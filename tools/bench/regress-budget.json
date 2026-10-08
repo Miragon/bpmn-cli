@@ -1,0 +1,5 @@
+{
+  "maxScore": 444,
+  "files": 115,
+  "note": "Upper bound for `node tools/layout-regress.mjs` (SCORE) checked by tools/bench/regress-gate.mjs in `npm run gate`. Lower it when the engine improves; raise it only with a reviewed reason (e.g. new scenarios or new metric kinds)."
+}

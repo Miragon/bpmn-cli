@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Ins" name="Insurance company" processRef="Process_Pool" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Pool" name="Data in pool" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Clerk" name="Clerk">
+        <bpmn:flowNodeRef>Event_Start</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Register</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Pay</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Paid</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Under" name="Underwriter">
+        <bpmn:flowNodeRef>Activity_Assess</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Appr</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RejectMsg</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Rejected</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_Start" name="Claim received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Register" name="Register claim">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_1">
+        <bpmn:targetRef>DataObjectReference_Claim</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_Assess" name="Assess claim">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:property id="Property_1" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_1">
+        <bpmn:sourceRef>DataObjectReference_Claim</bpmn:sourceRef>
+        <bpmn:targetRef>Property_1</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="DataInputAssociation_2">
+        <bpmn:sourceRef>DataStoreReference_Policy</bpmn:sourceRef>
+        <bpmn:targetRef>Property_1</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Appr" name="Approved?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_Pay" name="Pay out">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_2">
+        <bpmn:targetRef>DataStoreReference_Policy</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_Paid" name="Paid">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Pay" targetRef="Event_Paid" />
+    <bpmn:sequenceFlow id="Flow_4" name="yes" sourceRef="Gateway_Appr" targetRef="Activity_Pay" />
+    <bpmn:sendTask id="Activity_RejectMsg" name="Send rejection">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Rejected" name="Rejected">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_RejectMsg" targetRef="Event_Rejected" />
+    <bpmn:sequenceFlow id="Flow_6" name="no" sourceRef="Gateway_Appr" targetRef="Activity_RejectMsg" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Assess" targetRef="Gateway_Appr" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Register" targetRef="Activity_Assess" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Register" />
+    <bpmn:dataObject id="DataObject_ClaimFile" />
+    <bpmn:dataObjectReference id="DataObjectReference_Claim" name="Claim file" dataObjectRef="DataObject_ClaimFile" />
+    <bpmn:dataStoreReference id="DataStoreReference_Policy" name="Policy DB" dataStoreRef="DataStore_PolicyDB" />
+    <bpmn:textAnnotation id="TextAnnotation_Assess">
+      <bpmn:text>Four-eyes principle above 10k</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1" sourceRef="TextAnnotation_Assess" targetRef="Activity_Assess" />
+  </bpmn:process>
+  <bpmn:dataStore id="DataStore_PolicyDB" name="Policy DB" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Ins" bpmnElement="Participant_Ins" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="842" height="730" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Clerk" bpmnElement="Lane_Clerk" isHorizontal="true">
+        <dc:Bounds x="110" y="80" width="812" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Under" bpmnElement="Lane_Under" isHorizontal="true">
+        <dc:Bounds x="110" y="220" width="812" height="590" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="170" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="143" y="174" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Register" bpmnElement="Activity_Register">
+        <dc:Bounds x="266" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Assess" bpmnElement="Activity_Assess">
+        <dc:Bounds x="426" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Appr" bpmnElement="Gateway_Appr" isMarkerVisible="true">
+        <dc:Bounds x="586" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="578" y="245" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Pay" bpmnElement="Activity_Pay">
+        <dc:Bounds x="696" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Paid" bpmnElement="Event_Paid">
+        <dc:Bounds x="856" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="858" y="174" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_RejectMsg" bpmnElement="Activity_RejectMsg">
+        <dc:Bounds x="696" y="390" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Rejected" bpmnElement="Event_Rejected">
+        <dc:Bounds x="856" y="412" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="844" y="454" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="796" y="150" />
+        <di:waypoint x="856" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="636" y="290" />
+        <di:waypoint x="746" y="290" />
+        <di:waypoint x="746" y="190" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="644" y="272" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="796" y="430" />
+        <di:waypoint x="856" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="611" y="315" />
+        <di:waypoint x="611" y="430" />
+        <di:waypoint x="696" y="430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="619" y="412" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="526" y="290" />
+        <di:waypoint x="586" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="290" />
+        <di:waypoint x="426" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="206" y="150" />
+        <di:waypoint x="266" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Claim" bpmnElement="DataObjectReference_Claim">
+        <dc:Bounds x="298" y="530" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="279" y="586" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_1" bpmnElement="DataOutputAssociation_1">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_1" bpmnElement="DataInputAssociation_1">
+        <di:waypoint x="331" y="530" />
+        <di:waypoint x="452" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataStoreReference_Policy" bpmnElement="DataStoreReference_Policy">
+        <dc:Bounds x="451" y="640" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="443" y="696" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_2" bpmnElement="DataInputAssociation_2">
+        <di:waypoint x="476" y="640" />
+        <di:waypoint x="476" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_2" bpmnElement="DataOutputAssociation_2">
+        <di:waypoint x="725" y="190" />
+        <di:waypoint x="489" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Assess" bpmnElement="TextAnnotation_Assess">
+        <dc:Bounds x="356" y="750" width="240" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="476" y="750" />
+        <di:waypoint x="476" y="330" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

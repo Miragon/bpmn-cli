@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_PN" />
+    <bpmn:participant id="Participant_Cust" name="Customer" />
+    <bpmn:messageFlow id="Flow_5" name="Order" sourceRef="Participant_Cust" targetRef="Event_Start" />
+    <bpmn:messageFlow id="Flow_6" name="Confirmation" sourceRef="Activity_Confirm" targetRef="Participant_Cust" />
+    <bpmn:messageFlow id="Flow_7" name="Payment" sourceRef="Participant_Cust" targetRef="Activity_Payment" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_PN" name="Pool with notes" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Order received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Order" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Activity_Stock" name="Check stock">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:property id="Property_1" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_1">
+        <bpmn:sourceRef>DataObjectReference_Order</bpmn:sourceRef>
+        <bpmn:targetRef>Property_1</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:sendTask id="Activity_Confirm" name="Send confirmation">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:property id="Property_2" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_2">
+        <bpmn:sourceRef>DataObjectReference_Order</bpmn:sourceRef>
+        <bpmn:targetRef>Property_2</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="Activity_Payment" name="Receive payment">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:endEvent id="Event_End" name="Done">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Payment" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Confirm" targetRef="Activity_Payment" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Stock" targetRef="Activity_Confirm" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Stock" />
+    <bpmn:dataObject id="DataObject_Order" />
+    <bpmn:dataObjectReference id="DataObjectReference_Order" name="Order" dataObjectRef="DataObject_Order" />
+    <bpmn:textAnnotation id="TextAnnotation_Stock">
+      <bpmn:text>Checks the central warehouse only</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1" sourceRef="TextAnnotation_Stock" targetRef="Activity_Stock" />
+  </bpmn:process>
+  <bpmn:message id="Message_Order" name="Order" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Shop" bpmnElement="Participant_Shop" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="702" height="340" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="140" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="113" y="264" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Stock" bpmnElement="Activity_Stock">
+        <dc:Bounds x="236" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Confirm" bpmnElement="Activity_Confirm">
+        <dc:Bounds x="396" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Payment" bpmnElement="Activity_Payment">
+        <dc:Bounds x="556" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End">
+        <dc:Bounds x="716" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="718" y="264" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="656" y="150" />
+        <di:waypoint x="716" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="496" y="150" />
+        <di:waypoint x="556" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="336" y="150" />
+        <di:waypoint x="396" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="176" y="150" />
+        <di:waypoint x="236" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Order" bpmnElement="DataObjectReference_Order">
+        <dc:Bounds x="268" y="340" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="267" y="396" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_1" bpmnElement="DataInputAssociation_1">
+        <di:waypoint x="286" y="340" />
+        <di:waypoint x="286" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_2" bpmnElement="DataInputAssociation_2">
+        <di:waypoint x="304" y="351" />
+        <di:waypoint x="396" y="279" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Stock" bpmnElement="TextAnnotation_Stock">
+        <dc:Bounds x="146" y="110" width="280" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="286" y="140" />
+        <di:waypoint x="286" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Cust" bpmnElement="Participant_Cust" isHorizontal="true">
+        <dc:Bounds x="80" y="500" width="702" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="158" y="500" />
+        <di:waypoint x="158" y="258" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="164" y="372" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="446" y="280" />
+        <di:waypoint x="446" y="500" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="452" y="383" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="606" y="500" />
+        <di:waypoint x="606" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="612" y="383" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

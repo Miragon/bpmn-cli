@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Ev" name="Events only" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Ticket opened">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Ticket" />
+    </bpmn:startEvent>
+    <bpmn:intermediateCatchEvent id="Event_T1" name="Wait 1h">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="Event_M1" name="Ping agent">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Ping" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:eventBasedGateway id="Gateway_Ev">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_Reply" name="Agent replied">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Reply" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_EndHandled" name="Handled">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Event_Reply" targetRef="Event_EndHandled" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Gateway_Ev" targetRef="Event_Reply" />
+    <bpmn:intermediateCatchEvent id="Event_T2" name="No reply in 4h">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT4H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="Event_Sig" name="Escalate">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="Signal_Escalate" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:endEvent id="Event_EndEsc" name="Escalated">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_Level2" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Event_Sig" targetRef="Event_EndEsc" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_T2" targetRef="Event_Sig" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Gateway_Ev" targetRef="Event_T2" />
+    <bpmn:intermediateCatchEvent id="Event_Closed" name="Ticket closed">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="Signal_Closed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_EndClosed" name="Closed">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Event_Closed" targetRef="Event_EndClosed" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Gateway_Ev" targetRef="Event_Closed" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_M1" targetRef="Gateway_Ev" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Event_T1" targetRef="Event_M1" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Event_T1" />
+  </bpmn:process>
+  <bpmn:message id="Message_Ticket" name="Ticket" />
+  <bpmn:message id="Message_Ping" name="Ping" />
+  <bpmn:message id="Message_Reply" name="Reply" />
+  <bpmn:signal id="Signal_Escalate" name="Escalate" />
+  <bpmn:escalation id="Escalation_Level2" name="Level2" />
+  <bpmn:signal id="Signal_Closed" name="Closed" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Ev">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Ev" bpmnElement="Process_Ev">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="53" y="129" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_T1" bpmnElement="Event_T1">
+        <dc:Bounds x="176" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="168" y="129" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_M1" bpmnElement="Event_M1">
+        <dc:Bounds x="272" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="253" y="129" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Ev" bpmnElement="Gateway_Ev">
+        <dc:Bounds x="368" y="80" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reply" bpmnElement="Event_Reply">
+        <dc:Bounds x="478" y="190" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="451" y="232" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_EndHandled" bpmnElement="Event_EndHandled">
+        <dc:Bounds x="574" y="190" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="566" y="232" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_T2" bpmnElement="Event_T2">
+        <dc:Bounds x="478" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="451" y="129" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Sig" bpmnElement="Event_Sig">
+        <dc:Bounds x="574" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="562" y="129" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_EndEsc" bpmnElement="Event_EndEsc">
+        <dc:Bounds x="670" y="87" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="655" y="129" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Closed" bpmnElement="Event_Closed">
+        <dc:Bounds x="478" y="286" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="451" y="328" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_EndClosed" bpmnElement="Event_EndClosed">
+        <dc:Bounds x="574" y="286" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="569" y="328" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="514" y="208" />
+        <di:waypoint x="574" y="208" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="393" y="130" />
+        <di:waypoint x="393" y="208" />
+        <di:waypoint x="478" y="208" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="610" y="105" />
+        <di:waypoint x="670" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="514" y="105" />
+        <di:waypoint x="574" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="418" y="105" />
+        <di:waypoint x="478" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="514" y="304" />
+        <di:waypoint x="574" y="304" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="393" y="130" />
+        <di:waypoint x="393" y="304" />
+        <di:waypoint x="478" y="304" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="308" y="105" />
+        <di:waypoint x="368" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="212" y="105" />
+        <di:waypoint x="272" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="105" />
+        <di:waypoint x="176" y="105" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

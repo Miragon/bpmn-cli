@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Defs_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collab_1">
+    <bpmn:participant id="Pool_A" name="Company" processRef="Proc_A" />
+    <bpmn:participant id="Pool_B" name="Customer" processRef="Proc_B" />
+    <bpmn:messageFlow id="Msg_1" sourceRef="Task_Notify" targetRef="Task_Recv" />
+  </bpmn:collaboration>
+  <bpmn:process id="Proc_A" isExecutable="true">
+    <bpmn:laneSet id="LS_1">
+      <bpmn:lane id="Lane_1" name="Sales">
+        <bpmn:flowNodeRef>Start_1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gw_Split</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_B</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_C</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gw_Join</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Notify</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Timer_1</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_2" name="Back office">
+        <bpmn:flowNodeRef>Task_Esc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Sub_1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_3</bpmn:flowNodeRef><bpmn:flowNodeRef>B_Sub</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Start_1" name="Order received">
+      <bpmn:outgoing>F1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_A" name="Check order">
+      <bpmn:incoming>F1</bpmn:incoming>
+      <bpmn:outgoing>F2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gw_Split" name="OK?">
+      <bpmn:incoming>F2</bpmn:incoming>
+      <bpmn:outgoing>F3</bpmn:outgoing>
+      <bpmn:outgoing>F4</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_B" name="Approve">
+      <bpmn:incoming>F3</bpmn:incoming>
+      <bpmn:outgoing>F5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_C" name="Reject">
+      <bpmn:incoming>F4</bpmn:incoming>
+      <bpmn:outgoing>F6</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gw_Join">
+      <bpmn:incoming>F5</bpmn:incoming>
+      <bpmn:incoming>F6</bpmn:incoming>
+      <bpmn:outgoing>F7</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_Notify" name="Notify customer">
+      <bpmn:incoming>F7</bpmn:incoming>
+      <bpmn:outgoing>F8</bpmn:outgoing>
+      <bpmn:outgoing>F11</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="End_1" name="Done">
+      <bpmn:incoming>F8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:boundaryEvent id="Timer_1" name="2 days" attachedToRef="Task_A">
+      <bpmn:outgoing>F9</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TED_1" />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="Task_Esc" name="Escalate">
+      <bpmn:incoming>F9</bpmn:incoming>
+      <bpmn:outgoing>F10</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="End_2" name="Escalated">
+      <bpmn:incoming>F10</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="Sub_1" name="Archive">
+      <bpmn:incoming>F11</bpmn:incoming>
+      <bpmn:outgoing>F12</bpmn:outgoing>
+      <bpmn:startEvent id="S_Start">
+        <bpmn:outgoing>SF_s1</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:task id="S_Task" name="Store">
+        <bpmn:incoming>SF_s1</bpmn:incoming>
+        <bpmn:outgoing>SF_s2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="S_End">
+        <bpmn:incoming>SF_s2</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="SF_s1" sourceRef="S_Start" targetRef="S_Task" />
+      <bpmn:sequenceFlow id="SF_s2" sourceRef="S_Task" targetRef="S_End" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="B_Sub" name="Archive failed" attachedToRef="Sub_1"><bpmn:errorEventDefinition id="EED_1" /></bpmn:boundaryEvent>
+    <bpmn:endEvent id="End_3">
+      <bpmn:incoming>F12</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_1" targetRef="Task_A" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="Gw_Split" />
+    <bpmn:sequenceFlow id="F3" name="yes" sourceRef="Gw_Split" targetRef="Task_B" />
+    <bpmn:sequenceFlow id="F4" name="no" sourceRef="Gw_Split" targetRef="Task_C" />
+    <bpmn:sequenceFlow id="F5" sourceRef="Task_B" targetRef="Gw_Join" />
+    <bpmn:sequenceFlow id="F6" sourceRef="Task_C" targetRef="Gw_Join" />
+    <bpmn:sequenceFlow id="F7" sourceRef="Gw_Join" targetRef="Task_Notify" />
+    <bpmn:sequenceFlow id="F8" sourceRef="Task_Notify" targetRef="End_1" />
+    <bpmn:sequenceFlow id="F9" sourceRef="Timer_1" targetRef="Task_Esc" />
+    <bpmn:sequenceFlow id="F10" sourceRef="Task_Esc" targetRef="End_2" />
+    <bpmn:sequenceFlow id="F11" sourceRef="Task_Notify" targetRef="Sub_1" />
+    <bpmn:sequenceFlow id="F12" sourceRef="Sub_1" targetRef="End_3" />
+    <bpmn:textAnnotation id="Note_1">
+      <bpmn:text>Check within 1 day</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_1" sourceRef="Task_A" targetRef="Note_1" />
+    <bpmn:group id="Group_1" categoryValueRef="CV_1" />
+  </bpmn:process>
+  <bpmn:category id="Cat_1">
+    <bpmn:categoryValue id="CV_1" value="Decision" />
+  </bpmn:category>
+  <bpmn:process id="Proc_B" isExecutable="false">
+    <bpmn:task id="Task_Recv" name="Receive notice" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collab_1">
+      <bpmndi:BPMNShape id="Pool_A_di" bpmnElement="Pool_A" isHorizontal="true">
+        <dc:Bounds x="100" y="60" width="1300" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_1_di" bpmnElement="Lane_1" isHorizontal="true">
+        <dc:Bounds x="130" y="60" width="1270" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_2_di" bpmnElement="Lane_2" isHorizontal="true">
+        <dc:Bounds x="130" y="340" width="1270" height="240" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1">
+        <dc:Bounds x="172" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="152" y="175" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_A_di" bpmnElement="Task_A" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+        <dc:Bounds x="260" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Split_di" bpmnElement="Gw_Split" isMarkerVisible="true">
+        <dc:Bounds x="415" y="125" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="429" y="102" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_B_di" bpmnElement="Task_B">
+        <dc:Bounds x="520" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_C_di" bpmnElement="Task_C">
+        <dc:Bounds x="520" y="230" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Join_di" bpmnElement="Gw_Join" isMarkerVisible="true">
+        <dc:Bounds x="675" y="125" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Notify_di" bpmnElement="Task_Notify">
+        <dc:Bounds x="780" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1">
+        <dc:Bounds x="942" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="947" y="175" width="27" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Esc_di" bpmnElement="Task_Esc">
+        <dc:Bounds x="370" y="400" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_2_di" bpmnElement="End_2">
+        <dc:Bounds x="522" y="422" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="514" y="465" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Sub_1_di" bpmnElement="Sub_1" isExpanded="true">
+        <dc:Bounds x="760" y="370" width="380" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Start_di" bpmnElement="S_Start">
+        <dc:Bounds x="792" y="442" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Task_di" bpmnElement="S_Task">
+        <dc:Bounds x="880" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_End_di" bpmnElement="S_End">
+        <dc:Bounds x="1042" y="442" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B_Sub_di" bpmnElement="B_Sub"><dc:Bounds x="1082" y="532" width="36" height="36" /><bpmndi:BPMNLabel><dc:Bounds x="1122" y="560" width="70" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_3_di" bpmnElement="End_3">
+        <dc:Bounds x="1212" y="442" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_1_di" bpmnElement="Timer_1">
+        <dc:Bounds x="312" y="172" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="352" y="205" width="34" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Note_1_di" bpmnElement="Note_1">
+        <dc:Bounds x="380" y="70" width="140" height="26" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Group_1_di" bpmnElement="Group_1">
+        <dc:Bounds x="500" y="95" width="140" height="230" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1">
+        <di:waypoint x="208" y="150" />
+        <di:waypoint x="260" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2">
+        <di:waypoint x="360" y="150" />
+        <di:waypoint x="415" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3">
+        <di:waypoint x="465" y="150" />
+        <di:waypoint x="520" y="150" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="476" y="132" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4">
+        <di:waypoint x="440" y="175" />
+        <di:waypoint x="440" y="270" />
+        <di:waypoint x="520" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="448" y="250" width="14" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F5_di" bpmnElement="F5">
+        <di:waypoint x="620" y="150" />
+        <di:waypoint x="675" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F6_di" bpmnElement="F6" bioc:stroke="#831311">
+        <di:waypoint x="620" y="270" />
+        <di:waypoint x="700" y="270" />
+        <di:waypoint x="700" y="175" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F7_di" bpmnElement="F7">
+        <di:waypoint x="725" y="150" />
+        <di:waypoint x="780" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F8_di" bpmnElement="F8">
+        <di:waypoint x="880" y="150" />
+        <di:waypoint x="942" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F9_di" bpmnElement="F9">
+        <di:waypoint x="330" y="208" />
+        <di:waypoint x="330" y="440" />
+        <di:waypoint x="370" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F10_di" bpmnElement="F10">
+        <di:waypoint x="470" y="440" />
+        <di:waypoint x="522" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F11_di" bpmnElement="F11">
+        <di:waypoint x="830" y="190" />
+        <di:waypoint x="830" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F12_di" bpmnElement="F12">
+        <di:waypoint x="1140" y="460" />
+        <di:waypoint x="1212" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="SF_s1_di" bpmnElement="SF_s1">
+        <di:waypoint x="828" y="460" />
+        <di:waypoint x="880" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="SF_s2_di" bpmnElement="SF_s2">
+        <di:waypoint x="980" y="460" />
+        <di:waypoint x="1042" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_1_di" bpmnElement="Assoc_1">
+        <di:waypoint x="350" y="110" />
+        <di:waypoint x="390" y="96" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Pool_B_di" bpmnElement="Pool_B" isHorizontal="true">
+        <dc:Bounds x="100" y="640" width="1300" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Recv_di" bpmnElement="Task_Recv">
+        <dc:Bounds x="780" y="680" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Msg_1_di" bpmnElement="Msg_1">
+        <di:waypoint x="860" y="190" />
+        <di:waypoint x="860" y="355" />
+        <di:waypoint x="1180" y="355" />
+        <di:waypoint x="1180" y="620" />
+        <di:waypoint x="860" y="620" />
+        <di:waypoint x="860" y="680" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Company" name="Company" processRef="Process_Main" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Main" name="s09-lanes-zigzag" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Clerk" name="Clerk">
+        <bpmn:flowNodeRef>Event_Request</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Enter</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Notify</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Revise</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Manager" name="Manager">
+        <bpmn:flowNodeRef>Activity_Review</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Approved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Escalate</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Escalated</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System" name="System">
+        <bpmn:flowNodeRef>Activity_Book</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_Request" name="Request">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Enter" name="Enter request">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_Review" name="Review">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_Book" name="Book">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Activity_Notify" name="Notify">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Notify" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Book" targetRef="Activity_Notify" />
+    <bpmn:sequenceFlow id="Flow_4" name="yes" sourceRef="Gateway_Approved" targetRef="Activity_Book" />
+    <bpmn:userTask id="Activity_Revise" name="Revise">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_8" name="resubmit" sourceRef="Activity_Revise" targetRef="Activity_Review" />
+    <bpmn:sequenceFlow id="Flow_7" name="no" sourceRef="Gateway_Approved" targetRef="Activity_Revise" />
+    <bpmn:userTask id="Activity_Escalate" name="Escalate">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Escalated" name="Escalated">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_Escalate" targetRef="Event_Escalated" />
+    <bpmn:sequenceFlow id="Flow_9" name="escalate" sourceRef="Gateway_Approved" targetRef="Activity_Escalate" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Review" targetRef="Gateway_Approved" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Enter" targetRef="Activity_Review" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Request" targetRef="Activity_Enter" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Company" bpmnElement="Participant_Company" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="1002" height="710" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Clerk" bpmnElement="Lane_Clerk" isHorizontal="true">
+        <dc:Bounds x="110" y="80" width="972" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Manager" bpmnElement="Lane_Manager" isHorizontal="true">
+        <dc:Bounds x="110" y="360" width="972" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_System" bpmnElement="Lane_System" isHorizontal="true">
+        <dc:Bounds x="110" y="640" width="972" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Request" bpmnElement="Event_Request">
+        <dc:Bounds x="170" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="162" y="174" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Enter" bpmnElement="Activity_Enter">
+        <dc:Bounds x="266" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Review" bpmnElement="Activity_Review">
+        <dc:Bounds x="426" y="390" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Approved" bpmnElement="Gateway_Approved" isMarkerVisible="true">
+        <dc:Bounds x="586" y="405" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="578" y="385" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Book" bpmnElement="Activity_Book">
+        <dc:Bounds x="696" y="670" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Notify" bpmnElement="Activity_Notify">
+        <dc:Bounds x="856" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="1016" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1018" y="174" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Revise" bpmnElement="Activity_Revise">
+        <dc:Bounds x="696" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Escalate" bpmnElement="Activity_Escalate">
+        <dc:Bounds x="696" y="530" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Escalated" bpmnElement="Event_Escalated">
+        <dc:Bounds x="888" y="552" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="873" y="594" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="956" y="150" />
+        <di:waypoint x="1016" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="796" y="710" />
+        <di:waypoint x="986" y="710" />
+        <di:waypoint x="986" y="205" />
+        <di:waypoint x="906" y="205" />
+        <di:waypoint x="906" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="611" y="455" />
+        <di:waypoint x="611" y="710" />
+        <di:waypoint x="696" y="710" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="619" y="692" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="746" y="250" />
+        <di:waypoint x="746" y="220" />
+        <di:waypoint x="476" y="220" />
+        <di:waypoint x="476" y="390" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="678" y="202" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="636" y="430" />
+        <di:waypoint x="746" y="430" />
+        <di:waypoint x="746" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="644" y="412" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="796" y="570" />
+        <di:waypoint x="888" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="611" y="455" />
+        <di:waypoint x="611" y="570" />
+        <di:waypoint x="696" y="570" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="619" y="552" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="526" y="430" />
+        <di:waypoint x="586" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="430" />
+        <di:waypoint x="426" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="206" y="150" />
+        <di:waypoint x="266" y="150" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

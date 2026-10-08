@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Ends" name="End kinds" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Activity_Pay" name="Process payment">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Result" name="Result?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="Event_Paid" name="Paid">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_3" name="ok" sourceRef="Gateway_Result" targetRef="Event_Paid" />
+    <bpmn:endEvent id="Event_Term" name="Abort everything">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_4" name="fraud" sourceRef="Gateway_Result" targetRef="Event_Term" />
+    <bpmn:endEvent id="Event_Err" name="Payment failed">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:errorEventDefinition errorRef="Error_PaymentFailed" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" name="declined" sourceRef="Gateway_Result" targetRef="Event_Err" />
+    <bpmn:endEvent id="Event_Esc" name="Needs approval">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_Approval" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_6" name="large" sourceRef="Gateway_Result" targetRef="Event_Esc" />
+    <bpmn:endEvent id="Event_Msg" name="Inform customer">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:messageEventDefinition messageRef="Message_Info" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" name="pending" sourceRef="Gateway_Result" targetRef="Event_Msg" />
+    <bpmn:endEvent id="Event_Sig" name="Broadcast">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:signalEventDefinition signalRef="Signal_PaymentDone" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" name="partner" sourceRef="Gateway_Result" targetRef="Event_Sig" />
+    <bpmn:endEvent id="Event_Comp" name="Undo">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:compensateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_9" name="rollback" sourceRef="Gateway_Result" targetRef="Event_Comp" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Pay" targetRef="Gateway_Result" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Pay" />
+  </bpmn:process>
+  <bpmn:error id="Error_PaymentFailed" name="PaymentFailed" errorCode="PAY-1" />
+  <bpmn:escalation id="Escalation_Approval" name="Approval" />
+  <bpmn:message id="Message_Info" name="Info" />
+  <bpmn:signal id="Signal_PaymentDone" name="PaymentDone" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Ends">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Ends" bpmnElement="Process_Ends">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="144" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Pay" bpmnElement="Activity_Pay">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Result" bpmnElement="Gateway_Result" isMarkerVisible="true">
+        <dc:Bounds x="336" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="335" y="75" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Paid" bpmnElement="Event_Paid">
+        <dc:Bounds x="446" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="448" y="144" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Term" bpmnElement="Event_Term">
+        <dc:Bounds x="446" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="419" y="262" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Err" bpmnElement="Event_Err">
+        <dc:Bounds x="446" y="316" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="419" y="358" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Esc" bpmnElement="Event_Esc">
+        <dc:Bounds x="446" y="412" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="419" y="454" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Msg" bpmnElement="Event_Msg">
+        <dc:Bounds x="446" y="508" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="419" y="550" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Sig" bpmnElement="Event_Sig">
+        <dc:Bounds x="446" y="604" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="431" y="646" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Comp" bpmnElement="Event_Comp">
+        <dc:Bounds x="446" y="700" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="448" y="742" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="386" y="120" />
+        <di:waypoint x="446" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="102" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="238" />
+        <di:waypoint x="446" y="238" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="220" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="334" />
+        <di:waypoint x="446" y="334" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="316" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="430" />
+        <di:waypoint x="446" y="430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="412" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="526" />
+        <di:waypoint x="446" y="526" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="508" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="622" />
+        <di:waypoint x="446" y="622" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="604" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="718" />
+        <di:waypoint x="446" y="718" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="700" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

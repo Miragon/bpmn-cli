@@ -1,0 +1,61 @@
+{
+  "name": "bpmn-cli",
+  "version": "0.1.0",
+  "description": "AI-friendly CLI for editing BPMN 2.0 models semantically: agents name elements and operations, never XML or BPMNDI. Keeps hand-made diagrams (incremental layout), redraws engine-owned ones, and offers diagram formatting operations.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Miragon GmbH",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Miragon/bpmn-cli.git"
+  },
+  "homepage": "https://github.com/Miragon/bpmn-cli#readme",
+  "bugs": {
+    "url": "https://github.com/Miragon/bpmn-cli/issues"
+  },
+  "bin": {
+    "bpmn": "./bin/bpmn.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "layout:regress": "node tools/layout-regress.mjs",
+    "bench": "node tools/bench/run.mjs",
+    "bench:summary": "node tools/bench/summary.mjs",
+    "fuzz": "node tools/fuzz/run.mjs",
+    "gate": "npm run build && vitest run && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate"
+  },
+  "dependencies": {
+    "bpmn-auto-layout": "2.0.0-alpha.2",
+    "bpmn-moddle": "^10.2.0",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "keywords": [
+    "bpmn",
+    "bpmn-js",
+    "bpmn-moddle",
+    "cli",
+    "ai",
+    "agent",
+    "layout"
+  ]
+}

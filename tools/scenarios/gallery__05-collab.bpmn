@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_OrderHandling" />
+    <bpmn:participant id="Participant_Customer" name="Customer" processRef="Process_Customer" />
+    <bpmn:messageFlow id="Flow_8" name="Order" sourceRef="Activity_PlaceOrder" targetRef="Event_OrderReceived" />
+    <bpmn:messageFlow id="Flow_9" name="Confirmation" sourceRef="Activity_SendConfirmation" targetRef="Activity_ReceiveConfirmation" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_OrderHandling" name="Order handling" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>Event_OrderReceived</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_CheckOrder</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Logistics" name="Logistics">
+        <bpmn:flowNodeRef>Activity_ShipOrder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SendConfirmation</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_CheckOrder" name="Check order">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Activity_ShipOrder" name="Ship order">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sendTask id="Activity_SendConfirmation" name="Send confirmation">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_SendConfirmation" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_ShipOrder" targetRef="Activity_SendConfirmation" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_CheckOrder" targetRef="Activity_ShipOrder" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_OrderReceived" targetRef="Activity_CheckOrder" />
+  </bpmn:process>
+  <bpmn:process id="Process_Customer" isExecutable="false">
+    <bpmn:startEvent id="Event_WantsToOrder" name="Wants to order">
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sendTask id="Activity_PlaceOrder" name="Place order">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="Activity_ReceiveConfirmation" name="Receive confirmation">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:endEvent id="Event_Happy" name="Happy">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_ReceiveConfirmation" targetRef="Event_Happy" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_PlaceOrder" targetRef="Activity_ReceiveConfirmation" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Event_WantsToOrder" targetRef="Activity_PlaceOrder" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Shop" bpmnElement="Participant_Shop" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="732" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Sales" bpmnElement="Lane_Sales" isHorizontal="true">
+        <dc:Bounds x="110" y="80" width="702" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Logistics" bpmnElement="Lane_Logistics" isHorizontal="true">
+        <dc:Bounds x="110" y="220" width="702" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderReceived" bpmnElement="Event_OrderReceived">
+        <dc:Bounds x="170" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="143" y="174" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckOrder" bpmnElement="Activity_CheckOrder">
+        <dc:Bounds x="266" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ShipOrder" bpmnElement="Activity_ShipOrder">
+        <dc:Bounds x="426" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendConfirmation" bpmnElement="Activity_SendConfirmation">
+        <dc:Bounds x="586" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="746" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="748" y="314" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="686" y="290" />
+        <di:waypoint x="746" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="526" y="290" />
+        <di:waypoint x="586" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="290" />
+        <di:waypoint x="426" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="206" y="150" />
+        <di:waypoint x="266" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Customer" bpmnElement="Participant_Customer" isHorizontal="true">
+        <dc:Bounds x="80" y="440" width="732" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_WantsToOrder" bpmnElement="Event_WantsToOrder">
+        <dc:Bounds x="140" y="492" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="113" y="534" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PlaceOrder" bpmnElement="Activity_PlaceOrder">
+        <dc:Bounds x="236" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReceiveConfirmation" bpmnElement="Activity_ReceiveConfirmation">
+        <dc:Bounds x="396" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Happy" bpmnElement="Event_Happy">
+        <dc:Bounds x="556" y="492" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="555" y="534" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="496" y="510" />
+        <di:waypoint x="556" y="510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="336" y="510" />
+        <di:waypoint x="396" y="510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="176" y="510" />
+        <di:waypoint x="236" y="510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="286" y="470" />
+        <di:waypoint x="286" y="400" />
+        <di:waypoint x="188" y="400" />
+        <di:waypoint x="188" y="168" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="196" y="382" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="636" y="330" />
+        <di:waypoint x="636" y="400" />
+        <di:waypoint x="446" y="400" />
+        <di:waypoint x="446" y="470" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="454" y="382" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

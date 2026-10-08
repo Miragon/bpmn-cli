@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Comp" name="Compensation" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Activity_BookHotel" name="Book hotel">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="Event_CompHotel" attachedToRef="Activity_BookHotel">
+      <bpmn:compensateEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Event_HotelTimeout" name="No answer in 2 days" attachedToRef="Activity_BookHotel">
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:userTask id="Activity_OtherHotel" name="Pick other hotel">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_OtherHotel" targetRef="Activity_BookFlight" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Event_HotelTimeout" targetRef="Activity_OtherHotel" />
+    <bpmn:serviceTask id="Activity_BookFlight" name="Book flight">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="Event_CompFlight" attachedToRef="Activity_BookFlight">
+      <bpmn:compensateEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:serviceTask id="Activity_Charge" name="Charge card">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="Event_CardErr" name="Card declined" attachedToRef="Activity_Charge">
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_CardDeclined" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_Rollback" name="Roll back bookings">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:compensateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_CardErr" targetRef="Event_Rollback" />
+    <bpmn:endEvent id="Event_End" name="Trip booked">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Charge" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_BookFlight" targetRef="Activity_Charge" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_BookHotel" targetRef="Activity_BookFlight" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_BookHotel" />
+    <bpmn:serviceTask id="Activity_CancelHotel" name="Cancel hotel" isForCompensation="true" />
+    <bpmn:serviceTask id="Activity_CancelFlight" name="Cancel flight" isForCompensation="true" />
+    <bpmn:association id="Association_1" associationDirection="One" sourceRef="Event_CompHotel" targetRef="Activity_CancelHotel" />
+    <bpmn:association id="Association_2" associationDirection="One" sourceRef="Event_CompFlight" targetRef="Activity_CancelFlight" />
+  </bpmn:process>
+  <bpmn:error id="Error_CardDeclined" name="CardDeclined" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Comp">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Comp" bpmnElement="Process_Comp">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="121" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="163" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_BookHotel" bpmnElement="Activity_BookHotel">
+        <dc:Bounds x="176" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CompHotel" bpmnElement="Event_CompHotel">
+        <dc:Bounds x="233" y="161" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_HotelTimeout" bpmnElement="Event_HotelTimeout">
+        <dc:Bounds x="189" y="161" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="229" y="169" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_OtherHotel" bpmnElement="Activity_OtherHotel">
+        <dc:Bounds x="336" y="398" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_BookFlight" bpmnElement="Activity_BookFlight">
+        <dc:Bounds x="496" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CompFlight" bpmnElement="Event_CompFlight">
+        <dc:Bounds x="553" y="161" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Charge" bpmnElement="Activity_Charge">
+        <dc:Bounds x="656" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CardErr" bpmnElement="Event_CardErr">
+        <dc:Bounds x="713" y="161" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="753" y="169" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Rollback" bpmnElement="Event_Rollback">
+        <dc:Bounds x="816" y="280" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="789" y="322" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End">
+        <dc:Bounds x="816" y="121" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="794" y="163" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelHotel" bpmnElement="Activity_CancelHotel">
+        <dc:Bounds x="201" y="538" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelFlight" bpmnElement="Activity_CancelFlight">
+        <dc:Bounds x="521" y="258" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="436" y="438" />
+        <di:waypoint x="516" y="438" />
+        <di:waypoint x="516" y="179" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="207" y="197" />
+        <di:waypoint x="207" y="438" />
+        <di:waypoint x="336" y="438" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="731" y="197" />
+        <di:waypoint x="731" y="298" />
+        <di:waypoint x="816" y="298" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="756" y="139" />
+        <di:waypoint x="816" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="596" y="139" />
+        <di:waypoint x="656" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="139" />
+        <di:waypoint x="496" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="139" />
+        <di:waypoint x="176" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="251" y="197" />
+        <di:waypoint x="251" y="538" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_2" bpmnElement="Association_2">
+        <di:waypoint x="571" y="197" />
+        <di:waypoint x="571" y="258" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

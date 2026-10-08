@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Seller" name="Seller" processRef="Process_Main" />
+    <bpmn:participant id="Participant_Partner" name="Partner" processRef="Process_Partner" />
+    <bpmn:participant id="Participant_Registry" name="Registry" />
+    <bpmn:messageFlow id="Flow_12" name="Proposal" sourceRef="Activity_SendProposal" targetRef="Activity_ReadProposal" />
+    <bpmn:messageFlow id="Flow_13" name="Answer" sourceRef="Activity_Answer" targetRef="Activity_ReceiveAnswer" />
+    <bpmn:messageFlow id="Flow_14" name="Cancel" sourceRef="Activity_CancelDeal" targetRef="Event_CancelMsg" />
+    <bpmn:messageFlow id="Flow_15" name="Registration" sourceRef="Participant_Partner" targetRef="Participant_Registry" />
+    <bpmn:messageFlow id="Flow_16" name="Deal record" sourceRef="Activity_Close" targetRef="Participant_Registry" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Main" name="s17-msgflow-targets" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Activity_Negotiate" name="Negotiate">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:startEvent id="Event_NStart" name="N start">
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:sendTask id="Activity_SendProposal" name="Send proposal">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      </bpmn:sendTask>
+      <bpmn:receiveTask id="Activity_ReceiveAnswer" name="Receive answer">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      </bpmn:receiveTask>
+      <bpmn:endEvent id="Event_NDone" name="N done">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_ReceiveAnswer" targetRef="Event_NDone" />
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_SendProposal" targetRef="Activity_ReceiveAnswer" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Event_NStart" targetRef="Activity_SendProposal" />
+    </bpmn:subProcess>
+    <bpmn:userTask id="Activity_Close" name="Close deal">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_CancelMsg" name="Cancelled by partner" attachedToRef="Activity_Close">
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_CancelDeal" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_Cancelled" name="Cancelled">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_CancelMsg" targetRef="Event_Cancelled" />
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Close" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Negotiate" targetRef="Activity_Close" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Negotiate" />
+  </bpmn:process>
+  <bpmn:process id="Process_Partner" isExecutable="false">
+    <bpmn:startEvent id="Event_PStart" name="P start">
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:receiveTask id="Activity_ReadProposal" name="Read proposal">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:sendTask id="Activity_Answer" name="Answer">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:sendTask id="Activity_CancelDeal" name="Cancel deal">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_PDone" name="P done">
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="Activity_CancelDeal" targetRef="Event_PDone" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_Answer" targetRef="Activity_CancelDeal" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_ReadProposal" targetRef="Activity_Answer" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Event_PStart" targetRef="Activity_ReadProposal" />
+  </bpmn:process>
+  <bpmn:message id="Message_CancelDeal" name="CancelDeal" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Seller" bpmnElement="Participant_Seller" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="954" height="311" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="140" y="170" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="139" y="212" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Negotiate" bpmnElement="Activity_Negotiate" isExpanded="true">
+        <dc:Bounds x="236" y="110" width="512" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_NStart" bpmnElement="Event_NStart">
+        <dc:Bounds x="266" y="177" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="258" y="219" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendProposal" bpmnElement="Activity_SendProposal">
+        <dc:Bounds x="362" y="155" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReceiveAnswer" bpmnElement="Activity_ReceiveAnswer">
+        <dc:Bounds x="522" y="155" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_NDone" bpmnElement="Event_NDone">
+        <dc:Bounds x="682" y="177" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="677" y="219" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="622" y="195" />
+        <di:waypoint x="682" y="195" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="462" y="195" />
+        <di:waypoint x="522" y="195" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="302" y="195" />
+        <di:waypoint x="362" y="195" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Close" bpmnElement="Activity_Close">
+        <dc:Bounds x="808" y="148" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CancelMsg" bpmnElement="Event_CancelMsg">
+        <dc:Bounds x="865" y="210" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="905" y="218" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Cancelled" bpmnElement="Event_Cancelled">
+        <dc:Bounds x="968" y="325" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="953" y="367" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="968" y="170" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="970" y="212" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="883" y="246" />
+        <di:waypoint x="883" y="343" />
+        <di:waypoint x="968" y="343" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="908" y="188" />
+        <di:waypoint x="968" y="188" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="748" y="188" />
+        <di:waypoint x="808" y="188" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="176" y="188" />
+        <di:waypoint x="236" y="188" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Partner" bpmnElement="Participant_Partner" isHorizontal="true">
+        <dc:Bounds x="80" y="471" width="954" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_PStart" bpmnElement="Event_PStart">
+        <dc:Bounds x="140" y="523" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="132" y="565" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReadProposal" bpmnElement="Activity_ReadProposal">
+        <dc:Bounds x="236" y="501" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Answer" bpmnElement="Activity_Answer">
+        <dc:Bounds x="396" y="501" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelDeal" bpmnElement="Activity_CancelDeal">
+        <dc:Bounds x="556" y="501" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_PDone" bpmnElement="Event_PDone">
+        <dc:Bounds x="716" y="523" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="711" y="565" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="656" y="541" />
+        <di:waypoint x="716" y="541" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="496" y="541" />
+        <di:waypoint x="556" y="541" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="336" y="541" />
+        <di:waypoint x="396" y="541" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="176" y="541" />
+        <di:waypoint x="236" y="541" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Registry" bpmnElement="Participant_Registry" isHorizontal="true">
+        <dc:Bounds x="80" y="701" width="954" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="412" y="235" />
+        <di:waypoint x="412" y="431" />
+        <di:waypoint x="286" y="431" />
+        <di:waypoint x="286" y="501" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="294" y="413" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="446" y="501" />
+        <di:waypoint x="446" y="431" />
+        <di:waypoint x="572" y="431" />
+        <di:waypoint x="572" y="235" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="454" y="413" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_14" bpmnElement="Flow_14">
+        <di:waypoint x="606" y="501" />
+        <di:waypoint x="606" y="431" />
+        <di:waypoint x="883" y="431" />
+        <di:waypoint x="883" y="246" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="614" y="413" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_15" bpmnElement="Flow_15">
+        <di:waypoint x="557" y="621" />
+        <di:waypoint x="557" y="701" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="563" y="654" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_16" bpmnElement="Flow_16">
+        <di:waypoint x="858" y="228" />
+        <di:waypoint x="858" y="701" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="864" y="458" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

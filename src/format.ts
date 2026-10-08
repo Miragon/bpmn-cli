@@ -1,0 +1,372 @@
+/**
+ * Text rendering (default output). Deterministic, compact, no coordinates.
+ *
+ * CONTRACT (implemented in the "view" work package):
+ *  renderView(view): e.g.
+ *    process Process_Order "Order handling" executable
+ *      startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice
+ *      userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk
+ *      exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_Book (Flow_yes "yes" if ${ok}), Activity_Clarify (Flow_no "no" default)
+ *        boundaryEvent:timer Event_Timeout "2 days" [PT2D, non-interrupting] -> Activity_Remind
+ *      subProcess Activity_Payment "Payment" [expanded] -> Event_Done
+ *        startEvent Event_PayStart -> ...
+ *      endEvent Event_Done "Invoice booked"
+ *      ! unreachable: task Activity_Old "Old step"
+ *    lanes: Lane_Sales "Sales" [Event_OrderReceived, Activity_CheckInvoice]
+ *    data: dataObject DataObjectReference_Order "Order" (from Activity_CheckInvoice; to Activity_Book)
+ *    annotations: TextAnnotation_1 "note text" ~ Activity_Book
+ *    collaboration Collaboration_1: participant Participant_Shop "Shop" = Process_Order; message flows: Flow_9 Activity_Send -> Participant_Customer "Order"
+ *    root: message Message_OrderReceived "OrderReceived", error Error_PaymentFailed "PaymentFailed" (PAY-001)
+ *    problems: E_... / W_... lines
+ *  renderDetail(detail): key: value lines.
+ *  renderChanges(cs): "created userTask Activity_X "name" (after Event_Y)" lines etc., warnings, notes.
+ *  renderProblems(warnings): one line each `CODE element: message  (hint)`.
+ *  renderLayout(layout): the layout block of a mutation result (incl. one
+ *    `format <op> #<index>: ...` line per format op).
+ *  renderLayoutView(view) (`show --layout`): per diagram the frame tree with
+ *    `row n: id, id, ...` lines, then colors, labels off their default side,
+ *    and the layout problems with ids. renderMetrics(metrics) (`metrics`):
+ *    the score, the non-zero counts and one line per problem.
+ *
+ * Refined grammar (one line per node, flows inline, every id visible):
+ *    <kind> <id> ["name"] [flags] -> <target> (<flowId> ["name"] [if <cond>] [default]), ...
+ *  - flags: trigger text, non-interrupting, expanded|collapsed, key=value props,
+ *    `ext: <types>`, `doc: "<truncated>"`
+ *  - boundary events are indented under their host, sub-process children under
+ *    the sub-process; unreachable nodes are prefixed with `! unreachable`.
+ *  - the collaboration (pools, message flows) comes first, then each process
+ *    with its `lanes:` / `data:` / `annotations:` sections, then `root:` and
+ *    `problems:`.
+ */
+import { KEYS, type LayoutMetrics, type LayoutProblem } from './diagram/metrics.js';
+import type { FormatResult } from './diagram/ops.js';
+import type { LayoutView } from './diagram/view.js';
+import type { Warning } from './errors.js';
+import type { LayoutStatus } from './pipeline.js';
+import type { Change, ChangeSet } from './result.js';
+import type { ElementDetail, ModelView, ViewFlow, ViewLane, ViewNode } from './view.js';
+
+const INDENT = '  ';
+const DOC_MAX = 80;
+
+/** Single-line, double-quoted text. */
+function q(text: string): string {
+  return `"${text.replace(/\s+/g, ' ').trim().replace(/"/g, '\\"')}"`;
+}
+
+function truncate(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 3)}...` : flat;
+}
+
+function scalar(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.join(', ');
+  return JSON.stringify(value);
+}
+
+/* ------------------------------------------------------------------ */
+/* view                                                                 */
+/* ------------------------------------------------------------------ */
+
+function flowText(f: ViewFlow): string {
+  const parts = [f.id];
+  if (f.name) parts.push(q(f.name));
+  if (f.condition) parts.push(`if ${truncate(f.condition, 120)}`);
+  if (f.default) parts.push('default');
+  return `${f.target} (${parts.join(' ')})`;
+}
+
+function nodeFlags(n: ViewNode): string[] {
+  const flags: string[] = [];
+  if (n.trigger) flags.push(n.trigger);
+  if (n.nonInterrupting) flags.push('non-interrupting');
+  if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
+  for (const [k, v] of Object.entries(n.props ?? {})) flags.push(`${k}=${scalar(v)}`);
+  if (n.extensions?.length) flags.push(`ext: ${n.extensions.join(', ')}`);
+  if (n.documentation) flags.push(`doc: ${q(truncate(n.documentation, DOC_MAX))}`);
+  return flags;
+}
+
+function nodeLine(n: ViewNode): string {
+  const parts = [n.kind, n.id];
+  if (n.name) parts.push(q(n.name));
+  const flags = nodeFlags(n);
+  if (flags.length) parts.push(`[${flags.join(', ')}]`);
+  let line = parts.join(' ');
+  if (n.outgoing.length) line += ` -> ${n.outgoing.map(flowText).join(', ')}`;
+  return n.unreachable ? `! unreachable: ${line}` : line;
+}
+
+function renderNodes(nodes: ViewNode[], depth: number, out: string[]): void {
+  const pad = INDENT.repeat(depth);
+  for (const n of nodes) {
+    out.push(pad + nodeLine(n));
+    if (n.boundary?.length) renderNodes(n.boundary, depth + 1, out);
+    if (n.children?.length) renderNodes(n.children, depth + 1, out);
+  }
+}
+
+function renderLanes(lanes: ViewLane[], depth: number, out: string[]): void {
+  const pad = INDENT.repeat(depth);
+  for (const lane of lanes) {
+    out.push(`${pad}${lane.id}${lane.name ? ` ${q(lane.name)}` : ''} [${lane.members.join(', ')}]`);
+    if (lane.lanes?.length) renderLanes(lane.lanes, depth + 1, out);
+  }
+}
+
+/** Renders the whole model as compact text (see contract). */
+export function renderView(view: ModelView): string {
+  const out: string[] = [];
+  if (view.definitions.namespaces.length) out.push(`namespaces: ${view.definitions.namespaces.join(', ')}`);
+  if (view.collaboration) {
+    out.push(`collaboration ${view.collaboration.id}`);
+    for (const p of view.collaboration.participants) {
+      out.push(`${INDENT}participant ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.process ? `= ${p.process}` : '(black box)'}`);
+    }
+    for (const mf of view.collaboration.messageFlows) {
+      const extra = [mf.name ? q(mf.name) : '', mf.message ? `[message ${mf.message}]` : ''].filter(Boolean).join(' ');
+      out.push(`${INDENT}messageFlow ${mf.id} ${mf.source} -> ${mf.target}${extra ? ` ${extra}` : ''}`);
+    }
+  }
+  for (const p of view.processes) {
+    out.push(`process ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.executable ? 'executable' : 'non-executable'}${p.participant ? ` in ${p.participant}` : ''}`);
+    if (p.nodes.length) renderNodes(p.nodes, 1, out);
+    else out.push(`${INDENT}(empty)`);
+    if (p.lanes.length) {
+      out.push(`${INDENT}lanes:`);
+      renderLanes(p.lanes, 2, out);
+    }
+    if (p.data.length) {
+      out.push(`${INDENT}data:`);
+      for (const d of p.data) {
+        const links = [d.from.length ? `from ${d.from.join(', ')}` : '', d.to.length ? `to ${d.to.join(', ')}` : ''].filter(Boolean).join('; ');
+        out.push(`${INDENT}${INDENT}${d.kind} ${d.id}${d.name ? ` ${q(d.name)}` : ''}${links ? ` (${links})` : ''}`);
+      }
+    }
+    if (p.annotations.length) {
+      out.push(`${INDENT}annotations:`);
+      for (const a of p.annotations) {
+        out.push(`${INDENT}${INDENT}${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}${a.attachedTo.length ? ` ~ ${a.attachedTo.join(', ')}` : ''}`);
+      }
+    }
+  }
+  if (view.rootElements.length) {
+    out.push(`root: ${view.rootElements.map((r) => `${r.kind} ${r.id}${r.name ? ` ${q(r.name)}` : ''}${r.code ? ` (${r.code})` : ''}`).join(', ')}`);
+  }
+  if (view.problems.length) {
+    out.push('problems:');
+    for (const line of renderProblems(view.problems).split('\n')) out.push(INDENT + line);
+  } else {
+    out.push('problems: none');
+  }
+  return out.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* detail                                                               */
+/* ------------------------------------------------------------------ */
+
+function incomingText(f: ElementDetail['incoming'][number]): string {
+  const parts = [f.id, 'from', f.source];
+  if (f.name) parts.push(q(f.name));
+  if (f.condition) parts.push(`if ${f.condition}`);
+  if (f.default) parts.push('default');
+  return parts.join(' ');
+}
+
+function outgoingText(f: ViewFlow): string {
+  const parts = [f.id, 'to', f.target];
+  if (f.name) parts.push(q(f.name));
+  if (f.condition) parts.push(`if ${f.condition}`);
+  if (f.default) parts.push('default');
+  return parts.join(' ');
+}
+
+function extensionText(ext: unknown): string {
+  if (!ext || typeof ext !== 'object') return scalar(ext);
+  const e = ext as { type?: string; attrs?: Record<string, string>; body?: string; children?: unknown[] };
+  const parts = [e.type ?? 'extension'];
+  for (const [k, v] of Object.entries(e.attrs ?? {})) parts.push(`${k}=${q(v)}`);
+  if (e.body) parts.push(`body=${q(e.body)}`);
+  if (e.children?.length) parts.push(`children: ${e.children.map(extensionText).join('; ')}`);
+  return parts.join(' ');
+}
+
+/** Renders `bpmn show <id>` as `key: value` lines (property keys are `set` keys). */
+export function renderDetail(detail: ElementDetail): string {
+  const out: string[] = [];
+  const head: Array<[string, string | undefined]> = [
+    ['id', detail.id],
+    ['kind', detail.kind],
+    ['type', detail.type],
+    ['name', detail.name],
+    ['scope', detail.scope],
+    ['process', detail.process],
+    ['lane', detail.lane],
+    ['host', detail.host],
+  ];
+  const printed = new Set<string>();
+  for (const [k, v] of head) {
+    if (v === undefined) continue;
+    out.push(`${k}: ${v}`);
+    printed.add(k);
+  }
+  const deferred: Array<[string, unknown]> = [];
+  for (const [k, v] of Object.entries(detail.properties)) {
+    if (v === undefined || v === null || v === '' || printed.has(k)) continue;
+    if (k.includes(':')) {
+      deferred.push([k, v]); // vendor attributes go last, next to the extension elements
+      continue;
+    }
+    out.push(`${k}: ${scalar(v)}`);
+    printed.add(k);
+  }
+  if (detail.incoming.length) out.push(`incoming: ${detail.incoming.map(incomingText).join('; ')}`);
+  if (detail.outgoing.length) out.push(`outgoing: ${detail.outgoing.map(outgoingText).join('; ')}`);
+  if (detail.boundary?.length) out.push(`boundary: ${detail.boundary.join(', ')}`);
+  if (detail.children?.length) out.push(`children: ${detail.children.join(', ')}`);
+  if (detail.extensions.length) {
+    out.push('extensions:');
+    for (const ext of detail.extensions) out.push(`${INDENT}${extensionText(ext)}`);
+  }
+  for (const [k, v] of deferred) {
+    out.push(`${k}: ${scalar(v)}`);
+    printed.add(k);
+  }
+  for (const [k, v] of Object.entries(detail.attrs)) if (!printed.has(k)) out.push(`${k}: ${v}`);
+  return out.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* changes & problems                                                   */
+/* ------------------------------------------------------------------ */
+
+function changeLine(verb: string, c: Change): string {
+  let line = `${verb} ${c.kind} ${c.id}`;
+  if (c.name) line += ` ${q(c.name)}`;
+  if (c.detail) line += ` - ${c.detail}`;
+  return line;
+}
+
+/** One line per created/changed/removed entry, then warnings, then notes. */
+export function renderChanges(cs: ChangeSet): string {
+  const out: string[] = [];
+  if (cs.isEmpty) out.push('no changes');
+  for (const c of cs.created) out.push(changeLine('created', c));
+  for (const c of cs.changed) out.push(changeLine('changed', c));
+  for (const c of cs.removed) out.push(changeLine('removed', c));
+  for (const w of cs.warnings) out.push(`warning ${problemLine(w)}`);
+  for (const n of cs.notes) out.push(`note: ${n}`);
+  return out.join('\n');
+}
+
+function problemLine(p: Warning): string {
+  let head = p.code;
+  if (p.element) head += ` ${p.element}`;
+  if (p.related?.length) head += ` [${p.related.join(', ')}]`;
+  return `${head}: ${p.message}${p.hint ? `  (${p.hint})` : ''}`;
+}
+
+/** One line per finding: `CODE element [related]: message  (hint)`. */
+export function renderProblems(problems: Warning[]): string {
+  if (!problems.length) return 'no problems';
+  return problems.map(problemLine).join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* layout block of a mutation result                                    */
+/* ------------------------------------------------------------------ */
+
+function idList(ids: readonly string[], max = 8): string {
+  return ids.length <= max ? ids.join(', ') : `${ids.slice(0, max).join(', ')} (+${ids.length - max} more)`;
+}
+
+function problemText(p: LayoutProblem): string {
+  return `${p.kind} [${p.ids.join(', ')}]${p.detail ? ` ${p.detail}` : ''}`;
+}
+
+function problemList(list: readonly LayoutProblem[], max = 6): string {
+  const shown = list.slice(0, max).map(problemText).join(', ');
+  return list.length > max ? `${shown} (+${list.length - max} more)` : shown;
+}
+
+/** `format <op> #<index>: moved ...; rerouted ...; colored ...` (or `no change`), notes appended. */
+function formatLine(f: FormatResult): string {
+  const parts: string[] = [];
+  if (f.colored?.length) parts.push(`colored ${idList(f.colored)}`);
+  if (f.labels?.length) parts.push(`label placed ${idList(f.labels)}`);
+  if (f.moved.length) parts.push(`moved ${idList(f.moved)}`);
+  if (f.rerouted.length) parts.push(`rerouted ${idList(f.rerouted)}`);
+  if (!parts.length) parts.push('no change');
+  for (const n of f.notes ?? []) parts.push(`note: ${n}`);
+  return `${INDENT}format ${f.op} #${f.index}: ${parts.join('; ')}`;
+}
+
+/**
+ * The layout lines of a mutation result:
+ *   layout: ok - incremental (<reason>)       | layout: ok - full (<reason>) | layout: skipped
+ *     placed: ids / moved: ids / rerouted: ids / pruned: ids / note: text      (incremental)
+ *     format <op> #<i>: moved ids; rerouted ids; colored ids                  (format ops)
+ *   layout quality: score 12 -> 10; added: kind [ids], ...; resolved: kind [ids], ...
+ */
+export function renderLayout(layout: LayoutStatus): string[] {
+  const out: string[] = [];
+  const warnings = layout.warnings.length ? ` (${layout.warnings.length} warning${layout.warnings.length === 1 ? '' : 's'})` : '';
+  if (layout.status !== 'ok') out.push('layout: skipped');
+  else out.push(`layout: ok${layout.mode ? ` - ${layout.mode}${layout.reason ? ` (${layout.reason})` : ''}` : ''}${warnings}`);
+  for (const key of ['placed', 'moved', 'rerouted', 'pruned'] as const) {
+    const ids = layout[key];
+    if (ids?.length) out.push(`${INDENT}${key}: ${idList(ids)}`);
+  }
+  for (const n of layout.notes ?? []) out.push(`${INDENT}note: ${n}`);
+  for (const f of layout.format ?? []) out.push(formatLine(f));
+  const m = layout.metrics;
+  if (m) {
+    const score = m.before ? `score ${m.before.score} -> ${m.after.score}` : `score ${m.after.score}`;
+    const parts = [score];
+    if (m.added.length) parts.push(`${m.before ? 'added' : 'problems'}: ${problemList(m.added)}`);
+    if (m.resolved.length) parts.push(`resolved: ${problemList(m.resolved)}`);
+    out.push(`layout quality: ${parts.join('; ')}`);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* show --layout / metrics                                              */
+/* ------------------------------------------------------------------ */
+
+/** `score 12: crossings 1, labelOnLine 7` (non-zero counts in metric order). */
+function scoreLine(m: LayoutMetrics): string {
+  const counts = KEYS.filter((k) => m.counts[k] > 0).map((k) => `${k} ${m.counts[k]}`);
+  return `score ${m.score}${counts.length ? `: ${counts.join(', ')}` : ': no layout problems'}`;
+}
+
+/** `bpmn metrics`: the score line, then one line per problem. */
+export function renderMetrics(m: LayoutMetrics): string {
+  return [scoreLine(m), ...m.problems.map((p) => `${INDENT}${problemText(p)}`)].join('\n') + '\n';
+}
+
+/** `bpmn show --layout` (see module contract). */
+export function renderLayoutView(view: LayoutView): string {
+  const out: string[] = [];
+  if (!view.diagrams.length) out.push('no diagram');
+  for (const d of view.diagrams) {
+    out.push(`diagram ${d.id} (${d.root})`);
+    const depth = new Map<string, number>();
+    for (const g of d.groups) {
+      const level = g.parent !== undefined ? (depth.get(g.parent) ?? 0) + 1 : 1;
+      depth.set(g.id, level);
+      const pad = INDENT.repeat(level);
+      out.push(`${pad}${g.kind} ${g.id}${g.name ? ` ${q(g.name)}` : ''}`);
+      g.rows.forEach((row, i) => out.push(`${pad}${INDENT}row ${i + 1}: ${row.join(', ')}`));
+    }
+  }
+  if (view.colors.length) out.push(`colors: ${view.colors.map((c) => `${c.id} ${c.color === 'custom' ? `custom(${[c.fill, c.stroke].filter(Boolean).join('/')})` : c.color}`).join(', ')}`);
+  if (view.labels.length) out.push(`labels off their default side: ${view.labels.map((l) => `${l.id} ${l.side} (default ${l.default})`).join(', ')}`);
+  out.push(`layout quality: ${scoreLine(view.metrics)}`);
+  for (const p of view.metrics.problems) out.push(`${INDENT}${problemText(p)}`);
+  return out.join('\n') + '\n';
+}

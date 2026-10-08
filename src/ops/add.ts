@@ -1,0 +1,441 @@
+/**
+ * `add`: create one element and wire it in.
+ *
+ *  - parseKind(op.kind); rejected/unknown kinds -> E_UNSUPPORTED_KIND / E_UNKNOWN_KIND
+ *  - id: op.id (claimId) or doc.newId(def.prefix, op.name); when the slug
+ *    collides and a `_2` suffix is used, warn W_ID_SUFFIXED.
+ *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
+ *    ifAbsent without an id is E_USAGE (same rule as `apply`).
+ *  - flow options: default + condition -> E_USAGE, an empty condition ->
+ *    E_INVALID_VALUE (before anything is mutated); options the placement
+ *    cannot apply (no flow created by --in/--on, or --flow-id when the flow
+ *    into the node already existed) -> W_OPTION_IGNORED.
+ *  - eventSubProcess: a trigger (`eventSubProcess:<trigger>` or inferred from
+ *    --error/--message/--timer/...) also creates the triggered start event
+ *    inside it (id Event_<n>), so the event sub-process is valid in one op.
+ *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
+ *    applyTrigger() for events (default trigger 'none'; boundary events and
+ *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
+ *    a missing trigger is inferred from --timer/--message/... when given),
+ *    documentation (op.doc), sub-process expansion (op.collapsed ->
+ *    requestCollapse), lane: op.lane -> assignLane, else inherit the lane of
+ *    the after/before anchor (or of the host for boundary events).
+ *  - participant / lane -> containers.ts; dataObject / dataStore /
+ *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
+ *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them).
+ *  - op.set -> setProperties() from ./set.js on the new element.
+ *  - ChangeSet: the node's create entry comes first, flows follow (placeNode),
+ *    root Message/Error/Signal/Escalation elements created by the trigger are
+ *    reported too.
+ *
+ * Because 'expanded' lives in DI, explicit collapse requests are recorded per
+ * Doc (collapseRequests) so the pipeline can hand them to the layouter.
+ */
+import type { Doc } from '../document.js';
+import { CliError, modelError, usageError } from '../errors.js';
+import { slugify } from '../ids.js';
+import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
+import { addTo, is, localType, many, type El } from '../model.js';
+import { ChangeSet } from '../result.js';
+import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
+import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
+import { applyTrigger } from './events.js';
+import { assertCondition, placeNode, placementMode, placementScope } from './flows.js';
+import { setProperties } from './set.js';
+import type { AddOp, TriggerOptions } from './types.js';
+
+/* ------------------------------------------------------------------ */
+/* collapse registry                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Sub-process ids the AI asked to collapse, per document (read by the pipeline). */
+export const collapseRequests = new WeakMap<Doc, Set<string>>();
+
+/** Records that sub-process `id` must be laid out collapsed. */
+export function requestCollapse(doc: Doc, id: string): void {
+  let set = collapseRequests.get(doc);
+  if (!set) {
+    set = new Set<string>();
+    collapseRequests.set(doc, set);
+  }
+  set.add(id);
+}
+
+/** Sub-process ids recorded for collapsing on `doc`. */
+export function collapsedIds(doc: Doc): string[] {
+  return [...(collapseRequests.get(doc) ?? [])];
+}
+
+/* ------------------------------------------------------------------ */
+/* helpers                                                              */
+/* ------------------------------------------------------------------ */
+
+function idOf(el: El): string {
+  return el.get<string>('id');
+}
+
+/** Start triggers an event sub-process can be created with (`eventSubProcess:<trigger>`). */
+const EVENT_SUBPROCESS_TRIGGERS: Trigger[] = (kindByName('startEvent')?.triggers ?? []).filter((t) => t !== 'none');
+
+/** `eventSubProcess:<trigger>`: the trigger of the start event created inside it. */
+function parseEventSubProcessKind(token: string): ParsedKind | undefined {
+  const idx = token.indexOf(':');
+  if (idx < 0) return undefined;
+  let base: ParsedKind;
+  try {
+    base = parseKind(token.slice(0, idx));
+  } catch {
+    return undefined;
+  }
+  if (base.def.kind !== 'eventSubProcess') return undefined;
+  const raw = token.slice(idx + 1);
+  const trigger = normalizeTrigger(raw);
+  if (!trigger || !EVENT_SUBPROCESS_TRIGGERS.includes(trigger)) {
+    throw new CliError('E_INVALID_TRIGGER', `Trigger "${raw}" is not allowed on eventSubProcess. Allowed: ${EVENT_SUBPROCESS_TRIGGERS.join(', ')}`, 'usage', {
+      candidates: EVENT_SUBPROCESS_TRIGGERS,
+      hint: 'eventSubProcess:<trigger> creates the event sub-process with a startEvent:<trigger> inside, e.g. eventSubProcess:error --error PaymentFailed.',
+    });
+  }
+  return { def: base.def, trigger };
+}
+
+/** A bad kind token is a usage error (exit 1; test/cli.test.ts pins this for `add`). */
+function resolveKind(token: string): ParsedKind {
+  try {
+    return parseKind(token);
+  } catch (err) {
+    if (!(err instanceof KindError)) throw err;
+    const sub = parseEventSubProcessKind(token);
+    if (sub) return sub;
+    const msg = err.message;
+    if (/is rejected/.test(msg)) throw new CliError('E_UNSUPPORTED_KIND', msg, 'usage', { hint: 'Run `bpmn kinds` for the supported kinds.' });
+    if (/^Unknown kind/.test(msg)) throw new CliError('E_UNKNOWN_KIND', msg, 'usage', { candidates: err.candidates, hint: 'Run `bpmn kinds` for the full list.' });
+    throw new CliError('E_INVALID_TRIGGER', msg, 'usage', { hint: 'Use kind:trigger, e.g. startEvent:message or boundaryEvent:timer.' });
+  }
+}
+
+/** Warns W_ID_SUFFIXED when a generated `<prefix>_<Slug>` id had to be suffixed. */
+export function warnIfSuffixed(prefix: string, op: { id?: string; name?: string }, id: string, cs: ChangeSet): void {
+  if (op.id) return;
+  const slug = slugify(op.name);
+  if (slug && id !== `${prefix}_${slug}`) {
+    cs.warn({
+      code: 'W_ID_SUFFIXED',
+      message: `Id ${prefix}_${slug} is already taken; using ${id}`,
+      element: id,
+      hint: 'Pass --id <id> to choose the id yourself, or give the element a distinct name.',
+    });
+  }
+}
+
+/** Allocates the element id (explicit ids are validated and claimed) and warns about suffixes. */
+export function allocateElementId(doc: Doc, prefix: string, op: { id?: string; name?: string }, cs: ChangeSet): string {
+  if (op.id) {
+    doc.claimId(op.id);
+    return op.id;
+  }
+  const id = doc.newId(prefix, op.name);
+  warnIfSuffixed(prefix, op, id, cs);
+  return id;
+}
+
+const FLOW_NODE_FAMILIES: ReadonlySet<KindDef['family']> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
+
+const PLACEMENT_KEYS = ['after', 'before', 'flow', 'on', 'in'] as const;
+
+function rejectPlacement(op: AddOp, allowed: ReadonlyArray<(typeof PLACEMENT_KEYS)[number] | 'to'>, kind: string): void {
+  for (const key of [...PLACEMENT_KEYS, 'to'] as const) {
+    if (op[key] !== undefined && !allowed.includes(key)) {
+      throw modelError('E_INVALID_PLACEMENT', `--${key} does not apply to ${kind}`, {
+        hint: allowed.length ? `${kind} accepts ${allowed.map((k) => `--${k}`).join(', ')} only.` : `${kind} takes no placement options.`,
+      });
+    }
+  }
+}
+
+function addDocumentation(doc: Doc, el: El, text: string | undefined): void {
+  if (!text) return;
+  addTo(el, 'documentation', doc.moddle.create('bpmn:Documentation', { text }));
+}
+
+/** Trigger implied by the trigger options (e.g. --timer without :timer). */
+function inferTrigger(opts: TriggerOptions): Trigger | undefined {
+  if (opts.timer !== undefined) return 'timer';
+  if (opts.message !== undefined) return 'message';
+  if (opts.error !== undefined || opts.errorCode !== undefined) return 'error';
+  if (opts.signal !== undefined) return 'signal';
+  if (opts.escalation !== undefined || opts.escalationCode !== undefined) return 'escalation';
+  if (opts.when !== undefined) return 'conditional';
+  if (opts.link !== undefined) return 'link';
+  return undefined;
+}
+
+function hasTriggerOptions(opts: TriggerOptions): boolean {
+  return inferTrigger(opts) !== undefined || opts.nonInterrupting !== undefined;
+}
+
+const TRIGGER_KEYS = ['timer', 'timerKind', 'message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode', 'when', 'link', 'nonInterrupting'] as const;
+
+/** Just the trigger options of an op (handed to the start event of an event sub-process). */
+function triggerOptionsOf(opts: TriggerOptions): TriggerOptions {
+  const out: Record<string, unknown> = {};
+  for (const key of TRIGGER_KEYS) if (opts[key] !== undefined) out[key] = opts[key];
+  return out as TriggerOptions;
+}
+
+const FLOW_OPTION_FLAGS = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' } as const;
+
+function presentFlowOptions(op: AddOp): string[] {
+  return (Object.keys(FLOW_OPTION_FLAGS) as Array<keyof typeof FLOW_OPTION_FLAGS>).filter((k) => op[k] !== undefined && op[k] !== false).map((k) => FLOW_OPTION_FLAGS[k]);
+}
+
+/** Rejects contradictory or empty flow options before anything is mutated (same rules as `apply`). */
+function checkFlowOptions(op: AddOp): void {
+  if (op.default && op.condition !== undefined) {
+    throw usageError('--default and --condition are mutually exclusive: a default flow has no condition', {
+      hint: 'Keep the condition on the other branches and mark this one as default.',
+    });
+  }
+  assertCondition(op.condition);
+}
+
+/** W_OPTION_IGNORED for flow options the placement could not apply. */
+function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | undefined, cs: ChangeSet): void {
+  const id = idOf(node);
+  const mode = placementMode(op);
+  if (mode === 'in' || mode === 'none' || mode === 'on') {
+    const given = presentFlowOptions(op);
+    if (given.length) {
+      const why = mode === 'on' ? '--on attaches the event, it' : mode === 'in' ? '--in' : 'a placement without --after/--before/--flow';
+      cs.warn({
+        code: 'W_OPTION_IGNORED',
+        message: `${given.join(', ')} ignored for ${id}: ${why} creates no sequence flow into the node`,
+        element: id,
+        hint: 'Place the node with --after / --before / --flow, or connect it afterwards with `bpmn connect`.',
+      });
+    }
+    return;
+  }
+  if (op.flowId && !cs.created.some((c) => c.kind === 'sequenceFlow' && c.id === op.flowId)) {
+    const entry = entryFlow ?? doc.incoming(node)[0];
+    cs.warn({
+      code: 'W_OPTION_IGNORED',
+      message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
+      element: id,
+      ...(entry ? { related: [idOf(entry)] } : {}),
+      hint: `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${entry ? `; rename the existing one with \`bpmn set ${idOf(entry)} id=${op.flowId}\`` : ''}.`,
+    });
+  }
+}
+
+function rootLabel(el: El): string {
+  const local = localType(el);
+  return local.charAt(0).toLowerCase() + local.slice(1);
+}
+
+/** Reports root elements (messages, errors, ...) that appeared during `fn`. */
+function reportNewRoots(doc: Doc, cs: ChangeSet, fn: () => void): void {
+  const before = new Set(many(doc.definitions, 'rootElements'));
+  fn();
+  for (const root of many(doc.definitions, 'rootElements')) {
+    if (before.has(root)) continue;
+    const name = root.get<string | undefined>('name');
+    cs.create({ id: idOf(root), kind: rootLabel(root), ...(name ? { name } : {}), detail: 'root element' });
+  }
+}
+
+function isEventSubProcess(el: El | undefined): boolean {
+  return !!el && is(el, 'bpmn:SubProcess') && !!el.get<boolean | undefined>('triggeredByEvent');
+}
+
+function placementDetail(doc: Doc, op: AddOp): string {
+  switch (placementMode(op)) {
+    case 'between':
+      return `between ${op.after} and ${op.before}`;
+    case 'after':
+      return `after ${op.after}`;
+    case 'before':
+      return `before ${op.before}`;
+    case 'flow':
+      return `in flow ${op.flow}`;
+    case 'on':
+      return `on ${op.on}`;
+    default:
+      return `in ${idOf(placementScope(doc, op))}`;
+  }
+}
+
+/** The node whose lane a new node inherits (anchor / host / flow source). */
+function laneAnchor(doc: Doc, op: AddOp): El | undefined {
+  if (op.on) return doc.get(op.on);
+  if (op.after) return doc.get(op.after);
+  if (op.before) return doc.get(op.before);
+  if (op.flow) return doc.get(op.flow)?.get<El | undefined>('sourceRef');
+  return undefined;
+}
+
+/* ------------------------------------------------------------------ */
+/* flow nodes                                                           */
+/* ------------------------------------------------------------------ */
+
+/** Resolves --lane before anything is mutated (the target scope must be a process). */
+function resolveLane(doc: Doc, op: AddOp): El | undefined {
+  if (!op.lane) return undefined;
+  const lane = doc.require(op.lane, 'bpmn:Lane', 'lane');
+  const scope = placementScope(doc, op);
+  if (!is(scope, 'bpmn:Process')) {
+    throw modelError('E_INVALID_LANE_MEMBERSHIP', `Nodes inside sub-process ${idOf(scope)} cannot be lane members`, {
+      element: op.lane,
+      hint: 'Only nodes directly in the process can be assigned to lanes; drop --lane.',
+    });
+  }
+  return lane;
+}
+
+function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet): El {
+  checkFlowOptions(op);
+  const explicitLane = resolveLane(doc, op);
+  const id = allocateElementId(doc, def.prefix, op, cs);
+  const el = doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
+  const isEvent = def.family === 'event';
+  const isEventSub = def.kind === 'eventSubProcess';
+  // an event sub-process created with a trigger gets its triggered start event in the same op
+  const startTrigger = isEventSub ? (trigger ?? inferTrigger(op)) : undefined;
+  if (!isEvent && !startTrigger && hasTriggerOptions(op)) {
+    cs.warn({
+      code: 'W_OPTION_IGNORED',
+      message: isEventSub ? `Trigger options are ignored for eventSubProcess ${id}: no trigger given` : `Trigger options are ignored for ${def.kind} ${id}`,
+      element: id,
+      hint: isEventSub ? 'Use eventSubProcess:<trigger> or --error/--message/--timer/... to create the start event with the sub-process.' : 'Trigger options apply to events only.',
+    });
+  }
+  if (op.collapsed && def.family !== 'subProcess') {
+    cs.warn({ code: 'W_OPTION_IGNORED', message: `--collapsed is ignored for ${def.kind} ${id}`, element: id, hint: '--collapsed applies to sub-processes only.' });
+  }
+
+  const entry = { id, kind: def.kind, ...(op.name ? { name: op.name } : {}), detail: placementDetail(doc, op) };
+  cs.create(entry);
+  const entryFlow = placeNode(doc, el, op, cs);
+  warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
+
+  if (isEvent) {
+    let resolved = trigger ?? inferTrigger(op);
+    if (!resolved) {
+      const scope = doc.scopeOf(el);
+      if (is(el, 'bpmn:BoundaryEvent')) {
+        throw modelError('E_TRIGGER_REQUIRED', `Boundary event ${id} needs a trigger`, {
+          element: id,
+          candidates: def.triggers ?? [],
+          hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer PT2D or boundaryEvent:error --error PaymentFailed.`,
+        });
+      }
+      if (is(el, 'bpmn:StartEvent') && isEventSubProcess(scope)) {
+        throw modelError('E_TRIGGER_REQUIRED', `Start event ${id} inside event sub-process ${idOf(scope!)} needs a trigger`, {
+          element: id,
+          candidates: (def.triggers ?? []).filter((t) => t !== 'none'),
+          hint: 'Use startEvent:<trigger>, e.g. startEvent:error --error PaymentFailed or startEvent:timer --timer R/PT1H.',
+        });
+      }
+      resolved = 'none';
+    }
+    reportNewRoots(doc, cs, () => applyTrigger(doc, el, resolved, op));
+    if (resolved !== 'none') entry.kind = kindLabel(el);
+  }
+  if (op.collapsed && def.family === 'subProcess') {
+    requestCollapse(doc, id);
+    cs.note(`${id} will be laid out collapsed`);
+  }
+  addDocumentation(doc, el, op.doc);
+
+  if (explicitLane) {
+    assignLane(doc, el, explicitLane, cs);
+  } else {
+    const anchor = laneAnchor(doc, op);
+    const scope = doc.scopeOf(el);
+    if (anchor && scope && is(scope, 'bpmn:Process')) {
+      const lane = laneOf(doc, anchor);
+      if (lane) assignLane(doc, el, lane, cs);
+    }
+  }
+  if (startTrigger) {
+    const startCs = addElement(doc, { op: 'add', kind: `startEvent:${startTrigger}`, in: id, ...triggerOptionsOf(op) });
+    const start = startCs.created[0];
+    if (start) start.detail = `start of event sub-process ${id}`;
+    cs.merge(startCs);
+  }
+  return el;
+}
+
+/* ------------------------------------------------------------------ */
+/* entry point                                                          */
+/* ------------------------------------------------------------------ */
+
+/** Creates one element according to `op` and returns what changed. */
+export function addElement(doc: Doc, op: AddOp): ChangeSet {
+  const cs = new ChangeSet();
+  const { def, trigger } = resolveKind(op.kind);
+
+  if (op.ifAbsent && !op.id) {
+    const slug = slugify(op.name);
+    throw usageError('--if-absent needs an explicit --id to check for', {
+      hint: slug ? `Pass --id ${def.prefix}_${slug} (the id add generates for "${op.name}"), or drop --if-absent.` : 'Pass --id <Prefix>_<Name> (the id add would generate), or drop --if-absent.',
+    });
+  }
+  if (op.ifAbsent && op.id && doc.has(op.id)) {
+    const existing = doc.get(op.id)!;
+    cs.note(`${op.id} already exists (${kindLabel(existing)}); nothing to do`);
+    if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
+      cs.warn({
+        code: 'W_KIND_MISMATCH',
+        message: `${op.id} exists but is a ${kindLabel(existing)}, not a ${def.kind}`,
+        element: op.id,
+        hint: 'Use `retype` to change its kind, or pick another id.',
+      });
+    }
+    return cs;
+  }
+
+  let el: El;
+  switch (def.family) {
+    case 'participant':
+      rejectPlacement(op, [], 'participant');
+      el = createParticipant(doc, op, cs);
+      break;
+    case 'lane':
+      rejectPlacement(op, ['in'], 'lane');
+      el = createLane(doc, op, cs);
+      break;
+    case 'data': {
+      rejectPlacement(op, ['in', 'to'], def.kind);
+      const scope = doc.requireScope(op.in);
+      const opts = { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}) };
+      el = def.kind === 'dataStore' ? createDataStore(doc, scope, opts, cs) : createDataObject(doc, scope, opts, cs);
+      if (op.to) createDataAssociation(doc, el, doc.require(op.to), {}, cs);
+      break;
+    }
+    case 'artifact': {
+      rejectPlacement(op, ['in', 'to'], def.kind);
+      const scope = doc.requireScope(op.in);
+      const text = op.text ?? op.name;
+      el = createTextAnnotation(doc, scope, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(text ? { text } : {}) }, cs);
+      if (op.to) createAssociation(doc, doc.require(op.to), el, {}, cs);
+      break;
+    }
+    default:
+      el = addFlowNode(doc, op, def, trigger, cs);
+      break;
+  }
+
+  if (!FLOW_NODE_FAMILIES.has(def.family)) {
+    warnIfSuffixed(def.prefix, op, idOf(el), cs);
+    addDocumentation(doc, el, op.doc);
+    if (op.lane) {
+      cs.warn({ code: 'W_OPTION_IGNORED', message: `--lane is ignored for ${def.kind} ${idOf(el)}`, element: idOf(el), hint: 'Only flow nodes can be lane members.' });
+    }
+  }
+  if (op.set && Object.keys(op.set).length) {
+    cs.merge(setProperties(doc, { op: 'set', id: idOf(el), values: op.set }));
+  }
+  doc.invalidate();
+  return cs;
+}
