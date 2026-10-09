@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { applyToXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
 import { checkFile } from '../src/node/files.js';
 import { findContentRepo, resolveFileProfile } from '../src/node/repo.js';
@@ -145,7 +146,10 @@ ${proc([n('startEvent', 'QS'), n('receiveTask', 'B'), n('endEvent', 'QE'), f('Q1
   { name: 'a call activity without calledElement (design model)', xml: defs(proc([n('startEvent', 'S'), n('callActivity', 'A'), n('endEvent', 'E'), f('F1', 'S', 'A'), f('F2', 'A', 'E')].join('\n'))), codes: ['W_DESIGN_CALL_LINK'], designIq: 'pass' },
   { name: 'a business rule task without decision (design model)', xml: defs(proc([n('startEvent', 'S'), n('businessRuleTask', 'A'), n('endEvent', 'E'), f('F1', 'S', 'A'), f('F2', 'A', 'E')].join('\n'))), codes: ['W_DESIGN_DECISION_LINK'], designIq: 'pass' },
   { name: 'a business rule task with design-iq\'s calledDecision', xml: defs(proc([n('startEvent', 'S'), n('businessRuleTask', 'A', 'calledDecision="risk"'), n('endEvent', 'E'), f('F1', 'S', 'A'), f('F2', 'A', 'E')].join('\n'))), codes: [], designIq: 'pass' },
-  { name: 'no diagram at all', xml: defs(proc(LINE)), codes: ['E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI'], designIq: 'fail', di: false },
+  { name: 'documentation text that looks like a prefixed attribute (design-iq scans the raw text)', xml: defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation>Set key app:mode="prod" first</bpmn:documentation></bpmn:task>'))), codes: ['E_DESIGN_NAMESPACE'], designIq: 'fail' },
+  { name: 'a CDATA section with a prefixed element', xml: defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation><![CDATA[Example: <xs:element name="a"/>]]></bpmn:documentation></bpmn:task>'))), codes: ['E_DESIGN_NAMESPACE'], designIq: 'fail' },
+  { name: 'a condition ${x:y="z"} (no whitespace before the prefix)', xml: defs(proc([n('startEvent', 'S'), n('task', 'A'), n('endEvent', 'E'), f('F1', 'S', 'A'), '<bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="E"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${x:y="z"}</bpmn:conditionExpression></bpmn:sequenceFlow>'].join('\n'))), codes: [], designIq: 'pass' },
+  { name: 'no diagram at all', xml: defs(proc(LINE)), codes:['E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI'], designIq: 'fail', di: false },
   { name: 'no process', xml: defs('<bpmn:collaboration id="C"><bpmn:participant id="Pool" /></bpmn:collaboration>'), codes: ['E_DESIGN_NO_PROCESS'], designIq: 'fail', di: false },
 ];
 
@@ -191,6 +195,44 @@ describe('design profile rules', () => {
     expect(designFindings(doc).filter((x) => x.code === 'E_DESIGN_NAMESPACE').map((x) => x.message)).toEqual([
       'The namespace prefix foo: is used but never declared (xmlns:foo="..." is missing); strict XML parsers, design-iq\'s included, reject the file',
     ]);
+  });
+
+  it('the namespace check runs on the raw text like design-iq\'s: text, CDATA, comments and attribute values count', async () => {
+    const found = async (body: string): Promise<string[]> => designFindings(await Doc.fromXml(defs(proc(LINE.replace('<bpmn:task id="A" />', body))))).filter((x) => x.code === 'E_DESIGN_NAMESPACE').map((x) => `${x.element}: ${x.message}`);
+    expect(await found('<bpmn:task id="A"><bpmn:documentation>Set key app:mode="prod" before you start</bpmn:documentation></bpmn:task>')).toEqual([
+      'A: design-iq\'s namespace check reads `app:mode="` in the text of <bpmn:documentation> of A as the namespace prefix app:, which the file never declares (it scans the raw text, not only the markup); design-iq refuses to save the file',
+    ]);
+    expect(await found('<bpmn:task id="A"><bpmn:documentation><![CDATA[Example: <xs:element name="a"/> ]]></bpmn:documentation></bpmn:task>')).toEqual([expect.stringContaining('`<xs:element` in a CDATA section of <bpmn:documentation> of A as the namespace prefix xs:')]);
+    expect(await found('<bpmn:task id="A"><!-- <camunda:inputOutput/> --></bpmn:task>')).toEqual([expect.stringContaining('`<camunda:inputOutput` in an XML comment of <bpmn:task> A as the namespace prefix camunda:')]);
+    expect(await found(`<bpmn:task id="A" name='Say x:y="hi"' />`)).toEqual([expect.stringContaining('`x:y="` in an attribute value of <bpmn:task> A as the namespace prefix x:')]);
+    // what design-iq's expressions do not match passes: no whitespace before the prefix, no quote after `=`, a declared prefix, xml:
+    expect(await found('<bpmn:task id="A"><bpmn:documentation>${x:y="z"} and app:mode=prod and a &lt;b&gt;</bpmn:documentation></bpmn:task>')).toEqual([]);
+    expect(designFindings(await Doc.fromXml(defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation>Use app:mode="x"</bpmn:documentation></bpmn:task>')), 'xmlns:app="http://example.com/app"'))).filter((x) => x.code === 'E_DESIGN_NAMESPACE')).toEqual([]);
+    expect(await found('<bpmn:task id="A"><bpmn:documentation xml:lang="de">Text</bpmn:documentation></bpmn:task>')).toEqual([]);
+  });
+
+  it('a write whose text design-iq\'s namespace check refuses is refused (documentation, annotation text, CDATA)', async () => {
+    const xml = await withDi(defs(proc(LINE)));
+    const opts = { profile: 'design' as const, contentRepo: { processIds: ['order'], decisionIds: [] }, file: 'models/order.bpmn' };
+    const refusal = async (ops: Parameters<typeof applyToXml>[1], base = xml): Promise<string[]> => {
+      try {
+        await applyToXml(base, ops, opts);
+        return [];
+      } catch (err) {
+        const e = err as { code?: string; details?: { errors?: Array<{ code: string; validator?: string }> } };
+        expect(e.code).toBe('E_VALIDATION');
+        return (e.details?.errors ?? []).map((x) => `${x.validator}:${x.code}`);
+      }
+    };
+    expect(await refusal([{ op: 'set', id: 'A', values: { doc: 'Set key app:mode="prod" before you start' } }])).toEqual(['design:E_DESIGN_NAMESPACE']);
+    expect(await refusal([{ op: 'add', kind: 'userTask', name: 'Review', after: 'A', doc: 'Use cfg:level="high"' }])).toEqual(['design:E_DESIGN_NAMESPACE']);
+    expect(await refusal([{ op: 'add', kind: 'textAnnotation', text: 'Rule: ns:attr="x" applies', in: 'P' }])).toEqual(['design:E_DESIGN_NAMESPACE']);
+    // the text step keeps CDATA, so the new documentation is written as a literal <xs:element
+    const cdata = await withDi(defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation><![CDATA[Old note]]></bpmn:documentation></bpmn:task>'))));
+    expect(await refusal([{ op: 'set', id: 'A', values: { doc: 'Template: <xs:element name="a"/> here' } }], cdata)).toEqual(['design:E_DESIGN_NAMESPACE']);
+    // the same texts without what design-iq's expressions match are written
+    expect((await applyToXml(xml, [{ op: 'set', id: 'A', values: { doc: 'Set key app: mode=prod before you start' } }], opts)).unchanged).toBe(false);
+    expect((await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Review', after: 'A', doc: 'Template ${x:y="z"}' }], opts)).unchanged).toBe(false);
   });
 
   it('inside a content repository the links are checked against its models', async () => {

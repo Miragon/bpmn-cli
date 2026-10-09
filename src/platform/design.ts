@@ -23,7 +23,13 @@
  *                          participant or message flow without a shape or
  *                          edge (the visual editor breaks, design-iq hard
  *                          rule 2)
- *   E_DESIGN_NAMESPACE     a namespace prefix used but not declared
+ *   E_DESIGN_NAMESPACE     a namespace prefix used but not declared, found
+ *                          the way design-iq finds it: by two regular
+ *                          expressions on the raw text, so also text,
+ *                          CDATA, comments and attribute values that look
+ *                          like a prefixed element (`<xs:element `) or
+ *                          attribute (` app:mode="`) count
+ *                          (undeclaredPrefixes)
  *   E_DESIGN_NO_PROCESS    no process at all
  *  warnings (W_DESIGN_*):
  *   W_DESIGN_COMPLEXITY    more than 9 activities in the file (7 +- 2)
@@ -53,6 +59,7 @@ import { kindLabel, triggerOf } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { decisionLinkOf } from '../ops/decision.js';
 import type { NamedValidator, ValidatorFinding } from '../validators.js';
+import { elementChildren, idOf as xmlIdOf, readXmlText, type XDocument, type XElement } from '../xmltext.js';
 import { ZEEBE_URI } from './descriptor.js';
 
 export interface DesignOptions {
@@ -62,6 +69,84 @@ export interface DesignOptions {
   decisionIds?: Iterable<string>;
   /** why the profile runs, for results (`--profile option`, `bpmiq.yml in <dir>`) */
   detail?: string;
+  /**
+   * the XML text design-iq would read (default: the text the document was
+   * read from, doc.source; the namespace check needs the text, without one it
+   * does not run)
+   */
+  text?: string;
+}
+
+/** A namespace prefix design-iq's namespace check finds used but undeclared, with its first use. */
+export interface UndeclaredPrefix {
+  prefix: string;
+  /** what the check matched, e.g. `<xs:element` or `app:mode="` */
+  snippet: string;
+  /** offset of the prefix in the text */
+  index: number;
+}
+
+/**
+ * design-iq's namespace check (@bpmiq/validator checkXmlNamespaces), on the
+ * text exactly as design-iq runs it: its XML parser is not namespace-aware,
+ * so it scans the raw text. A prefix is declared where `xmlns:<prefix>=`
+ * appears; it is used where `<<prefix>:<name>` is followed by whitespace,
+ * `/` or `>`, or where whitespace, `<prefix>:<name>` and `="` follow each
+ * other: in the markup, but also in text, CDATA sections, comments and
+ * attribute values (a documentation `Set app:mode="prod"` uses app:). `xml`
+ * and `xmlns` count as declared. In the order design-iq reports them.
+ */
+export function undeclaredPrefixes(text: string): UndeclaredPrefix[] {
+  const declared = new Set([...text.matchAll(/xmlns:([\w.-]+)=/g)].map((m) => m[1]!));
+  const used = new Map<string, UndeclaredPrefix>();
+  for (const m of text.matchAll(/<([\w.-]+):[\w.-]+[\s/>]/g)) {
+    if (!used.has(m[1]!)) used.set(m[1]!, { prefix: m[1]!, snippet: m[0].slice(0, -1), index: m.index! + 1 });
+  }
+  for (const m of text.matchAll(/\s([\w.-]+):[\w.-]+="/g)) {
+    if (!used.has(m[1]!)) used.set(m[1]!, { prefix: m[1]!, snippet: m[0].slice(1), index: m.index! + 1 });
+  }
+  return [...used.values()].filter((u) => u.prefix !== 'xml' && u.prefix !== 'xmlns' && !declared.has(u.prefix));
+}
+
+/**
+ * Where a match of the namespace check is: in the markup (an element or
+ * attribute name), or in an attribute value, text, a CDATA section or a
+ * comment, and of which element (`owner`: the nearest element with an id).
+ */
+function placeOf(text: string, index: number): { where: 'markup' | string; of?: string; owner?: string } {
+  const before = text.slice(0, index);
+  let where: string | undefined;
+  if (before.lastIndexOf('<!--') > before.lastIndexOf('-->')) where = 'in an XML comment';
+  else if (before.lastIndexOf('<![CDATA[') > before.lastIndexOf(']]>')) where = 'in a CDATA section';
+  else {
+    const lt = before.lastIndexOf('<');
+    if (lt > before.lastIndexOf('>')) {
+      // inside a tag: in a quoted value, or a name
+      let quote = '';
+      for (const c of before.slice(lt)) {
+        if (quote) quote = c === quote ? '' : quote;
+        else if (c === '"' || c === "'") quote = c;
+      }
+      where = quote ? 'in an attribute value' : 'markup';
+    } else where = 'in the text';
+  }
+  let doc: XDocument;
+  try {
+    doc = readXmlText(text);
+  } catch {
+    return { where };
+  }
+  // the innermost element around the match, and the nearest one with an id
+  let el: XElement | undefined = doc.root;
+  for (let inner: XElement | undefined = el; inner; ) {
+    el = inner;
+    inner = elementChildren(inner).find((c) => c.start <= index && index < c.end);
+  }
+  let owner: XElement | undefined = el;
+  while (owner && xmlIdOf(owner) === undefined) owner = owner.parent;
+  const ownerId = owner ? xmlIdOf(owner) : undefined;
+  const of = el ? `<${el.name}>${ownerId && owner !== el ? ` of ${ownerId}` : ownerId ? ` ${ownerId}` : ''}` : undefined;
+  return { where, ...(of ? { of } : {}), ...(ownerId ? { owner: ownerId } : {}) };
 }
 
 /** The name the design profile's findings carry (`[design]`, `validator: "design"`). */
@@ -147,13 +232,21 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
     out.push({ severity: 'warning', code, message, ...(element ? { element } : {}), hint, ...(key ? { key } : {}) });
   };
 
-  // a namespace prefix the file uses without declaring it: bpmn-moddle cannot read that content at all
-  const prefixes = new Set<string>();
-  for (const w of doc.importWarnings) {
-    const m = /missing namespace for prefix <([^>]+)>/.exec(w.message);
-    if (m && !prefixes.has(m[1]!)) {
-      prefixes.add(m[1]!);
-      error('E_DESIGN_NAMESPACE', `The namespace prefix ${m[1]}: is used but never declared (xmlns:${m[1]}="..." is missing); strict XML parsers, design-iq's included, reject the file`, undefined, `Declare xmlns:${m[1]}="<uri>" on bpmn:definitions in the XML, or remove the content (\`--force\` on the next write drops what bpmn-moddle could not read).`, { key: `namespace:${m[1]}` });
+  // design-iq's namespace check runs on the text as it is (markup, text, CDATA, comments and attribute values alike)
+  const text = opts.text ?? doc.source?.text;
+  for (const u of text === undefined ? [] : undeclaredPrefixes(text)) {
+    const place = placeOf(text!, u.index);
+    const key = { key: `namespace:${u.prefix}` };
+    if (place.where === 'markup') {
+      error('E_DESIGN_NAMESPACE', `The namespace prefix ${u.prefix}: is used but never declared (xmlns:${u.prefix}="..." is missing); strict XML parsers, design-iq's included, reject the file`, place.owner, `Declare xmlns:${u.prefix}="<uri>" on bpmn:definitions in the XML, or remove the content (\`--force\` on the next write drops what bpmn-moddle could not read).`, key);
+    } else {
+      error(
+        'E_DESIGN_NAMESPACE',
+        `design-iq's namespace check reads \`${u.snippet}\` ${place.where}${place.of ? ` of ${place.of}` : ''} as the namespace prefix ${u.prefix}:, which the file never declares (it scans the raw text, not only the markup); design-iq refuses to save the file`,
+        place.owner,
+        `Write the text so that neither \`<${u.prefix}:\` before a name nor \` ${u.prefix}:<name>="\` remains in the XML (e.g. \`${u.prefix}: \` with a space, or no quote after \`=\`): \`bpmn set <file> <id> documentation=<text>\` / \`name=<text>\`; or declare xmlns:${u.prefix}="<uri>" on bpmn:definitions.`,
+        key,
+      );
     }
   }
 
@@ -315,7 +408,8 @@ export function designValidator(opts: DesignOptions = {}): NamedValidator {
   return {
     name: DESIGN_VALIDATOR,
     ...(opts.detail ? { detail: opts.detail } : {}),
-    validateDoc: (doc) => designFindings(doc, opts),
+    // the text design-iq would read: before the change the text as read, after it the candidate (Doc.fromXml of it)
+    validateDoc: async (doc) => designFindings(doc, { ...opts, text: doc.source?.text ?? (await doc.toXml()) }),
     covers: DESIGN_COVERS,
   };
 }

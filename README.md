@@ -1115,7 +1115,7 @@ hard rules, checked the way design-iq checks them:
 | `E_DESIGN_DEAD_END` | every flow node except end events and event sub-processes (boundary events included) has an outgoing sequence flow |
 | `E_DESIGN_NOT_IN_LANE` | in a process with lanes every node except boundary events is listed by a top-level lane |
 | `E_DESIGN_NO_DI` | every flow node, sequence flow, data object / store reference, text annotation, association, group, top-level lane, participant and message flow has a shape or edge (design-iq's editor breaks without it) |
-| `E_DESIGN_NAMESPACE` | every namespace prefix the file uses is declared |
+| `E_DESIGN_NAMESPACE` | every namespace prefix the file uses is declared; checked like design-iq on the raw text, so text, CDATA, comments and attribute values that look like `<p:name` or ` p:name="` (a documentation `Set app:mode="prod"`) count as a use too |
 | `E_DESIGN_NO_PROCESS` | the file has a process |
 | `W_DESIGN_COMPLEXITY` | warning: more than 9 activities in the file (7 +- 2) |
 | `W_DESIGN_CALL_LINK` / `W_DESIGN_DECISION_LINK` | warnings: a call activity / business rule task of a design model links no process / decision; inside a content repository, a link to a process / decision that is no `.bpmn` / `.dmn` of its models folder |
