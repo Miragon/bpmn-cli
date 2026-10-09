@@ -60,12 +60,15 @@ import { isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from './ki
 import { addTo, is, walk, type El } from './model.js';
 import { assertSequenceFlowEndpoints } from './ops/flows.js';
 import { profileDelta, runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
+import type { ValidatorReport } from './validators.js';
 
 export interface ValidationResult {
   errors: Warning[];
   warnings: Warning[];
   /** the platform profile that ran (validateDoc with a platform option, mutations); its findings are among the warnings */
   platform?: PlatformSummary;
+  /** the validators that ran (the design profile, MutationOptions.validators; src/validators.ts); their findings are among the errors / warnings */
+  validators?: ValidatorReport[];
 }
 
 export interface ValidateOptions {

@@ -104,7 +104,8 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_WOULD_DROP_CONTENT', meaning: '`retype` to a kind that cannot hold the element\'s content (a sub-process with nodes -> task / callActivity) would delete that content; nothing was written. The ids are listed.', fix: 'Move what should stay out first (`bpmn move <file> <ids> --in <scopeId>`), or pass --force to retype anyway (the listed elements are deleted).' },
   { code: 'E_INVALID_RETYPE', meaning: '`retype` between incompatible families (e.g. task -> gateway, start -> end event).', fix: 'Retype within a family (task <-> task/subProcess/callActivity, gateway <-> gateway, event <-> event of the same position); otherwise remove and add.' },
   // write-time
-  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, so the file was not written (the new errors are listed in the details; errors the file already had do not block, see W_PREEXISTING_ERROR).', fix: 'Run `bpmn validate <file>` and fix the listed problems (every finding has its own code and hint), or pass --force to write anyway.' },
+  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (the design profile, `[design] E_DESIGN_*`; a host\'s validator in library use), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Run `bpmn validate <file>` and fix the listed problems (every finding has its own code and hint), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway. `--profile none` switches the design profile off.' },
+  { code: 'E_VALIDATOR_FAILED', meaning: 'A validator (MutationOptions.validators / checkFile validators in library use) threw or did not return an array of findings; nothing was written.', fix: 'Fix the validator or the input it cannot read, or run without it.' },
   { code: 'E_LAYOUT_*', meaning: 'The layout engine could not draw the model (e.g. E_LAYOUT_ERROR); the suffix is the layouter\'s own code, the message names the element.', fix: 'Check the element named in the message (unsupported kind, broken flow graph), or write without DI using --no-layout and run `bpmn layout` later.' },
   { code: 'E_LAYOUT_INCREMENTAL', meaning: '`--layout incremental` was requested and the incremental layout (keep the drawing, place what is new) failed; nothing was written.', fix: 'Retry with --layout full (redraws the whole diagram) or --no-layout (writes without updating the diagram), and report the command and file.' },
   { code: 'E_INTERNAL', meaning: 'An unexpected internal error (exit 70).', fix: 'Re-run with --json (or BPMN_DEBUG=1 for a stack trace) and report the command and file.' },
@@ -133,7 +134,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_LABEL_DROPPED', meaning: 'While bridging a removed node the outgoing flow label could not be carried over because the incoming flow has its own.', fix: 'Set the wanted label on the surviving flow with `bpmn set <file> <flowId> name=...`.' },
   { code: 'W_CONDITION_DROPPED', meaning: 'While bridging a removed node the outgoing flow condition could not be carried over.', fix: 'Set the condition on the surviving flow with `bpmn set <file> <flowId> condition=...`.' },
   { code: 'W_PROPERTY_DROPPED', meaning: '`retype` dropped a property the new kind does not have (e.g. script on a userTask); a trigger kind change (`set trigger=`, `retype`) dropped vendor attributes / extension elements of the old event definition (changing only the details of the same trigger keeps the definition; on an event with several definitions `set trigger=<t>` keeps that one and drops the others); `set loop=none|standard` (or standard -> multi-instance) dropped the vendor content of the old loop; a condition change dropped camunda:resource / the script language (an inline body replacing a script resource, a ${...} body that does not inherit a script language) or the inline body (a script resource replacing it); or `ext add` replaced a keyed item (same name / id) whose attributes, value or children the new one does not have.', fix: 'Re-add the information in a form the new kind supports (the hint says how, e.g. language=<lang> to keep a script language; for `ext add` the hint holds the `--xml` that keeps the old content), or accept the loss.' },
-  { code: 'W_PREEXISTING_ERROR', meaning: 'A structural error the model already had before this change (the message starts with its E_ code); it does not block the write.', fix: 'Fix it when convenient: `bpmn validate <file>` lists it with its own code and hint.' },
+  { code: 'W_PREEXISTING_ERROR', meaning: 'A structural error, or an error of a validator (the design profile: `[design]`), that the model already had before this change (the message starts with its original code); it does not block the write. A validator\'s error follows its element through a rename.', fix: 'Fix it when convenient: `bpmn validate <file>` lists it with its own code and hint.' },
   // vendor content: nested keys of set, ext structure, retype, connect, remove
   { code: 'E_WRONG_HOST', meaning: '`set`: a known camunda attribute was given to an element that does not carry it: the Camunda descriptor places it on a nested element (the event definition, the multi-instance loop or the condition expression), it is a process attribute given to a participant, or a `<slot>.<attr>` the nested element cannot carry (loop.camunda:collection on a standard loop).', fix: 'Use the prefixed key from the hint, e.g. `bpmn set <file> <id> definition.camunda:errorCodeVariable=code`, `bpmn set <file> <id> \'loop.camunda:collection=${items}\'`, `bpmn set <file> <flowId> condition.camunda:resource=<uri>`; set the trigger it needs first (trigger=error ...), loop=parallel for multi-instance attributes, or set it on the process id.' },
   { code: 'E_NO_NESTED_ELEMENT', meaning: '`set`: a definition. or condition. key names a nested element that does not exist (an event without trigger has no event definition; a flow or conditional event without condition has no condition expression), or a `definition[<n>]` / `definition[<trigger>]` selector matches no event definition.', fix: 'Give the event a trigger in the same command (`bpmn set <file> <id> trigger=<t> definition.<key>=<value>`) or set condition=<expr> / when=<expr> first; a script resource condition is created directly with `condition.camunda:resource=<uri> language=<lang>`. (loop. never needs this: a parallel multi-instance loop is created.)' },
@@ -187,6 +188,19 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_C7_EXCLUSIVE_GATEWAY_DEFAULT', meaning: '(practice) An exclusive gateway has exactly one flow without condition and no default; the engine takes it as the default and logs a warning.', fix: '`bpmn set <file> <flowId> default=true`.' },
   { code: 'W_C7_DUPLICATE_EXTENSION', meaning: '(practice) A second camunda:failedJobRetryTimeCycle on an element that is not asynchronous yet; the engines refuse the file once it is.', fix: 'Keep one: `bpmn ext add <file> <id> camunda:failedJobRetryTimeCycle --replace --body R3/PT5M`.' },
   { code: 'W_DECISION_RESULT_VARIABLE', meaning: '`set <id> calledDecision=<decision>` in a Camunda 8 file wrote a zeebe:calledDecision without a resultVariable; Camunda 8 requires one to deploy.', fix: '`bpmn ext add <file> <id> zeebe:calledDecision decisionId=<decision> resultVariable=<variable> --replace`.' },
+  // design profile (the design-iq save gate; `--profile design`, auto for the models of a content repository)
+  { code: 'E_DESIGN_*', meaning: 'An error of the design profile, which mirrors the save gate of Miragon\'s design-iq (@bpmiq/validator): design-iq refuses to save a model with such an error. The profile runs with `--profile design`, and by default (`--profile auto`) for the models of a design-iq content repository (a bpmiq.yml in the file\'s directory or above names a models folder that contains the file). It checks the result after the layout; like a structural error, one a change introduces blocks the write (E_VALIDATION) and one the file already had is W_PREEXISTING_ERROR. Findings carry `"validator": "design"` (`[design]` in text).', fix: 'Each finding\'s hint names the command. Make an edit that passes through an invalid state (a new start event before its path exists) in one transaction (`bpmn apply <file> ops.json`), or draft with `--profile none` and fix what `bpmn validate <file> --profile design` reports before saving.' },
+  { code: 'E_DESIGN_START_EVENTS', meaning: 'A process with flow nodes has no or more than one start event, or an embedded sub-process (not an event sub-process) has more than one; design-iq requires exactly one per process.', fix: 'None: `bpmn add <file> startEvent "<Name>" --before <firstNodeId>`. Several: keep one (`bpmn remove <file> <startId>`) and model the alternatives after it (an event-based gateway), or move a triggered start into an event sub-process.' },
+  { code: 'E_DESIGN_UNREACHABLE', meaning: 'A flow node without incoming sequence flow (start events, boundary events and event sub-processes excepted). design-iq checks every node, also where BPMN allows it: a compensation handler, a catching link event and the content of an ad-hoc sub-process are errors there too (the message says so).', fix: '`bpmn connect <file> <fromId> <id>` or `bpmn move <file> <id> --after <nodeId>`, or remove it; a construct design-iq cannot save is removed or kept with --profile none.' },
+  { code: 'E_DESIGN_DEAD_END', meaning: 'A flow node without outgoing sequence flow (end events and event sub-processes excepted), boundary events included. design-iq checks every node, also where BPMN allows it: a compensation handler or compensation boundary event, a throwing link event and the content of an ad-hoc sub-process are errors there too.', fix: '`bpmn add <file> endEvent "<Name>" --after <id>` or `bpmn connect <file> <id> <toId>`; a construct design-iq cannot save is removed or kept with --profile none.' },
+  { code: 'E_DESIGN_NOT_IN_LANE', meaning: 'The process has lanes and this node (not a boundary event) is in none of its top-level lanes. design-iq reads the top-level lanes only: a node in a child lane must be listed by its top-level lane too (bpmn-js writes it so).', fix: '`bpmn set <file> <id> lane=<laneId>`.' },
+  { code: 'E_DESIGN_NO_DI', meaning: 'A flow node, sequence flow, data object / store reference, text annotation, association, group, top-level lane, participant or message flow has no shape or edge in the diagram; design-iq\'s visual editor breaks without it (hard rule 2). Usually the result of --no-layout.', fix: 'Write with the layout (new elements are placed next to their neighbours), or `bpmn layout <file>` (redraws everything).' },
+  { code: 'E_DESIGN_NAMESPACE', meaning: 'The file uses a namespace prefix it never declares; strict XML parsers (design-iq\'s included) reject it, and bpmn-moddle cannot read that content (E_IMPORT_LOSSY on a write).', fix: 'Declare xmlns:<prefix> on bpmn:definitions in the XML, or let a --force write drop the unreadable content.' },
+  { code: 'E_DESIGN_NO_PROCESS', meaning: 'The file has no bpmn:process.', fix: 'Create the model with `bpmn new <file> --name "<Name>"`.' },
+  { code: 'W_DESIGN_*', meaning: 'A warning of the design profile (see E_DESIGN_*): design-iq saves the model but warns. A write reports the ones it introduced.', fix: 'The hint of each finding names the command.' },
+  { code: 'W_DESIGN_COMPLEXITY', meaning: 'The file has more than 9 activities (design-iq\'s 7 +- 2 rule; sub-process content counts).', fix: 'Extract a coherent part into its own model and call it (`bpmn add <file> callActivity "<Name>" ... calledElement=<processId>`).' },
+  { code: 'W_DESIGN_CALL_LINK', meaning: 'A call activity of a design model (no engine namespace) calls no process, or, inside a content repository, calls a process that is no .bpmn of its models folder (design-iq: refs/dangling).', fix: '`bpmn set <file> <id> calledElement=<processId>` (in design-iq the process id is the file stem of its .bpmn).' },
+  { code: 'W_DESIGN_DECISION_LINK', meaning: 'A business rule task of a design model calls no decision, or, inside a content repository, calls a decision that is no .dmn of its models folder (design-iq: refs/dangling).', fix: '`bpmn set <file> <id> calledDecision=<decisionId>` (in design-iq the decision id is the file stem of its .dmn).' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -297,11 +311,22 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'route', usage: 'bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]', summary: 'Diagram only: route one sequence / message flow again, optionally forcing the side it leaves its source and enters its target by.', examples: ['bpmn route order.bpmn Flow_8 --exit bottom --entry bottom'] },
   { name: 'space', usage: 'bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>]', summary: 'Diagram only: the modeler\'s space tool: everything right of (--after, within the pool) or below (--below) the element moves by one column / row (default) or <px>; frames grow. On a lane or pool it makes that frame bigger.', examples: ['bpmn space order.bpmn --after Activity_CheckInvoice', 'bpmn space order.bpmn --below Lane_Sales --by 80'] },
   { name: 'tidy', usage: 'bpmn tidy <file> [<id>...]', summary: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape). Same as `bpmn layout <file> --tidy`.', examples: ['bpmn tidy order.bpmn'] },
-  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings and the engine profile of the file\'s platform (Camunda 7 today: W_C7_* findings with a severity; W_C7_DEPLOY_* = the engines refuse the file), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict'] },
+  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7 today: W_C7_* findings with a severity; W_C7_DEPLOY_* = the engines refuse the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
   { name: 'kinds', usage: 'bpmn kinds [--json]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue.', examples: ['bpmn kinds', 'bpmn kinds --json'] },
   { name: 'guide', usage: 'bpmn guide', summary: 'This cheat sheet.', examples: ['bpmn guide'] },
+];
+
+/** The validation profiles (`--profile`, MutationOptions.profile; `bpmn kinds --json` -> profiles). */
+export const PROFILE_DOCS: Array<{ profile: string; description: string; codes?: string[] }> = [
+  { profile: 'auto', description: 'Default: the design profile for the models of a design-iq content repository (a bpmiq.yml in the file\'s directory or above names a models folder that contains the file), no profile otherwise.' },
+  {
+    profile: 'design',
+    description: 'design-iq\'s save gate (@bpmiq/validator): errors a change introduces block the write (E_VALIDATION), errors the file had are W_PREEXISTING_ERROR, introduced warnings are reported; validate reports all of them. Inside a content repository call and decision links are checked against its .bpmn / .dmn file stems.',
+    codes: ['E_DESIGN_START_EVENTS', 'E_DESIGN_UNREACHABLE', 'E_DESIGN_DEAD_END', 'E_DESIGN_NOT_IN_LANE', 'E_DESIGN_NO_DI', 'E_DESIGN_NAMESPACE', 'E_DESIGN_NO_PROCESS', 'W_DESIGN_COMPLEXITY', 'W_DESIGN_CALL_LINK', 'W_DESIGN_DECISION_LINK'],
+  },
+  { profile: 'none', description: 'No validation profile (structural validation, lint and the engine profile still run).' },
 ];
 
 export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
@@ -312,6 +337,7 @@ export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
   { option: '--no-layout', description: 'write without updating the diagram (stale DI of removed elements is pruned, new elements have no shape until `bpmn layout`; format operations still apply to the existing drawing)' },
   { option: '--force', description: 'write although the import was lossy (E_IMPORT_LOSSY), the change introduces validation errors (E_VALIDATION; errors the file already had never block) or a retype would delete a sub-process\'s content (E_WOULD_DROP_CONTENT); for `new`: overwrite an existing file' },
+  { option: '--profile <auto|design|none>', description: 'validation profile: design checks the result against design-iq\'s save gate (one start event per process, every node with incoming and outgoing flow, every node in a lane, a complete diagram; E_DESIGN_* errors the change introduces block the write); auto (default) runs it for the models of a design-iq content repository (a bpmiq.yml above the file); none switches it off' },
   { option: '--backup', description: 'write <file>.bak before overwriting' },
   { option: '--show', description: 'append the full model view to the result' },
   { option: '--strict', description: 'exit 5 when the result has warnings' },
@@ -500,6 +526,7 @@ export function kindsJson(): Record<string, unknown> {
     ops: OPS_SCHEMA,
     opsExample: opsExample(),
     layoutModes: [...LAYOUT_MODES],
+    profiles: PROFILE_DOCS,
     colors: SWATCHES,
     errors: ERROR_CATALOGUE,
     exitCodes: Object.fromEntries(EXIT_CODE_DOCS.map((e) => [String(e.code), e.meaning])),
@@ -613,6 +640,23 @@ export function guideText(): string {
       '  camunda:* as the fallback, Camunda 7 and CIB seven ignore operaton:* (validate says so in its platform line).',
     ].join('\n'),
   );
+  out.push(heading('DESIGN-IQ  (content repositories with a bpmiq.yml; --profile design anywhere)'));
+  out.push(
+    [
+      '  Inside a design-iq content repository every write checks its result against design-iq\'s save gate (the design',
+      '  profile; `validator design` in the result). A change that introduces an E_DESIGN_* error is refused, like the',
+      '  live host refuses the save: exactly one start event per process, every node with an incoming and an outgoing',
+      '  sequence flow (boundary events too; compensation, link events and ad-hoc content cannot be saved there), every',
+      '  node in a top-level lane when the process has lanes, a shape for every element. So build paths in one go:',
+      "    echo '[{\"op\":\"add\",\"kind\":\"userTask\",\"name\":\"Review\",\"after\":\"Activity_Check\"}]' | bpmn apply f.bpmn -",
+      '    bpmn add f.bpmn boundary:timer "2 days" --on Activity_Review --timer PT2D    refused: the boundary event has no path',
+      '    -> one transaction: the boundary event and `{"op":"add","kind":"end","name":"Escalated","after":"Event_2Days"}`',
+      '  Links: a call activity names the process it calls (`set <id> calledElement=<file stem>`), a business rule task',
+      '  its decision (`set <id> calledDecision=<file stem of the .dmn>`; written as calledDecision= in a design model,',
+      '  camunda:decisionRef in Camunda 7, zeebe:calledDecision in Camunda 8). `bpmn validate f.bpmn` lists everything;',
+      '  `--profile none` drafts without the gate, `--profile design` applies it outside a content repository.',
+    ].join('\n'),
+  );
   out.push(heading('COMMANDS'));
   for (const c of COMMANDS) {
     out.push(`\n  ${c.usage}`);
@@ -627,8 +671,9 @@ export function guideText(): string {
   out.push('  score <before> -> <after>; added: <kind> [ids]; resolved: ...", then "written: <file>" ("dry run: <file> not written").');
   out.push('  With --json: {ok, file, written, created, changed, removed, warnings, notes, layout: {status, mode, reason,');
   out.push('  warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op, index, moved, rerouted, colored?,');
-  out.push('  labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}}, validation: {errors, warnings},');
-  out.push('  importWarnings, view?}.');
+  out.push('  labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}}, validation: {errors, warnings,');
+  out.push('  platform?, validators?: [{name, detail?, errors, warnings, preexisting, resolved, counts}]}, importWarnings, view?}.');
+  out.push('  A validator\'s findings (the design profile) carry `validator` and `severity`; in text they read "[design] E_...".');
   out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates); with --json as');
   out.push('  {ok: false, error: {code, message, element?, related?, candidates?, hint?, op?}}.');
   out.push(placementSection());
@@ -636,7 +681,7 @@ export function guideText(): string {
   out.push(opsSection());
   out.push(exitCodesSection());
   out.push(heading('COMMON ERRORS'));
-  const common = ['E_NOT_FOUND', 'E_HAS_SUCCESSOR', 'E_AMBIGUOUS_SCOPE', 'E_CROSS_SCOPE', 'E_INVALID_PLACEMENT', 'E_TRIGGER_REQUIRED', 'E_UNKNOWN_KEY', 'E_WRONG_HOST', 'E_DUPLICATE_EXTENSION', 'E_VALIDATION', 'E_IMPORT_LOSSY', 'E_USAGE', 'E_LEAVES_CONTAINER', 'E_NO_ROOM'];
+  const common = ['E_NOT_FOUND', 'E_HAS_SUCCESSOR', 'E_AMBIGUOUS_SCOPE', 'E_CROSS_SCOPE', 'E_INVALID_PLACEMENT', 'E_TRIGGER_REQUIRED', 'E_UNKNOWN_KEY', 'E_WRONG_HOST', 'E_DUPLICATE_EXTENSION', 'E_VALIDATION', 'E_DESIGN_*', 'E_IMPORT_LOSSY', 'E_USAGE', 'E_LEAVES_CONTAINER', 'E_NO_ROOM'];
   for (const code of common) {
     const e = ERROR_CATALOGUE.find((d) => d.code === code);
     if (e) out.push(`  ${e.code}: ${e.meaning}\n      fix: ${e.fix}`);

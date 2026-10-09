@@ -21,6 +21,8 @@ import { listAllExtensions } from './ops/ext.js';
 import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
 import { checkFile, LAYOUT_MODES, loadDoc, mutateDoc, mutateFile, type LayoutMode, type MutationOptions, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
+import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
+import type { ValidatorReport } from './validators.js';
 import { buildView, elementDetail, findElements } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
@@ -43,8 +45,19 @@ function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** `[design] ` for a validator's finding (src/validators.ts), else ''. */
+function validatorTag(w: Warning): string {
+  const name = (w as Warning & { validator?: string }).validator;
+  return name ? `[${name}] ` : '';
+}
+
 function warningLine(w: Warning): string {
-  return `warning ${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+  return `warning ${validatorTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+}
+
+/** One line per validator that ran: its name, why it ran and the totals of the result. */
+function validatorLines(reports: readonly ValidatorReport[] | undefined, what: string): string[] {
+  return (reports ?? []).map((r) => `validator ${r.name}${r.detail ? ` (${r.detail})` : ''}: ${r.counts.errors} error(s), ${r.counts.warnings} warning(s) in the ${what}`);
 }
 
 function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean }): void {
@@ -75,9 +88,12 @@ function printMutation(result: MutationResult, opts: OutputOptions & { show?: bo
     // format ops change the drawing only: their lines follow in the layout block
     const formatOnly = result.changes.isEmpty && !!result.layout.format?.length && !result.changes.notes.length && !result.changes.warnings.length;
     if (changes && !formatOnly) lines.push(changes);
+    // errors only remain in a result written with --force
+    for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
     for (const w of [...result.validation.warnings, ...result.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId }))]) {
       lines.push(warningLine(w));
     }
+    lines.push(...validatorLines(result.validation.validators, 'result'));
     lines.push(...renderLayout(result.layout));
     if (result.written) lines.push(`written: ${result.file}`);
     else if (result.file) lines.push(`dry run: ${result.file} not written`);
@@ -97,7 +113,7 @@ function printError(err: unknown, json: boolean | undefined): never {
       if (d.element) lines.push(`  element: ${String(d.element)}`);
       if (Array.isArray(d.related) && d.related.length) lines.push(`  related: ${d.related.join(', ')}`);
       if (Array.isArray(d.candidates) && d.candidates.length) lines.push(`  candidates: ${d.candidates.join(', ')}`);
-      if (Array.isArray(d.errors)) for (const e of d.errors as Warning[]) lines.push(`  ${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}${e.hint ? `  (${e.hint})` : ''}`);
+      if (Array.isArray(d.errors)) for (const e of d.errors as Warning[]) lines.push(`  ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}${e.hint ? `  (${e.hint})` : ''}`);
       if (Array.isArray(d.warnings)) for (const w of d.warnings as string[]) lines.push(`  ${w}`);
       if (d.op !== undefined) lines.push(`  op: #${String(d.op)}`);
       if (d.hint) lines.push(`  hint: ${String(d.hint)}`);
@@ -115,6 +131,11 @@ function printError(err: unknown, json: boolean | undefined): never {
 /* option helpers                                                       */
 /* ------------------------------------------------------------------ */
 
+function profileArg(v: string): string {
+  if (!(PROFILE_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PROFILE_CHOICES.join(', ')}`);
+  return v;
+}
+
 function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): CommandType {
   cmd
     .option('--json', 'machine-readable output')
@@ -130,6 +151,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
   }
   return cmd
+    .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate: one start event, every node connected and in a lane, complete diagram) or none', profileArg)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
@@ -183,6 +205,7 @@ function mutationOptions(o: RawOpts): MutationOptions & OutputOptions {
     show: !!o['show'],
     strict: !!o['strict'],
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
+    ...(o['profile'] ? { profile: o['profile'] as ProfileChoice } : {}),
   };
 }
 
@@ -819,15 +842,17 @@ program
     if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
     return v;
   })
+  .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate) or none', profileArg)
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const report = await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' });
+      const report = await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' });
       const platform = report.validation.platform;
       const layoutWarnings = report.layout.status === 'ok' ? report.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId })) : [];
       const warnings = [...report.validation.warnings, ...layoutWarnings];
       const errors = [...report.validation.errors, ...(report.layout.status === 'failed' ? [report.layout.error] : [])];
       if (o['json']) {
-        printJson({ ok: errors.length === 0, file, errors, warnings, platform, layout: report.layout, importWarnings: report.importWarnings });
+        const { repo: _repo, ...profile } = report.profile;
+        printJson({ ok: errors.length === 0, file, errors, warnings, platform, profile, ...(report.validation.validators ? { validators: report.validation.validators } : {}), layout: report.layout, importWarnings: report.importWarnings });
       } else {
         const lines: string[] = [];
         if (report.importWarnings.length) lines.push(...report.importWarnings.map((w) => `import: ${w}`));
@@ -843,6 +868,7 @@ program
                 : '';
           lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
         }
+        lines.push(...validatorLines(report.validation.validators, 'file'));
         lines.push(
           report.layout.status === 'ok' ? 'layout: ok' : report.layout.status === 'failed' ? `layout: failed (${report.layout.error.code})` : 'layout: skipped',
         );
