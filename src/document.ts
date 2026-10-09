@@ -10,9 +10,10 @@
 import { readFile } from 'node:fs/promises';
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
-import { modelError, ioError } from './errors.js';
+import { modelError, ioError, usageError } from './errors.js';
 import { IdRegistry, isValidId } from './ids.js';
 import { kindLabel, suggestKinds } from './kinds.js';
+import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
 import {
   createDefinitions,
   createModdle,
@@ -46,8 +47,19 @@ export interface NewDocOptions {
   processId?: string;
   processName?: string;
   executable?: boolean;
-  /** declare vendor namespaces up front */
+  /** declare vendor namespaces up front (and, for camunda7, the Modeler's process defaults) */
   target?: 'camunda8' | 'camunda7' | 'none';
+}
+
+/** The values `new --target` (NewDocOptions.target) accepts. */
+export const TARGETS = ['camunda8', 'camunda7', 'none'] as const;
+
+/** E_USAGE for a target that is not one of TARGETS (Operaton and CIB seven files are camunda7). */
+export function assertTarget(target: unknown): asserts target is NewDocOptions['target'] {
+  if (target === undefined || (TARGETS as readonly unknown[]).includes(target)) return;
+  throw usageError(`Unknown --target "${String(target)}": expected camunda8 or camunda7`, {
+    hint: 'camunda7 also covers CIB seven and Operaton (they read the camunda: namespace); camunda8 is Zeebe. Omit --target for a plain BPMN file.',
+  });
 }
 
 /** True for elements somewhere below a bpmn:extensionElements container. */
@@ -93,6 +105,7 @@ export class Doc {
   }
 
   static create(opts: NewDocOptions = {}, file?: string): Doc {
+    assertTarget(opts.target);
     const moddle = createModdle();
     const ids = new IdRegistry();
     const processId = opts.processId ?? (opts.processName ? ids.next('Process', opts.processName) : 'Process_1');
@@ -113,8 +126,37 @@ export class Doc {
       doc.declareNamespace('camunda');
       doc.declareNamespace('modeler');
       definitions.$attrs['modeler:executionPlatform'] = 'Camunda Platform';
+      definitions.$attrs['modeler:executionPlatformVersion'] = C7_PLATFORM_VERSION;
+      doc.initProcess(rootProcesses(definitions)[0]!);
     }
     return doc;
+  }
+
+  /** The engine the file targets (see platform/descriptor.ts platformOf). */
+  platform(): 'camunda7' | 'camunda8' | undefined {
+    return platformOf(this.definitions);
+  }
+
+  /**
+   * Platform defaults for a process the CLI creates (`new`, a new participant):
+   * in a Camunda 7 file camunda:historyTimeToLive="180" like Camunda Modeler,
+   * since C7, CIB seven and Operaton refuse to deploy an executable process
+   * without a TTL. An existing value is never touched.
+   */
+  initProcess(process: El): void {
+    if (this.platform() !== 'camunda7') return;
+    const prefix = this.prefixFor(KNOWN_NAMESPACES['camunda']!) ?? 'camunda';
+    if (process.$attrs[`${prefix}:historyTimeToLive`] !== undefined) return;
+    this.declareNamespace(prefix, KNOWN_NAMESPACES['camunda']);
+    process.$attrs[`${prefix}:historyTimeToLive`] = C7_DEFAULT_TTL;
+  }
+
+  /** The prefix bpmn:definitions binds to a namespace URI (undefined when it is not declared there). */
+  prefixFor(uri: string): string | undefined {
+    for (const [key, value] of Object.entries(this.definitions.$attrs ?? {})) {
+      if (key.startsWith('xmlns:') && value === uri) return key.slice('xmlns:'.length);
+    }
+    return undefined;
   }
 
   /* ------------------------------------------------------------ */

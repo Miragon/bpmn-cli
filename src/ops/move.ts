@@ -29,7 +29,7 @@ import { addTo, is, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { assignLane } from './containers.js';
 import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, type PlacementOptions } from './flows.js';
-import { canLoopToItself, detachWithBridge } from './remove.js';
+import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { changeOf, idOf } from './set.js';
 import type { MoveOp } from './types.js';
 
@@ -211,9 +211,10 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   const predecessor = inFlow.get<El>('sourceRef');
   const successor = outFlow.get<El>('targetRef');
   if ((predecessor === successor && !canLoopToItself(predecessor)) || doc.scopeOf(predecessor) !== doc.scopeOf(successor)) return;
+  const via = group.map(idOf).join(', ');
+  assertBridgeAllowed(doc, outFlow.get<El>('sourceRef'), inFlow, outFlow, undefined, 'move', via);
   const outName = outFlow.get<string | undefined>('name');
   const outCond = outFlow.get<El | undefined>('conditionExpression');
-  const via = group.map(idOf).join(', ');
   if (outName && !inFlow.get<string | undefined>('name')) inFlow.set('name', outName);
   else if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
   const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
@@ -243,7 +244,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void 
   const targetScope = placementScope(doc, p);
   const boundaries = is(node, 'bpmn:Activity') ? doc.boundaryEventsOf(node) : [];
   const flowIds = [...doc.incoming(node), ...doc.outgoing(node)].map(idOf);
-  detachWithBridge(doc, node, true, cs);
+  detachWithBridge(doc, node, true, cs, undefined, 'move');
   reserveIds(doc, flowIds);
   leaveScope(doc, [node, ...boundaries], oldScope, targetScope, cs);
   placeNode(doc, node, p, cs);

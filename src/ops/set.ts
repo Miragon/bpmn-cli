@@ -27,10 +27,29 @@
  *    A trigger change that would leave a message flow at an event that can no
  *    longer send/receive it is refused (E_INVALID_TRIGGER), like `connect` would.
  *  Activities: loop (none|standard|parallel|sequential), cardinality,
- *    completion (completionCondition).
+ *    completion (completionCondition). Removing or replacing a loop reports
+ *    the vendor content that goes with it (W_PROPERTY_DROPPED).
+ *  Send / receive tasks: message (name of a root bpmn:Message, created when
+ *    missing; empty removes the reference).
+ *  Nested elements without an id of their own are addressed with a prefix:
+ *    `definition.<key>` (the event definition), `loop.<key>` (the loop
+ *    characteristics; a parallel multi-instance loop is created when missing),
+ *    `condition.<key>` (the condition expression of a sequence flow or a
+ *    conditional event). <key> is a vendor attribute (`loop.camunda:collection`)
+ *    or an attribute of the nested BPMN type (`loop.isSequential`), or `id`.
+ *    A camunda attribute the descriptor places on such a nested element is
+ *    refused on the parent (E_WRONG_HOST, hint names the prefixed key); the
+ *    same for a camunda attribute of a process set on its participant.
+ *  Conditions are changed in place (id and vendor attributes stay); an inline
+ *    body replacing a script resource drops camunda:resource and its language
+ *    (W_PROPERTY_DROPPED), and a `${...}` body never inherits a script language.
  *  Sub-processes: expanded (true|false) -> recorded in `expansionRequests`
  *    (the pipeline merges it into the layouter options); triggeredByEvent.
  *  Flow nodes: lane (lane id or empty to remove).
+ *  Rename (id=): every BPMN reference follows, plus string references
+ *    (calledElement, zeebe:calledElement processId) and the id-valued
+ *    attributes of camunda extension elements the descriptor knows
+ *    (camunda:errorEventDefinition errorRef).
  *  Text annotations: text.
  *  `key=` (empty value) and --unset remove the property.
  *  Unknown keys -> E_UNKNOWN_KEY listing the settable keys for that element.
@@ -42,13 +61,14 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
-import { kindLabel, kindOf, normalizeTrigger, triggerOf, type Trigger } from '../kinds.js';
+import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { diExpansionState } from '../layout.js';
-import { addTo, is, many, walk, type El } from '../model.js';
+import { addTo, is, localType, many, walk, type El } from '../model.js';
+import { attrAppliesTo, camundaAttr, camundaAttrsFor, CAMUNDA_URI, idReferenceAttrs, typeIs } from '../platform/descriptor.js';
 import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
-import { applyTrigger } from './events.js';
-import { flowChange, redirectFlow, setDefaultFlow, setFlowCondition } from './flows.js';
+import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
+import { assertCondition, flowChange, redirectFlow, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -151,6 +171,8 @@ const APPLIES_TO: Record<string, (el: El) => boolean> = {
   activity: (el) => is(el, 'bpmn:Activity'),
   subProcess: (el) => is(el, 'bpmn:SubProcess'),
   textAnnotation: (el) => is(el, 'bpmn:TextAnnotation'),
+  'sendTask, receiveTask': (el) => is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'),
+  conditionalEvent: (el) => is(el, 'bpmn:Event') && triggerOf(el) === 'conditional',
 };
 
 export const SET_KEYS: SetKeyDoc[] = [
@@ -181,6 +203,11 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'completion', appliesTo: 'activity', description: 'Multi-instance completion condition expression' },
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
+  { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
+  { key: 'definition.<key>', appliesTo: 'event', description: 'Attribute of the event definition, e.g. definition.camunda:errorCodeVariable=code, definition.camunda:type=external + definition.camunda:topic=x (message throw / end), definition.camunda:variableName=amount (conditional)' },
+  { key: 'loop.<key>', appliesTo: 'activity', description: 'Attribute of the loop characteristics, e.g. loop.camunda:collection=${items}, loop.camunda:elementVariable=item, loop.camunda:asyncBefore=true (creates a parallel multi-instance loop when none exists)' },
+  { key: 'condition.<key>', appliesTo: 'sequenceFlow', description: 'Attribute of the condition expression, e.g. condition.camunda:resource=deployment://check.groovy (a script resource condition; set language= too)' },
+  { key: 'condition.<key>', appliesTo: 'conditionalEvent', description: 'Attribute of the condition expression of a conditional event, e.g. condition.camunda:resource=deployment://ready.groovy condition.language=groovy; the event definition itself is definition.<key> (definition.camunda:variableName=amount)' },
   { key: 'lane', appliesTo: 'flowNode', description: 'Lane id the node belongs to (empty removes lane membership)' },
   { key: 'text', appliesTo: 'textAnnotation', description: 'Annotation text' },
 ];
@@ -265,26 +292,27 @@ function parseBool(el: El, key: string, value: string): boolean {
   throw invalidValue(el, key, `"${value}" is not a boolean`, `Use ${key}=true or ${key}=false.`);
 }
 
-function coerceValue(doc: Doc, el: El, p: PropDescriptor, value: string): unknown {
+/** Converts a string to the property's type; errors name `el` and `label` (the key as given). */
+function coerceValue(doc: Doc, el: El, p: PropDescriptor, value: string, label: string = p.name): unknown {
   if (p.isReference) return doc.require(value, p.type, p.name);
   switch (p.type) {
     case 'String':
       return value;
     case 'Boolean':
-      return parseBool(el, p.name, value);
+      return parseBool(el, label, value);
     case 'Integer': {
-      if (!/^-?\d+$/.test(value.trim())) throw invalidValue(el, p.name, `"${value}" is not an integer`);
+      if (!/^-?\d+$/.test(value.trim())) throw invalidValue(el, label, `"${value}" is not an integer`);
       return Number(value);
     }
     case 'Real': {
       const n = Number(value);
-      if (!value.trim() || Number.isNaN(n)) throw invalidValue(el, p.name, `"${value}" is not a number`);
+      if (!value.trim() || Number.isNaN(n)) throw invalidValue(el, label, `"${value}" is not a number`);
       return n;
     }
     default: {
       const literals = enumLiterals(doc, p.type) ?? [];
       const hit = literals.find((l) => l.toLowerCase() === value.trim().toLowerCase());
-      if (!hit) throw invalidValue(el, p.name, `"${value}" is not one of ${literals.join('|')}`);
+      if (!hit) throw invalidValue(el, label, `"${value}" is not one of ${literals.join('|')}`);
       return hit;
     }
   }
@@ -329,6 +357,7 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
   }
   const eventKeys = new Map<string, string>();
   const conditionKeys = new Map<string, string>();
+  const nested: Array<{ slot: string; key: string; value: string }> = [];
   if (is(el, 'bpmn:SequenceFlow')) {
     const wantsDefault = entries.some(([k, v]) => k === 'default' && v && parseBool(el, k, v));
     const wantsCondition = entries.some(([k, v]) => k === 'condition' && v);
@@ -337,6 +366,11 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
     }
   }
   for (const [key, value] of entries) {
+    const split = splitNestedKey(key);
+    if (split) {
+      nested.push({ ...split, value });
+      continue;
+    }
     if (EVENT_KEYS.has(key) && is(el, 'bpmn:Event')) {
       eventKeys.set(key, value);
       continue;
@@ -347,13 +381,28 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
     }
     applyKey(doc, el, key, value, cs);
   }
+  // nested keys run after the keys that create their element (loop=, trigger=, when=);
+  // a flow's condition.* keys run first, so that a script resource condition can take a language=
+  const flowCondition = is(el, 'bpmn:SequenceFlow') ? nested.filter((n) => n.slot === 'condition') : [];
+  const newResource = flowCondition.some((n) => n.value && isResourceKey(doc, n.key));
+  if (conditionKeys.get('condition') && newResource) {
+    throw invalidValue(el, 'condition', 'a condition is either an inline expression (condition=) or a script resource (condition.camunda:resource=), not both', 'Pass one of them; a script resource also needs language=<script language>.');
+  }
+  if (conditionKeys.has('condition') && newResource) {
+    // `condition= condition.camunda:resource=<uri>`: the inline body is replaced by the resource on purpose
+    conditionKeys.delete('condition');
+    el.get<El | undefined>('conditionExpression')?.set('body', undefined);
+  }
+  for (const n of flowCondition) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   if (conditionKeys.size) applyCondition(doc, el, conditionKeys, cs);
   if (eventKeys.size) applyEventKeys(doc, el, eventKeys, cs);
+  for (const n of nested) if (!flowCondition.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   doc.invalidate();
   return cs;
 }
 
 function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): void {
+  if (key.includes(':')) value = vendorValue(doc, el, key, value);
   const detail = value ? `${key}=${value}` : `${key} removed`;
   switch (key) {
     case 'id': {
@@ -397,11 +446,32 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       assignLane(doc, el, value ? doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
       break;
     }
+    case 'message':
+      if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw unknownKey(doc, el, key, 'applies to events, send tasks and receive tasks');
+      setTaskMessage(doc, el, value, cs);
+      break;
     default:
-      if (key.includes(':')) setVendorAttribute(doc, el, key, value);
-      else setModelProperty(doc, el, key, value);
+      if (key.includes(':')) {
+        if (value) assertVendorHost(doc, el, key, value);
+        setVendorAttribute(doc, el, key, value);
+      } else setModelProperty(doc, el, key, value);
   }
   cs.change(changeOf(el, detail));
+}
+
+/**
+ * Sets (or with an empty name removes) the message of a send / receive task:
+ * the root bpmn:Message is found by id or name, or created (`Message_<Slug>`,
+ * reported as created) like an event's message trigger.
+ */
+export function setTaskMessage(doc: Doc, task: El, name: string, cs: ChangeSet): void {
+  if (!name) {
+    task.set('messageRef', undefined);
+    return;
+  }
+  const { el: message, created } = ensureRootElement(doc, 'bpmn:Message', name);
+  task.set('messageRef', message);
+  if (created) cs.create({ id: idOf(message), kind: 'message', name: message.get<string>('name'), detail: 'root element' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -427,7 +497,9 @@ function setDocumentation(doc: Doc, el: El, value: string): void {
 function makeDefaultFlow(doc: Doc, flow: El, cs: ChangeSet): void {
   const source = flow.get<El>('sourceRef');
   const previous = source.get<El | undefined>('default');
-  const condition = flow.get<El | undefined>('conditionExpression')?.get<string | undefined>('body');
+  const expr = flow.get<El | undefined>('conditionExpression');
+  const resourceKey = resourceKeyOf(doc, expr);
+  const condition = expr?.get<string | undefined>('body') ?? (resourceKey ? `${resourceKey}=${String(expr!.$attrs[resourceKey])}` : undefined);
   setDefaultFlow(doc, flow, true);
   if (condition) {
     cs.warn({
@@ -472,15 +544,18 @@ function setLoopKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet)
     const mode = (value || 'none').trim().toLowerCase();
     if (mode === 'none') {
       el.set('loopCharacteristics', undefined);
+      if (current) dropLoop(doc, el, current, mode, cs);
     } else if (mode === 'standard') {
       if (!is(current, 'bpmn:StandardLoopCharacteristics')) {
         const loop = doc.moddle.create('bpmn:StandardLoopCharacteristics');
         loop.$parent = el;
         el.set('loopCharacteristics', loop);
+        if (current) dropLoop(doc, el, current, mode, cs);
       }
     } else if (mode === 'parallel' || mode === 'sequential') {
       const multi = isMulti ? current! : createMultiInstance(doc, el);
       multi.set('isSequential', mode === 'sequential');
+      if (current && !isMulti) dropLoop(doc, el, current, mode, cs);
     } else {
       throw invalidValue(el, key, `"${value}" is not one of none|standard|parallel|sequential`);
     }
@@ -509,6 +584,42 @@ function createMultiInstance(doc: Doc, el: El): El {
   return multi;
 }
 
+/** lowerCamel local type for messages, e.g. `multiInstanceLoopCharacteristics`. */
+function typeLabel(el: El): string {
+  const local = localType(el);
+  return local.charAt(0).toLowerCase() + local.slice(1);
+}
+
+/** Releases the ids of a removed loop and reports its vendor content (W_PROPERTY_DROPPED). */
+function dropLoop(doc: Doc, el: El, old: El, mode: string, cs: ChangeSet): void {
+  for (const e of walk(old, { bpmnOnly: true })) {
+    const id = e.get<string | undefined>('id');
+    if (id) doc.ids.release(id);
+  }
+  const lost = vendorContent(old);
+  if (!lost.length) return;
+  const oldId = old.get<string | undefined>('id');
+  cs.warn({
+    code: 'W_PROPERTY_DROPPED',
+    message: `${lost.join(', ')} of the ${typeLabel(old)}${oldId ? ` ${oldId}` : ''} of ${idOf(el)} ${lost.length > 1 ? 'were' : 'was'} dropped: loop=${mode} ${mode === 'none' ? 'removes the loop' : 'replaces it'}`,
+    element: idOf(el),
+    hint: 'Vendor attributes and extension elements belong to the old loop characteristics; set what the new loop still needs with `bpmn set <file> <id> loop.<prefix>:<attr>=<value>`.',
+  });
+}
+
+/**
+ * A camunda attribute the descriptor types as Boolean (asyncBefore, exclusive,
+ * isStartableInTasklist, ...) is written as exactly true / false: the engines
+ * read only the exact value "true" (asyncBefore=yes would silently stay off).
+ * Other values are written as given.
+ */
+function vendorValue(doc: Doc, el: El, key: string, value: string, label: string = key): string {
+  if (!value) return value;
+  const local = camundaLocal(doc, key);
+  if (!local || camundaAttr(local)?.type !== 'Boolean') return value;
+  return String(parseBool(el, label, value));
+}
+
 function setVendorAttribute(doc: Doc, el: El, key: string, value: string): void {
   const idx = key.indexOf(':');
   const prefix = key.slice(0, idx);
@@ -535,20 +646,358 @@ function setModelProperty(doc: Doc, el: El, key: string, value: string): void {
   el.set(key, coerceValue(doc, el, p, value));
 }
 
+/** True for a camunda:resource key (any prefix bound to the camunda namespace). */
+function isResourceKey(doc: Doc, key: string): boolean {
+  const [prefix, local] = key.split(':');
+  return local === 'resource' && !!prefix && doc.namespaceUri(prefix) === CAMUNDA_URI;
+}
+
+/** The camunda:resource attribute key of an expression, if it has one. */
+function resourceKeyOf(doc: Doc, expr: El | undefined): string | undefined {
+  if (!expr) return undefined;
+  return Object.keys(expr.$attrs ?? {}).find((k) => isResourceKey(doc, k) && expr.$attrs[k] !== undefined && expr.$attrs[k] !== '');
+}
+
+/** A body that is one `${...}` / `#{...}` expression (JUEL), not a script. */
+function isJuel(body: string): boolean {
+  return /^\s*[$#]\{[\s\S]*\}\s*$/.test(body);
+}
+
+/**
+ * condition= / language= of a sequence flow. The existing expression is
+ * updated in place (id and vendor attributes stay). An inline body replacing a
+ * script resource drops camunda:resource and, unless language= is given, the
+ * script's language; a JUEL body never inherits a script language. Both are
+ * reported (W_PROPERTY_DROPPED). A resource condition has no body but is a
+ * condition: language= works on it.
+ */
 function applyCondition(doc: Doc, flow: El, keys: Map<string, string>, cs: ChangeSet): void {
   const existing = flow.get<El | undefined>('conditionExpression');
-  const condition = keys.has('condition') ? keys.get('condition') : existing?.get<string | undefined>('body');
-  const language = keys.has('language') ? keys.get('language') || undefined : existing?.get<string | undefined>('language');
-  if (!condition) {
-    if (language && keys.has('language')) {
-      throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
+  const oldBody = existing?.get<string | undefined>('body');
+  const oldLanguage = existing?.get<string | undefined>('language');
+  const resourceKey = resourceKeyOf(doc, existing);
+  const hasCondition = !!existing && (!!oldBody || !!resourceKey);
+  if (!keys.has('condition')) {
+    const language = keys.get('language') || undefined;
+    if (!hasCondition) {
+      if (language) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> (or condition.camunda:resource=<uri>) too.' });
+      return;
     }
+    existing!.set('language', language);
+    cs.change(changeOf(flow, language ? `language=${language}` : 'language removed'));
+    return;
+  }
+  const condition = keys.get('condition') ?? '';
+  if (!condition) {
+    if (keys.get('language')) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
     setFlowCondition(doc, flow, undefined);
     cs.change(changeOf(flow, 'condition removed'));
     return;
   }
-  setFlowCondition(doc, flow, condition, language);
+  assertCondition(condition);
+  const dropped: string[] = [];
+  let language: string | undefined;
+  if (keys.has('language')) language = keys.get('language') || undefined;
+  else if (oldLanguage && resourceKey) dropped.push(`language ${oldLanguage}`);
+  else if (oldLanguage && isJuel(condition) && oldLanguage.toLowerCase() !== 'juel') dropped.push(`language ${oldLanguage}`);
+  else language = oldLanguage;
+  if (!existing || !is(existing, 'bpmn:FormalExpression')) {
+    setFlowCondition(doc, flow, condition, language);
+  } else {
+    if (resourceKey) {
+      dropped.unshift(`${resourceKey} ${String(existing.$attrs[resourceKey])}`);
+      delete existing.$attrs[resourceKey];
+    }
+    existing.set('body', condition);
+    existing.set('language', language);
+    const source = flow.get<El | undefined>('sourceRef');
+    if (source?.get<El | undefined>('default') === flow) source.set('default', undefined);
+  }
+  if (dropped.length) {
+    cs.warn({
+      code: 'W_PROPERTY_DROPPED',
+      message: `${dropped.join(' and ')} of the condition of ${idOf(flow)} ${dropped.length > 1 ? 'were' : 'was'} dropped: ${resourceKey ? 'the inline condition replaces the script resource' : `"${condition}" is an expression, not a ${oldLanguage} script`}`,
+      element: idOf(flow),
+      hint: resourceKey
+        ? 'To keep a script resource set condition.camunda:resource=<uri> (and language=<lang>) instead of condition=; to run the inline body as a script add language=<lang>.'
+        : `Pass language=${oldLanguage} together with condition= to keep the script language.`,
+    });
+  }
   cs.change(changeOf(flow, `condition=${condition}${language ? ` (${language})` : ''}`));
+}
+
+/* ------------------------------------------------------------------ */
+/* nested elements: definition. / loop. / condition.                     */
+/* ------------------------------------------------------------------ */
+
+/** Key prefixes that address a nested element without an id of its own. */
+export const NESTED_SLOTS = ['definition', 'loop', 'condition'] as const;
+export type NestedSlot = (typeof NESTED_SLOTS)[number];
+
+export const SLOT_TEXT: Record<NestedSlot, string> = {
+  definition: 'event definition',
+  loop: 'loop characteristics',
+  condition: 'condition expression',
+};
+
+/** `loop.camunda:collection` -> { slot: 'loop', key: 'camunda:collection' }; undefined for keys without a slot prefix. */
+export function splitNestedKey(key: string): { slot: string; key: string } | undefined {
+  const dot = key.indexOf('.');
+  if (dot <= 0) return undefined;
+  const colon = key.indexOf(':');
+  if (colon >= 0 && colon < dot) return undefined; // a vendor attribute with a dot in its name
+  return { slot: key.slice(0, dot), key: key.slice(dot + 1) };
+}
+
+/** The slots `el` has: definition (events), loop (activities), condition (sequence flows, conditional events). */
+export function slotsOf(el: El): NestedSlot[] {
+  const out: NestedSlot[] = [];
+  if (is(el, 'bpmn:Event')) out.push('definition');
+  if (is(el, 'bpmn:Activity')) out.push('loop');
+  if (is(el, 'bpmn:SequenceFlow') || (is(el, 'bpmn:Event') && triggerOf(el) === 'conditional')) out.push('condition');
+  return out;
+}
+
+/** The nested element a slot names on `el`, or undefined when it does not exist (yet). */
+export function nestedElement(el: El, slot: NestedSlot): El | undefined {
+  switch (slot) {
+    case 'definition':
+      return is(el, 'bpmn:Event') ? (el.get<El[] | undefined>('eventDefinitions') ?? [])[0] : undefined;
+    case 'loop':
+      return is(el, 'bpmn:Activity') ? el.get<El | undefined>('loopCharacteristics') : undefined;
+    case 'condition': {
+      if (is(el, 'bpmn:SequenceFlow')) return el.get<El | undefined>('conditionExpression');
+      const def = is(el, 'bpmn:Event') ? (el.get<El[] | undefined>('eventDefinitions') ?? [])[0] : undefined;
+      return is(def, 'bpmn:ConditionalEventDefinition') ? def!.get<El | undefined>('condition') : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Vendor attributes of an element (prefixed, without xmlns / xsi). */
+export function vendorAttributes(el: El): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(el.$attrs ?? {})) {
+    if (!k.includes(':') || k.startsWith('xmlns') || k.startsWith('xsi:') || k.startsWith('xml:') || v === undefined || v === null || typeof v === 'object') continue;
+    out[k] = String(v);
+  }
+  return out;
+}
+
+/** The local name when `key` is a camunda attribute (`camunda:assignee` -> `assignee`), else undefined. */
+function camundaLocal(doc: Doc, key: string): string | undefined {
+  const idx = key.indexOf(':');
+  if (idx <= 0) return undefined;
+  return doc.namespaceUri(key.slice(0, idx)) === CAMUNDA_URI ? key.slice(idx + 1) : undefined;
+}
+
+/** `key=value` for a hint, single-quoted when the shell would mangle it. */
+function shellPair(key: string, value: string): string {
+  const pair = `${key}=${value}`;
+  return /^[\w.:/,-]*$/.test(value) ? pair : `'${pair.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Where a camunda attribute that `el` cannot carry belongs instead: a nested
+ * slot of `el` (with the trigger an event needs first) or, for a participant,
+ * its process. undefined when the descriptor places it nowhere near `el`.
+ */
+function placeFor(el: El, name: string): { slot?: NestedSlot; trigger?: Exclude<Trigger, 'none'>; element?: El } | undefined {
+  if (is(el, 'bpmn:Event')) {
+    const def = nestedElement(el, 'definition');
+    if (def && attrAppliesTo(name, def)) return { slot: 'definition' };
+    if (triggerOf(el) === 'conditional' && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+    const current = triggerOf(el);
+    for (const t of kindOf(el)?.triggers ?? []) {
+      if (t === 'none' || t === current) continue;
+      if (attrAppliesTo(name, TRIGGER_TYPES[t])) return { slot: 'definition', trigger: t };
+    }
+  }
+  if (is(el, 'bpmn:Activity') && attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) return { slot: 'loop' };
+  if (is(el, 'bpmn:SequenceFlow') && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+  if (is(el, 'bpmn:Participant')) {
+    const process = el.get<El | undefined>('processRef');
+    if (process && attrAppliesTo(name, process)) return { element: process };
+  }
+  return undefined;
+}
+
+/**
+ * E_WRONG_HOST for a camunda attribute that belongs on a nested element of
+ * `el` (or on a participant's process) instead of `el` itself. Attributes the
+ * descriptor allows on `el`, unknown ones and other vendors pass.
+ */
+function assertVendorHost(doc: Doc, el: El, key: string, value: string): void {
+  const local = camundaLocal(doc, key);
+  if (!local) return;
+  const name = `camunda:${local}`;
+  if (attrAppliesTo(name, el) !== false) return;
+  const place = placeFor(el, name);
+  if (!place) return;
+  const id = idOf(el);
+  if (place.element) {
+    throw modelError('E_WRONG_HOST', `${key} is an attribute of the process, not of participant ${id}`, {
+      element: id,
+      related: [idOf(place.element)],
+      hint: `Use \`bpmn set <file> ${idOf(place.element)} ${shellPair(key, value)}\`.`,
+    });
+  }
+  const slot = place.slot!;
+  throw modelError('E_WRONG_HOST', `${key} does not belong on ${kindLabel(el)} ${id}: it is an attribute of its ${SLOT_TEXT[slot]}${place.trigger ? ` (${TRIGGER_TYPES[place.trigger].replace('bpmn:', '')})` : ''}`, {
+    element: id,
+    hint: `Use \`bpmn set <file> ${id} ${place.trigger ? `trigger=${place.trigger} ` : ''}${shellPair(`${slot}.${key}`, value)}\`${place.trigger ? ` (${id} needs a ${place.trigger} trigger for it)` : ''}.`,
+  });
+}
+
+/** Keys of a nested element that have their own set key (or are generated). */
+const NESTED_BLOCKED: Record<string, string> = {
+  body: 'use condition= / when= / timer= / cardinality= / completion=',
+};
+
+/** The BPMN types a slot can name (for the key table of `bpmn kinds --json`). */
+export const NESTED_TYPES: Record<NestedSlot, readonly string[]> = {
+  definition: [
+    'bpmn:MessageEventDefinition',
+    'bpmn:TimerEventDefinition',
+    'bpmn:ErrorEventDefinition',
+    'bpmn:SignalEventDefinition',
+    'bpmn:EscalationEventDefinition',
+    'bpmn:ConditionalEventDefinition',
+    'bpmn:LinkEventDefinition',
+    'bpmn:CompensateEventDefinition',
+    'bpmn:TerminateEventDefinition',
+    'bpmn:CancelEventDefinition',
+  ],
+  loop: ['bpmn:MultiInstanceLoopCharacteristics', 'bpmn:StandardLoopCharacteristics'],
+  condition: ['bpmn:FormalExpression'],
+};
+
+/**
+ * The `<slot>.<key>` keys a nested element of this type accepts: id, its
+ * settable BPMN attributes and the camunda attributes the Camunda descriptor
+ * places on it (other vendors' attributes are accepted too, unchecked).
+ */
+export function nestedKeysOf(doc: Doc, slot: NestedSlot, target: El): string[] {
+  const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k]), ...camundaAttrsFor(target).map((a) => a.name)];
+  return [...new Set(keys)].map((k) => `${slot}.${k}`);
+}
+
+/** Creates the nested element a non-empty `<slot>.<key>` needs, or explains why it cannot. */
+function createNested(doc: Doc, el: El, slot: NestedSlot, key: string, cs: ChangeSet): El {
+  const id = idOf(el);
+  const local = camundaLocal(doc, key);
+  if (slot === 'loop') {
+    const multi = doc.moddle.create('bpmn:MultiInstanceLoopCharacteristics');
+    checkNestedKey(doc, el, slot, multi, key);
+    multi.$parent = el;
+    el.set('loopCharacteristics', multi);
+    cs.note(`${id}: created a parallel multi-instance loop for loop.${key}`);
+    return multi;
+  }
+  if (slot === 'condition' && is(el, 'bpmn:SequenceFlow') && local === 'resource') {
+    const expr = doc.moddle.create('bpmn:FormalExpression');
+    expr.$parent = el;
+    el.set('conditionExpression', expr);
+    const source = el.get<El | undefined>('sourceRef');
+    if (source?.get<El | undefined>('default') === el) {
+      source.set('default', undefined);
+      cs.change(changeOf(el, `no longer the default flow of ${idOf(source)}`));
+    }
+    return expr;
+  }
+  if (slot === 'definition') {
+    const name = local ? `camunda:${local}` : undefined;
+    const trigger = name ? (kindOf(el)?.triggers ?? []).find((t) => t !== 'none' && attrAppliesTo(name, TRIGGER_TYPES[t])) : undefined;
+    throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition to set ${slot}.${key} on (it has no trigger)`, {
+      element: id,
+      hint: `Give it a trigger first: \`bpmn set <file> ${id} trigger=${trigger ?? '<trigger>'}\` (or in the same command, e.g. trigger=${trigger ?? 'message'} ${slot}.${key}=<value>).`,
+    });
+  }
+  throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no condition to set ${slot}.${key} on`, {
+    element: id,
+    hint: is(el, 'bpmn:SequenceFlow')
+      ? `Set the condition first (\`bpmn set <file> ${id} condition=<expression>\`), or make it a script resource condition with condition.camunda:resource=<uri> language=<lang>.`
+      : `Set the condition first: \`bpmn set <file> ${id} when=<expression>\`.`,
+  });
+}
+
+/** Refuses a key the nested element cannot carry (E_WRONG_HOST for known camunda attributes, E_UNKNOWN_KEY otherwise). */
+function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: string): void {
+  const id = idOf(el);
+  const full = `${slot}.${key}`;
+  if (key.includes(':')) {
+    const local = camundaLocal(doc, key);
+    if (!local || attrAppliesTo(`camunda:${local}`, target) !== false) return;
+    const owners = camundaAttr(local)?.owners ?? [];
+    const onElement = attrAppliesTo(`camunda:${local}`, el);
+    const multi = slot === 'loop' && owners.some((o) => typeIs('bpmn:MultiInstanceLoopCharacteristics', o));
+    throw modelError('E_WRONG_HOST', `${key} cannot be set on the ${typeLabel(target)} of ${kindLabel(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
+      element: id,
+      hint: multi
+        ? `Set loop=parallel or loop=sequential first (\`bpmn set <file> ${id} loop=parallel ${full}=<value>\`).`
+        : onElement
+          ? `It is an attribute of ${id} itself: \`bpmn set <file> ${id} ${key}=<value>\`.`
+          : `${key} belongs on ${owners.map((o) => o.replace('bpmn:', '')).join(', ')}.`,
+    });
+  }
+  if (key === 'id') return;
+  const p = descriptorOf(target).propertiesByName?.[key];
+  const blocked = NESTED_BLOCKED[key];
+  if (!p || blocked || !isSettableProp(doc, p)) {
+    const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k])].map((k) => `${slot}.${k}`);
+    throw modelError('E_UNKNOWN_KEY', `Unknown key "${full}" for ${kindLabel(el)} ${id}: a ${typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
+      element: id,
+      candidates: keys,
+      hint: `Keys of the ${SLOT_TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${slot}.<prefix>:<attr>.`,
+    });
+  }
+}
+
+/** A script resource replaces an inline body: the body goes, reported as W_PROPERTY_DROPPED. */
+function dropConditionBody(el: El, expr: El, cs: ChangeSet): void {
+  const body = expr.get<string | undefined>('body');
+  if (!body) return;
+  expr.set('body', undefined);
+  cs.warn({
+    code: 'W_PROPERTY_DROPPED',
+    message: `The condition "${body}" of ${idOf(el)} was dropped: a script resource condition has no inline body`,
+    element: idOf(el),
+    hint: `To keep the inline condition remove the resource again (condition.camunda:resource=) and set ${is(el, 'bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>.`,
+  });
+}
+
+/** Applies one `<slot>.<key>=<value>` (see the module contract). */
+function applyNestedKey(doc: Doc, el: El, slot: string, key: string, value: string, cs: ChangeSet): void {
+  const full = `${slot}.${key}`;
+  if (key.includes(':')) value = vendorValue(doc, el, key, value, full);
+  const slots = slotsOf(el);
+  if (!(NESTED_SLOTS as readonly string[]).includes(slot) || !slots.includes(slot as NestedSlot) || !key) {
+    throw unknownKey(doc, el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((s) => `${s}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
+  }
+  const s = slot as NestedSlot;
+  let target = nestedElement(el, s);
+  if (!target) {
+    if (!value) return; // nothing to remove
+    target = createNested(doc, el, s, key, cs);
+  }
+  if (value) checkNestedKey(doc, el, s, target, key);
+  if (s === 'condition' && value && isResourceKey(doc, key)) dropConditionBody(el, target, cs);
+  if (key.includes(':')) {
+    setVendorAttribute(doc, target, key, value);
+  } else if (key === 'id') {
+    if (!value) throw invalidValue(el, full, 'an id cannot be empty');
+    if (idOf(target)) renameId(doc, target, value);
+    else {
+      doc.claimId(value);
+      target.set('id', value);
+    }
+  } else {
+    checkNestedKey(doc, el, s, target, key);
+    const p = descriptorOf(target).propertiesByName![key]!;
+    target.set(key, value ? coerceValue(doc, el, p, value, full) : undefined);
+  }
+  cs.change(changeOf(el, value ? `${full}=${value}` : `${full} removed`));
 }
 
 /* ------------------------------------------------------------------ */
@@ -780,11 +1229,20 @@ export function renameId(doc: Doc, el: El, newId: string): void {
   doc.claimId(newId);
   el.set('id', newId);
   if (old) doc.ids.release(old);
+  // id-valued attributes of vendor extension elements are plain strings in the model
+  const vendorRefs = idReferenceAttrs().filter((r) => is(el, r.target));
   for (const e of walk(doc.definitions)) {
     if (is(e, 'bpmn:CallActivity') && e.get<string | undefined>('calledElement') === old) e.set('calledElement', newId);
-    if (descriptorOf(e).isGeneric && e.$type === 'zeebe:calledElement') {
-      const any = e as unknown as Record<string, unknown>;
-      if (any['processId'] === old) any['processId'] = newId;
+    if (!descriptorOf(e).isGeneric) continue;
+    const any = e as unknown as Record<string, unknown>;
+    if (e.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
+    if (!vendorRefs.length) continue;
+    const [prefix, local] = e.$type.split(':');
+    if (!prefix || !local || doc.namespaceUri(prefix) !== CAMUNDA_URI) continue;
+    for (const ref of vendorRefs) {
+      if (ref.element !== `camunda:${local}`) continue;
+      if (any[ref.attr] === old) any[ref.attr] = newId;
+      if (e.$attrs?.[ref.attr] === old) e.$attrs[ref.attr] = newId;
     }
   }
   doc.invalidate();
@@ -856,6 +1314,17 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     const lanes = doc.lanesOf(el);
     const lane = lanes[lanes.length - 1];
     if (lane) out['lane'] = idOf(lane);
+  }
+  if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask')) {
+    const message = ownValue(el, 'messageRef');
+    if (isEl(message)) out['message'] = message.get<string | undefined>('name') ?? idOf(message);
+  }
+  for (const slot of slotsOf(el)) {
+    const nestedEl = nestedElement(el, slot);
+    if (!nestedEl) continue;
+    const nestedId = nestedEl.get<string | undefined>('id');
+    if (nestedId) out[`${slot}.id`] = nestedId;
+    for (const [k, v] of Object.entries(vendorAttributes(nestedEl))) out[`${slot}.${k}`] = v;
   }
   return out;
 }

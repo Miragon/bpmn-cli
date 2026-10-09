@@ -627,7 +627,8 @@ describe('retype', () => {
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('Task_A')).toBe(order.indexOf('F1') + 1);
     expect(cs.changed).toEqual([{ id: 'Task_A', kind: 'serviceTask', name: 'Do A', detail: 'retyped from userTask to serviceTask' }]);
-    expect(cs.warnings).toEqual([]);
+    // camunda:assignee is kept but has no effect on a serviceTask (see test/c7-semantic.test.ts)
+    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_INAPPLICABLE']);
     const xml = await doc.toXml();
     expect(xml).toContain('<bpmn:serviceTask id="Task_A" name="Do A" camunda:assignee="alice">');
     expect(xml).not.toContain('bpmn:userTask');
@@ -1238,7 +1239,8 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
   it('warns W_OPTION_IGNORED for trigger options on a non-event and stays a no-op for the same kind', async () => {
     const doc = await fullDoc();
     const cs = retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
-    expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
+    // (W_PROPERTY_INAPPLICABLE for the camunda:assignee the serviceTask keeps is covered in test/c7-semantic.test.ts)
+    expect(cs.warnings.filter((w) => w.code !== 'W_PROPERTY_INAPPLICABLE')).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/timer/);
     expect(cs.changed[0]!.detail).toBe('retyped from userTask to serviceTask');
     const again = retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });

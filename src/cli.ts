@@ -11,18 +11,20 @@ import { Command, CommanderError, type Command as CommandType, InvalidArgumentEr
 import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
 import { layoutProblems } from './diagram/metrics.js';
 import { layoutView } from './diagram/view.js';
-import { Doc } from './document.js';
+import { assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
-import { renderChanges, renderDetail, renderLayout, renderLayoutView, renderMetrics, renderProblems, renderView } from './format.js';
+import { renderChanges, renderDetail, renderExtensionList, renderFind, renderLayout, renderLayoutView, renderMetrics, renderProblems, renderView } from './format.js';
 import { guideText, kindsJson, kindsText } from './guide.js';
 import { KindError, kindLabel, parseKind } from './kinds.js';
 import { SUB_PROCESS_TYPES } from './layout.js';
-import { listExtensions } from './ops/ext.js';
+import { listAllExtensions } from './ops/ext.js';
 import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
 import { checkFile, LAYOUT_MODES, loadDoc, mutateDoc, mutateFile, type LayoutMode, type MutationOptions, type MutationResult } from './pipeline.js';
+import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
 import { buildView, elementDetail, findElements } from './view.js';
 
-const VERSION = '0.1.0';
+/** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
+const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 /* ------------------------------------------------------------------ */
 /* output                                                               */
@@ -292,7 +294,14 @@ withMutationOptions(
     .option('--name <text>', 'process name')
     .option('--id <processId>', 'process id (default: Process_<Name> or Process_1)')
     .option('--no-executable', 'isExecutable=false')
-    .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces'),
+    .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (v: string) => {
+      try {
+        assertTarget(v);
+      } catch {
+        throw new InvalidArgumentError('expected camunda8 or camunda7 (camunda7 also covers CIB seven and Operaton)');
+      }
+      return v;
+    }),
 ).action(async (file: string, o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
@@ -365,7 +374,7 @@ program
 /* find --------------------------------------------------------------- */
 program
   .command('find <file> <text>')
-  .description('find elements by id or name (case-insensitive substring)')
+  .description('find elements by id, name or vendor attribute value (case-insensitive substring)')
   .option('--kind <kind>', 'restrict to a kind', kindArg)
   .option('--json', 'machine-readable output')
   .action(async (file: string, text: string, o: RawOpts) => {
@@ -373,7 +382,7 @@ program
       const doc = await Doc.load(file);
       const hits = findElements(doc, text, o['kind'] as string | undefined);
       if (o['json']) printJson(hits);
-      else print(hits.length ? hits.map((h) => `${h.kind} ${h.id}${h.name ? ` "${h.name}"` : ''}${h.scope ? `  (in ${h.scope})` : ''}`).join('\n') : 'no matches');
+      else print(renderFind(hits));
     }, !!o['json']);
   });
 
@@ -585,10 +594,10 @@ const ext = program.command('ext').description('vendor extension elements (<bpmn
 withMutationOptions(
   ext
     .command('add <file> <id> <type> [attrs...]')
-    .description('add an extension element, e.g. zeebe:taskDefinition type=send-email retries=3')
+    .description('add an extension element, e.g. zeebe:taskDefinition type=send-email retries=3; child types go into their container (camunda:inputParameter -> camunda:inputOutput), single-instance containers are merged; <type> may be a path (camunda:connector/camunda:inputParameter) and take a definition. / loop. / condition. prefix for a nested element')
     .option('--body <text>', 'text content')
-    .option('--xml <snippet>', 'raw XML snippet (may contain nested elements)')
-    .option('--replace', 'replace existing elements of the same type'),
+    .option('--xml <snippet>', 'raw XML snippet (may contain nested elements); its roots must be of <type>')
+    .option('--replace', 'replace existing elements of the same type (and key) instead of merging'),
 ).action(async (file: string, id: string, type: string, attrs: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
@@ -606,12 +615,18 @@ withMutationOptions(
     printMutation(result, opts);
   }, opts.json);
 });
-withMutationOptions(ext.command('remove <file> <id> <typeOrIndex>').description('remove extension elements by type or index')).action(
+withMutationOptions(
+  ext
+    .command('remove <file> <id> <selector>')
+    .description("remove extension elements: a type, one item ('camunda:inputParameter[name=x]', 'camunda:formField[1]'), a path, or an index from `ext list` (loop.0 for a nested element's)"),
+).action(
   async (file: string, id: string, typeOrIndex: string, o: RawOpts) => {
     const opts = mutationOptions(o);
     await run(async () => {
-      const op: ExtOp = /^\d+$/.test(typeOrIndex)
-        ? { op: 'ext', id, action: 'remove', index: Number(typeOrIndex) }
+      // `2` or `loop.2`: an index (of the element's own / of a nested element's extension elements); anything else a selector
+      const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
+      const op: ExtOp = indexed
+        ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as ExtOp['slot'] } : {}) }
         : { op: 'ext', id, action: 'remove', type: typeOrIndex };
       const result = await mutateFile(file, [op], opts);
       printMutation(result, opts);
@@ -620,22 +635,15 @@ withMutationOptions(ext.command('remove <file> <id> <typeOrIndex>').description(
 );
 ext
   .command('list <file> <id>')
-  .description('list extension elements of an element')
+  .description('list extension elements of an element (and of its event definition / loop / condition) as an indented tree')
   .option('--json', 'machine-readable output')
   .action(async (file: string, id: string, o: RawOpts) => {
     await run(async () => {
       const doc = await Doc.load(file);
       const el = doc.require(id);
-      const items = listExtensions(el);
+      const items = listAllExtensions(el);
       if (o['json']) printJson(items);
-      else
-        print(
-          items.length
-            ? items
-                .map((i) => `${i.index}: ${i.type}${Object.entries(i.attrs).map(([k, v]) => ` ${k}=${JSON.stringify(v)}`).join('')}${i.body ? ` "${i.body}"` : ''}${i.children?.length ? ` (${i.children.length} child element${i.children.length === 1 ? '' : 's'})` : ''}`)
-                .join('\n')
-            : 'no extension elements',
-        );
+      else print(renderExtensionList(items));
     }, !!o['json']);
   });
 
@@ -802,22 +810,31 @@ withMutationOptions(
 /* validate ----------------------------------------------------------- */
 program
   .command('validate <file>')
-  .description('structural validation, lint and a layout dry run (nothing is written)')
+  .description('structural validation, lint, the engine profile (Camunda 7) and a layout dry run (nothing is written)')
   .option('--json', 'machine-readable output')
   .option('--strict', 'exit with code 5 when there are warnings')
+  .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (v: string) => {
+    if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
+    return v;
+  })
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const report = await checkFile(file);
+      const report = await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' });
+      const platform = report.validation.platform;
       const layoutWarnings = report.layout.status === 'ok' ? report.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId })) : [];
       const warnings = [...report.validation.warnings, ...layoutWarnings];
       const errors = [...report.validation.errors, ...(report.layout.status === 'failed' ? [report.layout.error] : [])];
       if (o['json']) {
-        printJson({ ok: errors.length === 0, file, errors, warnings, layout: report.layout, importWarnings: report.importWarnings });
+        printJson({ ok: errors.length === 0, file, errors, warnings, platform, layout: report.layout, importWarnings: report.importWarnings });
       } else {
         const lines: string[] = [];
         if (report.importWarnings.length) lines.push(...report.importWarnings.map((w) => `import: ${w}`));
         if (errors.length) lines.push(renderProblems(errors).trimEnd());
         if (warnings.length) lines.push(renderProblems(warnings).trimEnd());
+        if (platform) {
+          const counts = platform.platform === 'none' ? '' : ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)`;
+          lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
+        }
         lines.push(
           report.layout.status === 'ok' ? 'layout: ok' : report.layout.status === 'failed' ? `layout: failed (${report.layout.error.code})` : 'layout: skipped',
         );

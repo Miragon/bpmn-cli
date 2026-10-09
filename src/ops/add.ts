@@ -13,6 +13,10 @@
  *  - eventSubProcess: a trigger (`eventSubProcess:<trigger>` or inferred from
  *    --error/--message/--timer/...) also creates the triggered start event
  *    inside it (id Event_<n>), so the event sub-process is valid in one op.
+ *  - send / receive tasks: --message <name> references a root bpmn:Message
+ *    (found by id or name, created when missing), like a message event.
+ *  - participants: a new process gets the platform defaults (Doc.initProcess:
+ *    camunda:historyTimeToLive in a Camunda 7 file).
  *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
  *    applyTrigger() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
@@ -41,7 +45,7 @@ import { createAssociation, createDataAssociation, createDataObject, createDataS
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger } from './events.js';
 import { assertCondition, placeNode, placementMode, placementScope } from './flows.js';
-import { setProperties } from './set.js';
+import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -174,6 +178,11 @@ function hasTriggerOptions(opts: TriggerOptions): boolean {
   return inferTrigger(opts) !== undefined || opts.nonInterrupting !== undefined;
 }
 
+/** Send and receive tasks reference a message like message events (`--message <name>`). */
+function takesMessage(def: KindDef): boolean {
+  return def.kind === 'sendTask' || def.kind === 'receiveTask';
+}
+
 const TRIGGER_KEYS = ['timer', 'timerKind', 'message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode', 'when', 'link', 'nonInterrupting'] as const;
 
 /** Just the trigger options of an op (handed to the start event of an event sub-process). */
@@ -301,12 +310,15 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   const isEventSub = def.kind === 'eventSubProcess';
   // an event sub-process created with a trigger gets its triggered start event in the same op
   const startTrigger = isEventSub ? (trigger ?? inferTrigger(op)) : undefined;
-  if (!isEvent && !startTrigger && hasTriggerOptions(op)) {
+  const messageTask = takesMessage(def) && op.message !== undefined;
+  if (!isEvent && !startTrigger && hasTriggerOptions(messageTask ? { ...op, message: undefined } : op)) {
     cs.warn({
       code: 'W_OPTION_IGNORED',
       message: isEventSub ? `Trigger options are ignored for eventSubProcess ${id}: no trigger given` : `Trigger options are ignored for ${def.kind} ${id}`,
       element: id,
-      hint: isEventSub ? 'Use eventSubProcess:<trigger> or --error/--message/--timer/... to create the start event with the sub-process.' : 'Trigger options apply to events only.',
+      hint: isEventSub
+        ? 'Use eventSubProcess:<trigger> or --error/--message/--timer/... to create the start event with the sub-process.'
+        : `Trigger options apply to events only${takesMessage(def) ? ' (a send / receive task takes --message)' : ''}.`,
     });
   }
   if (op.collapsed && def.family !== 'subProcess') {
@@ -341,6 +353,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     reportNewRoots(doc, cs, () => applyTrigger(doc, el, resolved, op));
     if (resolved !== 'none') entry.kind = kindLabel(el);
   }
+  if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
   if (op.collapsed && def.family === 'subProcess') {
     requestCollapse(doc, id);
     cs.note(`${id} will be laid out collapsed`);
@@ -397,10 +410,14 @@ export function addElement(doc: Doc, op: AddOp): ChangeSet {
 
   let el: El;
   switch (def.family) {
-    case 'participant':
+    case 'participant': {
       rejectPlacement(op, [], 'participant');
+      const before = new Set(doc.processes());
       el = createParticipant(doc, op, cs);
+      // platform defaults for the process a new pool brings (C7: history time to live)
+      for (const p of doc.processes()) if (!before.has(p)) doc.initProcess(p);
       break;
+    }
     case 'lane':
       rejectPlacement(op, ['in'], 'lane');
       el = createLane(doc, op, cs);

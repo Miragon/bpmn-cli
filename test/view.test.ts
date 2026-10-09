@@ -497,7 +497,7 @@ describe('buildView / renderView', () => {
     expect(view.processes[0]!.nodes[2]!.props).toEqual({ calledElement: 'Other' });
     const text = renderView(view);
     expect(text.startsWith('namespaces: camunda, zeebe\n')).toBe(true);
-    expect(text).toContain('  serviceTask A "Call worker" [loop=sequential, cardinality=3, ext: zeebe:taskDefinition, zeebe:ioMapping, camunda:asyncBefore, doc: "Talks to the payment provider"] -> C (F2)');
+    expect(text).toContain('  serviceTask A "Call worker" [loop=sequential, cardinality=3, camunda:asyncBefore=true, ext: zeebe:taskDefinition, zeebe:ioMapping, doc: "Talks to the payment provider"] -> C (F2)');
     expect(text).toContain('  callActivity C [calledElement=Other] -> End (F3)');
   });
 

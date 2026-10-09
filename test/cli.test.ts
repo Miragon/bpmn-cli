@@ -284,7 +284,8 @@ describe('bpmn cli contracts', () => {
     expect(r.code).toBe(1);
     expect(JSON.parse(r.err).error.code).toBe('E_UNKNOWN_KIND');
     expect(bpmn('--help').code).toBe(0);
-    expect(bpmn('--version').out.trim()).toBe('0.1.0');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect(bpmn('--version').out.trim()).toBe(pkg.version);
     r = bpmn('layout', '--help');
     expect(r.code).toBe(0);
     expect(r.out).not.toMatch(/--no-layout/);

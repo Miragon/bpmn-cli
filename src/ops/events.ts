@@ -6,7 +6,9 @@
  *    exactly one definition of that trigger, it is updated in place: only the
  *    details that differ (message, error, signal, escalation, condition, timer,
  *    link) change, so its id, vendor attributes (camunda:topic ...), extension
- *    elements and expression elements survive. Otherwise (a trigger KIND
+ *    elements and expression elements survive. A new inline condition (when=)
+ *    replacing a script resource drops camunda:resource and its language, and
+ *    a `${...}` condition drops a script language (W_PROPERTY_DROPPED). Otherwise (a trigger KIND
  *    change, 'none') the eventDefinitions are replaced by the one for
  *    `trigger` ('none' removes them) and vendor content of the replaced
  *    definitions is returned as W_PROPERTY_DROPPED warnings. Root
@@ -26,6 +28,7 @@ import type { Doc } from '../document.js';
 import { modelError, type Warning } from '../errors.js';
 import { kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { addTo, is, many, walk, type El } from '../model.js';
+import { CAMUNDA_URI } from '../platform/descriptor.js';
 import type { TriggerOptions } from './types.js';
 
 export interface TriggerDetails {
@@ -217,30 +220,63 @@ function updateTimer(doc: Doc, def: El, opts: TriggerOptions): void {
   for (const p of Object.values(TIMER_PROPS)) if (p !== prop && def.get<El | undefined>(p)) def.set(p, undefined);
 }
 
-function updateCondition(doc: Doc, def: El, opts: TriggerOptions): void {
-  if (opts.when === undefined) return;
+/**
+ * A new inline condition of a conditional event: like a sequence flow's
+ * condition (ops/set.ts), it replaces a script resource (camunda:resource and
+ * its language go) and a `${...}` body does not keep a script language; both
+ * are reported (W_PROPERTY_DROPPED).
+ */
+function updateCondition(doc: Doc, event: El, def: El, opts: TriggerOptions): Warning[] {
+  if (opts.when === undefined) return [];
   if (!opts.when.trim()) {
     throw modelError('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. --when '${approved}'." });
   }
+  const expr = def.get<El | undefined>('condition');
+  const dropped: string[] = [];
+  if (expr && expr.get<string | undefined>('body') !== opts.when) {
+    const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && doc.namespaceUri(k.split(':')[0]!) === CAMUNDA_URI);
+    const language = expr.get<string | undefined>('language');
+    if (resourceKey) {
+      dropped.push(`${resourceKey} ${String(expr.$attrs[resourceKey])}`);
+      delete expr.$attrs[resourceKey];
+    }
+    if (language && (resourceKey || (/^\s*[$#]\{[\s\S]*\}\s*$/.test(opts.when) && language.toLowerCase() !== 'juel'))) {
+      dropped.push(`language ${language}`);
+      expr.set('language', undefined);
+    }
+  }
   updateExpression(doc, def, 'condition', opts.when);
+  if (!dropped.length) return [];
+  return [
+    {
+      code: 'W_PROPERTY_DROPPED',
+      message: `${dropped.join(' and ')} of the condition of ${idOf(event)} ${dropped.length > 1 ? 'were' : 'was'} dropped: the new inline condition replaces ${dropped[0]!.startsWith('language') ? 'the script' : 'the script resource'}`,
+      element: idOf(event),
+      hint: 'To keep a script condition set condition.camunda:resource=<uri> or condition.language=<lang> after when=.',
+    },
+  ];
 }
 
 /** Applies the trigger options to an existing definition of the same trigger, touching only what differs. */
-function updateDefinition(doc: Doc, def: El, trigger: Exclude<Trigger, 'none'>, opts: TriggerOptions): void {
+function updateDefinition(doc: Doc, event: El, def: El, trigger: Exclude<Trigger, 'none'>, opts: TriggerOptions): Warning[] {
   if (isRefTrigger(trigger)) updateReference(doc, def, trigger, opts);
   else if (trigger === 'timer') updateTimer(doc, def, opts);
-  else if (trigger === 'conditional') updateCondition(doc, def, opts);
+  else if (trigger === 'conditional') return updateCondition(doc, event, def, opts);
   else if (trigger === 'link' && opts.link !== undefined && def.get<string | undefined>('name') !== opts.link) def.set('name', opts.link || undefined);
+  return [];
 }
 
 /* ------------------------------------------------------------------ */
 /* replacement (trigger kind change)                                    */
 /* ------------------------------------------------------------------ */
 
-/** Vendor content of an event definition: prefixed attributes, extension elements, documentation. */
-function vendorContent(def: El): string[] {
+/**
+ * Vendor content of a nested element (event definition, loop characteristics,
+ * expression): prefixed attributes, extension elements, documentation.
+ */
+export function vendorContent(def: El): string[] {
   const out: string[] = [];
-  for (const [k, v] of Object.entries(def.$attrs ?? {})) if (!k.startsWith('xmlns') && typeof v !== 'object') out.push(k);
+  for (const [k, v] of Object.entries(def.$attrs ?? {})) if (!k.startsWith('xmlns') && !k.startsWith('xsi:') && typeof v !== 'object') out.push(k);
   for (const ext of def.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) out.push(ext.$type);
   if ((def.get<El[] | undefined>('documentation') ?? []).length) out.push('documentation');
   return out;
@@ -346,9 +382,9 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   const defs = event.get<El[] | undefined>('eventDefinitions') ?? [];
   const same = trigger !== 'none' && defs.length === 1 && is(defs[0], TRIGGER_TYPES[trigger]) ? defs[0] : undefined;
   if (same && trigger !== 'none') {
-    updateDefinition(doc, same, trigger, opts);
+    const warnings = updateDefinition(doc, event, same, trigger, opts);
     doc.invalidate();
-    return [];
+    return warnings;
   }
   const fresh = trigger !== 'none' ? buildDefinition(doc, event, trigger, opts) : undefined;
   const warnings = dropDefinitions(doc, event, trigger);

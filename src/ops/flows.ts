@@ -11,7 +11,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
-import { kindLabel } from '../kinds.js';
+import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
 import type { FlowOptions, Placement } from './types.js';
@@ -123,6 +123,63 @@ export function assertSequenceFlowEndpoints(doc: Doc, source: El, target: El): v
       },
     );
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* event-based gateway targets                                          */
+/* ------------------------------------------------------------------ */
+
+/** Triggers an event-based gateway may wait for (an intermediate catch event with one of them). */
+const EVENT_GATEWAY_TRIGGERS = ['message', 'timer', 'signal', 'conditional'];
+
+/** Name of the message / signal a catch event waits for (the engines subscribe by name), else undefined. */
+function subscriptionOf(event: El): { kind: 'message' | 'signal'; name: string } | undefined {
+  const trigger = triggerOf(event);
+  if (trigger !== 'message' && trigger !== 'signal') return undefined;
+  const def = (event.get<El[] | undefined>('eventDefinitions') ?? [])[0];
+  const ref = def?.get<El | undefined>(trigger === 'message' ? 'messageRef' : 'signalRef');
+  if (!ref) return undefined;
+  return { kind: trigger, name: ref.get<string | undefined>('name') ?? idOf(ref) };
+}
+
+/**
+ * Why `target` cannot become the target of a new sequence flow from the
+ * event-based gateway `gateway` (undefined = it can). The rules of Camunda 7,
+ * CIB seven and Operaton (each rejects the deployment otherwise):
+ *  - only an intermediateCatchEvent with a message, timer, signal or
+ *    conditional trigger (not a receive task, task, end or throw event, plain
+ *    or link catch event);
+ *  - it has no other incoming sequence flow (also not a second one from the
+ *    gateway);
+ *  - no two branches wait for the same message name or signal name.
+ * `leaving` are flows that disappear with the change (the flow into `target`
+ * that a bridge replaces, the gateway's flow it re-points).
+ */
+export function eventGatewayTargetProblem(doc: Doc, gateway: El, target: El, leaving: El[] = []): string | undefined {
+  if (!is(target, 'bpmn:IntermediateCatchEvent')) {
+    return `${label(target)} is not an intermediate catch event; an event-based gateway can only lead to message, timer, signal or conditional catch events`;
+  }
+  const trigger = triggerOf(target) ?? 'none';
+  if (!EVENT_GATEWAY_TRIGGERS.includes(trigger)) {
+    return `${label(target)} is a ${trigger === 'none' ? 'plain' : trigger} catch event; an event-based gateway can only wait for a message, timer, signal or condition`;
+  }
+  const others = doc.incoming(target).filter((f) => !leaving.includes(f));
+  if (others.length) {
+    return `${label(target)} already has the incoming flow ${others.map(idOf).join(', ')}; a catch event after an event-based gateway can have no other incoming flow`;
+  }
+  const mine = subscriptionOf(target);
+  if (mine) {
+    for (const f of doc.outgoing(gateway)) {
+      if (leaving.includes(f)) continue;
+      const t = f.get<El | undefined>('targetRef');
+      if (!t || t === target) continue;
+      const theirs = subscriptionOf(t);
+      if (theirs && theirs.kind === mine.kind && theirs.name === mine.name) {
+        return `${idOf(t)} on another branch of ${idOf(gateway)} already waits for the ${mine.kind} "${mine.name}"; the engines allow one subscription per ${mine.kind} name and gateway`;
+      }
+    }
+  }
+  return undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -341,6 +398,21 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
 
 export type PlacementOptions = Placement & FlowOptions & { to?: string };
 
+/**
+ * A compensation handler (isForCompensation=true) cannot carry boundary
+ * events: Camunda 7, CIB seven and Operaton reject the deployment ("Invalid
+ * reference in boundary event").
+ */
+export function assertBoundaryHost(host: El, boundary?: El): void {
+  if (host.get<boolean | undefined>('isForCompensation')) {
+    throw modelError('E_INVALID_HOST', `${label(host)} is a compensation handler (isForCompensation=true); it cannot carry boundary events`, {
+      element: boundary ? idOf(boundary) : idOf(host),
+      related: [idOf(host)],
+      hint: `Attach the boundary event to the activity that is compensated, or make ${idOf(host)} a normal activity first (\`bpmn set <file> ${idOf(host)} isForCompensation=false\`).`,
+    });
+  }
+}
+
 function requireFlowBetween(doc: Doc, a: El, b: El): El {
   const flows = doc.outgoing(a).filter((f) => f.get<El | undefined>('targetRef') === b);
   if (flows.length === 1) return flows[0]!;
@@ -480,6 +552,7 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
         hint: 'Use --after / --before / --in for other nodes.',
       });
     }
+    assertBoundaryHost(host, node);
     node.set('attachedToRef', host);
     const boundaries = doc.boundaryEventsOf(host);
     insertAfterInScope(scope, boundaries[boundaries.length - 1] ?? host, node);

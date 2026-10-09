@@ -16,7 +16,8 @@
  *  - source === target: allowed only as a sequence flow on an activity
  *    (a loop; the note suggests `set <id> loop=standard`), else E_INVALID_ENDPOINT
  *  - op.ifAbsent: an identical connection (same kind, source, target) already
- *    exists -> empty ChangeSet with note.
+ *    exists -> empty ChangeSet with note. Without it, a second sequence or
+ *    message flow between the same endpoints is created with W_DUPLICATE_FLOW.
  *  - condition/default only apply to sequence flows, name to sequence and
  *    message flows, message to message flows (else E_INVALID_VALUE);
  *    default together with condition is E_USAGE (a default flow has none)
@@ -213,12 +214,28 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
   }
   assertOptionsFor(kind, op);
 
+  const existing = kind === 'sequenceFlow' || kind === 'messageFlow' ? existingConnection(doc, kind, source, target) : undefined;
   if (op.ifAbsent) {
-    const existing = existingConnection(doc, kind, source, target);
-    if (existing) {
-      cs.note(`${kind} ${idOf(existing)} ${op.source} -> ${op.target} already exists; nothing to do`);
+    const same = existing ?? existingConnection(doc, kind, source, target);
+    if (same) {
+      cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
       return cs;
     }
+  }
+  if (existing) {
+    const all = (kind === 'sequenceFlow' ? doc.outgoing(source) : doc.messageFlows()).filter(
+      (f) => f.get<El | undefined>('sourceRef') === source && f.get<El | undefined>('targetRef') === target,
+    );
+    cs.warn({
+      code: 'W_DUPLICATE_FLOW',
+      message: `${op.source} -> ${op.target} is already connected by the ${kind} ${all.map(idOf).join(', ')}; this adds another one`,
+      element: op.source,
+      related: [op.target, ...all.map(idOf)],
+      hint:
+        kind === 'sequenceFlow'
+          ? `Two flows between the same nodes run the target twice (or join with itself). Use --if-absent to skip an existing connection; remove the extra flow with \`bpmn remove <file> <flowId>\`.`
+          : 'Use --if-absent to skip an existing connection; remove the extra flow with `bpmn remove <file> <flowId>`.',
+    });
   }
 
   switch (kind) {

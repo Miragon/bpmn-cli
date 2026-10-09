@@ -42,7 +42,7 @@ function codesInSource(): string[] {
   const codes = new Set<string>();
   for (const file of sourceFiles(SRC_DIR)) {
     if (file.endsWith('guide.ts')) continue;
-    for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
+    for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
   }
   return [...codes].sort();
 }
@@ -328,7 +328,7 @@ describe('guide', () => {
     const codes = ERROR_CATALOGUE.map((e) => e.code);
     expect(new Set(codes).size).toBe(codes.length);
     for (const e of ERROR_CATALOGUE) {
-      expect(e.code).toMatch(/^[EW]_[A-Z][A-Z_]*(\*)?$/);
+      expect(e.code).toMatch(/^[EW]_[A-Z][A-Z0-9_]*(\*)?$/);
       expect(e.meaning.length).toBeGreaterThan(10);
       expect(e.fix.length).toBeGreaterThan(10);
     }
