@@ -117,6 +117,31 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(await browser.metricsXml(edited.xml)).toEqual(await core.metricsXml(edited.xml));
   });
 
+  it('keeps the text, runs the design profile and host validators like Node (step 2 packages together)', async () => {
+    const styled = readFileSync(join(ROOT, 'test', 'fixtures', 'roundtrip', 'styled.bpmn'), 'utf8');
+    const same = await browser.applyToXml(styled, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }]);
+    expect(same.unchanged).toBe(true);
+    expect(same.xml).toBe(styled);
+    const phases: string[] = [];
+    const host = (xml: string, ctx: { phase: string }): Array<{ severity: string; ruleId: string; message: string }> => {
+      phases.push(`${ctx.phase}:${xml.includes('<!-- the order starts here -->')}`);
+      return [];
+    };
+    const ops = [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }];
+    const opts = { profile: 'design' as const, contentRepo: { processIds: ['Process_Styled'], decisionIds: [] }, validators: [host] };
+    const there = await browser.applyToXml(styled, ops, opts);
+    expect(phases).toEqual(['before:true', 'after:true']);
+    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_5']);
+    expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['design', 'host']);
+    const here = await core.applyToXml(styled, ops, opts);
+    expect(there.xml).toBe(here.xml);
+    expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
+    const report = await browser.validateXml(here.xml, { profile: 'design' });
+    expect(report.profile.profile).toBe('design');
+    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { profile: 'design' })));
+    await expect(browser.applyToXml(styled, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Styled' }], { profile: 'design' })).rejects.toMatchObject({ code: 'E_VALIDATION' });
+  });
+
   it('refuses like Node: CliError codes cross the realm boundary', async () => {
     await expect(browser.applyToXml(fixture('orders.bpmn'), [{ op: 'add', kind: 'userTask', after: 'Nope' }])).rejects.toMatchObject({ code: 'E_NOT_FOUND', name: 'CliError' });
     await expect(browser.applyToXml('<not-bpmn/>', [{ op: 'tidy' }])).rejects.toMatchObject({ code: 'E_PARSE' });
