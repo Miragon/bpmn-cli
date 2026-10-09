@@ -5,6 +5,7 @@
 export * from '../index.js';
 export {
   readXml,
+  decodeXmlBytes,
   readDoc,
   loadDoc,
   writeAtomic,

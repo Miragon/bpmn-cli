@@ -3,7 +3,7 @@
  * that touches the file system (Node only; `@miragon/bpmn-cli/node`). The
  * CLI uses it for every command.
  *
- *   readXml(file)                  -> the file's text (E_FILE_NOT_FOUND / E_IO)
+ *   readXml(file)                  -> the file's text, decoded as the file declares (E_FILE_NOT_FOUND / E_IO)
  *   readDoc(file)                  -> Doc (no lossy-import guard: show, find, metrics)
  *   loadDoc(file, { force })       -> Doc, E_IMPORT_LOSSY unless force (every write)
  *   writeAtomic(file, text)        -> temp file in the same directory, renamed over the target
@@ -20,6 +20,11 @@
  * back over that file (no new mtime, no sync event; `written: false`); `out`
  * to another file still gets the copy.
  *
+ * Encoding: a file is read in the encoding its XML declaration names
+ * (decodeXmlBytes: UTF-8 without one, UTF-16 by its byte order mark), so
+ * that the characters of an ISO-8859-1 / Windows-1252 file survive; every
+ * write is UTF-8, and a changed result declares UTF-8 (src/encoding.ts).
+ *
  * Validation profile: unless `contentRepo` is given (or the profile is
  * `none`), the design-iq content repository of the file being written or
  * checked is looked up on disk (src/node/repo.ts: bpmiq.yml and the
@@ -30,6 +35,7 @@
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../document.js';
+import { declaredEncoding, isUtf8 } from '../encoding.js';
 import { CliError, ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
@@ -52,14 +58,41 @@ export interface FileMutationOptions extends MutationOptions, FileWriteOptions {
 
 export interface FileLayoutOptions extends LayoutDocOptions, FileWriteOptions {}
 
-/** Reads a file as UTF-8 text. */
-export async function readXml(file: string): Promise<string> {
+/**
+ * The text of an XML file's bytes, in the encoding the file declares: UTF-8
+ * (a byte order mark kept as U+FEFF, as before) without a declaration or
+ * when it says UTF-8, UTF-16 when it starts with that byte order mark, else
+ * the declared encoding (WHATWG names: ISO-8859-1 reads as Windows-1252,
+ * like browsers). A declared encoding this runtime cannot decode is E_IO,
+ * unless every byte is ASCII (then every ASCII-based encoding reads alike).
+ */
+export function decodeXmlBytes(bytes: Uint8Array, file = 'the file'): string {
+  const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder('utf-16le').decode(buf);
+  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder('utf-16be').decode(buf);
+  const head = buf.subarray(0, 512).toString('latin1');
+  const encoding = declaredEncoding(head.replace(/^\u00ef\u00bb\u00bf/, '\uFEFF'));
+  if (encoding === undefined || isUtf8(encoding)) return buf.toString('utf8');
+  let decoder: TextDecoder;
   try {
-    return await readFile(file, 'utf8');
+    decoder = new TextDecoder(encoding.trim());
+  } catch {
+    if (buf.every((b) => b < 0x80)) return buf.toString('utf8');
+    throw ioError('E_IO', `Cannot read ${file}: it declares the encoding ${encoding}, which bpmn cannot decode`, { file, hint: 'Convert the file to UTF-8 (and declare encoding="UTF-8"), e.g. with iconv.' });
+  }
+  return decoder.decode(buf);
+}
+
+/** Reads a file as text, decoded as it declares (decodeXmlBytes). */
+export async function readXml(file: string): Promise<string> {
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(file);
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     throw ioError(e.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ${file}: ${e.message}`, { file });
   }
+  return decodeXmlBytes(bytes, file);
 }
 
 /** Reads and parses a file (no lossy-import guard: for reading commands). */

@@ -12,7 +12,8 @@
  * document read from XML every element the ops did not change keeps its
  * original text (preserve.ts: prolog, comments, CDATA, attribute order,
  * namespace declarations, indentation); changed and new elements follow the
- * file's style. Comments the result cannot keep, and a fall-back to
+ * file's style. A write is UTF-8: a changed result whose XML declaration
+ * names another encoding declares UTF-8 (src/encoding.ts, with a note). Comments the result cannot keep, and a fall-back to
  * bpmn-moddle's plain serialisation, are reported as notes. A result equal
  * to the input text is `unchanged: true`; the node layer does not write it
  * back over its file (`written: false`; `--out` to another file still writes
@@ -93,6 +94,7 @@
  * the stickies that moved.
  */
 import { withLayoutDebug, type DebugSink } from './debug.js';
+import { utf8Declaration } from './encoding.js';
 import { Doc } from './document.js';
 import { CliError, ioError, modelError, usageError, type Warning } from './errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from './layout.js';
@@ -422,7 +424,11 @@ async function outputText(doc: Doc, xml: string, baseline: string | undefined, c
   } else if (text.droppedComments) {
     changes.note(`${text.droppedComments} XML comment(s) dropped: they were inside or next to elements the change removed or rewrote`);
   }
-  return text.xml;
+  if (text.xml === source.text) return text.xml;
+  // a write is UTF-8 (src/encoding.ts): the kept declaration must say so
+  const declared = utf8Declaration(text.xml);
+  if (declared.was !== undefined) changes.note(`the XML declaration named the encoding ${declared.was}; the text is written as UTF-8, so it now says UTF-8`);
+  return declared.text;
 }
 
 /** The anchors of the stickies with the ids their process and node have after the ops (removed ones are left out). */

@@ -1538,6 +1538,18 @@ touched, in the file's own style:
   it on its last line, or inside it, go with it, and the result says so:
   `note: 1 XML comment(s) dropped: they were inside or next to elements the
   change removed or rewrote`. All other comments stay where they are.
+- **Encoding**: a file is read in the encoding its XML declaration names
+  (UTF-8 without one, UTF-16 by its byte order mark, ISO-8859-1 /
+  Windows-1252 and the other encodings a browser knows; one it cannot decode
+  is `E_IO` unless the file is plain ASCII), and every write is UTF-8. A
+  written file whose declaration named another encoding declares UTF-8 (note:
+  `the XML declaration named the encoding ISO-8859-1; ...`), so a parser that
+  honours the declaration reads every character as written. Re-encoding in
+  the declared encoding is not done: it cannot write every character (an
+  ISO-8859-1 file has no `€`, names and comments cannot use character
+  references). A no-op is not written, so such a file keeps its bytes. The
+  in-memory API does the same on strings: a changed result declares UTF-8;
+  store it as UTF-8.
 - **Safety**: the result must read back (with bpmn-moddle) as exactly the
   changed model. If it does not, or the file has something the text reader
   does not support (a DOCTYPE), the whole file is written the way

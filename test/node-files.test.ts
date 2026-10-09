@@ -104,3 +104,69 @@ describe('the node layer', () => {
     expect(readFileSync(f, 'utf8')).toBe(LINEAR);
   });
 });
+
+describe('encodings: every write is UTF-8, and says so', () => {
+  const latin1 = (name: string): string =>
+    `<?xml version="1.0" encoding="ISO-8859-1"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="Start" name="${name}"/>
+    <bpmn:task id="Task_CheckOrder" name="Check order"/>
+  </bpmn:process>
+</bpmn:definitions>
+`;
+
+  it('in memory: a changed result declares UTF-8 (with a note); a no-op keeps the input and its declaration', async () => {
+    const xml = latin1('Größe');
+    const r = await node.applyToXml(xml, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    expect(r.xml.split('\n')[0]).toBe('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(r.xml).toContain('name="Prüfung ß"');
+    expect(r.result.notes).toContain('the XML declaration named the encoding ISO-8859-1; the text is written as UTF-8, so it now says UTF-8');
+    // only the declaration and the changed element differ
+    expect(r.xml.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"').replace('Prüfung ß', 'Check order')).toBe(xml);
+    const noop = await node.applyToXml(xml, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Check order' } }], { layout: false });
+    expect(noop.unchanged).toBe(true);
+    expect(noop.xml).toBe(xml);
+  });
+
+  it('a file is read in the encoding it declares, so its characters survive a write (ISO-8859-1 bytes)', async () => {
+    const f = join(dir, 'latin1.bpmn');
+    writeFileSync(f, Buffer.from(latin1('Größe'), 'latin1'));
+    expect(await readXml(f)).toBe(latin1('Größe'));
+    expect((await readDoc(f)).get('Start')?.get('name')).toBe('Größe');
+    const r = await mutateFile(f, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    expect(r.written).toBe(true);
+    const text = readFileSync(f, 'utf8');
+    expect(text).toBe(latin1('Größe').replace('encoding="ISO-8859-1"', 'encoding="UTF-8"').replace('Check order', 'Prüfung ß'));
+    // a no-op on the Latin-1 file is not written (the bytes stay)
+    const g = join(dir, 'latin1-noop.bpmn');
+    writeFileSync(g, Buffer.from(latin1('Größe'), 'latin1'));
+    expect((await mutateFile(g, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Check order' } }], { layout: false })).written).toBe(false);
+    expect(readFileSync(g).equals(Buffer.from(latin1('Größe'), 'latin1'))).toBe(true);
+  });
+
+  it('UTF-8 bytes under an ISO-8859-1 declaration read as the declaration says; the write keeps those characters and declares UTF-8', async () => {
+    const f = join(dir, 'mislabelled.bpmn');
+    writeFileSync(f, latin1('Check'), 'utf8');
+    await mutateFile(f, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    const bytes = readFileSync(f);
+    expect(bytes.toString('utf8').split('\n')[0]).toBe('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(bytes.includes(Buffer.from('Prüfung ß', 'utf8'))).toBe(true);
+  });
+
+  it('UTF-16 with a byte order mark and UTF-8 files read as before; an encoding nobody can decode is E_IO unless the file is ASCII', () => {
+    const xml = latin1('Größe').replace('ISO-8859-1', 'UTF-16');
+    expect(node.decodeXmlBytes(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]))).toBe(xml);
+    const utf8 = `﻿${latin1('Größe').replace('ISO-8859-1', 'UTF-8')}`;
+    expect(node.decodeXmlBytes(Buffer.from(utf8, 'utf8'))).toBe(utf8);
+    const exotic = latin1('Size').replace('ISO-8859-1', 'X-NO-SUCH');
+    expect(node.decodeXmlBytes(Buffer.from(exotic, 'latin1'))).toBe(exotic);
+    let code = '';
+    try {
+      node.decodeXmlBytes(Buffer.from(latin1('Größe').replace('ISO-8859-1', 'X-NO-SUCH'), 'latin1'));
+    } catch (err) {
+      code = (err as { code: string }).code;
+    }
+    expect(code).toBe('E_IO');
+  });
+});
