@@ -588,7 +588,7 @@ profile before and after and reports only the findings the change introduced
 (JSON `validation.platform` with `added`, `resolved` and the totals in
 `counts`), so a file's old problems are not repeated on every write; `bpmn
 show` does not run it. `layout` redraws the whole diagram from the
-model (a hand layout is replaced, colours survive); `--expand` /
+model (a hand layout is replaced, colours and DI ids survive); `--expand` /
 `--collapse` change which sub-processes are drawn expanded. `layout --tidy`
 keeps the drawing instead and only removes overlaps (= `bpmn tidy`).
 
@@ -628,7 +628,7 @@ Every mutating command updates the diagram in one of three modes
 | --- | --- |
 | `auto` (default) | A file without diagram is drawn from scratch. A drawing that the engine made and nobody changed since (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check) is redrawn in full, so it keeps the best global layout while the CLI owns it. Any other drawing, hand-made in a modeler or changed by a format command (also one that only reroutes a flow or moves a label), is kept: `incremental`. |
 | `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
-| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) are carried over by element id; positions are not. `bpmn layout <file>` always does this. |
+| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) and the DI ids are carried over by element id (new DI gets the file's id style); positions are not. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why (`layout: ok - incremental (hand-made
 diagram: kept, changes placed locally)`), lists what was placed / moved /
@@ -1189,8 +1189,8 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 - **The engine draws** a new file, a file without diagram, a drawing it made
   itself and nobody changed (`auto`), and everything on request
   (`--relayout`, `--layout full`, `bpmn layout`). Then all shapes, edges,
-  waypoints and labels are derived from the semantic model; colours are
-  carried over by element id, manual positions are not.
+  waypoints and labels are derived from the semantic model; colours and the
+  DI ids are carried over by element id, manual positions are not.
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.
@@ -1311,8 +1311,8 @@ touched, in the file's own style:
   without a `BPMNEdge`, a plane without `bpmnElement`) is completed, and a
   name that no longer fits grows its task. `--no-layout` changes no DI
   except removing that of removed elements. A full redraw (`bpmn layout`,
-  `--relayout`) rewrites the DI section and gives the DI elements the
-  engine's ids.
+  `--relayout`) rewrites the geometry of the DI section; its DI elements keep
+  their ids (new ones get the file's id style).
 
 `npm run roundtrip` measures this on a corpus (no-ops, renames, inserts; see
 [docs/testing.md](docs/testing.md#roundtrip-fidelity)).

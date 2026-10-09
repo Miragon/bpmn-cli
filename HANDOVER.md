@@ -20,7 +20,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1145 tests, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1148 tests, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -39,8 +39,9 @@ replacing one text region per save. Before, a no-op write was
 byte-identical in 15 % of 265 real files and a rename rewrote a median 16 %
 of the file in that region (namespace declarations reordered, vendor
 attributes moved behind typed ones, derived incoming / outgoing lists
-added, CDATA turned into entities, comments dropped, no-op writes). Fixed:
-audit bugs #30, #31, #44, #45, #46; table and numbers in
+added, CDATA turned into entities, comments dropped, no-op writes, a full
+redraw renaming every DI id). Fixed: audit bugs #30, #31, #44, #45, #46,
+#47; table and numbers in
 [docs/audit-2026-10.md](docs/audit-2026-10.md#roundtrip-step-2026-10-09).
 
 - **Text-preserving output** (`src/preserve.ts`, `src/xmltext.ts`, called
@@ -72,6 +73,10 @@ audit bugs #30, #31, #44, #45, #46; table and numbers in
   whose ends did not change. A file without any sequence flow (a new one)
   gets the lists. Two C7 test helpers that added the lists by hand are now
   idempotent.
+- **DI ids of a full redraw** (`src/diagram/keep-ids.ts`, called from
+  `pipeline.ts fullLayout` like the colour carry-over): the redrawn DI
+  elements get the ids they had (by element), new DI the file's id style
+  (`write.ts diIds`); a file without a drawing keeps the engine's ids.
 - **API**: `MutationResult.unchanged`, `Doc.source` (`DocSource`),
   `preserveText` exported for hosts that serialise themselves.
 - **Tools / docs**: `tools/roundtrip.mjs` (`npm run roundtrip`, any corpus,
@@ -91,11 +96,10 @@ PR #218 86 %); in 4,475 runs of twelve edit types the results read exactly
 like the previous build's apart from the lists, with no fall-back and no
 dropped comment; +15–20 ms per write on 90 KB files.
 
-Still open for embedding: the DI ids of a full redraw (#47, the engine names
-them `BPMNShape_<id>`; a redraw rewrites the DI section anyway), the auto
-layout completing missing DI on any write (audit P3), and a host that wants
-fewer conflicts on inserts needs several regions per save (an insert changes
-the process and the DI section, so one region spans both).
+Still open for embedding: the auto layout completes missing DI on any write
+(audit P3), and a host that wants fewer conflicts on inserts needs several
+regions per save (an insert changes the process and the DI section, so one
+region spans both).
 
 ## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
 
@@ -373,8 +377,8 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
    plus `show --layout`, `metrics` and the format ops. Removes the shell
    quoting trap (`${...}` in conditions).
 4. **Embedding** (audit P1): a browser-safe core (#33), platform awareness
-   (#27, #28), collision-resistant ids (#32), DI ids kept by a full redraw
-   (#47). Text-preserving output and no-op writes are done (roundtrip step).
+   (#27, #28), collision-resistant ids (#32). Text-preserving output, no-op
+   writes and stable DI ids are done (roundtrip step).
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
