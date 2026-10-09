@@ -14,7 +14,7 @@
     "url": "https://github.com/Miragon/bpmn-cli/issues"
   },
   "bin": {
-    "bpmn": "./bin/bpmn.js"
+    "bpmn": "bin/bpmn.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
