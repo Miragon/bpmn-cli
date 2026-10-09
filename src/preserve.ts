@@ -39,7 +39,7 @@
  * ambiguous or unsupported (a DOCTYPE, differing root elements), the result
  * is `next` itself (`mode: 'plain'` with a reason).
  */
-import { createModdle } from './model.js';
+import { parseXml } from './model.js';
 import { attrKey, decodeXml, elementChildren, hasCharacterData, idOf, readXmlText, type XDocument, type XElement } from './xmltext.js';
 
 export interface PreservedText {
@@ -102,9 +102,9 @@ function firstLine(err: unknown): string {
 async function readsAs(xml: string, next: string): Promise<boolean> {
   const write = async (text: string): Promise<string | undefined> => {
     try {
-      const moddle = createModdle();
-      const { rootElement } = await moddle.fromXML(text);
-      return (await moddle.toXML(rootElement, { format: true })).xml;
+      // read like Doc.fromXml reads (model.ts parseXml: references with whitespace around the id resolve)
+      const { moddle, definitions } = await parseXml(text);
+      return (await moddle.toXML(definitions, { format: true })).xml;
     } catch {
       return undefined;
     }

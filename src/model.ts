@@ -14,7 +14,7 @@
  * carry vendor data: a camunda:formField id only has to be unique within its
  * form, so those ids are never indexed, resolved or checked.
  */
-import { BpmnModdle, type ImportWarning } from 'bpmn-moddle';
+import { BpmnModdle, type ImportResult, type ImportWarning } from 'bpmn-moddle';
 import type { ModdleElement } from 'moddle';
 
 export type El = ModdleElement;
@@ -279,7 +279,40 @@ export async function parseXml(xml: string, moddle: BpmnModdle = createModdle())
   if (!is(definitions, 'bpmn:Definitions')) {
     throw new ModelError('Root element is not bpmn:Definitions', 'PARSE_ERROR');
   }
-  return { moddle, definitions, importWarnings: [...result.warnings, ...overwrites.warnings()] };
+  return { moddle, definitions, importWarnings: [...resolvePaddedReferences(result), ...overwrites.warnings()] };
+}
+
+/**
+ * An id reference written with whitespace around it
+ * (`<bpmn:flowNodeRef>\n  Task_1\n</bpmn:flowNodeRef>`) is the id without
+ * it: the XSD types IDREF and QName collapse whitespace (design-iq's parser
+ * trims it too). bpmn-moddle looks the text up as written, drops the
+ * reference and warns "unresolved reference", a lossy import. Such references
+ * are resolved by the trimmed id, in their place among the property's
+ * references, and their warnings dropped. Returns the remaining warnings.
+ */
+function resolvePaddedReferences(result: ImportResult): ImportWarning[] {
+  const byId = result.elementsById;
+  const padded = result.references.filter((r) => r.id !== r.id.trim() && !byId[r.id] && byId[r.id.trim()]);
+  if (!padded.length) return result.warnings;
+  const rebuilt = new Map<El, Set<string>>();
+  for (const r of padded) {
+    const property = (r.element.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean }> }).propertiesByName?.[r.property];
+    if (!property) continue;
+    if (!property.isMany) {
+      r.element.set(property.name, byId[r.id.trim()]);
+      continue;
+    }
+    const seen = rebuilt.get(r.element) ?? new Set<string>();
+    rebuilt.set(r.element, seen);
+    if (seen.has(r.property)) continue;
+    seen.add(r.property);
+    // the property's references in document order, each resolved as written or trimmed
+    const list = result.references.filter((x) => x.element === r.element && x.property === r.property).map((x) => byId[x.id] ?? byId[x.id.trim()]).filter((x): x is El => !!x);
+    const collection = r.element.get<El[]>(property.name);
+    collection.splice(0, collection.length, ...list);
+  }
+  return result.warnings.filter((w) => !(/^unresolved reference/.test(w.message) && padded.some((r) => r.element === w.element && r.property === w.property && r.id === w.value)));
 }
 
 /** `<bpmn:userTask id="Activity_X">` / `standardLoopCharacteristics SL` for import warnings. */

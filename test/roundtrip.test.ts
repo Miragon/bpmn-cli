@@ -218,6 +218,26 @@ describe('a full redraw keeps the DI ids (#47)', () => {
   });
 });
 
+describe('id references written with whitespace around them', () => {
+  it('resolve by the trimmed id (XSD IDREF); the file is no lossy import, and a write keeps their text', async () => {
+    const xml = definitionsXml(`
+    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>
+        Task_A
+      </bpmn:flowNodeRef><bpmn:flowNodeRef> End </bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>
+    <bpmn:startEvent id="Start"><bpmn:outgoing> F1 </bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Task_A" name="Do A"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="End"><bpmn:incoming>F2</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Task_A" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="End" />`);
+    const doc = await Doc.fromXml(xml);
+    expect(doc.importWarnings).toEqual([]);
+    expect(doc.lossyImportWarnings).toEqual([]);
+    expect((doc.get('L1')!.get<El[]>('flowNodeRef')).map((n) => n.get('id'))).toEqual(['Start', 'Task_A', 'End']);
+    const r = await mutateDoc(doc, [{ op: 'set', id: 'Task_A', values: { name: 'Do B' } }], { layout: false });
+    expect(r.xml).toBe(xml.replace('name="Do A"', 'name="Do B"'));
+  });
+});
+
 describe('the safety net', () => {
   it('falls back to the plain serialisation when the preserved text would not read back as the changed model', async () => {
     // a baseline that does not describe the original: its unchanged task text would be copied from the original

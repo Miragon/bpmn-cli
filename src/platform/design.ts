@@ -31,6 +31,11 @@
  *                          attribute (` app:mode="`) count
  *                          (undeclaredPrefixes)
  *   E_DESIGN_NO_PROCESS    no process at all
+ *   E_DESIGN_XML           not well-formed XML that bpmn-moddle still reads
+ *                          (an attribute written twice on one element:
+ *                          bpmn-moddle drops the element, design-iq's parser
+ *                          refuses the file); like design-iq, nothing else
+ *                          is checked then
  *  warnings (W_DESIGN_*):
  *   W_DESIGN_COMPLEXITY    more than 9 activities in the file (7 +- 2)
  *   W_DESIGN_CALL_LINK     a call activity without calledElement (design
@@ -41,7 +46,10 @@
  *                          one whose decision is not a .dmn of the repo
  *
  * The flow rules are design-iq's degree checks (a node needs an incoming and
- * an outgoing sequence flow), not a reachability analysis, and they hold for
+ * an outgoing sequence flow), not a reachability analysis, counted the way
+ * design-iq counts them: one sequence flow per id within a container (flows
+ * without id, or sharing an id, count once: the last one), nodes without id
+ * not at all. They hold for
  * every node, also where BPMN 2.0 itself allows a node without them: a
  * compensation handler, a compensation boundary event, link events and the
  * content of an ad-hoc sub-process are design-iq errors too (the messages say
@@ -232,6 +240,15 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
     out.push({ severity: 'warning', code, message, ...(element ? { element } : {}), hint, ...(key ? { key } : {}) });
   };
 
+  // not well-formed (design-iq's parser refuses it, and checks nothing else): an attribute written twice, which bpmn-moddle reads by dropping its element
+  for (const w of doc.importWarnings) {
+    const m = /attribute <([^>]+)> already defined/.exec(w.message);
+    if (!m) continue;
+    const where = /unparsable content (<[^>]+>)/.exec(w.message)?.[1];
+    error('E_DESIGN_XML', `The file is not well-formed XML: the attribute ${m[1]} is written twice on ${where ?? 'an element'}; design-iq's parser refuses the file (bpmn-moddle drops that element)`, undefined, 'Remove one of the two attributes in the XML (a write needs --force on E_IMPORT_LOSSY and drops the element).', { key: `xml:${m[1]}:${where ?? ''}` });
+    return out;
+  }
+
   // design-iq's namespace check runs on the text as it is (markup, text, CDATA, comments and attribute values alike)
   const text = opts.text ?? doc.source?.text;
   for (const u of text === undefined ? [] : undeclaredPrefixes(text)) {
@@ -267,8 +284,11 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
   const counted = new Set<string>();
   for (const { el: scope, isSub } of containersOf(doc)) {
     const elements = list(scope, 'flowElements');
-    const nodes = elements.filter((e) => is(e, 'bpmn:FlowNode'));
-    const flows = elements.filter((e) => is(e, 'bpmn:SequenceFlow'));
+    // design-iq knows nodes by id (one without id is not checked) and flows by id (the last flow of an id counts)
+    const nodes = elements.filter((e) => is(e, 'bpmn:FlowNode') && idOf(e));
+    const allFlows = elements.filter((e) => is(e, 'bpmn:SequenceFlow'));
+    const flows = [...new Map(allFlows.map((f) => [idOf(f), f])).values()];
+    const shadowed = allFlows.filter((f) => !flows.includes(f));
     for (const e of elements) if (is(e, 'bpmn:FlowNode') || is(e, 'bpmn:SequenceFlow') || is(e, 'bpmn:DataObjectReference') || is(e, 'bpmn:DataStoreReference')) needsDi(e);
     for (const a of list(scope, 'artifacts')) if (is(a, 'bpmn:TextAnnotation') || is(a, 'bpmn:Association') || is(a, 'bpmn:Group')) needsDi(a);
     for (const n of nodes) {
@@ -287,6 +307,13 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
       if (source) outgoing.set(source, (outgoing.get(source) ?? 0) + 1);
       if (target) incoming.set(target, (incoming.get(target) ?? 0) + 1);
     }
+    /** a node design-iq misses a flow of: one without id, or with the id of a later flow */
+    const shadowNote = (n: El, end: 'sourceRef' | 'targetRef'): string => {
+      const hidden = shadowed.filter((f) => f.get<El | undefined>(end) === n);
+      if (!hidden.length) return '';
+      const ids = hidden.map((f) => idOf(f) || 'without id');
+      return ` (it has ${hidden.length === 1 ? 'a sequence flow' : 'sequence flows'} ${ids.join(', ')}, but design-iq counts one sequence flow per id: give each flow an id of its own, \`bpmn layout <file>\` gives one to each flow without)`;
+    };
     const starts = nodes.filter((n) => is(n, 'bpmn:StartEvent'));
     // no start event: one finding on the process; several: one on each start event, so that a change adding
     // another start event always introduces a finding and removing one never does
@@ -314,7 +341,7 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
         const allowed = bpmnAllows(n, scope, 'incoming');
         error(
           'E_DESIGN_UNREACHABLE',
-          `${describe(n)} has no incoming sequence flow${allowed ? ` (${DESIGN_IQ_NOTE}${allowed})` : ''}`,
+          `${describe(n)} has no incoming sequence flow${allowed ? ` (${DESIGN_IQ_NOTE}${allowed})` : ''}${shadowNote(n, 'targetRef')}`,
           id,
           allowed ? `design-iq cannot save this construct: remove ${id} (\`bpmn remove <file> ${id}\`), or keep it with --profile none (design-iq refuses the save).` : `Connect it (\`bpmn connect <file> <fromId> ${id}\` or \`bpmn move <file> ${id} --after <nodeId>\`) or remove it.`,
         );
@@ -323,7 +350,7 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
         const allowed = bpmnAllows(n, scope, 'outgoing');
         error(
           'E_DESIGN_DEAD_END',
-          `${describe(n)} has no outgoing sequence flow${allowed ? ` (${DESIGN_IQ_NOTE}${allowed})` : ''}`,
+          `${describe(n)} has no outgoing sequence flow${allowed ? ` (${DESIGN_IQ_NOTE}${allowed})` : ''}${shadowNote(n, 'sourceRef')}`,
           id,
           allowed ? `design-iq cannot save this construct: remove ${id} (\`bpmn remove <file> ${id}\`), or keep it with --profile none (design-iq refuses the save).` : `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${id}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${id}\`).`,
         );
@@ -354,8 +381,8 @@ export function designFindings(doc: Doc, opts: DesignOptions = {}): ValidatorFin
     }
   }
 
-  const collaboration = doc.collaboration();
-  if (collaboration) {
+  // every collaboration of the file, like design-iq (not only the one the diagram shows)
+  for (const collaboration of list(doc.definitions, 'rootElements').filter((e) => is(e, 'bpmn:Collaboration'))) {
     for (const p of list(collaboration, 'participants')) needsDi(p);
     for (const m of list(collaboration, 'messageFlows')) needsDi(m);
   }

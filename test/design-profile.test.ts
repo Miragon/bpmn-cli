@@ -56,6 +56,8 @@ interface Case {
   di?: boolean;
   /** design-iq's number of ERRORs, when it is not the number of E_ codes (it reports several start events once per process) */
   diqErrors?: number;
+  /** changes the drawn XML (what the engine cannot write: id-less flows, a duplicate attribute) */
+  post?: (xml: string) => string;
 }
 
 const tasks = (k: number): string =>
@@ -149,7 +151,28 @@ ${proc([n('startEvent', 'QS'), n('receiveTask', 'B'), n('endEvent', 'QE'), f('Q1
   { name: 'documentation text that looks like a prefixed attribute (design-iq scans the raw text)', xml: defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation>Set key app:mode="prod" first</bpmn:documentation></bpmn:task>'))), codes: ['E_DESIGN_NAMESPACE'], designIq: 'fail' },
   { name: 'a CDATA section with a prefixed element', xml: defs(proc(LINE.replace('<bpmn:task id="A" />', '<bpmn:task id="A"><bpmn:documentation><![CDATA[Example: <xs:element name="a"/>]]></bpmn:documentation></bpmn:task>'))), codes: ['E_DESIGN_NAMESPACE'], designIq: 'fail' },
   { name: 'a condition ${x:y="z"} (no whitespace before the prefix)', xml: defs(proc([n('startEvent', 'S'), n('task', 'A'), n('endEvent', 'E'), f('F1', 'S', 'A'), '<bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="E"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${x:y="z"}</bpmn:conditionExpression></bpmn:sequenceFlow>'].join('\n'))), codes: [], designIq: 'pass' },
-  { name: 'no diagram at all', xml: defs(proc(LINE)), codes:['E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI'], designIq: 'fail', di: false },
+  {
+    name: 'sequence flows without id: design-iq counts one flow per id (the last one)',
+    xml: defs(proc(LINE)),
+    post: (xml) => xml.replace(/<bpmn:sequenceFlow id="F[12]"/g, '<bpmn:sequenceFlow').replace(/\s*<bpmndi:BPMNEdge id="[^"]*" bpmnElement="F[12]">[\s\S]*?<\/bpmndi:BPMNEdge>/g, ''),
+    codes: ['E_DESIGN_DEAD_END', 'E_DESIGN_UNREACHABLE'],
+    designIq: 'fail',
+  },
+  {
+    name: 'a second collaboration whose pool has no shape',
+    xml: defs(`<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>\n<bpmn:collaboration id="C2"><bpmn:participant id="Other" /></bpmn:collaboration>\n${proc(LINE)}`),
+    codes: ['E_DESIGN_NO_DI'],
+    designIq: 'fail',
+  },
+  {
+    name: 'an attribute written twice: not well-formed, nothing else is checked',
+    xml: defs(proc(LINE)),
+    post: (xml) => xml.replace('<bpmn:task id="A"', '<bpmn:task id="A" name="One" name="Two"'),
+    codes: ['E_DESIGN_XML'],
+    designIq: 'fail',
+  },
+  { name: 'a lane member written with whitespace around its id', xml: LANES({ a: ['S', 'A'], b: ['\n          E\n        '] }), codes: [], designIq: 'pass' },
+  { name: 'no diagram at all', xml: defs(proc(LINE)), codes: ['E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI', 'E_DESIGN_NO_DI'], designIq: 'fail', di: false },
   { name: 'no process', xml: defs('<bpmn:collaboration id="C"><bpmn:participant id="Pool" /></bpmn:collaboration>'), codes: ['E_DESIGN_NO_PROCESS'], designIq: 'fail', di: false },
 ];
 
@@ -164,6 +187,7 @@ async function prepare(c: Case): Promise<string> {
   let xml = prepared.get(c.name);
   if (xml === undefined) {
     xml = c.di === false ? c.xml : await withDi(c.xml);
+    if (c.post) xml = c.post(xml);
     prepared.set(c.name, xml);
   }
   return xml;
@@ -233,6 +257,19 @@ describe('design profile rules', () => {
     // the same texts without what design-iq's expressions match are written
     expect((await applyToXml(xml, [{ op: 'set', id: 'A', values: { doc: 'Set key app: mode=prod before you start' } }], opts)).unchanged).toBe(false);
     expect((await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Review', after: 'A', doc: 'Template ${x:y="z"}' }], opts)).unchanged).toBe(false);
+  });
+
+  it('a node in no lane of two lane sets is reported (design-iq checks no lanes of a process with two lane sets: a documented difference)', async () => {
+    const xml = await withDi(defs(proc(`<bpmn:laneSet id="LS1"><bpmn:lane id="La"><bpmn:flowNodeRef>S</bpmn:flowNodeRef><bpmn:flowNodeRef>A</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet><bpmn:laneSet id="LS2"><bpmn:lane id="Lb" /></bpmn:laneSet>\n${LINE}`)));
+    expect(designFindings(await Doc.fromXml(xml)).map((x) => [x.code, x.element])).toContainEqual(['E_DESIGN_NOT_IN_LANE', 'E']);
+  });
+
+  it('says why a node lacks a flow when design-iq does not count a flow without id', async () => {
+    const xml = await prepare(CASES.find((c) => c.name.startsWith('sequence flows without id'))!);
+    const found = designFindings(await Doc.fromXml(xml));
+    expect(found.find((x) => x.element === 'S')!.message).toBe(
+      'startEvent S has no outgoing sequence flow (it has a sequence flow without id, but design-iq counts one sequence flow per id: give each flow an id of its own, `bpmn layout <file>` gives one to each flow without)',
+    );
   });
 
   it('inside a content repository the links are checked against its models', async () => {

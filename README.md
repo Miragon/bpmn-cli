@@ -1117,15 +1117,28 @@ hard rules, checked the way design-iq checks them:
 | `E_DESIGN_NO_DI` | every flow node, sequence flow, data object / store reference, text annotation, association, group, top-level lane, participant and message flow has a shape or edge (design-iq's editor breaks without it) |
 | `E_DESIGN_NAMESPACE` | every namespace prefix the file uses is declared; checked like design-iq on the raw text, so text, CDATA, comments and attribute values that look like `<p:name` or ` p:name="` (a documentation `Set app:mode="prod"`) count as a use too |
 | `E_DESIGN_NO_PROCESS` | the file has a process |
+| `E_DESIGN_XML` | the file is well-formed: no attribute written twice on one element (bpmn-moddle reads such a file by dropping the element; design-iq's parser refuses it and checks nothing else) |
 | `W_DESIGN_COMPLEXITY` | warning: more than 9 activities in the file (7 +- 2) |
 | `W_DESIGN_CALL_LINK` / `W_DESIGN_DECISION_LINK` | warnings: a call activity / business rule task of a design model links no process / decision; inside a content repository, a link to a process / decision that is no `.bpmn` / `.dmn` of its models folder |
 
 The flow rules are degree checks, as in design-iq, not a reachability
 analysis, and they hold for every node: a compensation handler, a
 compensation boundary event, link events and the content of an ad-hoc
-sub-process are valid BPMN but design-iq errors (the messages say so). What
-the structural validation already refuses (a start event with incoming flows,
-dangling references) is not repeated.
+sub-process are valid BPMN but design-iq errors (the messages say so). They
+count the way design-iq counts: one sequence flow per id in each process or
+sub-process (flows without id, or sharing an id, count once; a full redraw
+gives a flow without id one), nodes without id not at all; every
+collaboration's pools and message flows need DI. What the structural
+validation already refuses (a start event with incoming flows, dangling
+references) is not repeated.
+
+One difference is deliberate: in a process with two lane sets design-iq's
+reader sees no lanes at all (its XML parser turns the repeated element into
+a list) and checks no lane membership there; the profile checks every lane
+set, so a node in none of them is `E_DESIGN_NOT_IN_LANE` (stricter: a write
+it lets through is still a save design-iq accepts). A lane member written
+with whitespace around its id (`<flowNodeRef> Task_1 </flowNodeRef>`) counts,
+as in design-iq (the reader resolves the trimmed id, as the XSD says).
 
 On a write the profile behaves like the structural validation: an error the
 change introduces refuses the write (`E_VALIDATION`, each finding tagged
