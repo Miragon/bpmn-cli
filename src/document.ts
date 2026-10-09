@@ -34,6 +34,8 @@ import {
 
 export const KNOWN_NAMESPACES: Record<string, string> = {
   camunda: 'http://camunda.org/schema/1.0/bpmn',
+  // Operaton's copy of the camunda namespace (only Operaton reads it)
+  operaton: 'http://operaton.org/schema/1.0/bpmn',
   zeebe: 'http://camunda.org/schema/zeebe/1.0',
   modeler: 'http://camunda.org/schema/modeler/1.0',
   bioc: 'http://bpmn.io/schema/bpmn/biocolor/1.0',
@@ -41,7 +43,8 @@ export const KNOWN_NAMESPACES: Record<string, string> = {
   xsi: 'http://www.w3.org/2001/XMLSchema-instance',
 };
 
-const LOSSY_PATTERNS = [/unparsable content/i, /unrecognized element/i, /unresolved reference/i, /duplicate ID/i];
+// `duplicate element`: model.ts parseXml (an element the schema allows once appears twice; the reader keeps the last)
+const LOSSY_PATTERNS = [/unparsable content/i, /unrecognized element/i, /unresolved reference/i, /duplicate ID/i, /^duplicate element/i];
 
 export interface NewDocOptions {
   processId?: string;
@@ -132,8 +135,16 @@ export class Doc {
     return doc;
   }
 
-  /** The engine the file targets (see platform/descriptor.ts platformOf). */
+  /**
+   * An explicit platform for the running mutation (MutationOptions.platform
+   * other than auto; set by pipeline.ts mutateDoc around the ops), so the ops
+   * follow the same engine as the profile that reports on them.
+   */
+  platformChoice?: 'c7' | 'c8' | 'none';
+
+  /** The engine the file targets (an explicit platformChoice, else platform/descriptor.ts platformOf). */
   platform(): 'camunda7' | 'camunda8' | undefined {
+    if (this.platformChoice) return this.platformChoice === 'c7' ? 'camunda7' : this.platformChoice === 'c8' ? 'camunda8' : undefined;
     return platformOf(this.definitions);
   }
 
@@ -141,13 +152,21 @@ export class Doc {
    * Platform defaults for a process the CLI creates (`new`, a new participant):
    * in a Camunda 7 file camunda:historyTimeToLive="180" like Camunda Modeler,
    * since C7, CIB seven and Operaton refuse to deploy an executable process
-   * without a TTL. An existing value is never touched.
+   * without a TTL. A file written for Operaton (operaton content, no camunda
+   * namespace) gets operaton:historyTimeToLive with its own prefix. An
+   * existing value (in either namespace) is never touched.
    */
   initProcess(process: El): void {
     if (this.platform() !== 'camunda7') return;
-    const prefix = this.prefixFor(KNOWN_NAMESPACES['camunda']!) ?? 'camunda';
-    if (process.$attrs[`${prefix}:historyTimeToLive`] !== undefined) return;
-    this.declareNamespace(prefix, KNOWN_NAMESPACES['camunda']);
+    const camunda = KNOWN_NAMESPACES['camunda']!;
+    const operaton = KNOWN_NAMESPACES['operaton']!;
+    const uri = !this.prefixFor(camunda) && this.prefixFor(operaton) ? operaton : camunda;
+    for (const u of [camunda, operaton]) {
+      const p = this.prefixFor(u);
+      if (p && process.$attrs[`${p}:historyTimeToLive`] !== undefined) return;
+    }
+    const prefix = this.prefixFor(uri) ?? (uri === operaton ? 'operaton' : 'camunda');
+    this.declareNamespace(prefix, uri);
     process.$attrs[`${prefix}:historyTimeToLive`] = C7_DEFAULT_TTL;
   }
 

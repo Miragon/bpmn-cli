@@ -28,6 +28,10 @@
  *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
  *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them).
  *  - op.set -> setProperties() from ./set.js on the new element.
+ *  - a new flow out of an event-based gateway (--after, --flow, --before,
+ *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
+ *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
+ *    files get the profile's W_C7_DEPLOY_EVENT_GATEWAY, flows.ts).
  *  - ChangeSet: the node's create entry comes first, flows follow (placeNode),
  *    root Message/Error/Signal/Escalation elements created by the trigger are
  *    reported too.
@@ -44,7 +48,7 @@ import { ChangeSet } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger } from './events.js';
-import { assertCondition, placeNode, placementMode, placementScope } from './flows.js';
+import { assertCondition, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 
@@ -354,6 +358,8 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     if (resolved !== 'none') entry.kind = kindLabel(el);
   }
   if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
+  // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
+  for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) warnEventGatewayFlow(doc, f, cs);
   if (op.collapsed && def.family === 'subProcess') {
     requestCollapse(doc, id);
     cs.note(`${id} will be laid out collapsed`);

@@ -228,6 +228,12 @@ attributes; a nested element adds `definition.id`, `definition.camunda:...`,
 order, repeats included), on flows `conditionResource` and `language`, and in
 the element detail `nested: {definition|loop|condition: {type, id, attrs,
 extensions}}`; `extensions` keeps its meaning (types and attribute names).
+An event with several event definitions lists each under its selector
+(`definition[0].id`, `definition[1].camunda:...`; the model view flags it with
+`definitions=message+timer`). A multi-line body (a script) is printed as
+`body:` followed by one `| <line>` per line, so it can be rebuilt verbatim;
+`--json` keeps the raw string. Import warnings (content the reader could not
+keep, see [Limitations](#limitations)) come first as `import:` lines.
 `--scope <id>` restricts the view to one process / sub-process / participant.
 `find` is a case-insensitive substring search over ids and names, optionally
 filtered by `--kind`; it also matches vendor attribute values (topic,
@@ -314,7 +320,22 @@ attribute given to its participant) is refused on the parent with
 `E_WRONG_HOST`, whose hint names the right key. A `camunda:` attribute the
 descriptor types as Boolean (`asyncBefore`, `exclusive`, ...) is written as
 exactly `true` / `false` (`yes`, `1`, `TRUE` are normalised; the engines read
-only the exact `true`); other values fail with `E_INVALID_VALUE`.
+only the exact `true`); other values fail with `E_INVALID_VALUE`. The same
+rules apply to Operaton's own namespace (`operaton:asyncBefore`, see
+[Camunda 7](#camunda-7)).
+
+An event with several event definitions (BPMN "multiple"; the engines act on
+one of them only) needs a selector: `'definition[1].<key>=...'` (0-based) or
+`'definition[timer].<key>=...'`; a plain `definition.` key fails with
+`E_AMBIGUOUS_NESTED` listing them, a selector that matches nothing with
+`E_NO_NESTED_ELEMENT`. Quote the brackets in a shell. `set <id>
+trigger=<t>` keeps the definition of that trigger and reports the others as
+dropped. `definition.activityRef` of a compensation event must name an
+activity of the event's own (sub-)process (from an event sub-process also one
+of the scope around it), else `E_CROSS_SCOPE`: the engines refuse anything
+else. An attribute without prefix that BPMN does not define (a hand-edited
+`calledDecision="..."`, which the engines refuse) is removed with `<attr>=`
+(also `definition.<attr>=`); it cannot be set.
 
 Conditions are changed in place: `condition=` keeps the expression's id and
 vendor attributes. An inline body replacing a script resource drops
@@ -323,6 +344,12 @@ script language (both `W_PROPERTY_DROPPED`; pass `language=` to keep one).
 `language=` also works on a resource condition; `condition=
 condition.camunda:resource=<uri> language=groovy` switches an inline condition
 to a script resource. The same rules apply to `when=` on conditional events.
+Removing the script resource of a condition that has no inline body
+(`condition.camunda:resource=` alone) is refused with `E_INVALID_VALUE`: it
+would leave an empty condition, which deploys and fails every evaluation.
+Give the inline condition in the same command (`condition.camunda:resource=
+'condition=${ok}'`, `when=` on a conditional event) or remove the whole
+condition (`condition=`).
 `loop=none` / `loop=standard` (and standard -> multi-instance) report the
 dropped vendor content of the old loop (`W_PROPERTY_DROPPED`).
 
@@ -342,13 +369,20 @@ also dropped from stale `incoming` / `outgoing` entries of other nodes (files
 from other tools sometimes carry them). `--if-exists` skips unknown ids with
 a note.
 
-A bridge from an event-based gateway is made only when the engines accept it:
-the successor is a message / timer / signal / conditional intermediate catch
-event without other incoming flows, and no other branch waits for the same
-message or signal name. Otherwise the command fails with `E_INVALID_BRIDGE`
+A bridge from an event-based gateway is made only when the file's rule
+accepts it. In a Camunda 7 file that is the engines' rule: the successor is a
+message / timer / signal / conditional intermediate catch event without other
+incoming flows, and no other branch waits for the same message or signal
+name. Other files follow BPMN 2.0: catch events with those triggers or
+receive tasks without boundary events, receive tasks not mixed with message
+catch events behind one gateway, no other incoming flow. Otherwise the
+command fails with `E_INVALID_BRIDGE` (the message says which rule applied)
 and writes nothing: use `--no-bridge`, insert a catch event first, or remove
 the successor in the same command. This applies to `move` as well, which
-bridges the old place the same way.
+bridges the old place the same way. An edge the agent asks for explicitly
+(`connect`, `add --after` / `--flow` / `--before`, a `move` placement) is not
+refused: a plain file warns `W_EVENT_GATEWAY_TARGET`, a Camunda 7 file gets
+the profile's `W_C7_DEPLOY_EVENT_GATEWAY`.
 
 ### `retype`
 
@@ -364,8 +398,11 @@ the new kind does not have are dropped with `W_PROPERTY_DROPPED`. Vendor
 attributes and extension elements are kept; the `camunda:` ones the new kind
 cannot use (the Camunda descriptor decides: `camunda:assignee` on a service
 task, `camunda:topic` on a user task, a `camunda:taskListener` outside a user
-task) are named in one `W_PROPERTY_INAPPLICABLE` warning with the commands
-that remove them. A
+task; `operaton:` content alike) are named in one `W_PROPERTY_INAPPLICABLE`
+warning with the commands that remove them. In a Camunda 7 file the profile
+reports each of them as `W_C7_MISPLACED_ATTRIBUTE` / `W_C7_MISPLACED_EXTENSION`
+(with severity and a remove command each); a write then drops the summary, so
+every item is reported once. A
 sub-process with content becomes a task or call activity only with `--force`:
 without it the command fails with `E_WOULD_DROP_CONTENT` and lists every
 element that would be deleted (move what should stay out first, `move ...
@@ -408,8 +445,8 @@ bpmn ext list <file> <id> [--json]
 
 `ext add` creates one element from `<prefix:type> attr=value ... [--body
 <text>]`, or takes a raw snippet with nested elements (`--xml`). The
-namespace comes from the file or from the known prefixes (`camunda`, `zeebe`,
-`modeler`, `bioc`, `color`); other prefixes must be declared in the file
+namespace comes from the file or from the known prefixes (`camunda`,
+`operaton`, `zeebe`, `modeler`, `bioc`, `color`); other prefixes must be declared in the file
 (`E_UNKNOWN_NAMESPACE`). The file's own prefixes are used: a snippet that
 binds a namespace the file already declares under another prefix is mapped to
 the file's prefix, never declared twice. The structure the engines expect is
@@ -436,7 +473,16 @@ kept:
 - **An item with the same key replaces the old one**, and the replacement is
   reported. Keys: `name` for parameters, properties and fields, `id` for form
   fields, `target` for `zeebe:input` / `zeebe:output`, `key` for
-  `zeebe:header`.
+  `zeebe:header`. What the old item held and the new one does not (attributes,
+  value, children such as a form field's validation) is reported as
+  `W_PROPERTY_DROPPED`, whose hint is the `ext add ... --xml '...'` that adds
+  the item again with everything (not with `--replace`, which asks for the
+  whole item).
+- **Operaton's namespace** (`operaton:`) follows the same rules by local
+  name: `operaton:inputParameter` goes into an `operaton:inputOutput`, which is
+  merged like the camunda one. A `camunda:` and an `operaton:` container are
+  kept apart (Operaton reads one of each, Camunda 7 and CIB seven only the
+  camunda one).
 - **Paths reach nested containers**:
   `'camunda:connector/camunda:inputParameter' name=url --body https://...`,
   `'camunda:formField[id=amount]/camunda:validation/camunda:constraint'
@@ -464,18 +510,20 @@ at the top level (a child type: inside its container),
 may be quoted (`[name="a b"]`). A predicate that is not found directly is
 searched deeper, and refused with `E_AMBIGUOUS_EXTENSION` when it matches in
 several places. A container left empty is removed with its last child. An
-index from `ext list` works too. Quote selectors in zsh: `[` and `]` are glob
-characters.
+index from `ext list` works too (`2`, `loop.0`, `definition[1].0`; also as the
+ops JSON `type`). Quote selectors in zsh: `[` and `]` are glob characters.
 
 Nested elements without an id hold extension elements as well (a retry cycle
 on a multi-instance loop, `camunda:in` on a signal event definition,
 `camunda:field` / `camunda:connector` on a message event definition): give
 the type or selector the same prefix as the nested `set` keys,
 `loop.camunda:failedJobRetryTimeCycle`, `definition.camunda:in`,
-`condition.<type>`; in `ext remove` also `loop.0`. `ext list` prints the
-element's own extension elements and then those of its nested elements
-(`loop.0: ...`), each as an indented tree; `--json` gives the full tree with a
-`slot` field on nested items.
+`condition.<type>`; in `ext remove` also `loop.0`. One of several event
+definitions: `'definition[1].camunda:field'` (or `definition[<trigger>].`).
+`ext list` prints the element's own extension elements and then those of its
+nested elements (`loop.0: ...`, `definition[1].0: ...`), each as an indented
+tree (a multi-line body as `body:` plus `| <line>` lines); `--json` gives the
+full tree with a `slot` field on nested items.
 
 ```
 $ bpmn ext add claim.bpmn Activity_CheckCoverage camunda:inputParameter name=amount --body '${amount * 100}'
@@ -504,19 +552,34 @@ See [Ops JSON](#ops-json-bpmn-apply).
 (warnings, exit 5 with `--strict`), the engine profile of the file's platform
 and a layout dry run, without writing; it prints the findings, a `platform:`
 line, `layout: ok|skipped|failed`, and `valid, n warning(s)` or `n error(s),
-m warning(s)`. The platform is detected from `modeler:executionPlatform`
-("Camunda Platform" -> `c7`, "Camunda Cloud" -> `c8`), else from the vendor
-namespace the content uses (`camunda:` -> c7, CIB seven and Operaton files
-included, Operaton's own namespace too; `zeebe:` -> c8), else from a declared
-namespace, else `none`; `--platform auto|c7|c8|none` overrides it (another
-value: `E_USAGE`, exit 1). Only Camunda 7 has rules today (see
+m warning(s)` (plus `k import warning(s)` when the reader reported any; they
+are printed first as `import:` lines and fail `--strict` too). The platform
+is detected from `modeler:executionPlatform` ("Camunda Platform", "Camunda
+7", "Operaton", "CIB seven" -> `c7`; "Camunda Cloud", "Camunda 8" -> `c8`),
+else from the vendor namespace the content uses (`camunda:` -> c7, CIB seven
+and Operaton files included; `operaton:` -> c7 as well; `zeebe:` -> c8), else
+from a declared namespace (both camunda and zeebe declared without content:
+`none`, the detail says so), else `none`; `--platform auto|c7|c8|none`
+overrides it (another value: `E_USAGE`, exit 1). The same detector decides
+which defaults the CLI writes (`Doc.platform()`, e.g. the TTL of a new
+process). A file that uses Operaton's namespace is checked the way Operaton
+reads it: `operaton:*` first, `camunda:*` as the fallback; only Operaton reads
+that namespace, Camunda 7 and CIB seven ignore it, which the detail line says
+(`3 operaton attribute(s)/element(s); only Operaton reads the operaton
+namespace, Camunda 7 and CIB seven ignore it`) and `--json` flags as
+`"operaton": true`. Only Camunda 7 has rules today (a Camunda 8 file's line
+says `no Camunda 8 engine rules yet`; see
 [Camunda 7](#camunda-7)): its findings are warnings named `W_C7_*` with a
 `severity` (`deploy`: the engines refuse the file, codes `W_C7_DEPLOY_*`;
 `runtime`: it deploys but the setting is ignored or fails when it runs;
 `practice`: it works, the engine logs a warning), so `--strict` exits 5 on
 them. `--json` adds `"platform": {"platform", "source", "detail", "counts":
 {"deploy", "runtime", "practice"}}`. Only executable processes are checked
-(the engines skip the others), plus file-level content. Every write runs the
+(the engines skip the others, and the content of ad-hoc sub-processes), plus
+file-level content and the BPMN schema rules, which the engines apply to the
+whole file (an attribute BPMN does not define, a conditional event definition
+without condition, a link definition without name, also next to another
+definition the engines ignore). Every write runs the
 profile before and after and reports only the findings the change introduced
 (JSON `validation.platform` with `added`, `resolved` and the totals in
 `counts`), so a file's old problems are not repeated on every write; `bpmn
@@ -744,7 +807,7 @@ are:
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow of a gateway / activity, the node-side twin of `set <flowId> default=true`; empty clears it) |
 | text annotations | `text` |
 | send / receive tasks | `message=<name>`: the root `bpmn:Message` found by id or name, created when missing; empty removes the reference |
-| events | `definition.<key>`: attribute of the event definition, e.g. `definition.camunda:errorCodeVariable=errCode definition.camunda:errorMessageVariable=errMsg` (error), `definition.camunda:type=external definition.camunda:topic=notify` (message throw / end event; also `class`, `delegateExpression`, `expression`, `resultVariable`), `definition.camunda:variableName=amount definition.camunda:variableEvents=create,update` (conditional), `definition.camunda:escalationCodeVariable=code` (escalation), `definition.camunda:async=true` (signal) |
+| events | `definition.<key>`: attribute of the event definition, e.g. `definition.camunda:errorCodeVariable=errCode definition.camunda:errorMessageVariable=errMsg` (error), `definition.camunda:type=external definition.camunda:topic=notify` (message throw / end event; also `class`, `delegateExpression`, `expression`, `resultVariable`), `definition.camunda:variableName=amount definition.camunda:variableEvents=create,update` (conditional), `definition.camunda:escalationCodeVariable=code` (escalation), `definition.camunda:async=true` (signal); one of several event definitions: `'definition[1].<key>=...'` (0-based) or `'definition[timer].<key>=...'` |
 | activities | `loop.<key>`: attribute of the loop characteristics, e.g. `'loop.camunda:collection=${items}' loop.camunda:elementVariable=item loop.camunda:asyncBefore=true` (a parallel multi-instance loop is created when none exists), `loop.isSequential=true`, `loop.loopMaximum=5` |
 | sequence flows, conditional events | `condition.<key>`: attribute of the condition expression, e.g. `condition.camunda:resource=deployment://check.groovy language=groovy` (a script resource condition, no body; on a conditional event `condition.language=groovy`) |
 
@@ -756,7 +819,10 @@ on its parent with `E_WRONG_HOST`, whose hint names the prefixed key; the same
 for a process attribute set on its participant. A `definition.` /
 `condition.` key on an element that has no event definition / condition yet
 fails with `E_NO_NESTED_ELEMENT` (set the trigger or the condition in the same
-command). Quote `${...}` values with single quotes.
+command). On an event with several event definitions a plain `definition.`
+key is `E_AMBIGUOUS_NESTED`: select one with `definition[<n>].` or
+`definition[<trigger>].` (`bpmn kinds --json` -> `nestedSelectors`). Quote
+`${...}` values and bracketed keys with single quotes.
 
 Unknown keys fail with `E_UNKNOWN_KEY` and a list of the keys the element
 accepts.
@@ -769,6 +835,17 @@ rules below and the worked example were checked on Camunda 7.24.0, CIB seven
 untyped in the model and is kept byte for byte by every edit; the Camunda
 descriptor (`camunda-bpmn-moddle`, read as data) tells the CLI where an
 attribute or extension element belongs.
+
+**Operaton's own namespace.** Operaton 2.1 also reads `operaton:*`
+(`xmlns:operaton="http://operaton.org/schema/1.0/bpmn"`, the same types),
+first, with `camunda:*` as the fallback; Camunda 7 and CIB seven ignore it
+(an Operaton-only file without `camunda:historyTimeToLive` is refused by
+them). The CLI treats it as part of the Camunda 7 family: `set`, `ext`,
+renames, `retype` and `validate` apply the same rules to `operaton:` content
+(by local name), a new process of an Operaton file gets
+`operaton:historyTimeToLive`, and `validate` reads the file the way Operaton
+does and says so in its platform line. (The `activiti:` namespace, which
+Camunda 7 and CIB seven still read as a fallback, is not modelled.)
 
 **A new file.** `bpmn new claim.bpmn --name "Claim handling" --target
 camunda7` declares the `camunda:` and `modeler:` namespaces, the execution
@@ -825,16 +902,30 @@ bpmn ext add claim.bpmn Activity_InformParty loop.camunda:failedJobRetryTimeCycl
 ```
 
 **Validate before deploying.** `bpmn validate claim.bpmn` runs the Camunda 7
-profile: about 30 rules derived from what the engines refuse at deploy time
+profile: about 40 rules derived from what the engines refuse at deploy time
 (`W_C7_DEPLOY_*`: a missing TTL, a service task without implementation, an
 external task without topic, a multi-instance loop without collection or
 cardinality, two `camunda:inputOutput`, an event-based gateway leading to a
 receive task, an exclusive gateway flow without condition next to a default,
-...), what they silently ignore at run time (unknown or misplaced attributes
-and elements, `asyncBefore=yes`, a dangling error mapping, Camunda 8 content)
-and what they warn about. Every finding names the command that fixes it, and
-every write reports the findings it introduced. Use `--strict` in a pipeline:
-the findings are warnings, so `validate` alone exits 0.
+two none / timer start events in a process or two start events in a
+sub-process, a sub-process without start event, a connected ad-hoc
+sub-process, a link throw without its catch, two subscriptions to one message
+or signal in one engine scope, a compensation `activityRef` outside the
+throw event's scope, an attribute BPMN does not define (`W_C7_DEPLOY_SCHEMA`:
+the engines validate the whole file against the schema), ...), what they
+silently ignore or fail on at run time (unknown or misplaced attributes and
+elements, settings on the wrong side of an event definition such as
+`camunda:topic` on a message catch event, `asyncBefore=yes`, a dangling error
+mapping, an empty condition, an event with several event definitions of
+which the engines use one, Camunda 8 content) and what they warn about. Each
+rule was taken from a deployment to the three engines; the precision was
+checked on 218 real Camunda 7 / CIB seven files (no deploy finding on a file
+the engines accept). Every finding names the command that fixes it (a
+repeatable extension element such as a listener or an error mapping is
+rebuilt by removing just that one by its selector and adding it again, never
+with `--replace`, which would delete its siblings), and every write reports
+the findings it introduced. Use `--strict` in a pipeline: the findings are
+warnings, so `validate` alone exits 0.
 
 ```
 $ bpmn set claim.bpmn Process_ClaimHandling camunda:historyTimeToLive=
@@ -933,7 +1024,7 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `retype` | `id`, `kind` (required), trigger keys |
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
 | `order` | `id` (required), exactly one of `flows` (outgoing flows of a node) or `lanes` (lanes of a pool / process / parent lane) |
-| `ext` | `id`, `action` (`add` / `remove`, required), `type` (add: type or path; remove: selector such as `camunda:inputParameter[name=x]`; a `definition.` / `loop.` / `condition.` prefix addresses the nested element), `attrs` (map), `body`, `xml`, `replace`, `index`, `slot` (`definition` / `loop` / `condition`, the same as the type prefix) |
+| `ext` | `id`, `action` (`add` / `remove`, required), `type` (add: type or path; remove: selector such as `camunda:inputParameter[name=x]`, or an index from `ext list` such as `"2"`, `"loop.0"`, `"definition[1].0"`; a `definition.` / `loop.` / `condition.` prefix addresses the nested element, `definition[<n>].` / `definition[<trigger>].` one of several event definitions), `attrs` (map), `body`, `xml`, `replace`, `index`, `slot` (`definition` / `loop` / `condition` / `definition[<n>]`, the same as the type prefix) |
 | `place` | `ids` (required list; moved as one group, the first is the reference), at most one of `rowOf` / `below` / `above` and at most one of `columnOf` / `after` / `before` (at least one key) |
 | `align` | `ids` (required list), `axis` (`row` / `column`, required), `to` (reference; default the first id; without it two ids are needed) |
 | `color` | `ids` (required list), `color` (`blue` / `orange` / `green` / `red` / `purple` / `default`, required) |
@@ -1061,7 +1152,7 @@ candidate ids when a reference could not be resolved; with `--json`:
 | 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...) |
 | 3 | layout error (`E_LAYOUT_*`) |
 | 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`) |
-| 5 | `--strict` and the result has warnings |
+| 5 | `--strict` and the result has warnings (`validate`: also import warnings) |
 | 70 | internal error (`E_INTERNAL`; `BPMN_DEBUG=1` prints the stack) |
 
 The full error catalogue with a fix for every code: `bpmn kinds` (section
@@ -1192,8 +1283,11 @@ could not draw as `W_LAYOUT_DI_NOT_CREATED`.
   diagram already shows is treated as a read-only view by the incremental
   layout: DI of removed elements is pruned there, nothing else changes.
 - Files with content bpmn-moddle cannot represent (unknown elements,
-  unresolved references, duplicate ids) are refused with `E_IMPORT_LOSSY`;
-  `--force` writes anyway and drops that content. The library refuses them
+  unresolved references, duplicate ids, an element the schema allows once
+  appearing twice, such as two `loopCharacteristics` on one task: the reader
+  keeps only the last) are refused with `E_IMPORT_LOSSY`; `--force` writes
+  anyway and drops that content (of a duplicate element the last one stays).
+  `show` and `validate` print it as `import:` lines. The library refuses them
   the same way (`Doc.fromXml` + `mutateDoc` without `force: true`).
 - `bpmn-moddle` never sets `$parent` for elements created in memory; the CLI
   maintains containment, `incoming`/`outgoing` and every reference itself. A
@@ -1402,7 +1496,9 @@ colour palette `SWATCHES`. The platform profile: `validateDoc(doc, {
 platform: 'auto' | 'c7' | 'c8' | 'none' })` (findings among the warnings,
 `result.platform` with the platform, its source and the counts),
 `checkFile(file, { platform })`, `MutationOptions.platform` (default auto;
-`'none'` switches it off), `runProfile`, `detectPlatform`, `PLATFORM_CHOICES`
+`'none'` switches it off; an explicit choice also decides the engine rules of
+the ops, e.g. which event-gateway rule a bridge follows), `runProfile`,
+`detectPlatform`, `PLATFORM_CHOICES`
 and the types `ProfileFinding`, `PlatformSummary`, `Severity`;
 `listExtensions` / `listAllExtensions` (what `ext list` prints) and
 `Doc.create({ target })` with `TARGETS`. Everything the CLI does goes through

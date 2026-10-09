@@ -35,7 +35,10 @@
  *  - idReferenceAttrs()         -> id-valued attributes of camunda extension elements
  *                                  (camunda:errorEventDefinition@errorRef -> bpmn:Error)
  *  - typeIs(bpmnType, superType) -> BPMN type hierarchy check without an element
- *  - platformOf(definitions)    -> 'camunda7' | 'camunda8' | undefined (the engine a file targets)
+ *  - platformOf(definitions)    -> 'camunda7' | 'camunda8' | undefined (the engine a file targets;
+ *                                  the same decision as platform/detect.ts detectPlatform)
+ *  - isC7Uri(uri) / C7_URIS     -> the namespaces this descriptor describes by local name: camunda
+ *                                  and Operaton's copy of it (operaton:asyncBefore is camunda:asyncBefore)
  *  - C7_DEFAULT_TTL / C7_PLATFORM_VERSION -> what `new --target camunda7` writes
  *
  * Two placement lists of the descriptor are corrected to what the engines
@@ -43,9 +46,23 @@
  */
 import { createRequire } from 'node:module';
 import { createModdle, type El } from '../model.js';
+import { detectPlatformOf } from './detect.js';
 
 export const CAMUNDA_PREFIX = 'camunda';
 export const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
+/**
+ * Operaton's own namespace. Its element and attribute types are the camunda
+ * ones under another URI. Operaton 2.1 reads it first and falls back to the
+ * camunda namespace; Camunda 7 and CIB seven ignore it (engine-checked).
+ */
+export const OPERATON_URI = 'http://operaton.org/schema/1.0/bpmn';
+/** Namespaces whose content this descriptor describes, by local name (the Camunda 7 family). */
+export const C7_URIS: ReadonlySet<string> = new Set([CAMUNDA_URI, OPERATON_URI]);
+
+/** True for the camunda and the operaton namespace: look their names up here by local name. */
+export function isC7Uri(uri: string | undefined): boolean {
+  return uri !== undefined && C7_URIS.has(uri);
+}
 
 /** A camunda attribute that BPMN elements carry (`camunda:assignee` on a userTask). */
 export interface CamundaAttr {
@@ -444,24 +461,12 @@ export const C7_DEFAULT_TTL = '180';
 export const C7_PLATFORM_VERSION = '7.24.0';
 
 /**
- * The engine a file targets: `camunda7` when bpmn:definitions declares
- * modeler:executionPlatform="Camunda Platform" (any prefix bound to the
- * modeler namespace), `camunda8` for "Camunda Cloud"; without that attribute
- * the declared namespaces decide (camunda only -> camunda7, zeebe only ->
- * camunda8); undefined when nothing (or both) is declared.
+ * The engine a file targets: `camunda7` (Camunda 7, CIB seven, Operaton),
+ * `camunda8`, or undefined for plain BPMN. One decision with the validation
+ * profile: platform/detect.ts detectPlatformOf (modeler:executionPlatform,
+ * else the vendor namespace the content uses, else a declared one).
  */
 export function platformOf(definitions: El): 'camunda7' | 'camunda8' | undefined {
-  const attrs = (definitions.$attrs ?? {}) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(attrs)) {
-    if (key !== 'executionPlatform' && !key.endsWith(':executionPlatform')) continue;
-    const v = String(value).trim().toLowerCase();
-    if (v.startsWith('camunda platform')) return 'camunda7';
-    if (v.startsWith('camunda cloud')) return 'camunda8';
-  }
-  const uris = new Set(Object.entries(attrs).filter(([k]) => k.startsWith('xmlns:')).map(([, v]) => String(v)));
-  const c7 = uris.has(CAMUNDA_URI);
-  const c8 = uris.has(ZEEBE_URI);
-  if (c7 && !c8) return 'camunda7';
-  if (c8 && !c7) return 'camunda8';
-  return undefined;
+  const p = detectPlatformOf(definitions).platform;
+  return p === 'c7' ? 'camunda7' : p === 'c8' ? 'camunda8' : undefined;
 }

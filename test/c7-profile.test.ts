@@ -115,6 +115,8 @@ interface Case {
   codes: string[];
   /** what Camunda 7.24 / CIB seven 2.2 / Operaton 2.1.5 do with it */
   engine: 'reject' | 'accept';
+  /** a structural error validateDoc reports for the same problem: `validate` shows it instead of the profile codes */
+  structural?: string;
 }
 
 const CASES: Case[] = [
@@ -221,6 +223,7 @@ const CASES: Case[] = [
     ),
     codes: ['W_C7_DEPLOY_BOUNDARY_HOST'],
     engine: 'reject',
+    structural: 'E_INVALID_HOST',
   },
   { name: 'timer without value', xml: xml(chain('<bpmn:intermediateCatchEvent id="X"><bpmn:timerEventDefinition /></bpmn:intermediateCatchEvent>')), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
   { name: 'script task without script', xml: xml(chain('<bpmn:scriptTask id="X" scriptFormat="groovy" />')), codes: ['W_C7_DEPLOY_SCRIPT'], engine: 'reject' },
@@ -278,7 +281,9 @@ describe('Camunda 7 profile: one model per rule', () => {
     // standalone on a fresh document: the rules must not rely on validateDoc having repaired incoming/outgoing
     const findings = runProfile(await Doc.fromXml(c.xml)).findings;
     expect(findings.map((f) => f.code).sort()).toEqual([...c.codes].sort());
-    expect(profileCodes(await Doc.fromXml(c.xml))).toEqual([...c.codes].sort());
+    // validate reports a problem once: a structural error replaces the profile finding that repeats it
+    expect(profileCodes(await Doc.fromXml(c.xml))).toEqual(c.structural ? [] : [...c.codes].sort());
+    if (c.structural) expect(validateDoc(await Doc.fromXml(c.xml), { platform: 'auto' }).errors.map((e) => e.code)).toContain(c.structural);
     // deploy-severity findings exactly where the engines refuse the file
     expect(findings.some((f) => f.severity === 'deploy')).toBe(c.engine === 'reject');
     expect(findings.every((f) => f.code.startsWith('W_C7_DEPLOY_') === (f.severity === 'deploy'))).toBe(true);
@@ -341,10 +346,11 @@ describe('platform detection', () => {
     expect(await detect('', chain('<bpmn:task id="X" />'))).toMatchObject({ platform: 'none', source: 'none' });
   });
 
-  it('new --target camunda7 is a Camunda 7 file without findings', async () => {
+  it('new --target camunda7 is a Camunda 7 file whose only finding is the missing start event', async () => {
     const doc = Doc.create({ target: 'camunda7', processName: 'Order' });
     expect(detectPlatform(doc)).toMatchObject({ platform: 'c7', source: 'executionPlatform' });
-    expect(runProfile(doc).findings).toEqual([]);
+    // the engines refuse an empty process ("process must define a startEvent element")
+    expect(runProfile(doc).findings.map((f) => f.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
   });
 });
 

@@ -3,7 +3,9 @@
  * conditional / link / compensate / terminate / cancel.
  *
  *  - applyTrigger(): sets the event's trigger. When the event already has
- *    exactly one definition of that trigger, it is updated in place: only the
+ *    exactly one definition of that trigger, it is updated in place (other
+ *    event definitions of an event that has several are dropped, reported as
+ *    W_PROPERTY_DROPPED): only the
  *    details that differ (message, error, signal, escalation, condition, timer,
  *    link) change, so its id, vendor attributes (camunda:topic ...), extension
  *    elements and expression elements survive. A new inline condition (when=)
@@ -28,7 +30,7 @@ import type { Doc } from '../document.js';
 import { modelError, type Warning } from '../errors.js';
 import { kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { addTo, is, many, walk, type El } from '../model.js';
-import { CAMUNDA_URI } from '../platform/descriptor.js';
+import { isC7Uri } from '../platform/descriptor.js';
 import type { TriggerOptions } from './types.js';
 
 export interface TriggerDetails {
@@ -234,7 +236,7 @@ function updateCondition(doc: Doc, event: El, def: El, opts: TriggerOptions): Wa
   const expr = def.get<El | undefined>('condition');
   const dropped: string[] = [];
   if (expr && expr.get<string | undefined>('body') !== opts.when) {
-    const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && doc.namespaceUri(k.split(':')[0]!) === CAMUNDA_URI);
+    const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && isC7Uri(doc.namespaceUri(k.split(':')[0]!)));
     const language = expr.get<string | undefined>('language');
     if (resourceKey) {
       dropped.push(`${resourceKey} ${String(expr.$attrs[resourceKey])}`);
@@ -303,6 +305,37 @@ function dropDefinitions(doc: Doc, event: El, trigger: Trigger): Warning[] {
     });
   }
   return warnings;
+}
+
+/**
+ * An event with several event definitions set to the trigger of one of them:
+ * that one stays (id, details and vendor content), the others go (ids
+ * released), reported as one W_PROPERTY_DROPPED.
+ */
+function dropOtherDefinitions(doc: Doc, event: El, keep: El, trigger: Trigger): Warning[] {
+  const defs = [...(event.get<El[] | undefined>('eventDefinitions') ?? [])];
+  const others = defs.filter((d) => d !== keep);
+  event.set('eventDefinitions', [keep]);
+  for (const def of others) {
+    for (const e of walk(def, { bpmnOnly: true })) {
+      const id = e.get<string | undefined>('id');
+      if (id) doc.ids.release(id);
+    }
+  }
+  const text = (d: El): string => {
+    const local = d.$type.replace('bpmn:', '');
+    const id = d.get<string | undefined>('id');
+    const lost = vendorContent(d);
+    return `${local.charAt(0).toLowerCase()}${local.slice(1)}${id ? ` ${id}` : ''}${lost.length ? ` (with ${lost.join(', ')})` : ''}`;
+  };
+  return [
+    {
+      code: 'W_PROPERTY_DROPPED',
+      message: `${others.map(text).join(', ')} of ${idOf(event)} ${others.length > 1 ? 'were' : 'was'} dropped: trigger=${trigger} keeps only its ${text(keep).replace(/ \(with .*\)$/, '')} (an event acts on one event definition)`,
+      element: idOf(event),
+      hint: 'Set the trigger of the definition the event should keep; the others cannot be kept on the same event.',
+    },
+  ];
 }
 
 function isEventSubProcess(el: El | undefined): boolean {
@@ -380,11 +413,14 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   }
   applyInterrupting(doc, event, trigger, opts);
   const defs = event.get<El[] | undefined>('eventDefinitions') ?? [];
-  const same = trigger !== 'none' && defs.length === 1 && is(defs[0], TRIGGER_TYPES[trigger]) ? defs[0] : undefined;
+  // the one definition of that trigger is kept (also when the event has others besides it, which go)
+  const matching = trigger !== 'none' ? defs.filter((d) => is(d, TRIGGER_TYPES[trigger])) : [];
+  const same = matching.length === 1 ? matching[0] : undefined;
   if (same && trigger !== 'none') {
+    const others = defs.length > 1 ? dropOtherDefinitions(doc, event, same, trigger) : [];
     const warnings = updateDefinition(doc, event, same, trigger, opts);
     doc.invalidate();
-    return warnings;
+    return [...others, ...warnings];
   }
   const fresh = trigger !== 'none' ? buildDefinition(doc, event, trigger, opts) : undefined;
   const warnings = dropDefinitions(doc, event, trigger);

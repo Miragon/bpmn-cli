@@ -32,13 +32,17 @@
  *    does not allow on the new kind (camunda:assignee on a serviceTask,
  *    camunda:topic on a userTask, a camunda:taskListener outside a userTask)
  *    are named in one W_PROPERTY_INAPPLICABLE warning with the commands that
- *    remove them. (Not W_PROPERTY_DROPPED: nothing was dropped.)
+ *    remove them. (Not W_PROPERTY_DROPPED: nothing was dropped.) In a Camunda 7
+ *    file the profile names each of them as well (W_C7_MISPLACED_ATTRIBUTE /
+ *    W_C7_MISPLACED_EXTENSION); withoutProfileDuplicates() drops the summary
+ *    then, so a write reports every item once.
  */
 import type { Doc } from '../document.js';
 import { modelError, type Warning } from '../errors.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
-import { allowedOn, attrAppliesTo, CAMUNDA_URI } from '../platform/descriptor.js';
+import { allowedOn, attrAppliesTo, isC7Uri } from '../platform/descriptor.js';
+import { subjectOf, type ProfileFinding } from '../platform/finding.js';
 import { ChangeSet } from '../result.js';
 import { applyTrigger } from './events.js';
 import { cascadeRemove } from './remove.js';
@@ -227,10 +231,10 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   return cs;
 }
 
-/** `camunda:<local>` when `name` is prefixed with a prefix bound to the camunda namespace. */
+/** `camunda:<local>` when `name` is prefixed with a prefix bound to the camunda (or Operaton's) namespace. */
 function camundaName(doc: Doc, name: string): string | undefined {
   const idx = name.indexOf(':');
-  if (idx <= 0 || doc.namespaceUri(name.slice(0, idx)) !== CAMUNDA_URI) return undefined;
+  if (idx <= 0 || !isC7Uri(doc.namespaceUri(name.slice(0, idx)))) return undefined;
   return `camunda:${name.slice(idx + 1)}`;
 }
 
@@ -252,12 +256,40 @@ function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | un
     ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((a) => `${a}=`).join(' ')}\``] : []),
     ...exts.map((t) => `\`bpmn ext remove <file> ${id} ${t}\``),
   ];
-  return {
+  const warning: Warning = {
     code: 'W_PROPERTY_INAPPLICABLE',
     message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
     element: id,
     hint: `The Camunda descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
   };
+  // what the Camunda 7 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
+  Object.defineProperty(warning, COVERS, { value: [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)], enumerable: false });
+  return warning;
+}
+
+/** The profile findings that name one misplaced camunda attribute / extension element each. */
+const MISPLACED = ['W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION'];
+
+/** Hidden list of profile subjects an operation warning repeats (not serialised). */
+const COVERS: unique symbol = Symbol('covered-profile-subjects');
+
+/**
+ * The warnings of a mutation without the ones its platform-profile findings
+ * already report: after a retype in a Camunda 7 file the profile names every
+ * camunda attribute / extension element the new kind cannot use
+ * (W_C7_MISPLACED_ATTRIBUTE / W_C7_MISPLACED_EXTENSION, with severity and a
+ * remove command each), so the summary W_PROPERTY_INAPPLICABLE is dropped
+ * when those findings cover everything it names. Without the profile
+ * (`--platform none`, a file that is not Camunda 7) it stays. For the
+ * pipeline / printMutation: `changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings)`.
+ */
+export function withoutProfileDuplicates(warnings: Warning[], validation: readonly Warning[]): Warning[] {
+  return warnings.filter((w) => {
+    const covers = (w as Warning & { [COVERS]?: string[] })[COVERS];
+    if (!covers?.length) return true;
+    const reported = new Set(validation.filter((v) => v.element === w.element && MISPLACED.includes(v.code)).map((v) => subjectOf(v as ProfileFinding)));
+    return !covers.every((s) => reported.has(s));
+  });
 }
 
 /** Applies / clears the kind-specific creation props (e.g. triggeredByEvent for event sub-processes). */

@@ -30,13 +30,13 @@
  */
 import type { Doc } from './document.js';
 import { usageError, type Warning } from './errors.js';
-import { KindError, kindLabel, kindOf, parseKind, triggerOf } from './kinds.js';
+import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from './kinds.js';
 import { diExpansionState } from './layout.js';
 import { is, localType, walk, type El } from './model.js';
 import { laneOf } from './ops/containers.js';
 import { describeTrigger } from './ops/events.js';
 import { listExtensions, type ExtensionInfo } from './ops/ext.js';
-import { nestedElement, readProperties, slotsOf, vendorAttributes, type NestedSlot } from './ops/set.js';
+import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from './ops/set.js';
 import { flowOrder, repairFlowLinks, validateDoc } from './validate.js';
 
 export interface ViewFlow {
@@ -142,6 +142,8 @@ export interface ModelView {
   processes: ViewProcess[];
   rootElements: Array<{ id: string; kind: string; name?: string; code?: string }>;
   problems: Warning[];
+  /** content the reader could not keep (a write needs --force and drops it), e.g. a duplicate loopCharacteristics */
+  importWarnings?: string[];
 }
 
 /** A nested element of `show <id>` (event definition, loop characteristics, condition). */
@@ -169,8 +171,8 @@ export interface ElementDetail {
   children?: string[];
   extensions: unknown[];
   attrs: Record<string, string>;
-  /** nested elements by their set-key prefix */
-  nested?: Partial<Record<NestedSlot, NestedDetail>>;
+  /** nested elements by their set-key prefix (definition, loop, condition; definition[<n>] when an event has several) */
+  nested?: Record<string, NestedDetail>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -291,6 +293,9 @@ function nodeProps(el: El): Record<string, unknown> | undefined {
   if (messageRef && (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'))) props['message'] = refLabel(messageRef);
   const scriptFormat = peek<string>(el, 'scriptFormat');
   if (scriptFormat) props['scriptFormat'] = scriptFormat;
+  // several event definitions on one event (the label shows the first one's trigger): name them all
+  const defs = definitionsOf(el);
+  if (defs.length > 1) props['definitions'] = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0] ?? d.$type).join('+');
   return Object.keys(props).length ? props : undefined;
 }
 
@@ -309,13 +314,11 @@ function extensionMentions(el: El): string[] | undefined {
   return mentions.length ? [...new Set(mentions)] : undefined;
 }
 
-/** Vendor attribute values of an element and, under `<slot>.<key>`, of its nested elements. */
-function vendorValues(el: El, skip: (slot: NestedSlot, key: string) => boolean = () => false): Record<string, string> | undefined {
+/** Vendor attribute values of an element and, under `<slot>.<key>` (`definition[1].<key>`), of its nested elements. */
+function vendorValues(el: El, skip: (slot: string, key: string) => boolean = () => false): Record<string, string> | undefined {
   const out: Record<string, string> = { ...vendorAttrs(el) };
-  for (const slot of slotsOf(el)) {
-    const nested = nestedElement(el, slot);
-    if (!nested) continue;
-    for (const [k, v] of Object.entries(vendorAttrs(nested))) if (!skip(slot, k)) out[`${slot}.${k}`] = v;
+  for (const { prefix, el: nested } of nestedEntries(el)) {
+    for (const [k, v] of Object.entries(vendorAttrs(nested))) if (!skip(prefix, k)) out[`${prefix}.${k}`] = v;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -536,6 +539,7 @@ export function buildView(doc: Doc): ModelView {
     processes: doc.processes().map((p) => buildProcess(ctx, p)),
     rootElements: buildRootElements(doc),
     problems: [...errors, ...warnings],
+    importWarnings: nonEmpty(doc.lossyImportWarnings.map((w) => w.message.split('\n')[0]!)),
   });
 }
 
@@ -607,11 +611,9 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
       default: source && peek<El>(source, 'default') === f ? true : undefined,
     });
   });
-  const nested: Partial<Record<NestedSlot, NestedDetail>> = {};
-  for (const slot of slotsOf(el)) {
-    const n = nestedElement(el, slot);
-    if (!n) continue;
-    nested[slot] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: listExtensions(n) });
+  const nested: Record<string, NestedDetail> = {};
+  for (const { prefix, el: n } of nestedEntries(el)) {
+    nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: listExtensions(n) });
   }
   const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(idOf) : [];
   const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(idOf) : [];
@@ -712,9 +714,8 @@ function vendorMatch(el: El, q: string): string | undefined {
   };
   const own = visit(listExtensions(el), '');
   if (own) return own;
-  for (const slot of slotsOf(el)) {
-    const nested = nestedElement(el, slot);
-    const hit = nested ? visit(listExtensions(nested), `${slot}.`) : undefined;
+  for (const { prefix, el: nested } of nestedEntries(el)) {
+    const hit = visit(listExtensions(nested), `${prefix}.`);
     if (hit) return hit;
   }
   return undefined;

@@ -48,9 +48,11 @@ function warningLine(w: Warning): string {
 }
 
 function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean }): void {
-  // the same finding can be reported by the operation and by the validator: keep the validator's (it has the richer hint)
-  const validationKeys = new Set(result.validation.warnings.map((w) => `${w.code}|${w.element ?? ''}`));
-  result.changes.warnings = result.changes.warnings.filter((w) => !validationKeys.has(`${w.code}|${w.element ?? ''}`));
+  // the same finding can be reported by the operation and by the validator: keep the validator's (it has the richer hint);
+  // an event-gateway finding is about one branch: the same code on another target of the gateway is another finding
+  const keyOf = (w: Warning): string => `${w.code}|${w.element ?? ''}${w.code === 'W_EVENT_GATEWAY_TARGET' ? `|${w.related?.[0] ?? ''}` : ''}`;
+  const validationKeys = new Set(result.validation.warnings.map(keyOf));
+  result.changes.warnings = result.changes.warnings.filter((w) => !validationKeys.has(keyOf(w)));
   const allWarnings: Warning[] = [
     ...result.changes.warnings,
     ...result.validation.warnings,
@@ -832,17 +834,25 @@ program
         if (errors.length) lines.push(renderProblems(errors).trimEnd());
         if (warnings.length) lines.push(renderProblems(warnings).trimEnd());
         if (platform) {
-          const counts = platform.platform === 'none' ? '' : ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)`;
+          // only Camunda 7 has engine rules so far: a count of 0 would read as "checked and fine" for Camunda 8
+          const counts =
+            platform.platform === 'c7'
+              ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)`
+              : platform.platform === 'c8'
+                ? ' - no Camunda 8 engine rules yet (structure and lint only)'
+                : '';
           lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
         }
         lines.push(
           report.layout.status === 'ok' ? 'layout: ok' : report.layout.status === 'failed' ? `layout: failed (${report.layout.error.code})` : 'layout: skipped',
         );
-        lines.push(errors.length ? `${errors.length} error(s), ${warnings.length} warning(s)` : `valid, ${warnings.length} warning(s)`);
+        const imported = report.importWarnings.length ? `, ${report.importWarnings.length} import warning(s)` : '';
+        lines.push(errors.length ? `${errors.length} error(s), ${warnings.length} warning(s)${imported}` : `valid, ${warnings.length} warning(s)${imported}`);
         print(lines.join('\n'));
       }
       if (errors.length) process.exit(2);
-      if (o['strict'] && warnings.length) process.exit(5);
+      // content the reader could not keep (duplicate elements, unknown elements, ...) fails --strict like a warning
+      if (o['strict'] && (warnings.length || report.importWarnings.length)) process.exit(5);
     }, !!o['json']);
   });
 

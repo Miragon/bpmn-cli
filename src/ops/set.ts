@@ -40,9 +40,20 @@
  *    A camunda attribute the descriptor places on such a nested element is
  *    refused on the parent (E_WRONG_HOST, hint names the prefixed key); the
  *    same for a camunda attribute of a process set on its participant.
+ *    An event with several event definitions (XSD-valid; the engines act on
+ *    one of them) needs a selector: `definition[<n>].<key>` (0-based) or
+ *    `definition[<trigger>].<key>`; a plain `definition.` is E_AMBIGUOUS_NESTED
+ *    listing them (resolveNested; `ext` takes the same prefix).
+ *    definition.activityRef (compensation) must name an activity of the
+ *    event's own scope, or, from an event sub-process, of the scope around
+ *    it (E_CROSS_SCOPE; the engines refuse anything else).
  *  Conditions are changed in place (id and vendor attributes stay); an inline
  *    body replacing a script resource drops camunda:resource and its language
  *    (W_PROPERTY_DROPPED), and a `${...}` body never inherits a script language.
+ *    Removing a script resource (`condition.camunda:resource=`) from a
+ *    condition without an inline body is E_INVALID_VALUE unless the same
+ *    command sets condition= (flows; empty removes the condition) or when=
+ *    (conditional events): an empty condition fails every evaluation.
  *  Sub-processes: expanded (true|false) -> recorded in `expansionRequests`
  *    (the pipeline merges it into the layouter options); triggeredByEvent.
  *  Flow nodes: lane (lane id or empty to remove).
@@ -64,7 +75,7 @@ import { modelError, usageError } from '../errors.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { diExpansionState } from '../layout.js';
 import { addTo, is, localType, many, walk, type El } from '../model.js';
-import { attrAppliesTo, camundaAttr, camundaAttrsFor, CAMUNDA_URI, idReferenceAttrs, typeIs } from '../platform/descriptor.js';
+import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs } from '../platform/descriptor.js';
 import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
@@ -204,7 +215,7 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
   { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
-  { key: 'definition.<key>', appliesTo: 'event', description: 'Attribute of the event definition, e.g. definition.camunda:errorCodeVariable=code, definition.camunda:type=external + definition.camunda:topic=x (message throw / end), definition.camunda:variableName=amount (conditional)' },
+  { key: 'definition.<key>', appliesTo: 'event', description: "Attribute of the event definition, e.g. definition.camunda:errorCodeVariable=code, definition.camunda:type=external + definition.camunda:topic=x (message throw / end), definition.camunda:variableName=amount (conditional); an event with several event definitions takes 'definition[<n>].<key>' (0-based) or 'definition[<trigger>].<key>'" },
   { key: 'loop.<key>', appliesTo: 'activity', description: 'Attribute of the loop characteristics, e.g. loop.camunda:collection=${items}, loop.camunda:elementVariable=item, loop.camunda:asyncBefore=true (creates a parallel multi-instance loop when none exists)' },
   { key: 'condition.<key>', appliesTo: 'sequenceFlow', description: 'Attribute of the condition expression, e.g. condition.camunda:resource=deployment://check.groovy (a script resource condition; set language= too)' },
   { key: 'condition.<key>', appliesTo: 'conditionalEvent', description: 'Attribute of the condition expression of a conditional event, e.g. condition.camunda:resource=deployment://ready.groovy condition.language=groovy; the event definition itself is definition.<key> (definition.camunda:variableName=amount)' },
@@ -393,10 +404,14 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
     conditionKeys.delete('condition');
     el.get<El | undefined>('conditionExpression')?.set('body', undefined);
   }
-  for (const n of flowCondition) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
+  // condition= in the same command replaces (or removes) what a removed script resource leaves behind
+  for (const n of flowCondition) applyNestedKey(doc, el, n.slot, n.key, n.value, cs, conditionKeys.has('condition'));
   if (conditionKeys.size) applyCondition(doc, el, conditionKeys, cs);
+  // a conditional event's script resource removed together with when=: removed first, so that when= fills the condition
+  const resourceRemoval = is(el, 'bpmn:Event') ? nested.filter((n) => n.slot === 'condition' && !n.value && isResourceKey(doc, n.key)) : [];
+  for (const n of resourceRemoval) applyNestedKey(doc, el, n.slot, n.key, n.value, cs, eventKeys.has('when'));
   if (eventKeys.size) applyEventKeys(doc, el, eventKeys, cs);
-  for (const n of nested) if (!flowCondition.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
+  for (const n of nested) if (!flowCondition.includes(n) && !resourceRemoval.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   doc.invalidate();
   return cs;
 }
@@ -633,7 +648,21 @@ function setVendorAttribute(doc: Doc, el: El, key: string, value: string): void 
   el.$attrs[key] = value;
 }
 
+/**
+ * Removes an attribute without prefix that BPMN does not define but the
+ * reader kept (`calledDecision="..."` on a business rule task: the engines
+ * validate against the schema and refuse the file, W_C7_DEPLOY_SCHEMA).
+ * Only removal: such a key cannot be set.
+ */
+function removeUndefinedAttr(el: El, key: string, value: string): boolean {
+  if (value || key.includes(':') || descriptorOf(el).propertiesByName?.[key]) return false;
+  if (!el.$attrs || !Object.prototype.hasOwnProperty.call(el.$attrs, key)) return false;
+  delete el.$attrs[key];
+  return true;
+}
+
 function setModelProperty(doc: Doc, el: El, key: string, value: string): void {
+  if (removeUndefinedAttr(el, key, value)) return;
   const p = descriptorOf(el).propertiesByName?.[key];
   if (!p || key === 'id') throw unknownKey(doc, el, key);
   const blocked = BLOCKED_PROPS[key];
@@ -646,10 +675,10 @@ function setModelProperty(doc: Doc, el: El, key: string, value: string): void {
   el.set(key, coerceValue(doc, el, p, value));
 }
 
-/** True for a camunda:resource key (any prefix bound to the camunda namespace). */
+/** True for a camunda:resource key (any prefix bound to the camunda namespace, or Operaton's: operaton:resource). */
 function isResourceKey(doc: Doc, key: string): boolean {
   const [prefix, local] = key.split(':');
-  return local === 'resource' && !!prefix && doc.namespaceUri(prefix) === CAMUNDA_URI;
+  return local === 'resource' && !!prefix && isC7Uri(doc.namespaceUri(prefix));
 }
 
 /** The camunda:resource attribute key of an expression, if it has one. */
@@ -740,8 +769,14 @@ export const SLOT_TEXT: Record<NestedSlot, string> = {
   condition: 'condition expression',
 };
 
-/** `loop.camunda:collection` -> { slot: 'loop', key: 'camunda:collection' }; undefined for keys without a slot prefix. */
+/**
+ * `loop.camunda:collection` -> { slot: 'loop', key: 'camunda:collection' }
+ * (`definition[1].id` -> { slot: 'definition[1]', key: 'id' }); undefined for
+ * keys without a slot prefix.
+ */
 export function splitNestedKey(key: string): { slot: string; key: string } | undefined {
+  const selector = /^(\w+\[[^\]]*\])\.(.*)$/.exec(key);
+  if (selector) return { slot: selector[1]!, key: selector[2]! };
   const dot = key.indexOf('.');
   if (dot <= 0) return undefined;
   const colon = key.indexOf(':');
@@ -749,30 +784,150 @@ export function splitNestedKey(key: string): { slot: string; key: string } | und
   return { slot: key.slice(0, dot), key: key.slice(dot + 1) };
 }
 
+/**
+ * A slot as written before the `.` of a nested key or an ext type:
+ * `definition`, `loop`, `condition`, or one event definition of an event
+ * that has several, by position (`definition[1]`, 0-based) or by trigger
+ * (`definition[timer]`). `invalid` holds a selector that is neither.
+ */
+export interface SlotRef {
+  slot: NestedSlot;
+  /** the prefix as given, e.g. `definition[timer]` */
+  text: string;
+  index?: number;
+  trigger?: Exclude<Trigger, 'none'>;
+  invalid?: string;
+}
+
+/** Parses a slot prefix (see SlotRef); undefined when `text` is not one of the slots. */
+export function parseSlotRef(text: string): SlotRef | undefined {
+  const m = /^(\w+)(?:\[\s*([^\]]*?)\s*\])?$/.exec(text.trim());
+  if (!m || !(NESTED_SLOTS as readonly string[]).includes(m[1]!)) return undefined;
+  const ref: SlotRef = { slot: m[1] as NestedSlot, text: text.trim() };
+  const sel = m[2];
+  if (sel === undefined) return ref;
+  if (/^\d+$/.test(sel)) ref.index = Number(sel);
+  else {
+    const t = normalizeTrigger(sel);
+    if (t && t !== 'none') ref.trigger = t;
+    else ref.invalid = sel;
+  }
+  return ref;
+}
+
+/** The event definitions of an event (no lazy collection is created). */
+export function definitionsOf(el: El): El[] {
+  const defs = ownValue(el, 'eventDefinitions');
+  return is(el, 'bpmn:Event') && Array.isArray(defs) ? (defs as El[]) : [];
+}
+
+/** `messageEventDefinition MDef` for messages and hints. */
+function definitionText(def: El): string {
+  const id = def.get<string | undefined>('id');
+  return `${typeLabel(def)}${id ? ` ${id}` : ''}`;
+}
+
 /** The slots `el` has: definition (events), loop (activities), condition (sequence flows, conditional events). */
 export function slotsOf(el: El): NestedSlot[] {
   const out: NestedSlot[] = [];
   if (is(el, 'bpmn:Event')) out.push('definition');
   if (is(el, 'bpmn:Activity')) out.push('loop');
-  if (is(el, 'bpmn:SequenceFlow') || (is(el, 'bpmn:Event') && triggerOf(el) === 'conditional')) out.push('condition');
+  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((d) => is(d, 'bpmn:ConditionalEventDefinition'))) out.push('condition');
   return out;
 }
 
-/** The nested element a slot names on `el`, or undefined when it does not exist (yet). */
+/**
+ * The nested element a slot names on `el`, or undefined when it does not
+ * exist (yet). For an event with several event definitions `definition`
+ * is the first one (views use nestedEntries, ops resolveNested); `condition`
+ * is the condition of its conditional event definition (only when it has
+ * exactly one).
+ */
 export function nestedElement(el: El, slot: NestedSlot): El | undefined {
   switch (slot) {
     case 'definition':
-      return is(el, 'bpmn:Event') ? (el.get<El[] | undefined>('eventDefinitions') ?? [])[0] : undefined;
+      return definitionsOf(el)[0];
     case 'loop':
       return is(el, 'bpmn:Activity') ? el.get<El | undefined>('loopCharacteristics') : undefined;
     case 'condition': {
       if (is(el, 'bpmn:SequenceFlow')) return el.get<El | undefined>('conditionExpression');
-      const def = is(el, 'bpmn:Event') ? (el.get<El[] | undefined>('eventDefinitions') ?? [])[0] : undefined;
-      return is(def, 'bpmn:ConditionalEventDefinition') ? def!.get<El | undefined>('condition') : undefined;
+      const conditional = definitionsOf(el).filter((d) => is(d, 'bpmn:ConditionalEventDefinition'));
+      return conditional.length === 1 ? conditional[0]!.get<El | undefined>('condition') : undefined;
     }
     default:
       return undefined;
   }
+}
+
+/**
+ * Every nested element of `el` with the prefix that addresses it: `definition`
+ * for the event definition (`definition[<n>]` for each one when an event has
+ * several), `loop`, `condition`.
+ */
+export function nestedEntries(el: El): Array<{ slot: NestedSlot; prefix: string; el: El }> {
+  const out: Array<{ slot: NestedSlot; prefix: string; el: El }> = [];
+  for (const slot of slotsOf(el)) {
+    if (slot === 'definition') {
+      const defs = definitionsOf(el);
+      defs.forEach((d, i) => out.push({ slot, prefix: defs.length > 1 ? `definition[${i}]` : 'definition', el: d }));
+      continue;
+    }
+    const n = nestedElement(el, slot);
+    if (n) out.push({ slot, prefix: slot, el: n });
+  }
+  return out;
+}
+
+/**
+ * The nested element a slot reference names, for an operation (set nested
+ * keys, ext on a nested element). undefined = the slot exists but is empty
+ * (no trigger, no loop, no condition). An event with several event
+ * definitions needs a selector (E_AMBIGUOUS_NESTED); a selector that matches
+ * nothing is E_NO_NESTED_ELEMENT; a bad selector or one on loop / condition
+ * is E_UNKNOWN_KEY. `what` names the key or type in messages; `example`
+ * turns a selector prefix into the command a hint shows (default: `set`).
+ */
+export function resolveNested(el: El, ref: SlotRef, what: string, example?: (prefix: string) => string): El | undefined {
+  const id = idOf(el);
+  if (ref.slot !== 'definition' && (ref.index !== undefined || ref.trigger || ref.invalid !== undefined)) {
+    throw modelError('E_UNKNOWN_KEY', `${what}: only definition. takes a selector ([<n>] or [<trigger>]), not ${ref.slot}.`, { element: id, hint: `Use ${ref.slot}.<key>.` });
+  }
+  if (ref.invalid !== undefined) {
+    throw modelError('E_UNKNOWN_KEY', `${what}: "${ref.invalid}" in ${ref.text} is neither a position nor a trigger`, {
+      element: id,
+      hint: 'Select an event definition by position (definition[0], definition[1], ...) or by trigger (definition[message], definition[timer], ...).',
+    });
+  }
+  if (ref.slot !== 'definition') return nestedElement(el, ref.slot);
+  const defs = definitionsOf(el);
+  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
+  if (ref.index !== undefined || ref.trigger) {
+    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((d) => is(d, TRIGGER_TYPES[ref.trigger!]));
+    if (hits.length === 1) return hits[0];
+    if (!hits.length) {
+      throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition ${ref.text} (${what})`, {
+        element: id,
+        hint: defs.length ? `Its event definitions: ${listing}.` : `It has no trigger; give it one first: \`bpmn set <file> ${id} trigger=<trigger>\`.`,
+      });
+    }
+    throw ambiguousNested(el, defs, what, `${hits.length} ${ref.trigger} event definitions`, example);
+  }
+  if (defs.length > 1) throw ambiguousNested(el, defs, what, `${defs.length} event definitions`, example);
+  return defs[0];
+}
+
+function ambiguousNested(el: El, defs: El[], what: string, count: string, example?: (prefix: string) => string) {
+  const id = idOf(el);
+  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
+  const triggers = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0]).filter((t): t is string => !!t);
+  const unique = triggers.filter((t, i) => triggers.indexOf(t) === i && triggers.lastIndexOf(t) === i);
+  const rest = what.replace(/^definition(\[[^\]]*\])?\./, '');
+  const show = example ?? ((prefix: string) => `bpmn set <file> ${id} '${prefix}.${rest}=<value>'`);
+  return modelError('E_AMBIGUOUS_NESTED', `${kindLabel(el)} ${id} has ${count} (${listing}); ${what} does not say which one`, {
+    element: id,
+    candidates: defs.map((_, i) => `definition[${i}]`),
+    hint: `Name one by position (0-based) or by trigger, e.g. \`${show('definition[1]')}\`${unique.length ? ` or \`${show(`definition[${unique[unique.length - 1]}]`)}\`` : ''} (quote the brackets in a shell). The engines act on only one event definition per event; to keep a single one, set the trigger again: \`bpmn set <file> ${id} trigger=<trigger> ...\`.`,
+  });
 }
 
 /** Vendor attributes of an element (prefixed, without xmlns / xsi). */
@@ -785,17 +940,21 @@ export function vendorAttributes(el: El): Record<string, string> {
   return out;
 }
 
-/** The local name when `key` is a camunda attribute (`camunda:assignee` -> `assignee`), else undefined. */
+/**
+ * The local name when `key` is a camunda attribute (`camunda:assignee` ->
+ * `assignee`), else undefined. Operaton's namespace holds the same attributes
+ * (`operaton:assignee`): the descriptor's rules apply to it by local name.
+ */
 function camundaLocal(doc: Doc, key: string): string | undefined {
   const idx = key.indexOf(':');
   if (idx <= 0) return undefined;
-  return doc.namespaceUri(key.slice(0, idx)) === CAMUNDA_URI ? key.slice(idx + 1) : undefined;
+  return isC7Uri(doc.namespaceUri(key.slice(0, idx))) ? key.slice(idx + 1) : undefined;
 }
 
 /** `key=value` for a hint, single-quoted when the shell would mangle it. */
 function shellPair(key: string, value: string): string {
   const pair = `${key}=${value}`;
-  return /^[\w.:/,-]*$/.test(value) ? pair : `'${pair.replace(/'/g, "'\\''")}'`;
+  return /^[\w.:/,-]*$/.test(value) && /^[\w.:-]*$/.test(key) ? pair : `'${pair.replace(/'/g, "'\\''")}'`;
 }
 
 /**
@@ -803,11 +962,12 @@ function shellPair(key: string, value: string): string {
  * slot of `el` (with the trigger an event needs first) or, for a participant,
  * its process. undefined when the descriptor places it nowhere near `el`.
  */
-function placeFor(el: El, name: string): { slot?: NestedSlot; trigger?: Exclude<Trigger, 'none'>; element?: El } | undefined {
+function placeFor(el: El, name: string): { slot?: NestedSlot; prefix?: string; trigger?: Exclude<Trigger, 'none'>; element?: El } | undefined {
   if (is(el, 'bpmn:Event')) {
-    const def = nestedElement(el, 'definition');
-    if (def && attrAppliesTo(name, def)) return { slot: 'definition' };
-    if (triggerOf(el) === 'conditional' && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+    const defs = definitionsOf(el);
+    const fit = defs.findIndex((d) => attrAppliesTo(name, d));
+    if (fit !== -1) return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
+    if (slotsOf(el).includes('condition') && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
     const current = triggerOf(el);
     for (const t of kindOf(el)?.triggers ?? []) {
       if (t === 'none' || t === current) continue;
@@ -846,7 +1006,7 @@ function assertVendorHost(doc: Doc, el: El, key: string, value: string): void {
   const slot = place.slot!;
   throw modelError('E_WRONG_HOST', `${key} does not belong on ${kindLabel(el)} ${id}: it is an attribute of its ${SLOT_TEXT[slot]}${place.trigger ? ` (${TRIGGER_TYPES[place.trigger].replace('bpmn:', '')})` : ''}`, {
     element: id,
-    hint: `Use \`bpmn set <file> ${id} ${place.trigger ? `trigger=${place.trigger} ` : ''}${shellPair(`${slot}.${key}`, value)}\`${place.trigger ? ` (${id} needs a ${place.trigger} trigger for it)` : ''}.`,
+    hint: `Use \`bpmn set <file> ${id} ${place.trigger ? `trigger=${place.trigger} ` : ''}${shellPair(`${place.prefix ?? slot}.${key}`, value)}\`${place.trigger ? ` (${id} needs a ${place.trigger} trigger for it)` : ''}.`,
   });
 }
 
@@ -923,9 +1083,9 @@ function createNested(doc: Doc, el: El, slot: NestedSlot, key: string, cs: Chang
 }
 
 /** Refuses a key the nested element cannot carry (E_WRONG_HOST for known camunda attributes, E_UNKNOWN_KEY otherwise). */
-function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: string): void {
+function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: string, prefix: string = slot): void {
   const id = idOf(el);
-  const full = `${slot}.${key}`;
+  const full = `${prefix}.${key}`;
   if (key.includes(':')) {
     const local = camundaLocal(doc, key);
     if (!local || attrAppliesTo(`camunda:${local}`, target) !== false) return;
@@ -945,17 +1105,17 @@ function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: str
   const p = descriptorOf(target).propertiesByName?.[key];
   const blocked = NESTED_BLOCKED[key];
   if (!p || blocked || !isSettableProp(doc, p)) {
-    const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k])].map((k) => `${slot}.${k}`);
+    const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k])].map((k) => `${prefix}.${k}`);
     throw modelError('E_UNKNOWN_KEY', `Unknown key "${full}" for ${kindLabel(el)} ${id}: a ${typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
       element: id,
       candidates: keys,
-      hint: `Keys of the ${SLOT_TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${slot}.<prefix>:<attr>.`,
+      hint: `Keys of the ${SLOT_TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${prefix}.<prefix>:<attr>.`,
     });
   }
 }
 
 /** A script resource replaces an inline body: the body goes, reported as W_PROPERTY_DROPPED. */
-function dropConditionBody(el: El, expr: El, cs: ChangeSet): void {
+function dropConditionBody(el: El, expr: El, cs: ChangeSet, key = 'camunda:resource'): void {
   const body = expr.get<string | undefined>('body');
   if (!body) return;
   expr.set('body', undefined);
@@ -963,26 +1123,54 @@ function dropConditionBody(el: El, expr: El, cs: ChangeSet): void {
     code: 'W_PROPERTY_DROPPED',
     message: `The condition "${body}" of ${idOf(el)} was dropped: a script resource condition has no inline body`,
     element: idOf(el),
-    hint: `To keep the inline condition remove the resource again (condition.camunda:resource=) and set ${is(el, 'bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>.`,
+    hint: `To go back to an inline condition remove the resource and set the body in one command: \`bpmn set <file> ${idOf(el)} condition.${key}= '${is(el, 'bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>'\`.`,
   });
 }
 
-/** Applies one `<slot>.<key>=<value>` (see the module contract). */
-function applyNestedKey(doc: Doc, el: El, slot: string, key: string, value: string, cs: ChangeSet): void {
+/**
+ * Removing the script resource of a condition that has no inline body would
+ * leave an empty condition: the engines deploy it, and every evaluation fails
+ * ("condition script returns null" / "condition expression returns
+ * non-Boolean"). Refused unless the same command gives the inline condition
+ * (`condition=` on a flow, which may also remove it; `when=` on an event).
+ */
+function assertConditionKept(doc: Doc, el: El, target: El, key: string, full: string): void {
+  if (!isResourceKey(doc, key) || resourceKeyOf(doc, target) !== key) return;
+  if (target.get<string | undefined>('body')?.trim()) return;
+  const id = idOf(el);
+  const flow = is(el, 'bpmn:SequenceFlow');
+  throw invalidValue(
+    el,
+    full,
+    `removing the script resource ${String(target.$attrs[key])} would leave ${flow ? 'the condition' : 'the condition of the conditional event'} empty (it has no inline body); the engines would fail every evaluation of an empty condition`,
+    flow
+      ? `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'condition=\${...}'\`, or remove the whole condition: \`bpmn set <file> ${id} condition=\`.`
+      : `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'when=\${...}'\` (a conditional event always needs a condition), or point it at another script: \`bpmn set <file> ${id} ${full}=<uri>\`.`,
+  );
+}
+
+/**
+ * Applies one `<slot>.<key>=<value>` (see the module contract). `replacing`:
+ * the same command sets the flow's inline condition (condition=), so a
+ * removed script resource leaves nothing empty behind.
+ */
+function applyNestedKey(doc: Doc, el: El, slot: string, key: string, value: string, cs: ChangeSet, replacing = false): void {
   const full = `${slot}.${key}`;
   if (key.includes(':')) value = vendorValue(doc, el, key, value, full);
   const slots = slotsOf(el);
-  if (!(NESTED_SLOTS as readonly string[]).includes(slot) || !slots.includes(slot as NestedSlot) || !key) {
+  const ref = parseSlotRef(slot);
+  if (!ref || !slots.includes(ref.slot) || !key) {
     throw unknownKey(doc, el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((s) => `${s}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
   }
-  const s = slot as NestedSlot;
-  let target = nestedElement(el, s);
+  const s = ref.slot;
+  let target = resolveNested(el, ref, full);
   if (!target) {
     if (!value) return; // nothing to remove
     target = createNested(doc, el, s, key, cs);
   }
-  if (value) checkNestedKey(doc, el, s, target, key);
-  if (s === 'condition' && value && isResourceKey(doc, key)) dropConditionBody(el, target, cs);
+  if (value) checkNestedKey(doc, el, s, target, key, ref.text);
+  if (s === 'condition' && value && isResourceKey(doc, key)) dropConditionBody(el, target, cs, key);
+  if (s === 'condition' && !value && !replacing) assertConditionKept(doc, el, target, key, full);
   if (key.includes(':')) {
     setVendorAttribute(doc, target, key, value);
   } else if (key === 'id') {
@@ -992,12 +1180,43 @@ function applyNestedKey(doc: Doc, el: El, slot: string, key: string, value: stri
       doc.claimId(value);
       target.set('id', value);
     }
-  } else {
-    checkNestedKey(doc, el, s, target, key);
+  } else if (!removeUndefinedAttr(target, key, value)) {
+    checkNestedKey(doc, el, s, target, key, ref.text);
     const p = descriptorOf(target).propertiesByName![key]!;
-    target.set(key, value ? coerceValue(doc, el, p, value, full) : undefined);
+    const coerced = value ? coerceValue(doc, el, p, value, full) : undefined;
+    if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) assertCompensationInScope(doc, el, coerced, full);
+    target.set(key, coerced);
   }
   cs.change(changeOf(el, value ? `${full}=${value}` : `${full} removed`));
+}
+
+/**
+ * The activity a compensation throw event names (activityRef) must be an
+ * activity of the event's own scope (directly, not inside a sub-process of
+ * it); a throw event in an event sub-process may also name an activity of the
+ * scope around the event sub-process. Camunda 7, CIB seven and Operaton refuse
+ * anything else ("no activity with id ... in scope"); BPMN 2.0 says the same
+ * (the activity is compensated from within its scope).
+ */
+function assertCompensationInScope(doc: Doc, event: El, activity: El, full: string): void {
+  if (!is(activity, 'bpmn:Activity')) return;
+  const scope = doc.scopeOf(event);
+  if (!scope) return;
+  const scopes = [scope];
+  if (is(scope, 'bpmn:SubProcess') && scope.get<boolean | undefined>('triggeredByEvent')) {
+    const outer = doc.scopeOf(scope);
+    if (outer) scopes.push(outer);
+  }
+  const actual = doc.scopeOf(activity);
+  if (actual && scopes.includes(actual)) return;
+  const candidates = scopes.flatMap((sc) => many(sc, 'flowElements').filter((e) => is(e, 'bpmn:Activity') && !(is(e, 'bpmn:SubProcess') && e.get<boolean | undefined>('triggeredByEvent'))).map(idOf));
+  const id = idOf(event);
+  throw modelError('E_CROSS_SCOPE', `${full}=${idOf(activity)}: ${idOf(activity)} is in ${actual ? idOf(actual) : '?'}, not in the scope of ${id} (${scopes.map(idOf).join(' / ')}); a compensation event can only compensate activities of its own scope`, {
+    element: id,
+    related: [idOf(activity)],
+    candidates,
+    hint: `Name an activity of ${scopes.map(idOf).join(' or ')}: ${candidates.join(', ') || 'none'}. To compensate ${idOf(activity)}, throw the compensation inside ${actual ? idOf(actual) : 'its scope'} (e.g. an event sub-process or an intermediate throw event there). The engines refuse the file otherwise.`,
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1238,7 +1457,7 @@ export function renameId(doc: Doc, el: El, newId: string): void {
     if (e.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
     if (!vendorRefs.length) continue;
     const [prefix, local] = e.$type.split(':');
-    if (!prefix || !local || doc.namespaceUri(prefix) !== CAMUNDA_URI) continue;
+    if (!prefix || !local || !isC7Uri(doc.namespaceUri(prefix))) continue;
     for (const ref of vendorRefs) {
       if (ref.element !== `camunda:${local}`) continue;
       if (any[ref.attr] === old) any[ref.attr] = newId;
@@ -1319,12 +1538,12 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     const message = ownValue(el, 'messageRef');
     if (isEl(message)) out['message'] = message.get<string | undefined>('name') ?? idOf(message);
   }
-  for (const slot of slotsOf(el)) {
-    const nestedEl = nestedElement(el, slot);
-    if (!nestedEl) continue;
+  for (const { prefix, el: nestedEl } of nestedEntries(el)) {
+    // an event with several event definitions: each under its position (definition[1]: timerEventDefinition)
+    if (prefix.includes('[')) out[prefix] = typeLabel(nestedEl);
     const nestedId = nestedEl.get<string | undefined>('id');
-    if (nestedId) out[`${slot}.id`] = nestedId;
-    for (const [k, v] of Object.entries(vendorAttributes(nestedEl))) out[`${slot}.${k}`] = v;
+    if (nestedId) out[`${prefix}.id`] = nestedId;
+    for (const [k, v] of Object.entries(vendorAttributes(nestedEl))) out[`${prefix}.${k}`] = v;
   }
   return out;
 }
