@@ -149,8 +149,8 @@ describe('design profile on mutations', () => {
   it('checks what would be written: without the layout a new node has no shape (E_DESIGN_NO_DI)', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { profile: 'design', layout: false });
-    // the new flow's id is a hash in the file's style (Flow_<7 chars>, src/idstyle.ts)
-    expect(codes(r.errors)).toEqual(['[design] E_DESIGN_NO_DI Activity_Inserted', expect.stringMatching(/^\[design\] E_DESIGN_NO_DI Flow_[0-9a-z]{7}$/)]);
+    // the new flow's id in the file's style (src/idstyle.ts): LINE numbers its flows F1, F2
+    expect(codes(r.errors)).toEqual(['[design] E_DESIGN_NO_DI Activity_Inserted', '[design] E_DESIGN_NO_DI F3']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { profile: 'design', dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
 });

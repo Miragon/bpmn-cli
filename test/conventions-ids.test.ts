@@ -231,6 +231,107 @@ describe('id style inference (edits follow the file)', () => {
   });
 });
 
+describe('id style inference: ids without prefix, numbers without separator, scoped flow names', () => {
+  /** Hand-written ids: camelCase without prefix, flows numbered without separator. */
+  const BARE = chain(
+    [
+      ['startEvent', 'orderReceived', 'Order received'],
+      ['task', 'checkOrder', 'Check order'],
+      ['task', 'packGoods', 'Pack goods'],
+      ['task', 'shipOrder', 'Ship order'],
+      ['endEvent', 'orderShipped', 'Order shipped'],
+    ],
+    ['flow1', 'flow2', 'flow3', 'flow4'],
+  );
+
+  it('a file whose ids have no prefix gets bare camelCase ids and the next glued flow number', async () => {
+    const { ids } = await created(BARE, [{ op: 'add', kind: 'task', name: 'Review order', after: 'checkOrder' }]);
+    expect(ids).toEqual(['reviewOrder', 'flow5']);
+    // another kind of the family (no own evidence) follows the family; a second one with the same name gets a suffix
+    const more = await created(BARE, [
+      { op: 'add', kind: 'userTask', name: 'Review order', after: 'checkOrder' },
+      { op: 'add', kind: 'userTask', name: 'Review order', after: 'packGoods' },
+    ]);
+    expect(more.ids).toEqual(['reviewOrder', 'flow5', 'reviewOrder_2', 'flow6']);
+  });
+
+  it('an unnamed element in such a file still gets a prefix (a hash or a number needs one)', async () => {
+    const { ids } = await created(BARE, [{ op: 'add', kind: 'exclusiveGateway', after: 'packGoods' }]);
+    expect(ids[0]).toMatch(HASHED('Gateway'));
+    expect(ids[1]).toBe('flow5');
+  });
+
+  it('single lower-case words read as camelCase (not snake_case, which would read as a prefix); a PascalCase file stays PascalCase', async () => {
+    const lower = chain(
+      [
+        ['startEvent', 'start', 'Start'],
+        ['serviceTask', 'prepare', 'Prepare'],
+        ['serviceTask', 'branch1', 'Branch 1'],
+        ['parallelGateway', 'join'],
+        ['endEvent', 'end', 'End'],
+      ],
+      ['f0', 'f1', 'f2', 'f3'],
+    );
+    expect((await created(lower, [{ op: 'add', kind: 'serviceTask', name: 'Check stock', after: 'prepare' }])).ids).toEqual(['checkStock', 'f4']);
+    const pascal = chain(
+      [
+        ['startEvent', 'OrderReceived', 'Order received'],
+        ['task', 'CheckOrder', 'Check order'],
+        ['task', 'ShipOrder', 'Ship order'],
+        ['endEvent', 'OrderShipped', 'Order shipped'],
+      ],
+      ['Flow_1', 'Flow_2', 'Flow_3'],
+    );
+    expect((await created(pascal, [{ op: 'add', kind: 'task', name: 'Review order', after: 'CheckOrder' }])).ids).toEqual(['ReviewOrder', 'Flow_4']);
+    // a kind of another family without own evidence: the file's flow nodes have no prefixes, so neither does it
+    expect((await created(pascal, [{ op: 'add', kind: 'exclusiveGateway', name: 'Order ok?', after: 'CheckOrder' }])).ids).toEqual(['OrderOk', 'Flow_4']);
+  });
+
+  it('a kind without prefix next to prefixed kinds: only that kind goes bare', async () => {
+    const mixed = chain(
+      [
+        ['startEvent', 'StartEvent_1'],
+        ['userTask', 'first', 'First'],
+        ['userTask', 'second', 'Second'],
+        ['endEvent', 'Event_16m42dv'],
+      ],
+      ['Flow_03y1k7c', 'Flow_02qw1n8', 'Flow_01kyget'],
+    );
+    const { ids } = await created(mixed, [{ op: 'add', kind: 'userTask', name: 'Review order', after: 'first' }]);
+    expect(ids[0]).toBe('reviewOrder');
+    expect(ids[1]).toMatch(HASHED('Flow'));
+  });
+
+  it('flows named Flow_<scope>_<A>To<B>: the scope of the ends and the first word of each end', async () => {
+    const scoped = chain(
+      [
+        ['startEvent', 'startEvent_KotOrder', 'Order placed'],
+        ['serviceTask', 'serviceTask_KotO_ValidatePayment', 'Validate payment'],
+        ['serviceTask', 'serviceTask_KotO_ReserveInventory', 'Reserve inventory'],
+        ['userTask', 'userTask_KotO_ConfirmShipment', 'Confirm shipment'],
+        ['endEvent', 'endEvent_KotOrder', 'Order done'],
+      ],
+      ['Flow_KotO_StartToValidate', 'Flow_KotO_ValidateToReserve', 'Flow_KotO_ReserveToConfirm', 'Flow_KotO_ConfirmToEnd'],
+    );
+    const doc = await Doc.fromXml(scoped);
+    expect(doc.idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
+    const r = await created(scoped, [{ op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', after: 'serviceTask_KotO_ReserveInventory' }]);
+    expect(r.ids).toEqual(['userTask_KotO_ReviewOrder', 'Flow_KotO_ReviewToConfirm']);
+    // an end event as the target, a start event as the source; a second flow of the same words gets a number
+    const ends = await created(scoped, [
+      { op: 'add', kind: 'endEvent', id: 'endEvent_KotO_Failed', name: 'Failed', in: 'Process_1' },
+      { op: 'connect', source: 'serviceTask_KotO_ValidatePayment', target: 'endEvent_KotO_Failed' },
+      { op: 'connect', source: 'startEvent_KotOrder', target: 'userTask_KotO_ConfirmShipment' },
+      { op: 'connect', source: 'startEvent_KotOrder', target: 'userTask_KotO_ConfirmShipment' },
+    ]);
+    expect(ends.ids).toEqual(['endEvent_KotO_Failed', 'Flow_KotO_ValidateToEnd', 'Flow_KotO_StartToConfirm', 'Flow_KotO_StartToConfirm2']);
+  });
+
+  it('the scoped form is not read into other forms', async () => {
+    for (const xml of [CAMEL, SNAKE, MODELER]) expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow.form).not.toBe('scopedTo');
+  });
+});
+
 describe('collision-resistant flow ids (independent edits on two branches)', () => {
   const base = chain(
     [
@@ -303,7 +404,7 @@ describe('documentation', () => {
   it('bpmn kinds --json describes the id conventions', () => {
     const ids = kindsJson()['ids'] as { bodies: Record<string, string>; flowForms: Record<string, string> };
     expect(Object.keys(ids.bodies).sort()).toEqual(['camel', 'hash', 'numbered', 'pascal', 'pascalSnake', 'snake']);
-    expect(Object.keys(ids.flowForms).sort()).toEqual(['hash', 'idPair', 'idSnake', 'numbered', 'stemSnake', 'stemTo']);
+    expect(Object.keys(ids.flowForms).sort()).toEqual(['hash', 'idPair', 'idSnake', 'numbered', 'scopedTo', 'stemSnake', 'stemTo']);
     expect(guideText()).toContain('Ids follow the file');
   });
 });

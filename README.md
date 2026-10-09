@@ -150,10 +150,10 @@ JSON) are always taken as given.
 
 | what | learned from the file | examples |
 | --- | --- | --- |
-| prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_` |
+| prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case. No prefix is a convention too: where a kind's or family's ids have none, or the file's flow nodes mostly have none, a named element gets a bare id (camelCase, PascalCase in a PascalCase file); an unnamed one keeps a prefix | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_`; bare `reviewOrder` |
 | body of named elements | the case style of the named flow nodes' ids (of the other named elements when the flow nodes show none) | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice`, a modeler hash `0k3x9qa`, a number `12` |
 | unnamed elements | numbered when the file numbers them, else a hash | `Gateway_0k3x9qa`, `Gateway_3` |
-| sequence / message flows | the form of at least half of the flows | `Flow_0k3x9qa` (default), `SequenceFlow_1abc2de`, `Flow_12`, `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>` |
+| sequence / message flows | the form of at least half of the flows | `Flow_0k3x9qa` (default), `SequenceFlow_1abc2de`, `Flow_12`, `flow12`, `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>`, `Flow_<scope>_<A>To<B>` (`Flow_KotO_ValidateToReserve`: the scope the flows share, the first word of each end, `Start` / `End` for start and end events) |
 | diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
 
 One id is not a convention: a rule needs two ids that follow it (in a file

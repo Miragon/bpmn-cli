@@ -10,7 +10,12 @@
  *     tasks share it), else the type name when the file names prefixes after
  *     the type (`serviceTask_`, `EndEvent_`; `Task_` on a plain task counts
  *     as a family prefix), else the bpmn-cli prefix (Activity, Event,
- *     Gateway, ...) in the file's prefix case (`event_`);
+ *     Gateway, ...) in the file's prefix case (`event_`). "No prefix" is a
+ *     prefix too: where the file's ids of a kind or family have none
+ *     (`checkOrder`, `start`), or a kind without evidence of its own sits
+ *     in a file whose flow node ids mostly have none, a named element gets
+ *     the bare name-derived body (`reviewOrder`; camel case, PascalCase in a
+ *     pascal file) and an unnamed one the next prefix that rule chain gives;
  *   - the BODY of named elements (voted by the named flow nodes; by every
  *     named element when they show none): `pascal` (Activity_CheckInvoice, the
  *     default), `camel` (serviceTask_checkInvoice), `snake`
@@ -21,12 +26,15 @@
  *     `hash`;
  *   - the FORM of sequence flows and of message flows (a type without flows
  *     follows the sequence flows): `hash` (Flow_0k3x9qa, SequenceFlow_1abc2de),
- *     `numbered` (Flow_12, SF_3), `stemTo` (flow_checkStockToShipGoods: the
- *     ends' ids without prefix), `idPair` (Flow_Task_A_Task_B), `stemSnake`
- *     (Flow_check_stock_to_ship_goods) or `idSnake` (Flow_Task_A_to_Task_B),
- *     with the prefix those flows use. A form needs at least half of the
- *     flows of its type; otherwise flows are hashed with the file's most
- *     common flow prefix.
+ *     `numbered` (Flow_12, SF_3, also without separator: flow12), `stemTo`
+ *     (flow_checkStockToShipGoods: the ends' ids without prefix), `idPair`
+ *     (Flow_Task_A_Task_B), `stemSnake` (Flow_check_stock_to_ship_goods),
+ *     `idSnake` (Flow_Task_A_to_Task_B) or `scopedTo`
+ *     (Flow_KotO_ValidateToReserve: a scope segment the flows share, then
+ *     the first word of each end; a start / end event is Start / End), with
+ *     the prefix those flows use. A form needs at least half of the flows of
+ *     its type; otherwise flows are hashed with the file's most common flow
+ *     prefix.
  *  A document without ids to learn from gets the default style: pascal
  *  bodies, the bpmn-cli prefixes, hashed unnamed elements and flows.
  *
@@ -43,12 +51,12 @@
  *  (undefined for hashed and numbered styles); style.joinId(gatewayId) the
  *  id of a split's join gateway in a name-derived style.
  */
-import { camelSlug, hash7, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
+import { camelSlug, hash7, isValidId, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
 import { kindOf, triggerOf, type KindDef } from './kinds.js';
 import { is, isBpmnElement, walk, type El } from './model.js';
 
 export type Body = 'pascal' | 'camel' | 'snake' | 'pascalSnake' | 'hash' | 'numbered';
-export type FlowForm = 'hash' | 'numbered' | 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';
+export type FlowForm = 'hash' | 'numbered' | 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake' | 'scopedTo';
 
 export interface IdRequest {
   /** style key: a kind of `bpmn kinds` (userTask, eventSubProcess, lane, ...) or a BPMN type (bpmn:Message, bpmn:LaneSet) */
@@ -67,11 +75,19 @@ export interface IdRequest {
   target?: string;
 }
 
+/** How a type's flows are named: the form, its prefix, the separator after a numbered prefix ('' for `flow12`), the scope of `scopedTo`. */
+export interface FlowStyle {
+  form: FlowForm;
+  prefix: string;
+  sep?: string;
+  scope?: string;
+}
+
 export interface IdStyleInfo {
   body: Body;
   unnamed: 'hash' | 'numbered';
-  sequenceFlow: { form: FlowForm; prefix: string };
-  messageFlow: { form: FlowForm; prefix: string };
+  sequenceFlow: FlowStyle;
+  messageFlow: FlowStyle;
 }
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +126,10 @@ const CONNECTIONS = new Set(['bpmn:SequenceFlow', 'bpmn:MessageFlow']);
 /* ------------------------------------------------------------------ */
 
 const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
+/** A number glued to its prefix: `flow12`, `f3`. */
+const GLUED = /^([A-Za-z]+)(\d+)$/;
+/** `<scope>_<A>To<B>` after a flow prefix: Flow_KotO_ValidateToReserve. */
+const SCOPED_TO = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To([A-Z][A-Za-z0-9]*)$/;
 
 /**
  * One element is not a convention: a learned rule needs two ids that follow
@@ -177,14 +197,19 @@ function stem(id: string): string {
 }
 
 /** The flow forms an id matches, given its ends (none: only its prefix counts). */
-function flowForms(id: string, source: string, target: string): Array<{ form: FlowForm; prefix: string }> {
+function flowForms(id: string, source: string, target: string): FlowStyle[] {
   const m = PREFIXED.exec(id);
-  if (!m) return [];
+  if (!m) {
+    const g = GLUED.exec(id);
+    return g ? [{ form: 'numbered', prefix: g[1]!, sep: '' }] : [];
+  }
   const prefix = m[1]!;
   const rest = m[2]!;
   if (HASH.test(rest)) return [{ form: 'hash', prefix }];
   if (/^\d+$/.test(rest)) return [{ form: 'numbered', prefix }];
-  const out: Array<{ form: FlowForm; prefix: string }> = [];
+  const out: FlowStyle[] = [];
+  const scoped = SCOPED_TO.exec(rest);
+  if (scoped) out.push({ form: 'scopedTo', prefix, scope: scoped[1]! });
   // the form itself, or the form with a collision suffix (`2` / `_2`)
   const fits = (candidate: string, sep: string): boolean => rest === candidate || (rest.startsWith(candidate) && new RegExp(`^${sep}\\d+$`).test(rest.slice(candidate.length)));
   if (fits(`${lcfirst(stem(source))}To${ucfirst(stem(target))}`, '')) out.push({ form: 'stemTo', prefix });
@@ -241,9 +266,14 @@ interface Learned {
   upperFirst: number;
   body: Body;
   unnamed: 'hash' | 'numbered';
-  flows: Map<string, { form: FlowForm; prefix: string }>;
+  flows: Map<string, FlowStyle>;
   /** the file's ids are mostly prefixed (see MIN_EVIDENCE): one id is evidence for its kind and family */
   strong: boolean;
+  /** scopedTo flows: the scopes of a type's flows, most used first */
+  scopes: Map<string, string[]>;
+  /** flow node ids without / with a prefix: a file whose flow nodes mostly have none gives a kind without own evidence none either */
+  bareNodes: number;
+  prefixedNodes: number;
 }
 
 function tallyOf<K>(map: Map<string, Tally<K>>, key: string): Tally<K> {
@@ -259,9 +289,14 @@ interface Sample {
   trigger?: string;
   id: string;
   named: boolean;
+  /** the id spells the element's name (`checkOrder` for "Check order", `branch1` for "Branch 1") */
+  spellsName: boolean;
   /** a flow node (task, event, gateway, sub-process, call activity) */
   flowNode: boolean;
 }
+
+/** A name or id as lower-case letters and digits only (`Check order` and `checkOrder` -> `checkorder`). */
+const folded = (text: string): string => nameWords(text).join('').toLowerCase();
 
 const FLOW_NODE_FAMILIES = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
 
@@ -272,13 +307,14 @@ function sampleOf(el: El, id: string): Sample | undefined {
   if (IGNORED.some((t) => is(el, t))) return undefined;
   const name = el.get<string | undefined>('name');
   const named = !!name && nameWords(name).length > 0;
+  const spellsName = named && folded(id) === folded(name!);
   const def = kindOf(el);
   if (def) {
     const trigger = triggerOf(el);
-    return { key: def.kind, family: def.prefix, typeNames: kindTypeNames(def), ...(trigger && trigger !== 'none' ? { trigger } : {}), id, named, flowNode: FLOW_NODE_FAMILIES.has(def.family) };
+    return { key: def.kind, family: def.prefix, typeNames: kindTypeNames(def), ...(trigger && trigger !== 'none' ? { trigger } : {}), id, named, spellsName, flowNode: FLOW_NODE_FAMILIES.has(def.family) };
   }
   const local = localName(el.$type);
-  return { key: el.$type, family: local, typeNames: [lcfirst(local)], id, named, flowNode: false };
+  return { key: el.$type, family: local, typeNames: [lcfirst(local)], id, named, spellsName, flowNode: false };
 }
 
 function learn(defs: El | undefined): Learned {
@@ -293,6 +329,9 @@ function learn(defs: El | undefined): Learned {
     body: 'pascal',
     unnamed: 'hash',
     flows: new Map(),
+    scopes: new Map(),
+    bareNodes: 0,
+    prefixedNodes: 0,
     strong: false,
   };
   let samples = 0;
@@ -300,7 +339,7 @@ function learn(defs: El | undefined): Learned {
   const nodeBodies = new Tally<BodyClass>();
   const otherBodies = new Tally<BodyClass>();
   const unnamed = new Tally<BodyClass>();
-  const flowVotes = new Map<string, { n: number; forms: Tally<FlowForm>; prefixes: Map<FlowForm, Tally<string>>; any: Tally<string> }>();
+  const flowVotes = new Map<string, { n: number; forms: Tally<FlowForm>; prefixes: Map<FlowForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
 
   for (const el of defs ? walk(defs, { bpmnOnly: true }) : []) {
     if (!isBpmnElement(el) || /^(bpmndi|dc|di):/.test(el.$type)) continue;
@@ -310,7 +349,7 @@ function learn(defs: El | undefined): Learned {
       const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
       const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
       let v = flowVotes.get(el.$type);
-      if (!v) flowVotes.set(el.$type, (v = { n: 0, forms: new Tally(), prefixes: new Map(), any: new Tally() }));
+      if (!v) flowVotes.set(el.$type, (v = { n: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
       v.n++;
       const p = PREFIXED.exec(id)?.[1];
       if (p) v.any.add(p);
@@ -320,6 +359,8 @@ function learn(defs: El | undefined): Learned {
         let t = v.prefixes.get(f.form);
         if (!t) v.prefixes.set(f.form, (t = new Tally()));
         t.add(f.prefix);
+        if (f.sep !== undefined && !v.seps.has(f.prefix)) v.seps.set(f.prefix, f.sep);
+        if (f.scope) v.scopes.add(f.scope);
       }
       continue;
     }
@@ -328,8 +369,22 @@ function learn(defs: El | undefined): Learned {
     if (!s) continue;
     samples++;
     const m = PREFIXED.exec(id);
-    if (!m) continue;
+    let fam = l.family.get(s.family);
+    if (!fam) l.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally() }));
+    if (!m) {
+      // no prefix, and the id spells the name (`checkOrder` for "Check order"): a convention for its kind and
+      // family, the whole id is the body. A short id that is no name (`GW`, `Start` for "Started") says nothing.
+      if (!s.spellsName) continue;
+      tallyOf(l.byKey, s.key).add('');
+      if (s.trigger) tallyOf(l.byKeyTrigger, `${s.key}|${s.trigger}`).add('');
+      tallyOf(l.classByKey, s.key).add('literal');
+      fam.generic.add('');
+      (s.named ? (s.flowNode ? nodeBodies : otherBodies) : unnamed).add(bodyClass(id));
+      if (s.flowNode) l.bareNodes++;
+      continue;
+    }
     prefixed++;
+    if (s.flowNode) l.prefixedNodes++;
     const prefix = m[1]!;
     const body = m[2]!;
     const cls = prefixClass(prefix, s.typeNames, s.trigger, s.family);
@@ -340,8 +395,6 @@ function learn(defs: El | undefined): Learned {
     if (!(GENERIC.has(prefix.toLowerCase()) && s.typeNames.some((n) => n.toLowerCase() === prefix.toLowerCase()))) l.classes.add(cls);
     if (/^[a-z]/.test(prefix)) l.lowerFirst++;
     else l.upperFirst++;
-    let fam = l.family.get(s.family);
-    if (!fam) l.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally() }));
     if (cls !== 'literal') fam.kindish.add(cls === 'triggerKind' ? 'triggerKind' : 'kind');
     else if (!isSpecific(prefix, s.typeNames, s.trigger, s.family)) fam.generic.add(prefix);
     (s.named ? (s.flowNode ? nodeBodies : otherBodies) : unnamed).add(bodyClass(body));
@@ -373,8 +426,12 @@ function learn(defs: El | undefined): Learned {
   for (const [type, v] of flowVotes) {
     const form = v.forms.top();
     const prefix = form ? v.prefixes.get(form)!.top() : undefined;
-    if (form && prefix && v.forms.get(form) * 2 >= v.n) l.flows.set(type, { form, prefix });
-    else l.flows.set(type, { form: 'hash', prefix: v.any.top() ?? 'Flow' });
+    const scope = form === 'scopedTo' ? v.scopes.top() : undefined;
+    if (form && prefix && v.forms.get(form) * 2 >= v.n && (form !== 'scopedTo' || scope)) {
+      const sep = v.seps.get(prefix);
+      l.flows.set(type, { form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) });
+      if (form === 'scopedTo') l.scopes.set(type, [...v.scopes.counts.keys()].sort((a, b) => v.scopes.get(b) - v.scopes.get(a)));
+    } else l.flows.set(type, { form: 'hash', prefix: v.any.top() ?? 'Flow' });
   }
   return l;
 }
@@ -383,7 +440,7 @@ function learn(defs: El | undefined): Learned {
 /* the style                                                            */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_FLOW = { form: 'hash' as FlowForm, prefix: 'Flow' };
+const DEFAULT_FLOW: FlowStyle = { form: 'hash', prefix: 'Flow' };
 
 export class IdStyle {
   private constructor(private readonly l: Learned) {}
@@ -401,7 +458,7 @@ export class IdStyle {
     return { body: this.l.body, unnamed: this.l.unnamed, sequenceFlow, messageFlow: this.flowOf('bpmn:MessageFlow') };
   }
 
-  private flowOf(type: string): { form: FlowForm; prefix: string } {
+  private flowOf(type: string): FlowStyle {
     return this.l.flows.get(type) ?? this.l.flows.get('bpmn:SequenceFlow') ?? DEFAULT_FLOW;
   }
 
@@ -409,31 +466,38 @@ export class IdStyle {
     return lowerFirst ? lcfirst(name) : ucfirst(name);
   }
 
-  /** The prefix a new element of the request's kind gets (see the module contract). */
-  prefixFor(req: IdRequest): string {
+  /**
+   * The prefix a new element of the request's kind gets (see the module
+   * contract); '' when the file's ids of the kind have none (only with
+   * `bare`: a name-derived id can do without a prefix, a hash or a number
+   * cannot).
+   */
+  prefixFor(req: IdRequest, bare = true): string {
     const l = this.l;
     const lowerFile = l.lowerFirst >= MIN_EVIDENCE && l.lowerFirst > l.upperFirst;
     const min = l.strong ? 1 : MIN_EVIDENCE;
     const typeName = req.typeNames[0]!;
     const withTrigger = (lowerFirst: boolean): string => this.caseLike(req.trigger ? `${req.trigger}${ucfirst(typeName)}` : typeName, lowerFirst);
+    const usable = (p: string | undefined): p is string => p !== undefined && (bare || p !== '');
     if (req.trigger) {
       const exact = l.byKeyTrigger.get(`${req.key}|${req.trigger}`)?.top(min);
-      if (exact) return exact;
+      if (usable(exact)) return exact;
     }
     const own = l.byKey.get(req.key);
     const ownTop = own?.top(min);
-    if (ownTop) {
+    if (usable(ownTop)) {
       const cls = l.classByKey.get(req.key)!;
-      if (cls.get('triggerKind') > cls.get('kind') && cls.get('triggerKind') >= cls.get('literal')) return withTrigger(/^[a-z]/.test(ownTop));
+      if (ownTop && cls.get('triggerKind') > cls.get('kind') && cls.get('triggerKind') >= cls.get('literal')) return withTrigger(/^[a-z]/.test(ownTop));
       return ownTop;
     }
     const fam = l.family.get(req.prefix);
     if (fam) {
       const generic = fam.generic.top(min);
       const kindish = fam.kindish.total;
-      if (generic && fam.generic.get(generic) >= kindish) return generic;
+      if (usable(generic) && fam.generic.get(generic) >= kindish) return generic;
       if (kindish >= MIN_EVIDENCE) return fam.kindish.get('triggerKind') > fam.kindish.get('kind') ? withTrigger(lowerFile) : this.caseLike(typeName, lowerFile);
     }
+    if (bare && l.bareNodes >= MIN_EVIDENCE && l.bareNodes > l.prefixedNodes) return '';
     const kindish = l.classes.get('kind') + l.classes.get('triggerKind');
     if (kindish >= MIN_EVIDENCE && kindish > l.classes.get('literal')) return this.caseLike(typeName, lowerFile);
     return this.caseLike(req.prefix, lowerFile);
@@ -455,15 +519,39 @@ export class IdStyle {
     }
   }
 
+  /**
+   * A name-derived id without prefix: camelCase (a file whose bare ids are
+   * single lower-case words reads as camel too; snake_case would read as a
+   * prefix), PascalCase in a pascal file; '' when it is no valid id.
+   */
+  private bareBody(name: string | undefined): string {
+    if (!this.nameBody(name)) return '';
+    const body = this.l.body === 'pascal' || this.l.body === 'pascalSnake' ? slugify(name) : camelSlug(name);
+    return isValidId(body) && !PREFIXED.test(body) ? body : '';
+  }
+
+  /** The name-derived id (before collision handling), or undefined: no usable name, a hashed or numbered style. */
+  private derived(req: IdRequest): string | undefined {
+    const prefix = this.prefixFor(req);
+    if (prefix === '') {
+      const bare = this.bareBody(req.name);
+      if (bare) return bare;
+      const body = this.nameBody(req.name);
+      return body ? `${this.prefixFor(req, false)}_${body}` : undefined;
+    }
+    const body = this.nameBody(req.name);
+    return body ? `${prefix}_${body}` : undefined;
+  }
+
   /** The name-derived id of a request before collision handling, or undefined (no name, a hashed or numbered style, a connection). */
   derivedBase(req: IdRequest): string | undefined {
     if (CONNECTIONS.has(req.key)) return undefined;
-    const body = this.nameBody(req.name);
-    return body ? `${this.prefixFor(req)}_${body}` : undefined;
+    return this.derived(req);
   }
 
-  /** The id of the join gateway of a split whose gateway is `gatewayId`, in a name-derived style (`<id>_join`, camel `<id>Join`). */
+  /** The id of the join gateway of a split whose gateway is `gatewayId`, in a name-derived style (`<id>_join`, camel `<id>Join`; a bare id `<id>Join`). */
   joinId(gatewayId: string): string | undefined {
+    if (this.nameBody('join') && !gatewayId.includes('_')) return `${gatewayId}Join`;
     switch (this.l.body) {
       case 'pascal':
       case 'snake':
@@ -480,14 +568,14 @@ export class IdStyle {
   /** A free id for the request (not claimed); `derived` when it comes from the name. */
   next(req: IdRequest, ids: IdRegistry): { id: string; derived: boolean } {
     if (CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined) return { id: this.nextConnection(req, ids), derived: false };
-    const prefix = this.prefixFor(req);
-    const body = this.nameBody(req.name);
-    if (body) {
-      const base = `${prefix}_${body}`;
+    const base = this.derived(req);
+    if (base) {
       let id = base;
       for (let n = 2; ids.has(id); n++) id = `${base}_${n}`;
       return { id, derived: true };
     }
+    // a hash or a number needs a prefix
+    const prefix = this.prefixFor(req, false);
     const unnamed = !nameWords(req.name).length;
     const style = unnamed ? this.l.unnamed : this.l.body;
     if (style === 'numbered') return { id: numbered(prefix, ids), derived: false };
@@ -495,7 +583,7 @@ export class IdStyle {
   }
 
   private nextConnection(req: IdRequest, ids: IdRegistry): string {
-    const { form, prefix } = this.flowOf(req.key);
+    const { form, prefix, sep, scope } = this.flowOf(req.key);
     const s = req.source!;
     const t = req.target!;
     const free = (base: string, sep: string): string => {
@@ -505,7 +593,13 @@ export class IdStyle {
     };
     switch (form) {
       case 'numbered':
-        return numbered(prefix, ids);
+        return numbered(prefix, ids, sep);
+      case 'scopedTo': {
+        // the scope one of the ends names as a segment of its id (KotO in serviceTask_KotO_ValidatePayment), else the most used one
+        const scopes = this.l.scopes.get(req.key) ?? this.l.scopes.get('bpmn:SequenceFlow') ?? [scope!];
+        const own = scopes.find((x) => s.split('_').includes(x) || t.split('_').includes(x)) ?? scope!;
+        return free(`${prefix}_${own}_${endWord(s, own, 'Start')}To${endWord(t, own, 'End')}`, '');
+      }
       case 'stemTo':
         return free(`${prefix}_${lcfirst(stem(s))}To${ucfirst(stem(t))}`, '');
       case 'idPair':
@@ -520,17 +614,31 @@ export class IdStyle {
   }
 }
 
-/** `<prefix>_<n>` with n = the highest number of the prefix + 1. */
-function numbered(prefix: string, ids: IdRegistry): string {
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_(\\d+)$`);
+/** `<prefix>_<n>` (`<prefix><n>` with sep '') with n = the highest number of the prefix + 1. */
+function numbered(prefix: string, ids: IdRegistry, sep = '_'): string {
+  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${sep}(\\d+)$`);
   let max = 0;
   for (const id of ids.values()) {
     const m = re.exec(id);
     if (m) max = Math.max(max, Number(m[1]));
   }
-  let id = `${prefix}_${max + 1}`;
-  for (let n = max + 2; ids.has(id); n++) id = `${prefix}_${n}`;
+  let id = `${prefix}${sep}${max + 1}`;
+  for (let n = max + 2; ids.has(id); n++) id = `${prefix}${sep}${n}`;
   return id;
+}
+
+/**
+ * The word a scopedTo flow uses for one of its ends: Start / End for a start
+ * / end event (`startEvent_KotOrder`, `EndEvent_Failed`), else the first word
+ * of the id after its prefix and the scope (`serviceTask_KotO_ValidatePayment`
+ * -> Validate).
+ */
+function endWord(id: string, scope: string, terminal: 'Start' | 'End'): string {
+  const segments = id.split('_');
+  if (segments.length > 1 && new RegExp(`^${terminal}(Event)?$`, 'i').test(segments[0]!)) return terminal;
+  const rest = segments.length > 1 ? segments.slice(1).filter((x) => x !== scope) : segments;
+  const word = nameWords(rest.join(' '))[0] ?? nameWords(id)[0] ?? terminal;
+  return ucfirst(word);
 }
 
 /** `<prefix>_<hash7(seed)>`, re-hashed with a salt while taken. */

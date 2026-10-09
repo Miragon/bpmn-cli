@@ -717,10 +717,10 @@ describe('connect', () => {
     add(doc, { kind: 'startEvent:message', name: 'Got it', message: 'Offer', in: 'Participant_Customer' });
     add(doc, { kind: 'participant', name: 'Bank', blackBox: true });
 
-    // message flows share the Flow_ prefix with sequence flows: a hash of their ends
+    // message flows follow the sequence flows: the file numbers them F1, F2 (and the send task's F3)
     const cs = connect(doc, { source: 'Activity_Send', target: 'Event_GotIt', message: 'Offer', name: 'offer' });
     const offer = cs.created[0]!.id;
-    expect(offer).toMatch(HASHED('Flow'));
+    expect(offer).toBe('F4');
     expect(cs.created[0]).toMatchObject({ kind: 'messageFlow', name: 'offer', detail: 'Activity_Send -> Event_GotIt' });
     expect(doc.require(offer).get<El>('messageRef').get('id')).toBe('Message_Offer');
     expect(doc.rootElementsOfType('bpmn:Message')).toHaveLength(1);
@@ -1046,7 +1046,8 @@ describe('connect: self-loops', () => {
     expect(codeOf(() => connect(doc, { source: 'Participant_P', target: 'Participant_P' }))).toBe('E_INVALID_ENDPOINT');
     const { xml } = await roundTrip(doc);
     expect(xml).toContain(`<bpmn:sequenceFlow id="${cs.created[0]!.id}" name="again" sourceRef="Task_A" targetRef="Task_A" />`);
-    expect(cs.created[0]!.id).toMatch(HASHED('Flow'));
+    // the file numbers its flows F1, F2
+    expect(cs.created[0]!.id).toBe('F3');
   });
 });
 

@@ -277,10 +277,10 @@ export const PLACEMENT_DOCS: PlacementDoc[] = [
 export const ID_CONVENTIONS = {
   rule: 'New ids follow the id style of the file; explicit ids (--id, "id") are taken as given. A rule needs two ids that follow it (one id of a kind in a file whose ids are mostly prefixed).',
   default: { element: '<Prefix>_<NameSlug> (prefix: `prefix` of the kind)', unnamed: '<Prefix>_<hash>', flow: 'Flow_<hash>', di: '<id>_di in files with DI of that form; BPMNShape_<id> / BPMNEdge_<id> in a new drawing' },
-  prefixes: 'per kind (and trigger) as the file has them; else the family prefix the file shares (Task_); else the type name when the file names prefixes after types (serviceTask_); else the bpmn-cli prefix in the case of the file',
+  prefixes: 'per kind (and trigger) as the file has them; else the family prefix the file shares (Task_); else the type name when the file names prefixes after types (serviceTask_); else the bpmn-cli prefix in the case of the file. No prefix counts too: where the file\'s ids of a kind or family have none (checkOrder), or its flow nodes mostly have none, a named element gets a bare camelCase (PascalCase) id; an unnamed one keeps a prefix',
   bodies: { pascal: 'CheckInvoice', camel: 'checkInvoice', snake: 'check_invoice', pascalSnake: 'Check_Invoice', hash: '0k3x9qa', numbered: '12' },
   unnamed: 'numbered when the file numbers unnamed elements, else hash',
-  flowForms: { hash: 'Flow_0k3x9qa', numbered: 'Flow_12', stemTo: 'flow_checkStockToShipGoods', idPair: 'Flow_<sourceId>_<targetId>', stemSnake: 'Flow_check_stock_to_ship_goods', idSnake: 'Flow_<sourceId>_to_<targetId>' },
+  flowForms: { hash: 'Flow_0k3x9qa', numbered: 'Flow_12 (or flow12)', stemTo: 'flow_checkStockToShipGoods', idPair: 'Flow_<sourceId>_<targetId>', stemSnake: 'Flow_check_stock_to_ship_goods', idSnake: 'Flow_<sourceId>_to_<targetId>', scopedTo: 'Flow_<scope>_<SourceWord>To<TargetWord> (Flow_KotO_ValidateToReserve; Start / End for start and end events)' },
   hash: 'seven base-36 characters like a Camunda Modeler id, hashed from stable inputs (flow ends; kind, name and placement of a node): the same edit gives the same id, independent edits on two branches do not collide',
   transliteration: 'ä -> ae, ö -> oe, ü -> ue, ß -> ss; other accents dropped',
   di: 'a full redraw keeps the ids of existing DI elements, planes and diagrams; new DI follows the DI ids of the file',
