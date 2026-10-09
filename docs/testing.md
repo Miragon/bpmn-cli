@@ -113,6 +113,12 @@ touched, a full redraw keeps every DI start tag, a sticky keeps its text
 when it follows its node), validators see the text-preserving result, the
 design profile runs in memory with a content repository the host names, and
 the file helpers find the repository of the file they write.
+`test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
+ids before drawing them, `test/node-files.test.ts` the encodings (a file is
+read as it declares, a write is UTF-8 and says so), and the design profile
+test the cases design-iq's validator decides differently from a plain BPMN
+reading (its namespace check on the raw text, flows counted per id, every
+collaboration, an attribute written twice).
 
 ## Isomorphism check
 

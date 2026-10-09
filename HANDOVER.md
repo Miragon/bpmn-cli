@@ -24,7 +24,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1292 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1318 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -121,6 +121,24 @@ skipping a write of an unchanged result over its own file.
   file's spelling (design: unprefixed, C7: `camunda:decisionRef`, C8:
   `zeebe:calledDecision`).
 
+**Verifier round** (after the integration; table in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#verifier-round-2026-10-09)):
+`E_DESIGN_NAMESPACE` runs design-iq's namespace check on the raw text
+(text, CDATA, comments and attribute values that look like `<p:name` or
+` p:name="` count; a documentation `Set app:mode="prod"` is refused like
+design-iq refuses it); a full redraw gives id-less elements it draws an id
+in the file's style first (`src/diagram/drawn-ids.ts`; never
+`bpmnElement="undefined"`); the id style learns ids without prefix
+(`reviewOrder`), flows numbered without separator (`flow5`) and
+`Flow_<scope>_<A>To<B>`; every write is UTF-8 and a changed result declares
+UTF-8, the node layer reads a file in its declared encoding
+(`src/encoding.ts`, `decodeXmlBytes`); the design profile counts flows per
+id, checks every collaboration, reports an attribute written twice
+(`E_DESIGN_XML`), and an id reference with whitespace around it resolves at
+import (model.ts); in a process with two lane sets the profile stays
+stricter than design-iq (documented); `camunda-bpmn-moddle` is a
+development dependency.
+
 **Integration decisions** (`step2/integration`): the core API runs the
 roundtrip post-pass and the validators (they see the post-pass result, their
 baseline is the text as read); skipping an unchanged in-place write and the
@@ -133,7 +151,7 @@ move before the text step, so only the moved sticky elements change; the
 keys of `validate --json` live in the shared report.
 
 Tests: `test/api.test.ts`, `test/isomorphic.test.ts`,
-`test/node-files.test.ts`, `test/roundtrip.test.ts` (fixtures
+`test/node-files.test.ts` (encodings too), `test/drawn-ids.test.ts`, `test/roundtrip.test.ts` (fixtures
 `test/fixtures/roundtrip/`), `test/conventions-ids.test.ts`,
 `test/conventions-di.test.ts`, `test/conventions-stickies.test.ts`,
 `test/design-profile.test.ts` (opt-in against design-iq's validator with
@@ -144,13 +162,14 @@ packages together).
 Evidence on the integrated build (private corpora used locally, outside the
 repository; counts only):
 
-- **Gate**: 1,292 tests + 1 opt-in (972 before step 2), isomorphism check,
+- **Gate**: 1,318 tests + 1 opt-in (972 before step 2), isomorphism check,
   layout regression 115 files score 444 (budget 444), fuzz 12 x 15: 0
   errors (2 warnings of open bugs #61 and `route`, the same with the package
   builds).
-- **Roundtrip** (265 real files the CLI accepts, the audit's targets): no-op
-  byte-identical 262 in layout auto (the rest: the layout completes missing
-  DI) and 265 with `--no-layout` (0.2.0: 40 / 42; PR #218: 169); a rename
+- **Roundtrip** (265 real files the CLI accepts, the audit's targets, all
+  with a diagram): no-op byte-identical 262 in layout auto (the rest: the
+  layout completes missing DI; a file without a diagram, 22 of the 289 real
+  files the CLI accepts, is drawn on any write) and 265 with `--no-layout` (0.2.0: 40 / 42; PR #218: 169); a rename
   changes 2 lines (median, p90), region median 0 %; an insert rewrites a
   region of 77 % (median; 0.2.0: 97 %, PR #218: 86 %). Every output of 12
   edit types on 396 files equals the roundtrip package's byte for byte except
@@ -159,13 +178,14 @@ repository; counts only):
   263 / 263 (`layout: false`).
 - **Id style** (291 real files): new task ids in the file's style 264 / 270
   (0.2.0: 4), flows 226 / 226 (0.2.0: 5), a full redraw keeps 8,345 / 8,345
-  DI ids, 6 / 225 file pairs share a new id (0.2.0: 225 / 225).
+  DI ids, 9 / 225 file pairs share a new id (0.2.0: 225 / 225; all in files
+  that number their flows, three of them without separator).
 - **Design profile** vs design-iq's validator (394 files): 0 disagreements
   (65 refused, 328 accepted; 540 / 540 findings matched); of 2,231 probe edits
   the 1,117 written add no design-iq error and the 1,114 refused would.
 - **Browser**: the bundle in a vm context without Node globals equals Node in
-  3,491 / 3,491 calls on 394 files; 707 / 221 KB minified / gzip for the
-  whole entry, 586 / 183 KB for `applyToXml` alone (+82 KB bpmn-auto-layout on
+  3,491 / 3,491 calls on 394 files; 716 / 224 KB minified / gzip for the
+  whole entry, 594 / 186 KB for `applyToXml` alone (+82 KB bpmn-auto-layout on
   demand).
 - **Camunda 7** (Camunda 7.24.0, CIB seven 2.2.0, Operaton 2.1.5): the
   218-file battery (8 edit types, deploy before / after) 0 regressions, 0
@@ -177,22 +197,25 @@ repository; counts only):
   side effect of an edit, since a write keeps the element order.
 
 Still open from step 2: in layout `auto` a no-op is still written when the
-layout completes missing DI or draws a file without a diagram (3 of 265 real
-files; audit P3: skip the layout when the model did not change); an insert
+layout completes missing DI (3 of the audit's 265 targets) or draws a file
+without a diagram (every such file: 22 of the 289 real files the CLI
+accepts, 13 of them with a node to rename; 16 of 278 files with a rename
+target in all; audit P3: skip the layout when the model did not change); an insert
 rewrites one text region of about 77 % of the file because it changes the
 process and the DI section (a host wanting fewer conflicts needs several
 regions per save); a write keeps the file's element order, so it no longer
 repairs an element in a place the BPMN XSD does not allow (0.2 rewrote such a
 file in bpmn-moddle's order; 1 of 218 real Camunda 7 files, refused by the
 engines before and after an edit); a spliced or bridged flow keeps its id
-(#48); files that number their flows can still collide across branches (6 of
-225 file pairs); a sticky moves by its node's centre shift only; nested lanes
+(#48); files that number their flows can still collide across branches (9 of
+225 file pairs); in a process with two lane sets the design profile checks
+the lanes design-iq does not read (stricter, documented); a sticky moves by its node's centre shift only; nested lanes
 (`set lane=` writes the child lane only, design-iq reads top-level lanes) and
 lane inheritance of a node placed next to a node in no lane; design-iq's
 degree rules make compensation handlers, link events and ad-hoc content
 unsavable there; host validators only through the library, not the CLI;
 `mutateDoc` still takes typed ops unchecked (#49; `applyToXml` checks them);
-bundle size (`applyToXml` 586 / 183 KB minified / gzip; ops, diagram and the
+bundle size (`applyToXml` 594 / 186 KB minified / gzip; ops, diagram and the
 Camunda 7 profile are the largest parts: a lazy profile or a slimmer build
 would be the next lever); design-iq's code conventions (audit R17: `.ts`
 import specifiers, `erasableSyntaxOnly`, `node --test`) are not addressed.

@@ -2001,8 +2001,8 @@ Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 707 KB | 221 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
-| `applyToXml` only (tree-shaken) | 586 KB | 183 KB | the same |
+| everything `@miragon/bpmn-cli` exports | 716 KB | 224 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 594 KB | 186 KB | the same |
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import.
@@ -2028,3 +2028,8 @@ bundler drops what a host does not import.
   `profile`, `contentRepo`, `validators` and `file`; in a design-iq content
   repository the CLI and the file helpers run the design profile by default
   (`--profile none` switches it off).
+- `readXml` and the other file helpers read a file in the encoding its XML
+  declaration names (0.2 read UTF-8 only); a write is UTF-8 and declares it.
+- A full redraw gives an element it draws that has no id (a hand-written
+  message flow, pool, process or collaboration) an id first; 0.2 wrote
+  `bpmnElement="undefined"`.
