@@ -1061,12 +1061,12 @@ bpmn add claim.bpmn end "Claim settled" --after Activity_InformParty
 $ bpmn show claim.bpmn
 namespaces: camunda, modeler
 process Process_ClaimHandling "Claim handling" executable [camunda:historyTimeToLive=180]
-  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_1)
-  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_3)
-    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_2)
-  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_4)
-  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_5)
-  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_6)
+  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_078nmus)
+  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_01d397f)
+    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_1vl2v2v)
+  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_0y359yr)
+  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_1fzbwrx)
+  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_0adcvrj)
   endEvent Event_ClaimSettled "Claim settled"
   endEvent Event_ClaimRejected "Claim rejected"
 root: error Error_NotCovered "Not covered" (NOT_COVERED)
@@ -1103,8 +1103,9 @@ copy of those rules, and a **validator hook** through which an embedding
 host runs its own validator inside the write transaction.
 
 **The design profile** (`--profile design`, `MutationOptions.profile`)
-checks the result of every write, after the layout and the format
-operations, i.e. exactly what would be written. Its rules are design-iq's
+checks the result of every write, after the layout, the format operations
+and the text-preserving step, i.e. exactly what would be written. Its rules
+are design-iq's
 hard rules, checked the way design-iq checks them:
 
 | code | rule |
@@ -1164,7 +1165,12 @@ model and bpmn-cli's platform detector `none`; the two detectors agree on all
 394 real models measured): the profile refuses every intermediate state of a
 model built step by step (`add start` alone leaves a dead end), which is right
 for design-iq's save gate and wrong for plain BPMN editing. `--profile design`
-applies it anywhere, `--profile none` switches it off.
+applies it anywhere, `--profile none` switches it off. In memory
+(`applyToXml`, `validateXml`, `mutateDoc`) there is no file to look up:
+`auto` runs the profile when the caller passes the repository as
+`contentRepo` (`{ processIds, decisionIds }`, the stems of its `.bpmn` /
+`.dmn` models, for the link checks); the file helpers of
+`@miragon/bpmn-cli/node` and the CLI look it up on disk.
 
 **Decision links.** A business rule task's decision link is the set key
 `calledDecision` in every file (see [`set`](#set)): design models get
@@ -1183,12 +1189,16 @@ rename, a loose task, a boundary event with and without its path, a second
 start event), every write the gate let through was accepted by design-iq and
 every refused one would have added a design-iq error.
 
-**The validator hook** (library). `MutationOptions.validators` takes
-functions `(xml, ctx) => findings` (sync or async) or `{ name, validate }`
-objects; `checkFile(file, { validators })` takes the same. A mutation runs
-each one on the document before the ops and on the candidate XML after the
-layout, inside the transaction, with `ctx = { file, phase: 'before' |
-'after' | 'check', platform, ops, doc() }`. A finding is `{ severity:
+**The validator hook** (library). The `validators` option of
+`applyToXml`, `newXml`, `layoutXml`, `validateXml` (and of `mutateDoc`,
+`checkDoc`, and in `@miragon/bpmn-cli/node` of `mutateFile` and
+`checkFile`) takes functions `(xml, ctx) => findings` (sync or async) or
+`{ name, validate }` objects. A mutation runs each one on the document
+before the ops (its text as read) and on the candidate XML after the layout,
+the format operations and the text-preserving step, inside the transaction,
+with `ctx = { file, phase: 'before' | 'after' | 'check', platform, ops,
+doc() }` (`file`: the `file` option, the document's name, or the target the
+file helpers write to). A finding is `{ severity:
 'error' | 'warning', code, message, element?, related?, hint?, key? }`;
 design-iq's `{ severity: 'ERROR' | 'WARN', ruleId, message }` is accepted as
 it is. Errors the change introduces block the write (`E_VALIDATION`, unless
@@ -1203,15 +1213,17 @@ write with `E_VALIDATOR_FAILED`. The reports are in
 
 ```js
 import { checkModel } from '@bpmiq/validator';
-import { Doc, mutateDoc } from '@miragon/bpmn-cli';
+import { applyToXml } from '@miragon/bpmn-cli';
 
-const doc = await Doc.fromXml(xml, 'processes/order.bpmn');
-const result = await mutateDoc(doc, ops, {
-  dryRun: true,
+const edit = await applyToXml(xml, ops, {
+  file: 'processes/order.bpmn',
   profile: 'none', // the host's own validator below is the gate
   validators: [{ name: 'design-iq', validate: (candidate) => checkModel(candidate, { path: 'processes/order.bpmn' }) ?? [] }],
 });
-// result.xml is what to save; E_VALIDATION (err.details.errors) is the 422
+// edit.xml is what to save (edit.unchanged: nothing to save); E_VALIDATION (err.details.errors) is the 422
+
+// or the built-in copy of the rules, with the repository's model ids for the link checks
+await applyToXml(xml, ops, { contentRepo: { processIds: ['order', 'billing'], decisionIds: ['risk-rating'] } });
 ```
 
 ## Ops JSON (`bpmn apply`)
@@ -1581,6 +1593,13 @@ touched, in the file's own style:
   formatting are not kept, the result says so). `show` and `validate` print
   it as `import:` lines. The library refuses them
   the same way (`Doc.fromXml` + `mutateDoc` without `force: true`).
+- A write keeps the order of the file's elements ([What a write
+  changes](#what-a-write-changes)), so it no longer repairs an element the
+  file has in a place the BPMN XSD does not allow (0.2 rewrote every file in
+  bpmn-moddle's order, which fixed such a file as a side effect). The engines
+  refuse such a file before and after the edit; `bpmn layout` does not
+  reorder either. A new element goes after the sibling bpmn-moddle writes
+  before it (in a file in XSD order, its place in that order).
 - `bpmn-moddle` never sets `$parent` for elements created in memory; the CLI
   maintains containment, `incoming`/`outgoing` (complete in memory, written
   the way the file keeps them) and every reference itself. A hand-edited file
@@ -1808,21 +1827,30 @@ Every function runs the code of the CLI command it names, without a file:
 - Options of the writing functions (`EditOptions`): `layout` (`'auto'`, the
   default, `'incremental'`, `'full'` or `false`, see
   [Layout modes](#layout-modes)), `engine` (`'clean'` or `'auto'`), `force`,
-  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `show` (add the model
-  view) and `debug` (below). `layoutXml` takes `expand`, `collapse` and
-  `tidy` instead of `layout`; `newXml` takes `processName`, `processId`,
-  `executable` and `target`; `viewXml` and `showXml` take `id`, `scope` and
-  `layout` like `show`; `validateXml` takes `platform`.
-- `EditResult` is `{ xml, unchanged, result }`: the new document; `unchanged`
-  is `true` when it is byte-identical to the input (then `xml` is the input
-  string itself and there is nothing to save); `result` is what the CLI
-  prints with `--json` ([Output](#output-errors-and-exit-codes)) without
-  `file`, `written` and the XML. `renderMutation(result)` gives the CLI's
-  text for it, `renderValidation(report)` the text of `validate`.
+  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `profile` (`'auto'`,
+  `'design'`, `'none'`), `contentRepo` and `validators` (see
+  [design-iq](#design-iq-the-design-profile-and-validators)), `file` (the
+  document's name for the validators), `show` (add the model view) and
+  `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
+  of `layout`; `newXml` takes `processName`, `processId`, `executable` and
+  `target`; `viewXml` and `showXml` take `id`, `scope` and `layout` like
+  `show`; `validateXml` takes `platform`, `profile`, `contentRepo`,
+  `validators` and `file`.
+- `EditResult` is `{ xml, unchanged, result }`: the new document, which
+  keeps the input's text wherever the ops changed nothing ([What a write
+  changes](#what-a-write-changes)); `unchanged` is `true` when it is
+  byte-identical to the input (then `xml` is the input string itself and
+  there is nothing to save; a rename to the current name, `tidy` on a tidy
+  drawing); `result` is what the CLI prints with `--json`
+  ([Output](#output-errors-and-exit-codes)) without `file`, `written` and the
+  XML. `renderMutation(result)` gives the CLI's text for it,
+  `renderValidation(report)` the text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
-  errors the ops would introduce (`E_VALIDATION`) and content a retype would
-  delete (`E_WOULD_DROP_CONTENT`) are refused unless `force: true`. The
-  layout modes, the format ops and the platform profile's new findings
+  errors the ops would introduce (`E_VALIDATION`, also those of the design
+  profile and of `validators`) and content a retype would delete
+  (`E_WOULD_DROP_CONTENT`) are refused unless `force: true`. The layout
+  modes, the format ops, the file's id style for new ids
+  ([Ids](#ids)) and the platform profile's new findings
   (`result.validation.platform`) work as on the command line.
 - A failure throws a `CliError`: `code`, `category`, `details` (`element`,
   `related`, `candidates`, `hint`, `op`); `toJSON()` is the CLI's `--json`
@@ -1864,10 +1892,17 @@ no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
 `writeAtomic(file, text)` (temp file, then rename), `mutateFile(file, ops,
 opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
 ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`) and
-`checkFile(file, { platform })` (`validate`). `FileMutationOptions` adds the
-file options to the core options: `out`, `dryRun`, `backup` and
-`mustNotExist` (`E_FILE_EXISTS` unless `force`); the result says
-`written: true` and names the file.
+`checkFile(file, { platform, profile, validators })` (`validate`).
+`FileMutationOptions` adds the file options to the core options: `out`,
+`dryRun`, `backup` and `mustNotExist` (`E_FILE_EXISTS` unless `force`); the
+result says `written: true` and names the file. A result equal to the file
+it was read from is not written back (`written: false`, `unchanged: true`;
+`out` to another file still writes the copy). For the validation profile
+the helpers look up the design-iq content repository of the file they write
+or check (`contentRepoOf(file)`: the nearest `bpmiq.yml`, the model ids of
+its models folder) unless `contentRepo` is given or the profile is `none`,
+and tell the validators that file (`ctx.file`, the `out` target with
+`out`).
 
 ### Building blocks
 
@@ -1933,15 +1968,16 @@ import of a Node builtin or a reference to `process`, `Buffer`, `global`,
 also checks that both entries and their types resolve for a strict
 TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
 `test/isomorphic.test.ts` runs the browser bundle in a vm context without any
-Node global and compares `applyToXml`, `layoutXml` (both engines),
-`validateXml`, `showXml`, `findXml` and `metricsXml` with Node, byte for byte.
+Node global and compares `applyToXml` (also with the design profile and a
+host validator), `layoutXml` (both engines), `validateXml`, `showXml`,
+`findXml` and `metricsXml` with Node, byte for byte.
 
 Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 648 KB | 200 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
-| `applyToXml` only (tree-shaken) | 541 KB | 167 KB | the same |
+| everything `@miragon/bpmn-cli` exports | 707 KB | 221 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 586 KB | 183 KB | the same |
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import.
@@ -1956,3 +1992,14 @@ bundler drops what a host does not import.
   bpmn-auto-layout is internal (`layoutModel(model, { engine: 'auto' })`).
 - `package.json` has `exports`: only `.`, `./node` and `./package.json`
   resolve (no deep imports into `dist/`).
+- A write keeps the file's text outside what it changed, and a result equal
+  to the file is not written (`MutationResult.unchanged`, `written: false`;
+  [What a write changes](#what-a-write-changes)).
+- New ids follow the file's id style; flows and unnamed elements get a short
+  hash instead of `<Prefix>_<n>` ([Ids](#ids)): a batch that refers to an
+  element it creates gives it an explicit `id`.
+- `checkFile` / `checkDoc` return the validation profile that ran
+  (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
+  `profile`, `contentRepo`, `validators` and `file`; in a design-iq content
+  repository the CLI and the file helpers run the design profile by default
+  (`--profile none` switches it off).

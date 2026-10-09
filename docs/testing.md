@@ -106,6 +106,14 @@ Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
 
+`test/step2-integration.test.ts` checks that the parts of step 2 work as one
+pipeline: the in-memory API keeps the text (a no-op is the input string
+itself, an insert gets ids in the file's style and changes only what it
+touched, a full redraw keeps every DI start tag, a sticky keeps its text
+when it follows its node), validators see the text-preserving result, the
+design profile runs in memory with a content repository the host names, and
+the file helpers find the repository of the file they write.
+
 ## Isomorphism check
 
 The package's main entry (`src/index.ts`, published as `@miragon/bpmn-cli`)
@@ -131,9 +139,11 @@ npx vitest run test/isomorphic.test.ts
 - `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
   needed), checks that the check sees a planted `node:fs` import and
   `process` read, and runs the bundle in a `vm` context without any Node
-  global: `applyToXml`, `layoutXml` (both engines), `newXml`, `validateXml`
-  with the Camunda 7 profile, `showXml`, `findXml` and `metricsXml` must give
-  there exactly what they give in Node. It also checks that the inlined
+  global: `applyToXml` (also with the design profile and a host validator,
+  and a no-op that must come back `unchanged`), `layoutXml` (both engines),
+  `newXml`, `validateXml` with the Camunda 7 and the design profile,
+  `showXml`, `findXml` and `metricsXml` must give there exactly what they
+  give in Node. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
@@ -373,13 +383,14 @@ validators, the content-repository auto profile and the CLI output),
 Camunda 7, Operaton and Camunda 8 files.
 
 **On a private corpus.** Compare, per file, design-iq's `checkModel(xml, {
-path })` errors with `checkFile(file, { profile: 'design' })` (the design
-profile's errors carry `validator: "design"`), file by file and finding by
+path })` errors with `checkFile(file, { profile: 'design' })` of
+`@miragon/bpmn-cli/node` (or `validateXml(xml, { profile: 'design' })`; the
+design profile's errors carry `validator: "design"`), file by file and finding by
 finding (design-iq names the element in its message: `<id> is a dead end`,
 `expected exactly one start event in process <id>`; it reports several start
 events once per process, the profile once per start event). For the gate
-itself, run edits through `mutateDoc(doc, ops, { dryRun: true, profile:
-'design' })` and check that a refused edit (E_VALIDATION with a `design`
+itself, run edits through `mutateDoc(doc, ops, { profile: 'design' })` (or
+`applyToXml`; neither writes) and check that a refused edit (E_VALIDATION with a `design`
 finding) is exactly one whose output (written with `force: true`) has an
 error design-iq did not report before. Keep the scripts and their output
 outside the repository and report counts only.
