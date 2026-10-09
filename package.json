@@ -1,6 +1,6 @@
 {
   "name": "@miragon/bpmn-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-friendly CLI for editing BPMN 2.0 models semantically: agents name elements and operations, never XML or BPMNDI. Keeps hand-made diagrams (incremental layout), redraws engine-owned ones, and offers diagram formatting operations.",
   "type": "module",
   "license": "MIT",
