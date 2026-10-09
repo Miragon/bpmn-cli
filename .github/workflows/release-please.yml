@@ -1,0 +1,53 @@
+# Releases: release-please keeps a release PR open that bumps the version and the changelog from
+# Conventional Commits on main. Merging that PR creates the tag and the GitHub release; the publish job
+# then publishes the package to npm with trusted publishing (OIDC, no npm token stored anywhere).
+#
+# npm side (one-time): the package must exist on npm, then trust this workflow file:
+#   npm trust github @miragon/bpmn-cli --file release-please.yml --repo Miragon/bpmn-cli --allow-publish
+# See docs/releasing.md.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm trusted publishing
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      # no NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token. No --provenance: npm only creates
+      # provenance for public repositories.
+      - run: npm publish

@@ -1,5 +1,5 @@
 {
-  "name": "bpmn-cli",
+  "name": "@miragon/bpmn-cli",
   "version": "0.1.0",
   "description": "AI-friendly CLI for editing BPMN 2.0 models semantically: agents name elements and operations, never XML or BPMNDI. Keeps hand-made diagrams (incremental layout), redraws engine-owned ones, and offers diagram formatting operations.",
   "type": "module",
@@ -23,6 +23,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -36,7 +39,8 @@
     "bench": "node tools/bench/run.mjs",
     "bench:summary": "node tools/bench/summary.mjs",
     "fuzz": "node tools/fuzz/run.mjs",
-    "gate": "npm run build && vitest run && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate"
+    "gate": "npm run build && vitest run && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "bpmn-auto-layout": "2.0.0-alpha.2",

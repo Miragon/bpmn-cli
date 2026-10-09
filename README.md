@@ -59,11 +59,21 @@ with a laid-out diagram.
 Requires Node 20+ (developed on Node 24).
 
 ```
+npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
+bpmn guide                         # the agent cheat sheet
+```
+
+From a checkout:
+
+```
 npm install
 npm run build          # tsc -> dist/
 npm link               # optional: puts `bpmn` on your PATH (bin/bpmn.js)
 bpmn guide             # the agent cheat sheet
 ```
+
+Releases are automated (release-please, npm trusted publishing); see
+[docs/releasing.md](docs/releasing.md).
 
 During development `npm run dev -- <args>` runs the TypeScript sources directly
 (`tsx src/cli.ts`). `npm test` runs the vitest suite, `npm run typecheck` the
