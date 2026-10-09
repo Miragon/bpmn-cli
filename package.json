@@ -54,7 +54,8 @@
     "bench": "node tools/bench/run.mjs",
     "bench:summary": "node tools/bench/summary.mjs",
     "fuzz": "node tools/fuzz/run.mjs",
-    "gate": "npm run build && vitest run && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "check:iso": "node tools/iso/check.mjs",
+    "gate": "npm run build && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -66,6 +67,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
