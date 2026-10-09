@@ -4,27 +4,34 @@
  *
  * Every command works on one .bpmn file. Mutating commands run the pipeline
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
+ * The file I/O is src/node/files.ts, everything else the browser-safe core;
+ * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug).
  */
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
 import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
+import { setLayoutDebug } from './debug.js';
 import { layoutProblems } from './diagram/metrics.js';
 import { layoutView } from './diagram/view.js';
 import { assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
-import { renderChanges, renderDetail, renderExtensionList, renderFind, renderLayout, renderLayoutView, renderMetrics, renderProblems, renderView } from './format.js';
+import { renderDetail, renderExtensionList, renderFind, renderLayoutView, renderMetrics, renderView } from './format.js';
 import { guideText, kindsJson, kindsText } from './guide.js';
-import { KindError, kindLabel, parseKind } from './kinds.js';
-import { SUB_PROCESS_TYPES } from './layout.js';
+import { assertKindToken } from './kinds.js';
+import { checkFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
 import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
-import { checkFile, LAYOUT_MODES, loadDoc, mutateDoc, mutateFile, type LayoutMode, type MutationOptions, type MutationResult } from './pipeline.js';
+import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { buildView, elementDetail, findElements } from './view.js';
+import { mutationReport, mutationWarnings, renderMutation, renderValidation, validationReport } from './report.js';
+import { buildView, elementDetail, findElements, scopeView } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+
+// placement candidates, reroute reasons, [strip] / [rows] lines of the layout engines
+if (process.env['BPMN_LAYOUT_DEBUG']) setLayoutDebug((line) => process.stderr.write(`${line}\n`));
 
 /* ------------------------------------------------------------------ */
 /* output                                                               */
@@ -43,48 +50,12 @@ function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function warningLine(w: Warning): string {
-  return `warning ${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
-}
-
+/** The result of a mutation (src/report.ts: the same for the CLI and the in-memory API); --strict exits 5 on any warning. */
 function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean }): void {
-  // the same finding can be reported by the operation and by the validator: keep the validator's (it has the richer hint);
-  // an event-gateway finding is about one branch: the same code on another target of the gateway is another finding
-  const keyOf = (w: Warning): string => `${w.code}|${w.element ?? ''}${w.code === 'W_EVENT_GATEWAY_TARGET' ? `|${w.related?.[0] ?? ''}` : ''}`;
-  const validationKeys = new Set(result.validation.warnings.map(keyOf));
-  result.changes.warnings = result.changes.warnings.filter((w) => !validationKeys.has(keyOf(w)));
-  const allWarnings: Warning[] = [
-    ...result.changes.warnings,
-    ...result.validation.warnings,
-    ...result.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId })),
-  ];
-  if (opts.json) {
-    printJson({
-      ok: true,
-      file: result.file,
-      written: result.written,
-      ...result.changes.toJSON(),
-      layout: result.layout,
-      validation: result.validation,
-      importWarnings: result.importWarnings,
-      ...(result.view ? { view: result.view } : {}),
-    });
-  } else {
-    const lines: string[] = [];
-    const changes = renderChanges(result.changes).trimEnd();
-    // format ops change the drawing only: their lines follow in the layout block
-    const formatOnly = result.changes.isEmpty && !!result.layout.format?.length && !result.changes.notes.length && !result.changes.warnings.length;
-    if (changes && !formatOnly) lines.push(changes);
-    for (const w of [...result.validation.warnings, ...result.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId }))]) {
-      lines.push(warningLine(w));
-    }
-    lines.push(...renderLayout(result.layout));
-    if (result.written) lines.push(`written: ${result.file}`);
-    else if (result.file) lines.push(`dry run: ${result.file} not written`);
-    if (result.view) lines.push('', renderView(result.view).trimEnd());
-    print(lines.join('\n'));
-  }
-  if (opts.strict && allWarnings.length) process.exit(5);
+  const report = mutationReport(result);
+  if (opts.json) printJson(report);
+  else print(renderMutation(report));
+  if (opts.strict && mutationWarnings(result).length) process.exit(5);
 }
 
 function printError(err: unknown, json: boolean | undefined): never {
@@ -159,8 +130,8 @@ interface RawOpts {
   [key: string]: unknown;
 }
 
-/** --layout <mode> / --relayout / --no-layout -> MutationOptions.layout */
-function layoutOption(o: RawOpts): MutationOptions['layout'] {
+/** --layout <mode> / --relayout / --no-layout -> FileMutationOptions.layout */
+function layoutOption(o: RawOpts): FileMutationOptions['layout'] {
   const layout = o['layout'] as string | false | undefined;
   if (o['relayout']) {
     if (layout === false || (layout !== undefined && layout !== 'full')) {
@@ -172,7 +143,7 @@ function layoutOption(o: RawOpts): MutationOptions['layout'] {
   return (layout as LayoutMode | undefined) ?? 'auto';
 }
 
-function mutationOptions(o: RawOpts): MutationOptions & OutputOptions {
+function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
   return {
     json: !!o['json'],
     out: o['out'] as string | undefined,
@@ -222,14 +193,8 @@ function splitList(value: string | undefined): string[] | undefined {
 
 /** Option parser for kind tokens: the documented kind codes (usage errors, like `add`) instead of commander's generic text. */
 function kindArg(value: string): string {
-  try {
-    parseKind(value);
-    return value;
-  } catch (err) {
-    if (!(err instanceof KindError)) throw err;
-    const code = /is rejected/.test(err.message) ? 'E_UNSUPPORTED_KIND' : /^Unknown kind/.test(err.message) ? 'E_UNKNOWN_KIND' : 'E_INVALID_TRIGGER';
-    throw new CliError(code, err.message, 'usage', { ...(err.candidates?.length ? { candidates: err.candidates } : {}), hint: 'Run `bpmn kinds` for the full list of kinds and triggers.' });
-  }
+  assertKindToken(value);
+  return value;
 }
 
 /* The same rules `apply` enforces on ops JSON (batch.ts), spelled with CLI flags. */
@@ -316,7 +281,7 @@ withMutationOptions(
       },
       file,
     );
-    const result = await mutateDoc(doc, [], { ...opts, mustNotExist: true });
+    const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true });
     result.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: o['name'] as string | undefined });
     printMutation(result, opts);
   }, opts.json);
@@ -331,7 +296,7 @@ program
   .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane, colours, label sides, layout problems')
   .action(async (file: string, id: string | undefined, o: RawOpts) => {
     await run(async () => {
-      const doc = await Doc.load(file);
+      const doc = await readDoc(file);
       if (o['layout']) {
         if (id || o['scope']) throw usageError('--layout shows the whole drawing; drop the element id / --scope', { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
         const view = layoutView(doc.definitions);
@@ -347,27 +312,7 @@ program
         return;
       }
       const view = buildView(doc);
-      if (o['scope']) {
-        const scope = doc.requireScope(String(o['scope']));
-        const scopeId = scope.get<string>('id');
-        const processId = doc.processOf(scope)?.get<string>('id');
-        view.processes = view.processes.filter((p) => p.id === processId);
-        if (scopeId !== processId) {
-          // narrow to the sub-process subtree
-          const findNode = (nodes: typeof view.processes[number]['nodes']): typeof nodes[number] | undefined => {
-            for (const n of nodes) {
-              if (n.id === scopeId) return n;
-              const inner = n.children ? findNode(n.children) : undefined;
-              if (inner) return inner;
-            }
-            return undefined;
-          };
-          for (const p of view.processes) {
-            const sub = findNode(p.nodes);
-            p.nodes = sub ? [sub] : [];
-          }
-        }
-      }
+      if (o['scope']) scopeView(doc, view, String(o['scope']));
       if (o['json']) printJson(view);
       else print(renderView(view));
     }, !!o['json']);
@@ -381,7 +326,7 @@ program
   .option('--json', 'machine-readable output')
   .action(async (file: string, text: string, o: RawOpts) => {
     await run(async () => {
-      const doc = await Doc.load(file);
+      const doc = await readDoc(file);
       const hits = findElements(doc, text, o['kind'] as string | undefined);
       if (o['json']) printJson(hits);
       else print(renderFind(hits));
@@ -641,7 +586,7 @@ ext
   .option('--json', 'machine-readable output')
   .action(async (file: string, id: string, o: RawOpts) => {
     await run(async () => {
-      const doc = await Doc.load(file);
+      const doc = await readDoc(file);
       const el = doc.require(id);
       const items = listAllExtensions(el);
       if (o['json']) printJson(items);
@@ -771,7 +716,7 @@ program
   .option('--json', 'machine-readable output')
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const doc = await Doc.load(file);
+      const doc = await readDoc(file);
       const m = layoutProblems(doc.definitions);
       if (o['json']) printJson({ file, score: m.score, counts: m.counts, problems: m.problems });
       else print(renderMetrics(m));
@@ -821,38 +766,16 @@ program
   })
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const report = await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' });
-      const platform = report.validation.platform;
-      const layoutWarnings = report.layout.status === 'ok' ? report.layout.warnings.map((w) => ({ code: `W_LAYOUT_${w.code}`, message: w.message, element: w.elementId })) : [];
-      const warnings = [...report.validation.warnings, ...layoutWarnings];
-      const errors = [...report.validation.errors, ...(report.layout.status === 'failed' ? [report.layout.error] : [])];
+      const report = validationReport(await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' }));
       if (o['json']) {
-        printJson({ ok: errors.length === 0, file, errors, warnings, platform, layout: report.layout, importWarnings: report.importWarnings });
+        const { ok, ...rest } = report;
+        printJson({ ok, file, ...rest });
       } else {
-        const lines: string[] = [];
-        if (report.importWarnings.length) lines.push(...report.importWarnings.map((w) => `import: ${w}`));
-        if (errors.length) lines.push(renderProblems(errors).trimEnd());
-        if (warnings.length) lines.push(renderProblems(warnings).trimEnd());
-        if (platform) {
-          // only Camunda 7 has engine rules so far: a count of 0 would read as "checked and fine" for Camunda 8
-          const counts =
-            platform.platform === 'c7'
-              ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)`
-              : platform.platform === 'c8'
-                ? ' - no Camunda 8 engine rules yet (structure and lint only)'
-                : '';
-          lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
-        }
-        lines.push(
-          report.layout.status === 'ok' ? 'layout: ok' : report.layout.status === 'failed' ? `layout: failed (${report.layout.error.code})` : 'layout: skipped',
-        );
-        const imported = report.importWarnings.length ? `, ${report.importWarnings.length} import warning(s)` : '';
-        lines.push(errors.length ? `${errors.length} error(s), ${warnings.length} warning(s)${imported}` : `valid, ${warnings.length} warning(s)${imported}`);
-        print(lines.join('\n'));
+        print(renderValidation(report));
       }
-      if (errors.length) process.exit(2);
+      if (report.errors.length) process.exit(2);
       // content the reader could not keep (duplicate elements, unknown elements, ...) fails --strict like a warning
-      if (o['strict'] && (warnings.length || report.importWarnings.length)) process.exit(5);
+      if (o['strict'] && (report.warnings.length || report.importWarnings.length)) process.exit(5);
     }, !!o['json']);
   });
 
@@ -868,25 +791,10 @@ withMutationOptions(
 ).action(async (file: string, o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
-    if (o['tidy']) {
-      if (o['expand'] || o['collapse']) throw usageError('--tidy keeps the drawing; --expand / --collapse need a redraw', { hint: 'Run `bpmn layout <file> --expand ...` and `bpmn layout <file> --tidy` separately.' });
-      const result = await mutateFile(file, [{ op: 'tidy' }], { ...opts, layout: 'auto' });
-      printMutation(result, opts);
-      return;
-    }
-    const doc = await loadDoc(file, opts);
     // the ids are validated like `set <id> expanded=`: unknown ids and non-sub-processes are errors, not silent no-ops
-    const expand = splitList(o['expand'] as string | undefined) ?? [];
-    const collapse = splitList(o['collapse'] as string | undefined) ?? [];
-    const subs = new Map([...expand, ...collapse].map((id) => [id, doc.require(id, SUB_PROCESS_TYPES, 'sub-process')]));
-    const both = expand.filter((id) => collapse.includes(id));
-    if (both.length) throw usageError(`${both.join(', ')} given to both --expand and --collapse`);
-    const result = await mutateDoc(doc, [], { ...opts, layout: 'full', expand, collapse });
-    for (const [id, expanded] of [...expand.map((id) => [id, true] as const), ...collapse.map((id) => [id, false] as const)]) {
-      const sub = subs.get(id)!;
-      const name = sub.get<string | undefined>('name');
-      result.changes.change({ id, kind: kindLabel(sub), ...(name ? { name } : {}), detail: `expanded=${expanded}` });
-    }
+    const expand = splitList(o['expand'] as string | undefined);
+    const collapse = splitList(o['collapse'] as string | undefined);
+    const result = await layoutFile(file, { ...opts, tidy: !!o['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) });
     printMutation(result, opts);
   }, opts.json);
 });

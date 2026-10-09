@@ -5,14 +5,15 @@
  * tree traversal and the small set of invariants bpmn-moddle does NOT maintain
  * on its own ($parent links, lazy collections).
  *
+ * No file access here (the core also runs in the browser): reading and the
+ * atomic write live in src/node/files.ts.
+ *
  * Ids: only BPMN and DI elements (bpmn:, bpmndi:, dc:, di:) form the id space
  * (indexById, the duplicate-id check). Vendor extension elements (camunda:,
  * zeebe:, any generic element) and everything inside bpmn:extensionElements
  * carry vendor data: a camunda:formField id only has to be unique within its
  * form, so those ids are never indexed, resolved or checked.
  */
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
-import { dirname, basename, join } from 'node:path';
 import { BpmnModdle, type ImportWarning } from 'bpmn-moddle';
 import type { ModdleElement } from 'moddle';
 
@@ -332,26 +333,6 @@ function watchOverwrites(moddle: BpmnModdle): { stop(): void; warnings(): Import
 export async function serialize(model: Model): Promise<string> {
   const { xml } = await model.moddle.toXML(model.definitions, { format: true });
   return xml;
-}
-
-export async function readModel(file: string): Promise<Model> {
-  let xml: string;
-  try {
-    xml = await readFile(file, 'utf8');
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    throw new ModelError(`Cannot read ${file}: ${e.message}`, e.code === 'ENOENT' ? 'FILE_NOT_FOUND' : 'IO_ERROR', { file });
-  }
-  return parseXml(xml);
-}
-
-/** Atomic write: temp file in the same directory, then rename over the target. */
-export async function writeAtomic(file: string, content: string): Promise<void> {
-  const dir = dirname(file);
-  await mkdir(dir, { recursive: true });
-  const tmp = join(dir, `.${basename(file)}.${process.pid}.tmp`);
-  await writeFile(tmp, content, 'utf8');
-  await rename(tmp, file);
 }
 
 /** Creates a fresh definitions element with one process. */

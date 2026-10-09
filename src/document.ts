@@ -7,7 +7,6 @@
  * vendor data (see model.ts) and never resolve: `require` answers E_NOT_FOUND
  * naming the vendor element and its BPMN owner instead.
  */
-import { readFile } from 'node:fs/promises';
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
@@ -84,17 +83,10 @@ export class Doc {
   /* construction                                                   */
   /* ------------------------------------------------------------ */
 
-  static async load(file: string): Promise<Doc> {
-    let xml: string;
-    try {
-      xml = await readFile(file, 'utf8');
-    } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      throw ioError(e.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ${file}: ${e.message}`, { file });
-    }
-    return Doc.fromXml(xml, file);
-  }
-
+  /**
+   * Parses a document. `file` only names it in messages and results (the
+   * core never touches the file system; src/node/files.ts readDoc reads one).
+   */
   static async fromXml(xml: string, file?: string): Promise<Doc> {
     let model: Model;
     try {

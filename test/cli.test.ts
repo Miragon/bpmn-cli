@@ -48,6 +48,8 @@ function diIds(xml: string): string[] {
 
 beforeAll(() => {
   execFileSync(process.execPath, [join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', join(ROOT, 'tsconfig.json')], { cwd: ROOT, stdio: 'inherit' });
+  // the second step of `npm run build` (type shims), so dist stays what the build makes
+  execFileSync(process.execPath, [join(ROOT, 'tools', 'build-types.mjs')], { cwd: ROOT, stdio: 'inherit' });
   dir = mkdtempSync(join(tmpdir(), 'bpmn-cli-'));
   file = join(dir, 'order.bpmn');
 }, 60000);

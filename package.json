@@ -18,10 +18,25 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "bin",
     "dist",
     "README.md"
+  ],
+  "sideEffects": [
+    "./bin/bpmn.js",
+    "./dist/cli.js"
   ],
   "publishConfig": {
     "access": "public"
@@ -30,7 +45,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node tools/build-types.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -46,7 +61,8 @@
     "bpmn-auto-layout": "2.0.0-alpha.2",
     "bpmn-moddle": "^10.2.0",
     "camunda-bpmn-moddle": "8.0.1",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "moddle": "^8.2.1"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

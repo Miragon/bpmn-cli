@@ -543,6 +543,34 @@ export function buildView(doc: Doc): ModelView {
   });
 }
 
+/**
+ * `show --scope <id>`: narrows a view (in place) to one process, the process
+ * of a participant, or one sub-process subtree. E_NOT_FOUND / E_WRONG_KIND
+ * for an id that is no scope (Doc.requireScope).
+ */
+export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView {
+  const scope = doc.requireScope(scopeId);
+  const id = scope.get<string>('id');
+  const processId = doc.processOf(scope)?.get<string>('id');
+  view.processes = view.processes.filter((p) => p.id === processId);
+  if (id !== processId) {
+    // narrow to the sub-process subtree
+    const findNode = (nodes: ViewNode[]): ViewNode | undefined => {
+      for (const n of nodes) {
+        if (n.id === id) return n;
+        const inner = n.children ? findNode(n.children) : undefined;
+        if (inner) return inner;
+      }
+      return undefined;
+    };
+    for (const p of view.processes) {
+      const sub = findNode(p.nodes);
+      p.nodes = sub ? [sub] : [];
+    }
+  }
+  return view;
+}
+
 /* ------------------------------------------------------------------ */
 /* one element                                                          */
 /* ------------------------------------------------------------------ */
