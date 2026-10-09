@@ -25,7 +25,7 @@
  *     compensation handler is moved right below its boundary event (bpmn.io
  *     convention) when that spot is free.
  */
-import { layoutProcess, LayoutError, LayoutWarning } from 'bpmn-auto-layout';
+import type { LayoutWarning } from 'bpmn-auto-layout';
 import { layoutClean } from './layout/engine.js';
 import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, ModelError } from './model.js';
 
@@ -443,7 +443,7 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
   let result: LayoutResult;
   try {
     const { xml: input } = await model.moddle.toXML(model.definitions, { format: true });
-    result = await layoutXml(input, expanded);
+    result = await autoLayoutXml(input, expanded);
   } finally {
     removeTemporaryLaneMembers(model.definitions, temporary);
   }
@@ -461,8 +461,13 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
   };
 }
 
-/** Lays out raw XML that already carries the right expansion hints. */
-export async function layoutXml(xml: string, expanded: Set<string> = new Set()): Promise<LayoutResult> {
+/**
+ * bpmn-auto-layout on raw XML that already carries the right expansion hints
+ * (layoutModel with engine auto). The package is imported on first use, so a
+ * browser bundle can load it as a separate chunk only for `engine: 'auto'`.
+ */
+export async function autoLayoutXml(xml: string, expanded: Set<string> = new Set()): Promise<LayoutResult> {
+  const { layoutProcess, LayoutError } = await import('bpmn-auto-layout');
   try {
     const { xml: out, warnings } = await layoutProcess(xml);
     return { xml: out, warnings: warnings.map(toWarningInfo), expanded: [...expanded] };

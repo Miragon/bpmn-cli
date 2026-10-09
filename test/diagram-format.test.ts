@@ -22,7 +22,8 @@ import { isCliError } from '../src/errors.js';
 import { renderLayoutView } from '../src/format.js';
 import type { El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, mutateFile, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateFile } from '../src/node/files.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */

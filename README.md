@@ -79,17 +79,22 @@ Releases are automated (release-please, npm trusted publishing); see
 During development `npm run dev -- <args>` runs the TypeScript sources directly
 (`tsx src/cli.ts`). `npm test` runs the vitest suite, `npm run typecheck` the
 compiler, and `npm run gate` everything a change has to pass before it is
-handed over (build, tests, the layout-regression budget and a short fuzz
-campaign). The test layers, the benchmark and the fuzzer, and how to run them
+handed over (build, tests, the isomorphism check of the browser-safe core,
+the layout-regression budget and a short fuzz campaign). The test layers, the benchmark and the fuzzer, and how to run them
 on a private corpus without copying it into the repository, are described in
 [docs/testing.md](docs/testing.md).
 
-Dependencies: `bpmn-moddle` (the semantic model), `bpmn-auto-layout`
-(pinned to `2.0.0-alpha.2`), `commander` and `camunda-bpmn-moddle` (pinned to
-`8.0.1`). The last one is read only as data: its Camunda 7 descriptor says
-which `camunda:` attributes and extension elements belong where (placement,
-`validate`). It is never registered with bpmn-moddle, so camunda content stays
-untyped and the serialisation is unchanged. Nothing else.
+Dependencies: `bpmn-moddle` (the semantic model; `moddle` for its types),
+`bpmn-auto-layout` (pinned to `2.0.0-alpha.2`, loaded only for
+`--engine auto`), `commander` (the CLI only) and `camunda-bpmn-moddle`
+(pinned to `8.0.1`). The last one is read only as data: its Camunda 7
+descriptor says which `camunda:` attributes and extension elements belong
+where (placement, `validate`). It is inlined into
+`src/platform/camunda-descriptor.ts` by `node tools/gen-camunda-descriptor.mjs`
+(run it after updating the package; a test fails while the copy differs), so
+the core reads it without file access. It is never registered with
+bpmn-moddle, so camunda content stays untyped and the serialisation is
+unchanged. Nothing else.
 
 ## The contract
 
@@ -1481,29 +1486,158 @@ against the live renderer.)
 
 ## Library use
 
-The package also exports its building blocks (`dist/index.js`): `Doc`
-(load / create / query the model), `parseOps` and `OPS_SCHEMA`, `runOps`,
-`mutateFile` / `mutateDoc` / `checkFile` (the write pipeline, with the types
+The package has two entries:
+
+- **`@miragon/bpmn-cli`**: the core. It runs in Node and in the browser:
+  nothing it imports reads a file, `process`, `Buffer` or a Node builtin
+  (checked on every change, see [Browser bundles](#browser-bundles)).
+  Strings in, strings and data out.
+- **`@miragon/bpmn-cli/node`**: the core plus the file helpers the CLI uses
+  (Node only).
+
+### The in-memory API
+
+Every function runs the code of the CLI command it names, without a file:
+
+| function | like | returns |
+| --- | --- | --- |
+| `applyToXml(xml, ops, opts?)` | `bpmn apply` | `EditResult` |
+| `newXml(opts?)` | `bpmn new` | `EditResult` |
+| `layoutXml(xml, opts?)` | `bpmn layout` | `EditResult` |
+| `validateXml(xml, opts?)` | `bpmn validate --json` | `ValidationReport` |
+| `viewXml(xml, opts?)` | `bpmn show --json` | `ModelView`, `ElementDetail` (with `id`), `LayoutView` (with `layout: true`) |
+| `showXml(xml, opts?)` | `bpmn show` | the text |
+| `metricsXml(xml)` | `bpmn metrics --json` | `{ score, counts, problems }` |
+| `findXml(xml, text, { kind? })` | `bpmn find --json` | `FindHit[]` |
+| `extensionsXml(xml, id)` | `bpmn ext list <file> <id> --json` | `ExtensionInfo[]` |
+
+- `ops` is the [ops JSON](#ops-json-bpmn-apply) of `bpmn apply`: an array,
+  `{ "ops": [...] }`, or the JSON text of either (schema: `OPS_SCHEMA`, also
+  `bpmn kinds --json` -> `ops`). It is checked like `apply` checks it
+  (`E_USAGE` naming `ops[<i>]`; values are normalised, `"by": "80"` is 80
+  pixels).
+- Options of the writing functions (`EditOptions`): `layout` (`'auto'`, the
+  default, `'incremental'`, `'full'` or `false`, see
+  [Layout modes](#layout-modes)), `engine` (`'clean'` or `'auto'`), `force`,
+  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `show` (add the model
+  view) and `debug` (below). `layoutXml` takes `expand`, `collapse` and
+  `tidy` instead of `layout`; `newXml` takes `processName`, `processId`,
+  `executable` and `target`; `viewXml` and `showXml` take `id`, `scope` and
+  `layout` like `show`; `validateXml` takes `platform`.
+- `EditResult` is `{ xml, unchanged, result }`: the new document; `unchanged`
+  is `true` when it is byte-identical to the input (then `xml` is the input
+  string itself and there is nothing to save); `result` is what the CLI
+  prints with `--json` ([Output](#output-errors-and-exit-codes)) without
+  `file`, `written` and the XML. `renderMutation(result)` gives the CLI's
+  text for it, `renderValidation(report)` the text of `validate`.
+- The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
+  errors the ops would introduce (`E_VALIDATION`) and content a retype would
+  delete (`E_WOULD_DROP_CONTENT`) are refused unless `force: true`. The
+  layout modes, the format ops and the platform profile's new findings
+  (`result.validation.platform`) work as on the command line.
+- A failure throws a `CliError`: `code`, `category`, `details` (`element`,
+  `related`, `candidates`, `hint`, `op`); `toJSON()` is the CLI's `--json`
+  error. Nothing is half done: the caller still has its input.
+
+```ts
+import { applyToXml, CliError, newXml, renderMutation, showXml } from '@miragon/bpmn-cli';
+
+let { xml } = await newXml({ processName: 'Order handling' });
+const edit = await applyToXml(xml, [
+  { op: 'add', kind: 'start', name: 'Order received' },
+  { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' },
+  { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
+]);
+if (!edit.unchanged) xml = edit.xml; // and save it
+edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_1', 'Event_Done', 'Flow_2']
+edit.result.layout.mode;              // 'full' (no diagram before: drawn from scratch)
+renderMutation(edit.result);          // the text `bpmn apply` prints: created ... / layout: ok - full (...)
+await showXml(xml);                   // the `bpmn show` text of the quick start above
+
+try {
+  await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }]);
+} catch (err) {
+  if (!(err instanceof CliError)) throw err;
+  err.code;               // 'E_NOT_FOUND'
+  err.details.candidates; // ['Activity_CheckInvoice']
+}
+```
+
+The layout engines' diagnostic lines (placement candidates, reroute reasons,
+`[strip]` / `[rows]` lines) go to a `debug: (line) => ...` option of one
+call, or to `setLayoutDebug(sink)` for the whole process; the CLI sets the
+latter when `BPMN_LAYOUT_DEBUG=1` and writes them to stderr.
+
+### File helpers (`@miragon/bpmn-cli/node`)
+
+`readXml(file)` and `readDoc(file)` (`E_FILE_NOT_FOUND`, `E_IO`, `E_PARSE`;
+no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
+`writeAtomic(file, text)` (temp file, then rename), `mutateFile(file, ops,
+opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
+ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`) and
+`checkFile(file, { platform })` (`validate`). `FileMutationOptions` adds the
+file options to the core options: `out`, `dryRun`, `backup` and
+`mustNotExist` (`E_FILE_EXISTS` unless `force`); the result says
+`written: true` and names the file.
+
+### Building blocks
+
+The in-memory API is made of exported parts. `Doc` (`Doc.fromXml(xml)`,
+`Doc.create({ target })` with `TARGETS`; query the model), `parseOps` and
+`OPS_SCHEMA`, `runOps` (the ops alone, without any guard), the pipeline on a
+`Doc`: `mutateDoc(doc, ops, opts)` / `layoutDoc` / `checkDoc` (never write;
+`written` is `false`; typed ops, not checked by `parseOps`), with the types
 `MutationOptions`, `MutationResult`, `LayoutMode`, `LayoutStatus` and
-`LAYOUT_MODES`), `validateDoc`, `buildView` / `elementDetail` /
-`findElements`, `layoutModel` and the `KINDS` vocabulary. The diagram API:
-`layoutProblems` / `layoutProblemsOfXml` / `diffProblems` / `metricsDelta`
-(layout metrics with ids, `METRIC_KEYS`, `METRIC_WEIGHTS`), `layoutView`
-(what `show --layout` prints), `runFormatOps` (the format operations on a
-loaded document; `FORMAT_OP_NAMES`, `isFormatOp`, the op types `PlaceOp`,
-`AlignOp`, `ColorOp`, `LabelOp`, `RouteOp`, `SpaceOp`, `TidyOp`) and the
-colour palette `SWATCHES`. The platform profile: `validateDoc(doc, {
-platform: 'auto' | 'c7' | 'c8' | 'none' })` (findings among the warnings,
-`result.platform` with the platform, its source and the counts),
-`checkFile(file, { platform })`, `MutationOptions.platform` (default auto;
-`'none'` switches it off; an explicit choice also decides the engine rules of
-the ops, e.g. which event-gateway rule a bridge follows), `runProfile`,
-`detectPlatform`, `PLATFORM_CHOICES`
-and the types `ProfileFinding`, `PlatformSummary`, `Severity`;
-`listExtensions` / `listAllExtensions` (what `ext list` prints) and
-`Doc.create({ target })` with `TARGETS`. Everything the CLI does goes through
-these functions. `mutateDoc` applies the same guards as the CLI: a lossy import
-(`E_IMPORT_LOSSY`), errors the ops would introduce (`E_VALIDATION`) and a
-retype that would delete a sub-process's content (`E_WOULD_DROP_CONTENT`)
-are refused unless `force: true`; `runOps` alone applies the ops without
-these guards.
+`LAYOUT_MODES`, and `assertLossless`. What the CLI prints: `mutationReport`,
+`mutationWarnings`, `validationReport`, `renderMutation`, `renderValidation`,
+`renderView`, `renderDetail`, `renderLayoutView`, `renderFind`,
+`renderMetrics`, `renderExtensionList`, `renderProblems`; `guideText`,
+`kindsText`, `kindsJson` and `ERROR_CATALOGUE`. Views: `validateDoc`,
+`buildView` / `scopeView` / `elementDetail` / `findElements`, `layoutModel`
+and the `KINDS` vocabulary. The diagram API: `layoutProblems` /
+`layoutProblemsOfXml` / `diffProblems` / `metricsDelta` (layout metrics with
+ids, `METRIC_KEYS`, `METRIC_WEIGHTS`), `layoutView` (what `show --layout`
+prints), `runFormatOps` (the format operations on a loaded document;
+`FORMAT_OP_NAMES`, `isFormatOp`, the op types `PlaceOp`, `AlignOp`,
+`ColorOp`, `LabelOp`, `RouteOp`, `SpaceOp`, `TidyOp`) and the colour palette
+`SWATCHES`. The platform profile: `validateDoc(doc, { platform: 'auto' |
+'c7' | 'c8' | 'none' })` (findings among the warnings, `result.platform`
+with the platform, its source and the counts), `MutationOptions.platform`
+(default auto; `'none'` switches it off; an explicit choice also decides the
+engine rules of the ops, e.g. which event-gateway rule a bridge follows),
+`runProfile`, `detectPlatform`, `PLATFORM_CHOICES` and the types
+`ProfileFinding`, `PlatformSummary`, `Severity`; `listExtensions` /
+`listAllExtensions` (what `ext list` prints).
+
+### Browser bundles
+
+`npm run gate` (and so CI) runs `tools/iso/check.mjs` after the build: it
+bundles `dist/index.js` with esbuild for `platform=browser` and fails on an
+import of a Node builtin or a reference to `process`, `Buffer`, `global`,
+`require`, `__dirname`, `__filename` or `setImmediate`, naming the module; it
+also checks that both entries and their types resolve for a strict
+TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
+`test/isomorphic.test.ts` runs the browser bundle in a vm context without any
+Node global and compares `applyToXml`, `layoutXml` (both engines),
+`validateXml`, `showXml`, `findXml` and `metricsXml` with Node, byte for byte.
+
+Sizes (esbuild, minified, split like a host's bundler would):
+
+| entry | minified | gzip | loaded on demand |
+| --- | --- | --- | --- |
+| everything `@miragon/bpmn-cli` exports | 648 KB | 200 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 541 KB | 167 KB | the same |
+
+`package.json` declares only the CLI files as having side effects, so a
+bundler drops what a host does not import.
+
+### Changes from 0.2
+
+- `mutateFile`, `checkFile` and `loadDoc` moved to `@miragon/bpmn-cli/node`;
+  `Doc.load(file)` is `readDoc(file)` there.
+- `mutateDoc` never writes; `out`, `dryRun`, `backup` and `mustNotExist` are
+  options of the file helpers (`mutateDocToFile`, `mutateFile`).
+- `layoutXml` is `bpmn layout` on a string; the former wrapper around
+  bpmn-auto-layout is internal (`layoutModel(model, { engine: 'auto' })`).
+- `package.json` has `exports`: only `.`, `./node` and `./package.json`
+  resolve (no deep imports into `dist/`).

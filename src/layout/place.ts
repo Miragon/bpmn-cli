@@ -19,6 +19,7 @@
  *  - expanded / collapsed follows `opts.expanded` for every sub-process,
  *    event sub-processes included
  */
+import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { is, many, type El } from '../model.js';
 import { elementLabel, routeEdges, routeLinks, routedSegments } from './route.js';
 import { METRICS, SIZES, boxesOverlap, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LinkEnd, type Point, type ScopeLayout } from './types.js';
@@ -287,7 +288,7 @@ function assignRows(layout: ScopeLayout): void {
   const placed = new Set<GNode>();
   const branches: Branch[] = [];
   const debug = (msg: string): void => {
-    if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[rows] ${msg}`);
+    if (layoutDebugOn()) layoutDebug(`[rows] ${msg}`);
   };
   const inRow = (row: number): Branch[] => branches.filter((b) => b.row === row);
   const maxRow = (): number => Math.max(-1, ...branches.map((b) => b.row));

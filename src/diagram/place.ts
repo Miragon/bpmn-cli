@@ -61,6 +61,7 @@
  *  associated with, data object / store below-right of the activity it is
  *  connected to (unconnected: like an unconnected node).
  */
+import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { annotationSize } from '../layout/place.js';
 import { SIZES } from '../layout/types.js';
 import { is, type El } from '../model.js';
@@ -519,7 +520,7 @@ function cheapest(plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): C
   for (const cand of cands) {
     const box = { x: cand.x, y: cand.c - cand.size.height / 2, ...cand.size };
     const cost = connectionCost(plane, from, box, kind, cand.insert ?? cand.grow) + cand.penalty;
-    if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ' insert' : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}`);
+    if (layoutDebugOn()) layoutDebug(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ' insert' : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}`);
     if (!best || cost < best.cost) best = { cand, cost };
   }
   return best?.cand ?? cands[0]!;

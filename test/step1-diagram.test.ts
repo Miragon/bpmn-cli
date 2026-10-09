@@ -28,7 +28,8 @@ import { writePlanes } from '../src/diagram/write.js';
 import { isCliError } from '../src/errors.js';
 import type { El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, mutateFile, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateFile } from '../src/node/files.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

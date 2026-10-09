@@ -72,6 +72,7 @@
  *  frame inside it (a drawing with an event sub-process in another lane than
  *  its member lane) is skipped, never grown around it.
  */
+import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './geom.js';
 import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, type DShape, type Plane } from './plane.js';
 
@@ -584,7 +585,7 @@ function spaceInFrame(plane: Plane, base: Omit<Pass, 'band' | 'scope'>, frame: D
     }
     const over = swallowers(pass, decision);
     if (!over.length) return applyPass(pass, decision);
-    if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[space] ${over.map((r) => r.id).join(',')} would grow over a shape: room one level out`);
+    if (layoutDebugOn()) layoutDebug(`[space] ${over.map((r) => r.id).join(',')} would grow over a shape: room one level out`);
     scope = widen(plane, scope, over);
   }
   // above the outermost frame: the whole plane

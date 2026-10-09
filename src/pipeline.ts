@@ -5,6 +5,12 @@
  *
  * Nothing is written when any stage fails.
  *
+ * This module is the in-memory part (everything but load and write): it
+ * never touches the file system or the environment, so it runs in the
+ * browser too. src/node/files.ts reads the file, calls mutateDoc and writes
+ * the result atomically (mutateFile, the CLI); src/api.ts wraps it for
+ * strings (applyToXml).
+ *
  * Guards (each overridden by MutationOptions.force / --force):
  *  - lossy import: a document bpmn-moddle dropped content from is refused
  *    with E_IMPORT_LOSSY, by loadDoc and again by mutateDoc, so the library
@@ -52,15 +58,16 @@
  * or a label side) makes the drawing hand-made, so later `auto` writes keep
  * it; colours survive full redraws.
  */
-import { copyFile, stat } from 'node:fs/promises';
+import { withLayoutDebug, type DebugSink } from './debug.js';
 import { Doc } from './document.js';
-import { CliError, ioError, modelError, type Warning } from './errors.js';
+import { CliError, ioError, modelError, usageError, type Warning } from './errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from './layout.js';
 import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
 import { applyColors, colorsOf } from './diagram/write.js';
-import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
+import { kindLabel } from './kinds.js';
+import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
 import { runOps } from './ops/index.js';
 import { ordersLanes } from './ops/order.js';
@@ -72,11 +79,11 @@ import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './pl
 import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
 import { buildView, type ModelView } from './view.js';
 
+/**
+ * Options of the in-memory pipeline. Writing (out, dryRun, backup,
+ * mustNotExist) is the node layer's: FileMutationOptions in src/node/files.ts.
+ */
 export interface MutationOptions {
-  /** write here instead of the input file */
-  out?: string;
-  /** run everything but do not write */
-  dryRun?: boolean;
   /**
    * diagram handling: false = skip (stale DI), true / 'auto' (default) = keep a
    * hand-made drawing and redraw an engine-owned one, 'incremental', 'full'
@@ -84,19 +91,17 @@ export interface MutationOptions {
   layout?: boolean | LayoutMode;
   /** write despite lossy import / validation errors */
   force?: boolean;
-  /** copy <file> to <file>.bak before writing */
-  backup?: boolean;
   /** include the model view in the result */
   show?: boolean;
   /** additional sub-process ids to expand / collapse (layout command) */
   expand?: string[];
   collapse?: string[];
-  /** refuse to overwrite an existing file (new) */
-  mustNotExist?: boolean;
   /** layout engine: 'clean' (default) or 'auto' (bpmn-auto-layout) */
   engine?: LayoutEngine;
   /** platform profile whose new findings are reported: 'auto' (default) detects it, 'none' switches it off */
   platform?: PlatformChoice;
+  /** receives the layout engines' diagnostic lines during this call (src/debug.ts; the CLI: BPMN_LAYOUT_DEBUG) */
+  debug?: DebugSink;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -128,7 +133,9 @@ export interface LayoutStatus {
 
 export interface MutationResult {
   ok: true;
+  /** the document's file name (Doc.file), or the file written to (node layer) */
   file?: string;
+  /** whether the node layer wrote the file; always false from the in-memory pipeline (mutateDoc) */
   written: boolean;
   changes: ChangeSet;
   layout: LayoutStatus;
@@ -148,13 +155,6 @@ export function assertLossless(doc: Doc, opts: { force?: boolean } = {}): void {
     warnings: lossy.map((w) => w.message.split('\n')[0]),
     hint: 'Fix the XML, or pass --force (MutationOptions.force) to write anyway (the reported content will be dropped).',
   });
-}
-
-/** Loads a file and refuses to continue when bpmn-moddle dropped content. */
-export async function loadDoc(file: string, opts: { force?: boolean } = {}): Promise<Doc> {
-  const doc = await Doc.load(file);
-  assertLossless(doc, opts);
-  return doc;
 }
 
 /** Refuses content that retypes deleted (the agent asked for another kind, not for a deletion). */
@@ -465,23 +465,17 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: O
 }
 
 /**
- * Applies ops to an in-memory document and (unless dry-run) writes the result.
+ * Applies ops to an in-memory document: the whole pipeline except reading and
+ * writing (src/node/files.ts mutateFile / mutateDocToFile write the result).
+ * Returns the new XML and what changed; `written` is false. Throws a CliError
+ * (E_IMPORT_LOSSY, E_VALIDATION, E_WOULD_DROP_CONTENT, the ops' own codes)
+ * and leaves nothing half done: the caller keeps its input when it throws.
  */
 export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
-  const target = opts.out ?? doc.file;
-  if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
+  return withLayoutDebug(opts.debug, () => mutate(doc, ops, opts));
+}
 
-  if (opts.mustNotExist && target && !opts.force && !opts.dryRun) {
-    try {
-      await stat(target);
-      throw ioError('E_FILE_EXISTS', `${target} already exists`, { file: target, hint: 'Choose another name or pass --force to overwrite.' });
-    } catch (err) {
-      if (!(err instanceof CliError)) {
-        /* does not exist: fine */
-      } else throw err;
-    }
-  }
-
+async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
   assertLossless(doc, opts);
   const requested = requestedMode(opts.layout);
   const formatOnly = ops.length > 0 && ops.every(isFormatOp);
@@ -540,23 +534,10 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     layout.metrics = metricsDelta(before.metrics, formatted.after);
   }
 
-  let written = false;
-  if (!opts.dryRun && target) {
-    if (opts.backup && doc.file) {
-      try {
-        await copyFile(doc.file, `${doc.file}.bak`);
-      } catch {
-        /* no original to back up */
-      }
-    }
-    await writeAtomic(target, xml);
-    written = true;
-  }
-
   const result: MutationResult = {
     ok: true,
-    ...(target ? { file: target } : {}),
-    written,
+    ...(doc.file ? { file: doc.file } : {}),
+    written: false,
     changes,
     layout,
     validation,
@@ -564,36 +545,78 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     xml,
   };
   if (opts.show) {
-    const fresh = await Doc.fromXml(xml, target);
+    const fresh = await Doc.fromXml(xml, doc.file);
     result.view = buildView(fresh);
   }
   return result;
 }
 
-/** Loads a file, applies ops, writes back. */
-export async function mutateFile(file: string, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
-  const doc = await loadDoc(file, opts);
-  return mutateDoc(doc, ops, opts);
+/** Options of `bpmn layout` (layoutDoc): a full redraw, or with `tidy` only overlaps removed. */
+export interface LayoutDocOptions extends Omit<MutationOptions, 'layout'> {
+  /** keep the drawing and only remove overlaps and gaps < 20 px (= `bpmn layout --tidy`); expand / collapse must be absent */
+  tidy?: boolean;
 }
 
-/** Validation (with the platform profile, auto-detected unless `opts.platform`) + layout dry run without writing. */
-export async function checkFile(file: string, opts: { platform?: PlatformChoice } = {}): Promise<{ validation: ValidationResult; layout: LayoutStatus | { status: 'failed'; error: Warning }; importWarnings: string[] }> {
-  const doc = await Doc.load(file);
-  const validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
-  const importWarnings = doc.importWarnings.map((w) => w.message.split('\n')[0]!);
-  let layout: LayoutStatus | { status: 'failed'; error: Warning };
-  if (validation.errors.length) {
-    layout = { status: 'skipped', warnings: [], expanded: [] };
-  } else {
-    try {
-      const r = await layoutModel(doc.model, {});
-      layout = { status: 'ok', warnings: r.warnings, expanded: r.expanded };
-    } catch (err) {
-      const e = toCliError(err) as CliError;
-      layout = { status: 'failed', error: { code: e.code, message: e.message, element: e.details?.element as string | undefined } };
-    }
+/** E_USAGE for layout options that contradict each other (checked before anything is read). */
+export function assertLayoutOptions(opts: LayoutDocOptions): void {
+  if (opts.tidy && (opts.expand !== undefined || opts.collapse !== undefined)) {
+    throw usageError('--tidy keeps the drawing; --expand / --collapse need a redraw', { hint: 'Run `bpmn layout <file> --expand ...` and `bpmn layout <file> --tidy` separately.' });
   }
-  return { validation, layout, importWarnings };
+}
+
+/**
+ * `bpmn layout` on an in-memory document: redraws the diagram (expanding /
+ * collapsing the given sub-processes, reported as changes), or with `tidy`
+ * keeps it and only removes overlaps. Unknown ids and ids that are no
+ * sub-process are errors (like `set <id> expanded=`), not silent no-ops.
+ */
+export async function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
+  assertLayoutOptions(opts);
+  if (opts.tidy) return mutateDoc(doc, [{ op: 'tidy' }], { ...opts, layout: 'auto' });
+  const expand = opts.expand ?? [];
+  const collapse = opts.collapse ?? [];
+  const subs = new Map([...expand, ...collapse].map((id) => [id, doc.require(id, SUB_PROCESS_TYPES, 'sub-process')]));
+  const both = expand.filter((id) => collapse.includes(id));
+  if (both.length) throw usageError(`${both.join(', ')} given to both --expand and --collapse`);
+  const result = await mutateDoc(doc, [], { ...opts, layout: 'full', expand, collapse });
+  for (const [id, expanded] of [...expand.map((id) => [id, true] as const), ...collapse.map((id) => [id, false] as const)]) {
+    const sub = subs.get(id)!;
+    const name = sub.get<string | undefined>('name');
+    result.changes.change({ id, kind: kindLabel(sub), ...(name ? { name } : {}), detail: `expanded=${expanded}` });
+  }
+  return result;
+}
+
+/** What `bpmn validate` finds in a document (checkDoc). */
+export interface CheckResult {
+  validation: ValidationResult;
+  layout: LayoutStatus | { status: 'failed'; error: Warning };
+  importWarnings: string[];
+}
+
+/**
+ * Validation (with the platform profile, auto-detected unless `opts.platform`)
+ * and a layout dry run. The dry run redraws the in-memory document: pass a
+ * document of its own (validateXml and checkFile parse one).
+ */
+export async function checkDoc(doc: Doc, opts: { platform?: PlatformChoice; debug?: DebugSink } = {}): Promise<CheckResult> {
+  return withLayoutDebug(opts.debug, async () => {
+    const validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
+    const importWarnings = doc.importWarnings.map((w) => w.message.split('\n')[0]!);
+    let layout: CheckResult['layout'];
+    if (validation.errors.length) {
+      layout = { status: 'skipped', warnings: [], expanded: [] };
+    } else {
+      try {
+        const r = await layoutModel(doc.model, {});
+        layout = { status: 'ok', warnings: r.warnings, expanded: r.expanded };
+      } catch (err) {
+        const e = toCliError(err) as CliError;
+        layout = { status: 'failed', error: { code: e.code, message: e.message, element: e.details?.element as string | undefined } };
+      }
+    }
+    return { validation, layout, importWarnings };
+  });
 }
 
 export function isProcessLike(el: El): boolean {

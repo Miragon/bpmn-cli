@@ -70,6 +70,7 @@
  *  model in `laidOut`: the same shapes and connections, every bound, label
  *  and waypoint within 2 px.
  */
+import { layoutDebug, layoutDebugOn } from '../debug.js';
 import type { Doc } from '../document.js';
 import { resolveExpanded } from '../layout.js';
 import { layoutClean } from '../layout/engine.js';
@@ -583,7 +584,7 @@ function closeStrips(ctx: Ctx, strips: Array<{ plane: Plane; box: Box; poolId?: 
     const beyond = [...st.plane.shapes.values()].some((s) => isLeaf(s) && s.bounds.x >= to && (!band || (cy(s.bounds) >= band.y && cy(s.bounds) <= band.y + band.height)) && !keep?.has(s.id));
     if (!beyond) continue;
     const r = closeStrip(st.plane, { axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
-    if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${r ? `closed, moved ${[...r.moved].join(',')}` : 'kept'}`);
+    if (layoutDebugOn()) layoutDebug(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${r ? `closed, moved ${[...r.moved].join(',')}` : 'kept'}`);
     if (r) r.moved.forEach((x) => ctx.place.moved.add(x));
   }
 }
@@ -940,7 +941,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
               : undefined;
       if (why) {
         ctx.reroute.add(e.id);
-        if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[route] ${e.id}: ${why}`);
+        if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: ${why}`);
       }
     }
   }
