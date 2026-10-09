@@ -1,9 +1,21 @@
 /**
  * The one write pipeline every mutating command uses:
  *
- *   load -> refuse lossy imports -> run ops -> validate -> layout -> atomic write
+ *   load -> refuse lossy imports -> run ops -> validate -> layout -> keep the
+ *   file's text -> atomic write
  *
- * Nothing is written when any stage fails.
+ * Nothing is written when any stage fails, nor when the result equals the
+ * file (`unchanged`).
+ *
+ * Output text (outputText): incoming / outgoing entries are written the way
+ * the file keeps them (mirror.ts; in memory they are complete), and for a
+ * document read from XML every element the ops did not change keeps its
+ * original text (preserve.ts: prolog, comments, CDATA, attribute order,
+ * namespace declarations, indentation); changed and new elements follow the
+ * file's style. Comments the result cannot keep, and a fall-back to
+ * bpmn-moddle's plain serialisation, are reported as notes. A result equal
+ * to the input file is not written back (`written: false, unchanged: true`;
+ * `--out` to another file still writes the copy).
  *
  * Guards (each overridden by MutationOptions.force / --force):
  *  - lossy import: a document bpmn-moddle dropped content from is refused
@@ -53,6 +65,7 @@
  * it; colours survive full redraws.
  */
 import { copyFile, stat } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
 import { Doc } from './document.js';
 import { CliError, ioError, modelError, type Warning } from './errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from './layout.js';
@@ -60,6 +73,7 @@ import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type Inc
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
 import { applyColors, colorsOf } from './diagram/write.js';
+import { serializeWithout, unkeptEntries, withoutEntries } from './mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
 import { runOps } from './ops/index.js';
@@ -69,6 +83,7 @@ import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
 import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './platform/profile.js';
+import { plainText, preserveText } from './preserve.js';
 import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
 import { buildView, type ModelView } from './view.js';
 
@@ -129,7 +144,10 @@ export interface LayoutStatus {
 export interface MutationResult {
   ok: true;
   file?: string;
+  /** false with dryRun, and when the result equals the file it would overwrite (`unchanged`) */
   written: boolean;
+  /** the result is the input text byte for byte (the ops changed nothing that is written) */
+  unchanged: boolean;
   changes: ChangeSet;
   layout: LayoutStatus;
   validation: ValidationResult;
@@ -328,13 +346,36 @@ interface Before {
   metrics?: LayoutMetrics;
 }
 
-async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: boolean): Promise<Before> {
+async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: boolean, baseline: string | undefined): Promise<Before> {
   const snapshot = takeSnapshot(doc.definitions);
   const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
   const before: Before = { snapshot };
   if (hasDiagram) before.metrics = layoutProblems(doc.definitions);
-  if (mode === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = await doc.toXml();
+  if (mode === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = baseline ?? (await doc.toXml());
   return before;
+}
+
+/**
+ * The text a mutation writes. The mirror entries the file does not keep are
+ * left out (mirror.ts). For a document read from a file, the parts the ops
+ * did not change keep their original text (preserve.ts; `baseline` is the
+ * serialisation of the document as read); comments that could not be kept
+ * and a fall-back to the plain serialisation are reported as notes.
+ */
+async function outputText(doc: Doc, xml: string, baseline: string | undefined, changes: ChangeSet): Promise<string> {
+  const source = doc.source;
+  if (!source || baseline === undefined) return xml;
+  const unkept = unkeptEntries(doc.definitions, source.mirror);
+  if (unkept.length) xml = await withoutEntries(xml, unkept);
+  // a forced write of a lossy import drops what bpmn-moddle could not read: the original text would keep it
+  const text = doc.lossyImportWarnings.length ? plainText(source.text, xml, 'the import was lossy') : await preserveText(source.text, baseline, xml);
+  if (text.mode === 'plain') {
+    const comments = text.droppedComments ? `; ${text.droppedComments} XML comment(s) dropped` : '';
+    changes.note(`the file's formatting was not kept (${text.reason}): written as bpmn-moddle serialises it${comments}`);
+  } else if (text.droppedComments) {
+    changes.note(`${text.droppedComments} XML comment(s) dropped: they were inside or next to elements the change removed or rewrote`);
+  }
+  return text.xml;
 }
 
 /** The ops the diagram phase runs after the layout: format ops and lane orders, with their batch index. */
@@ -483,9 +524,11 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
   }
 
   assertLossless(doc, opts);
+  // the document as read (entries a caller's validateDoc added in memory left out): unchanged parts keep their text
+  const asRead = doc.source ? await serializeWithout(doc.model, unkeptEntries(doc.definitions, doc.source.mirror)) : undefined;
   const requested = requestedMode(opts.layout);
   const formatOnly = ops.length > 0 && ops.every(isFormatOp);
-  const before = await captureBefore(doc, requested, formatOnly);
+  const before = await captureBefore(doc, requested, formatOnly, asRead);
   const baseline = errorBaseline(doc, opts.platform);
   takeDroppedContent(doc);
 
@@ -540,8 +583,13 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     layout.metrics = metricsDelta(before.metrics, formatted.after);
   }
 
+  xml = await outputText(doc, xml, asRead, changes);
+  const unchanged = doc.source !== undefined && xml === doc.source.text;
+
   let written = false;
-  if (!opts.dryRun && target) {
+  // a result equal to the file is not written back over it (no new mtime, no sync event); --out still gets its copy
+  const inPlace = !!target && !!doc.file && resolvePath(target) === resolvePath(doc.file);
+  if (!opts.dryRun && target && !(unchanged && inPlace)) {
     if (opts.backup && doc.file) {
       try {
         await copyFile(doc.file, `${doc.file}.bak`);
@@ -557,6 +605,7 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     ok: true,
     ...(target ? { file: target } : {}),
     written,
+    unchanged,
     changes,
     layout,
     validation,

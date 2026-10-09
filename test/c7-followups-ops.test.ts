@@ -64,12 +64,14 @@ async function rejected(p: Promise<unknown>): Promise<{ code?: string; message: 
   throw new Error('expected a rejection');
 }
 
-/** Adds the incoming / outgoing entries the XML snippets leave out. */
+/** Adds the incoming / outgoing entries the XML snippets leave out (Doc.fromXml completes them in memory already). */
 function withMirrors(doc: Doc): Doc {
   for (const f of doc.byId().values()) {
     if (!is(f, 'bpmn:SequenceFlow')) continue;
-    many(f.get<El>('sourceRef'), 'outgoing').push(f);
-    many(f.get<El>('targetRef'), 'incoming').push(f);
+    for (const [end, list] of [['sourceRef', 'outgoing'], ['targetRef', 'incoming']] as const) {
+      const entries = many(f.get<El>(end), list);
+      if (!entries.includes(f)) entries.push(f);
+    }
   }
   return doc;
 }

@@ -256,7 +256,8 @@ describe('structural errors', () => {
         <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="A" />
         <bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="End" />`),
     );
-    expect(doc.outgoing(doc.require('Start'))).toEqual([]);
+    // Doc.fromXml completes the lists in memory (a write keeps the file's own, see mirror.ts)
+    expect(doc.source?.mirror.listed.has(doc.require('Start'))).toBe(false);
     expect(codes(doc)).toEqual({ errors: [], warnings: [] });
     const id = (el: { get: <T>(k: string) => T }) => el.get<string>('id');
     expect(doc.outgoing(doc.require('Start')).map(id)).toEqual(['F1']);

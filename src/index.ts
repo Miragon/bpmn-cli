@@ -1,4 +1,4 @@
-export { Doc, TARGETS, type NewDocOptions } from './document.js';
+export { Doc, TARGETS, type DocSource, type NewDocOptions } from './document.js';
 export { CliError, type Warning } from './errors.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './kinds.js';
 export { layoutModel, layoutXml } from './layout.js';
@@ -25,6 +25,8 @@ export type {
   TidyOp,
 } from './ops/types.js';
 export { mutateFile, mutateDoc, checkFile, loadDoc, LAYOUT_MODES, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
+/* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
+export { preserveText, type PreservedText } from './preserve.js';
 export { ChangeSet } from './result.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';
 /* the platform profile (Camunda 7 rules; validate --platform) */

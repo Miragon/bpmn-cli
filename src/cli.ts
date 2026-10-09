@@ -47,7 +47,7 @@ function warningLine(w: Warning): string {
   return `warning ${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
 }
 
-function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean }): void {
+function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }): void {
   // the same finding can be reported by the operation and by the validator: keep the validator's (it has the richer hint);
   // an event-gateway finding is about one branch: the same code on another target of the gateway is another finding
   const keyOf = (w: Warning): string => `${w.code}|${w.element ?? ''}${w.code === 'W_EVENT_GATEWAY_TARGET' ? `|${w.related?.[0] ?? ''}` : ''}`;
@@ -63,6 +63,7 @@ function printMutation(result: MutationResult, opts: OutputOptions & { show?: bo
       ok: true,
       file: result.file,
       written: result.written,
+      unchanged: result.unchanged,
       ...result.changes.toJSON(),
       layout: result.layout,
       validation: result.validation,
@@ -79,8 +80,9 @@ function printMutation(result: MutationResult, opts: OutputOptions & { show?: bo
       lines.push(warningLine(w));
     }
     lines.push(...renderLayout(result.layout));
-    if (result.written) lines.push(`written: ${result.file}`);
-    else if (result.file) lines.push(`dry run: ${result.file} not written`);
+    if (result.written) lines.push(`written: ${result.file}${result.unchanged ? ' (unchanged copy of the input)' : ''}`);
+    else if (result.unchanged && !opts.dryRun) lines.push(`unchanged: ${result.file} (the result equals the file; nothing written)`);
+    else if (result.file) lines.push(`dry run: ${result.file} not written${result.unchanged ? ' (unchanged)' : ''}`);
     if (result.view) lines.push('', renderView(result.view).trimEnd());
     print(lines.join('\n'));
   }
