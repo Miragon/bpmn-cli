@@ -300,6 +300,8 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     const { ids } = await created(mixed, [{ op: 'add', kind: 'userTask', name: 'Review order', after: 'first' }]);
     expect(ids[0]).toBe('reviewOrder');
     expect(ids[1]).toMatch(HASHED('Flow'));
+    // the events are prefixed (Event_16m42dv): a new event keeps a prefix
+    expect((await created(mixed, [{ op: 'add', kind: 'boundaryEvent:timer', name: 'Timeout', on: 'first', timer: 'PT1H' }])).ids).toEqual(['Event_Timeout']);
   });
 
   it('flows named Flow_<scope>_<A>To<B>: the scope of the ends and the first word of each end', async () => {

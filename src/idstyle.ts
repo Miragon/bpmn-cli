@@ -12,8 +12,9 @@
  *     as a family prefix), else the bpmn-cli prefix (Activity, Event,
  *     Gateway, ...) in the file's prefix case (`event_`). "No prefix" is a
  *     prefix too: where the file's ids of a kind or family have none
- *     (`checkOrder`, `start`), or a kind without evidence of its own sits
- *     in a file whose flow node ids mostly have none, a named element gets
+ *     (`checkOrder`, `start`), or a kind without evidence of its own (and
+ *     of a family without prefixed ids) sits in a file whose flow node ids
+ *     mostly have none, a named element gets
  *     the bare name-derived body (`reviewOrder`; camel case, PascalCase in a
  *     pascal file) and an unnamed one the next prefix that rule chain gives;
  *   - the BODY of named elements (voted by the named flow nodes; by every
@@ -253,6 +254,8 @@ class Tally<K> {
 interface FamilyStats {
   kindish: Tally<string>;
   generic: Tally<string>;
+  /** ids of the family with a prefix, any */
+  prefixed: number;
 }
 
 interface Learned {
@@ -274,6 +277,8 @@ interface Learned {
   /** flow node ids without / with a prefix: a file whose flow nodes mostly have none gives a kind without own evidence none either */
   bareNodes: number;
   prefixedNodes: number;
+  /** the case of bare ids (voted by the bare ids that spell their names; prefixed ids vote `body`) */
+  bareBody: 'pascal' | 'camel';
 }
 
 function tallyOf<K>(map: Map<string, Tally<K>>, key: string): Tally<K> {
@@ -331,12 +336,14 @@ function learn(defs: El | undefined): Learned {
     flows: new Map(),
     scopes: new Map(),
     bareNodes: 0,
+    bareBody: 'camel',
     prefixedNodes: 0,
     strong: false,
   };
   let samples = 0;
   let prefixed = 0;
   const nodeBodies = new Tally<BodyClass>();
+  const bareBodies = new Tally<BodyClass>();
   const otherBodies = new Tally<BodyClass>();
   const unnamed = new Tally<BodyClass>();
   const flowVotes = new Map<string, { n: number; forms: Tally<FlowForm>; prefixes: Map<FlowForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
@@ -370,7 +377,7 @@ function learn(defs: El | undefined): Learned {
     samples++;
     const m = PREFIXED.exec(id);
     let fam = l.family.get(s.family);
-    if (!fam) l.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally() }));
+    if (!fam) l.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally(), prefixed: 0 }));
     if (!m) {
       // no prefix, and the id spells the name (`checkOrder` for "Check order"): a convention for its kind and
       // family, the whole id is the body. A short id that is no name (`GW`, `Start` for "Started") says nothing.
@@ -379,11 +386,12 @@ function learn(defs: El | undefined): Learned {
       if (s.trigger) tallyOf(l.byKeyTrigger, `${s.key}|${s.trigger}`).add('');
       tallyOf(l.classByKey, s.key).add('literal');
       fam.generic.add('');
-      (s.named ? (s.flowNode ? nodeBodies : otherBodies) : unnamed).add(bodyClass(id));
+      bareBodies.add(bodyClass(id));
       if (s.flowNode) l.bareNodes++;
       continue;
     }
     prefixed++;
+    fam.prefixed++;
     if (s.flowNode) l.prefixedNodes++;
     const prefix = m[1]!;
     const body = m[2]!;
@@ -404,6 +412,8 @@ function learn(defs: El | undefined): Learned {
 
   // body of named elements: the flow nodes' when they show one (pools, lanes, messages often keep tool ids);
   // a single lower-case word fits camel and snake alike
+  // bare ids: PascalCase when the file writes them so, else camelCase (single lower-case words read as camel)
+  l.bareBody = bareBodies.get('pascal') > bareBodies.get('camel') + bareBodies.get('lower') ? 'pascal' : 'camel';
   const bodies = nodeBodies.total >= MIN_EVIDENCE ? nodeBodies : otherBodies;
   if (bodies === otherBodies) for (const [k, v] of nodeBodies.counts) bodies.add(k, v);
   const camel = bodies.get('camel');
@@ -497,7 +507,8 @@ export class IdStyle {
       if (usable(generic) && fam.generic.get(generic) >= kindish) return generic;
       if (kindish >= MIN_EVIDENCE) return fam.kindish.get('triggerKind') > fam.kindish.get('kind') ? withTrigger(lowerFile) : this.caseLike(typeName, lowerFile);
     }
-    if (bare && l.bareNodes >= MIN_EVIDENCE && l.bareNodes > l.prefixedNodes) return '';
+    // a family the file has prefixed ids of (one is enough) keeps a prefix; else the file's flow nodes decide
+    if (bare && !fam?.prefixed && l.bareNodes >= MIN_EVIDENCE && l.bareNodes > l.prefixedNodes) return '';
     const kindish = l.classes.get('kind') + l.classes.get('triggerKind');
     if (kindish >= MIN_EVIDENCE && kindish > l.classes.get('literal')) return this.caseLike(typeName, lowerFile);
     return this.caseLike(req.prefix, lowerFile);
@@ -520,14 +531,13 @@ export class IdStyle {
   }
 
   /**
-   * A name-derived id without prefix: camelCase (a file whose bare ids are
-   * single lower-case words reads as camel too; snake_case would read as a
-   * prefix), PascalCase in a pascal file; '' when it is no valid id.
+   * A name-derived id without prefix in the case of the file's bare ids:
+   * camelCase (also for single lower-case words; snake_case would read as a
+   * prefix) or PascalCase; '' when the name gives no valid id.
    */
   private bareBody(name: string | undefined): string {
-    if (!this.nameBody(name)) return '';
-    const body = this.l.body === 'pascal' || this.l.body === 'pascalSnake' ? slugify(name) : camelSlug(name);
-    return isValidId(body) && !PREFIXED.test(body) ? body : '';
+    const body = this.l.bareBody === 'pascal' ? slugify(name) : camelSlug(name);
+    return body && isValidId(body) && !PREFIXED.test(body) ? body : '';
   }
 
   /** The name-derived id (before collision handling), or undefined: no usable name, a hashed or numbered style. */
@@ -551,7 +561,7 @@ export class IdStyle {
 
   /** The id of the join gateway of a split whose gateway is `gatewayId`, in a name-derived style (`<id>_join`, camel `<id>Join`; a bare id `<id>Join`). */
   joinId(gatewayId: string): string | undefined {
-    if (this.nameBody('join') && !gatewayId.includes('_')) return `${gatewayId}Join`;
+    if (!gatewayId.includes('_') && this.l.bareNodes) return `${gatewayId}Join`;
     switch (this.l.body) {
       case 'pascal':
       case 'snake':
