@@ -281,7 +281,9 @@ function gapsOf(doc: XDocument, el: XElement, kids: XElement[]): Gaps {
   for (let i = 0; i <= kids.length; i++) {
     const to = i < kids.length ? kids[i]!.start : el.closeStart;
     const gap = text.slice(from, to);
-    const br = gap.indexOf('\n');
+    const lf = gap.indexOf('\n');
+    // the line break starts at its \r (CRLF files)
+    const br = lf > 0 && gap[lf - 1] === '\r' ? lf - 1 : lf;
     if (br >= 0) inline = false;
     const before = br >= 0 ? gap.slice(0, br) : '';
     const after = br >= 0 ? gap.slice(br) : gap;

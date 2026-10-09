@@ -117,6 +117,15 @@ describe('text-preserving output (#30, #31, #44)', () => {
     expect(out).toMatch(/<bpmndi:BPMNShape id="End_di" bpmnElement="End">\n {16}<dc:Bounds [^\n]*\/>\n {16}<bpmndi:BPMNLabel><dc:Bounds [^\n]*\/><\/bpmndi:BPMNLabel>/);
   });
 
+  it('CRLF line breaks and tab indentation are kept, also around new elements', async () => {
+    const crlfTabs = STYLED.replace(/^((?: {4})+)/gm, (m) => '\t'.repeat(m.length / 4)).replace(/\n/g, '\r\n');
+    const out = (await dry(crlfTabs, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }])).xml;
+    expect(out).not.toMatch(/[^\r]\n/);
+    expect(out).toMatch(/\r\n\t\t<bpmn:task id="Activity_Audit" name="Audit">\r\n\t\t\t<bpmn:incoming>Flow_2<\/bpmn:incoming>/);
+    expect(out).toMatch(/\/>\r\n\t\t<bpmn:sequenceFlow id="Flow_Yes"/);
+    expect(out).toMatch(/\r\n\t\t\t<bpmndi:BPMNShape id="Activity_Audit_di" bpmnElement="Activity_Audit">\r\n\t\t\t\t<dc:Bounds /);
+  });
+
   it('a changed condition keeps its CDATA section', async () => {
     const r = await dry(STYLED, [{ op: 'set', id: 'Flow_Yes', values: { condition: '${amount < 200 && ok}' } }], { layout: false });
     expect(r.xml).toBe(STYLED.replace('${amount < 100 && ok}', '${amount < 200 && ok}'));
