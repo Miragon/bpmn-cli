@@ -20,8 +20,11 @@
  *    names (kind filter by canonical kind), returns ViewNode-like entries;
  *    also over vendor attribute values (camunda:topic, camunda:assignee, ...,
  *    of nested elements too) and the attributes / bodies of extension
- *    elements (`match` says what matched), and, for a non-empty text, over
- *    the ids of event definitions and loop characteristics.
+ *    elements (`match` says what matched), the decision link of a business
+ *    rule task (`calledDecision=<id>`), and, for a non-empty text, over the
+ *    ids of event definitions and loop characteristics.
+ *  The decision link of a business rule task is shown as the node fact
+ *  `calledDecision` in every spelling (ops/decision.ts).
  *  Vendor content: nodes, processes and flows carry `attrs` (vendor attribute
  *  values; those of nested elements under the `set` keys `definition.`,
  *  `loop.`, `condition.`), `extensions` (extension element types and vendor
@@ -34,6 +37,7 @@ import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } fro
 import { diExpansionState } from './layout.js';
 import { is, localType, walk, type El } from './model.js';
 import { laneOf } from './ops/containers.js';
+import { decisionLinkOf } from './ops/decision.js';
 import { describeTrigger } from './ops/events.js';
 import { listExtensions, type ExtensionInfo } from './ops/ext.js';
 import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from './ops/set.js';
@@ -288,6 +292,9 @@ function nodeProps(el: El): Record<string, unknown> | undefined {
   }
   const called = peek<string>(el, 'calledElement');
   if (called) props['calledElement'] = called;
+  // the decision link of a business rule task, whatever the spelling (design: calledDecision, C7: camunda:decisionRef, C8: zeebe:calledDecision)
+  const decision = decisionLinkOf(el);
+  if (decision) props['calledDecision'] = decision.value;
   if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
   const messageRef = peek<El>(el, 'messageRef');
   if (messageRef && (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'))) props['message'] = refLabel(messageRef);
@@ -703,6 +710,8 @@ export interface FindHit {
 /** The first vendor value of `el` containing `q`: an attribute (also of a nested element) or an extension element attribute / body. */
 function vendorMatch(el: El, q: string): string | undefined {
   for (const [k, v] of Object.entries(vendorValues(el) ?? {})) if (v.toLowerCase().includes(q)) return `${k}=${v}`;
+  const decision = decisionLinkOf(el);
+  if (decision && decision.value.toLowerCase().includes(q)) return `calledDecision=${decision.value}`;
   const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
     for (const e of exts ?? []) {
       for (const [k, v] of Object.entries(e.attrs ?? {})) if (String(v).toLowerCase().includes(q)) return `${path}${e.type} ${k}=${v}`;

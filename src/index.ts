@@ -31,6 +31,7 @@ export { validateDoc, type ValidateOptions, type ValidationResult } from './vali
 export { runProfile, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profile.js';
 export { detectPlatform } from './platform/detect.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
+export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { buildView, elementDetail, findElements } from './view.js';
 export { parseOps, OPS_SCHEMA } from './batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */

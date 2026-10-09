@@ -70,7 +70,9 @@
  *                                  incoming flow) without a catch event of its name in its own (sub-)process;
  *                                  schema (every definition in the file): link definition without name
  *   W_C7_DEPLOY_SCHEMA             an attribute without prefix that the BPMN schema does not define (anywhere in
- *                                  the file: the engines validate it against the schema); `set <id> <attr>=` removes it
+ *                                  the file: the engines validate it against the schema); `set <id> <attr>=` removes it;
+ *                                  a business rule task's calledDecision (design-iq's decision link) is converted to
+ *                                  camunda:decisionRef by `set <id> calledDecision=<decision>`
  *   W_C7_DEPLOY_BOUNDARY_HOST      boundary event attached to a compensation handler (isForCompensation="true");
  *                                  validate.ts withProfile drops it next to the structural E_INVALID_HOST
  *   W_C7_DEPLOY_SCRIPT             script task without script and without camunda:resource
@@ -116,6 +118,7 @@ import { kindLabel } from '../kinds.js';
 import { createModdle, is, isBpmnElement, isDiElement, walk, type El } from '../model.js';
 import { camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, ZEEBE_URI, CAMUNDA_URI, OPERATON_URI, type CamundaElementType } from './descriptor.js';
 import { namespaceMap, namespaceUsage, uriOfElement, uriOfName } from './detect.js';
+import { decisionLinkOf } from '../ops/decision.js';
 import { makeFinding, type ProfileFinding, type Severity } from './finding.js';
 
 interface Ctx {
@@ -1616,7 +1619,13 @@ function checkSchemaAttributes(ctx: Ctx): void {
       const fits = !!vendor && vendor.owners.some((o) => is(el, o)) && !!id && el === owner;
       const where = el === owner ? describe(el, undefined) : `${el.$type}${id ? ` in ${id}` : ''}`;
       const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
-      const hint = fits
+      // design-iq's decision link (calledDecision, or calledElement read as one): `set calledDecision=` writes the engines' spelling
+      // (not next to another implementation: class, delegateExpression, expression or type=external stay, the attribute just goes)
+      const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && isC7Uri(uriOfName(a, ctx.ns)));
+      const link = el === owner && !!id && !implemented && is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? decisionLinkOf(el, ctx.doc) : undefined;
+      const hint = link
+        ? `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${ctx.p}:decisionRef; the unprefixed ${k} is removed).`
+        : fits
         ? `Use the vendor attribute instead: \`bpmn set <file> ${id} ${sh(`${k}=`)} ${sh(`${ctx.p}:${k}=${String(el.$attrs[k] ?? '')}`)}\`.`
         : remove
           ? `Remove it: ${remove} (vendor attributes need their namespace prefix, e.g. ${ctx.p}:<name>).`

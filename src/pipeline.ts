@@ -62,6 +62,7 @@ import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops
 import { applyColors, colorsOf } from './diagram/write.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
+import { reportedImportWarnings } from './ops/decision.js';
 import { runOps } from './ops/index.js';
 import { ordersLanes } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
@@ -560,7 +561,7 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     changes,
     layout,
     validation,
-    importWarnings: doc.importWarnings.map((w) => w.message.split('\n')[0]!),
+    importWarnings: reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!),
     xml,
   };
   if (opts.show) {
@@ -580,7 +581,7 @@ export async function mutateFile(file: string, ops: Op[], opts: MutationOptions 
 export async function checkFile(file: string, opts: { platform?: PlatformChoice } = {}): Promise<{ validation: ValidationResult; layout: LayoutStatus | { status: 'failed'; error: Warning }; importWarnings: string[] }> {
   const doc = await Doc.load(file);
   const validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
-  const importWarnings = doc.importWarnings.map((w) => w.message.split('\n')[0]!);
+  const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
   let layout: LayoutStatus | { status: 'failed'; error: Warning };
   if (validation.errors.length) {
     layout = { status: 'skipped', warnings: [], expanded: [] };
