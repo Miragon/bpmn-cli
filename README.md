@@ -112,7 +112,8 @@ untyped and the serialisation is unchanged. Nothing else.
    `Activity_CheckInvoice`, `Event_OrderReceived`, `Gateway_InvoiceOk`,
    `Participant_Customer`, `Lane_Sales`, `DataObjectReference_Order`; flows
    and unnamed elements get a short hash of their ends or position
-   (`Flow_1cat8ax`), so two edits on two branches of a file never collide.
+   (`Flow_1cat8ax`), so independent edits on two branches of a file do not
+   produce the same id.
    Name collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every
    result lists the ids it created.
 4. **Nothing is half done.** A command (or a whole `apply` batch) either
