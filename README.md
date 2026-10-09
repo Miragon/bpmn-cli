@@ -89,15 +89,15 @@ on a private corpus without copying it into the repository, are described in
 
 Dependencies: `bpmn-moddle` (the semantic model; `moddle` for its types),
 `bpmn-auto-layout` (pinned to `2.0.0-alpha.2`, loaded only for
-`--engine auto`), `commander` (the CLI only) and `camunda-bpmn-moddle`
-(pinned to `8.0.1`). The last one is read only as data: its Camunda 7
-descriptor says which `camunda:` attributes and extension elements belong
-where (placement, `validate`). It is inlined into
+`--engine auto`) and `commander` (the CLI only). Nothing else.
+`camunda-bpmn-moddle` (pinned to `8.0.1`) is a development dependency: its
+Camunda 7 descriptor says which `camunda:` attributes and extension elements
+belong where (placement, `validate`), and it is inlined into
 `src/platform/camunda-descriptor.ts` by `node tools/gen-camunda-descriptor.mjs`
 (run it after updating the package; a test fails while the copy differs), so
-the core reads it without file access. It is never registered with
-bpmn-moddle, so camunda content stays untyped and the serialisation is
-unchanged. Nothing else.
+the published package reads the copy, without the package and without file
+access. It is never registered with bpmn-moddle, so camunda content stays
+untyped and the serialisation is unchanged.
 
 ## The contract
 

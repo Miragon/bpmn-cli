@@ -274,8 +274,9 @@ fixed now. The table with each finding, its fix and the engine evidence is in
 [docs/audit-2026-10.md](docs/audit-2026-10.md#camunda-7-audit-2026-10-09).
 
 - **Descriptor as data** (`src/platform/descriptor.ts`): reads
-  `camunda-bpmn-moddle`'s `camunda.json` (new runtime dependency, pinned
-  8.0.1) to know which camunda attributes and extension elements belong where.
+  `camunda-bpmn-moddle`'s `camunda.json` (pinned 8.0.1; since step 2
+  inlined, the package a development dependency) to know which camunda
+  attributes and extension elements belong where.
   It is never registered with bpmn-moddle: camunda content stays generic and
   the serialisation is byte-stable. Two `allowedIn` lists are corrected to what
   the engines accept.
