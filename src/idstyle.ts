@@ -8,9 +8,11 @@
  *   - the PREFIX per kind: the prefix the file uses for that kind (and
  *     trigger), else what its family uses (`Task_` for every task when the
  *     tasks share it), else the type name when the file names prefixes after
- *     the type (`serviceTask_`, `EndEvent_`), else the bpmn-cli prefix
- *     (Activity, Event, Gateway, ...) in the file's prefix case (`event_`);
- *   - the BODY of named elements: `pascal` (Activity_CheckInvoice, the
+ *     the type (`serviceTask_`, `EndEvent_`; `Task_` on a plain task counts
+ *     as a family prefix), else the bpmn-cli prefix (Activity, Event,
+ *     Gateway, ...) in the file's prefix case (`event_`);
+ *   - the BODY of named elements (voted by the named flow nodes; by every
+ *     named element when they show none): `pascal` (Activity_CheckInvoice, the
  *     default), `camel` (serviceTask_checkInvoice), `snake`
  *     (Task_check_invoice), `pascalSnake` (Task_Check_Invoice), `hash`
  *     (Camunda Modeler ids, Activity_0k3x9qa) or `numbered` (Task_12);
@@ -139,15 +141,23 @@ function bodyClass(body: string): BodyClass {
 type PrefixClass = 'kind' | 'triggerKind' | 'literal';
 
 /**
+ * Prefixes that name a type but are also the usual generic prefix of their
+ * family: `Task_` on a plain task may be the old modeler's type name or a
+ * `Task_` for every task. Such a prefix counts as the family's prefix, and
+ * on its own type it says nothing about type-named prefixes.
+ */
+const GENERIC = new Set(['task']);
+
+/**
  * `kind`: the prefix names the element's type (serviceTask_, EndEvent_),
  * `triggerKind`: its trigger and type (messageBoundaryEvent_), else a
  * `literal` (Task_, End_, Activity_). The bpmn-cli prefix of the family is a
  * literal even where it is the type name (Lane_, Message_, LaneSet_): it says
- * nothing about type-named prefixes.
+ * nothing about type-named prefixes; so is `Task_` (GENERIC).
  */
 function prefixClass(prefix: string, typeNames: string[], trigger: string | undefined, family: string): PrefixClass {
   const p = prefix.toLowerCase();
-  if (p === family.toLowerCase()) return 'literal';
+  if (p === family.toLowerCase() || GENERIC.has(p)) return 'literal';
   if (typeNames.some((n) => n.toLowerCase() === p)) return 'kind';
   if (trigger && typeNames.some((n) => `${trigger}${n}`.toLowerCase() === p)) return 'triggerKind';
   return 'literal';
@@ -156,7 +166,7 @@ function prefixClass(prefix: string, typeNames: string[], trigger: string | unde
 /** A literal prefix that abbreviates its own kind (End, Start, Call, Sub, Boundary, Timer) says nothing about other kinds. */
 function isSpecific(prefix: string, typeNames: string[], trigger: string | undefined, family: string): boolean {
   const p = prefix.toLowerCase();
-  if (p === family.toLowerCase()) return false;
+  if (p === family.toLowerCase() || GENERIC.has(p)) return false;
   return typeNames.some((n) => n.toLowerCase().startsWith(p)) || (!!trigger && trigger.toLowerCase().startsWith(p));
 }
 
@@ -249,7 +259,11 @@ interface Sample {
   trigger?: string;
   id: string;
   named: boolean;
+  /** a flow node (task, event, gateway, sub-process, call activity) */
+  flowNode: boolean;
 }
+
+const FLOW_NODE_FAMILIES = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
 
 /** BPMN elements whose ids say nothing about the conventions (tool defaults, ids nobody chooses). */
 const IGNORED = ['bpmn:Definitions', 'bpmn:Process', 'bpmn:EventDefinition', 'bpmn:Expression', 'bpmn:ExtensionElements', 'bpmn:Documentation', 'bpmn:LoopCharacteristics', 'bpmn:InputOutputSpecification', 'bpmn:InputSet', 'bpmn:OutputSet'];
@@ -261,10 +275,10 @@ function sampleOf(el: El, id: string): Sample | undefined {
   const def = kindOf(el);
   if (def) {
     const trigger = triggerOf(el);
-    return { key: def.kind, family: def.prefix, typeNames: kindTypeNames(def), ...(trigger && trigger !== 'none' ? { trigger } : {}), id, named };
+    return { key: def.kind, family: def.prefix, typeNames: kindTypeNames(def), ...(trigger && trigger !== 'none' ? { trigger } : {}), id, named, flowNode: FLOW_NODE_FAMILIES.has(def.family) };
   }
   const local = localName(el.$type);
-  return { key: el.$type, family: local, typeNames: [lcfirst(local)], id, named };
+  return { key: el.$type, family: local, typeNames: [lcfirst(local)], id, named, flowNode: false };
 }
 
 function learn(defs: El | undefined): Learned {
@@ -283,7 +297,8 @@ function learn(defs: El | undefined): Learned {
   };
   let samples = 0;
   let prefixed = 0;
-  const bodies = new Tally<BodyClass>();
+  const nodeBodies = new Tally<BodyClass>();
+  const otherBodies = new Tally<BodyClass>();
   const unnamed = new Tally<BodyClass>();
   const flowVotes = new Map<string, { n: number; forms: Tally<FlowForm>; prefixes: Map<FlowForm, Tally<string>>; any: Tally<string> }>();
 
@@ -321,19 +336,23 @@ function learn(defs: El | undefined): Learned {
     tallyOf(l.byKey, s.key).add(prefix);
     if (s.trigger) tallyOf(l.byKeyTrigger, `${s.key}|${s.trigger}`).add(prefix);
     tallyOf(l.classByKey, s.key).add(cls);
-    l.classes.add(cls);
+    // `Task_` on a plain task: neither for nor against type-named prefixes
+    if (!(GENERIC.has(prefix.toLowerCase()) && s.typeNames.some((n) => n.toLowerCase() === prefix.toLowerCase()))) l.classes.add(cls);
     if (/^[a-z]/.test(prefix)) l.lowerFirst++;
     else l.upperFirst++;
     let fam = l.family.get(s.family);
     if (!fam) l.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally() }));
     if (cls !== 'literal') fam.kindish.add(cls === 'triggerKind' ? 'triggerKind' : 'kind');
     else if (!isSpecific(prefix, s.typeNames, s.trigger, s.family)) fam.generic.add(prefix);
-    (s.named ? bodies : unnamed).add(bodyClass(body));
+    (s.named ? (s.flowNode ? nodeBodies : otherBodies) : unnamed).add(bodyClass(body));
   }
 
   l.strong = prefixed >= 3 && prefixed * 2 >= samples;
 
-  // body of named elements: a single lower-case word fits camel and snake alike
+  // body of named elements: the flow nodes' when they show one (pools, lanes, messages often keep tool ids);
+  // a single lower-case word fits camel and snake alike
+  const bodies = nodeBodies.total >= MIN_EVIDENCE ? nodeBodies : otherBodies;
+  if (bodies === otherBodies) for (const [k, v] of nodeBodies.counts) bodies.add(k, v);
   const camel = bodies.get('camel');
   const snake = bodies.get('snake');
   const lower = bodies.get('lower');

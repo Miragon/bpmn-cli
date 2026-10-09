@@ -170,6 +170,43 @@ describe('id style inference (edits follow the file)', () => {
     expect(ids).toEqual(['Task_Notify', 'End_Cancelled', 'Event_Late']);
   });
 
+  it('Task_ on a plain task is the family prefix, not evidence for type-named prefixes', async () => {
+    // type-named file with a plain Task_ task: a new user task is userTask_
+    const typed = chain(
+      [
+        ['startEvent', 'startEvent_go', 'Go'],
+        ['serviceTask', 'serviceTask_load', 'Load'],
+        ['task', 'Task_check', 'Check'],
+        ['serviceTask', 'serviceTask_store', 'Store'],
+        ['endEvent', 'endEvent_done', 'Done'],
+      ],
+      ['f1', 'f2', 'f3', 'f4'],
+    );
+    expect((await created(typed, [{ op: 'add', kind: 'userTask', name: 'Approve', in: 'Process_1' }])).ids).toEqual(['userTask_approve']);
+    // Task_ for every task, custom event prefixes: a new user task is Task_
+    const plain = chain(
+      [
+        ['startEvent', 'Start_go', 'Go'],
+        ['task', 'Task_load', 'Load'],
+        ['task', 'Task_check', 'Check'],
+        ['endEvent', 'End_done', 'Done'],
+      ],
+      ['f1', 'f2', 'f3'],
+    );
+    expect((await created(plain, [{ op: 'add', kind: 'userTask', name: 'Approve', in: 'Process_1' }])).ids).toEqual(['Task_approve']);
+  });
+
+  it('the body style comes from the flow nodes when they show one (pools and lanes often keep other ids)', async () => {
+    const xml = definitionsXml(
+      [
+        '<bpmn:laneSet id="LaneSet_0aa1111"><bpmn:lane id="Lane_Sales" name="Sales" /><bpmn:lane id="Lane_BackOffice" name="Back office" /><bpmn:lane id="Lane_Shipping" name="Shipping" /></bpmn:laneSet>',
+        '<bpmn:task id="Task_7" name="Load" />',
+        '<bpmn:task id="Task_8" name="Store" />',
+      ].join('\n'),
+    );
+    expect((await created(xml, [{ op: 'add', kind: 'task', name: 'Check', in: 'Process_1' }])).ids).toEqual(['Task_9']);
+  });
+
   it('warns W_ID_SUFFIXED and names the --if-absent id in the file style', async () => {
     const doc = await Doc.fromXml(CAMEL);
     const cs = runOps(doc, [{ op: 'add', kind: 'serviceTask', name: 'Check stock', in: 'Process_1' }]);
