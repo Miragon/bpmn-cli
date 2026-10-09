@@ -104,6 +104,17 @@ describe('a full redraw keeps the DI ids', () => {
     expect(after.diagrams).toContain('Sub_diagram');
   });
 
+  it('a new plane never takes the ids of another old diagram', async () => {
+    const ops: Op[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C' }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
+    const engine = (await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true })).xml;
+    // a second view of the process, as some tools write it
+    const second = /<bpmndi:BPMNDiagram id="BPMNDiagram_P">[\s\S]*?<\/bpmndi:BPMNDiagram>/.exec(engine)![0].replace('BPMNDiagram_P', 'BPMNDiagram_2').replace('BPMNPlane_P', 'BPMNPlane_2').replace(/ id="BPMN(Shape|Edge)_/g, ' id="View2_');
+    const xml = engine.replace('</bpmndi:BPMNDiagram>', `</bpmndi:BPMNDiagram>${second}`);
+    const after = diOf(await write(xml, [], { layout: 'full', collapse: ['Sub'] }));
+    expect(after.planes).toEqual(['BPMNPlane_P', 'BPMNPlane_Sub']);
+    expect(after.diagrams).toEqual(['BPMNDiagram_P', 'BPMNDiagram_Sub']);
+  });
+
   it('a file without DI gets the engine ids', async () => {
     const after = diOf((await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true })).xml);
     expect(after.shapes.get('A')).toBe('BPMNShape_A');

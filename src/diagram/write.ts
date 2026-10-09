@@ -195,6 +195,7 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
     } else pending.push(() => el.set('id', fallback()));
   };
   const old = [...memo.diagrams];
+  const main = old[0];
   const derived = (o: { root?: string; plane?: string; diagram?: string }): boolean => !!o.root && (o.plane === `BPMNPlane_${o.root}` || o.diagram === `BPMNDiagram_${o.root}`);
   const unmatched: El[] = [];
   for (const diagram of diagrams) {
@@ -212,8 +213,9 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
   for (const diagram of unmatched) {
     const plane = raw<El>(diagram, 'plane');
     const root = idOf(raw(plane, 'bpmnElement'));
-    const i = old.findIndex((o) => !derived(o));
-    const o = i === -1 ? undefined : old.splice(i, 1)[0];
+    // only the main diagram takes over the ids of the old main diagram (its root changed, e.g. to a new collaboration)
+    const o = diagram === diagrams[0] && main && old.includes(main) && !derived(main) ? main : undefined;
+    if (o) old.splice(old.indexOf(o), 1);
     if (plane) claim(plane, o?.plane, () => claimUnique(taken, idOf(plane) ?? `BPMNPlane_${root}`));
     claim(diagram, o?.diagram, () => claimUnique(taken, idOf(diagram) ?? `BPMNDiagram_${root}`));
   }
