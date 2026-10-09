@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups)
+# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and the roundtrip step)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -9,7 +9,8 @@ A CLI that lets an AI agent edit BPMN 2.0 models semantically. The agent names
 elements by id and changes kinds, names, flows, triggers, lanes, pools,
 properties and vendor extensions; it never sees or writes diagram interchange.
 Every mutating command runs the same pipeline: load, apply operations,
-validate, lay out, write atomically. A hand-made diagram is kept (new elements
+validate, lay out, write atomically; the write keeps the text of everything
+the change did not touch, and a result equal to the file is not written. A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
@@ -19,7 +20,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 919 tests, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1145 tests, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -29,6 +30,72 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## What the roundtrip step changed (2026-10-09, after the steps below)
+
+Goal: bpmn-cli as the editing engine of design-iq (PR #218 of
+Miragon/design-iq), which stores BPMN in git and syncs a file live by
+replacing one text region per save. Before, a no-op write was
+byte-identical in 15 % of 265 real files and a rename rewrote a median 16 %
+of the file in that region (namespace declarations reordered, vendor
+attributes moved behind typed ones, derived incoming / outgoing lists
+added, CDATA turned into entities, comments dropped, no-op writes). Fixed:
+audit bugs #30, #31, #44, #45, #46; table and numbers in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#roundtrip-step-2026-10-09).
+
+- **Text-preserving output** (`src/preserve.ts`, `src/xmltext.ts`, called
+  from `pipeline.ts outputText`): three texts are compared, the file as read,
+  bpmn-moddle's serialisation of the model as read (`asRead`, taken at the
+  start of `mutateDoc`) and of the model after the ops. Elements are paired
+  top-down (id among siblings, else name and position; between the two
+  serialisations also equal text). An element whose serialisation did not
+  change keeps its original text; a changed one keeps its start tag or its
+  attribute order, its children follow bpmn-moddle's order (the original
+  order when the change did not reorder them), each with the whitespace and
+  comments before it; new ones get the file's indentation unit, line break
+  and `/>` style; CDATA stays CDATA. Safety: the result must read back with
+  bpmn-moddle as exactly the changed model (`readsAs`), else the original
+  order is dropped, then the plain serialisation is written with a note. A
+  DOCTYPE, or a forced lossy import, always gets the plain serialisation.
+- **No-op writes**: `MutationResult.unchanged` (the result is the input text
+  byte for byte); then nothing is written over the file (`written: false`,
+  text `unchanged: <file> ...`, JSON `"unchanged": true`); `--out` to another
+  file still writes.
+- **Comments**: a comment next to (before, or after on the same line) or
+  inside a removed element is dropped and reported as a note (`n XML
+  comment(s) dropped: ...`); all others stay.
+- **Derived lists** (`src/mirror.ts`): `Doc.fromXml` records the incoming /
+  outgoing lists as read (`doc.source.mirror`) and completes them in memory
+  (`completeMirrorLists`; `repairFlowLinks` delegates to it); `unkeptEntries`
+  says which in-memory entries a write leaves out: all of a node that had
+  none (the file's style), and of nodes that had some the entries of flows
+  whose ends did not change. A file without any sequence flow (a new one)
+  gets the lists. Two C7 test helpers that added the lists by hand are now
+  idempotent.
+- **API**: `MutationResult.unchanged`, `Doc.source` (`DocSource`),
+  `preserveText` exported for hosts that serialise themselves.
+- **Tools / docs**: `tools/roundtrip.mjs` (`npm run roundtrip`, any corpus,
+  `--baseline` another build), README "What a write changes", guide
+  CONTRACT and result lines, docs/testing.md "Roundtrip fidelity".
+
+Tests: `test/roundtrip.test.ts` (fixtures `test/fixtures/roundtrip/`, all
+synthetic: exact expected texts for no-op, rename, insert, condition,
+retype, removal with a comment, a new namespace, lists; the safety net; the
+reader; and every fixture and scenario: no-op unchanged, rename one line),
+`test/cli.test.ts` (text and JSON of an unchanged write). Evidence outside
+the repository (private corpus, aggregate): no-op byte-identical 262 / 265
+in layout auto (the 3 others: the layout completes missing DI) and 265 / 265
+with `--no-layout` (PR #218: 169 / 265); rename 2 changed lines, region
+median 0.0 % (before 16.3 %); insert region median 77 % (before 97 %,
+PR #218 86 %); in 4,475 runs of twelve edit types the results read exactly
+like the previous build's apart from the lists, with no fall-back and no
+dropped comment; +15–20 ms per write on 90 KB files.
+
+Still open for embedding: the DI ids of a full redraw (#47, the engine names
+them `BPMNShape_<id>`; a redraw rewrites the DI section anyway), the auto
+layout completing missing DI on any write (audit P3), and a host that wants
+fewer conflicts on inserts needs several regions per save (an insert changes
+the process and the DI section, so one region spans both).
 
 ## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
 
@@ -305,9 +372,9 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
 3. **An MCP server.** Thin wrapper over show/find/add/connect/apply/validate
    plus `show --layout`, `metrics` and the format ops. Removes the shell
    quoting trap (`${...}` in conditions).
-4. **Roundtrip for embedding** (audit P1): text-preserving output and true
-   no-op writes (#30, #31, #44–#47), a browser-safe core (#33), platform
-   awareness (#27, #28), collision-resistant ids (#32).
+4. **Embedding** (audit P1): a browser-safe core (#33), platform awareness
+   (#27, #28), collision-resistant ids (#32), DI ids kept by a full redraw
+   (#47). Text-preserving output and no-op writes are done (roundtrip step).
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the

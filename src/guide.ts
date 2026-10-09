@@ -305,7 +305,7 @@ export const COMMANDS: CommandDoc[] = [
 
 export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
   { option: '--json', description: 'machine-readable result on stdout (errors as JSON on stderr)' },
-  { option: '-o, --out <file>', description: 'write to another file instead of in place' },
+  { option: '-o, --out <file>', description: 'write to another file instead of in place (also when the result equals the input)' },
   { option: '--dry-run', description: 'report what would change, write nothing' },
   { option: '--layout <mode>', description: `${LAYOUT_MODES.join(' | ')}: auto (default) keeps a hand-made or formatted drawing and places changes locally, and redraws a new file or a drawing the engine made and nobody changed; incremental always keeps; full always redraws (colours survive)` },
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
@@ -527,6 +527,9 @@ export function guideText(): string {
       '  - One diagram root: the collaboration when pools exist, else the single process. Several root processes',
       '    need pools (participants). Complex gateways are not supported (a file with one stays editable;',
       '    retype it to a supported gateway). Errors a file already has never block a write (W_PREEXISTING_ERROR).',
+      '  - A write rewrites only the elements it changed: comments, CDATA, attribute and namespace order, indentation',
+      '    and incoming/outgoing lists (written only where the file has them) stay as the file had them. A result equal',
+      '    to the file is not written ("unchanged: <file>"); a comment next to a removed element is reported in a note.',
     ].join('\n'),
   );
   out.push(heading('WORKFLOW'));
@@ -623,8 +626,9 @@ export function guideText(): string {
   out.push('\n  Result (text): one line per created/changed/removed element, then notes, warnings, then');
   out.push('  "layout: ok - <full|incremental> (<reason>)" or "layout: skipped", the ids the layout placed / moved / rerouted /');
   out.push('  pruned, one "format <op> #<index>: moved ...; rerouted ...; colored ..." line per format op, "layout quality:');
-  out.push('  score <before> -> <after>; added: <kind> [ids]; resolved: ...", then "written: <file>" ("dry run: <file> not written").');
-  out.push('  With --json: {ok, file, written, created, changed, removed, warnings, notes, layout: {status, mode, reason,');
+  out.push('  score <before> -> <after>; added: <kind> [ids]; resolved: ...", then "written: <file>" ("dry run: <file> not written";');
+  out.push('  "unchanged: <file> (the result equals the file; nothing written)" when the change left the file as it was).');
+  out.push('  With --json: {ok, file, written, unchanged, created, changed, removed, warnings, notes, layout: {status, mode, reason,');
   out.push('  warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op, index, moved, rerouted, colored?,');
   out.push('  labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}}, validation: {errors, warnings},');
   out.push('  importWarnings, view?}.');
