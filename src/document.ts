@@ -11,7 +11,8 @@ import { readFile } from 'node:fs/promises';
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
-import { IdRegistry, isValidId } from './ids.js';
+import { IdRegistry, isValidId, transliterate } from './ids.js';
+import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
 import {
@@ -65,6 +66,17 @@ export function assertTarget(target: unknown): asserts target is NewDocOptions['
   });
 }
 
+/** An id or name folded for fuzzy matching: lower-case ASCII with ae / oe / ue / ss read as a / o / u / s (ä -> a). */
+function foldUmlauts(text: string): string {
+  return transliterate(text)
+    .toLowerCase()
+    .replace(/ae/g, 'a')
+    .replace(/oe/g, 'o')
+    .replace(/ue/g, 'u')
+    .replace(/ss/g, 's')
+    .replace(/[^a-z0-9]/g, '');
+}
+
 /** True for elements somewhere below a bpmn:extensionElements container. */
 function insideExtension(el: El): boolean {
   for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
@@ -73,6 +85,7 @@ function insideExtension(el: El): boolean {
 
 export class Doc {
   private index: Map<string, El> | null = null;
+  private style: IdStyle | undefined;
 
   private constructor(
     public readonly model: Model,
@@ -111,7 +124,7 @@ export class Doc {
     assertTarget(opts.target);
     const moddle = createModdle();
     const ids = new IdRegistry();
-    const processId = opts.processId ?? (opts.processName ? ids.next('Process', opts.processName) : 'Process_1');
+    const processId = opts.processId ?? (opts.processName ? IdStyle.DEFAULT.next(typeRequest('bpmn:Process', { name: opts.processName }), ids).id : 'Process_1');
     if (!isValidId(processId)) throw modelError('E_INVALID_ID', `"${processId}" is not a valid id (XML NCName)`);
     const definitions = createDefinitions(moddle, {
       processId,
@@ -264,17 +277,19 @@ export class Doc {
     return out;
   }
 
-  /** Case-insensitive fuzzy id/name candidates. */
+  /** Case-insensitive fuzzy id/name candidates; umlaut spellings match each other (Pruefung, Prufung, Prüfung). */
   suggest(query: string, max = 5): string[] {
     const q = query.toLowerCase();
+    const fq = foldUmlauts(query);
     const hits: Array<{ id: string; score: number }> = [];
     for (const [id, el] of this.byId()) {
       const name = String(el.get<string | undefined>('name') ?? '').toLowerCase();
       const lid = id.toLowerCase();
+      const fid = foldUmlauts(id);
       let score = Infinity;
       if (lid === q) score = 0;
-      else if (lid.includes(q) || q.includes(lid)) score = 1;
-      else if (name && (name === q || name.includes(q))) score = 2;
+      else if (lid.includes(q) || q.includes(lid) || (fq && (fid.includes(fq) || fq.includes(fid)))) score = 1;
+      else if (name && (name === q || name.includes(q) || (!!fq && foldUmlauts(name).includes(fq)))) score = 2;
       else if (lid.replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''))) score = 3;
       if (score < Infinity) hits.push({ id, score });
     }
@@ -288,9 +303,25 @@ export class Doc {
       .map((h) => h.id);
   }
 
-  /** Next id for a prefix / name; claims it. */
+  /** The id conventions of this document, learned from its ids on first use (src/idstyle.ts). */
+  get idStyle(): IdStyle {
+    return (this.style ??= IdStyle.infer(this.definitions));
+  }
+
+  /**
+   * A new id in the document's style (src/idstyle.ts) for a kindRequest /
+   * typeRequest / connectionRequest; claims it. `derived` when the id comes
+   * from the name (W_ID_SUFFIXED compares it with style.derivedBase).
+   */
+  allocateId(req: IdRequest): { id: string; derived: boolean } {
+    const out = this.idStyle.next(req, this.ids);
+    this.ids.claim(out.id);
+    return out;
+  }
+
+  /** Next id for a prefix (the family of `bpmn kinds`, or a type name) and name in the document's style; claims it. */
   newId(prefix: string, name?: string): string {
-    return this.ids.next(prefix, name);
+    return this.allocateId({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
   }
 
   /** Validates and claims an explicit id. */

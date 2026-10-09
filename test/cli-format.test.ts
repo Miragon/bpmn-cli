@@ -177,7 +177,7 @@ describe('read side', () => {
     bpmn('color', file, 'A', '--color', 'blue');
     const r = bpmn('show', file, '--layout');
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/^diagram BPMNPlane_Collaboration_1 \(Collaboration_1\)\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: S, A, G, B, E\n {6}row 2: C\n {6}row 3: E2\n {4}lane L2 "Boss"\n/);
+    expect(r.out).toMatch(/^diagram BPMNPlane_(Collaboration_[01][0-9a-z]{6}) \(\1\)\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: S, A, G, B, E\n {6}row 2: C\n {6}row 3: E2\n {4}lane L2 "Boss"\n/);
     expect(r.out).toMatch(/^colors: A blue$/m);
     expect(r.out).toMatch(/^layout quality: score \d+: .*overlaps 1/m);
     expect(r.out).toMatch(/^ {2}overlaps \[B, C\]$/m);

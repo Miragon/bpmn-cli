@@ -477,7 +477,8 @@ describe('remove', () => {
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Call')))).toEqual([]);
     expect(ids(doc.require('Lane_Ops').get<El[]>('flowNodeRef'))).not.toContain('Sub');
-    expect(doc.newId('Activity', 'Sub')).toBe('Activity_Sub');
+    // a new id follows the file: its tasks are Task_*
+    expect(doc.newId('Activity', 'Sub')).toBe('Task_Sub');
     // a gateway default is cleared when the default flow goes
     removeElements(doc, { op: 'remove', ids: ['F_no'] });
     expect(doc.require('Gw').get('default')).toBeUndefined();

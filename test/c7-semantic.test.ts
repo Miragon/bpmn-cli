@@ -22,7 +22,7 @@ import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { allowedOn, allowedParents, attrAppliesTo, camundaAttr, camundaAttrsFor, containersOf, idReferenceAttrs, isCamundaType, platformOf, typeIs } from '../src/platform/descriptor.js';
 import { buildView, elementDetail, findElements } from '../src/view.js';
-import { definitionsXml } from './helpers.js';
+import { definitionsXml, flowBetween } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -244,7 +244,7 @@ describe('set: a C7 attribute that belongs on a nested element is refused on its
 
   it('on a flow: camunda:resource belongs to the condition', async () => {
     const doc = await c7Doc();
-    const err = caught(() => set(doc, 'Flow_1', { 'camunda:resource': 'deployment://x.groovy' }));
+    const err = caught(() => set(doc, flowBetween(doc, 'Event_Start', 'Activity_Charge'), { 'camunda:resource': 'deployment://x.groovy' }));
     expect(err.code).toBe('E_WRONG_HOST');
     expect(String(err.details['hint'])).toContain('condition.camunda:resource=deployment://x.groovy');
   });

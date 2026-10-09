@@ -2,8 +2,10 @@
  * `add`: create one element and wire it in.
  *
  *  - parseKind(op.kind); rejected/unknown kinds -> E_UNSUPPORTED_KIND / E_UNKNOWN_KIND
- *  - id: op.id (claimId) or doc.newId(def.prefix, op.name); when the slug
- *    collides and a `_2` suffix is used, warn W_ID_SUFFIXED.
+ *  - id: op.id (claimId) or an id in the file's style (doc.allocateId with
+ *    kindRequest: kind, trigger, name, the placement as seed; src/idstyle.ts);
+ *    when a name-derived id collides and a `_2` suffix is used, warn
+ *    W_ID_SUFFIXED.
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).
  *  - flow options: default + condition -> E_USAGE, an empty condition ->
@@ -12,7 +14,7 @@
  *    into the node already existed) -> W_OPTION_IGNORED.
  *  - eventSubProcess: a trigger (`eventSubProcess:<trigger>` or inferred from
  *    --error/--message/--timer/...) also creates the triggered start event
- *    inside it (id Event_<n>), so the event sub-process is valid in one op.
+ *    inside it (an unnamed event: Event_<hash> by default), so the event sub-process is valid in one op.
  *  - send / receive tasks: --message <name> references a root bpmn:Message
  *    (found by id or name, created when missing), like a message event.
  *  - participants: a new process gets the platform defaults (Doc.initProcess:
@@ -41,7 +43,7 @@
  */
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError } from '../errors.js';
-import { slugify } from '../ids.js';
+import { kindRequest, type IdRequest } from '../idstyle.js';
 import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -122,14 +124,14 @@ function resolveKind(token: string): ParsedKind {
   }
 }
 
-/** Warns W_ID_SUFFIXED when a generated `<prefix>_<Slug>` id had to be suffixed. */
-export function warnIfSuffixed(prefix: string, op: { id?: string; name?: string }, id: string, cs: ChangeSet): void {
+/** Warns W_ID_SUFFIXED when the id generated from the name (in the file's style) had to be suffixed. */
+export function warnIfSuffixed(doc: Doc, req: IdRequest, op: { id?: string }, id: string, cs: ChangeSet): void {
   if (op.id) return;
-  const slug = slugify(op.name);
-  if (slug && id !== `${prefix}_${slug}`) {
+  const base = doc.idStyle.derivedBase(req);
+  if (base && id !== base) {
     cs.warn({
       code: 'W_ID_SUFFIXED',
-      message: `Id ${prefix}_${slug} is already taken; using ${id}`,
+      message: `Id ${base} is already taken; using ${id}`,
       element: id,
       hint: 'Pass --id <id> to choose the id yourself, or give the element a distinct name.',
     });
@@ -137,14 +139,25 @@ export function warnIfSuffixed(prefix: string, op: { id?: string; name?: string 
 }
 
 /** Allocates the element id (explicit ids are validated and claimed) and warns about suffixes. */
-export function allocateElementId(doc: Doc, prefix: string, op: { id?: string; name?: string }, cs: ChangeSet): string {
+export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string }, cs: ChangeSet): string {
   if (op.id) {
     doc.claimId(op.id);
     return op.id;
   }
-  const id = doc.newId(prefix, op.name);
-  warnIfSuffixed(prefix, op, id, cs);
+  const { id } = doc.allocateId(req);
+  warnIfSuffixed(doc, req, op, id, cs);
   return id;
+}
+
+/** The placement of an add op (and an extra seed) as the stable input of a hashed id (tells unnamed elements of one kind apart). */
+function placementSeed(op: AddOp, extra: string | undefined): string {
+  const parts = (['after', 'before', 'flow', 'on', 'in', 'lane'] as const).filter((k) => op[k] !== undefined).map((k) => `${k}:${op[k]}`);
+  return [...parts, ...(extra ? [extra] : [])].join('|');
+}
+
+/** The id request of a new element of `def` (W_ID_SUFFIXED and the --if-absent hint recompute it). */
+function elementRequest(def: KindDef, trigger: Trigger | undefined, op: AddOp, seed?: string): IdRequest {
+  return kindRequest(def, { ...(def.family === 'event' && trigger && trigger !== 'none' ? { trigger } : {}), ...(op.name ? { name: op.name } : {}), seed: placementSeed(op, seed) });
 }
 
 const FLOW_NODE_FAMILIES: ReadonlySet<KindDef['family']> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
@@ -305,10 +318,10 @@ function resolveLane(doc: Doc, op: AddOp): El | undefined {
   return lane;
 }
 
-function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet): El {
+function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, seed: string | undefined): El {
   checkFlowOptions(op);
   const explicitLane = resolveLane(doc, op);
-  const id = allocateElementId(doc, def.prefix, op, cs);
+  const id = allocateElementId(doc, elementRequest(def, trigger ?? inferTrigger(op), op, seed), op, cs);
   const el = doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
   const isEvent = def.family === 'event';
   const isEventSub = def.kind === 'eventSubProcess';
@@ -389,15 +402,15 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
 /* entry point                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Creates one element according to `op` and returns what changed. */
-export function addElement(doc: Doc, op: AddOp): ChangeSet {
+/** Creates one element according to `op` and returns what changed; `idSeed` tells a hashed id apart (split: the join's gateway). */
+export function addElement(doc: Doc, op: AddOp, idSeed?: string): ChangeSet {
   const cs = new ChangeSet();
   const { def, trigger } = resolveKind(op.kind);
 
   if (op.ifAbsent && !op.id) {
-    const slug = slugify(op.name);
+    const base = doc.idStyle.derivedBase(elementRequest(def, trigger, op));
     throw usageError('--if-absent needs an explicit --id to check for', {
-      hint: slug ? `Pass --id ${def.prefix}_${slug} (the id add generates for "${op.name}"), or drop --if-absent.` : 'Pass --id <Prefix>_<Name> (the id add would generate), or drop --if-absent.',
+      hint: base ? `Pass --id ${base} (the id add generates for "${op.name}"), or drop --if-absent.` : 'Pass --id <id> (the id the element should have), or drop --if-absent.',
     });
   }
   if (op.ifAbsent && op.id && doc.has(op.id)) {
@@ -445,12 +458,12 @@ export function addElement(doc: Doc, op: AddOp): ChangeSet {
       break;
     }
     default:
-      el = addFlowNode(doc, op, def, trigger, cs);
+      el = addFlowNode(doc, op, def, trigger, cs, idSeed);
       break;
   }
 
   if (!FLOW_NODE_FAMILIES.has(def.family)) {
-    warnIfSuffixed(def.prefix, op, idOf(el), cs);
+    warnIfSuffixed(doc, elementRequest(def, trigger, op), op, idOf(el), cs);
     addDocumentation(doc, el, op.doc);
     if (op.lane) {
       cs.warn({ code: 'W_OPTION_IGNORED', message: `--lane is ignored for ${def.kind} ${idOf(el)}`, element: idOf(el), hint: 'Only flow nodes can be lane members.' });

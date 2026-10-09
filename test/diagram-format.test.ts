@@ -583,7 +583,9 @@ describe('format ops in a batch', () => {
 
 describe('layoutView (show --layout)', () => {
   it('lists the rows of node ids per pool and lane, left to right', async () => {
-    const view = layoutView((await Doc.fromXml(pooledHand)).definitions);
+    const hand = await Doc.fromXml(pooledHand);
+    const collab = hand.collaboration()!.get<string>('id');
+    const view = layoutView(hand.definitions);
     expect(view.diagrams).toHaveLength(1);
     expect(view.diagrams[0]!.groups).toEqual([
       { id: 'Pool', kind: 'participant', name: 'Org', rows: [] },
@@ -593,7 +595,7 @@ describe('layoutView (show --layout)', () => {
     expect(view.metrics.score).toBe(0);
     expect(renderLayoutView(view)).toBe(
       [
-        'diagram BPMNPlane_Collaboration_1 (Collaboration_1)',
+        `diagram BPMNPlane_${collab} (${collab})`,
         '  participant Pool "Org"',
         '    lane L1 "Clerk"',
         '      row 1: S, A, G, B, E',

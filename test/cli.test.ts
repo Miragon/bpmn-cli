@@ -166,8 +166,9 @@ describe('bpmn cli session', () => {
         },
         { op: 'add', kind: 'dataObject', name: 'Invoice', in: 'Process_OrderHandling' },
         { op: 'connect', source: 'Activity_CheckInvoice', target: 'DataObjectReference_Invoice' },
-        { op: 'add', kind: 'textAnnotation', text: 'Manual fallback', in: 'Activity_Payment' },
-        { op: 'connect', source: 'TextAnnotation_1', target: 'Activity_RetryManually' },
+        // an unnamed element gets a hashed id: give it one to refer to it later in the batch
+        { op: 'add', kind: 'textAnnotation', id: 'TextAnnotation_Fallback', text: 'Manual fallback', in: 'Activity_Payment' },
+        { op: 'connect', source: 'TextAnnotation_Fallback', target: 'Activity_RetryManually' },
       ],
     };
     const opsFile = join(dir, 'ops.json');
@@ -183,7 +184,7 @@ describe('bpmn cli session', () => {
     expect(xml).toMatch(/bpmnElement="Activity_Payment" isExpanded="true"/);
     expect(diIds(xml)).toContain('Activity_RetryManually');
     expect(diIds(xml)).toContain('DataObjectReference_Invoice');
-    expect(diIds(xml)).toContain('TextAnnotation_1');
+    expect(diIds(xml)).toContain('TextAnnotation_Fallback');
     const v = ok('validate', file, '--json').json();
     expect(v.ok).toBe(true);
   });
