@@ -39,7 +39,8 @@
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
  *  - 'full': redraw everything with the engine (clean or auto); bpmn-js
- *    colours (bioc:/color:) are carried over by element id
+ *    colours (bioc:/color:) and the drawing's DI ids are carried over by
+ *    element id (diagram/keep-ids.ts; new DI gets the file's id style)
  *  - 'incremental': keep every existing shape and connection, place what is
  *    new, prune what is gone, reroute only affected connections
  *    (src/diagram/incremental.ts); a file without any diagram is drawn in full
@@ -72,6 +73,7 @@ import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngi
 import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
+import { keepDiIds, rememberDiIds } from './diagram/keep-ids.js';
 import { applyColors, colorsOf } from './diagram/write.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from './mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
@@ -433,18 +435,21 @@ async function decideMode(requested: LayoutMode, before: Before, opts: MutationO
   return { mode: 'incremental', reason: 'hand-made diagram: kept, changes placed locally' };
 }
 
-/** Full redraw with the engine; colours survive by element id. */
+/** Full redraw with the engine; colours and the drawing's DI ids survive by element id. */
 async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const colors = colorsOf(doc.definitions);
+  const ids = rememberDiIds(doc.definitions);
   const expansion = collectExpansion(doc, opts);
   const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine });
   let xml = result.xml;
   let defs = doc.definitions;
+  // both run, in this order (applyColors may add a BPMNLabel, keepDiIds only renames)
+  const restore = (moddle: Doc['moddle'], laid: El): boolean => applyColors(moddle, laid, colors) + (ids ? keepDiIds(laid, ids) : 0) > 0;
   if ((opts.engine ?? 'clean') !== 'clean') {
     const laidOut = await parseXml(xml);
     defs = laidOut.definitions;
-    if (applyColors(laidOut.moddle, defs, colors)) xml = await serialize(laidOut);
-  } else if (applyColors(doc.moddle, defs, colors)) {
+    if (restore(laidOut.moddle, defs)) xml = await serialize(laidOut);
+  } else if (restore(doc.moddle, defs)) {
     xml = await doc.toXml();
   }
   return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs) };

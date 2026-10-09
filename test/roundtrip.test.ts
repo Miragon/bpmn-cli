@@ -195,6 +195,28 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
   });
 });
 
+describe('a full redraw keeps the DI ids (#47)', () => {
+  const diIds = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) id="([^"]+)"/g)].map((m) => m[1]!);
+
+  it("existing DI keeps its ids, new DI gets the file's id style", async () => {
+    const r = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }], { layout: 'full' });
+    expect(r.layout.mode).toBe('full');
+    const ids = diIds(r.xml);
+    expect(ids).toEqual(expect.arrayContaining([...diIds(STYLED), 'Activity_Audit_di']));
+    expect(ids.filter((id) => /^BPMN(Shape|Edge)_/.test(id))).toEqual([]);
+    expect(new Set(ids).size).toBe(ids.length);
+    // the start tags of the DI elements stay as they were; only bounds and waypoints change
+    expect(r.xml).toContain('<bpmndi:BPMNShape id="Gateway_Ok_di" bpmnElement="Gateway_Ok" isMarkerVisible="true">');
+  });
+
+  it('a file the engine drew keeps the engine ids, a file without a drawing gets them', async () => {
+    const drawn = await dry(definitionsXml('    <bpmn:startEvent id="Start" />'), [{ op: 'add', kind: 'task', name: 'Work', id: 'Activity_Work', after: 'Start' }]);
+    expect(diIds(drawn.xml)).toEqual(expect.arrayContaining(['BPMNShape_Start', 'BPMNShape_Activity_Work']));
+    const again = await dry(drawn.xml, [{ op: 'add', kind: 'endEvent', name: 'Done', id: 'Event_Done', after: 'Activity_Work' }], { layout: 'full' });
+    expect(diIds(again.xml)).toEqual(expect.arrayContaining(['BPMNShape_Start', 'BPMNShape_Activity_Work', 'BPMNShape_Event_Done']));
+  });
+});
+
 describe('the safety net', () => {
   it('falls back to the plain serialisation when the preserved text would not read back as the changed model', async () => {
     // a baseline that does not describe the original: its unchanged task text would be copied from the original
