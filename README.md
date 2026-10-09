@@ -1229,6 +1229,13 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
   id (a plane named after the old root, `BPMNPlane_<processId>`, follows a new
   collaboration root), and new DI takes the file's DI id style, so a redraw
   changes coordinates, not ids.
+- **design-iq stickies follow their node.** A `bpmiq:sticky` extension
+  element of a process (workshop notes of Miragon design-iq, absolute
+  `x` / `y` on the element, no DI) belongs to the flow node nearest to it.
+  When a write moves that node (incremental placement, a format command, a
+  redraw), the sticky moves by the same shift; a write that moves no node
+  never touches it. The result lists them (`stickies moved: Sticky_1 (with
+  Activity_Check)`, JSON `layout.stickies`).
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.

@@ -567,6 +567,7 @@ export function guideText(): string {
       '                  made like the modeler\'s space tool, only affected flows are rerouted, removed elements\' DI pruned.',
       '  incremental     always keep the drawing (fails with E_LAYOUT_INCREMENTAL instead of redrawing).',
       '  full            always redraw (= --relayout; also `bpmn layout <file>`). Colours survive, positions do not.',
+      '  design-iq stickies (bpmiq:sticky) move with the flow node nearest to them, never when no node moved.',
       '  The result says which mode ran and why, what was placed / moved / rerouted, and the layout quality before ->',
       '  after with the problems added and resolved (ids). A format command that changed the drawing (moved a shape,',
       '  rerouted a flow, moved a label) makes it hand-made, so later writes keep your formatting.',

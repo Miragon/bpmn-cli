@@ -51,6 +51,13 @@
  * measures after them. A format op that changes the geometry (also a route
  * or a label side) makes the drawing hand-made, so later `auto` writes keep
  * it; colours survive full redraws.
+ *
+ * design-iq stickies (`bpmiq:sticky` extension elements with absolute
+ * coordinates, src/diagram/stickies.ts) follow the flow node nearest to them
+ * before the ops by the shift of its centre, after the layout and the format
+ * ops, whatever moved it (incremental placement, a format op, a redraw); a
+ * write that moves no node leaves them untouched. `layout.stickies` lists
+ * the stickies that moved.
  */
 import { copyFile, stat } from 'node:fs/promises';
 import { Doc } from './document.js';
@@ -59,6 +66,7 @@ import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngi
 import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
+import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from './diagram/stickies.js';
 import { applyColors, colorsOf, diIds } from './diagram/write.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
@@ -124,6 +132,8 @@ export interface LayoutStatus {
   metrics?: MetricsDelta;
   /** what each format op (and lane order) of the batch did to the drawing, in batch order */
   format?: FormatResult[];
+  /** design-iq stickies moved along with their flow node (sticky id, or `<processId>#<n>` without id) */
+  stickies?: Array<{ sticky: string; node: string }>;
 }
 
 export interface MutationResult {
@@ -324,6 +334,8 @@ function relocatedIds(ops: Op[]): string[] {
 
 interface Before {
   snapshot: Snapshot;
+  /** the node each design-iq sticky follows */
+  stickies: StickyAnchor[];
   /** the model before the ops (only for the ownership check of auto mode) */
   xml?: string;
   metrics?: LayoutMetrics;
@@ -332,10 +344,30 @@ interface Before {
 async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: boolean): Promise<Before> {
   const snapshot = takeSnapshot(doc.definitions);
   const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
-  const before: Before = { snapshot };
+  const before: Before = { snapshot, stickies: stickyAnchors(doc.definitions) };
   if (hasDiagram) before.metrics = layoutProblems(doc.definitions);
   if (mode === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = await doc.toXml();
   return before;
+}
+
+/** The anchors of the stickies with the ids their process and node have after the ops (removed ones are left out). */
+function resolveAnchors(doc: Doc, anchors: readonly StickyAnchor[]): ResolvedAnchor[] {
+  const out: ResolvedAnchor[] = [];
+  for (const a of anchors) {
+    const processId = a.process.get<string | undefined>('id');
+    const nodeId = a.node.get<string | undefined>('id');
+    if (!processId || !nodeId || doc.get(processId) !== a.process || !doc.get(nodeId)) continue;
+    out.push({ processId, index: a.index, ...(a.stickyId !== undefined ? { stickyId: a.stickyId } : {}), nodeId, centre: a.centre });
+  }
+  return out;
+}
+
+/** Moves the stickies of the written XML with their nodes; returns the new XML and what moved. */
+async function moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ xml: string; moved: Array<{ sticky: string; node: string }> }> {
+  if (!anchors.length) return { xml, moved: [] };
+  const model = await parseXml(xml);
+  const moved = followStickies(model.definitions, anchors);
+  return { xml: moved.length ? await serialize(model) : xml, moved };
 }
 
 /** The ops the diagram phase runs after the layout: format ops and lane orders, with their batch index. */
@@ -540,6 +572,9 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
     layout.format = formatted.results;
     layout.metrics = metricsDelta(before.metrics, formatted.after);
   }
+  const followed = await moveStickies(xml, resolveAnchors(doc, before.stickies));
+  xml = followed.xml;
+  if (followed.moved.length) layout.stickies = followed.moved;
 
   let written = false;
   if (!opts.dryRun && target) {

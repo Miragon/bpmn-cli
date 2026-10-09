@@ -392,6 +392,7 @@ function formatLine(f: FormatResult): string {
  *   layout: ok - incremental (<reason>)       | layout: ok - full (<reason>) | layout: skipped
  *     placed: ids / moved: ids / rerouted: ids / pruned: ids / note: text      (incremental)
  *     format <op> #<i>: moved ids; rerouted ids; colored ids                  (format ops)
+ *     stickies moved: id (with nodeId), ...                                   (design-iq stickies)
  *   layout quality: score 12 -> 10; added: kind [ids], ...; resolved: kind [ids], ...
  */
 export function renderLayout(layout: LayoutStatus): string[] {
@@ -405,6 +406,7 @@ export function renderLayout(layout: LayoutStatus): string[] {
   }
   for (const n of layout.notes ?? []) out.push(`${INDENT}note: ${n}`);
   for (const f of layout.format ?? []) out.push(formatLine(f));
+  if (layout.stickies?.length) out.push(`${INDENT}stickies moved: ${layout.stickies.map((s) => `${s.sticky} (with ${s.node})`).join(', ')}`);
   const m = layout.metrics;
   if (m) {
     const score = m.before ? `score ${m.before.score} -> ${m.after.score}` : `score ${m.after.score}`;
