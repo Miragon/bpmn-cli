@@ -1,7 +1,7 @@
 /**
  * Read-only lookup over the Camunda 7 descriptor (`camunda-bpmn-moddle`,
- * resources/camunda.json), used for validation and for placing vendor
- * attributes on the right element.
+ * resources/camunda.json, inlined as camunda-descriptor.ts), used for
+ * validation and for placing vendor attributes on the right element.
  *
  * The descriptor is DATA here: it is never registered with a BpmnModdle
  * instance. Registering it would make camunda content typed, which changes
@@ -44,8 +44,8 @@
  * Two placement lists of the descriptor are corrected to what the engines
  * accept (ALLOWED_IN_OVERRIDES): camunda:executionListener and camunda:potentialStarter.
  */
-import { createRequire } from 'node:module';
 import { createModdle, type El } from '../model.js';
+import { CAMUNDA_DESCRIPTOR } from './camunda-descriptor.js';
 import { detectPlatformOf } from './detect.js';
 
 export const CAMUNDA_PREFIX = 'camunda';
@@ -153,9 +153,9 @@ const ALLOWED_IN_OVERRIDES: Record<string, string[]> = {
 
 let cached: Index | undefined;
 
+/** The descriptor (inlined from camunda-bpmn-moddle by tools/gen-camunda-descriptor.mjs: no file access, browser-safe). */
 function load(): { types: RawType[] } {
-  const require = createRequire(import.meta.url);
-  return require('camunda-bpmn-moddle/resources/camunda.json') as { types: RawType[] };
+  return CAMUNDA_DESCRIPTOR as unknown as { types: RawType[] };
 }
 
 /** `InputOutput` / `inputOutput` / `camunda:inputOutput` -> `camunda:InputOutput` (descriptor key). */
