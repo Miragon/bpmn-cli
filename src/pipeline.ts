@@ -57,7 +57,10 @@
  *  - 'full': redraw everything with the engine (clean or auto); bpmn-js
  *    colours (bioc:/color:) and the drawing's DI ids are carried over by
  *    element id (layoutModel, diagram/write.ts restoreDiIds; plane and
- *    diagram ids by root; new DI gets the file's DI id style)
+ *    diagram ids by root; new DI gets the file's DI id style). An element
+ *    the redraw draws that has no id (a hand-written message flow, pool,
+ *    process, collaboration) first gets one in the file's id style and
+ *    registry (diagram/drawn-ids.ts), reported as a change and a note
  *  - 'incremental': keep every existing shape and connection, place what is
  *    new, prune what is gone, reroute only affected connections
  *    (src/diagram/incremental.ts); a file without any diagram is drawn in full
@@ -93,6 +96,7 @@ import { withLayoutDebug, type DebugSink } from './debug.js';
 import { Doc } from './document.js';
 import { CliError, ioError, modelError, usageError, type Warning } from './errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from './layout.js';
+import type { GivenId } from './diagram/drawn-ids.js';
 import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
@@ -500,10 +504,12 @@ async function decideMode(requested: LayoutMode, before: Before, opts: MutationO
  * Full redraw with the engine; colours survive by element id (the DI ids
  * survive inside layoutModel, diagram/write.ts restoreDiIds).
  */
-async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
+async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] }> {
   const colors = colorsOf(doc.definitions);
   const expansion = collectExpansion(doc, opts);
-  const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine });
+  // an element without id that the redraw draws gets one in the document's style and registry
+  const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine, allocateId: (req) => doc.allocateId(req).id });
+  if (result.givenIds?.length) doc.invalidate();
   let xml = result.xml;
   let defs = doc.definitions;
   if ((opts.engine ?? 'clean') !== 'clean') {
@@ -513,7 +519,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   } else if (applyColors(doc.moddle, defs, colors)) {
     xml = await doc.toXml();
   }
-  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs) };
+  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
 async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
@@ -548,9 +554,9 @@ function firstLine(err: unknown): string {
  * INCREMENTAL_FAILED, shown as W_LAYOUT_*); a requested incremental layout
  * that fails is a layout error instead (LAYOUT_INCREMENTAL, shown as E_LAYOUT_*).
  */
-async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: Op[], opts: MutationOptions): Promise<{ xml: string; layout: LayoutStatus }> {
+async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: Op[], opts: MutationOptions): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
   const decision = await decideMode(requested, before, opts);
-  let ran: { xml: string; status: LayoutStatus; after: LayoutMetrics };
+  let ran: { xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] };
   if (decision.mode === 'full') ran = await fullLayout(doc, opts);
   else {
     try {
@@ -568,7 +574,7 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: O
       ran.status.warnings.push({ code: 'INCREMENTAL_FAILED', elementId: '', message: `The incremental layout failed and the diagram was redrawn: ${firstLine(err)}`, relatedElementIds: [] });
     }
   }
-  return { xml: ran.xml, layout: { ...ran.status, mode: decision.mode, reason: decision.reason, metrics: metricsDelta(before.metrics, ran.after) } };
+  return { xml: ran.xml, layout: { ...ran.status, mode: decision.mode, reason: decision.reason, metrics: metricsDelta(before.metrics, ran.after) }, ...(ran.givenIds ? { givenIds: ran.givenIds } : {}) };
 }
 
 /**
@@ -636,10 +642,15 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     xml = await doc.toXml();
     layout = { status: 'ok', mode: 'incremental', reason: 'format operations only: drawing kept', warnings: [], expanded: [] };
   } else {
+    let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout } = await runLayout(doc, requested, before, ops, opts));
+      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ops, opts));
     } catch (err) {
       throw toCliError(err);
+    }
+    if (givenIds?.length) {
+      for (const g of givenIds) changes.change({ id: g.id, kind: g.kind, ...(g.name ? { name: g.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
+      changes.note(`${givenIds.length} element(s) without id got one in the file's id style so that the redrawn diagram can show them: ${givenIds.map((g) => g.id).join(', ')}`);
     }
   }
 
