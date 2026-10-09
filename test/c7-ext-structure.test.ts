@@ -494,12 +494,14 @@ describe('ext add: where and what (1e, 1f)', () => {
 
 const MSG_ROOTS = `<bpmn:message id="Message_Paid" name="Paid" /><bpmn:message id="Message_Finished" name="Finished" /><bpmn:message id="Message_Finished2" name="Finished" /><bpmn:message id="Message_Confirmed" name="Confirmed" /><bpmn:signal id="Signal_Go" name="Go" />`;
 
-/** Fills incoming / outgoing of the flow nodes from the sequence flows (what modeler files carry). */
+/** Fills incoming / outgoing of the flow nodes from the sequence flows (what modeler files carry; Doc.fromXml completes them in memory already). */
 function withMirrors(doc: Doc): Doc {
   for (const f of many(doc.require('Process_1'), 'flowElements')) {
     if (!is(f, 'bpmn:SequenceFlow')) continue;
-    many(f.get<El>('sourceRef'), 'outgoing').push(f);
-    many(f.get<El>('targetRef'), 'incoming').push(f);
+    for (const [end, list] of [['sourceRef', 'outgoing'], ['targetRef', 'incoming']] as const) {
+      const entries = many(f.get<El>(end), list);
+      if (!entries.includes(f)) entries.push(f);
+    }
   }
   return doc;
 }

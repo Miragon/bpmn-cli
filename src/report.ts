@@ -7,7 +7,7 @@
  *   opWarnings(result)        the op warnings without the ones the validator repeats
  *   mutationWarnings(result)  every warning of a mutation (what --strict counts)
  *   mutationReport(result)    the JSON of a mutation (no XML)
- *   renderMutation(report)    its text (also of applyToXml's `result`)
+ *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
  *   renderValidation(report)  its text
  */
@@ -23,7 +23,10 @@ import type { ModelView } from './view.js';
 export interface MutationReport {
   ok: true;
   file?: string;
+  /** false with dryRun, and when the result equals the file it would overwrite (`unchanged`) */
   written: boolean;
+  /** the result is the input text byte for byte (the ops changed nothing that is written) */
+  unchanged: boolean;
   created: Change[];
   changed: Change[];
   removed: Change[];
@@ -76,6 +79,7 @@ export function mutationReport(result: MutationResult): MutationReport {
     ok: true,
     file: result.file,
     written: result.written,
+    unchanged: result.unchanged,
     created: result.changes.created,
     changed: result.changes.changed,
     removed: result.changes.removed,
@@ -97,9 +101,10 @@ export type MutationReportLike = Omit<MutationReport, 'file' | 'written'> & { fi
 
 /**
  * The text the CLI prints for a mutation: changes, warnings, the layout
- * block, the file line (when the report names a file), the view (--show).
+ * block, the file line (when the report names a file: written, unchanged
+ * and not written, or `dryRun`), the view (--show).
  */
-export function renderMutation(result: MutationReportLike): string {
+export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string {
   const changes = Object.assign(new ChangeSet(), { created: result.created, changed: result.changed, removed: result.removed, warnings: result.warnings, notes: result.notes });
   const lines: string[] = [];
   const text = renderChanges(changes).trimEnd();
@@ -108,8 +113,9 @@ export function renderMutation(result: MutationReportLike): string {
   if (text && !formatOnly) lines.push(text);
   for (const w of [...result.validation.warnings, ...layoutWarnings(result.layout)]) lines.push(warningLine(w));
   lines.push(...renderLayout(result.layout));
-  if (result.written) lines.push(`written: ${result.file}`);
-  else if (result.file) lines.push(`dry run: ${result.file} not written`);
+  if (result.written) lines.push(`written: ${result.file}${result.unchanged ? ' (unchanged copy of the input)' : ''}`);
+  else if (result.file && result.unchanged && !opts.dryRun) lines.push(`unchanged: ${result.file} (the result equals the file; nothing written)`);
+  else if (result.file) lines.push(`dry run: ${result.file} not written${result.unchanged ? ' (unchanged)' : ''}`);
   if (result.view) lines.push('', renderView(result.view).trimEnd());
   return lines.join('\n');
 }

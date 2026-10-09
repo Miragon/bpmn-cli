@@ -51,6 +51,7 @@ with a laid-out diagram.
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Quoting](#quoting)
 - [The DI contract](#the-di-contract)
+- [What a write changes](#what-a-write-changes)
 - [Limitations](#limitations)
 - [A worked session](#a-worked-session)
 - [Library use](#library-use)
@@ -107,7 +108,10 @@ unchanged. Nothing else.
    the engine made and nobody changed is redrawn ([Layout modes](#layout-modes)).
    `--relayout` redraws on request, `--no-layout` skips the layout,
    `bpmn layout` redraws on its own. The picture itself is changed with the
-   [format commands](#formatting-without-xml), never with coordinates.
+   [format commands](#formatting-without-xml), never with coordinates. The
+   write rewrites only the elements the change touched; the rest of the file
+   keeps its text, and a result equal to the file is not written at all
+   ([What a write changes](#what-a-write-changes)).
 3. **Ids are readable and stable.** `<Prefix>_<NameSlug>` following the
    bpmn-js conventions: `Activity_CheckInvoice`, `Event_OrderReceived`,
    `Gateway_InvoiceOk`, `Flow_3`, `Participant_Customer`, `Lane_Sales`,
@@ -589,7 +593,7 @@ profile before and after and reports only the findings the change introduced
 (JSON `validation.platform` with `added`, `resolved` and the totals in
 `counts`), so a file's old problems are not repeated on every write; `bpmn
 show` does not run it. `layout` redraws the whole diagram from the
-model (a hand layout is replaced, colours survive); `--expand` /
+model (a hand layout is replaced, colours and DI ids survive); `--expand` /
 `--collapse` change which sub-processes are drawn expanded. `layout --tidy`
 keeps the drawing instead and only removes overlaps (= `bpmn tidy`).
 
@@ -629,7 +633,7 @@ Every mutating command updates the diagram in one of three modes
 | --- | --- |
 | `auto` (default) | A file without diagram is drawn from scratch. A drawing that the engine made and nobody changed since (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check) is redrawn in full, so it keeps the best global layout while the CLI owns it. Any other drawing, hand-made in a modeler or changed by a format command (also one that only reroutes a flow or moves a label), is kept: `incremental`. |
 | `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
-| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) are carried over by element id; positions are not. `bpmn layout <file>` always does this. |
+| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) and the DI ids are carried over by element id (new DI gets the file's id style); positions are not. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why (`layout: ok - incremental (hand-made
 diagram: kept, changes placed locally)`), lists what was placed / moved /
@@ -1096,8 +1100,10 @@ Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
 Event_OrderReceived`), then notes (`note: inserted between A and B`),
 warnings (`warning W_CODE element: message  (hint)`), then the layout block,
-then `written: <file>` (`dry run: <file> not written` with `--dry-run`). With
-`--show` the model view follows. The layout block:
+then `written: <file>` (`dry run: <file> not written` with `--dry-run`;
+`unchanged: <file> (the result equals the file; nothing written)` when the
+change left the file as it was). With `--show` the model view follows. The
+layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
@@ -1119,7 +1125,7 @@ and `resolved:` name them with ids).
 
 ```json
 {
-  "ok": true, "file": "order.bpmn", "written": true,
+  "ok": true, "file": "order.bpmn", "written": true, "unchanged": false,
   "created": [{ "id": "Activity_X", "kind": "userTask", "name": "...", "detail": "after Event_Y" }],
   "changed": [], "removed": [],
   "warnings": [{ "code": "W_...", "message": "...", "element": "...", "hint": "..." }],
@@ -1141,7 +1147,9 @@ and `resolved:` name them with ids).
 }
 ```
 
-`written` is `false` with `--dry-run`; `importWarnings` lists what
+`written` is `false` with `--dry-run`, and when `unchanged` is `true`: the
+result equals the input file byte for byte, so nothing is written over it
+(`--out <other file>` still writes the copy). `importWarnings` lists what
 bpmn-moddle reported while reading the input file (informational, first line
 of each warning).
 
@@ -1186,8 +1194,8 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 - **The engine draws** a new file, a file without diagram, a drawing it made
   itself and nobody changed (`auto`), and everything on request
   (`--relayout`, `--layout full`, `bpmn layout`). Then all shapes, edges,
-  waypoints and labels are derived from the semantic model; colours are
-  carried over by element id, manual positions are not.
+  waypoints and labels are derived from the semantic model; colours and the
+  DI ids are carried over by element id, manual positions are not.
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.
@@ -1259,6 +1267,61 @@ agent can predict the picture from the semantics:
 `bpmn validate` runs the engine as a dry run; the engine reports elements it
 could not draw as `W_LAYOUT_DI_NOT_CREATED`.
 
+## What a write changes
+
+BPMN files live in git or are synced live by a host that replaces one text
+region per save (design-iq). So a write rewrites only the elements the change
+touched, in the file's own style:
+
+- **Everything else keeps its text**, byte for byte: the XML declaration and
+  the comments before the root, the root start tag with its namespace
+  declarations in their order, vendor attributes before or between the typed
+  ones, quoting, entities (`&amp;` stays `&amp;`), CDATA sections, comments,
+  blank lines, indentation, a missing final line break. A rename changes one
+  line (of a labelled event or gateway, the layout also fits its label's
+  bounds).
+- **A changed element keeps its style**: its start tag as written when only
+  its children changed, else its attributes in their order with the new
+  values (a new attribute goes after the one bpmn-moddle writes before it); a
+  script or condition written as CDATA stays CDATA; a label on one line stays
+  on one line; a retype keeps the attributes and renames both tags.
+- **A new element follows the file**: its indentation unit (two or four
+  spaces, tabs), its line breaks, `/>` with or without a space. A namespace
+  the change needs is added to the root tag, which otherwise stays as written.
+- **No-op**: when the result equals the file (a rename to the current name,
+  `set` to the current value, `tidy` on a tidy drawing), nothing is written
+  and the file keeps its modification time: `unchanged: <file>` (JSON
+  `"written": false, "unchanged": true`). `--out <other>` still writes the
+  copy; `--dry-run` says `(unchanged)`.
+- **`incoming` / `outgoing` lists** are derived data (optional in BPMN 2.0).
+  The CLI completes them in memory (the placement grammar, the views and the
+  lint read them) and writes them the way the file keeps them: a file that
+  never lists them never gets them; a file that lists them (Camunda Modeler,
+  bpmn-js) gets the entries of new and changed flows; a missing entry of an
+  unchanged flow is not added. A new file, and one without any sequence flow
+  yet, gets them the way the Modeler writes them.
+- **Comments** on the lines right before an element the change removes, after
+  it on its last line, or inside it, go with it, and the result says so:
+  `note: 1 XML comment(s) dropped: they were inside or next to elements the
+  change removed or rewrote`. All other comments stay where they are.
+- **Safety**: the result must read back (with bpmn-moddle) as exactly the
+  changed model. If it does not, or the file has something the text reader
+  does not support (a DOCTYPE), the whole file is written the way
+  bpmn-moddle serialises it, with the note `the file's formatting was not
+  kept (<reason>) ...` and the number of comments dropped. A forced write of
+  a lossy import (`--force` on `E_IMPORT_LOSSY`) is always written that way:
+  it drops what bpmn-moddle could not read.
+- **The layout still changes the drawing** where it acts: in `auto` mode a
+  file without a diagram is drawn on its first write, missing DI (an edge
+  without a `BPMNEdge`, a plane without `bpmnElement`) is completed, and a
+  name that no longer fits grows its task. `--no-layout` changes no DI
+  except removing that of removed elements. A full redraw (`bpmn layout`,
+  `--relayout`) rewrites the geometry of the DI section; its DI elements keep
+  their ids (new ones get the file's id style).
+
+`npm run roundtrip` measures this on a corpus (no-ops, renames, inserts; see
+[docs/testing.md](docs/testing.md#roundtrip-fidelity)).
+
 ## Limitations
 
 - Only **one root** is laid out: the collaboration when pools exist, otherwise
@@ -1291,13 +1354,16 @@ could not draw as `W_LAYOUT_DI_NOT_CREATED`.
   unresolved references, duplicate ids, an element the schema allows once
   appearing twice, such as two `loopCharacteristics` on one task: the reader
   keeps only the last) are refused with `E_IMPORT_LOSSY`; `--force` writes
-  anyway and drops that content (of a duplicate element the last one stays).
-  `show` and `validate` print it as `import:` lines. The library refuses them
+  anyway and drops that content (of a duplicate element the last one stays);
+  that write uses bpmn-moddle's own formatting (the file's comments and
+  formatting are not kept, the result says so). `show` and `validate` print
+  it as `import:` lines. The library refuses them
   the same way (`Doc.fromXml` + `mutateDoc` without `force: true`).
 - `bpmn-moddle` never sets `$parent` for elements created in memory; the CLI
-  maintains containment, `incoming`/`outgoing` and every reference itself. A
-  hand-edited file with broken links is reported by `bpmn validate`
-  (`E_DANGLING_REF`, `E_FLOW_LINKS`).
+  maintains containment, `incoming`/`outgoing` (complete in memory, written
+  the way the file keeps them) and every reference itself. A hand-edited file
+  with broken links is reported by `bpmn validate` (`E_DANGLING_REF`,
+  `E_FLOW_LINKS`).
 
 ## A worked session
 
@@ -1608,6 +1674,16 @@ engine rules of the ops, e.g. which event-gateway rule a bridge follows),
 `runProfile`, `detectPlatform`, `PLATFORM_CHOICES` and the types
 `ProfileFinding`, `PlatformSummary`, `Severity`; `listExtensions` /
 `listAllExtensions` (what `ext list` prints).
+
+Text preservation: `mutateDoc` returns the text to store as `result.xml`:
+the original text of everything the ops did not change (see [What a write
+changes](#what-a-write-changes)); `result.unchanged` is true when it equals
+the input (the file helpers then do not write over the file: `written:
+false`). `Doc.fromXml` keeps what it read as `doc.source` (`DocSource`: the
+text and the incoming / outgoing lists as read); `preserveText(original,
+asRead, changed)` is the text-preserving step on its own, for a host that
+serialises a model itself (two serialisations by bpmn-moddle, of the model as
+read and as changed).
 
 ### Browser bundles
 

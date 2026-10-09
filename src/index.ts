@@ -16,7 +16,7 @@ export { renderView, renderDetail, renderLayoutView, renderFind, renderMetrics, 
 export { setLayoutDebug, type DebugSink } from './debug.js';
 export { guideText, kindsJson, kindsText, ERROR_CATALOGUE } from './guide.js';
 /* the building blocks */
-export { Doc, TARGETS, type NewDocOptions } from './document.js';
+export { Doc, TARGETS, type DocSource, type NewDocOptions } from './document.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './errors.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './kinds.js';
 export { layoutModel } from './layout.js';
@@ -43,6 +43,8 @@ export type {
   TidyOp,
 } from './ops/types.js';
 export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
+/* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
+export { preserveText, type PreservedText } from './preserve.js';
 export { ChangeSet, type Change } from './result.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';
 /* the platform profile (Camunda 7 rules; validate --platform) */

@@ -12,6 +12,7 @@ import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
 import { IdRegistry, isValidId } from './ids.js';
 import { kindLabel, suggestKinds } from './kinds.js';
+import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
 import {
   createDefinitions,
@@ -64,6 +65,14 @@ export function assertTarget(target: unknown): asserts target is NewDocOptions['
   });
 }
 
+/** What a document was read from (see Doc.source). */
+export interface DocSource {
+  /** the XML text as read */
+  text: string;
+  /** the incoming / outgoing lists as read, before the in-memory repair */
+  mirror: MirrorSnapshot;
+}
+
 /** True for elements somewhere below a bpmn:extensionElements container. */
 function insideExtension(el: El): boolean {
   for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
@@ -77,6 +86,14 @@ export class Doc {
     public readonly model: Model,
     public readonly ids: IdRegistry,
     public readonly file: string | undefined,
+    /**
+     * The text the document was read from and its incoming / outgoing lists
+     * at that time (Doc.fromXml, also readDoc / loadDoc of the node layer;
+     * undefined for Doc.create): the write pipeline keeps the file's
+     * formatting and mirror-list style (preserve.ts, mirror.ts) and reports
+     * a result equal to it as `unchanged`.
+     */
+    public readonly source?: DocSource,
   ) {}
 
   /* ------------------------------------------------------------ */
@@ -96,7 +113,10 @@ export class Doc {
       throw err;
     }
     const ids = new IdRegistry(indexById(model.definitions).keys());
-    return new Doc(model, ids, file);
+    // the mirror lists as read decide what a write keeps (mirror.ts); in memory they are complete
+    const mirror = takeMirrorSnapshot(model.definitions);
+    completeMirrorLists(model.definitions);
+    return new Doc(model, ids, file, { text: xml, mirror });
   }
 
   static create(opts: NewDocOptions = {}, file?: string): Doc {

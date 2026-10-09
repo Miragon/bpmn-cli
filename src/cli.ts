@@ -51,10 +51,10 @@ function printJson(value: unknown): void {
 }
 
 /** The result of a mutation (src/report.ts: the same for the CLI and the in-memory API); --strict exits 5 on any warning. */
-function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean }): void {
+function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }): void {
   const report = mutationReport(result);
   if (opts.json) printJson(report);
-  else print(renderMutation(report));
+  else print(renderMutation(report, { dryRun: opts.dryRun }));
   if (opts.strict && mutationWarnings(result).length) process.exit(5);
 }
 

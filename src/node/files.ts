@@ -16,9 +16,12 @@
  * stage fails; `out` writes elsewhere; `backup` copies the input to
  * <file>.bak first; `mustNotExist` refuses an existing target (E_FILE_EXISTS,
  * `new`) unless force. The result says `written: true` and names the file.
+ * A result equal to the file it was read from (`unchanged`) is not written
+ * back over that file (no new mtime, no sync event; `written: false`); `out`
+ * to another file still gets the copy.
  */
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../document.js';
 import { CliError, ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
@@ -86,7 +89,9 @@ async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean }, co
     }
   }
   const result = await compute();
-  if (!opts.dryRun && target) {
+  // a result equal to the file is not written back over it; --out to another file still gets its copy
+  const inPlace = !!target && !!doc.file && resolve(target) === resolve(doc.file);
+  if (!opts.dryRun && target && !(result.unchanged && inPlace)) {
     if (opts.backup && doc.file) {
       try {
         await copyFile(doc.file, `${doc.file}.bak`);

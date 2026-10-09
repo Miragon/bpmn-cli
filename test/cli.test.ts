@@ -373,5 +373,19 @@ describe('bpmn cli contracts', () => {
     expect(r.err).toMatch(/candidates: Event_Inner, Event_S$/m);
     expect(bpmn('remove', f, 'BPMNPlane_P').code).toBe(2);
   });
+
+  it('does not write a result that equals the file, and says so', () => {
+    const before = readFileSync(f, 'utf8');
+    let r = ok('set', f, 'Event_S', 'name=S');
+    expect(r.out).toMatch(/^unchanged: .*contracts\.bpmn \(the result equals the file; nothing written\)$/m);
+    expect(r.out).not.toMatch(/^written: /m);
+    r = ok('set', f, 'Event_S', 'name=S', '--json');
+    expect(r.json()).toMatchObject({ ok: true, written: false, unchanged: true });
+    r = ok('set', f, 'Event_S', 'name=S', '--dry-run');
+    expect(r.out).toMatch(/^dry run: .* not written \(unchanged\)$/m);
+    expect(readFileSync(f, 'utf8')).toBe(before);
+    r = ok('set', f, 'Event_S', 'name=Started', '--json');
+    expect(r.json()).toMatchObject({ written: true, unchanged: false });
+  });
 });
 
