@@ -26,8 +26,8 @@ $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 $ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
 $ bpmn show order.bpmn
 process Process_OrderHandling "Order handling" executable
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_1)
-  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_2)
+  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_1cat8ax)
+  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_18s39x0)
   endEvent Event_Done "Done"
 problems: none
 ```
@@ -39,6 +39,7 @@ with a laid-out diagram.
 
 - [Install](#install)
 - [The contract](#the-contract)
+- [Ids](#ids)
 - [Command reference](#command-reference)
 - [Layout modes](#layout-modes)
 - [Formatting without XML](#formatting-without-xml)
@@ -47,10 +48,12 @@ with a laid-out diagram.
 - [Placement grammar](#placement-grammar)
 - [Set keys](#set-keys)
 - [Camunda 7](#camunda-7)
+- [design-iq: the design profile and validators](#design-iq-the-design-profile-and-validators)
 - [Ops JSON (`bpmn apply`)](#ops-json-bpmn-apply)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Quoting](#quoting)
 - [The DI contract](#the-di-contract)
+- [What a write changes](#what-a-write-changes)
 - [Limitations](#limitations)
 - [A worked session](#a-worked-session)
 - [Library use](#library-use)
@@ -79,17 +82,22 @@ Releases are automated (release-please, npm trusted publishing); see
 During development `npm run dev -- <args>` runs the TypeScript sources directly
 (`tsx src/cli.ts`). `npm test` runs the vitest suite, `npm run typecheck` the
 compiler, and `npm run gate` everything a change has to pass before it is
-handed over (build, tests, the layout-regression budget and a short fuzz
-campaign). The test layers, the benchmark and the fuzzer, and how to run them
+handed over (build, tests, the isomorphism check of the browser-safe core,
+the layout-regression budget and a short fuzz campaign). The test layers, the benchmark and the fuzzer, and how to run them
 on a private corpus without copying it into the repository, are described in
 [docs/testing.md](docs/testing.md).
 
-Dependencies: `bpmn-moddle` (the semantic model), `bpmn-auto-layout`
-(pinned to `2.0.0-alpha.2`), `commander` and `camunda-bpmn-moddle` (pinned to
-`8.0.1`). The last one is read only as data: its Camunda 7 descriptor says
-which `camunda:` attributes and extension elements belong where (placement,
-`validate`). It is never registered with bpmn-moddle, so camunda content stays
-untyped and the serialisation is unchanged. Nothing else.
+Dependencies: `bpmn-moddle` (the semantic model; `moddle` for its types),
+`bpmn-auto-layout` (pinned to `2.0.0-alpha.2`, loaded only for
+`--engine auto`) and `commander` (the CLI only). Nothing else.
+`camunda-bpmn-moddle` (pinned to `8.0.1`) is a development dependency: its
+Camunda 7 descriptor says which `camunda:` attributes and extension elements
+belong where (placement, `validate`), and it is inlined into
+`src/platform/camunda-descriptor.ts` by `node tools/gen-camunda-descriptor.mjs`
+(run it after updating the package; a test fails while the copy differs), so
+the published package reads the copy, without the package and without file
+access. It is never registered with bpmn-moddle, so camunda content stays
+untyped and the serialisation is unchanged.
 
 ## The contract
 
@@ -102,25 +110,72 @@ untyped and the serialisation is unchanged. Nothing else.
    the engine made and nobody changed is redrawn ([Layout modes](#layout-modes)).
    `--relayout` redraws on request, `--no-layout` skips the layout,
    `bpmn layout` redraws on its own. The picture itself is changed with the
-   [format commands](#formatting-without-xml), never with coordinates.
-3. **Ids are readable and stable.** `<Prefix>_<NameSlug>` following the
-   bpmn-js conventions: `Activity_CheckInvoice`, `Event_OrderReceived`,
-   `Gateway_InvoiceOk`, `Flow_3`, `Participant_Customer`, `Lane_Sales`,
-   `DataObjectReference_Order`. Unnamed elements get `<Prefix>_<n>`; name
-   collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every result
-   lists the ids it created.
+   [format commands](#formatting-without-xml), never with coordinates. The
+   write rewrites only the elements the change touched; the rest of the file
+   keeps its text, and a result equal to the file is not written at all
+   ([What a write changes](#what-a-write-changes)).
+3. **Ids follow the file.** New ids take the id style the file already uses
+   ([Ids](#ids)): Camunda Modeler ids (`Activity_0k3x9qa`), type-named ones
+   (`serviceTask_checkStock`), `Task_check_stock`, numbered `Task_12`, flows
+   like `flow_checkStockToShip` or `Flow_<from>_<to>`. A new file gets
+   readable `<Prefix>_<NameSlug>` ids following the bpmn-js conventions:
+   `Activity_CheckInvoice`, `Event_OrderReceived`, `Gateway_InvoiceOk`,
+   `Participant_Customer`, `Lane_Sales`, `DataObjectReference_Order`; flows
+   and unnamed elements get a short hash of their ends or position
+   (`Flow_1cat8ax`), so independent edits on two branches of a file do not
+   produce the same id.
+   Name collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every
+   result lists the ids it created.
 4. **Nothing is half done.** A command (or a whole `apply` batch) either
    succeeds completely or leaves the file untouched. Structural validation
    errors that the change would introduce block the write (`--force`
    overrides); errors the file already had are reported as
    `W_PREEXISTING_ERROR` and do not block, so a file with an unsupported
-   element (a `complexGateway`) or another old problem stays editable.
+   element (a `complexGateway`) or another old problem stays editable. In a
+   design-iq content repository the same holds for design-iq's save gate
+   (the [design profile](#design-iq-the-design-profile-and-validators)).
 5. **Conventions instead of coordinates.** Sub-processes are expanded by
    default; the default flow (or, without one, the first outgoing flow) is
    the straight continuation and further branches alternate below and above
    it; exclusive gateways should be named as a question and their branches
    named; joins and parallel gateways stay unnamed. `bpmn validate` lints
    against these.
+
+## Ids
+
+New ids follow the conventions of the file they are written into (the
+modeler, a team convention, a generator): `bpmn` reads the ids the file has
+and generates new ones the same way. Explicit ids (`--id`, `"id"` in ops
+JSON) are always taken as given.
+
+| what | learned from the file | examples |
+| --- | --- | --- |
+| prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case. No prefix is a convention too: where a kind's or family's ids have none, or the file's flow nodes mostly have none, a named element gets a bare id (camelCase, PascalCase in a PascalCase file); an unnamed one keeps a prefix | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_`; bare `reviewOrder` |
+| body of named elements | the case style of the named flow nodes' ids (of the other named elements when the flow nodes show none) | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice`, a modeler hash `0k3x9qa`, a number `12` |
+| unnamed elements | numbered when the file numbers them, else a hash | `Gateway_0k3x9qa`, `Gateway_3` |
+| sequence / message flows | the form of at least half of the flows | `Flow_0k3x9qa` (default), `SequenceFlow_1abc2de`, `Flow_12`, `flow12`, `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>`, `Flow_<scope>_<A>To<B>` (`Flow_KotO_ValidateToReserve`: the scope the flows share, the first word of each end, `Start` / `End` for start and end events) |
+| diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
+
+One id is not a convention: a rule needs two ids that follow it (in a file
+whose ids are mostly prefixed, one id of a kind is enough for that kind). A
+file without a convention gets the bpmn-cli default.
+
+Hashed ids look like Camunda Modeler ids (`<Prefix>_` and seven base-36
+characters) but are not random: they hash stable inputs (the ends of a flow,
+the kind, name and placement of a node, the owner of a lane set), so the same
+edit on the same file always gives the same id, and edits made independently
+on two branches of a file (git, two agents) do not produce the same new id.
+Earlier versions numbered flows and unnamed elements (`Flow_3`); a file
+numbered like that keeps being numbered. In an `apply` batch, give an
+explicit `id` to an element a later op refers to: generated ids are not
+meant to be guessed. Ids of existing elements never change (a spliced or
+bridged flow keeps its id even when it names its old ends).
+
+Names become ASCII words: German umlauts are transliterated (`ä` -> `ae`,
+`ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`),
+other accents dropped (`Café` -> `Cafe`). An id that is not found is
+matched against the other spellings (`Activity_Prufung`, `Activity_Prüfung`
+suggest `Activity_Pruefung`).
 
 ## Command reference
 
@@ -155,7 +210,7 @@ bpmn label <file> <id> --side above|below|left|right
 bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]
 bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>]
 bpmn tidy <file> [<id>...]
-bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]
+bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
@@ -181,6 +236,7 @@ always redraws, so it has no layout mode options):
 | `--show` | append the full model view (as `show` prints it) to the result |
 | `--strict` | exit with code 5 when the result has warnings |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
+| `--profile <auto\|design\|none>` | validation profile: `design` checks the result against design-iq's save gate and refuses a change that introduces an `E_DESIGN_*` error; `auto` (default) runs it for the models of a design-iq content repository (a `bpmiq.yml` above the file), see [design-iq](#design-iq-the-design-profile-and-validators) |
 
 ### `new`
 
@@ -214,7 +270,9 @@ the validation findings (`problems: none` when there are none). Vendor
 attributes appear with their values next to the properties, nested ones under
 their `set` keys, and repeated extension types are counted:
 `userTask Activity_Review "Review" [loop=parallel, camunda:assignee=demo,
-loop.camunda:collection=${items}, ext: camunda:taskListener x3]`. The process
+loop.camunda:collection=${items}, ext: camunda:taskListener x3]`; a business
+rule task shows its decision link as `calledDecision=<id>` whatever the
+spelling (see [`set`](#set)). The process
 line carries the process's own (`process P "P" executable
 [camunda:historyTimeToLive=180, ext: camunda:executionListener]`); flows show
 `language=`, their vendor attributes and extensions, and a script resource
@@ -255,13 +313,13 @@ same data (`diagrams[].groups[] {id, kind, name, parent, rows}`, `colors`,
 
 ```
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_1 (Collaboration_1)
+diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
   participant Participant_OrderHandling "Order handling"
     lane Lane_Sales "Sales"
       row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Event_Done
       row 2: Activity_ClarifyInvoice, Event_Clarified
     lane Lane_Backoffice "Backoffice"
-colors: Activity_CheckInvoice red, Flow_2 red
+colors: Activity_CheckInvoice red, Flow_024yl5b red
 labels off their default side: Gateway_InvoiceOk below (default above)
 layout quality: score 0: no layout problems
 ```
@@ -334,8 +392,27 @@ dropped. `definition.activityRef` of a compensation event must name an
 activity of the event's own (sub-)process (from an event sub-process also one
 of the scope around it), else `E_CROSS_SCOPE`: the engines refuse anything
 else. An attribute without prefix that BPMN does not define (a hand-edited
-`calledDecision="..."`, which the engines refuse) is removed with `<attr>=`
+`assignee="..."`, which the engines refuse) is removed with `<attr>=`
 (also `definition.<attr>=`); it cannot be set.
+
+`calledDecision=<decision>` links a business rule task to the DMN decision
+it calls, in the spelling of the file's platform: an unprefixed
+`calledDecision="<decision>"` in a design model (no engine namespace, what
+Miragon's design-iq writes, its hard rule 5), `camunda:decisionRef` in a
+Camunda 7 file (`operaton:decisionRef` in an Operaton-only one) and a
+`zeebe:calledDecision decisionId` extension element in a Camunda 8 file (an
+existing `resultVariable` is kept; without one `W_DECISION_RESULT_VARIABLE`
+says Camunda 8 needs it). The other spellings are removed (also a
+hand-written unprefixed `calledElement`), so a task never carries two links;
+the change line names what was removed. An empty value removes the link in
+every spelling. In a Camunda 7 or 8 file the unprefixed attribute is never
+written (the engines validate the file against the BPMN schema and refuse
+it): `set <id> calledDecision=<d>` there converts a hand-written one into the
+engine's spelling, which is the fix the `W_C7_DEPLOY_SCHEMA` finding names.
+`show`, `show <id>` and `find` read every spelling (`calledDecision=risk` on
+the node line, also `match` in `find`). On another element the key is
+`E_UNKNOWN_KEY` (an unprefixed `calledDecision` there is still removed with
+`calledDecision=`).
 
 Conditions are changed in place: `condition=` keeps the expression's id and
 vendor attributes. An inline body replacing a script resource drops
@@ -583,8 +660,21 @@ definition the engines ignore). Every write runs the
 profile before and after and reports only the findings the change introduced
 (JSON `validation.platform` with `added`, `resolved` and the totals in
 `counts`), so a file's old problems are not repeated on every write; `bpmn
-show` does not run it. `layout` redraws the whole diagram from the
-model (a hand layout is replaced, colours survive); `--expand` /
+show` does not run it.
+
+`--profile auto|design|none` selects the validation profile, independent of
+the platform: `design` checks the file against design-iq's save gate (see
+[design-iq](#design-iq-the-design-profile-and-validators)); its errors
+(`E_DESIGN_*`) are errors of `validate` (exit 2), its warnings
+(`W_DESIGN_*`) warnings, each line tagged `[design]`, followed by a
+`validator design (<why it ran>): n error(s), m warning(s) in the file`
+line. `auto` (the default) runs it for the models of a design-iq content
+repository; `--json` adds `"profile": {"profile", "source", "detail"}` and
+`"validators": [{"name", "detail", "errors", "warnings", "counts"}]`. The
+validators read the file's own diagram (before the layout dry run).
+
+`layout` redraws the whole diagram from the
+model (a hand layout is replaced, colours and DI ids survive); `--expand` /
 `--collapse` change which sub-processes are drawn expanded. `layout --tidy`
 keeps the drawing instead and only removes overlaps (= `bpmn tidy`).
 
@@ -612,7 +702,8 @@ problems it added and resolved.
 
 `kinds` prints the kind table, trigger options, set keys, placement grammar
 and the error catalogue; `kinds --json` adds the JSON Schema of the ops
-format (`ops`), the example (`opsExample`) and the exit codes. `guide` is the
+format (`ops`), the example (`opsExample`), the validation profiles
+(`profiles`) and the exit codes. `guide` is the
 cheat sheet for agents.
 
 ## Layout modes
@@ -624,7 +715,7 @@ Every mutating command updates the diagram in one of three modes
 | --- | --- |
 | `auto` (default) | A file without diagram is drawn from scratch. A drawing that the engine made and nobody changed since (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check) is redrawn in full, so it keeps the best global layout while the CLI owns it. Any other drawing, hand-made in a modeler or changed by a format command (also one that only reroutes a flow or moves a label), is kept: `incremental`. |
 | `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
-| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) are carried over by element id; positions are not. `bpmn layout <file>` always does this. |
+| `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) and the DI ids are carried over by element id (new DI gets the file's id style); positions are not. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why (`layout: ok - incremental (hand-made
 diagram: kept, changes placed locally)`), lists what was placed / moved /
@@ -677,11 +768,11 @@ the last of them. A typical agent loop:
 
 ```
 $ bpmn show order.bpmn --layout                          # rows per lane, colours, problems
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_2 Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
 $ bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column
 $ bpmn place order.bpmn Activity_ClarifyInvoice --below Activity_BookInvoice
 $ bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales
-$ bpmn route order.bpmn Flow_8 --exit bottom --entry bottom
+$ bpmn route order.bpmn Flow_02tom5g --exit bottom --entry bottom
 $ bpmn metrics order.bpmn                                # no overlaps / through / outsideLane added?
 ```
 
@@ -807,6 +898,7 @@ are:
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow of a gateway / activity, the node-side twin of `set <flowId> default=true`; empty clears it) |
 | text annotations | `text` |
 | send / receive tasks | `message=<name>`: the root `bpmn:Message` found by id or name, created when missing; empty removes the reference |
+| business rule tasks | `calledDecision=<decision>`: the decision link in the file's spelling (design model: `calledDecision`, Camunda 7: `camunda:decisionRef`, Camunda 8: `zeebe:calledDecision`); the other spellings are removed, empty removes the link |
 | events | `definition.<key>`: attribute of the event definition, e.g. `definition.camunda:errorCodeVariable=errCode definition.camunda:errorMessageVariable=errMsg` (error), `definition.camunda:type=external definition.camunda:topic=notify` (message throw / end event; also `class`, `delegateExpression`, `expression`, `resultVariable`), `definition.camunda:variableName=amount definition.camunda:variableEvents=create,update` (conditional), `definition.camunda:escalationCodeVariable=code` (escalation), `definition.camunda:async=true` (signal); one of several event definitions: `'definition[1].<key>=...'` (0-based) or `'definition[timer].<key>=...'` |
 | activities | `loop.<key>`: attribute of the loop characteristics, e.g. `'loop.camunda:collection=${items}' loop.camunda:elementVariable=item loop.camunda:asyncBefore=true` (a parallel multi-instance loop is created when none exists), `loop.isSequential=true`, `loop.loopMaximum=5` |
 | sequence flows, conditional events | `condition.<key>`: attribute of the condition expression, e.g. `condition.camunda:resource=deployment://check.groovy language=groovy` (a script resource condition, no body; on a conditional event `condition.language=groovy`) |
@@ -912,7 +1004,9 @@ sub-process, a sub-process without start event, a connected ad-hoc
 sub-process, a link throw without its catch, two subscriptions to one message
 or signal in one engine scope, a compensation `activityRef` outside the
 throw event's scope, an attribute BPMN does not define (`W_C7_DEPLOY_SCHEMA`:
-the engines validate the whole file against the schema), ...), what they
+the engines validate the whole file against the schema; design-iq's
+unprefixed `calledDecision` on a business rule task is converted to
+`camunda:decisionRef` by `set <id> calledDecision=<decision>`), ...), what they
 silently ignore or fail on at run time (unknown or misplaced attributes and
 elements, settings on the wrong side of an event definition such as
 `camunda:topic` on a message catch event, `asyncBefore=yes`, a dangling error
@@ -967,12 +1061,12 @@ bpmn add claim.bpmn end "Claim settled" --after Activity_InformParty
 $ bpmn show claim.bpmn
 namespaces: camunda, modeler
 process Process_ClaimHandling "Claim handling" executable [camunda:historyTimeToLive=180]
-  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_1)
-  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_3)
-    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_2)
-  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_4)
-  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_5)
-  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_6)
+  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_078nmus)
+  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_01d397f)
+    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_1vl2v2v)
+  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_0y359yr)
+  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_1fzbwrx)
+  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_0adcvrj)
   endEvent Event_ClaimSettled "Claim settled"
   endEvent Event_ClaimRejected "Claim rejected"
 root: error Error_NotCovered "Not covered" (NOT_COVERED)
@@ -999,6 +1093,151 @@ the form refuses a submit without `approved`, the child process receives
 created per entry of `parties`, assigned to it. (`Mapping_NotCovered` follows
 a rename of `Error_NotCovered`: `bpmn set claim.bpmn Error_NotCovered
 id=Error_Rejected` re-points it.)
+
+## design-iq: the design profile and validators
+
+Miragon's design-iq validates every save of a model with its own validator
+(`@bpmiq/validator`) and refuses a model with an error (HTTP 422). Two
+things make bpmn-cli predictable there: the **design profile**, a built-in
+copy of those rules, and a **validator hook** through which an embedding
+host runs its own validator inside the write transaction.
+
+**The design profile** (`--profile design`, `MutationOptions.profile`)
+checks the result of every write, after the layout, the format operations
+and the text-preserving step, i.e. exactly what would be written. Its rules
+are design-iq's
+hard rules, checked the way design-iq checks them:
+
+| code | rule |
+| --- | --- |
+| `E_DESIGN_START_EVENTS` | a process with flow nodes has exactly one start event; an embedded sub-process (not an event sub-process) at most one. No start event is reported on the process, several on each start event (so a change that adds another one always counts as new) |
+| `E_DESIGN_UNREACHABLE` | every flow node except start events, boundary events and event sub-processes has an incoming sequence flow |
+| `E_DESIGN_DEAD_END` | every flow node except end events and event sub-processes (boundary events included) has an outgoing sequence flow |
+| `E_DESIGN_NOT_IN_LANE` | in a process with lanes every node except boundary events is listed by a top-level lane |
+| `E_DESIGN_NO_DI` | every flow node, sequence flow, data object / store reference, text annotation, association, group, top-level lane, participant and message flow has a shape or edge (design-iq's editor breaks without it) |
+| `E_DESIGN_NAMESPACE` | every namespace prefix the file uses is declared; checked like design-iq on the raw text, so text, CDATA, comments and attribute values that look like `<p:name` or ` p:name="` (a documentation `Set app:mode="prod"`) count as a use too |
+| `E_DESIGN_NO_PROCESS` | the file has a process |
+| `E_DESIGN_XML` | the file is well-formed: no attribute written twice on one element (bpmn-moddle reads such a file by dropping the element; design-iq's parser refuses it and checks nothing else) |
+| `W_DESIGN_COMPLEXITY` | warning: more than 9 activities in the file (7 +- 2) |
+| `W_DESIGN_CALL_LINK` / `W_DESIGN_DECISION_LINK` | warnings: a call activity / business rule task of a design model links no process / decision; inside a content repository, a link to a process / decision that is no `.bpmn` / `.dmn` of its models folder |
+
+The flow rules are degree checks, as in design-iq, not a reachability
+analysis, and they hold for every node: a compensation handler, a
+compensation boundary event, link events and the content of an ad-hoc
+sub-process are valid BPMN but design-iq errors (the messages say so). They
+count the way design-iq counts: one sequence flow per id in each process or
+sub-process (flows without id, or sharing an id, count once; a full redraw
+gives a flow without id one), nodes without id not at all; every
+collaboration's pools and message flows need DI. What the structural
+validation already refuses (a start event with incoming flows, dangling
+references) is not repeated.
+
+One difference is deliberate: in a process with two lane sets design-iq's
+reader sees no lanes at all (its XML parser turns the repeated element into
+a list) and checks no lane membership there; the profile checks every lane
+set, so a node in none of them is `E_DESIGN_NOT_IN_LANE` (stricter: a write
+it lets through is still a save design-iq accepts). A lane member written
+with whitespace around its id (`<flowNodeRef> Task_1 </flowNodeRef>`) counts,
+as in design-iq (the reader resolves the trimmed id, as the XSD says).
+
+On a write the profile behaves like the structural validation: an error the
+change introduces refuses the write (`E_VALIDATION`, each finding tagged
+`[design]`), an error the file already had is a `W_PREEXISTING_ERROR`
+warning (it follows its element through a rename), a warning the change
+introduced is reported once, and the result names the validator and the
+totals:
+
+```
+$ bpmn add claims/models/claim.bpmn boundary:timer "2 days" --on Activity_Review --timer PT2D
+error E_VALIDATION: The change would introduce 1 error(s) reported by validator design; nothing was written
+  [design] E_DESIGN_DEAD_END Event_2Days: boundaryEvent:timer Event_2Days "2 days" has no outgoing sequence flow  (Continue the flow ...)
+  hint: Fix the listed problems (each names its validator in brackets), make the edit in one transaction ...
+$ bpmn apply claims/models/claim.bpmn ops.json      # the boundary event and its end event in one batch
+created boundaryEvent:timer Event_2Days "2 days" - on Activity_Review
+created endEvent Event_Escalated "Escalated" - after Event_2Days
+...
+validator design (bpmiq.yml in /work/claims: a design-iq content repository): 0 error(s), 0 warning(s) in the result
+layout: ok - ...
+written: claims/models/claim.bpmn
+```
+
+Edits that pass through an invalid state (a boundary event before its path,
+a node before its flows) go into one `apply` batch; `--profile none` drafts
+without the gate, and `bpmn validate --profile design` lists what is left. A
+`--no-layout` write leaves new elements without shapes, which the profile
+refuses (`E_DESIGN_NO_DI`).
+
+**When it runs.** `--profile auto` (the default) runs the design profile
+for the models of a design-iq content repository: a `bpmiq.yml` in the
+file's directory or above names (`models: <folder>`, legacy `processes:`) a
+folder that contains the file. There the call and decision links are also
+checked against the file stems of the repository's `.bpmn` and `.dmn` files
+(design-iq's id rule). Any other file gets no profile by default, also a file
+without engine namespace (what design-iq's PR #218 tool calls a "design"
+model and bpmn-cli's platform detector `none`; the two detectors agree on all
+394 real models measured): the profile refuses every intermediate state of a
+model built step by step (`add start` alone leaves a dead end), which is right
+for design-iq's save gate and wrong for plain BPMN editing. `--profile design`
+applies it anywhere, `--profile none` switches it off. In memory
+(`applyToXml`, `validateXml`, `mutateDoc`) there is no file to look up:
+`auto` runs the profile when the caller passes the repository as
+`contentRepo` (`{ processIds, decisionIds }`, the stems of its `.bpmn` /
+`.dmn` models, for the link checks); the file helpers of
+`@miragon/bpmn-cli/node` and the CLI look it up on disk.
+
+**Decision links.** A business rule task's decision link is the set key
+`calledDecision` in every file (see [`set`](#set)): design models get
+design-iq's unprefixed `calledDecision`, Camunda 7 files `camunda:decisionRef`,
+Camunda 8 files `zeebe:calledDecision`. In a design model the unprefixed
+attribute is not reported as an import warning.
+
+**Measured** on 394 real models (private corpora; design-iq's validator
+crashes on one of them, a file with a DOCTYPE): the design profile's verdict
+equals design-iq's on all 393 others (65 refused, 328 accepted), and every
+one of the 540 findings matches by rule and element. bpmn-cli's own
+structural validation refuses 2 of the 328 files design-iq accepts (a plain
+start event in an event sub-process, a contradicting incoming / outgoing
+list). In 2,231 probe edits through the gate (an insert into a flow, a
+rename, a loose task, a boundary event with and without its path, a second
+start event), every write the gate let through was accepted by design-iq and
+every refused one would have added a design-iq error.
+
+**The validator hook** (library). The `validators` option of
+`applyToXml`, `newXml`, `layoutXml`, `validateXml` (and of `mutateDoc`,
+`checkDoc`, and in `@miragon/bpmn-cli/node` of `mutateFile` and
+`checkFile`) takes functions `(xml, ctx) => findings` (sync or async) or
+`{ name, validate }` objects. A mutation runs each one on the document
+before the ops (its text as read) and on the candidate XML after the layout,
+the format operations and the text-preserving step, inside the transaction,
+with `ctx = { file, phase: 'before' | 'after' | 'check', platform, ops,
+doc() }` (`file`: the `file` option, the document's name, or the target the
+file helpers write to). A finding is `{ severity:
+'error' | 'warning', code, message, element?, related?, hint?, key? }`;
+design-iq's `{ severity: 'ERROR' | 'WARN', ruleId, message }` is accepted as
+it is. Errors the change introduces block the write (`E_VALIDATION`, unless
+`force`), errors the document had before are `W_PREEXISTING_ERROR`, and
+findings are matched before / after by code and element (renames followed)
+or, without an element, by code and message (renamed ids replaced in the
+message); `key` overrides that identity. A validator that throws fails the
+write with `E_VALIDATOR_FAILED`. The reports are in
+`result.validation.validators` (`name`, `detail`, introduced `errors` and
+`warnings`, `preexisting`, `resolved`, `counts`), and the findings among
+`validation.errors` / `validation.warnings` with `validator` and `severity`:
+
+```js
+import { checkModel } from '@bpmiq/validator';
+import { applyToXml } from '@miragon/bpmn-cli';
+
+const edit = await applyToXml(xml, ops, {
+  file: 'processes/order.bpmn',
+  profile: 'none', // the host's own validator below is the gate
+  validators: [{ name: 'design-iq', validate: (candidate) => checkModel(candidate, { path: 'processes/order.bpmn' }) ?? [] }],
+});
+// edit.xml is what to save (edit.unchanged: nothing to save); E_VALIDATION (err.details.errors) is the 422
+
+// or the built-in copy of the rules, with the repository's model ids for the link checks
+await applyToXml(xml, ops, { contentRepo: { processIds: ['order', 'billing'], decisionIds: ['risk-rating'] } });
+```
 
 ## Ops JSON (`bpmn apply`)
 
@@ -1089,10 +1328,15 @@ an end event:
 
 Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
-Event_OrderReceived`), then notes (`note: inserted between A and B`),
-warnings (`warning W_CODE element: message  (hint)`), then the layout block,
-then `written: <file>` (`dry run: <file> not written` with `--dry-run`). With
-`--show` the model view follows. The layout block:
+Event_OrderReceived`), then notes (`note: inserted between A and B`), the
+errors a `--force` write let through (`forced E_CODE element: message`),
+warnings (`warning W_CODE element: message  (hint)`; a validator's finding
+names it: `warning [design] W_DESIGN_COMPLEXITY ...`), one `validator <name>
+(<why it ran>): n error(s), m warning(s) in the result` line per validator
+that ran (the design profile), then the layout block, then `written: <file>`
+(`dry run: <file> not written` with `--dry-run`; `unchanged: <file> (the
+result equals the file; nothing written)` when the change left the file as
+it was). With `--show` the model view follows. The layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
@@ -1114,7 +1358,7 @@ and `resolved:` name them with ids).
 
 ```json
 {
-  "ok": true, "file": "order.bpmn", "written": true,
+  "ok": true, "file": "order.bpmn", "written": true, "unchanged": false,
   "created": [{ "id": "Activity_X", "kind": "userTask", "name": "...", "detail": "after Event_Y" }],
   "changed": [], "removed": [],
   "warnings": [{ "code": "W_...", "message": "...", "element": "...", "hint": "..." }],
@@ -1130,15 +1374,20 @@ and `resolved:` name them with ids).
       "added": [], "resolved": [{ "kind": "crossings", "ids": ["Flow_3", "Flow_7"] }]
     }
   },
-  "validation": { "errors": [], "warnings": [] },
+  "validation": { "errors": [], "warnings": [], "platform": { "...": "the engine profile" }, "validators": [{ "name": "design", "detail": "...", "errors": [], "warnings": [], "preexisting": [], "resolved": [], "counts": { "errors": 0, "warnings": 0 } }] },
   "importWarnings": [],
   "view": { "...": "only with --show" }
 }
 ```
 
-`written` is `false` with `--dry-run`; `importWarnings` lists what
+`written` is `false` with `--dry-run`, and when `unchanged` is `true`: the
+result equals the input file byte for byte, so nothing is written over it
+(`--out <other file>` still writes the copy). `importWarnings` lists what
 bpmn-moddle reported while reading the input file (informational, first line
-of each warning).
+of each warning; a design model's `calledDecision` is not one).
+`validation.validators` is there when a validator ran (the design profile,
+library validators); their findings in `validation.errors` /
+`validation.warnings` carry `"validator"` and `"severity"`.
 
 Errors go to stderr: `error E_CODE: message`, then `  hint: ...` and the
 candidate ids when a reference could not be resolved; with `--json`:
@@ -1161,7 +1410,7 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 ## Quoting
 
 - Expressions and anything containing `$`: **single quotes**, e.g.
-  `--condition '${amount > 100}'`, `set Flow_3 condition='${ok}'`. In double
+  `--condition '${amount > 100}'`, `set Flow_1qqra0u condition='${ok}'`. In double
   quotes the shell expands `${...}` to nothing and the CLI rejects the empty
   expression (`E_INVALID_VALUE`).
 - Names with spaces: quote them, `add userTask "Check invoice"`.
@@ -1182,7 +1431,18 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
   itself and nobody changed (`auto`), and everything on request
   (`--relayout`, `--layout full`, `bpmn layout`). Then all shapes, edges,
   waypoints and labels are derived from the semantic model; colours are
-  carried over by element id, manual positions are not.
+  carried over by element id, manual positions are not. The ids stay: every
+  BPMNShape / BPMNEdge keeps the id it had, every plane and diagram keeps its
+  id (a plane named after the old root, `BPMNPlane_<processId>`, follows a new
+  collaboration root), and new DI takes the file's DI id style, so a redraw
+  changes coordinates, not ids.
+- **design-iq stickies follow their node.** A `bpmiq:sticky` extension
+  element of a process (workshop notes of Miragon design-iq, absolute
+  `x` / `y` on the element, no DI) belongs to the flow node nearest to it.
+  When a write moves that node (incremental placement, a format command, a
+  redraw), the sticky moves by the same shift; a write that moves no node
+  never touches it. The result lists them (`stickies moved: Sticky_1 (with
+  Activity_Check)`, JSON `layout.stickies`).
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.
@@ -1254,6 +1514,73 @@ agent can predict the picture from the semantics:
 `bpmn validate` runs the engine as a dry run; the engine reports elements it
 could not draw as `W_LAYOUT_DI_NOT_CREATED`.
 
+## What a write changes
+
+BPMN files live in git or are synced live by a host that replaces one text
+region per save (design-iq). So a write rewrites only the elements the change
+touched, in the file's own style:
+
+- **Everything else keeps its text**, byte for byte: the XML declaration and
+  the comments before the root, the root start tag with its namespace
+  declarations in their order, vendor attributes before or between the typed
+  ones, quoting, entities (`&amp;` stays `&amp;`), CDATA sections, comments,
+  blank lines, indentation, a missing final line break. A rename changes one
+  line (of a labelled event or gateway, the layout also fits its label's
+  bounds).
+- **A changed element keeps its style**: its start tag as written when only
+  its children changed, else its attributes in their order with the new
+  values (a new attribute goes after the one bpmn-moddle writes before it); a
+  script or condition written as CDATA stays CDATA; a label on one line stays
+  on one line; a retype keeps the attributes and renames both tags.
+- **A new element follows the file**: its indentation unit (two or four
+  spaces, tabs), its line breaks, `/>` with or without a space. A namespace
+  the change needs is added to the root tag, which otherwise stays as written.
+- **No-op**: when the result equals the file (a rename to the current name,
+  `set` to the current value, `tidy` on a tidy drawing), nothing is written
+  and the file keeps its modification time: `unchanged: <file>` (JSON
+  `"written": false, "unchanged": true`). `--out <other>` still writes the
+  copy; `--dry-run` says `(unchanged)`.
+- **`incoming` / `outgoing` lists** are derived data (optional in BPMN 2.0).
+  The CLI completes them in memory (the placement grammar, the views and the
+  lint read them) and writes them the way the file keeps them: a file that
+  never lists them never gets them; a file that lists them (Camunda Modeler,
+  bpmn-js) gets the entries of new and changed flows; a missing entry of an
+  unchanged flow is not added. A new file, and one without any sequence flow
+  yet, gets them the way the Modeler writes them.
+- **Comments** on the lines right before an element the change removes, after
+  it on its last line, or inside it, go with it, and the result says so:
+  `note: 1 XML comment(s) dropped: they were inside or next to elements the
+  change removed or rewrote`. All other comments stay where they are.
+- **Encoding**: a file is read in the encoding its XML declaration names
+  (UTF-8 without one, UTF-16 by its byte order mark, ISO-8859-1 /
+  Windows-1252 and the other encodings a browser knows; one it cannot decode
+  is `E_IO` unless the file is plain ASCII), and every write is UTF-8. A
+  written file whose declaration named another encoding declares UTF-8 (note:
+  `the XML declaration named the encoding ISO-8859-1; ...`), so a parser that
+  honours the declaration reads every character as written. Re-encoding in
+  the declared encoding is not done: it cannot write every character (an
+  ISO-8859-1 file has no `€`, names and comments cannot use character
+  references). A no-op is not written, so such a file keeps its bytes. The
+  in-memory API does the same on strings: a changed result declares UTF-8;
+  store it as UTF-8.
+- **Safety**: the result must read back (with bpmn-moddle) as exactly the
+  changed model. If it does not, or the file has something the text reader
+  does not support (a DOCTYPE), the whole file is written the way
+  bpmn-moddle serialises it, with the note `the file's formatting was not
+  kept (<reason>) ...` and the number of comments dropped. A forced write of
+  a lossy import (`--force` on `E_IMPORT_LOSSY`) is always written that way:
+  it drops what bpmn-moddle could not read.
+- **The layout still changes the drawing** where it acts: in `auto` mode a
+  file without a diagram is drawn on its first write, missing DI (an edge
+  without a `BPMNEdge`, a plane without `bpmnElement`) is completed, and a
+  name that no longer fits grows its task. `--no-layout` changes no DI
+  except removing that of removed elements. A full redraw (`bpmn layout`,
+  `--relayout`) rewrites the geometry of the DI section; its DI elements keep
+  their ids (new ones get the file's id style).
+
+`npm run roundtrip` measures this on a corpus (no-ops, renames, inserts; see
+[docs/testing.md](docs/testing.md#roundtrip-fidelity)).
+
 ## Limitations
 
 - Only **one root** is laid out: the collaboration when pools exist, otherwise
@@ -1286,13 +1613,23 @@ could not draw as `W_LAYOUT_DI_NOT_CREATED`.
   unresolved references, duplicate ids, an element the schema allows once
   appearing twice, such as two `loopCharacteristics` on one task: the reader
   keeps only the last) are refused with `E_IMPORT_LOSSY`; `--force` writes
-  anyway and drops that content (of a duplicate element the last one stays).
-  `show` and `validate` print it as `import:` lines. The library refuses them
+  anyway and drops that content (of a duplicate element the last one stays);
+  that write uses bpmn-moddle's own formatting (the file's comments and
+  formatting are not kept, the result says so). `show` and `validate` print
+  it as `import:` lines. The library refuses them
   the same way (`Doc.fromXml` + `mutateDoc` without `force: true`).
+- A write keeps the order of the file's elements ([What a write
+  changes](#what-a-write-changes)), so it no longer repairs an element the
+  file has in a place the BPMN XSD does not allow (0.2 rewrote every file in
+  bpmn-moddle's order, which fixed such a file as a side effect). The engines
+  refuse such a file before and after the edit; `bpmn layout` does not
+  reorder either. A new element goes after the sibling bpmn-moddle writes
+  before it (in a file in XSD order, its place in that order).
 - `bpmn-moddle` never sets `$parent` for elements created in memory; the CLI
-  maintains containment, `incoming`/`outgoing` and every reference itself. A
-  hand-edited file with broken links is reported by `bpmn validate`
-  (`E_DANGLING_REF`, `E_FLOW_LINKS`).
+  maintains containment, `incoming`/`outgoing` (complete in memory, written
+  the way the file keeps them) and every reference itself. A hand-edited file
+  with broken links is reported by `bpmn validate` (`E_DANGLING_REF`,
+  `E_FLOW_LINKS`).
 
 ## A worked session
 
@@ -1316,7 +1653,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
-created sequenceFlow Flow_1 - Event_OrderReceived -> Activity_CheckInvoice
+created sequenceFlow Flow_1cat8ax - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
 warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
@@ -1326,7 +1663,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn end "Invoice handled" --after Activity_CheckInvoice
 created endEvent Event_InvoiceHandled "Invoice handled" - after Activity_CheckInvoice
-created sequenceFlow Flow_2 - Activity_CheckInvoice -> Event_InvoiceHandled
+created sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Event_InvoiceHandled
 note: appended after Activity_CheckInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
@@ -1347,19 +1684,19 @@ EOF
 $ bpmn apply order.bpmn ops.json
 created exclusiveGateway Gateway_InvoiceOk "Invoice ok?" - between Activity_CheckInvoice and Event_InvoiceHandled
 created serviceTask Activity_BookInvoice "Book invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_3 "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
+created sequenceFlow Flow_1qqra0u "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
 created userTask Activity_ClarifyInvoice "Clarify invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_4 "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
+created sequenceFlow Flow_0d0nlaf "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
 created exclusiveGateway Gateway_InvoiceOk_join - join of Gateway_InvoiceOk
-created sequenceFlow Flow_5 - Activity_BookInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_6 - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_7 - Gateway_InvoiceOk_join -> Event_InvoiceHandled
+created sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_0jz1192 - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_1y8i3yl - Gateway_InvoiceOk_join -> Event_InvoiceHandled
 created boundaryEvent:timer Event_Reminder "Reminder" - on Activity_ClarifyInvoice
 created sendTask Activity_RemindCustomer "Remind customer" - after Event_Reminder
-created sequenceFlow Flow_8 - Event_Reminder -> Activity_RemindCustomer
+created sequenceFlow Flow_02tom5g - Event_Reminder -> Activity_RemindCustomer
 created endEvent Event_ReminderSent "Reminder sent" - after Activity_RemindCustomer
-created sequenceFlow Flow_9 - Activity_RemindCustomer -> Event_ReminderSent
-changed sequenceFlow Flow_2 - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled)
+created sequenceFlow Flow_1brj5dq - Activity_RemindCustomer -> Event_ReminderSent
+changed sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled)
 changed serviceTask Activity_BookInvoice "Book invoice" - ext added zeebe:taskDefinition
 note: inserted Gateway_InvoiceOk between Activity_CheckInvoice and Event_InvoiceHandled
 note: appended after Gateway_InvoiceOk
@@ -1375,15 +1712,15 @@ written: order.bpmn
 $ bpmn show order.bpmn
 namespaces: zeebe, modeler
 process Process_OrderHandling "Order handling" executable
-  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_1)
-  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_2)
-  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_3 "yes" if =ok), Activity_ClarifyInvoice (Flow_4 "no" default)
-  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_5)
-  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_7)
+  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_1cat8ax)
+  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_024yl5b)
+  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_1qqra0u "yes" if =ok), Activity_ClarifyInvoice (Flow_0d0nlaf "no" default)
+  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_08vgc8d)
+  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_1y8i3yl)
   endEvent Event_InvoiceHandled "Invoice handled"
-  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_6)
-    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_8)
-  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_9)
+  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_0jz1192)
+    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_02tom5g)
+  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_1brj5dq)
   endEvent Event_ReminderSent "Reminder sent"
 root: message Message_OrderReceived "OrderReceived"
 problems: none
@@ -1396,9 +1733,9 @@ layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn participant "Order handling"
-created collaboration Collaboration_1
+created collaboration Collaboration_17c2kqg
 created participant Participant_OrderHandling "Order handling" - wraps process Process_OrderHandling
-note: collaboration Collaboration_1 created; Participant_OrderHandling wraps the existing process Process_OrderHandling
+note: collaboration Collaboration_17c2kqg created; Participant_OrderHandling wraps the existing process Process_OrderHandling
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1411,13 +1748,13 @@ written: order.bpmn
 
 $ bpmn connect order.bpmn Activity_RemindCustomer Participant_Customer --message Reminder
 created message Message_Reminder "Reminder" - root element
-created messageFlow Flow_10 - Activity_RemindCustomer -> Participant_Customer
+created messageFlow Flow_1r0se6x - Activity_RemindCustomer -> Participant_Customer
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_1 (Collaboration_1)
+diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
   participant Participant_OrderHandling "Order handling"
     row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Gateway_InvoiceOk_join, Event_InvoiceHandled
     row 2: Activity_ClarifyInvoice
@@ -1425,9 +1762,9 @@ diagram BPMNPlane_Collaboration_1 (Collaboration_1)
   participant Participant_Customer "Customer"
 layout quality: score 0: no layout problems
 
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_2 Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
 layout: ok - incremental (format operations only: drawing kept)
-  format color #0: colored Activity_CheckInvoice, Flow_2, Gateway_InvoiceOk
+  format color #0: colored Activity_CheckInvoice, Flow_024yl5b, Gateway_InvoiceOk
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1439,19 +1776,19 @@ written: order.bpmn
 
 $ bpmn place order.bpmn Activity_RemindCustomer Event_ReminderSent --row-of Activity_ClarifyInvoice --after Activity_ClarifyInvoice
 layout: ok - incremental (format operations only: drawing kept)
-  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_8, Flow_6, Flow_10
+  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_02tom5g, Flow_0jz1192, Flow_1r0se6x
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn serviceTask "Archive invoice" --after Activity_BookInvoice
 created serviceTask Activity_ArchiveInvoice "Archive invoice" - after Activity_BookInvoice
-created sequenceFlow Flow_11 - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
-changed sequenceFlow Flow_5 - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join)
+created sequenceFlow Flow_1l931fe - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
+changed sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join)
 note: inserted between Activity_BookInvoice and Gateway_InvoiceOk_join
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
-  placed: Activity_ArchiveInvoice, Flow_11
+  placed: Activity_ArchiveInvoice, Flow_1l931fe
   moved: Participant_OrderHandling, Event_InvoiceHandled, Activity_RemindCustomer, Event_ReminderSent, Gateway_InvoiceOk_join, Participant_Customer
-  rerouted: Flow_5
+  rerouted: Flow_08vgc8d
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1460,6 +1797,7 @@ score 0: no layout problems
 
 $ bpmn validate order.bpmn
 layout: ok
+platform: c8 (modeler:executionPlatform Camunda Cloud) - no Camunda 8 engine rules yet (structure and lint only)
 valid, 0 warning(s)
 ```
 
@@ -1481,29 +1819,217 @@ against the live renderer.)
 
 ## Library use
 
-The package also exports its building blocks (`dist/index.js`): `Doc`
-(load / create / query the model), `parseOps` and `OPS_SCHEMA`, `runOps`,
-`mutateFile` / `mutateDoc` / `checkFile` (the write pipeline, with the types
+The package has two entries:
+
+- **`@miragon/bpmn-cli`**: the core. It runs in Node and in the browser:
+  nothing it imports reads a file, `process`, `Buffer` or a Node builtin
+  (checked on every change, see [Browser bundles](#browser-bundles)).
+  Strings in, strings and data out.
+- **`@miragon/bpmn-cli/node`**: the core plus the file helpers the CLI uses
+  (Node only).
+
+### The in-memory API
+
+Every function runs the code of the CLI command it names, without a file:
+
+| function | like | returns |
+| --- | --- | --- |
+| `applyToXml(xml, ops, opts?)` | `bpmn apply` | `EditResult` |
+| `newXml(opts?)` | `bpmn new` | `EditResult` |
+| `layoutXml(xml, opts?)` | `bpmn layout` | `EditResult` |
+| `validateXml(xml, opts?)` | `bpmn validate --json` | `ValidationReport` |
+| `viewXml(xml, opts?)` | `bpmn show --json` | `ModelView`, `ElementDetail` (with `id`), `LayoutView` (with `layout: true`) |
+| `showXml(xml, opts?)` | `bpmn show` | the text |
+| `metricsXml(xml)` | `bpmn metrics --json` | `{ score, counts, problems }` |
+| `findXml(xml, text, { kind? })` | `bpmn find --json` | `FindHit[]` |
+| `extensionsXml(xml, id)` | `bpmn ext list <file> <id> --json` | `ExtensionInfo[]` |
+
+- `ops` is the [ops JSON](#ops-json-bpmn-apply) of `bpmn apply`: an array,
+  `{ "ops": [...] }`, or the JSON text of either (schema: `OPS_SCHEMA`, also
+  `bpmn kinds --json` -> `ops`). It is checked like `apply` checks it
+  (`E_USAGE` naming `ops[<i>]`; values are normalised, `"by": "80"` is 80
+  pixels).
+- Options of the writing functions (`EditOptions`): `layout` (`'auto'`, the
+  default, `'incremental'`, `'full'` or `false`, see
+  [Layout modes](#layout-modes)), `engine` (`'clean'` or `'auto'`), `force`,
+  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `profile` (`'auto'`,
+  `'design'`, `'none'`), `contentRepo` and `validators` (see
+  [design-iq](#design-iq-the-design-profile-and-validators)), `file` (the
+  document's name for the validators), `show` (add the model view) and
+  `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
+  of `layout`; `newXml` takes `processName`, `processId`, `executable` and
+  `target`; `viewXml` and `showXml` take `id`, `scope` and `layout` like
+  `show`; `validateXml` takes `platform`, `profile`, `contentRepo`,
+  `validators` and `file`.
+- `EditResult` is `{ xml, unchanged, result }`: the new document, which
+  keeps the input's text wherever the ops changed nothing ([What a write
+  changes](#what-a-write-changes)); `unchanged` is `true` when it is
+  byte-identical to the input (then `xml` is the input string itself and
+  there is nothing to save; a rename to the current name, `tidy` on a tidy
+  drawing); `result` is what the CLI prints with `--json`
+  ([Output](#output-errors-and-exit-codes)) without `file`, `written` and the
+  XML. `renderMutation(result)` gives the CLI's text for it,
+  `renderValidation(report)` the text of `validate`.
+- The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
+  errors the ops would introduce (`E_VALIDATION`, also those of the design
+  profile and of `validators`) and content a retype would delete
+  (`E_WOULD_DROP_CONTENT`) are refused unless `force: true`. The layout
+  modes, the format ops, the file's id style for new ids
+  ([Ids](#ids)) and the platform profile's new findings
+  (`result.validation.platform`) work as on the command line.
+- A failure throws a `CliError`: `code`, `category`, `details` (`element`,
+  `related`, `candidates`, `hint`, `op`); `toJSON()` is the CLI's `--json`
+  error. Nothing is half done: the caller still has its input.
+
+```ts
+import { applyToXml, CliError, newXml, renderMutation, showXml } from '@miragon/bpmn-cli';
+
+let { xml } = await newXml({ processName: 'Order handling' });
+const edit = await applyToXml(xml, [
+  { op: 'add', kind: 'start', name: 'Order received' },
+  { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' },
+  { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
+]);
+if (!edit.unchanged) xml = edit.xml; // and save it
+edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_1cat8ax', 'Event_Done', 'Flow_18s39x0']
+edit.result.layout.mode;              // 'full' (no diagram before: drawn from scratch)
+renderMutation(edit.result);          // the text `bpmn apply` prints: created ... / layout: ok - full (...)
+await showXml(xml);                   // the `bpmn show` text of the quick start above
+
+try {
+  await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }]);
+} catch (err) {
+  if (!(err instanceof CliError)) throw err;
+  err.code;               // 'E_NOT_FOUND'
+  err.details.candidates; // ['Activity_CheckInvoice']
+}
+```
+
+The layout engines' diagnostic lines (placement candidates, reroute reasons,
+`[strip]` / `[rows]` lines) go to a `debug: (line) => ...` option of one
+call, or to `setLayoutDebug(sink)` for the whole process; the CLI sets the
+latter when `BPMN_LAYOUT_DEBUG=1` and writes them to stderr.
+
+### File helpers (`@miragon/bpmn-cli/node`)
+
+`readXml(file)` and `readDoc(file)` (`E_FILE_NOT_FOUND`, `E_IO`, `E_PARSE`;
+no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
+`writeAtomic(file, text)` (temp file, then rename), `mutateFile(file, ops,
+opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
+ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`) and
+`checkFile(file, { platform, profile, validators })` (`validate`).
+`FileMutationOptions` adds the file options to the core options: `out`,
+`dryRun`, `backup` and `mustNotExist` (`E_FILE_EXISTS` unless `force`); the
+result says `written: true` and names the file. A result equal to the file
+it was read from is not written back (`written: false`, `unchanged: true`;
+`out` to another file still writes the copy). For the validation profile
+the helpers look up the design-iq content repository of the file they write
+or check (`contentRepoOf(file)`: the nearest `bpmiq.yml`, the model ids of
+its models folder) unless `contentRepo` is given or the profile is `none`,
+and tell the validators that file (`ctx.file`, the `out` target with
+`out`).
+
+### Building blocks
+
+The in-memory API is made of exported parts. `Doc` (`Doc.fromXml(xml)`,
+`Doc.create({ target })` with `TARGETS`; query the model), `parseOps` and
+`OPS_SCHEMA`, `runOps` (the ops alone, without any guard), the pipeline on a
+`Doc`: `mutateDoc(doc, ops, opts)` / `layoutDoc` / `checkDoc` (never write;
+`written` is `false`; typed ops, not checked by `parseOps`), with the types
 `MutationOptions`, `MutationResult`, `LayoutMode`, `LayoutStatus` and
-`LAYOUT_MODES`), `validateDoc`, `buildView` / `elementDetail` /
-`findElements`, `layoutModel` and the `KINDS` vocabulary. The diagram API:
-`layoutProblems` / `layoutProblemsOfXml` / `diffProblems` / `metricsDelta`
-(layout metrics with ids, `METRIC_KEYS`, `METRIC_WEIGHTS`), `layoutView`
-(what `show --layout` prints), `runFormatOps` (the format operations on a
-loaded document; `FORMAT_OP_NAMES`, `isFormatOp`, the op types `PlaceOp`,
-`AlignOp`, `ColorOp`, `LabelOp`, `RouteOp`, `SpaceOp`, `TidyOp`) and the
-colour palette `SWATCHES`. The platform profile: `validateDoc(doc, {
-platform: 'auto' | 'c7' | 'c8' | 'none' })` (findings among the warnings,
-`result.platform` with the platform, its source and the counts),
-`checkFile(file, { platform })`, `MutationOptions.platform` (default auto;
-`'none'` switches it off; an explicit choice also decides the engine rules of
-the ops, e.g. which event-gateway rule a bridge follows), `runProfile`,
-`detectPlatform`, `PLATFORM_CHOICES`
-and the types `ProfileFinding`, `PlatformSummary`, `Severity`;
-`listExtensions` / `listAllExtensions` (what `ext list` prints) and
-`Doc.create({ target })` with `TARGETS`. Everything the CLI does goes through
-these functions. `mutateDoc` applies the same guards as the CLI: a lossy import
-(`E_IMPORT_LOSSY`), errors the ops would introduce (`E_VALIDATION`) and a
-retype that would delete a sub-process's content (`E_WOULD_DROP_CONTENT`)
-are refused unless `force: true`; `runOps` alone applies the ops without
-these guards.
+`LAYOUT_MODES`, and `assertLossless`. What the CLI prints: `mutationReport`,
+`mutationWarnings`, `validationReport`, `renderMutation`, `renderValidation`,
+`renderView`, `renderDetail`, `renderLayoutView`, `renderFind`,
+`renderMetrics`, `renderExtensionList`, `renderProblems`; `guideText`,
+`kindsText`, `kindsJson` and `ERROR_CATALOGUE`. Views: `validateDoc`,
+`buildView` / `scopeView` / `elementDetail` / `findElements`, `layoutModel`
+and the `KINDS` vocabulary. The diagram API: `layoutProblems` /
+`layoutProblemsOfXml` / `diffProblems` / `metricsDelta` (layout metrics with
+ids, `METRIC_KEYS`, `METRIC_WEIGHTS`), `layoutView` (what `show --layout`
+prints), `runFormatOps` (the format operations on a loaded document;
+`FORMAT_OP_NAMES`, `isFormatOp`, the op types `PlaceOp`, `AlignOp`,
+`ColorOp`, `LabelOp`, `RouteOp`, `SpaceOp`, `TidyOp`) and the colour palette
+`SWATCHES`. The platform profile: `validateDoc(doc, { platform: 'auto' |
+'c7' | 'c8' | 'none' })` (findings among the warnings, `result.platform`
+with the platform, its source and the counts), `MutationOptions.platform`
+(default auto; `'none'` switches it off; an explicit choice also decides the
+engine rules of the ops, e.g. which event-gateway rule a bridge follows),
+`runProfile`, `detectPlatform`, `PLATFORM_CHOICES` and the types
+`ProfileFinding`, `PlatformSummary`, `Severity`; `listExtensions` /
+`listAllExtensions` (what `ext list` prints).
+
+Validation in the transaction (see
+[design-iq](#design-iq-the-design-profile-and-validators)):
+`MutationOptions.validators` / `CheckOptions.validators` (also `validators`
+of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
+`ValidatorFn`, `NamedValidator`, `ValidatorFinding`, `ValidatorContext`,
+`ValidatorIssue`, `ValidatorReport`; `profile` (`'auto' | 'design' |
+'none'`, `PROFILE_CHOICES`, `resolveProfile`, `ProfileInfo`) and
+`contentRepo` (`ContentRepo`: the design-iq content repository the document
+is a model of, with its `processIds` / `decisionIds` for the link checks; in
+memory `auto` runs the design profile only when it is given; the file
+helpers find it on disk: `findContentRepo`, `contentRepoOf`,
+`resolveFileProfile` in `@miragon/bpmn-cli/node`), the design profile itself
+as `designFindings(doc, { processIds, decisionIds })` / `designValidator(...)`
+(`DESIGN_VALIDATOR` is its name), and `decisionLinkOf(element, doc)` (a
+business rule task's decision link in any spelling).
+
+Text preservation: `mutateDoc` returns the text to store as `result.xml`:
+the original text of everything the ops did not change (see [What a write
+changes](#what-a-write-changes)); `result.unchanged` is true when it equals
+the input (the file helpers then do not write over the file: `written:
+false`). `Doc.fromXml` keeps what it read as `doc.source` (`DocSource`: the
+text and the incoming / outgoing lists as read); `preserveText(original,
+asRead, changed)` is the text-preserving step on its own, for a host that
+serialises a model itself (two serialisations by bpmn-moddle, of the model as
+read and as changed).
+
+### Browser bundles
+
+`npm run gate` (and so CI) runs `tools/iso/check.mjs` after the build: it
+bundles `dist/index.js` with esbuild for `platform=browser` and fails on an
+import of a Node builtin or a reference to `process`, `Buffer`, `global`,
+`require`, `__dirname`, `__filename` or `setImmediate`, naming the module; it
+also checks that both entries and their types resolve for a strict
+TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
+`test/isomorphic.test.ts` runs the browser bundle in a vm context without any
+Node global and compares `applyToXml` (also with the design profile and a
+host validator), `layoutXml` (both engines), `validateXml`, `showXml`,
+`findXml` and `metricsXml` with Node, byte for byte.
+
+Sizes (esbuild, minified, split like a host's bundler would):
+
+| entry | minified | gzip | loaded on demand |
+| --- | --- | --- | --- |
+| everything `@miragon/bpmn-cli` exports | 716 KB | 224 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 594 KB | 186 KB | the same |
+
+`package.json` declares only the CLI files as having side effects, so a
+bundler drops what a host does not import.
+
+### Changes from 0.2
+
+- `mutateFile`, `checkFile` and `loadDoc` moved to `@miragon/bpmn-cli/node`;
+  `Doc.load(file)` is `readDoc(file)` there.
+- `mutateDoc` never writes; `out`, `dryRun`, `backup` and `mustNotExist` are
+  options of the file helpers (`mutateDocToFile`, `mutateFile`).
+- `layoutXml` is `bpmn layout` on a string; the former wrapper around
+  bpmn-auto-layout is internal (`layoutModel(model, { engine: 'auto' })`).
+- `package.json` has `exports`: only `.`, `./node` and `./package.json`
+  resolve (no deep imports into `dist/`).
+- A write keeps the file's text outside what it changed, and a result equal
+  to the file is not written (`MutationResult.unchanged`, `written: false`;
+  [What a write changes](#what-a-write-changes)).
+- New ids follow the file's id style; flows and unnamed elements get a short
+  hash instead of `<Prefix>_<n>` ([Ids](#ids)): a batch that refers to an
+  element it creates gives it an explicit `id`.
+- `checkFile` / `checkDoc` return the validation profile that ran
+  (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
+  `profile`, `contentRepo`, `validators` and `file`; in a design-iq content
+  repository the CLI and the file helpers run the design profile by default
+  (`--profile none` switches it off).
+- `readXml` and the other file helpers read a file in the encoding its XML
+  declaration names (0.2 read UTF-8 only); a write is UTF-8 and declares it.
+- A full redraw gives an element it draws that has no id (a hand-written
+  message flow, pool, process or collaboration) an id first; 0.2 wrote
+  `bpmnElement="undefined"`.

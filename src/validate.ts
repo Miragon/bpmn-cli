@@ -25,7 +25,8 @@
  *  Each finding: { code, message, element, related?, hint }.
  *  Before checking, validateDoc normalises the derived incoming/outgoing
  *  mirror lists (optional in BPMN 2.0): a sequence flow missing from
- *  sourceRef.outgoing / targetRef.incoming is added there (repairFlowLinks);
+ *  sourceRef.outgoing / targetRef.incoming is added there (repairFlowLinks),
+ *  in memory only (a write keeps the file's lists, see mirror.ts);
  *  E_FLOW_LINKS is reserved for entries that contradict a flow's endpoints.
  *  Hints name real command lines (`bpmn <cmd> <file> ...`).
  *
@@ -57,15 +58,19 @@
 import type { Doc } from './document.js';
 import { isCliError, type Warning } from './errors.js';
 import { isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from './kinds.js';
-import { addTo, is, walk, type El } from './model.js';
+import { completeMirrorLists } from './mirror.js';
+import { is, walk, type El } from './model.js';
 import { assertSequenceFlowEndpoints } from './ops/flows.js';
 import { profileDelta, runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
+import type { ValidatorReport } from './validators.js';
 
 export interface ValidationResult {
   errors: Warning[];
   warnings: Warning[];
   /** the platform profile that ran (validateDoc with a platform option, mutations); its findings are among the warnings */
   platform?: PlatformSummary;
+  /** the validators that ran (the design profile, MutationOptions.validators; src/validators.ts); their findings are among the errors / warnings */
+  validators?: ValidatorReport[];
 }
 
 export interface ValidateOptions {
@@ -248,25 +253,15 @@ export function flowOrder(doc: Doc, scope: El): FlowOrder {
  * where it is missing. BPMN 2.0 makes those mirror lists optional (they are
  * derivable from sourceRef/targetRef) and hand-written or generated files
  * routinely omit them, while the placement grammar, the view and the lint
- * read them. Idempotent; returns the number of entries added. Entries that
+ * read them. The completion is in memory only: a write keeps the lists the
+ * way the file kept them (mirror.ts unkeptEntries), so no entry is written
+ * for an unchanged flow of a file that omits it. Doc.fromXml completes the
+ * lists when it reads a document; this repeats it for a model changed in
+ * memory. Idempotent; returns the number of entries added. Entries that
  * contradict a flow's endpoints are left alone and reported as E_FLOW_LINKS.
  */
 export function repairFlowLinks(doc: Doc): number {
-  let added = 0;
-  for (const flow of walk(doc.definitions)) {
-    if (!is(flow, 'bpmn:SequenceFlow')) continue;
-    const source = peek<El>(flow, 'sourceRef');
-    const target = peek<El>(flow, 'targetRef');
-    if (source && is(source, 'bpmn:FlowNode') && !outgoingOf(source).includes(flow)) {
-      addTo(source, 'outgoing', flow);
-      added++;
-    }
-    if (target && is(target, 'bpmn:FlowNode') && !incomingOf(target).includes(flow)) {
-      addTo(target, 'incoming', flow);
-      added++;
-    }
-  }
-  return added;
+  return completeMirrorLists(doc.definitions);
 }
 
 /* ------------------------------------------------------------------ */
@@ -737,7 +732,8 @@ function checkDuplicateNames(ctx: Ctx): void {
  * written (dangling references, impossible structures); `warnings` are lint
  * findings about modelling conventions. Missing incoming/outgoing mirror
  * entries are added first (see repairFlowLinks): the only change this makes
- * to the model is derived data every later stage relies on. With
+ * to the model is derived data every later stage relies on, and it is not
+ * written where the file omits it (mirror.ts). With
  * `opts.platform` the platform profile runs too (see the module header).
  */
 export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult {

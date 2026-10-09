@@ -1,7 +1,10 @@
 # Testing bpmn-cli
 
-Five layers, from fast to thorough (plus the opt-in Camunda 7 engine check,
-see [Engine checks](#engine-checks-camunda-7)):
+Six layers, from fast to thorough (plus the isomorphism check of the
+browser-safe core, see [Isomorphism check](#isomorphism-check), the opt-in
+Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), and
+the opt-in check against design-iq's validator, see
+[design-iq](#design-iq-validator-check)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -10,9 +13,11 @@ see [Engine checks](#engine-checks-camunda-7)):
 | layout regression | quality of the clean full-layout engine on tools/scenarios | `npm run layout:regress` | ~20 s |
 | fuzzer | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s – hours |
 | benchmark | stability, quality, hard defects and semantic success of six typical edits, against a baseline | `npm run bench` | ~30 s per arm on the scenarios |
+| roundtrip | how much of a file a no-op, a rename and an insert rewrite (byte-identical no-ops, changed lines, the replaced text region) | `npm run roundtrip` | ~10 s on the scenarios |
 
 `npm run gate` runs the build, all unit tests (including the property test),
-the layout-regression budget and a short fuzz campaign (12 walks of 15 steps).
+the isomorphism check, the layout-regression budget and a short fuzz campaign
+(12 walks of 15 steps).
 Run it before every change you hand over; it exits non-zero on the first
 failing stage. The gate's fuzz campaign is strict on the robustness invariants
 and reports new hard layout defects as warnings (`--hard warn`): while layout
@@ -100,6 +105,60 @@ nondeterministic bytes, a crash) and checks that the oracles notice them.
 Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
+
+`test/step2-integration.test.ts` checks that the parts of step 2 work as one
+pipeline: the in-memory API keeps the text (a no-op is the input string
+itself, an insert gets ids in the file's style and changes only what it
+touched, a full redraw keeps every DI start tag, a sticky keeps its text
+when it follows its node), validators see the text-preserving result, the
+design profile runs in memory with a content repository the host names, and
+the file helpers find the repository of the file they write.
+`test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
+ids before drawing them, `test/node-files.test.ts` the encodings (a file is
+read as it declares, a write is UTF-8 and says so), and the design profile
+test the cases design-iq's validator decides differently from a plain BPMN
+reading (its namespace check on the raw text, flows counted per id, every
+collaboration, an attribute written twice).
+
+## Isomorphism check
+
+The package's main entry (`src/index.ts`, published as `@miragon/bpmn-cli`)
+must run in a browser; only `src/node/` (`@miragon/bpmn-cli/node`) and
+`src/cli.ts` may touch files, `process` or other Node builtins.
+
+```
+npm run build && npm run check:iso     # node tools/iso/check.mjs [--json]
+npx vitest run test/isomorphic.test.ts
+```
+
+- `tools/iso/check.mjs` (part of the gate) bundles `dist/index.js` with
+  esbuild for `platform=browser` and fails on an import of a Node builtin or a
+  free reference to `process`, `Buffer`, `global`, `require`, `__dirname`,
+  `__filename`, `setImmediate` / `clearImmediate`, naming the module
+  (`tools/iso/bundle.mjs`: the globals are replaced through esbuild's `define`,
+  which leaves local variables and properties of that name alone). It also
+  fails when the bundle contains `dist/node/` or `dist/cli.js`, when the
+  package `exports` do not resolve, or when a strict TypeScript consumer
+  (`skipLibCheck: false`, no `@types/node`, lib ES2022) of both entries does
+  not compile. It prints the minified and gzipped sizes, split like a host's
+  bundler would split them.
+- `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
+  needed), checks that the check sees a planted `node:fs` import and
+  `process` read, and runs the bundle in a `vm` context without any Node
+  global: `applyToXml` (also with the design profile and a host validator,
+  and a no-op that must come back `unchanged`), `layoutXml` (both engines),
+  `newXml`, `validateXml` with the Camunda 7 and the design profile,
+  `showXml`, `findXml` and `metricsXml` must give there exactly what they
+  give in Node. It also checks that the inlined
+  Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
+  installed `camunda-bpmn-moddle`; regenerate it with
+  `node tools/gen-camunda-descriptor.mjs`.
+- `test/api.test.ts` checks that the in-memory API gives what the CLI writes
+  and prints for the same input.
+
+When the check fails, move the Node-only code into `src/node/` (or behind an
+option, like the layout debug lines: `setLayoutDebug`, which the CLI maps to
+`BPMN_LAYOUT_DEBUG`).
 
 ## Layout regression
 
@@ -231,6 +290,43 @@ known to both runs are compared, so a newly added metric kind is not a
 regression of the code. With `--engine`, set `BASELINE_BIN` so that both runs
 draw the engine corpus with the same CLI.
 
+## Roundtrip fidelity
+
+A write changes the text of the elements it changed and nothing else
+(src/preserve.ts, src/mirror.ts; README "What a write changes"). Two checks
+keep it that way:
+
+- `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
+  fixtures in `test/fixtures/roundtrip/` (prolog, comments, CDATA, vendor
+  attributes before typed ones, four-space indentation, `/>` without a
+  space, a file without incoming / outgoing lists) with exact expected
+  texts for a no-op, a rename, an insert, a condition, a retype, a removed
+  element with a comment and a new namespace; and every fixture and
+  scenario of the repository: a no-op is `unchanged`, a rename changes one
+  line.
+- `tools/roundtrip.mjs` measures a corpus in-process (dry runs, nothing is
+  written): per file a no-op (`set <first named activity> name=<its
+  name>`, layout auto and `--no-layout`), a rename (`--no-layout` and
+  auto) and an insert after the first task with one outgoing flow. It
+  prints the byte-identical no-ops (the others with their cause), the
+  changed lines, and the share of the file that a host replacing one text
+  region per save (design-iq's Y.Text `diffRegion`) rewrites, plus the
+  notes about fall-backs and dropped comments.
+
+```
+npm run build
+npm run roundtrip                                   # tools/scenarios + test/fixtures
+node tools/roundtrip.mjs ~/corpora/hand --list      # a private corpus; --list names the non-identical no-ops
+node tools/roundtrip.mjs --baseline <old>/dist/index.js ~/corpora/hand   # against another build
+```
+
+A no-op that is not byte-identical in layout auto comes from the layout,
+not from the writer: a file without a diagram is drawn, and the incremental
+layout completes missing DI (an edge, a shape, the plane's `bpmnElement`).
+With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
+above zero means preserve.ts could not keep a file's text (the note says
+why) and deserves a synthetic fixture.
+
 ## Engine checks (Camunda 7)
 
 The Camunda 7 profile of `bpmn validate` (`src/platform/c7.ts`) states for
@@ -270,6 +366,40 @@ it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
 complete, correlate), and run the real-file battery on your private corpus:
 deploy every file before and after each edit and compare the camunda content
 element by element.
+
+## design-iq validator check
+
+The design profile (`src/platform/design.ts`) mirrors the save gate of
+Miragon's design-iq. `test/design-profile.test.ts` holds one synthetic model
+per rule with design-iq's verdict (`designIq: 'pass' | 'fail'`, and the number
+of its errors where it differs from the profile's); by default it checks the
+profile only. To check the verdicts against design-iq's own validator, point
+`BPMN_DESIGN_IQ_VALIDATOR` at `packages/validator/src/validate.ts` of a
+design-iq checkout whose dependencies are installed (Node 22.6+ strips the
+types; the test runs it in a child process and never imports it):
+
+```
+BPMN_DESIGN_IQ_VALIDATOR=<checkout>/packages/validator/src/validate.ts npx vitest run test/design-profile.test.ts
+```
+
+`test/validators.test.ts` covers the validator hook of the pipeline
+(blocking, pre-existing errors through renames, warnings, context, failing
+validators, the content-repository auto profile and the CLI output),
+`test/decision-link.test.ts` the decision link (`calledDecision`) in design,
+Camunda 7, Operaton and Camunda 8 files.
+
+**On a private corpus.** Compare, per file, design-iq's `checkModel(xml, {
+path })` errors with `checkFile(file, { profile: 'design' })` of
+`@miragon/bpmn-cli/node` (or `validateXml(xml, { profile: 'design' })`; the
+design profile's errors carry `validator: "design"`), file by file and finding by
+finding (design-iq names the element in its message: `<id> is a dead end`,
+`expected exactly one start event in process <id>`; it reports several start
+events once per process, the profile once per start event). For the gate
+itself, run edits through `mutateDoc(doc, ops, { profile: 'design' })` (or
+`applyToXml`; neither writes) and check that a refused edit (E_VALIDATION with a `design`
+finding) is exactly one whose output (written with `force: true`) has an
+error design-iq did not report before. Keep the scripts and their output
+outside the repository and report counts only.
 
 ## Private corpora
 

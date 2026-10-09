@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups)
+# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and step 2: bpmn-cli as design-iq's editing engine)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -9,7 +9,12 @@ A CLI that lets an AI agent edit BPMN 2.0 models semantically. The agent names
 elements by id and changes kinds, names, flows, triggers, lanes, pools,
 properties and vendor extensions; it never sees or writes diagram interchange.
 Every mutating command runs the same pipeline: load, apply operations,
-validate, lay out, write atomically. A hand-made diagram is kept (new elements
+validate, lay out, write atomically; the write keeps the text of everything
+the change did not touch, and a result equal to the file is not written. The
+same pipeline runs in the browser on strings (`@miragon/bpmn-cli`:
+`applyToXml` and friends; the file helpers are `@miragon/bpmn-cli/node`), with
+host validators and a copy of design-iq's save gate inside the transaction.
+New ids follow the file's id style. A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
@@ -19,7 +24,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 919 tests, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1318 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -30,7 +35,192 @@ bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
 
-## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
+## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
+
+Goal: bpmn-cli as the editing engine inside Miragon's design-iq (PR #218 of
+Miragon/design-iq, its ADR 0008), which runs the editor in the browser,
+stores BPMN in git, syncs a file live by replacing one text region per save
+and refuses every save its validator finds an error in. Four packages were
+built in parallel and merged on `step2/integration`; 13 audit bugs are fixed
+(#27, #29–#33, #43–#47, #55, #56), 2 partly (#48, #49). Tables and evidence:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-2-2026-10-09-design-iqs-editing-engine).
+
+**The write pipeline, as it is now** (`src/pipeline.ts mutate`, in memory,
+browser-safe): lossy-import guard -> the document as read is serialised once
+(`asRead`, the baseline of the text step) -> layout snapshot and sticky
+anchors -> error baseline, platform profile baseline, validators on the
+document before the ops -> ops -> structural validation (`E_VALIDATION` for
+introduced errors) -> layout (auto / incremental / full; a full redraw gives
+the DI its ids back inside `layoutModel`) -> format ops -> stickies follow
+their nodes -> text-preserving step (`outputText`: mirror lists the file's
+way, unchanged elements keep their text) -> validators on that final text
+(`E_VALIDATION` for introduced errors) -> `unchanged` (result equals the
+input text). The node layer (`src/node/files.ts`) reads, looks up the
+design-iq content repository, calls the pipeline and writes atomically,
+skipping a write of an unchanged result over its own file.
+
+- **Browser-safe core and in-memory API** (core package, #33, #49 partly).
+  Two entries (`package.json` `exports`): `@miragon/bpmn-cli` (`src/index.ts`)
+  never touches files, `process` or Node builtins; `@miragon/bpmn-cli/node`
+  (`src/node/index.ts`) adds `readXml`, `readDoc`, `loadDoc`, `writeAtomic`,
+  `mutateFile`, `mutateDocToFile`, `layoutFile`, `checkFile` and the content
+  repository lookup (`src/node/repo.ts`: `findContentRepo`, `contentModelIds`,
+  `contentRepoOf`, `resolveFileProfile`). Only `src/node/` and `src/cli.ts`
+  may use Node; `tools/iso/check.mjs` in the gate fails otherwise.
+  `src/api.ts`: `applyToXml(xml, ops, opts)` -> `{ xml, unchanged, result }`,
+  `newXml`, `layoutXml` (= `bpmn layout`), `validateXml`, `viewXml` /
+  `showXml`, `metricsXml`, `findXml`, `extensionsXml`; ops go through
+  `parseOps` like `apply`; options include `profile`, `contentRepo`,
+  `validators` and `file`. `mutateDoc` never writes (`out`, `dryRun`,
+  `backup`, `mustNotExist` are node options); `layoutDoc` / `checkDoc` are
+  the `layout` / `validate` commands on a `Doc`. What a command reports is
+  `src/report.ts` (CLI and API alike). Layout debug lines: `src/debug.ts`
+  (`setLayoutDebug`, `debug` option; the CLI maps `BPMN_LAYOUT_DEBUG`). The
+  Camunda 7 descriptor is inlined (`src/platform/camunda-descriptor.ts`,
+  `tools/gen-camunda-descriptor.mjs`; a test fails while it is stale);
+  bpmn-auto-layout is imported on first use. `npm run build` also ships the
+  type shims (`tools/build-types.mjs`); `moddle` is a direct dependency.
+- **Text-preserving writes** (roundtrip package, #30, #31, #44–#47).
+  `src/preserve.ts` (reader with positions: `src/xmltext.ts`) compares the
+  file, bpmn-moddle's serialisation of the model as read and of the changed
+  model: elements whose serialisation did not change keep their original
+  text; changed ones keep their start tag or attribute order, new ones get
+  the file's indentation, line breaks and `/>` style, CDATA stays CDATA. The
+  result must read back as exactly the changed model, else it falls back to
+  the plain serialisation with a note (a DOCTYPE and a forced lossy import
+  always do). `src/mirror.ts`: incoming / outgoing lists are complete in
+  memory (`Doc.fromXml` records them as read in `doc.source.mirror`) and
+  written the file's way. Comments next to removed elements are reported as
+  dropped. `MutationResult.unchanged`; `Doc.source` (`DocSource`);
+  `preserveText` exported; `tools/roundtrip.mjs` (`npm run roundtrip`).
+- **Edits follow the file** (conventions package, #32, #43, #47, #48 partly,
+  #55, #56). `src/idstyle.ts` learns a document's id style once
+  (`Doc.idStyle`, `Doc.allocateId`): prefixes per kind / family / type name,
+  pascal / camel / snake / Pascal_Snake / modeler-hash / numbered bodies, flow
+  forms (`Flow_0k3x9qa`, `Flow_12`, `flow_aToB`, `Flow_<from>_<to>`); flows
+  and unnamed elements are hashed from stable inputs (files that number
+  their flows keep numbering); umlauts become ae / oe / ue / ss. A full redraw
+  keeps every DI, plane and diagram id (`diagram/write.ts` rememberDiIds /
+  restoreDiIds inside `layoutModel`, both engines). design-iq stickies
+  (`bpmiq:sticky`) follow their nearest flow node (`src/diagram/stickies.ts`,
+  `layout.stickies`). Generated ids are not guessable: `apply` batches pass
+  explicit ids for back references.
+- **Validator hook, design profile, decision link** (validation package,
+  #27, #29). `src/validators.ts`: `validators` (functions `(xml, ctx) =>
+  findings` or `{ name, validate }`, design-iq's `Finding` accepted) run on
+  the document before the ops and on the final text; introduced errors block
+  (`E_VALIDATION`, each finding with `validator`), old ones are
+  `W_PREEXISTING_ERROR` (followed through renames), introduced warnings are
+  reported, a throwing validator is `E_VALIDATOR_FAILED`.
+  `src/platform/design.ts`: design-iq's save-gate rules (`E_DESIGN_*`,
+  `W_DESIGN_*`); `--profile auto|design|none`; `auto` runs it for the models
+  of a design-iq content repository (a `bpmiq.yml` above the file naming a
+  models folder that contains it; in memory: when `contentRepo` is given).
+  `src/platform/repo.ts` decides (browser-safe), `src/node/repo.ts` looks the
+  repository up. `src/ops/decision.ts`: `set <id> calledDecision=<d>` in the
+  file's spelling (design: unprefixed, C7: `camunda:decisionRef`, C8:
+  `zeebe:calledDecision`).
+
+**Verifier round** (after the integration; table in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#verifier-round-2026-10-09)):
+`E_DESIGN_NAMESPACE` runs design-iq's namespace check on the raw text
+(text, CDATA, comments and attribute values that look like `<p:name` or
+` p:name="` count; a documentation `Set app:mode="prod"` is refused like
+design-iq refuses it); a full redraw gives id-less elements it draws an id
+in the file's style first (`src/diagram/drawn-ids.ts`; never
+`bpmnElement="undefined"`); the id style learns ids without prefix
+(`reviewOrder`), flows numbered without separator (`flow5`) and
+`Flow_<scope>_<A>To<B>`; every write is UTF-8 and a changed result declares
+UTF-8, the node layer reads a file in its declared encoding
+(`src/encoding.ts`, `decodeXmlBytes`); the design profile counts flows per
+id, checks every collaboration, reports an attribute written twice
+(`E_DESIGN_XML`), and an id reference with whitespace around it resolves at
+import (model.ts); in a process with two lane sets the profile stays
+stricter than design-iq (documented); `camunda-bpmn-moddle` is a
+development dependency.
+
+**Integration decisions** (`step2/integration`): the core API runs the
+roundtrip post-pass and the validators (they see the post-pass result, their
+baseline is the text as read); skipping an unchanged in-place write and the
+`bpmiq.yml` lookup moved to the node layer (the core takes `contentRepo` and
+`file`; the node layer fills them for the file it writes, the `--out` target
+included); #47 was fixed by two packages and the conventions version
+(inside `layoutModel`) is kept, `src/diagram/keep-ids.ts` dropped; stickies
+move before the text step, so only the moved sticky elements change; the
+`unchanged`, `forced` and validator lines and the `profile` / `validators`
+keys of `validate --json` live in the shared report.
+
+Tests: `test/api.test.ts`, `test/isomorphic.test.ts`,
+`test/node-files.test.ts` (encodings too), `test/drawn-ids.test.ts`, `test/roundtrip.test.ts` (fixtures
+`test/fixtures/roundtrip/`), `test/conventions-ids.test.ts`,
+`test/conventions-di.test.ts`, `test/conventions-stickies.test.ts`,
+`test/design-profile.test.ts` (opt-in against design-iq's validator with
+`BPMN_DESIGN_IQ_VALIDATOR`), `test/validators.test.ts`,
+`test/decision-link.test.ts`, and `test/step2-integration.test.ts` (the
+packages together).
+
+Evidence on the integrated build (private corpora used locally, outside the
+repository; counts only):
+
+- **Gate**: 1,318 tests + 1 opt-in (972 before step 2), isomorphism check,
+  layout regression 115 files score 444 (budget 444), fuzz 12 x 15: 0
+  errors (2 warnings of open bugs #61 and `route`, the same with the package
+  builds).
+- **Roundtrip** (265 real files the CLI accepts, the audit's targets, all
+  with a diagram): no-op byte-identical 262 in layout auto (the rest: the
+  layout completes missing DI; a file without a diagram, 22 of the 289 real
+  files the CLI accepts, is drawn on any write) and 265 with `--no-layout` (0.2.0: 40 / 42; PR #218: 169); a rename
+  changes 2 lines (median, p90), region median 0 %; an insert rewrites a
+  region of 77 % (median; 0.2.0: 97 %, PR #218: 86 %). Every output of 12
+  edit types on 396 files equals the roundtrip package's byte for byte except
+  where the id style names a new element differently. In memory
+  (`applyToXml`) a no-op is `unchanged` for 260 / 263 real files (auto) and
+  263 / 263 (`layout: false`).
+- **Id style** (291 real files): new task ids in the file's style 264 / 270
+  (0.2.0: 4), flows 226 / 226 (0.2.0: 5), a full redraw keeps 8,345 / 8,345
+  DI ids, 9 / 225 file pairs share a new id (0.2.0: 225 / 225; all in files
+  that number their flows, three of them without separator).
+- **Design profile** vs design-iq's validator (394 files): 0 disagreements
+  (65 refused, 328 accepted; 540 / 540 findings matched); of 2,231 probe edits
+  the 1,117 written add no design-iq error and the 1,114 refused would.
+- **Browser**: the bundle in a vm context without Node globals equals Node in
+  3,491 / 3,491 calls on 394 files; 716 / 224 KB minified / gzip for the
+  whole entry, 594 / 186 KB for `applyToXml` alone (+82 KB bpmn-auto-layout on
+  demand).
+- **Camunda 7** (Camunda 7.24.0, CIB seven 2.2.0, Operaton 2.1.5): the
+  218-file battery (8 edit types, deploy before / after) 0 regressions, 0
+  unexpected camunda changes; the sweep of 4,100 edits 0 regressions and
+  every verdict as with 0.2.0; the chained session 0 regressions; the
+  follow-up battery 202 / 202 edits deploy; the execution scenarios 65 / 65;
+  the live-engine tests 804 / 804. One file (a data object after the flow
+  elements, refused by Camunda 7 and Operaton) is no longer repaired as a
+  side effect of an edit, since a write keeps the element order.
+
+Still open from step 2: in layout `auto` a no-op is still written when the
+layout completes missing DI (3 of the audit's 265 targets) or draws a file
+without a diagram (every such file: 22 of the 289 real files the CLI
+accepts, 13 of them with a node to rename; 16 of 278 files with a rename
+target in all; audit P3: skip the layout when the model did not change); an insert
+rewrites one text region of about 77 % of the file because it changes the
+process and the DI section (a host wanting fewer conflicts needs several
+regions per save); a write keeps the file's element order, so it no longer
+repairs an element in a place the BPMN XSD does not allow (0.2 rewrote such a
+file in bpmn-moddle's order; 1 of 218 real Camunda 7 files, refused by the
+engines before and after an edit); a spliced or bridged flow keeps its id
+(#48); files that number their flows can still collide across branches (9 of
+225 file pairs); in a process with two lane sets the design profile checks
+the lanes design-iq does not read (stricter, documented); a sticky moves by its node's centre shift only; nested lanes
+(`set lane=` writes the child lane only, design-iq reads top-level lanes) and
+lane inheritance of a node placed next to a node in no lane; design-iq's
+degree rules make compensation handlers, link events and ad-hoc content
+unsavable there; host validators only through the library, not the CLI;
+`mutateDoc` still takes typed ops unchecked (#49; `applyToXml` checks them);
+bundle size (`applyToXml` 594 / 186 KB minified / gzip; ops, diagram and the
+Camunda 7 profile are the largest parts: a lazy profile or a slimmer build
+would be the next lever); design-iq's code conventions (audit R17: `.ts`
+import specifiers, `erasableSyntaxOnly`, `node --test`) are not addressed.
+
+## What the Camunda 7 follow-ups changed (2026-10-09, before step 2)
 
 An independent verifier re-checked the Camunda 7 step on the three engines
 and reported 15 follow-ups plus profile noise; all are fixed, together with
@@ -107,8 +297,9 @@ fixed now. The table with each finding, its fix and the engine evidence is in
 [docs/audit-2026-10.md](docs/audit-2026-10.md#camunda-7-audit-2026-10-09).
 
 - **Descriptor as data** (`src/platform/descriptor.ts`): reads
-  `camunda-bpmn-moddle`'s `camunda.json` (new runtime dependency, pinned
-  8.0.1) to know which camunda attributes and extension elements belong where.
+  `camunda-bpmn-moddle`'s `camunda.json` (pinned 8.0.1; since step 2
+  inlined, the package a development dependency) to know which camunda
+  attributes and extension elements belong where.
   It is never registered with bpmn-moddle: camunda content stays generic and
   the serialisation is byte-stable. Two `allowedIn` lists are corrected to what
   the engines accept.
@@ -273,7 +464,9 @@ the repository.
 npm run gate                                   # before every hand-over
 npx vitest run test/<file>.test.ts             # one layer
 node tools/layout-regress.mjs --save /tmp/base.json; ...; node tools/layout-regress.mjs --compare /tmp/base.json
-BPMN_LAYOUT_DEBUG=1 node bin/bpmn.js add ...   # placement candidates, reroute reasons, [strip] lines
+BPMN_LAYOUT_DEBUG=1 node bin/bpmn.js add ...   # placement candidates, reroute reasons, [strip] lines (library: setLayoutDebug / debug option)
+npm run check:iso                              # after a build: the core still bundles for the browser; sizes
+npm run roundtrip [<dir>]                      # after a build: how much of a file a no-op, a rename, an insert rewrite
 node bin/bpmn.js metrics <file>                # problems with ids
 tools/render.sh /tmp/png <files>               # look at the result with real bpmn-js
 BASELINE_BIN=<old>/bin/bpmn.js npm run bench   # benchmark against an older build
@@ -305,15 +498,30 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
 3. **An MCP server.** Thin wrapper over show/find/add/connect/apply/validate
    plus `show --layout`, `metrics` and the format ops. Removes the shell
    quoting trap (`${...}` in conditions).
-4. **Roundtrip for embedding** (audit P1): text-preserving output and true
-   no-op writes (#30, #31, #44–#47), a browser-safe core (#33), platform
-   awareness (#27, #28), collision-resistant ids (#32).
+4. **Embedding in design-iq, the rest** (audit P1 and the step 2 leftovers
+   above): skip the layout in `auto` mode when the model did not change (a
+   no-op that completes missing DI is still written); hunks or several text
+   regions per save for inserts; lane conventions for nested lanes (a node
+   in a child lane also listed by the parent lanes, as bpmn-js and design-iq
+   expect; today `set lane=` writes the child lane only and `E_LANE_CONFLICT`
+   reports bpmn-js files that list both) and lane inheritance for nodes
+   placed next to a node in no lane; batch aliases (`as:`) so that an
+   `apply` batch can refer to an element it creates without an explicit id;
+   a Camunda 8 profile (#28); the bundle size if design-iq needs it.
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 
 ## Known residuals
+
+- Design profile: design-iq's flow rules are degree checks, so compensation
+  handlers, link events and ad-hoc sub-process content cannot be saved there;
+  the profile reports them with that explanation (BPMN allows them). A new
+  node next to a node in no lane inherits no lane and is refused
+  (`--lane` in the same command). The CLI cannot pass host validators (only
+  the library can); a host validator that needs repository context (design-iq's
+  `checkModel` with `modelIds`) gets it from the host.
 
 - Camunda 7: an Operaton-namespace file is checked the way Operaton reads it
   (operaton first, camunda as the fallback), so `operaton:historyTimeToLive`

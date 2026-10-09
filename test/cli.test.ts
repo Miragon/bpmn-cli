@@ -48,6 +48,8 @@ function diIds(xml: string): string[] {
 
 beforeAll(() => {
   execFileSync(process.execPath, [join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', join(ROOT, 'tsconfig.json')], { cwd: ROOT, stdio: 'inherit' });
+  // the second step of `npm run build` (type shims), so dist stays what the build makes
+  execFileSync(process.execPath, [join(ROOT, 'tools', 'build-types.mjs')], { cwd: ROOT, stdio: 'inherit' });
   dir = mkdtempSync(join(tmpdir(), 'bpmn-cli-'));
   file = join(dir, 'order.bpmn');
 }, 60000);
@@ -166,8 +168,9 @@ describe('bpmn cli session', () => {
         },
         { op: 'add', kind: 'dataObject', name: 'Invoice', in: 'Process_OrderHandling' },
         { op: 'connect', source: 'Activity_CheckInvoice', target: 'DataObjectReference_Invoice' },
-        { op: 'add', kind: 'textAnnotation', text: 'Manual fallback', in: 'Activity_Payment' },
-        { op: 'connect', source: 'TextAnnotation_1', target: 'Activity_RetryManually' },
+        // an unnamed element gets a hashed id: give it one to refer to it later in the batch
+        { op: 'add', kind: 'textAnnotation', id: 'TextAnnotation_Fallback', text: 'Manual fallback', in: 'Activity_Payment' },
+        { op: 'connect', source: 'TextAnnotation_Fallback', target: 'Activity_RetryManually' },
       ],
     };
     const opsFile = join(dir, 'ops.json');
@@ -183,7 +186,7 @@ describe('bpmn cli session', () => {
     expect(xml).toMatch(/bpmnElement="Activity_Payment" isExpanded="true"/);
     expect(diIds(xml)).toContain('Activity_RetryManually');
     expect(diIds(xml)).toContain('DataObjectReference_Invoice');
-    expect(diIds(xml)).toContain('TextAnnotation_1');
+    expect(diIds(xml)).toContain('TextAnnotation_Fallback');
     const v = ok('validate', file, '--json').json();
     expect(v.ok).toBe(true);
   });
@@ -370,6 +373,20 @@ describe('bpmn cli contracts', () => {
     r = bpmn('show', f, 'Event_');
     expect(r.err).toMatch(/candidates: Event_Inner, Event_S$/m);
     expect(bpmn('remove', f, 'BPMNPlane_P').code).toBe(2);
+  });
+
+  it('does not write a result that equals the file, and says so', () => {
+    const before = readFileSync(f, 'utf8');
+    let r = ok('set', f, 'Event_S', 'name=S');
+    expect(r.out).toMatch(/^unchanged: .*contracts\.bpmn \(the result equals the file; nothing written\)$/m);
+    expect(r.out).not.toMatch(/^written: /m);
+    r = ok('set', f, 'Event_S', 'name=S', '--json');
+    expect(r.json()).toMatchObject({ ok: true, written: false, unchanged: true });
+    r = ok('set', f, 'Event_S', 'name=S', '--dry-run');
+    expect(r.out).toMatch(/^dry run: .* not written \(unchanged\)$/m);
+    expect(readFileSync(f, 'utf8')).toBe(before);
+    r = ok('set', f, 'Event_S', 'name=Started', '--json');
+    expect(r.json()).toMatchObject({ written: true, unchanged: false });
   });
 });
 

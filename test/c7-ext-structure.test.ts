@@ -494,12 +494,14 @@ describe('ext add: where and what (1e, 1f)', () => {
 
 const MSG_ROOTS = `<bpmn:message id="Message_Paid" name="Paid" /><bpmn:message id="Message_Finished" name="Finished" /><bpmn:message id="Message_Finished2" name="Finished" /><bpmn:message id="Message_Confirmed" name="Confirmed" /><bpmn:signal id="Signal_Go" name="Go" />`;
 
-/** Fills incoming / outgoing of the flow nodes from the sequence flows (what modeler files carry). */
+/** Fills incoming / outgoing of the flow nodes from the sequence flows (what modeler files carry; Doc.fromXml completes them in memory already). */
 function withMirrors(doc: Doc): Doc {
   for (const f of many(doc.require('Process_1'), 'flowElements')) {
     if (!is(f, 'bpmn:SequenceFlow')) continue;
-    many(f.get<El>('sourceRef'), 'outgoing').push(f);
-    many(f.get<El>('targetRef'), 'incoming').push(f);
+    for (const [end, list] of [['sourceRef', 'outgoing'], ['targetRef', 'incoming']] as const) {
+      const entries = many(f.get<El>(end), list);
+      if (!entries.includes(f)) entries.push(f);
+    }
   }
   return doc;
 }
@@ -685,7 +687,8 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
     expect(first.warnings.map((w) => w.code)).not.toContain('W_DUPLICATE_FLOW');
     const second = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
     const dup = second.warnings.find((w) => w.code === 'W_DUPLICATE_FLOW');
-    expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow Flow_1/);
+    // the file numbers its flows F1, F2: the new one is F3
+    expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F3\b/);
     expect(dup?.hint).toMatch(/--if-absent/);
     const skipped = connectElements(doc, { op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);

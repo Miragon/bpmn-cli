@@ -6,6 +6,7 @@
  * moddle type with or without prefix (`bpmn:UserTask`, `UserTask`). Events
  * take an optional trigger suffix: `startEvent:message`, `boundary:timer`.
  */
+import { CliError } from './errors.js';
 import { is, type El } from './model.js';
 
 export type Family =
@@ -180,6 +181,21 @@ export function parseKind(token: string): ParsedKind {
     throw new KindError(`Trigger "${trigger}" is not allowed on ${def.kind}. Allowed: ${def.triggers.join(', ')}`);
   }
   return { def, trigger };
+}
+
+/**
+ * A kind token given as an option (`find --kind`): its KindError as the
+ * documented usage error (E_UNSUPPORTED_KIND, E_UNKNOWN_KIND with
+ * candidates, E_INVALID_TRIGGER), like `add` reports it.
+ */
+export function assertKindToken(value: string): void {
+  try {
+    parseKind(value);
+  } catch (err) {
+    if (!(err instanceof KindError)) throw err;
+    const code = /is rejected/.test(err.message) ? 'E_UNSUPPORTED_KIND' : /^Unknown kind/.test(err.message) ? 'E_UNKNOWN_KIND' : 'E_INVALID_TRIGGER';
+    throw new CliError(code, err.message, 'usage', { ...(err.candidates?.length ? { candidates: err.candidates } : {}), hint: 'Run `bpmn kinds` for the full list of kinds and triggers.' });
+  }
 }
 
 export function suggestKinds(token: string, max = 4): string[] {

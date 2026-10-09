@@ -9,7 +9,7 @@ import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
 import { ChangeSet } from '../src/result.js';
-import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
+import { definitionsXml, docFromXml, flowBetween, HASHED, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -78,6 +78,7 @@ const WITH_JOIN = definitionsXml(`
     <bpmn:sequenceFlow id="F4" sourceRef="B" targetRef="Join" />
     <bpmn:sequenceFlow id="F5" sourceRef="Join" targetRef="End" />`);
 
+// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/idstyle.ts)
 const WITH_LANES = definitionsXml(`
     <bpmn:laneSet id="LaneSet_1">
       <bpmn:lane id="Lane_Sales" name="Sales"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef></bpmn:lane>
@@ -228,11 +229,11 @@ describe('add: placement modes', () => {
   it('inherits the lane of the after/before anchor', async () => {
     const doc = await docFromXml(WITH_LANES);
     add(doc, { kind: 'task', name: 'Next', after: 'Task_A' });
-    expect(laneOf(doc, doc.require('Activity_Next'))?.get('id')).toBe('Lane_Sales');
+    expect(laneOf(doc, doc.require('Task_Next'))?.get('id')).toBe('Lane_Sales');
     add(doc, { kind: 'task', name: 'Last', before: 'End' });
-    expect(laneOf(doc, doc.require('Activity_Last'))?.get('id')).toBe('Lane_Backoffice');
-    add(doc, { kind: 'task', name: 'Explicit', after: 'Activity_Last', lane: 'Lane_Sales' });
-    expect(laneOf(doc, doc.require('Activity_Explicit'))?.get('id')).toBe('Lane_Sales');
+    expect(laneOf(doc, doc.require('Task_Last'))?.get('id')).toBe('Lane_Backoffice');
+    add(doc, { kind: 'task', name: 'Explicit', after: 'Task_Last', lane: 'Lane_Sales' });
+    expect(laneOf(doc, doc.require('Task_Explicit'))?.get('id')).toBe('Lane_Sales');
     await roundTrip(doc);
   });
 });
@@ -242,13 +243,13 @@ describe('add: placement modes', () => {
 /* ------------------------------------------------------------------ */
 
 describe('add: ids and options', () => {
-  it('uses Prefix_Slug ids, numeric ids for unnamed nodes and warns on suffixes', async () => {
+  it('uses Prefix_Slug ids, hashed ids for unnamed nodes and warns on suffixes', async () => {
     const doc = await linearDoc();
     expect(add(doc, { kind: 'task', name: 'Check invoice', in: 'Process_1' }).created[0]!.id).toBe('Activity_CheckInvoice');
     const cs = add(doc, { kind: 'task', name: 'Check invoice', in: 'Process_1' });
     expect(cs.created[0]!.id).toBe('Activity_CheckInvoice_2');
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_ID_SUFFIXED']);
-    expect(add(doc, { kind: 'task', in: 'Process_1' }).created[0]!.id).toBe('Activity_1');
+    expect(add(doc, { kind: 'task', in: 'Process_1' }).created[0]!.id).toMatch(HASHED('Activity'));
     expect(add(doc, { kind: 'xor', name: 'Invoice ok?', in: 'Process_1' }).created[0]!.id).toBe('Gateway_InvoiceOk');
     expect(add(doc, { kind: 'bpmn:StartEvent', name: 'Order received', in: 'Process_1' }).created[0]!.id).toBe('Event_OrderReceived');
     await roundTrip(doc);
@@ -451,12 +452,14 @@ describe('participants', () => {
   it('wraps the single process, then creates new processes and black boxes', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'participant', name: 'Shop' });
+    const collab = cs.created[0]!.id;
+    expect(collab).toMatch(HASHED('Collaboration'));
     expect(cs.created.map((c) => [c.id, c.kind])).toEqual([
-      ['Collaboration_1', 'collaboration'],
+      [collab, 'collaboration'],
       ['Participant_Shop', 'participant'],
     ]);
     expect(cs.created[1]!.detail).toBe('wraps process Process_1');
-    expect(ids(many(doc.definitions, 'rootElements'))).toEqual(['Collaboration_1', 'Process_1']);
+    expect(ids(many(doc.definitions, 'rootElements'))).toEqual([collab, 'Process_1']);
     expect(doc.require('Participant_Shop').get<El>('processRef').get('id')).toBe('Process_1');
 
     const cs2 = add(doc, { kind: 'pool', name: 'Customer' });
@@ -464,7 +467,7 @@ describe('participants', () => {
     const proc = doc.require('Process_Customer');
     expect(proc.get('isExecutable')).toBe(false);
     expect(doc.participantOf(proc)?.get('id')).toBe('Participant_Customer');
-    expect(ids(many(doc.definitions, 'rootElements'))).toEqual(['Collaboration_1', 'Process_1', 'Process_Customer']);
+    expect(ids(many(doc.definitions, 'rootElements'))).toEqual([collab, 'Process_1', 'Process_Customer']);
 
     const cs3 = add(doc, { kind: 'participant', name: 'Bank', blackBox: true });
     expect(cs3.created.map((c) => c.id)).toEqual(['Participant_Bank']);
@@ -476,7 +479,7 @@ describe('participants', () => {
     expect(codeOf(() => add(doc, { kind: 'participant', name: 'X', blackBox: true, process: 'Process_1' }))).toBe('E_INVALID_VALUE');
 
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:collaboration id="Collaboration_1">\s*<bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_1" \/>/);
+    expect(xml).toMatch(new RegExp(`<bpmn:collaboration id="${collab}">\\s*<bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_1" />`));
     expect(xml).toMatch(/<bpmn:participant id="Participant_Bank" name="Bank" \/>/);
   });
 
@@ -503,7 +506,9 @@ describe('lanes', () => {
     expect(cs.created[0]).toMatchObject({ id: 'Lane_Sales', kind: 'lane', name: 'Sales', detail: 'in Process_1' });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_LANES_WITHOUT_POOL']);
     expect(cs.changed.map((c) => `${c.id}:${c.detail}`)).toEqual(['Start:lane Lane_Sales', 'Task_A:lane Lane_Sales']);
-    expect(ids(many(doc.require('Process_1'), 'laneSets'))).toEqual(['LaneSet_1']);
+    const laneSet = ids(many(doc.require('Process_1'), 'laneSets'));
+    expect(laneSet).toHaveLength(1);
+    expect(laneSet[0]).toMatch(HASHED('LaneSet'));
     expect(ids(many(doc.require('Lane_Sales'), 'flowNodeRef'))).toEqual(['Start', 'Task_A']);
 
     add(doc, { kind: 'participant', name: 'Shop' });
@@ -513,7 +518,7 @@ describe('lanes', () => {
     expect(ids(many(doc.require('Lane_Backoffice'), 'flowNodeRef'))).toEqual(['End', 'Task_A']);
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('Lane_Backoffice');
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:laneSet id="LaneSet_1">\s*<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:flowNodeRef>Start<\/bpmn:flowNodeRef>/);
+    expect(xml).toMatch(/<bpmn:laneSet id="LaneSet_[01][0-9a-z]{6}">\s*<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:flowNodeRef>Start<\/bpmn:flowNodeRef>/);
   });
 
   it('nests lanes inside a lane, moving the parent members into the first child', async () => {
@@ -532,9 +537,9 @@ describe('lanes', () => {
     expect(codeOf(() => assignLane(doc, doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
     // nodes added after a member inherit the nested lane
     add(doc, { kind: 'task', name: 'Ship', after: 'Task_A' });
-    expect(laneOf(doc, doc.require('Activity_Ship'))?.get('id')).toBe('Lane_Outbound');
+    expect(laneOf(doc, doc.require('Task_Ship'))?.get('id')).toBe('Lane_Outbound');
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:childLaneSet id="LaneSet_2">\s*<bpmn:lane id="Lane_Inbound" name="Inbound">/);
+    expect(xml).toMatch(/<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:childLaneSet id="LaneSet_[01][0-9a-z]{6}">\s*<bpmn:lane id="Lane_Inbound" name="Inbound">/);
   });
 
   it('assignLane moves nodes with their boundary events and rejects sub-process children', async () => {
@@ -550,11 +555,11 @@ describe('lanes', () => {
     expect(cs.changed.some((c) => c.id === 'Task_A' && c.detail === 'removed from lanes')).toBe(true);
 
     add(doc, { kind: 'subProcess', name: 'Sub', after: 'Task_A' });
-    add(doc, { kind: 'task', name: 'Inner', in: 'Activity_Sub' });
-    expect(codeOf(() => add(doc, { kind: 'task', name: 'Inner2', after: 'Activity_Inner', lane: 'Lane_Sales' }))).toBe('E_INVALID_LANE_MEMBERSHIP');
-    expect(codeOf(() => add(doc, { kind: 'lane', name: 'Nope', in: 'Activity_Sub' }))).toBe('E_INVALID_SCOPE');
+    add(doc, { kind: 'task', name: 'Inner', in: 'Task_Sub' });
+    expect(codeOf(() => add(doc, { kind: 'task', name: 'Inner2', after: 'Task_Inner', lane: 'Lane_Sales' }))).toBe('E_INVALID_LANE_MEMBERSHIP');
+    expect(codeOf(() => add(doc, { kind: 'lane', name: 'Nope', in: 'Task_Sub' }))).toBe('E_INVALID_SCOPE');
     // the sub-process itself can be a member and inner nodes silently inherit nothing
-    const cs2 = add(doc, { kind: 'task', name: 'Inner3', after: 'Activity_Inner' });
+    const cs2 = add(doc, { kind: 'task', name: 'Inner3', after: 'Task_Inner' });
     expect(cs2.changed).toHaveLength(0);
     await roundTrip(doc);
   });
@@ -573,15 +578,20 @@ describe('data objects, stores and annotations', () => {
     expect(is(doc.require('DataObject_Order'), 'bpmn:DataObject')).toBe(true);
 
     const out = connect(doc, { source: 'Task_A', target: 'DataObjectReference_Order' });
-    expect(out.created[0]).toMatchObject({ id: 'DataOutputAssociation_1', kind: 'dataAssociation', detail: 'Task_A -> DataObjectReference_Order' });
+    const outId = out.created[0]!.id;
+    expect(outId).toMatch(HASHED('DataOutputAssociation'));
+    expect(out.created[0]).toMatchObject({ kind: 'dataAssociation', detail: 'Task_A -> DataObjectReference_Order' });
     const inp = connect(doc, { source: 'DataObjectReference_Order', target: 'Task_A' });
-    expect(inp.created[0]).toMatchObject({ id: 'DataInputAssociation_1', kind: 'dataAssociation' });
+    const inId = inp.created[0]!.id;
+    expect(inId).toMatch(HASHED('DataInputAssociation'));
+    expect(inp.created[0]).toMatchObject({ kind: 'dataAssociation' });
     const task = doc.require('Task_A');
-    expect(ids(many(task, 'dataOutputAssociations'))).toEqual(['DataOutputAssociation_1']);
-    expect(ids(many(task, 'dataInputAssociations'))).toEqual(['DataInputAssociation_1']);
+    expect(ids(many(task, 'dataOutputAssociations'))).toEqual([outId]);
+    expect(ids(many(task, 'dataInputAssociations'))).toEqual([inId]);
     const prop = many(task, 'properties')[0]!;
     expect(prop.get('name')).toBe(PLACEHOLDER_PROPERTY);
-    expect(doc.require('DataInputAssociation_1').get<El>('targetRef')).toBe(prop);
+    expect(prop.get('id')).toMatch(HASHED('Property'));
+    expect(doc.require(inId).get<El>('targetRef')).toBe(prop);
 
     expect(codeOf(() => add(doc, { kind: 'dataObject', name: 'X', after: 'Task_A' }))).toBe('E_INVALID_PLACEMENT');
     expect(codeOf(() => connect(doc, { source: 'DataObjectReference_Order', target: 'DataObjectReference_Order' }))).toBe('E_INVALID_ENDPOINT');
@@ -589,22 +599,23 @@ describe('data objects, stores and annotations', () => {
 
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:dataObject id="DataObject_Order" \/>\s*<bpmn:dataObjectReference id="DataObjectReference_Order" name="Order" dataObjectRef="DataObject_Order" \/>/);
-    expect(xml).toMatch(/<bpmn:property id="Property_1" name="__targetRef_placeholder" \/>/);
-    expect(xml).toMatch(/<bpmn:dataInputAssociation id="DataInputAssociation_1">\s*<bpmn:sourceRef>DataObjectReference_Order<\/bpmn:sourceRef>\s*<bpmn:targetRef>Property_1<\/bpmn:targetRef>/);
-    expect(xml).toMatch(/<bpmn:dataOutputAssociation id="DataOutputAssociation_1">\s*<bpmn:targetRef>DataObjectReference_Order<\/bpmn:targetRef>/);
+    const propId = String(prop.get('id'));
+    expect(xml).toContain(`<bpmn:property id="${propId}" name="__targetRef_placeholder" />`);
+    expect(xml).toMatch(new RegExp(`<bpmn:dataInputAssociation id="${inId}">\\s*<bpmn:sourceRef>DataObjectReference_Order</bpmn:sourceRef>\\s*<bpmn:targetRef>${propId}</bpmn:targetRef>`));
+    expect(xml).toMatch(new RegExp(`<bpmn:dataOutputAssociation id="${outId}">\\s*<bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>`));
 
     // removal cleans the placeholder property
-    removeDataAssociation(doc, doc.require('DataInputAssociation_1'));
+    removeDataAssociation(doc, doc.require(inId));
     expect(many(task, 'properties')).toHaveLength(0);
     expect(many(task, 'dataInputAssociations')).toHaveLength(0);
-    expect(doc.has('DataInputAssociation_1')).toBe(false);
+    expect(doc.has(inId)).toBe(false);
     await roundTrip(doc);
   });
 
   it('creates data stores with a root bpmn:DataStore and --to wiring', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'dataStore', name: 'Order DB', to: 'Task_A' });
-    expect(cs.created.map((c) => c.id)).toEqual(['DataStoreReference_OrderDB', 'DataInputAssociation_1']);
+    expect(cs.created.map((c) => c.id)).toEqual(['DataStoreReference_OrderDB', expect.stringMatching(HASHED('DataInputAssociation'))]);
     expect(doc.rootElementsOfType('bpmn:DataStore').map((s) => s.get('id'))).toEqual(['DataStore_OrderDB']);
     expect(doc.require('DataStoreReference_OrderDB').get<El>('dataStoreRef').get('id')).toBe('DataStore_OrderDB');
     expect(codeOf(() => connect(doc, { source: 'Start', target: 'DataStoreReference_OrderDB' }))).toBe('NO_ERROR');
@@ -619,23 +630,30 @@ describe('data objects, stores and annotations', () => {
   it('creates text annotations and associations via connect / --to', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'textAnnotation', text: 'Check twice' });
-    expect(cs.created[0]).toMatchObject({ id: 'TextAnnotation_1', kind: 'textAnnotation', name: 'Check twice' });
-    const assoc = connect(doc, { source: 'TextAnnotation_1', target: 'Task_A' });
-    expect(assoc.created[0]).toMatchObject({ id: 'Association_1', kind: 'association', detail: 'TextAnnotation_1 -> Task_A' });
-    expect(ids(many(doc.require('Process_1'), 'artifacts'))).toEqual(['TextAnnotation_1', 'Association_1']);
-    expect(connect(doc, { source: 'Task_A', target: 'TextAnnotation_1', ifAbsent: true }).isEmpty).toBe(true);
-    expect(codeOf(() => connect(doc, { source: 'Task_A', target: 'TextAnnotation_1', condition: 'x' }))).toBe('E_INVALID_VALUE');
+    const note = cs.created[0]!.id;
+    expect(note).toMatch(HASHED('TextAnnotation'));
+    expect(cs.created[0]).toMatchObject({ kind: 'textAnnotation', name: 'Check twice' });
+    const assoc = connect(doc, { source: note, target: 'Task_A' });
+    const assocId = assoc.created[0]!.id;
+    expect(assocId).toMatch(HASHED('Association'));
+    expect(assoc.created[0]).toMatchObject({ kind: 'association', detail: `${note} -> Task_A` });
+    expect(ids(many(doc.require('Process_1'), 'artifacts'))).toEqual([note, assocId]);
+    expect(connect(doc, { source: 'Task_A', target: note, ifAbsent: true }).isEmpty).toBe(true);
+    expect(codeOf(() => connect(doc, { source: 'Task_A', target: note, condition: 'x' }))).toBe('E_INVALID_VALUE');
 
     // the positional name gives the id (Prefix_Slug like every other kind) and, without --text, the text
     const cs2 = add(doc, { kind: 'note', name: 'Note via name', to: 'End' });
-    expect(cs2.created.map((c) => c.id)).toEqual(['TextAnnotation_NoteViaName', 'Association_2']);
+    const assoc2 = cs2.created[1]!.id;
+    expect(cs2.created.map((c) => c.id)).toEqual(['TextAnnotation_NoteViaName', assoc2]);
+    expect(assoc2).toMatch(HASHED('Association'));
     expect(doc.require('TextAnnotation_NoteViaName').get('text')).toBe('Note via name');
-    expect(edge(doc, 'Association_2')).toBe('End->TextAnnotation_NoteViaName');
-    add(doc, { kind: 'textAnnotation', text: 'Two' });
-    expect(codeOf(() => connect(doc, { source: 'TextAnnotation_NoteViaName', target: 'TextAnnotation_2' }))).toBe('E_INVALID_ENDPOINT');
+    expect(edge(doc, assoc2)).toBe('End->TextAnnotation_NoteViaName');
+    const two = add(doc, { kind: 'textAnnotation', text: 'Two' }).created[0]!.id;
+    expect(two).not.toBe(note);
+    expect(codeOf(() => connect(doc, { source: 'TextAnnotation_NoteViaName', target: two }))).toBe('E_INVALID_ENDPOINT');
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:textAnnotation id="TextAnnotation_1">\s*<bpmn:text>Check twice<\/bpmn:text>\s*<\/bpmn:textAnnotation>/);
-    expect(xml).toMatch(/<bpmn:association id="Association_1" sourceRef="TextAnnotation_1" targetRef="Task_A" \/>/);
+    expect(xml).toMatch(new RegExp(`<bpmn:textAnnotation id="${note}">\\s*<bpmn:text>Check twice</bpmn:text>\\s*</bpmn:textAnnotation>`));
+    expect(xml).toContain(`<bpmn:association id="${assocId}" sourceRef="${note}" targetRef="Task_A" />`);
   });
 
   it('draws compensation associations from compensate boundary events', async () => {
@@ -643,8 +661,8 @@ describe('data objects, stores and annotations', () => {
     add(doc, { kind: 'boundaryEvent:compensate', name: 'Undo', on: 'Task_A' });
     add(doc, { kind: 'task', name: 'Undo A', in: 'Process_1' });
     const cs = connect(doc, { source: 'Event_Undo', target: 'Activity_UndoA' });
-    expect(cs.created[0]).toMatchObject({ id: 'Association_1', kind: 'association' });
-    expect(doc.require('Association_1').get('associationDirection')).toBe('One');
+    expect(cs.created[0]).toMatchObject({ id: expect.stringMatching(HASHED('Association')), kind: 'association' });
+    expect(doc.require(cs.created[0]!.id).get('associationDirection')).toBe('One');
     expect(doc.require('Activity_UndoA').get('isForCompensation')).toBe(true);
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:task id="Activity_UndoA" name="Undo A" isForCompensation="true" \/>/);
@@ -699,18 +717,22 @@ describe('connect', () => {
     add(doc, { kind: 'startEvent:message', name: 'Got it', message: 'Offer', in: 'Participant_Customer' });
     add(doc, { kind: 'participant', name: 'Bank', blackBox: true });
 
-    // Flow_1 is the sequence flow created by the splice above; message flows share the Flow_ prefix
+    // message flows follow the sequence flows: the file numbers them F1, F2 (and the send task's F3)
     const cs = connect(doc, { source: 'Activity_Send', target: 'Event_GotIt', message: 'Offer', name: 'offer' });
-    expect(cs.created[0]).toMatchObject({ id: 'Flow_2', kind: 'messageFlow', name: 'offer', detail: 'Activity_Send -> Event_GotIt' });
-    expect(doc.require('Flow_2').get<El>('messageRef').get('id')).toBe('Message_Offer');
+    const offer = cs.created[0]!.id;
+    expect(offer).toBe('F4');
+    expect(cs.created[0]).toMatchObject({ kind: 'messageFlow', name: 'offer', detail: 'Activity_Send -> Event_GotIt' });
+    expect(doc.require(offer).get<El>('messageRef').get('id')).toBe('Message_Offer');
     expect(doc.rootElementsOfType('bpmn:Message')).toHaveLength(1);
 
     const cs2 = connect(doc, { source: 'Participant_Bank', target: 'Task_A', message: 'Statement' });
-    expect(cs2.created.map((c) => c.id)).toEqual(['Message_Statement', 'Flow_3']);
+    const statement = cs2.created[1]!.id;
+    expect(cs2.created.map((c) => c.id)).toEqual(['Message_Statement', statement]);
     const cs3 = connect(doc, { source: 'Activity_Send', target: 'Participant_Bank' });
     expect(cs3.created[0]!.kind).toBe('messageFlow');
     expect(connect(doc, { source: 'Activity_Send', target: 'Participant_Bank', ifAbsent: true }).isEmpty).toBe(true);
-    expect(ids(doc.messageFlows())).toEqual(['Flow_2', 'Flow_3', 'Flow_4']);
+    expect(ids(doc.messageFlows())).toEqual([offer, statement, cs3.created[0]!.id]);
+    expect(new Set(ids(doc.messageFlows())).size).toBe(3);
 
     expect(codeOf(() => connect(doc, { source: 'Task_A', target: 'Participant_Shop' }))).toBe('E_SAME_POOL');
     expect(codeOf(() => connect(doc, { source: 'Activity_Send', target: 'Event_GotIt', condition: 'x' }))).toBe('E_INVALID_VALUE');
@@ -719,7 +741,7 @@ describe('connect', () => {
     expect(codeOf(() => connect(doc, { source: 'Event_GotIt', target: 'Participant_Bank' }))).toBe('E_INVALID_ENDPOINT');
     expect(codeOf(() => connect(doc, { source: 'Participant_Bank', target: 'Activity_Send' }))).toBe('NO_ERROR');
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:messageFlow id="Flow_2" name="offer" sourceRef="Activity_Send" targetRef="Event_GotIt" messageRef="Message_Offer" \/>/);
+    expect(xml).toContain(`<bpmn:messageFlow id="${offer}" name="offer" sourceRef="Activity_Send" targetRef="Event_GotIt" messageRef="Message_Offer" />`);
   });
 
   it('refuses message flows without a collaboration and unrelated endpoints', async () => {
@@ -783,8 +805,10 @@ describe('split', () => {
       join: false,
       branches: [{ nodes: [{ kind: 'task', name: 'P1' }] }, { nodes: [{ kind: 'task', name: 'P2' }] }],
     });
-    expect(is(doc.require('Gateway_1'), 'bpmn:ParallelGateway')).toBe(true);
-    expect(doc.has('Gateway_1_join')).toBe(false);
+    const gateway = cs.created.find((c) => c.kind === 'parallelGateway')!.id;
+    expect(gateway).toMatch(HASHED('Gateway'));
+    expect(is(doc.require(gateway), 'bpmn:ParallelGateway')).toBe(true);
+    expect(doc.has(`${gateway}_join`)).toBe(false);
     expect(doc.incoming(doc.require('End')).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_P1', 'Activity_P2']);
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_JOIN']);
     await roundTrip(doc);
@@ -827,7 +851,7 @@ describe('split', () => {
 
   it('branch nodes inherit the anchor lane and can carry triggers', async () => {
     const doc = await docFromXml(WITH_LANES);
-    splitFlow(doc, {
+    const cs = splitFlow(doc, {
       op: 'split',
       after: 'Task_A',
       kind: 'eventBased',
@@ -837,7 +861,7 @@ describe('split', () => {
         { nodes: [{ kind: 'intermediateCatchEvent:message', name: 'Reply', message: 'Reply' }] },
       ],
     });
-    expect(laneOf(doc, doc.require('Gateway_1'))?.get('id')).toBe('Lane_Sales');
+    expect(laneOf(doc, doc.require(cs.created.find((c) => c.kind === 'eventBasedGateway')!.id))?.get('id')).toBe('Lane_Sales');
     expect(laneOf(doc, doc.require('Event_Timeout'))?.get('id')).toBe('Lane_Sales');
     expect(describeTrigger(doc.require('Event_Reply'))).toBe('message Reply');
     await roundTrip(doc);
@@ -861,25 +885,29 @@ describe('add: event sub-processes with a trigger', () => {
   it('creates the triggered start event inside in the same op (trigger options or kind:trigger)', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'eventSubProcess', name: 'Handle errors', error: 'PaymentFailed', errorCode: 'PAY-1' });
+    const start = cs.created[1]!.id;
+    expect(start).toMatch(HASHED('Event'));
     expect(cs.created.map((c) => [c.id, c.kind])).toEqual([
       ['Activity_HandleErrors', 'eventSubProcess'],
-      ['Event_1', 'startEvent:error'],
+      [start, 'startEvent:error'],
       ['Error_PaymentFailed', 'error'],
     ]);
     expect(cs.created[1]!.detail).toBe('start of event sub-process Activity_HandleErrors');
     expect(cs.warnings).toHaveLength(0);
-    expect(ids(doc.flowNodes(doc.require('Activity_HandleErrors')))).toEqual(['Event_1']);
-    expect(describeTrigger(doc.require('Event_1'))).toBe('error PaymentFailed (PAY-1)');
+    expect(ids(doc.flowNodes(doc.require('Activity_HandleErrors')))).toEqual([start]);
+    expect(describeTrigger(doc.require(start))).toBe('error PaymentFailed (PAY-1)');
 
     const cs2 = add(doc, { kind: 'eventSubProcess:message', name: 'On cancel', message: 'Cancel', nonInterrupting: true, in: 'Process_1' });
     expect(cs2.created.map((c) => c.kind)).toEqual(['eventSubProcess', 'startEvent:message', 'message']);
-    expect(doc.require('Event_2').get('isInterrupting')).toBe(false);
-    expect(doc.scopeOf(doc.require('Event_2'))?.get('id')).toBe('Activity_OnCancel');
+    const start2 = cs2.created[1]!.id;
+    expect(start2).not.toBe(start);
+    expect(doc.require(start2).get('isInterrupting')).toBe(false);
+    expect(doc.scopeOf(doc.require(start2))?.get('id')).toBe('Activity_OnCancel');
     // --timer infers the trigger as well, aliases work
-    add(doc, { kind: 'eventSub', name: 'Tick', timer: 'R/PT1H' });
-    expect(triggerDetails(doc.require('Event_3'))?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
+    const cs3 = add(doc, { kind: 'eventSub', name: 'Tick', timer: 'R/PT1H' });
+    expect(triggerDetails(doc.require(cs3.created[1]!.id))?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:subProcess id="Activity_HandleErrors" name="Handle errors" triggeredByEvent="true">\s*<bpmn:startEvent id="Event_1">\s*<bpmn:errorEventDefinition errorRef="Error_PaymentFailed" \/>/);
+    expect(xml).toMatch(new RegExp(`<bpmn:subProcess id="Activity_HandleErrors" name="Handle errors" triggeredByEvent="true">\\s*<bpmn:startEvent id="${start}">\\s*<bpmn:errorEventDefinition errorRef="Error_PaymentFailed" />`));
   });
 
   it('rejects triggers a start event cannot have; without a trigger nothing is created inside', async () => {
@@ -995,7 +1023,7 @@ describe('add: option validation', () => {
     expect(cs2.created[0]!.id).toBe('TextAnnotation_ApprovalNote_2');
     expect(cs2.warnings.map((w) => w.code)).toEqual(['W_ID_SUFFIXED']);
     const cs3 = add(doc, { kind: 'note', text: 'only text' });
-    expect(cs3.created[0]!.id).toBe('TextAnnotation_1');
+    expect(cs3.created[0]!.id).toMatch(HASHED('TextAnnotation'));
     expect(cs3.warnings).toHaveLength(0);
     await roundTrip(doc);
   });
@@ -1012,12 +1040,14 @@ describe('connect: self-loops', () => {
     add(doc, { kind: 'exclusiveGateway', name: 'G', in: 'Process_1' });
     expect(codeOf(() => connect(doc, { source: 'Gateway_G', target: 'Gateway_G' }))).toBe('E_INVALID_ENDPOINT');
     expect(codeOf(() => connect(doc, { source: 'Start', target: 'Start' }))).toBe('E_INVALID_ENDPOINT');
-    add(doc, { kind: 'textAnnotation', text: 'n' });
-    expect(codeOf(() => connect(doc, { source: 'TextAnnotation_1', target: 'TextAnnotation_1' }))).toBe('E_INVALID_ENDPOINT');
+    const note = add(doc, { kind: 'textAnnotation', text: 'n' }).created[0]!.id;
+    expect(codeOf(() => connect(doc, { source: note, target: note }))).toBe('E_INVALID_ENDPOINT');
     add(doc, { kind: 'participant', name: 'P' });
     expect(codeOf(() => connect(doc, { source: 'Participant_P', target: 'Participant_P' }))).toBe('E_INVALID_ENDPOINT');
     const { xml } = await roundTrip(doc);
-    expect(xml).toMatch(/<bpmn:sequenceFlow id="Flow_1" name="again" sourceRef="Task_A" targetRef="Task_A" \/>/);
+    expect(xml).toContain(`<bpmn:sequenceFlow id="${cs.created[0]!.id}" name="again" sourceRef="Task_A" targetRef="Task_A" />`);
+    // the file numbers its flows F1, F2
+    expect(cs.created[0]!.id).toBe('F3');
   });
 });
 

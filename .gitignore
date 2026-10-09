@@ -8,3 +8,4 @@ tools/bench/results/
 tools/fuzz/out/
 coverage/
 *.tgz
+.claude/worktrees/

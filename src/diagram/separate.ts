@@ -32,6 +32,7 @@
  *   every unit active and movable. For `bpmn layout --tidy` and the `tidy`
  *   format op.
  */
+import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { bottom, right, type Box } from './geom.js';
 import { frameOf, isLeaf, type DShape, type Plane } from './plane.js';
 import { fitInFrame, shiftShape, unitBox } from './space.js';
@@ -229,7 +230,7 @@ export function separate(plane: Plane, opts: SeparateOptions): SeparateResult {
       continue;
     }
     const need = Math.ceil(move.need);
-    if (process.env['BPMN_LAYOUT_DEBUG']) console.error(`[separate] ${a.id} ~ ${b.id}: ${move.unit} ${move.dir} ${need}`);
+    if (layoutDebugOn()) layoutDebug(`[separate] ${a.id} ~ ${b.id}: ${move.unit} ${move.dir} ${need}`);
     const dy = move.dir === 'down' ? need : move.dir === 'up' ? -need : 0;
     const dx = move.dir === 'right' ? need : 0;
     for (const id of shiftShape(plane, move.unit, dx, dy)) res.moved.add(id);

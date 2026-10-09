@@ -66,9 +66,15 @@ function createdId(cs: ChangeSet): string {
   return first.id;
 }
 
-function joinIdFor(doc: Doc, op: SplitOp, gatewayId: string, cs: ChangeSet): string {
+/**
+ * The join gateway's id: op.joinId, else `<gatewayId>_join` (in the file's
+ * name style: camel `<gatewayId>Join`); in a hashed or numbered id style an
+ * unnamed gateway id of that style.
+ */
+function joinIdFor(doc: Doc, op: SplitOp, gatewayId: string, cs: ChangeSet): string | undefined {
   if (op.joinId) return op.joinId;
-  const base = `${gatewayId}_join`;
+  const base = doc.idStyle.joinId(gatewayId);
+  if (!base) return undefined;
   let id = base;
   let n = 2;
   while (doc.has(id) || doc.ids.has(id)) id = `${base}_${n++}`;
@@ -108,7 +114,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const laneOpt = lane ? { lane: idOf(lane) } : {};
 
   // 1. split gateway
-  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt });
+  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, `split:${op.after}`);
   cs.merge(gwCs);
   const gatewayId = createdId(gwCs);
   const gateway = doc.require(gatewayId);
@@ -161,9 +167,10 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   if (withJoin && !continuing.length) {
     cs.note('every branch ends in an end event; no join gateway created');
   } else if (withJoin) {
-    joinId = joinIdFor(doc, op, gatewayId, cs);
-    const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: joinId, in: idOf(scope), ...laneOpt });
+    const wanted = joinIdFor(doc, op, gatewayId, cs);
+    const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), ...(wanted ? { id: wanted } : {}), in: idOf(scope), ...laneOpt }, `join:${gatewayId}`);
     cs.merge(joinCs);
+    joinId = createdId(joinCs);
     const joinEntry = cs.created.find((c) => c.id === joinId);
     if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;
   }

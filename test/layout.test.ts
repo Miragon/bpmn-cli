@@ -797,7 +797,8 @@ describe('clean layout engine', () => {
     expectClean(L);
     expectLabelsClear(L);
     expect(L.planes).toHaveLength(1);
-    expect(idOf(L.planes[0]!.el)).toBe('Collaboration_1');
+    expect(idOf(L.planes[0]!.el)).toBe(doc.collaboration()!.get('id'));
+    expect(idOf(L.planes[0]!.el)).toMatch(/^Collaboration_[01][0-9a-z]{6}$/);
     const customer = L.box('Customer'), shop = L.box('Shop'), bank = L.box('Bank');
     // stacked vertically in declaration order, left-aligned, same width
     expect(customer.y + customer.height).toBeLessThan(shop.y);

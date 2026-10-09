@@ -13,6 +13,13 @@
  * Before calling the layouter we replace the DI with a minimal "hint" diagram
  * that lists the expanded sub-processes.
  *
+ * Both engines write new DI; the ids the file's DI had are given back to it
+ * afterwards (diagram/write.ts restoreDiIds: same DI, plane and diagram ids,
+ * new DI in the file's DI id style), so a redraw only changes geometry.
+ * Before they run, every element they draw that has no id gets one in the
+ * file's id style (diagram/drawn-ids.ts; LayoutResult.givenIds), since DI
+ * refers to elements by id.
+ *
  * Two things the alpha layouter does not handle are patched around here:
  *
  *   - a process with lanes and a node in none of them (a lint state, W_NOT_IN_LANE)
@@ -25,7 +32,10 @@
  *     compensation handler is moved right below its boundary event (bpmn.io
  *     convention) when that spot is free.
  */
-import { layoutProcess, LayoutError, LayoutWarning } from 'bpmn-auto-layout';
+import type { LayoutWarning } from 'bpmn-auto-layout';
+import { giveDrawnElementsIds, type GivenId } from './diagram/drawn-ids.js';
+import { rememberDiIds, restoreDiIds } from './diagram/write.js';
+import type { IdRequest } from './idstyle.js';
 import { layoutClean } from './layout/engine.js';
 import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, ModelError } from './model.js';
 
@@ -45,12 +55,16 @@ export interface LayoutOptions {
   collapse?: Iterable<string>;
   /** 'clean' (built-in engine, default) or 'auto' (bpmn-auto-layout) */
   engine?: LayoutEngine;
+  /** allocates (and claims) the id of a drawn element that has none, in the document's registry (default: the file's id style on a registry of the model's ids) */
+  allocateId?: (req: IdRequest) => string;
 }
 
 export interface LayoutResult {
   xml: string;
   warnings: LayoutWarningInfo[];
   expanded: string[];
+  /** elements without id that got one so that the diagram can refer to them (diagram/drawn-ids.ts) */
+  givenIds?: GivenId[];
 }
 
 export const SUB_PROCESS_TYPES = ['bpmn:SubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction'];
@@ -432,37 +446,49 @@ function toWarningInfo(w: LayoutWarning): LayoutWarningInfo {
  * re-parse it if they need DI.
  */
 export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promise<LayoutResult> {
+  // the DI refers to elements by id: an element without one gets one first (never bpmnElement="undefined")
+  const givenIds = giveDrawnElementsIds(model.definitions, opts.allocateId);
+  const given = givenIds.length ? { givenIds } : {};
   const expanded = resolveExpanded(model, opts);
+  const diIds = rememberDiIds(model.definitions);
   if ((opts.engine ?? 'clean') === 'clean') {
     const { warnings } = layoutClean(model, expanded);
+    restoreDiIds(model.definitions, diIds);
     const { xml } = await model.moddle.toXML(model.definitions, { format: true });
-    return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded] };
+    return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given };
   }
   injectLayoutHints(model, expanded);
   const temporary = addTemporaryLaneMembers(model.definitions);
   let result: LayoutResult;
   try {
     const { xml: input } = await model.moddle.toXML(model.definitions, { format: true });
-    result = await layoutXml(input, expanded);
+    result = await autoLayoutXml(input, expanded);
   } finally {
     removeTemporaryLaneMembers(model.definitions, temporary);
   }
   const missingDi = result.warnings.some((w) => w.code === 'DI_NOT_CREATED');
-  if (!temporary.length && !missingDi) return result;
+  if (!temporary.length && !missingDi && !diIds.diagrams.length) return { ...result, ...given };
 
-  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges
+  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges, give the DI its ids back
   const laidOut = await parseXml(result.xml);
   removeTemporaryLaneMembers(laidOut.definitions, temporary);
   const fixed = new Set(missingDi ? synthesiseAssociationEdges(laidOut) : []);
+  restoreDiIds(laidOut.definitions, diIds);
   return {
     xml: await serialize(laidOut),
     warnings: result.warnings.filter((w) => !(w.code === 'DI_NOT_CREATED' && fixed.has(w.elementId))),
     expanded: result.expanded,
+    ...given,
   };
 }
 
-/** Lays out raw XML that already carries the right expansion hints. */
-export async function layoutXml(xml: string, expanded: Set<string> = new Set()): Promise<LayoutResult> {
+/**
+ * bpmn-auto-layout on raw XML that already carries the right expansion hints
+ * (layoutModel with engine auto). The package is imported on first use, so a
+ * browser bundle can load it as a separate chunk only for `engine: 'auto'`.
+ */
+export async function autoLayoutXml(xml: string, expanded: Set<string> = new Set()): Promise<LayoutResult> {
+  const { layoutProcess, LayoutError } = await import('bpmn-auto-layout');
   try {
     const { xml: out, warnings } = await layoutProcess(xml);
     return { xml: out, warnings: warnings.map(toWarningInfo), expanded: [...expanded] };
