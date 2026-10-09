@@ -1,29 +1,90 @@
 /**
- * Readable, deterministic ids.
+ * Id building blocks: name words, slugs, short hashes, the id registry.
  *
- * Convention (bpmn-js family prefixes + a slug of the name):
- *   Activity_CheckInvoice, Event_OrderReceived, Gateway_InvoiceOk, Flow_3,
- *   Participant_Customer, Lane_Sales, DataObjectReference_Order, ...
+ * Which id a new element gets is decided by the file's id style
+ * (src/idstyle.ts): new ids follow the conventions the file already uses,
+ * and a file without a convention gets the bpmn-cli default
+ * (`Activity_CheckInvoice`, `Flow_0k3x9qa`).
  *
- * Unnamed elements get a numeric suffix (max existing + 1, never reused
- * while the maximum exists). Name collisions get _2, _3, ...
+ * Names become ASCII words: German umlauts are transliterated (ä -> ae,
+ * ö -> oe, ü -> ue, ß -> ss; Ä -> Ae, or AE inside an upper-case word),
+ * other accents are dropped (é -> e), everything that is not a letter or
+ * digit separates words.
  */
 
 const MAX_SLUG = 40;
 
-/** ASCII-only PascalCase slug of a name, or '' when nothing usable remains. */
-export function slugify(name: string | undefined): string {
-  if (!name) return '';
-  const ascii = name
+const GERMAN: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ẞ: 'SS' };
+
+/** The ASCII transliteration of a name (German umlauts as ae / oe / ue / ss, other accents dropped). */
+export function transliterate(name: string): string {
+  return name
+    .normalize('NFC')
+    .replace(/[äöüßÄÖÜẞ]/g, (c, at: number, all: string) => {
+      const out = GERMAN[c]!;
+      // Ä in an upper-case word (ÄNDERUNG) -> AE
+      const next = all.charAt(at + 1);
+      return out.length === 2 && c === c.toUpperCase() && next && next !== next.toLowerCase() ? out.toUpperCase() : out;
+    })
     .normalize('NFKD')
-    .replace(/ß/g, 'ss')
-    .replace(/[̀-ͯ]/g, '');
-  const words = ascii.split(/[^A-Za-z0-9]+/).filter(Boolean);
-  let slug = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
-  if (slug.length > MAX_SLUG) {
-    slug = slug.slice(0, MAX_SLUG);
-  }
-  return slug;
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/** The ASCII words of a name (see transliterate; `OrderReceived` and `URLCheck` are two words each); [] when nothing usable remains. */
+export function nameWords(name: string | undefined): string[] {
+  if (!name) return [];
+  return transliterate(name)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+}
+
+const cap = (w: string): string => w.charAt(0).toUpperCase() + w.slice(1);
+
+/** Cuts a slug to MAX_SLUG characters (and a trailing separator off). */
+function cut(slug: string): string {
+  return slug.length > MAX_SLUG ? slug.slice(0, MAX_SLUG).replace(/_+$/, '') : slug;
+}
+
+/** ASCII-only PascalCase slug of a name, or '' when nothing usable remains (the bpmn-cli default body). */
+export function slugify(name: string | undefined): string {
+  return cut(nameWords(name).map(cap).join(''));
+}
+
+/** camelCase slug: `checkInvoice` (an upper-case first word is lowered: `URL check` -> `urlCheck`). */
+export function camelSlug(name: string | undefined): string {
+  const words = nameWords(name);
+  if (!words.length) return '';
+  const [first, ...rest] = words;
+  const head = /^[A-Z0-9]+$/.test(first!) ? first!.toLowerCase() : first!.charAt(0).toLowerCase() + first!.slice(1);
+  return cut(head + rest.map(cap).join(''));
+}
+
+/** snake_case slug: `check_invoice`. */
+export function snakeSlug(name: string | undefined): string {
+  return cut(
+    nameWords(name)
+      .map((w) => w.toLowerCase())
+      .join('_'),
+  );
+}
+
+/** Pascal_Snake slug: `Check_Invoice`. */
+export function pascalSnakeSlug(name: string | undefined): string {
+  return cut(nameWords(name).map(cap).join('_'));
+}
+
+/**
+ * A short stable hash in base 36, seven characters like the random part of a
+ * Camunda Modeler id (`Flow_0k3x9qa`): FNV-1a over the text, so the same
+ * inputs always give the same id and different inputs (other flow ends,
+ * another placement) give different ones.
+ */
+export function hash7(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h.toString(36).padStart(7, '0').slice(-7);
 }
 
 /** BPMN ids must be XML NCNames. */
@@ -31,6 +92,7 @@ export function isValidId(id: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(id);
 }
 
+/** Every id of the document (BPMN, DI and vendor ids), so that a new id never collides. */
 export class IdRegistry {
   private readonly used = new Set<string>();
 
@@ -50,33 +112,8 @@ export class IdRegistry {
     this.used.delete(id);
   }
 
-  /**
-   * Next free id for a prefix. With a name: `<prefix>_<Slug>` (then `_2`, `_3`
-   * on collision); without: `<prefix>_<n>` with n = max existing + 1.
-   */
-  next(prefix: string, name?: string): string {
-    const slug = slugify(name);
-    let id: string;
-    if (slug) {
-      const base = `${prefix}_${slug}`;
-      id = base;
-      let n = 2;
-      while (this.used.has(id)) id = `${base}_${n++}`;
-    } else {
-      const re = new RegExp(`^${escapeRegExp(prefix)}_(\\d+)$`);
-      let max = 0;
-      for (const existing of this.used) {
-        const m = re.exec(existing);
-        if (m) max = Math.max(max, Number(m[1]));
-      }
-      id = `${prefix}_${max + 1}`;
-      while (this.used.has(id)) id = `${prefix}_${++max + 1}`;
-    }
-    this.used.add(id);
-    return id;
+  /** The ids in use. */
+  values(): IterableIterator<string> {
+    return this.used.values();
   }
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

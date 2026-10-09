@@ -68,7 +68,7 @@ describe('bpmn layout modes on the command line', () => {
     const r = bpmn('add', file, 'userTask', 'Review', '--after', 'A');
     expect(r.code, r.err).toBe(0);
     expect(r.out).toMatch(/^layout: ok - incremental \(hand-made diagram: kept, changes placed locally\)$/m);
-    expect(r.out).toMatch(/^ {2}placed: Activity_Review, Flow_\d+$/m);
+    expect(r.out).toMatch(/^ {2}placed: Activity_Review, Flow_[01][0-9a-z]{6}$/m);
     expect(r.out).toMatch(/^layout quality: score 0 -> 0$/m);
     expect(await boxOf(file, 'S')).toEqual(before);
   });

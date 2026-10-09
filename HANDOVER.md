@@ -150,6 +150,25 @@ Still open for embedding: the auto layout completes missing DI on any write
 regions per save (an insert changes the process and the DI section, so one
 region spans both).
 
+## Edits follow the file (2026-10-09, after the steps below)
+
+For embedding the CLI as design-iq's editing engine: new ids follow the
+file's id style (`src/idstyle.ts`, learned per document: prefixes per kind /
+family / type name, pascal / camel / snake / Pascal_Snake / modeler-hash /
+numbered bodies, flow forms `Flow_0k3x9qa`, `Flow_12`, `flow_aToB`,
+`Flow_<from>_<to>`); flows and unnamed elements are hashed from stable inputs
+instead of numbered (no more `Flow_5` on two branches); umlauts become ae /
+oe / ue / ss and E_NOT_FOUND suggests the other spellings; a full redraw
+keeps every DI, plane and diagram id (`diagram/write.ts` rememberDiIds /
+restoreDiIds in `layoutModel`); design-iq stickies (`bpmiq:sticky`) follow
+their nearest flow node after incremental layout, format ops and redraws
+(`src/diagram/stickies.ts`, pipeline; `layout.stickies`). Generated ids are
+no longer guessable: in `apply` batches pass explicit ids for back
+references. Evidence (private corpus, aggregate) and what is still open:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#edits-follow-the-file-2026-10-09).
+Tests: `test/conventions-ids.test.ts`, `test/conventions-di.test.ts`,
+`test/conventions-stickies.test.ts`.
+
 ## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
 
 An independent verifier re-checked the Camunda 7 step on the three engines
@@ -429,6 +448,11 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
 4. **Embedding** (audit P1): platform awareness (#27, #28),
    collision-resistant ids (#32). The browser-safe core (#33), text-preserving
    output, no-op writes and stable DI ids are done (step 2).
+
+4. **Roundtrip for embedding** (audit P1): text-preserving output and true
+   no-op writes (#30, #31, #44–#46), a browser-safe core (#33), platform
+   awareness (#27, #28). (Ids, DI ids and stickies follow the file now, see
+   above.)
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the

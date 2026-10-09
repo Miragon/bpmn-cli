@@ -80,7 +80,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const there = await browser.applyToXml(xml, JSON.stringify(ops), { debug: (l) => lines.push(l) });
     const here = await core.applyToXml(xml, ops);
     expect(there.result.layout.mode).toBe('incremental');
-    expect(there.result.created.map((c) => c.id)).toContain('Activity_ShipGoods');
+    expect(there.result.created.map((c) => c.id)).toContain('Task_ShipGoods'); // the file's id style (Task_)
     expect(there.unchanged).toBe(false);
     expect(there.xml).toBe(here.xml);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));

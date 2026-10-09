@@ -11,6 +11,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
+import { connectionRequest } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
@@ -293,7 +294,7 @@ export function createSequenceFlow(doc: Doc, source: El, target: El, attrs: Flow
   const scope = doc.scopeOf(source)!;
   let id = attrs.id;
   if (id) doc.claimId(id);
-  else id = doc.newId('Flow');
+  else id = doc.allocateId(connectionRequest('bpmn:SequenceFlow', idOf(source), idOf(target))).id;
   const flow = doc.create('bpmn:SequenceFlow', {
     id,
     ...(attrs.name ? { name: attrs.name } : {}),

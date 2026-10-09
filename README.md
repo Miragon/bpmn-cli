@@ -26,8 +26,8 @@ $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 $ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
 $ bpmn show order.bpmn
 process Process_OrderHandling "Order handling" executable
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_1)
-  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_2)
+  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_1cat8ax)
+  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_18s39x0)
   endEvent Event_Done "Done"
 problems: none
 ```
@@ -39,6 +39,7 @@ with a laid-out diagram.
 
 - [Install](#install)
 - [The contract](#the-contract)
+- [Ids](#ids)
 - [Command reference](#command-reference)
 - [Layout modes](#layout-modes)
 - [Formatting without XML](#formatting-without-xml)
@@ -112,12 +113,18 @@ unchanged. Nothing else.
    write rewrites only the elements the change touched; the rest of the file
    keeps its text, and a result equal to the file is not written at all
    ([What a write changes](#what-a-write-changes)).
-3. **Ids are readable and stable.** `<Prefix>_<NameSlug>` following the
-   bpmn-js conventions: `Activity_CheckInvoice`, `Event_OrderReceived`,
-   `Gateway_InvoiceOk`, `Flow_3`, `Participant_Customer`, `Lane_Sales`,
-   `DataObjectReference_Order`. Unnamed elements get `<Prefix>_<n>`; name
-   collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every result
-   lists the ids it created.
+3. **Ids follow the file.** New ids take the id style the file already uses
+   ([Ids](#ids)): Camunda Modeler ids (`Activity_0k3x9qa`), type-named ones
+   (`serviceTask_checkStock`), `Task_check_stock`, numbered `Task_12`, flows
+   like `flow_checkStockToShip` or `Flow_<from>_<to>`. A new file gets
+   readable `<Prefix>_<NameSlug>` ids following the bpmn-js conventions:
+   `Activity_CheckInvoice`, `Event_OrderReceived`, `Gateway_InvoiceOk`,
+   `Participant_Customer`, `Lane_Sales`, `DataObjectReference_Order`; flows
+   and unnamed elements get a short hash of their ends or position
+   (`Flow_1cat8ax`), so independent edits on two branches of a file do not
+   produce the same id.
+   Name collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every
+   result lists the ids it created.
 4. **Nothing is half done.** A command (or a whole `apply` batch) either
    succeeds completely or leaves the file untouched. Structural validation
    errors that the change would introduce block the write (`--force`
@@ -130,6 +137,42 @@ unchanged. Nothing else.
    it; exclusive gateways should be named as a question and their branches
    named; joins and parallel gateways stay unnamed. `bpmn validate` lints
    against these.
+
+## Ids
+
+New ids follow the conventions of the file they are written into (the
+modeler, a team convention, a generator): `bpmn` reads the ids the file has
+and generates new ones the same way. Explicit ids (`--id`, `"id"` in ops
+JSON) are always taken as given.
+
+| what | learned from the file | examples |
+| --- | --- | --- |
+| prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_` |
+| body of named elements | the case style of the named flow nodes' ids (of the other named elements when the flow nodes show none) | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice`, a modeler hash `0k3x9qa`, a number `12` |
+| unnamed elements | numbered when the file numbers them, else a hash | `Gateway_0k3x9qa`, `Gateway_3` |
+| sequence / message flows | the form of at least half of the flows | `Flow_0k3x9qa` (default), `SequenceFlow_1abc2de`, `Flow_12`, `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>` |
+| diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
+
+One id is not a convention: a rule needs two ids that follow it (in a file
+whose ids are mostly prefixed, one id of a kind is enough for that kind). A
+file without a convention gets the bpmn-cli default.
+
+Hashed ids look like Camunda Modeler ids (`<Prefix>_` and seven base-36
+characters) but are not random: they hash stable inputs (the ends of a flow,
+the kind, name and placement of a node, the owner of a lane set), so the same
+edit on the same file always gives the same id, and edits made independently
+on two branches of a file (git, two agents) do not produce the same new id.
+Earlier versions numbered flows and unnamed elements (`Flow_3`); a file
+numbered like that keeps being numbered. In an `apply` batch, give an
+explicit `id` to an element a later op refers to: generated ids are not
+meant to be guessed. Ids of existing elements never change (a spliced or
+bridged flow keeps its id even when it names its old ends).
+
+Names become ASCII words: German umlauts are transliterated (`ä` -> `ae`,
+`ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`),
+other accents dropped (`Café` -> `Cafe`). An id that is not found is
+matched against the other spellings (`Activity_Prufung`, `Activity_Prüfung`
+suggest `Activity_Pruefung`).
 
 ## Command reference
 
@@ -264,13 +307,13 @@ same data (`diagrams[].groups[] {id, kind, name, parent, rows}`, `colors`,
 
 ```
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_1 (Collaboration_1)
+diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
   participant Participant_OrderHandling "Order handling"
     lane Lane_Sales "Sales"
       row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Event_Done
       row 2: Activity_ClarifyInvoice, Event_Clarified
     lane Lane_Backoffice "Backoffice"
-colors: Activity_CheckInvoice red, Flow_2 red
+colors: Activity_CheckInvoice red, Flow_024yl5b red
 labels off their default side: Gateway_InvoiceOk below (default above)
 layout quality: score 0: no layout problems
 ```
@@ -686,11 +729,11 @@ the last of them. A typical agent loop:
 
 ```
 $ bpmn show order.bpmn --layout                          # rows per lane, colours, problems
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_2 Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
 $ bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column
 $ bpmn place order.bpmn Activity_ClarifyInvoice --below Activity_BookInvoice
 $ bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales
-$ bpmn route order.bpmn Flow_8 --exit bottom --entry bottom
+$ bpmn route order.bpmn Flow_02tom5g --exit bottom --entry bottom
 $ bpmn metrics order.bpmn                                # no overlaps / through / outsideLane added?
 ```
 
@@ -1174,7 +1217,7 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 ## Quoting
 
 - Expressions and anything containing `$`: **single quotes**, e.g.
-  `--condition '${amount > 100}'`, `set Flow_3 condition='${ok}'`. In double
+  `--condition '${amount > 100}'`, `set Flow_1qqra0u condition='${ok}'`. In double
   quotes the shell expands `${...}` to nothing and the CLI rejects the empty
   expression (`E_INVALID_VALUE`).
 - Names with spaces: quote them, `add userTask "Check invoice"`.
@@ -1194,8 +1237,19 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 - **The engine draws** a new file, a file without diagram, a drawing it made
   itself and nobody changed (`auto`), and everything on request
   (`--relayout`, `--layout full`, `bpmn layout`). Then all shapes, edges,
-  waypoints and labels are derived from the semantic model; colours and the
-  DI ids are carried over by element id, manual positions are not.
+  waypoints and labels are derived from the semantic model; colours are
+  carried over by element id, manual positions are not. The ids stay: every
+  BPMNShape / BPMNEdge keeps the id it had, every plane and diagram keeps its
+  id (a plane named after the old root, `BPMNPlane_<processId>`, follows a new
+  collaboration root), and new DI takes the file's DI id style, so a redraw
+  changes coordinates, not ids.
+- **design-iq stickies follow their node.** A `bpmiq:sticky` extension
+  element of a process (workshop notes of Miragon design-iq, absolute
+  `x` / `y` on the element, no DI) belongs to the flow node nearest to it.
+  When a write moves that node (incremental placement, a format command, a
+  redraw), the sticky moves by the same shift; a write that moves no node
+  never touches it. The result lists them (`stickies moved: Sticky_1 (with
+  Activity_Check)`, JSON `layout.stickies`).
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.
@@ -1387,7 +1441,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
-created sequenceFlow Flow_1 - Event_OrderReceived -> Activity_CheckInvoice
+created sequenceFlow Flow_1cat8ax - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
 warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
@@ -1397,7 +1451,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn end "Invoice handled" --after Activity_CheckInvoice
 created endEvent Event_InvoiceHandled "Invoice handled" - after Activity_CheckInvoice
-created sequenceFlow Flow_2 - Activity_CheckInvoice -> Event_InvoiceHandled
+created sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Event_InvoiceHandled
 note: appended after Activity_CheckInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
@@ -1418,19 +1472,19 @@ EOF
 $ bpmn apply order.bpmn ops.json
 created exclusiveGateway Gateway_InvoiceOk "Invoice ok?" - between Activity_CheckInvoice and Event_InvoiceHandled
 created serviceTask Activity_BookInvoice "Book invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_3 "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
+created sequenceFlow Flow_1qqra0u "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
 created userTask Activity_ClarifyInvoice "Clarify invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_4 "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
+created sequenceFlow Flow_0d0nlaf "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
 created exclusiveGateway Gateway_InvoiceOk_join - join of Gateway_InvoiceOk
-created sequenceFlow Flow_5 - Activity_BookInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_6 - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_7 - Gateway_InvoiceOk_join -> Event_InvoiceHandled
+created sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_0jz1192 - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_1y8i3yl - Gateway_InvoiceOk_join -> Event_InvoiceHandled
 created boundaryEvent:timer Event_Reminder "Reminder" - on Activity_ClarifyInvoice
 created sendTask Activity_RemindCustomer "Remind customer" - after Event_Reminder
-created sequenceFlow Flow_8 - Event_Reminder -> Activity_RemindCustomer
+created sequenceFlow Flow_02tom5g - Event_Reminder -> Activity_RemindCustomer
 created endEvent Event_ReminderSent "Reminder sent" - after Activity_RemindCustomer
-created sequenceFlow Flow_9 - Activity_RemindCustomer -> Event_ReminderSent
-changed sequenceFlow Flow_2 - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled)
+created sequenceFlow Flow_1brj5dq - Activity_RemindCustomer -> Event_ReminderSent
+changed sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled)
 changed serviceTask Activity_BookInvoice "Book invoice" - ext added zeebe:taskDefinition
 note: inserted Gateway_InvoiceOk between Activity_CheckInvoice and Event_InvoiceHandled
 note: appended after Gateway_InvoiceOk
@@ -1446,15 +1500,15 @@ written: order.bpmn
 $ bpmn show order.bpmn
 namespaces: zeebe, modeler
 process Process_OrderHandling "Order handling" executable
-  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_1)
-  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_2)
-  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_3 "yes" if =ok), Activity_ClarifyInvoice (Flow_4 "no" default)
-  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_5)
-  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_7)
+  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_1cat8ax)
+  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_024yl5b)
+  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_1qqra0u "yes" if =ok), Activity_ClarifyInvoice (Flow_0d0nlaf "no" default)
+  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_08vgc8d)
+  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_1y8i3yl)
   endEvent Event_InvoiceHandled "Invoice handled"
-  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_6)
-    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_8)
-  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_9)
+  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_0jz1192)
+    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_02tom5g)
+  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_1brj5dq)
   endEvent Event_ReminderSent "Reminder sent"
 root: message Message_OrderReceived "OrderReceived"
 problems: none
@@ -1467,9 +1521,9 @@ layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn participant "Order handling"
-created collaboration Collaboration_1
+created collaboration Collaboration_17c2kqg
 created participant Participant_OrderHandling "Order handling" - wraps process Process_OrderHandling
-note: collaboration Collaboration_1 created; Participant_OrderHandling wraps the existing process Process_OrderHandling
+note: collaboration Collaboration_17c2kqg created; Participant_OrderHandling wraps the existing process Process_OrderHandling
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1482,13 +1536,13 @@ written: order.bpmn
 
 $ bpmn connect order.bpmn Activity_RemindCustomer Participant_Customer --message Reminder
 created message Message_Reminder "Reminder" - root element
-created messageFlow Flow_10 - Activity_RemindCustomer -> Participant_Customer
+created messageFlow Flow_1r0se6x - Activity_RemindCustomer -> Participant_Customer
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_1 (Collaboration_1)
+diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
   participant Participant_OrderHandling "Order handling"
     row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Gateway_InvoiceOk_join, Event_InvoiceHandled
     row 2: Activity_ClarifyInvoice
@@ -1496,9 +1550,9 @@ diagram BPMNPlane_Collaboration_1 (Collaboration_1)
   participant Participant_Customer "Customer"
 layout quality: score 0: no layout problems
 
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_2 Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
 layout: ok - incremental (format operations only: drawing kept)
-  format color #0: colored Activity_CheckInvoice, Flow_2, Gateway_InvoiceOk
+  format color #0: colored Activity_CheckInvoice, Flow_024yl5b, Gateway_InvoiceOk
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1510,19 +1564,19 @@ written: order.bpmn
 
 $ bpmn place order.bpmn Activity_RemindCustomer Event_ReminderSent --row-of Activity_ClarifyInvoice --after Activity_ClarifyInvoice
 layout: ok - incremental (format operations only: drawing kept)
-  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_8, Flow_6, Flow_10
+  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_02tom5g, Flow_0jz1192, Flow_1r0se6x
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn serviceTask "Archive invoice" --after Activity_BookInvoice
 created serviceTask Activity_ArchiveInvoice "Archive invoice" - after Activity_BookInvoice
-created sequenceFlow Flow_11 - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
-changed sequenceFlow Flow_5 - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join)
+created sequenceFlow Flow_1l931fe - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
+changed sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join)
 note: inserted between Activity_BookInvoice and Gateway_InvoiceOk_join
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
-  placed: Activity_ArchiveInvoice, Flow_11
+  placed: Activity_ArchiveInvoice, Flow_1l931fe
   moved: Participant_OrderHandling, Event_InvoiceHandled, Activity_RemindCustomer, Event_ReminderSent, Gateway_InvoiceOk_join, Participant_Customer
-  rerouted: Flow_5
+  rerouted: Flow_08vgc8d
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1531,6 +1585,7 @@ score 0: no layout problems
 
 $ bpmn validate order.bpmn
 layout: ok
+platform: c8 (modeler:executionPlatform Camunda Cloud) - no Camunda 8 engine rules yet (structure and lint only)
 valid, 0 warning(s)
 ```
 
@@ -1615,7 +1670,7 @@ const edit = await applyToXml(xml, [
   { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
 ]);
 if (!edit.unchanged) xml = edit.xml; // and save it
-edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_1', 'Event_Done', 'Flow_2']
+edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_1cat8ax', 'Event_Done', 'Flow_18s39x0']
 edit.result.layout.mode;              // 'full' (no diagram before: drawn from scratch)
 renderMutation(edit.result);          // the text `bpmn apply` prints: created ... / layout: ok - full (...)
 await showXml(xml);                   // the `bpmn show` text of the quick start above

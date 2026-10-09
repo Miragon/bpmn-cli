@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
-import { IdRegistry, isValidId, slugify } from '../src/ids.js';
+import { hash7, IdRegistry, isValidId, slugify } from '../src/ids.js';
+import { IdStyle, kindRequest, typeRequest } from '../src/idstyle.js';
+import { kindByName } from '../src/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout.js';
 import { many } from '../src/model.js';
@@ -8,7 +10,7 @@ import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { ChangeSet } from '../src/result.js';
-import { definitionsXml, linearDoc } from './helpers.js';
+import { definitionsXml, flowBetween, HASHED, linearDoc } from './helpers.js';
 
 function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {
   try {
@@ -35,20 +37,35 @@ async function compensationDoc(): Promise<Doc> {
 }
 
 describe('ids', () => {
-  it('slugifies names to ASCII PascalCase', () => {
+  it('slugifies names to ASCII PascalCase, German umlauts as ae / oe / ue / ss', () => {
     expect(slugify('Check invoice')).toBe('CheckInvoice');
-    expect(slugify('Rechnung prüfen (groß)')).toBe('RechnungPrufenGross');
+    expect(slugify('Rechnung prüfen (groß)')).toBe('RechnungPruefenGross');
+    expect(slugify('Änderung übernehmen, Öl')).toBe('AenderungUebernehmenOel');
+    expect(slugify('ÄNDERUNG')).toBe('AENDERUNG');
+    expect(slugify('Café crème')).toBe('CafeCreme');
     expect(slugify('  ')).toBe('');
     expect(slugify('a'.repeat(60)).length).toBe(40);
   });
 
-  it('generates Prefix_Slug and Prefix_n ids without collisions', () => {
+  it('generates Prefix_Slug ids and hashed ids for unnamed elements, without collisions (default style)', () => {
     const ids = new IdRegistry(['Activity_CheckInvoice', 'Flow_3', 'Flow_7']);
-    expect(ids.next('Activity', 'Check invoice')).toBe('Activity_CheckInvoice_2');
-    expect(ids.next('Activity', 'Check invoice')).toBe('Activity_CheckInvoice_3');
-    expect(ids.next('Flow')).toBe('Flow_8');
-    expect(ids.next('Flow')).toBe('Flow_9');
-    expect(ids.next('Gateway', '???')).toBe('Gateway_1');
+    const next = (req: Parameters<IdStyle['next']>[0]): string => {
+      const { id } = IdStyle.DEFAULT.next(req, ids);
+      ids.claim(id);
+      return id;
+    };
+    const task = kindByName('task')!;
+    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_2');
+    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_3');
+    // unnamed: a hash of the stable inputs, like a Camunda Modeler id; a taken one is hashed again with a salt
+    const gw = kindByName('exclusiveGateway')!;
+    const first = next(kindRequest(gw, { name: '???', seed: 'after:A' }));
+    expect(first).toMatch(HASHED('Gateway'));
+    expect(first).toBe(`Gateway_${hash7('exclusiveGateway||' + '|after:A')}`);
+    const second = next(kindRequest(gw, { seed: 'after:A' }));
+    expect(second).toMatch(HASHED('Gateway'));
+    expect(second).not.toBe(first);
+    expect(next(typeRequest('bpmn:LaneSet', { seed: 'Process_1' }))).toMatch(HASHED('LaneSet'));
   });
 
   it('validates NCNames', () => {
@@ -284,7 +301,7 @@ describe('flows & placement', () => {
     spliceIntoFlow(doc, doc.get('F2')!, t);
     const order = doc.flowElements(doc.processes()[0]!).map((e) => e.get('id'));
     expect(order.indexOf('T')).toBeGreaterThan(order.indexOf('Task_A'));
-    expect(order.indexOf('Flow_1')).toBeGreaterThan(order.indexOf('T'));
+    expect(order.indexOf(flowBetween(doc, 'T', 'End'))).toBeGreaterThan(order.indexOf('T'));
   });
 });
 
@@ -350,7 +367,8 @@ describe('layout', () => {
     const doc = await compensationDoc();
     const r = await layoutModel(doc.model);
     expect(r.warnings.filter((w) => w.code === 'DI_NOT_CREATED')).toEqual([]);
-    expect(r.xml).toMatch(/BPMNEdge_Association_1/);
+    const association = [...doc.byId().values()].find((e) => e.$type === 'bpmn:Association')!.get<string>('id');
+    expect(r.xml).toContain(`BPMNEdge_${association}`);
     const laidOut = await Doc.fromXml(r.xml);
     const shapes = new Map<string, any>();
     for (const d of many(laidOut.definitions, 'diagrams')) for (const s of many(d.get('plane'), 'planeElement')) shapes.set(s.get('bpmnElement').id, s);
@@ -358,7 +376,7 @@ describe('layout', () => {
     const handler = shapes.get('Activity_RefundCard').bounds;
     expect(handler.x + handler.width / 2).toBe(event.x + event.width / 2);
     expect(handler.y).toBeGreaterThan(event.y + event.height);
-    const edge = shapes.get('Association_1');
+    const edge = shapes.get(association);
     expect(edge.waypoint).toHaveLength(2);
     expect(edge.waypoint[0].y).toBe(event.y + event.height);
     expect(edge.waypoint[1].y).toBe(handler.y);
@@ -366,10 +384,12 @@ describe('layout', () => {
 
   it('draws associations of text annotations on sequence flows', async () => {
     const doc = await linearDoc();
-    runOps(doc, [{ op: 'add', kind: 'textAnnotation', text: 'on the flow', to: 'F1' }]);
+    const cs = runOps(doc, [{ op: 'add', kind: 'textAnnotation', text: 'on the flow', to: 'F1' }]);
+    const association = cs.created.find((c) => c.kind === 'association')!.id;
+    expect(association).toMatch(HASHED('Association'));
     const r = await layoutModel(doc.model);
     expect(r.warnings).toEqual([]);
-    expect(r.xml).toMatch(/BPMNEdge_Association_1/);
+    expect(r.xml).toContain(`BPMNEdge_${association}`);
   });
 });
 

@@ -28,6 +28,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, type Warning } from '../errors.js';
+import { typeRequest } from '../idstyle.js';
 import { kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { addTo, is, many, walk, type El } from '../model.js';
 import { isC7Uri } from '../platform/descriptor.js';
@@ -70,7 +71,7 @@ function idOf(el: El): string {
 
 /**
  * Finds a root Message/Error/Signal/Escalation by id or name, creating it
- * (id `<Prefix>_<Slug>`) when missing. `extra` (errorCode / escalationCode)
+ * (id `<Prefix>_<Slug>` in the default style, src/idstyle.ts) when missing. `extra` (errorCode / escalationCode)
  * is applied to found elements too. Returns whether it was created.
  */
 export function ensureRootElement(doc: Doc, type: RootRefType, nameOrId: string, extra: Record<string, string | undefined> = {}): { el: El; created: boolean } {
@@ -82,7 +83,7 @@ export function ensureRootElement(doc: Doc, type: RootRefType, nameOrId: string,
   let el = existing.find((e) => idOf(e) === key) ?? existing.find((e) => e.get<string | undefined>('name') === key);
   let created = false;
   if (!el) {
-    el = doc.create(type, { id: doc.newId(ROOT_PREFIX[type], key), name: key });
+    el = doc.create(type, { id: doc.allocateId(typeRequest(type, { name: key, prefix: ROOT_PREFIX[type] })).id, name: key });
     addTo(doc.definitions, 'rootElements', el);
     created = true;
   }

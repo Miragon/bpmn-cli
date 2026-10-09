@@ -168,7 +168,7 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
     expect(renamed.xml).toBe(LISTLESS.replace('name="Register request"', 'name="Register the request"'));
     const inserted = await dry(LISTLESS, [{ op: 'add', kind: 'task', name: 'Check request', after: 'Task_A' }]);
     expect(lists(inserted.xml)).toBe(0);
-    expect(inserted.xml).toMatch(/\n {4}<task id="Activity_CheckRequest" name="Check request" \/>\n/);
+    expect(inserted.xml).toMatch(/\n {4}<task id="Task_CheckRequest" name="Check request" \/>\n/); // the file's id style (Task_)
   });
 
   it('in memory the lists are complete (the placement grammar and the views read them)', async () => {

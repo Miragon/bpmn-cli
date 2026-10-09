@@ -339,7 +339,7 @@ withTriggerOptions(
     program
       .command('add <file> <kind> [name] [keyValues...]')
       .description('create an element and wire it in (kind[:trigger], e.g. userTask, startEvent:message, boundaryEvent:timer)')
-      .option('--id <id>', 'explicit id (default: <Prefix>_<NameSlug>)')
+      .option('--id <id>', "explicit id (default: in the file's id style, else <Prefix>_<NameSlug>)")
       .option('--after <id>', 'append after a gateway / unconnected node, or insert into the node\'s single outgoing flow')
       .option('--before <id>', 'prepend before a join / unconnected node, or insert into the node\'s single incoming flow')
       .option('--flow <flowId>', 'insert into this sequence flow')
