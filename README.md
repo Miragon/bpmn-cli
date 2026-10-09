@@ -1224,7 +1224,11 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
   itself and nobody changed (`auto`), and everything on request
   (`--relayout`, `--layout full`, `bpmn layout`). Then all shapes, edges,
   waypoints and labels are derived from the semantic model; colours are
-  carried over by element id, manual positions are not.
+  carried over by element id, manual positions are not. The ids stay: every
+  BPMNShape / BPMNEdge keeps the id it had, every plane and diagram keeps its
+  id (a plane named after the old root, `BPMNPlane_<processId>`, follows a new
+  collaboration root), and new DI takes the file's DI id style, so a redraw
+  changes coordinates, not ids.
 - **You still never write coordinates.** The picture is changed with the
   [format commands](#formatting-without-xml), which name elements (rows,
   columns, sides), and read back with `show --layout` and `metrics`.

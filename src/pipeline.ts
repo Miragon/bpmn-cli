@@ -59,7 +59,7 @@ import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngi
 import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
-import { applyColors, colorsOf } from './diagram/write.js';
+import { applyColors, colorsOf, diIds } from './diagram/write.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtomic, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
 import { runOps } from './ops/index.js';
@@ -268,6 +268,7 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
       if (id && is(shape, 'bpmndi:BPMNShape')) shapes.set(id, shape);
     }
   }
+  let newDi: ReturnType<typeof diIds> | undefined;
   for (const [id, expanded] of wanted) {
     const sub = doc.get(id);
     if (!sub || !SUB_PROCESS_TYPES.some((t) => is(sub, t))) continue;
@@ -285,9 +286,9 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
       rootPlane.$parent = diagram;
       addTo(doc.definitions, 'diagrams', diagram);
     }
-    // a placeholder shape (redrawn by the next layout) so the collapse survives the stale diagram
+    // a placeholder shape (redrawn by the next layout) so the collapse survives the stale diagram; its id in the file's DI style
     const shape = doc.moddle.create('bpmndi:BPMNShape', {
-      id: `BPMNShape_${id}`,
+      id: (newDi ??= diIds(doc.definitions)).shape(id),
       bpmnElement: sub,
       isExpanded: false,
       bounds: doc.moddle.create('dc:Bounds', { x: 0, y: 0, width: 100, height: 80 }),

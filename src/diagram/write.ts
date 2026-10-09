@@ -15,6 +15,15 @@
  *    Coordinates are rounded to whole pixels when written; a connection
  *    keeps at least two waypoints (rounding never merges its ends into one;
  *    the engine reroutes zero-length connections before, reroute.ts).
+ *  - rememberDiIds(defs) / restoreDiIds(defs, memo): a full redraw (the
+ *    engine writes new DI) keeps the ids the file's DI had: every BPMNShape /
+ *    BPMNEdge gets the id of the old DI element of its element, every
+ *    BPMNPlane / BPMNDiagram the ids of the old diagram of the same root (a
+ *    main diagram whose root changed, e.g. to a new collaboration, keeps the
+ *    old ids unless they were derived from the old root's id like
+ *    `BPMNPlane_<processId>`); DI of elements that had none follows the
+ *    file's DI id style (diIds). A file without DI (or without shapes and
+ *    edges showing a style) keeps the engine's ids for new DI.
  *  - pruneDi(defs, sem): deletes DI whose semantic element is gone (or is not
  *    the element registered under its id) and diagrams whose root is gone;
  *    returns the ids of the deleted DI's elements.
@@ -76,8 +85,8 @@ function allIds(defs: El): Set<string> {
   return ids;
 }
 
-/** Id factory for new DI in the style most DI of the file already uses (default `<id>_di`). */
-export function diIds(defs: El): DiIds {
+/** The DI id styles of shapes and edges most DI of the file uses (edges without a style like shapes; undefined: no DI shows one). */
+function diStyles(defs: El): { shape?: Style; edge?: Style } {
   const votes = { Shape: new Map<Style, number>(), Edge: new Map<Style, number>() };
   for (const diagram of rawList(defs, 'diagrams')) {
     for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
@@ -89,8 +98,8 @@ export function diIds(defs: El): DiIds {
       if (style) votes[kind].set(style, (votes[kind].get(style) ?? 0) + 1);
     }
   }
-  const pick = (m: Map<Style, number>, fallback?: Style): Style => {
-    let best: Style = fallback ?? 'suffix';
+  const pick = (m: Map<Style, number>, fallback?: Style): Style | undefined => {
+    let best = fallback;
     let n = 0;
     for (const s of ['suffix', 'bpmn', 'short'] as Style[]) {
       const v = m.get(s) ?? 0;
@@ -101,22 +110,125 @@ export function diIds(defs: El): DiIds {
     }
     return best;
   };
-  const shapeStyle = pick(votes.Shape);
-  const edgeStyle = pick(votes.Edge, shapeStyle);
+  const shape = pick(votes.Shape);
+  return { shape, edge: pick(votes.Edge, shape) };
+}
+
+function styledId(style: Style, kind: 'Shape' | 'Edge', id: string): string {
+  return style === 'suffix' ? `${id}_di` : style === 'bpmn' ? `BPMN${kind}_${id}` : `${kind}_${id}`;
+}
+
+/** `base`, else `base_2`, `base_3`, ... whichever is not taken; claims it. */
+function claimUnique(taken: Set<string>, base: string): string {
+  let id = base;
+  for (let i = 2; taken.has(id); i++) id = `${base}_${i}`;
+  taken.add(id);
+  return id;
+}
+
+/** Id factory for new DI in the style most DI of the file already uses (default `<id>_di`). */
+export function diIds(defs: El): DiIds {
+  const styles = diStyles(defs);
   const taken = allIds(defs);
-  const unique = (base: string): string => {
-    let id = base;
-    for (let i = 2; taken.has(id); i++) id = `${base}_${i}`;
-    taken.add(id);
-    return id;
-  };
-  const make = (style: Style, kind: 'Shape' | 'Edge', id: string): string => unique(style === 'suffix' ? `${id}_di` : style === 'bpmn' ? `BPMN${kind}_${id}` : `${kind}_${id}`);
   return {
-    shape: (id) => make(shapeStyle, 'Shape', id),
-    edge: (id) => make(edgeStyle, 'Edge', id),
-    plane: (id) => unique(`BPMNPlane_${id}`),
-    diagram: (id) => unique(`BPMNDiagram_${id}`),
+    shape: (id) => claimUnique(taken, styledId(styles.shape ?? 'suffix', 'Shape', id)),
+    edge: (id) => claimUnique(taken, styledId(styles.edge ?? 'suffix', 'Edge', id)),
+    plane: (id) => claimUnique(taken, `BPMNPlane_${id}`),
+    diagram: (id) => claimUnique(taken, `BPMNDiagram_${id}`),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* DI ids over a full redraw                                            */
+/* ------------------------------------------------------------------ */
+
+/** The DI ids of a document before a full redraw (rememberDiIds). */
+export interface DiIdMemo {
+  /** element id -> id of its BPMNShape / BPMNEdge */
+  shapes: Map<string, string>;
+  edges: Map<string, string>;
+  /** per BPMNDiagram in document order: the id of the element its plane shows, the plane's and the diagram's id */
+  diagrams: Array<{ root?: string; plane?: string; diagram?: string }>;
+  /** the file's DI id styles (none: new DI keeps the engine's ids) */
+  styles: { shape?: Style; edge?: Style };
+}
+
+/** Records the DI ids of a document (before a full redraw replaces its DI). */
+export function rememberDiIds(defs: El): DiIdMemo {
+  const memo: DiIdMemo = { shapes: new Map(), edges: new Map(), diagrams: [], styles: diStyles(defs) };
+  for (const diagram of rawList(defs, 'diagrams')) {
+    const plane = raw<El>(diagram, 'plane');
+    memo.diagrams.push({ root: idOf(raw(plane, 'bpmnElement')), plane: idOf(plane), diagram: idOf(diagram) });
+    for (const pe of rawList(plane, 'planeElement')) {
+      const diId = idOf(pe);
+      const elId = idOf(raw(pe, 'bpmnElement'));
+      if (!diId || !elId) continue;
+      const into = is(pe, 'bpmndi:BPMNShape') ? memo.shapes : is(pe, 'bpmndi:BPMNEdge') ? memo.edges : undefined;
+      if (into && !into.has(elId)) into.set(elId, diId);
+    }
+  }
+  return memo;
+}
+
+/** Gives the DI the engine wrote the ids the document had before (see the module contract). */
+export function restoreDiIds(defs: El, memo: DiIdMemo): void {
+  if (!memo.diagrams.length) return;
+  const diagrams = rawList(defs, 'diagrams');
+  const di = new Set<El>();
+  for (const diagram of diagrams) {
+    const plane = raw<El>(diagram, 'plane');
+    di.add(diagram);
+    if (plane) di.add(plane);
+    for (const pe of rawList(plane, 'planeElement')) di.add(pe);
+  }
+  // every id but those of the new DI (they are given again)
+  const taken = allIds(defs);
+  for (const el of di) {
+    const id = idOf(el);
+    if (id) taken.delete(id);
+  }
+  const pending: Array<() => void> = [];
+  const claim = (el: El, wanted: string | undefined, fallback: () => string): void => {
+    if (wanted && !taken.has(wanted)) {
+      taken.add(wanted);
+      el.set('id', wanted);
+    } else pending.push(() => el.set('id', fallback()));
+  };
+  const old = [...memo.diagrams];
+  const derived = (o: { root?: string; plane?: string; diagram?: string }): boolean => !!o.root && (o.plane === `BPMNPlane_${o.root}` || o.diagram === `BPMNDiagram_${o.root}`);
+  const unmatched: El[] = [];
+  for (const diagram of diagrams) {
+    const plane = raw<El>(diagram, 'plane');
+    const root = idOf(raw(plane, 'bpmnElement'));
+    const i = old.findIndex((o) => o.root === root);
+    if (i === -1) {
+      unmatched.push(diagram);
+      continue;
+    }
+    const [o] = old.splice(i, 1);
+    if (plane) claim(plane, o!.plane, () => claimUnique(taken, idOf(plane) ?? `BPMNPlane_${root}`));
+    claim(diagram, o!.diagram, () => claimUnique(taken, idOf(diagram) ?? `BPMNDiagram_${root}`));
+  }
+  for (const diagram of unmatched) {
+    const plane = raw<El>(diagram, 'plane');
+    const root = idOf(raw(plane, 'bpmnElement'));
+    const i = old.findIndex((o) => !derived(o));
+    const o = i === -1 ? undefined : old.splice(i, 1)[0];
+    if (plane) claim(plane, o?.plane, () => claimUnique(taken, idOf(plane) ?? `BPMNPlane_${root}`));
+    claim(diagram, o?.diagram, () => claimUnique(taken, idOf(diagram) ?? `BPMNDiagram_${root}`));
+  }
+  for (const diagram of diagrams) {
+    for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
+      const elId = idOf(raw(pe, 'bpmnElement'));
+      if (!elId) continue;
+      const kind = is(pe, 'bpmndi:BPMNShape') ? 'Shape' : is(pe, 'bpmndi:BPMNEdge') ? 'Edge' : undefined;
+      if (!kind) continue;
+      const wanted = (kind === 'Shape' ? memo.shapes : memo.edges).get(elId);
+      const style = kind === 'Shape' ? memo.styles.shape : memo.styles.edge;
+      claim(pe, wanted, () => claimUnique(taken, style ? styledId(style, kind, elId) : (idOf(pe) ?? styledId('bpmn', kind, elId))));
+    }
+  }
+  for (const give of pending) give();
 }
 
 /* ------------------------------------------------------------------ */
