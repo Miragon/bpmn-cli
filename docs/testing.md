@@ -247,11 +247,22 @@ Each model is deployed to every listed engine, the test asserts the engine's
 verdict and that a deploy-severity finding (`W_C7_DEPLOY_*`) is reported
 exactly for the refused ones, and every deployment is deleted again. The
 verdicts were identical on Camunda 7.24.0, CIB seven 2.2.0 and Operaton 2.1.5
-(341 tests with three engines).
+(341 tests with three engines). The follow-up rounds add their own models with
+engine verdicts the same way: `test/c7-followups-profile.test.ts` (deploy
+rules the engines disagreed with or the profile missed; `operaton` marks a
+verdict only Operaton gives, the engine is told apart by
+`/telemetry/data`), `test/c7-followups-integration.test.ts` (events with
+several event definitions, attributes BPMN does not define) and
+`test/c7-followups-verify.test.ts` (schema rules on every event definition,
+start events of transactions / empty sub-processes / ad-hoc sub-processes;
+`run` also starts the process and checks that it fails or runs, and the
+second-start hint is followed and run). Run all four with the same
+`BPMN_C7_ENGINES`; `--no-file-parallelism` keeps two files from deploying
+one message name at the same time.
 
 The other C7 regression tests (`test/c7-semantic.test.ts`,
-`test/c7-ext-structure.test.ts`, `test/c7-integration.test.ts`) run without
-engines; their engine evidence (deploy and run the CLI-built models, real
+`test/c7-ext-structure.test.ts`, `test/c7-integration.test.ts`,
+`test/c7-followups-ops.test.ts`) run without engines; their engine evidence (deploy and run the CLI-built models, real
 customer files before and after edits) was collected outside the repository,
 see [audit-2026-10.md](audit-2026-10.md#camunda-7-audit-2026-10-09). When you
 change how vendor content is written, build a small model with the CLI, deploy

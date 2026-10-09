@@ -29,7 +29,10 @@
  *      extensionElements). Inside a path the same rule applies one level down
  *      (camunda:connector/camunda:inputParameter -> the connector's inputOutput).
  *    - keyed items (KEYS): an item with the same type and key (name / id /
- *      target / key) is replaced in place and reported.
+ *      target / key) is replaced in place and reported; what the old item
+ *      held and the new one does not (attributes, value, children) is
+ *      W_PROPERTY_DROPPED, its hint the --xml that keeps it (not with
+ *      --replace, which asks for the whole item).
  *    - single-instance types (SINGLE_TOP, SINGLE_CHILD): a second one is
  *      merged into the existing one (attributes, body, children with the same
  *      rules); a conflicting attribute or body, or a file that already holds
@@ -42,7 +45,8 @@
  *      given with W_MISPLACED_EXTENSION and a path hint.
  *    - bpmn:definitions (and DI elements) cannot hold extensionElements
  *      (BPMN 2.0 XSD; the engines reject it): E_WRONG_KIND.
- *  - remove: by index (top level) or by selector. One step without predicate
+ *  - remove: by index (top level; op.type may carry it as in the CLI: `2`,
+ *    `loop.2`, `definition[1].0`) or by selector. One step without predicate
  *    removes every element of that type at the top level (or, when there is
  *    none, inside its container: `camunda:inputParameter` removes the input
  *    parameters); `type[attr=value]` / `type[n]` pick one item; a path
@@ -51,6 +55,9 @@
  *    well. Nothing matching: E_NO_EXTENSION listing what is there.
  *  - listExtensions(): [{index, type, attrs, body?, children?: [...]}] for
  *    `ext list` and for `show <id>`.
+ *  - nested elements: a `definition.` / `loop.` / `condition.` prefix (or
+ *    op.slot); one of several event definitions: `definition[<n>].` /
+ *    `definition[<trigger>].` (E_AMBIGUOUS_NESTED without it, see set.ts).
  *
  * Selectors: `step('/'step)*`, step = `prefix:localName` optionally followed
  * by `[attr=value]` (value may be quoted) or `[n]` (0-based among the
@@ -62,18 +69,21 @@
  * $body / $children shape, verified against moddle's own parse).
  */
 import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
+import { modelError, usageError, type Warning } from '../errors.js';
 import { addTo, BPMN_NS, is, many, removeFrom, type El } from '../model.js';
-import { allowedOn, allowedParents, containersOf } from '../platform/descriptor.js';
+import { allowedOn, allowedParents, CAMUNDA_URI, containersOf, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
 import { ChangeSet } from '../result.js';
 import { kindLabel } from '../kinds.js';
-import { changeOf, descriptorOf, idOf, isEl, nestedElement, NESTED_SLOTS, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
+import { changeOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';
 
 export interface ExtensionInfo {
   index: number;
-  /** set for the extension elements of a nested element (`ext list`): definition / loop / condition */
-  slot?: NestedSlot;
+  /**
+   * set for the extension elements of a nested element (`ext list`): definition / loop / condition,
+   * `definition[<n>]` for one of several event definitions of an event
+   */
+  slot?: string;
   type: string;
   attrs: Record<string, string>;
   body?: string;
@@ -82,8 +92,6 @@ export interface ExtensionInfo {
 
 const NAME_RE = /^([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)$/;
 
-const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
-const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
 
 /* ------------------------------------------------------------------ */
 /* structure rules                                                      */
@@ -188,29 +196,50 @@ const PURE_CONTAINERS: ReadonlySet<string> = new Set([
   'zeebe:linkedResources',
 ]);
 
+/**
+ * Operaton's own namespace holds the camunda types under another URI
+ * (Operaton reads it first, camunda:* as the fallback). Its elements keep
+ * their canonical name (`operaton:inputOutput`: never merged into a
+ * camunda:inputOutput, Operaton reads one of each), the structure rules above
+ * apply to them by local name (ruleName), and a container created for an
+ * operaton item is an operaton one (inFamily).
+ */
+function ruleName(type: string): string {
+  return type.startsWith('operaton:') ? `camunda:${type.slice('operaton:'.length)}` : type;
+}
+
+/** A camunda type name in the namespace family of `like` (`operaton:inputOutput` for an operaton item). */
+function inFamily(type: string, like: string): string {
+  return like.startsWith('operaton:') && type.startsWith('camunda:') ? `operaton:${type.slice('camunda:'.length)}` : type;
+}
+
 function isCamunda(type: string): boolean {
-  return type.startsWith('camunda:');
+  return ruleName(type).startsWith('camunda:');
 }
 
 /** A camunda type that may only appear inside another vendor element (descriptor: no allowedIn, but a container). */
 function nestedOnly(type: string): boolean {
-  return isCamunda(type) && !allowedParents(type).some((p) => p === '*' || p.startsWith('bpmn:')) && containersOf(type).length > 0;
+  const t = ruleName(type);
+  return isCamunda(t) && !allowedParents(t).some((p) => p === '*' || p.startsWith('bpmn:')) && containersOf(t).length > 0;
 }
 
 /** True when vendor type `parent` holds `child` as a direct child. */
 function holds(parent: string, child: string): boolean {
-  if (SINGLE_CHILD[parent]?.includes(child)) return true;
-  if (STATIC_HOMES[child] === parent) return true;
-  return isCamunda(child) && containersOf(child).includes(parent);
+  const p = ruleName(parent);
+  const c = ruleName(child);
+  if (SINGLE_CHILD[p]?.includes(c)) return true;
+  if (STATIC_HOMES[c] === p) return true;
+  return isCamunda(c) && containersOf(c).includes(p);
 }
 
-/** The one container type of a child type, if it has exactly one. */
+/** The one container type of a child type, if it has exactly one (in the child's namespace family). */
 function containerOf(type: string): string | undefined {
-  const fixed = STATIC_HOMES[type];
-  if (fixed) return fixed;
-  if (!nestedOnly(type)) return undefined;
-  const all = containersOf(type);
-  return all.length === 1 ? all[0] : undefined;
+  const t = ruleName(type);
+  const fixed = STATIC_HOMES[t];
+  if (fixed) return inFamily(fixed, type);
+  if (!nestedOnly(t)) return undefined;
+  const all = containersOf(t);
+  return all.length === 1 ? inFamily(all[0]!, type) : undefined;
 }
 
 /**
@@ -222,24 +251,27 @@ function homeAt(type: string, levelType: string | undefined): string | undefined
   if (levelType !== undefined && holds(levelType, type)) return undefined;
   const home = containerOf(type);
   if (!home) return undefined;
-  if (levelType === undefined) return STATIC_HOMES[type] || !nestedOnly(home) ? home : undefined;
+  if (levelType === undefined) return STATIC_HOMES[ruleName(type)] || !nestedOnly(home) ? home : undefined;
   return holds(levelType, home) ? home : undefined;
 }
 
 /** A path step that `ext add` may create when it is missing: a container that needs no attributes of its own. */
 function creatable(type: string): boolean {
-  return PURE_CONTAINERS.has(type) || SINGLE_TOP.has(type) || Object.values(SINGLE_CHILD).some((c) => c.includes(type));
+  const t = ruleName(type);
+  return PURE_CONTAINERS.has(t) || SINGLE_TOP.has(t) || Object.values(SINGLE_CHILD).some((c) => c.includes(t));
 }
 
 function isSingle(type: string, levelType: string | undefined): boolean {
-  return levelType === undefined ? SINGLE_TOP.has(type) : !!SINGLE_CHILD[levelType]?.includes(type);
+  return levelType === undefined ? SINGLE_TOP.has(ruleName(type)) : !!SINGLE_CHILD[ruleName(levelType)]?.includes(ruleName(type));
 }
 
 /* ------------------------------------------------------------------ */
 /* names and namespaces                                                 */
 /* ------------------------------------------------------------------ */
 
-const CANONICAL_PREFIX: Readonly<Record<string, string>> = { [CAMUNDA_URI]: 'camunda', [ZEEBE_URI]: 'zeebe', [BPMN_NS]: 'bpmn' };
+const CANONICAL_PREFIX: Readonly<Record<string, string>> = { [CAMUNDA_URI]: 'camunda', [OPERATON_URI]: 'operaton', [ZEEBE_URI]: 'zeebe', [BPMN_NS]: 'bpmn' };
+/** The namespace URI of a canonical prefix. */
+const CANONICAL_URI: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(CANONICAL_PREFIX).map(([uri, prefix]) => [prefix, uri]));
 
 function canonical(uri: string | undefined, local: string, fallback: string): string {
   const p = uri ? CANONICAL_PREFIX[uri] : undefined;
@@ -378,7 +410,7 @@ function isGeneric(el: El): boolean {
 
 function keyOf(doc: Doc, el: El): { attr: string; value: string } | undefined {
   const attrs = attrsOf(el);
-  for (const k of KEYS[typeOf(doc, el)] ?? []) if (attrs[k] !== undefined) return { attr: k, value: attrs[k]! };
+  for (const k of KEYS[ruleName(typeOf(doc, el))] ?? []) if (attrs[k] !== undefined) return { attr: k, value: attrs[k]! };
   return undefined;
 }
 
@@ -419,8 +451,8 @@ class Level {
     if (this.parent) {
       const raw = this.parent as unknown as Raw;
       const kids = Array.isArray(raw['$children']) ? (raw['$children'] as El[]) : [];
-      const order = CHILD_ORDER[this.type!];
-      const rank = (e: El): number => (order ? order.indexOf(typeOf(this.doc, e)) : -1);
+      const order = CHILD_ORDER[ruleName(this.type!)];
+      const rank = (e: El): number => (order ? order.indexOf(ruleName(typeOf(this.doc, e))) : -1);
       const mine = rank(el);
       const at = mine === -1 ? -1 : kids.findIndex((k) => rank(k) > mine);
       if (at === -1) kids.push(el);
@@ -598,7 +630,7 @@ function presentAt(doc: Doc, levels: Level[]): string[] {
 export function extensionOp(doc: Doc, op: ExtOp): ChangeSet {
   const owner = doc.require(op.id);
   if (op.action !== 'add' && op.action !== 'remove') throw usageError(`Unknown ext action "${String(op.action)}"; use add or remove`, { element: op.id });
-  const { host, op: inner } = resolveHost(doc, owner, op);
+  const { host, op: inner } = resolveHost(doc, owner, normalizeIndex(op));
   return inner.action === 'add' ? addExtension(doc, host, inner) : removeExtension(doc, host, inner);
 }
 
@@ -615,7 +647,7 @@ export function extensionOp(doc: Doc, op: ExtOp): ChangeSet {
  * `<slot>.` prefix on the type / selector (`loop.camunda:failedJobRetryTimeCycle`)
  * or op.slot. Messages and hints name them through their owner.
  */
-const NESTED_HOSTS = new WeakMap<El, { owner: El; slot: NestedSlot }>();
+const NESTED_HOSTS = new WeakMap<El, { owner: El; slot: NestedSlot; prefix: string }>();
 
 /** The element results and hints name: the owner of a nested host, else the host. */
 function ownerOf(host: El): El {
@@ -627,23 +659,50 @@ function hostId(host: El): string {
   return idOf(ownerOf(host));
 }
 
-/** The prefix a type / selector needs in a command for this host: `loop.` for a nested host, '' otherwise. */
+/** The prefix a type / selector needs in a command for this host: `loop.` (`definition[1].`) for a nested host, '' otherwise. */
 function slotPrefix(host: El): string {
   const n = NESTED_HOSTS.get(host);
-  return n ? `${n.slot}.` : '';
+  return n ? `${n.prefix}.` : '';
 }
 
 /** How messages name the host: its id, or `the loop characteristics of Activity_X`. */
 function hostLabel(host: El): string {
   const n = NESTED_HOSTS.get(host);
-  return n ? `the ${SLOT_TEXT[n.slot]} of ${idOf(n.owner)}` : idOf(host);
+  return n ? `the ${SLOT_TEXT[n.slot]}${n.prefix !== n.slot ? ` ${n.prefix}` : ''} of ${idOf(n.owner)}` : idOf(host);
 }
 
-/** `loop.camunda:x` -> { slot: 'loop', rest: 'camunda:x' } for the known slots; undefined otherwise. */
-export function splitSlot(text: string): { slot: NestedSlot; rest: string } | undefined {
-  const m = /^(\w+)\.(.+)$/.exec(text.trim());
-  if (!m || !(NESTED_SLOTS as readonly string[]).includes(m[1]!)) return undefined;
-  return { slot: m[1] as NestedSlot, rest: m[2]! };
+/**
+ * `loop.camunda:x` -> { slot: 'loop', rest: 'camunda:x' } for the known slots
+ * (`definition[timer].camunda:x` -> slot 'definition[timer]'); undefined otherwise.
+ */
+export function splitSlot(text: string): { slot: string; rest: string } | undefined {
+  const m = /^(\w+(?:\[[^\]]*\])?)\.(.+)$/.exec(text.trim());
+  if (!m || !parseSlotRef(m[1]!)) return undefined;
+  return { slot: m[1]!, rest: m[2]! };
+}
+
+/** `2`, `loop.2`, `definition[1].0`: an index from `ext list` (of the element's own / of a nested element's extension elements). */
+export function indexRef(text: string): { slot?: string; index: number } | undefined {
+  const m = /^(?:(\w+(?:\[[^\]]*\])?)\.)?(\d+)$/.exec(text.trim());
+  if (!m || (m[1] !== undefined && !parseSlotRef(m[1]))) return undefined;
+  return { ...(m[1] !== undefined ? { slot: m[1] } : {}), index: Number(m[2]) };
+}
+
+/**
+ * An ext remove whose type is an index from `ext list` (`2`, `loop.2`,
+ * `definition[1].0`) is the index form, as on the command line (the ops JSON
+ * may give it as "type").
+ */
+function normalizeIndex(op: ExtOp): ExtOp {
+  if (op.action !== 'remove' || op.index !== undefined || op.type === undefined) return op;
+  const ref = indexRef(op.type);
+  if (!ref) return op;
+  if (ref.slot !== undefined && op.slot !== undefined && op.slot !== ref.slot) {
+    throw usageError(`"slot": "${op.slot}" and the type prefix ${ref.slot}. disagree`, { element: op.id, hint: 'Give the slot once: as the prefix (loop.0) or as "slot".' });
+  }
+  const { type: _type, ...rest } = op;
+  const slot = ref.slot ?? op.slot;
+  return { ...rest, index: ref.index, ...(slot !== undefined ? { slot: slot as ExtOp['slot'] } : {}) };
 }
 
 /** The element the op works on: `owner`, or its nested element named by op.slot / a `<slot>.` prefix of op.type. */
@@ -652,19 +711,22 @@ function resolveHost(doc: Doc, owner: El, op: ExtOp): { host: El; op: ExtOp } {
   if (split && op.slot && op.slot !== split.slot) {
     throw usageError(`"slot": "${op.slot}" and the type prefix ${split.slot}. disagree`, { element: idOf(owner), hint: 'Give the slot once: as the type prefix (loop.camunda:...) or as "slot".' });
   }
-  const slot = split?.slot ?? op.slot;
-  if (slot === undefined) return { host: owner, op };
+  const slotText: string | undefined = split?.slot ?? op.slot;
+  if (slotText === undefined) return { host: owner, op };
   const id = idOf(owner);
-  if (!(NESTED_SLOTS as readonly string[]).includes(slot)) {
-    throw usageError(`Unknown slot "${String(slot)}"; use ${NESTED_SLOTS.join(', ')}`, { element: id });
+  const ref = parseSlotRef(slotText);
+  if (!ref) {
+    throw usageError(`Unknown slot "${String(slotText)}"; use ${NESTED_SLOTS.join(', ')}`, { element: id });
   }
+  const slot = ref.slot;
   if (!slotsOf(owner).includes(slot)) {
     throw modelError('E_WRONG_KIND', `${kindLabel(owner)} ${id} has no ${SLOT_TEXT[slot]} (${slot}.)`, {
       element: id,
       hint: 'definition. addresses the event definition of an event, loop. the loop characteristics of an activity, condition. the condition expression of a sequence flow or conditional event.',
     });
   }
-  const nested = nestedElement(owner, slot);
+  const what = split?.rest ?? (op.index !== undefined ? String(op.index) : (op.type ?? '<type>'));
+  const nested = resolveNested(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${op.action} <file> ${id} '${prefix}.${what}'${op.action === 'add' ? ' ...' : ''}`);
   if (!nested) {
     const first: Record<NestedSlot, string> = {
       definition: `give it a trigger first: \`bpmn set <file> ${id} trigger=<message|timer|error|signal|...>\``,
@@ -676,7 +738,7 @@ function resolveHost(doc: Doc, owner: El, op: ExtOp): { host: El; op: ExtOp } {
       hint: op.action === 'remove' ? 'Nothing to remove; `bpmn ext list <file> <id>` shows what is there.' : `${first[slot][0]!.toUpperCase()}${first[slot].slice(1)}.`,
     });
   }
-  NESTED_HOSTS.set(nested, { owner, slot });
+  NESTED_HOSTS.set(nested, { owner, slot, prefix: ref.text });
   const { slot: _slot, ...rest } = op;
   return { host: nested, op: { ...rest, ...(split ? { type: split.rest } : {}) } };
 }
@@ -745,21 +807,23 @@ function checkMerge(doc: Doc, host: El, existing: El, incoming: El): void {
   for (const c of kidsOf(incoming)) checkInsert(doc, host, kidsOf(existing), typeOf(doc, existing), c, false);
 }
 
-/** Inserts `value` into `level` by the structure rules (checkInsert ran before). */
-function insert(doc: Doc, level: Level, value: El, replace: boolean, out: Outcome[], notes: string[]): void {
+/** Inserts `value` into `level` by the structure rules (checkInsert ran before); `drops` collects what a keyed replacement lost. */
+function insert(doc: Doc, level: Level, value: El, replace: boolean, out: Outcome[], notes: string[], drops: Warning[] = []): void {
   const t = typeOf(doc, value);
   const where = level.parent ? ` in ${level.label}` : '';
   const home = homeAt(t, level.type);
   if (home) {
     let container = level.items().find((e) => typeOf(doc, e) === home);
     if (!container) {
+      // a canonical name: written with the prefix the file binds to its namespace
       const [prefix, local] = home.split(':') as [string, string];
-      const ns = resolvePrefix(doc, level.host, prefix, {});
+      const uri = CANONICAL_URI[prefix];
+      const ns = resolvePrefix(doc, level.host, prefix, uri ? { [prefix]: uri } : {});
       container = doc.moddle.createAny(`${ns.prefix}:${local}`, ns.uri, {}) as unknown as El;
       level.append(container);
       notes.push(`created ${container.$type}${where} for ${value.$type}`);
     }
-    insert(doc, levelOf(doc, level.host, container), value, replace, out, notes);
+    insert(doc, levelOf(doc, level.host, container), value, replace, out, notes, drops);
     return;
   }
   const into = level.parent ? ` to ${level.label}` : '';
@@ -768,10 +832,14 @@ function insert(doc: Doc, level: Level, value: El, replace: boolean, out: Outcom
   if (key) {
     const match = same.filter((e) => attrsOf(e)[key.attr] === key.value);
     if (match.length) {
+      if (!replace) {
+        const drop = keyedDrop(doc, level, match, value);
+        if (drop) drops.push(drop);
+      }
       level.replace(match[0]!, value);
       for (const extra of match.slice(1)) level.remove(extra);
       out.push({ verb: 'replaced', text: `${itemLabel(doc, value)}${level.parent ? ` in ${level.label}` : ''}` });
-      notes.push(`replaced the existing ${itemLabel(doc, value)}${level.parent ? ` in ${level.label}` : ''} of ${idOf(level.host)}`);
+      notes.push(`replaced the existing ${itemLabel(doc, value)}${level.parent ? ` in ${level.label}` : ''} of ${hostLabel(level.host)}`);
       return;
     }
     level.append(value);
@@ -786,15 +854,106 @@ function insert(doc: Doc, level: Level, value: El, replace: boolean, out: Outcom
     return;
   }
   if (same.length === 1 && isSingle(t, level.type)) {
-    out.push(merge(doc, level, same[0]!, value, notes));
+    out.push(merge(doc, level, same[0]!, value, notes, drops));
     return;
   }
   level.append(value);
   out.push({ verb: 'added', text: `${itemLabel(doc, value)}${into}` });
 }
 
+/* keyed replacement: what the replaced item held ---------------------- */
+
+const SNIPPET_MAX = 800;
+
+function escapeXml(text: string, attr: boolean): string {
+  const s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return attr ? s.replace(/"/g, '&quot;') : s;
+}
+
+/** A generic vendor element as an XML snippet (`ext add --xml`); undefined when it holds typed content it cannot write. */
+function snippetOf(el: El): string | undefined {
+  if (!isGeneric(el)) return undefined;
+  const attrs = Object.entries(attrsOf(el))
+    .map(([k, v]) => ` ${k}="${escapeXml(v, true)}"`)
+    .join('');
+  const kids = kidsOf(el).map(snippetOf);
+  if (kids.some((k) => k === undefined)) return undefined;
+  const body = (el as unknown as Raw)['$body'];
+  const text = typeof body === 'string' ? escapeXml(body, false) : '';
+  if (!kids.length && !text) return `<${el.$type}${attrs} />`;
+  return `<${el.$type}${attrs}>${text}${kids.join('')}</${el.$type}>`;
+}
+
+/** `camunda:validation (camunda:constraint[name=min])`: a child with what it holds. */
+function contentLabel(doc: Doc, el: El): string {
+  const kids = kidsOf(el).map((k) => itemLabel(doc, k));
+  const body = bodyOf(el);
+  const inside = [...kids, ...(body !== undefined ? [`"${body.trim().length > 40 ? `${body.trim().slice(0, 37)}...` : body.trim()}"`] : [])];
+  return `${itemLabel(doc, el)}${inside.length ? ` (${inside.join(', ')})` : ''}`;
+}
+
+/**
+ * The old item with the new one's attributes, value and same-labelled children
+ * laid over it: what to pass to keep the old content (a detached copy).
+ */
+function mergedCopy(doc: Doc, old: El, value: El): El {
+  const props: Record<string, unknown> = { ...attrsOf(old), ...attrsOf(value) };
+  const body = bodyOf(value) ?? bodyOf(old);
+  if (body !== undefined) props['$body'] = body;
+  const copy = doc.moddle.createAny(value.$type, (value.$descriptor as { ns?: { uri?: string } }).ns?.uri ?? '', props) as unknown as El;
+  const fresh = new Map(kidsOf(value).map((k) => [itemLabel(doc, k), k]));
+  const kids: El[] = [];
+  for (const k of kidsOf(old)) {
+    const label = itemLabel(doc, k);
+    kids.push(fresh.get(label) ?? k);
+    fresh.delete(label);
+  }
+  kids.push(...fresh.values());
+  if (kids.length) (copy as unknown as Raw)['$children'] = kids;
+  return copy;
+}
+
+/** The type argument that files `value` where it was: its type, or the path from the top of extensionElements. */
+function addTypeFor(doc: Doc, level: Level, value: El): string {
+  if (!level.parent) return value.$type;
+  const filed = is(level.parent.$parent as El | undefined, 'bpmn:ExtensionElements') && homeAt(typeOf(doc, value), undefined) === typeOf(doc, level.parent);
+  return filed ? value.$type : `${pathOf(doc, level.parent)}/${value.$type}`;
+}
+
+/**
+ * W_PROPERTY_DROPPED for a keyed item (`camunda:formField[id=amount]`) that
+ * `ext add` replaced as a whole: the attributes, value and children the old
+ * one had and the new one does not, and the command that keeps them.
+ */
+function keyedDrop(doc: Doc, level: Level, match: El[], value: El): Warning | undefined {
+  const old = match[0]!;
+  const lost: string[] = [];
+  const now = attrsOf(value);
+  for (const [k, v] of Object.entries(attrsOf(old))) if (now[k] === undefined) lost.push(`${k}="${v}"`);
+  if (bodyOf(old) !== undefined && bodyOf(value) === undefined) lost.push(`its value "${bodyOf(old)!.trim().length > 40 ? `${bodyOf(old)!.trim().slice(0, 37)}...` : bodyOf(old)!.trim()}"`);
+  const kept = new Set(kidsOf(value).map((k) => itemLabel(doc, k)));
+  for (const k of kidsOf(old)) if (!kept.has(itemLabel(doc, k))) lost.push(contentLabel(doc, k));
+  const extra = match.length - 1;
+  if (extra) lost.push(`${extra} more ${itemLabel(doc, old)} with the same ${keyOf(doc, old)?.attr ?? 'key'}`);
+  if (!lost.length) return undefined;
+  const label = `${itemLabel(doc, value)}${level.parent ? ` in ${level.label}` : ''}`;
+  const id = hostId(level.host);
+  const snippet = extra ? undefined : snippetOf(mergedCopy(doc, old, value));
+  const type = `${slotPrefix(level.host)}${addTypeFor(doc, level, value)}`;
+  const quotedType = /^[\w.:-]+$/.test(type) ? type : `'${type}'`;
+  return {
+    code: 'W_PROPERTY_DROPPED',
+    message: `${lost.join(', ')} of the replaced ${label} of ${hostLabel(level.host)} ${lost.length > 1 ? 'were' : 'was'} dropped: ext add replaces an item with the same ${keyOf(doc, value)?.attr ?? 'key'} as a whole`,
+    element: id,
+    hint:
+      snippet && snippet.length <= SNIPPET_MAX
+        ? `To keep ${lost.length > 1 ? 'them' : 'it'}, add the item again with everything it should hold: \`bpmn ext add <file> ${id} ${quotedType} --xml '${snippet.replace(/'/g, "'\\''")}'\`.`
+        : `To keep ${lost.length > 1 ? 'them' : 'it'}, add the item again with everything it should hold: \`bpmn ext add <file> ${id} ${quotedType} --xml '<${value.$type} ...>...</${value.$type}>'\`.`,
+  };
+}
+
 /** Merges a second single-instance element into the existing one. */
-function merge(doc: Doc, level: Level, existing: El, incoming: El, notes: string[]): Outcome {
+function merge(doc: Doc, level: Level, existing: El, incoming: El, notes: string[], drops: Warning[] = []): Outcome {
   const raw = existing as unknown as Raw;
   const changes: string[] = [];
   const have = attrsOf(existing);
@@ -811,11 +970,11 @@ function merge(doc: Doc, level: Level, existing: El, incoming: El, notes: string
   }
   const sub: Outcome[] = [];
   const inner = levelOf(doc, level.host, existing);
-  for (const c of kidsOf(incoming)) insert(doc, inner, c, false, sub, notes);
+  for (const c of kidsOf(incoming)) insert(doc, inner, c, false, sub, notes, drops);
   for (const s of sub) changes.push(`${s.verb} ${s.text.replace(` in ${inner.label}`, '').replace(` to ${inner.label}`, '')}`);
   const where = level.parent ? ` in ${level.label}` : '';
   if (!changes.length) {
-    notes.push(`${existing.$type}${where} of ${idOf(level.host)} already holds that content; nothing to add`);
+    notes.push(`${existing.$type}${where} of ${hostLabel(level.host)} already holds that content; nothing to add`);
     return { verb: 'unchanged', text: `${existing.$type}${where}` };
   }
   return { verb: 'merged', text: `${existing.$type}${where} (${changes.join(', ')})` };
@@ -899,11 +1058,13 @@ function addExtension(doc: Doc, el: El, op: ExtOp): ChangeSet {
   }
 
   const level = parentLevel(doc, el, steps.slice(0, -1), out, notes);
+  const drops: Warning[] = [];
   for (const v of values) {
     checkInsert(doc, el, level.items(), level.type, v, !!op.replace);
-    insert(doc, level, v, !!op.replace, out, notes);
+    insert(doc, level, v, !!op.replace, out, notes, drops);
     misplacedWarning(doc, el, v, cs);
   }
+  for (const w of drops) cs.warn(w);
   doc.invalidate();
   for (const n of notes) cs.note(n);
   if (out.some((o) => o.verb !== 'unchanged')) cs.change(changeOf(ownerOf(el), describeOutcomes(out.filter((o) => o.verb !== 'unchanged'), slotPrefix(el))));
@@ -932,23 +1093,30 @@ function misplacedWarning(doc: Doc, host: El, v: El, cs: ChangeSet): void {
   const t = typeOf(doc, v);
   if (!isCamunda(t)) return;
   if (nestedOnly(t)) {
-    const containers = containersOf(t).filter((c) => !c.endsWith('inputOutputParameter'));
+    const containers = containersOf(ruleName(t))
+      .filter((c) => !c.endsWith('inputOutputParameter'))
+      .map((c) => inFamily(c, t));
     cs.warn({
       code: 'W_MISPLACED_EXTENSION',
       message: `${v.$type} was added at the top level of the extensionElements of ${hostLabel(host)}, where the engines do not read it; it belongs inside ${containers.join(' / ')}`,
       element: hostId(host),
-      hint: `Add it with a path to its container, e.g. \`bpmn ext add <file> ${hostId(host)} '${slotPrefix(host)}${pathTo(t, EXAMPLE_CONTAINER[t] ?? containers[0]!)}' ...\`, and remove the loose one with \`bpmn ext remove <file> ${hostId(host)} ${slotPrefix(host)}${v.$type}\`.`,
+      hint: `Add it with a path to its container, e.g. \`bpmn ext add <file> ${hostId(host)} '${slotPrefix(host)}${familyPath(pathTo(ruleName(t), EXAMPLE_CONTAINER[ruleName(t)] ?? ruleName(containers[0]!)), t)}' ...\`, and remove the loose one with \`bpmn ext remove <file> ${hostId(host)} ${slotPrefix(host)}${v.$type}\`.`,
     });
     return;
   }
-  if (t === 'camunda:field' && allowedOn(t, host) === false) {
+  if (ruleName(t) === 'camunda:field' && allowedOn(ruleName(t), host) === false) {
     cs.warn({
       code: 'W_MISPLACED_EXTENSION',
-      message: `camunda:field on ${hostLabel(host)} (${host.$type}) is not read by the engines: field injection belongs to service, send and business rule tasks, a message event definition or a listener`,
+      message: `${v.$type} on ${hostLabel(host)} (${host.$type}) is not read by the engines: field injection belongs to service, send and business rule tasks, a message event definition or a listener`,
       element: hostId(host),
-      hint: `Put it into a listener, e.g. \`bpmn ext add <file> ${hostId(host)} 'camunda:executionListener[0]/camunda:field' name=... stringValue=...\`.`,
+      hint: `Put it into a listener, e.g. \`bpmn ext add <file> ${hostId(host)} '${familyPath('camunda:executionListener[0]/camunda:field', t)}' name=... stringValue=...\`.`,
     });
   }
+}
+
+/** A path of camunda type names in the namespace family of `like` (hints for operaton content). */
+function familyPath(path: string, like: string): string {
+  return like.startsWith('operaton:') ? path.replace(/(^|[/'])camunda:/g, '$1operaton:') : path;
 }
 
 /** The container used in hints for types the descriptor allows in many places. */
@@ -1066,7 +1234,7 @@ function pruneEmpty(doc: Doc, host: El, level: Level, cs: ChangeSet): void {
   let cur: El | undefined = level.parent;
   while (cur && isGeneric(cur)) {
     if (kidsOf(cur).length || bodyOf(cur) !== undefined || Object.keys(attrsOf(cur)).length) return;
-    if (!PURE_CONTAINERS.has(typeOf(doc, cur))) return;
+    if (!PURE_CONTAINERS.has(ruleName(typeOf(doc, cur)))) return;
     const parent = cur.$parent as El | undefined;
     if (!parent) return;
     if (is(parent, 'bpmn:ExtensionElements')) {
@@ -1121,10 +1289,7 @@ export function listExtensions(el: El): ExtensionInfo[] {
  */
 export function listAllExtensions(el: El): ExtensionInfo[] {
   const out = listExtensions(el);
-  for (const slot of slotsOf(el)) {
-    const nested = nestedElement(el, slot);
-    if (nested) out.push(...listExtensions(nested).map((i) => ({ ...i, slot })));
-  }
+  for (const { prefix, el: nested } of nestedEntries(el)) out.push(...listExtensions(nested).map((i) => ({ ...i, slot: prefix })));
   return out;
 }
 

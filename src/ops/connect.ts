@@ -3,7 +3,10 @@
  *
  *  - both flow nodes in the same process        -> sequence flow (createSequenceFlow),
  *      W_IMPLICIT_SPLIT when a non-gateway source gets a 2nd outgoing flow,
- *      W_IMPLICIT_JOIN when a non-gateway target gets a 2nd incoming flow
+ *      W_IMPLICIT_JOIN when a non-gateway target gets a 2nd incoming flow,
+ *      W_EVENT_GATEWAY_TARGET when an event-based gateway gets a target BPMN
+ *      2.0 does not allow there (Camunda 7 files: the platform profile reports
+ *      the engines' rule instead, see warnEventGatewayFlow in flows.ts)
  *  - endpoints in different participants (or a participant itself) -> message
  *      flow in the collaboration (id Flow_<n>, only between InteractionNodes:
  *      participants, tasks, events, sub-processes/call activities; gateways ->
@@ -29,7 +32,7 @@ import { addTo, is, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { ensureRootElement } from './events.js';
-import { createSequenceFlow, flowChange } from './flows.js';
+import { createSequenceFlow, flowChange, warnEventGatewayFlow } from './flows.js';
 import type { ConnectOp } from './types.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
@@ -248,6 +251,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
         ...(op.default ? { isDefault: true } : {}),
       });
       cs.create(flowChange(flow));
+      warnEventGatewayFlow(doc, flow, cs);
       if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set ${idOf(source)} loop=standard\`) is the conventional alternative`);
       const out = doc.outgoing(source).length;
       const inc = doc.incoming(target).length;

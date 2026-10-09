@@ -182,7 +182,7 @@ export const ORDER_FIELDS: FieldsOf<OrderOp> = {
 export const EXT_FIELDS: FieldsOf<ExtOp> = {
   id: ref('Element id.', { required: true }),
   action: str('What to do with the extension elements.', { required: true, values: ['add', 'remove'] }),
-  type: str('Prefixed element type or path (add: what to create, e.g. "zeebe:taskDefinition", "camunda:inputParameter" (filed into its container) or "camunda:connector/camunda:inputParameter"; remove: a selector such as "camunda:inputParameter[name=x]", every element of a bare type). A "definition." / "loop." / "condition." prefix addresses the nested element.'),
+  type: str('Prefixed element type or path (add: what to create, e.g. "zeebe:taskDefinition", "camunda:inputParameter" (filed into its container) or "camunda:connector/camunda:inputParameter"; remove: a selector such as "camunda:inputParameter[name=x]", every element of a bare type, or an index from `ext list` such as "2" or "loop.0"). A "definition." / "loop." / "condition." prefix addresses the nested element; one of several event definitions of an event: "definition[<n>]." (0-based) or "definition[<trigger>].".'),
   attrs: map('add: attributes of the new element.'),
   body: str('add: text content of the new element.'),
   xml: str('add: raw XML snippet (may contain nested elements), parsed and appended instead of type/attrs/body.'),

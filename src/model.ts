@@ -262,6 +262,7 @@ export function layoutRoot(defs: El): El | undefined {
 
 export async function parseXml(xml: string, moddle: BpmnModdle = createModdle()): Promise<Model> {
   let result;
+  const overwrites = watchOverwrites(moddle);
   try {
     result = await moddle.fromXML(xml);
   } catch (err) {
@@ -270,12 +271,62 @@ export async function parseXml(xml: string, moddle: BpmnModdle = createModdle())
       message: e.message,
       warnings: (e.warnings ?? []).map((w) => w.message),
     });
+  } finally {
+    overwrites.stop();
   }
   const definitions = result.rootElement;
   if (!is(definitions, 'bpmn:Definitions')) {
     throw new ModelError('Root element is not bpmn:Definitions', 'PARSE_ERROR');
   }
-  return { moddle, definitions, importWarnings: result.warnings };
+  return { moddle, definitions, importWarnings: [...result.warnings, ...overwrites.warnings()] };
+}
+
+/** `<bpmn:userTask id="Activity_X">` / `standardLoopCharacteristics SL` for import warnings. */
+function elementText(el: El, tag = false): string {
+  const id = (el as unknown as Record<string, unknown>)['id'];
+  const local = localType(el);
+  const name = local.charAt(0).toLowerCase() + local.slice(1);
+  if (tag) return `<${el.$type.split(':')[0]}:${name}${typeof id === 'string' ? ` id="${id}"` : ''}>`;
+  return `${name}${typeof id === 'string' ? ` ${id}` : ''}`;
+}
+
+/**
+ * Watches bpmn-moddle while it reads a file: a BPMN element that appears
+ * twice where the schema allows one (two loopCharacteristics on a task, two
+ * extensionElements, two conditionExpressions) is silently overwritten by
+ * the reader, the first one is lost. Each overwrite becomes an import warning
+ * (`duplicate element: ...`), which document.ts counts as lossy: the file can
+ * be read and shown, but writing it back (and losing the first element)
+ * needs --force (E_IMPORT_LOSSY). Only the semantic model is watched (diagram
+ * interchange is redrawn anyway).
+ */
+function watchOverwrites(moddle: BpmnModdle): { stop(): void; warnings(): ImportWarning[] } {
+  type Props = { set(target: El, name: string, value: unknown): void };
+  const props = (moddle as unknown as { properties: Props }).properties;
+  const own = Object.prototype.hasOwnProperty.call(props, 'set');
+  const original = props.set;
+  const found: Array<{ holder: El; prop: string; lost: El; kept: El }> = [];
+  props.set = function set(this: Props, target: El, name: string, value: unknown): void {
+    if (value && typeof value === 'object' && typeof (value as El).$type === 'string' && /^bpmn:/.test(target.$type)) {
+      const p = (target.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean; isReference?: boolean }> }).propertiesByName?.[name];
+      const current = p && !p.isMany && !p.isReference && Object.prototype.hasOwnProperty.call(target, p.name) ? (target as unknown as Record<string, unknown>)[p.name] : undefined;
+      if (current && current !== value && typeof current === 'object' && typeof (current as El).$type === 'string') found.push({ holder: target, prop: p!.name, lost: current as El, kept: value as El });
+    }
+    original.call(this, target, name, value);
+  };
+  return {
+    stop(): void {
+      if (own) props.set = original;
+      else delete (props as Partial<Props>).set;
+    },
+    warnings(): ImportWarning[] {
+      return found.map(({ holder, prop, lost, kept }) => ({
+        message: `duplicate element: ${elementText(holder, true)} has more than one ${prop} (the schema allows one); only the last one, ${elementText(kept)}, can be kept, ${elementText(lost)} would be dropped`,
+        element: holder,
+        property: prop,
+      }));
+    },
+  };
 }
 
 export async function serialize(model: Model): Promise<string> {

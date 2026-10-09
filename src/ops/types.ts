@@ -139,9 +139,10 @@ export interface ExtOp {
   index?: number;
   /**
    * a nested element of `id` instead of the element itself: its event definition,
-   * loop characteristics or condition expression (also given as a `<slot>.` prefix of type)
+   * loop characteristics or condition expression (also given as a `<slot>.` prefix of type;
+   * one of several event definitions: `definition[<n>]` / `definition[<trigger>]`)
    */
-  slot?: 'definition' | 'loop' | 'condition';
+  slot?: 'definition' | 'loop' | 'condition' | `definition[${string}]`;
 }
 
 export interface SplitBranch extends FlowOptions {

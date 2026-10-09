@@ -3,8 +3,9 @@
  * structural validation and lint of src/validate.ts.
  *
  *  - runProfile(doc, choice) detects the platform (platform/detect.ts; an
- *    explicit choice wins) and runs its rules: Camunda 7 (platform/c7.ts);
- *    Camunda 8 and plain BPMN have no rules yet.
+ *    explicit choice wins) and runs its rules: Camunda 7 (platform/c7.ts;
+ *    a file that uses the operaton namespace is read the way Operaton reads
+ *    it, `operaton: true`); Camunda 8 and plain BPMN have no rules yet.
  *  - `bpmn validate` reports every finding as a warning (`--strict` exits 5)
  *    and the platform it checked against (`--platform` overrides).
  *  - Mutations report only the findings the change introduced (profileDelta,
@@ -42,14 +43,14 @@ export interface PlatformSummary extends PlatformInfo {
 /** Runs the profile of the document's platform (or of `choice`). */
 export function runProfile(doc: Doc, choice: PlatformChoice = 'auto'): ProfileReport {
   const info = resolvePlatform(doc, choice);
-  const findings = info.platform === 'c7' ? c7Findings(doc) : [];
+  const findings = info.platform === 'c7' ? c7Findings(doc, { operaton: info.operaton === true }) : [];
   return { ...info, findings };
 }
 
 export function summarize(report: ProfileReport): PlatformSummary {
   const counts = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<Severity, number>;
   for (const f of report.findings) counts[f.severity]++;
-  return { platform: report.platform, source: report.source, detail: report.detail, counts };
+  return { platform: report.platform, source: report.source, detail: report.detail, ...(report.operaton ? { operaton: true } : {}), counts };
 }
 
 /** A profile run before a change, with the elements its findings named (renames keep their identity). */

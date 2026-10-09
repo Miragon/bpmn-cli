@@ -10,6 +10,9 @@
  *    connecting: the moved group is bridged as a whole (one flow in, one flow
  *    out -> predecessor connected to successor), every other flow that would
  *    now cross scopes is removed (reported).
+ *    The bridge of the old place follows remove's rule (E_INVALID_BRIDGE next
+ *    to an event-based gateway); a new place behind an event-based gateway
+ *    is warned about like add / connect (W_EVENT_GATEWAY_TARGET, plain files).
  *  - lane + placement may be combined.
  *  - ids of flows removed while moving stay claimed for the rest of the
  *    command, so a flow created by the placement never reuses one.
@@ -28,7 +31,7 @@ import { kindLabel } from '../kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { assignLane } from './containers.js';
-import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, type PlacementOptions } from './flows.js';
+import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, warnEventGatewayFlow, type PlacementOptions } from './flows.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { changeOf, idOf } from './set.js';
 import type { MoveOp } from './types.js';
@@ -248,6 +251,8 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void 
   reserveIds(doc, flowIds);
   leaveScope(doc, [node, ...boundaries], oldScope, targetScope, cs);
   placeNode(doc, node, p, cs);
+  // the new place may give an event-based gateway a target BPMN 2.0 does not allow (like add / connect)
+  for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) warnEventGatewayFlow(doc, f, cs);
   if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
   fixFlows(doc, boundaries, targetScope, cs);
   if (oldScope !== targetScope) inheritLane(doc, node, boundaries, anchors[0], targetScope);

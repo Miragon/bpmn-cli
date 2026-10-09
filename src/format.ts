@@ -19,6 +19,8 @@
  *    root: message Message_OrderReceived "OrderReceived", error Error_PaymentFailed "PaymentFailed" (PAY-001)
  *    problems: E_... / W_... lines
  *  renderDetail(detail): key: value lines.
+ *  A model whose import lost content (a lossy import warning, e.g. two
+ *    loopCharacteristics on one task) starts with `import: <warning>` lines.
  *  renderChanges(cs): "created userTask Activity_X "name" (after Event_Y)" lines etc., warnings, notes.
  *  renderProblems(warnings): one line each `CODE element: message  (hint)`.
  *  renderLayout(layout): the layout block of a mutation result (incl. one
@@ -151,6 +153,7 @@ function renderLanes(lanes: ViewLane[], depth: number, out: string[]): void {
 /** Renders the whole model as compact text (see contract). */
 export function renderView(view: ModelView): string {
   const out: string[] = [];
+  for (const w of view.importWarnings ?? []) out.push(`import: ${w}`);
   if (view.definitions.namespaces.length) out.push(`namespaces: ${view.definitions.namespaces.join(', ')}`);
   if (view.collaboration) {
     out.push(`collaboration ${view.collaboration.id}`);
@@ -223,16 +226,33 @@ function outgoingText(f: ViewFlow): string {
  * An extension element as an indented tree: one line per element
  * (`type attr="value" ... body="text"`), its children two spaces deeper, so
  * siblings and children can be told apart (and the XML rebuilt for --replace).
+ * A body of several lines (a script) ends the line with `body:` and follows
+ * line by line, each behind `| ` at the children's depth, exactly as written
+ * (blank lines around it dropped), so the script can be rebuilt; JSON keeps
+ * the body as one string.
  */
 export function extensionLines(ext: unknown, indent = '', lead = ''): string[] {
   if (!ext || typeof ext !== 'object') return [`${indent}${lead}${scalar(ext)}`];
   const e = ext as { type?: string; attrs?: Record<string, string>; body?: string; children?: unknown[] };
   const parts = [e.type ?? 'extension'];
   for (const [k, v] of Object.entries(e.attrs ?? {})) parts.push(`${k}=${q(v)}`);
-  if (e.body) parts.push(`body=${q(e.body)}`);
+  const inner = `${indent}${' '.repeat(lead.length)}${INDENT}`;
+  const block = e.body ? bodyBlock(e.body) : undefined;
+  if (block) parts.push('body:');
+  else if (e.body?.trim()) parts.push(`body="${e.body.trim().replace(/"/g, '\\"')}"`);
   const out = [`${indent}${lead}${parts.join(' ')}`];
-  for (const c of e.children ?? []) out.push(...extensionLines(c, `${indent}${' '.repeat(lead.length)}${INDENT}`));
+  // a multi-line body (a script) line by line, exactly as written, each line behind "| "
+  for (const line of block ?? []) out.push(`${inner}|${line ? ` ${line}` : ''}`);
+  for (const c of e.children ?? []) out.push(...extensionLines(c, inner));
   return out;
+}
+
+/** The lines of a body that spans several lines (blank lines around it dropped, the rest verbatim); undefined for a one-line body. */
+function bodyBlock(body: string): string[] | undefined {
+  const lines = body.replace(/\r\n?/g, '\n').split('\n');
+  while (lines.length && !lines[0]!.trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1]!.trim()) lines.pop();
+  return lines.length > 1 ? lines.map((l) => l.replace(/\s+$/, '')) : undefined;
 }
 
 /** `bpmn ext list`: `<index>: <type> attr="value" ...` per element (`loop.0: ...` for a nested element's), children indented below. */

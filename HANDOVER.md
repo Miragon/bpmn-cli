@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes and the Camunda 7 step)
+# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -19,7 +19,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 781 tests, layout-regression budget, short fuzz campaign
+npm run gate            # build, 919 tests, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -29,6 +29,74 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
+
+An independent verifier re-checked the Camunda 7 step on the three engines
+and reported 15 follow-ups plus profile noise; all are fixed, together with
+seven more found while integrating. Table with status and engine evidence:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#c7-follow-ups-2026-10-09-verifier-round).
+
+- **Profile** (`src/platform/c7.ts`): new deploy rules
+  `W_C7_DEPLOY_START_EVENT`, `W_C7_DEPLOY_LINK`, `W_C7_DEPLOY_SCHEMA`
+  (attributes BPMN does not define, anywhere in the file), subscriptions
+  grouped by the engine's scope, compensation `activityRef` scope, timeout
+  listener id, field values; runtime `W_C7_EMPTY_CONDITION`,
+  `W_C7_MULTIPLE_EVENT_DEFINITIONS` and wrong-side event-definition settings
+  (`W_C7_MISPLACED_*`). Two false deploy findings removed (script-resource
+  conditions, `camunda:type="shell"`). Of several event definitions the
+  engines act on one and do not parse the others (`actingOrder`,
+  engine-checked per event type): the deploy rules look at that one only.
+  Hints rebuild one repeatable extension element by its selector instead of
+  `--replace`, and use `definition[<n>].` where `definition.` is ambiguous.
+- **One platform detector** (`detect.ts detectPlatformOf`) behind `validate`
+  and `Doc.platform()`; an explicit `MutationOptions.platform` reaches the
+  ops (`Doc.platformChoice`). Operaton's own namespace is part of the Camunda
+  7 family everywhere: `isC7Uri` / `C7_URIS` / `OPERATON_URI` in
+  `descriptor.ts`; `ext` applies its structure rules by local name with
+  operaton containers (`ruleName` / `inFamily` in `ops/ext.ts`), `set`,
+  rename, retype and resource conditions accept `operaton:`, a new process of
+  an Operaton file gets `operaton:historyTimeToLive`, and the profile reads
+  `operaton:*` first like Operaton (`"operaton": true`).
+- **Operations**: `definition[<n>].` / `definition[<trigger>].` selectors
+  (`E_AMBIGUOUS_NESTED` for a plain `definition.` on several definitions),
+  `E_CROSS_SCOPE` for `activityRef`, an empty condition is refused, keyed
+  `ext add` replacement reports what it drops with the `--xml` that keeps it,
+  multi-line bodies print line by line, `"type": "loop.0"` in ops JSON, the
+  event-gateway rule per file (engines' rule for Camunda 7, BPMN 2.0
+  otherwise; explicit edges warn), duplicate single elements are a lossy
+  import, `set <id> <attr>=` removes an attribute BPMN does not define, and a
+  write reports a retype's stale camunda content once (through the profile).
+- **Output**: `validate` counts import warnings (`--strict` fails on them),
+  says "no Camunda 8 engine rules yet" for c8 files, and a boundary event on
+  a compensation handler is reported once (`E_INVALID_HOST`).
+- **Docs**: catalogue entries for `E_AMBIGUOUS_NESTED` and the five new
+  `W_C7_*` codes (and the changed ones), README sections (set, remove,
+  retype, ext, validate, set keys, Camunda 7, ops JSON, limitations), the
+  guide's Camunda 7 recipe, `bpmn kinds --json` -> `nestedSelectors`.
+
+A second verifier round fixed two regressions and two hint / precision
+issues ([table](docs/audit-2026-10.md#c7-follow-ups-second-verifier-round-2026-10-09)):
+the BPMN schema rules on event definitions (`checkSchemaEventDefinitions`:
+conditional without condition, link without name, timer with two time
+elements) run on every definition of the file, also one the engines ignore
+and non-executable processes; nested extension hints address the flow node
+(`ext remove <file> Event_Wait definition.0`, never the definition's own
+id); start events follow the engines (an empty process / embedded
+sub-process is `W_C7_DEPLOY_START_EVENT`, a transaction without start is
+runtime `W_C7_TRANSACTION_NO_START`, a connected ad-hoc sub-process is
+`W_C7_DEPLOY_AD_HOC_SUBPROCESS`, ad-hoc content is skipped); the second-start
+hint never moves a flow into a node the kept start reaches
+(`extraStartHint`). Tests: `test/c7-followups-verify.test.ts`.
+
+Tests: `test/c7-followups-profile.test.ts`, `test/c7-followups-ops.test.ts`,
+`test/c7-followups-integration.test.ts`, `test/c7-followups-verify.test.ts` (live engines opt-in with
+`BPMN_C7_ENGINES` like `c7-profile`). Engine evidence (outside the
+repository): 145 / 145 follow-up repro checks, the step's suites unchanged
+on the integrated build (108 / 108 with three checks following the new
+contract, 39 / 39, 65 / 65, extension scenarios identical), profile precision
+on 218 real files 0 false positives (14 / 15 refused files found) and 5,860 /
+5,860 derived files, real-file battery 202 / 202 edits deploy.
 
 ## What the Camunda 7 step changed (2026-10-09)
 
@@ -221,10 +289,9 @@ handful of elements (the fuzzer's minimiser tells you which ops matter).
 ## What to build next, most valuable first
 
 (Camunda 7 leftovers, smaller than the items below: a Camunda 8 profile
-(`W_C8_*`, mirroring `W_C7_FOREIGN_CONTENT`), XSD-level checks (element order,
-unprefixed attributes) in the C7 profile, `connect` / `add --after` refusing
-an event-gateway branch the engines reject like the bridges do. See the "Still
-open" list of the C7 audit.)
+(`W_C8_*`, mirroring `W_C7_FOREIGN_CONTENT`), the XSD element order in the C7
+profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
+"Still open after the follow-ups" list of the C7 audit.)
 
 1. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
@@ -248,13 +315,13 @@ open" list of the C7 audit.)
 
 ## Known residuals
 
-- Camunda 7: `operaton:historyTimeToLive` satisfies the TTL rule although
-  Camunda 7 and CIB seven refuse it; the form-field type rule reports custom
-  form types; `W_EVENT_GATEWAY_TARGET` (generic lint) still accepts a receive
-  task; the TTL default for new pools uses `platformOf` (descriptor.ts) while
-  `validate` uses `detectPlatform` (detect.ts): the two agree on Modeler files
-  and on files that declare only the camunda or only the zeebe namespace
-  (an Operaton-namespace file or one declaring both differs).
+- Camunda 7: an Operaton-namespace file is checked the way Operaton reads it
+  (operaton first, camunda as the fallback), so `operaton:historyTimeToLive`
+  satisfies the TTL rule although Camunda 7 and CIB seven ignore it; the
+  platform line says so. The form-field type rule reports custom form types;
+  `activiti:` is not modelled; a text-less field child cannot be told apart
+  from a blank one; message start events of two executable pools with one
+  message name are not reported (the engines refuse them).
 
 - See the open bugs in docs/audit-2026-10.md and its "Open findings from the
   gate".

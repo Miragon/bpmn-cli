@@ -23,11 +23,13 @@
  *    `connect` would refuse; activities may loop to themselves); a condition
  *    carried onto the predecessor's default flow is dropped instead
  *    (W_CONDITION_DROPPED), a default flow has no condition. A bridge from an
- *    event-based gateway to a target the engines reject (not a message /
- *    timer / signal / conditional catch event, a catch event with another
- *    incoming flow, a second branch waiting for the same message or signal)
- *    fails with E_INVALID_BRIDGE (eventGatewayTargetProblem in flows.ts),
- *    unless the successor is removed by the same command.
+ *    event-based gateway to a target the file's rule does not allow fails
+ *    with E_INVALID_BRIDGE (eventGatewayTargetProblem in flows.ts), unless
+ *    the successor is removed by the same command. Camunda 7 files follow the
+ *    engines (only message / timer / signal / conditional catch events, no
+ *    other incoming flow, no second branch waiting for the same message or
+ *    signal); other files follow BPMN 2.0 (receive tasks allowed, but not
+ *    mixed with message catch events).
  *
  * The cascade is reference-driven: after an element (and its containment
  * subtree) is detached, every remaining reference to any of those elements
@@ -39,7 +41,7 @@ import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { detachNode, eventGatewayTargetProblem, flowChange, removeSequenceFlow } from './flows.js';
+import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, removeSequenceFlow } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
 import type { RemoveOp } from './types.js';
 
@@ -137,7 +139,8 @@ export function assertBridgeAllowed(doc: Doc, node: El, inFlow: El, outFlow: El,
   const problem = eventGatewayTargetProblem(doc, predecessor, successor, [outFlow, inFlow]);
   if (!problem) return;
   const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${idOf(successor)} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${idOf(outFlow)} --timer PT1H\`)`;
-  throw modelError('E_INVALID_BRIDGE', `${command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${idOf(predecessor)} to ${idOf(successor)}, which the engines reject: ${problem}`, {
+  const rejectedBy = eventGatewayRule(doc) === 'engines' ? 'which the engines reject' : 'which BPMN 2.0 does not allow';
+  throw modelError('E_INVALID_BRIDGE', `${command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${idOf(predecessor)} to ${idOf(successor)}, ${rejectedBy}: ${problem}`, {
     element: idOf(node),
     related: [idOf(predecessor), idOf(successor)],
     hint:

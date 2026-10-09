@@ -21,6 +21,8 @@
  *    auto-detected): only the findings the ops introduce are reported, as
  *    warnings; `validation.platform` has them as `added`, the ones the ops
  *    removed as `resolved`, and the totals (`bpmn validate` lists them all).
+ *    An op warning that the added findings repeat item by item is dropped
+ *    (retype's W_PROPERTY_INAPPLICABLE, ops/retype.ts withoutProfileDuplicates).
  *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
@@ -62,7 +64,7 @@ import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, writeAtom
 import { collapsedIds } from './ops/add.js';
 import { runOps } from './ops/index.js';
 import { ordersLanes } from './ops/order.js';
-import { takeDroppedContent, type DroppedContent } from './ops/retype.js';
+import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
@@ -488,15 +490,21 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
   takeDroppedContent(doc);
 
   let changes: ChangeSet;
+  // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
+  doc.platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
   try {
     changes = runOps(doc, ops);
   } catch (err) {
     throw toCliError(err);
+  } finally {
+    doc.platformChoice = undefined;
   }
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 
   const structural = separatePreexisting(doc, validateDoc(doc), baseline);
   const validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
+  // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
+  changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings);
   if (validation.errors.length && !opts.force) {
     throw modelError('E_VALIDATION', `The change would introduce ${validation.errors.length} structural error(s); nothing was written`, {
       errors: validation.errors,
