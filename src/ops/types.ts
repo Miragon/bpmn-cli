@@ -137,6 +137,11 @@ export interface ExtOp {
   replace?: boolean;
   /** remove: index within extensionElements (alternative to type) */
   index?: number;
+  /**
+   * a nested element of `id` instead of the element itself: its event definition,
+   * loop characteristics or condition expression (also given as a `<slot>.` prefix of type)
+   */
+  slot?: 'definition' | 'loop' | 'condition';
 }
 
 export interface SplitBranch extends FlowOptions {

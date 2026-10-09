@@ -17,6 +17,10 @@
  *    document already had (same code and element) do not block unrelated
  *    edits: they are reported as W_PREEXISTING_ERROR warnings whose message
  *    starts with the original code.
+ *  - platform profile (src/platform/, MutationOptions.platform, default
+ *    auto-detected): only the findings the ops introduce are reported, as
+ *    warnings; `validation.platform` has them as `added`, the ones the ops
+ *    removed as `resolved`, and the totals (`bpmn validate` lists them all).
  *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
@@ -62,7 +66,8 @@ import { takeDroppedContent, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
-import { validateDoc, type ValidationResult } from './validate.js';
+import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './platform/profile.js';
+import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
 import { buildView, type ModelView } from './view.js';
 
 export interface MutationOptions {
@@ -88,6 +93,8 @@ export interface MutationOptions {
   mustNotExist?: boolean;
   /** layout engine: 'clean' (default) or 'auto' (bpmn-auto-layout) */
   engine?: LayoutEngine;
+  /** platform profile whose new findings are reported: 'auto' (default) detects it, 'none' switches it off */
+  platform?: PlatformChoice;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -166,11 +173,13 @@ export interface ErrorBaseline {
   errors: Warning[];
   /** id -> element before the ops (an element renamed or retyped by the ops is still recognised) */
   index: Map<string, El>;
+  /** the platform profile before the ops (its findings are not repeated by the mutation) */
+  profile?: ProfileBaseline;
 }
 
 /** Validates the document before the ops run (this also repairs missing incoming/outgoing entries, see repairFlowLinks). */
-export function errorBaseline(doc: Doc): ErrorBaseline {
-  return { errors: validateDoc(doc).errors, index: new Map(doc.byId()) };
+export function errorBaseline(doc: Doc, platform: PlatformChoice = 'auto'): ErrorBaseline {
+  return { errors: validateDoc(doc).errors, index: new Map(doc.byId()), profile: profileBaseline(doc, platform) };
 }
 
 /** Whether `after` is the finding `before` again: same code, about the same element (by id, or by identity after a rename). */
@@ -475,7 +484,7 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
   const requested = requestedMode(opts.layout);
   const formatOnly = ops.length > 0 && ops.every(isFormatOp);
   const before = await captureBefore(doc, requested, formatOnly);
-  const baseline = errorBaseline(doc);
+  const baseline = errorBaseline(doc, opts.platform);
   takeDroppedContent(doc);
 
   let changes: ChangeSet;
@@ -486,7 +495,8 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
   }
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 
-  const validation = separatePreexisting(doc, validateDoc(doc), baseline);
+  const structural = separatePreexisting(doc, validateDoc(doc), baseline);
+  const validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
   if (validation.errors.length && !opts.force) {
     throw modelError('E_VALIDATION', `The change would introduce ${validation.errors.length} structural error(s); nothing was written`, {
       errors: validation.errors,
@@ -558,10 +568,10 @@ export async function mutateFile(file: string, ops: Op[], opts: MutationOptions 
   return mutateDoc(doc, ops, opts);
 }
 
-/** Validation + layout dry run without writing. */
-export async function checkFile(file: string): Promise<{ validation: ValidationResult; layout: LayoutStatus | { status: 'failed'; error: Warning }; importWarnings: string[] }> {
+/** Validation (with the platform profile, auto-detected unless `opts.platform`) + layout dry run without writing. */
+export async function checkFile(file: string, opts: { platform?: PlatformChoice } = {}): Promise<{ validation: ValidationResult; layout: LayoutStatus | { status: 'failed'; error: Warning }; importWarnings: string[] }> {
   const doc = await Doc.load(file);
-  const validation = validateDoc(doc);
+  const validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
   const importWarnings = doc.importWarnings.map((w) => w.message.split('\n')[0]!);
   let layout: LayoutStatus | { status: 'failed'; error: Warning };
   if (validation.errors.length) {

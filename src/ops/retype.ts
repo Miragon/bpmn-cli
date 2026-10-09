@@ -26,11 +26,19 @@
  *    (E_INVALID_TRIGGER otherwise, the same rule `connect` applies).
  *  - a sub-process that stops being one loses its child diagram (DI), so a
  *    --no-layout write never leaves a BPMNPlane rooted at a task.
+ *  - vendor attributes and extension elements are kept as they are (like the
+ *    BPMN content, they may still be wanted, and dropping them would lose
+ *    data); camunda attributes / extension elements the Camunda descriptor
+ *    does not allow on the new kind (camunda:assignee on a serviceTask,
+ *    camunda:topic on a userTask, a camunda:taskListener outside a userTask)
+ *    are named in one W_PROPERTY_INAPPLICABLE warning with the commands that
+ *    remove them. (Not W_PROPERTY_DROPPED: nothing was dropped.)
  */
 import type { Doc } from '../document.js';
-import { modelError } from '../errors.js';
+import { modelError, type Warning } from '../errors.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
+import { allowedOn, attrAppliesTo, CAMUNDA_URI } from '../platform/descriptor.js';
 import { ChangeSet } from '../result.js';
 import { applyTrigger } from './events.js';
 import { cascadeRemove } from './remove.js';
@@ -44,6 +52,7 @@ import {
   isEl,
   messageFlowConflicts,
   ownValue,
+  vendorAttributes,
   warnNonInterruptingDropped,
   type PropDescriptor,
 } from './set.js';
@@ -192,6 +201,10 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const conflictsBefore = new Set(messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
   const target = to.type === el.$type ? el : swapType(doc, el, to, cs);
   applyKindProps(target, from, to);
+  if (target !== el) {
+    const inapplicable = inapplicableCamundaContent(doc, target, to);
+    if (inapplicable) cs.warn(inapplicable);
+  }
   let dropNonInterrupting = false;
   if (trigger !== undefined && (!sameTrigger || hasTriggerOptions)) {
     // same trigger: update its details (keep what was not given); new trigger: build from the given options
@@ -212,6 +225,39 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
       : `retyped from ${oldLabel} to ${kindLabel(target)}`;
   cs.change(changeOf(target, detail));
   return cs;
+}
+
+/** `camunda:<local>` when `name` is prefixed with a prefix bound to the camunda namespace. */
+function camundaName(doc: Doc, name: string): string | undefined {
+  const idx = name.indexOf(':');
+  if (idx <= 0 || doc.namespaceUri(name.slice(0, idx)) !== CAMUNDA_URI) return undefined;
+  return `camunda:${name.slice(idx + 1)}`;
+}
+
+/** W_PROPERTY_INAPPLICABLE naming the camunda attributes / extension elements the new kind cannot use (they stay). */
+function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | undefined {
+  const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
+    const name = camundaName(doc, key);
+    return !!name && attrAppliesTo(name, el) === false;
+  });
+  const exts: string[] = [];
+  for (const ext of el.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
+    const name = camundaName(doc, ext.$type);
+    if (name && allowedOn(name, el) === false && !exts.includes(ext.$type)) exts.push(ext.$type);
+  }
+  const names = [...attrs, ...exts];
+  if (!names.length) return undefined;
+  const id = idOf(el);
+  const fixes = [
+    ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((a) => `${a}=`).join(' ')}\``] : []),
+    ...exts.map((t) => `\`bpmn ext remove <file> ${id} ${t}\``),
+  ];
+  return {
+    code: 'W_PROPERTY_INAPPLICABLE',
+    message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
+    element: id,
+    hint: `The Camunda descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
+  };
 }
 
 /** Applies / clears the kind-specific creation props (e.g. triggeredByEvent for event sub-processes). */

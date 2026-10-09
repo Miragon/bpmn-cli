@@ -29,9 +29,15 @@
  *    the score, the non-zero counts and one line per problem.
  *
  * Refined grammar (one line per node, flows inline, every id visible):
- *    <kind> <id> ["name"] [flags] -> <target> (<flowId> ["name"] [if <cond>] [default]), ...
+ *    <kind> <id> ["name"] [flags] -> <target> (<flowId> ["name"] [if <cond>] [default] [flags]), ...
  *  - flags: trigger text, non-interrupting, expanded|collapsed, key=value props,
- *    `ext: <types>`, `doc: "<truncated>"`
+ *    vendor attributes with their values under their `set` keys
+ *    (`camunda:assignee=demo`, `loop.camunda:collection=${items}`,
+ *    `definition.camunda:topic=x`; values with spaces or commas quoted, long
+ *    ones truncated), `ext: <types>` (repeated types as `type xN`),
+ *    `doc: "<truncated>"`; flows: `language=<lang>`, vendor attributes, ext;
+ *    a script resource condition reads `if resource <uri>`
+ *  - the process line carries the process's vendor attributes and extension types
  *  - boundary events are indented under their host, sub-process children under
  *    the sub-process; unreachable nodes are prefixed with `! unreachable`.
  *  - the collaboration (pools, message flows) comes first, then each process
@@ -44,10 +50,11 @@ import type { LayoutView } from './diagram/view.js';
 import type { Warning } from './errors.js';
 import type { LayoutStatus } from './pipeline.js';
 import type { Change, ChangeSet } from './result.js';
-import type { ElementDetail, ModelView, ViewFlow, ViewLane, ViewNode } from './view.js';
+import type { ElementDetail, FindHit, ModelView, ViewFlow, ViewLane, ViewNode } from './view.js';
 
 const INDENT = '  ';
 const DOC_MAX = 80;
+const VALUE_MAX = 60;
 
 /** Single-line, double-quoted text. */
 function q(text: string): string {
@@ -71,11 +78,35 @@ function scalar(value: unknown): string {
 /* view                                                                 */
 /* ------------------------------------------------------------------ */
 
+/** A vendor value in a flag list: bare when unambiguous, else quoted (and truncated). */
+function flagValue(value: string): string {
+  return /^[^\s,[\]"]+$/.test(value) && value.length <= VALUE_MAX ? value : q(truncate(value, VALUE_MAX));
+}
+
+/** `type`, or `type xN` for repeated extension element types, in first-seen order. */
+function extensionList(types: readonly string[]): string {
+  const counts = new Map<string, number>();
+  for (const t of types) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts].map(([t, n]) => (n > 1 ? `${t} x${n}` : t)).join(', ');
+}
+
+/** Vendor attributes (`key=value`) and extension element types of a node, process or flow. */
+function vendorFlags(item: { attrs?: Record<string, string>; extensions?: string[]; extensionElements?: string[] }): string[] {
+  const flags = Object.entries(item.attrs ?? {}).map(([k, v]) => `${k}=${flagValue(v)}`);
+  // extensionElements is new; views built without it fall back to the type names in `extensions`
+  const types = item.extensionElements ?? (item.extensions ?? []).filter((e) => !(e in (item.attrs ?? {})));
+  if (types.length) flags.push(`ext: ${extensionList(types)}`);
+  return flags;
+}
+
 function flowText(f: ViewFlow): string {
   const parts = [f.id];
   if (f.name) parts.push(q(f.name));
   if (f.condition) parts.push(`if ${truncate(f.condition, 120)}`);
+  else if (f.conditionResource) parts.push(`if resource ${f.conditionResource}`);
   if (f.default) parts.push('default');
+  const flags = [...(f.language ? [`language=${f.language}`] : []), ...vendorFlags(f)];
+  if (flags.length) parts.push(`[${flags.join(', ')}]`);
   return `${f.target} (${parts.join(' ')})`;
 }
 
@@ -85,7 +116,7 @@ function nodeFlags(n: ViewNode): string[] {
   if (n.nonInterrupting) flags.push('non-interrupting');
   if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
   for (const [k, v] of Object.entries(n.props ?? {})) flags.push(`${k}=${scalar(v)}`);
-  if (n.extensions?.length) flags.push(`ext: ${n.extensions.join(', ')}`);
+  flags.push(...vendorFlags(n));
   if (n.documentation) flags.push(`doc: ${q(truncate(n.documentation, DOC_MAX))}`);
   return flags;
 }
@@ -132,7 +163,8 @@ export function renderView(view: ModelView): string {
     }
   }
   for (const p of view.processes) {
-    out.push(`process ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.executable ? 'executable' : 'non-executable'}${p.participant ? ` in ${p.participant}` : ''}`);
+    const flags = vendorFlags(p);
+    out.push(`process ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.executable ? 'executable' : 'non-executable'}${p.participant ? ` in ${p.participant}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
     if (p.nodes.length) renderNodes(p.nodes, 1, out);
     else out.push(`${INDENT}(empty)`);
     if (p.lanes.length) {
@@ -169,10 +201,11 @@ export function renderView(view: ModelView): string {
 /* detail                                                               */
 /* ------------------------------------------------------------------ */
 
-function incomingText(f: ElementDetail['incoming'][number]): string {
+function incomingText(f: ElementDetail['incoming'][number] & { conditionResource?: string }): string {
   const parts = [f.id, 'from', f.source];
   if (f.name) parts.push(q(f.name));
   if (f.condition) parts.push(`if ${f.condition}`);
+  else if (f.conditionResource) parts.push(`if resource ${f.conditionResource}`);
   if (f.default) parts.push('default');
   return parts.join(' ');
 }
@@ -181,18 +214,31 @@ function outgoingText(f: ViewFlow): string {
   const parts = [f.id, 'to', f.target];
   if (f.name) parts.push(q(f.name));
   if (f.condition) parts.push(`if ${f.condition}`);
+  else if (f.conditionResource) parts.push(`if resource ${f.conditionResource}`);
   if (f.default) parts.push('default');
   return parts.join(' ');
 }
 
-function extensionText(ext: unknown): string {
-  if (!ext || typeof ext !== 'object') return scalar(ext);
+/**
+ * An extension element as an indented tree: one line per element
+ * (`type attr="value" ... body="text"`), its children two spaces deeper, so
+ * siblings and children can be told apart (and the XML rebuilt for --replace).
+ */
+export function extensionLines(ext: unknown, indent = '', lead = ''): string[] {
+  if (!ext || typeof ext !== 'object') return [`${indent}${lead}${scalar(ext)}`];
   const e = ext as { type?: string; attrs?: Record<string, string>; body?: string; children?: unknown[] };
   const parts = [e.type ?? 'extension'];
   for (const [k, v] of Object.entries(e.attrs ?? {})) parts.push(`${k}=${q(v)}`);
   if (e.body) parts.push(`body=${q(e.body)}`);
-  if (e.children?.length) parts.push(`children: ${e.children.map(extensionText).join('; ')}`);
-  return parts.join(' ');
+  const out = [`${indent}${lead}${parts.join(' ')}`];
+  for (const c of e.children ?? []) out.push(...extensionLines(c, `${indent}${' '.repeat(lead.length)}${INDENT}`));
+  return out;
+}
+
+/** `bpmn ext list`: `<index>: <type> attr="value" ...` per element (`loop.0: ...` for a nested element's), children indented below. */
+export function renderExtensionList(items: ReadonlyArray<{ index: number; slot?: string; type: string; attrs: Record<string, string>; body?: string; children?: unknown[] }>): string {
+  if (!items.length) return 'no extension elements';
+  return items.flatMap((i) => extensionLines(i, '', `${i.slot ? `${i.slot}.` : ''}${i.index}: `)).join('\n');
 }
 
 /** Renders `bpmn show <id>` as `key: value` lines (property keys are `set` keys). */
@@ -230,14 +276,30 @@ export function renderDetail(detail: ElementDetail): string {
   if (detail.children?.length) out.push(`children: ${detail.children.join(', ')}`);
   if (detail.extensions.length) {
     out.push('extensions:');
-    for (const ext of detail.extensions) out.push(`${INDENT}${extensionText(ext)}`);
+    for (const ext of detail.extensions) out.push(...extensionLines(ext, INDENT));
   }
   for (const [k, v] of deferred) {
     out.push(`${k}: ${scalar(v)}`);
     printed.add(k);
   }
   for (const [k, v] of Object.entries(detail.attrs)) if (!printed.has(k)) out.push(`${k}: ${v}`);
+  // nested elements: attributes the properties did not carry, then their extension elements
+  for (const [slot, n] of Object.entries(detail.nested ?? {})) {
+    if (!n) continue;
+    if (n.id && !printed.has(`${slot}.id`)) out.push(`${slot}.id: ${n.id}`);
+    for (const [k, v] of Object.entries(n.attrs)) if (!printed.has(`${slot}.${k}`)) out.push(`${slot}.${k}: ${v}`);
+    if (n.extensions.length) {
+      out.push(`${slot}.extensions:`);
+      for (const ext of n.extensions) out.push(...extensionLines(ext, INDENT));
+    }
+  }
   return out.join('\n');
+}
+
+/** `bpmn find` hits: `<kind> <id> ["name"]  (in <scope>)  [<matched vendor value>]`, or `no matches`. */
+export function renderFind(hits: readonly FindHit[]): string {
+  if (!hits.length) return 'no matches';
+  return hits.map((h) => `${h.kind} ${h.id}${h.name ? ` ${q(h.name)}` : ''}${h.scope ? `  (in ${h.scope})` : ''}${h.match ? `  [${truncate(h.match, 100)}]` : ''}`).join('\n');
 }
 
 /* ------------------------------------------------------------------ */

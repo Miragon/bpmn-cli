@@ -1,4 +1,4 @@
-# Handover, 2026-10-08 (after step 1 of the audit fixes)
+# Handover, 2026-10-09 (after step 1 of the audit fixes and the Camunda 7 step)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -19,7 +19,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 585 tests, layout-regression budget, short fuzz campaign
+npm run gate            # build, 781 tests, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -29,6 +29,75 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## What the Camunda 7 step changed (2026-10-09)
+
+A second audit checked Camunda 7 support (Camunda 7.24.0, CIB seven 2.2.0,
+Operaton 2.1.5; 218 real C7 / CIB seven files from private corpora). Camunda
+content was preserved perfectly, but treated as untyped; 18 findings, all
+fixed now. The table with each finding, its fix and the engine evidence is in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#camunda-7-audit-2026-10-09).
+
+- **Descriptor as data** (`src/platform/descriptor.ts`): reads
+  `camunda-bpmn-moddle`'s `camunda.json` (new runtime dependency, pinned
+  8.0.1) to know which camunda attributes and extension elements belong where.
+  It is never registered with bpmn-moddle: camunda content stays generic and
+  the serialisation is byte-stable. Two `allowedIn` lists are corrected to what
+  the engines accept.
+- **`new --target camunda7`** writes `camunda:historyTimeToLive="180"` and
+  `modeler:executionPlatformVersion="7.24.0"` like the Modeler (the engines
+  refuse an executable process without TTL); a new pool's process gets the TTL
+  (`Doc.initProcess`). Unknown targets fail with `E_USAGE`.
+- **Nested keys** (`src/ops/set.ts`): `definition.<key>`, `loop.<key>`,
+  `condition.<key>` address the event definition, the loop characteristics and
+  the condition expression; a camunda attribute that belongs there is refused
+  on the parent (`E_WRONG_HOST`, the hint names the key), a missing nested
+  element is `E_NO_NESTED_ELEMENT`. Conditions are changed in place and report
+  a dropped script resource / language; loop changes report dropped vendor
+  content; renames re-point `camunda:errorEventDefinition errorRef`;
+  send / receive tasks take `message=`; camunda Boolean attributes are written
+  as exactly `true` / `false`. `bpmn kinds` lists the nested keys
+  ("NESTED KEYS", `kinds --json` -> `nestedKeys`).
+- **`ext` structure** (`src/ops/ext.ts`): child types are filed into their
+  container, single-instance containers merged (`E_DUPLICATE_EXTENSION` on a
+  conflict), keyed items replaced, paths reach nested containers, `ext remove`
+  takes selectors (`'camunda:inputParameter[name=x]'`; `E_AMBIGUOUS_EXTENSION`),
+  `--xml` accepts `bpmn:` children inside vendor elements and must match the
+  positional type, `ext add` on `bpmn:definitions` is `E_WRONG_KIND`, content
+  the engines would not read is `W_MISPLACED_EXTENSION`. A `definition.` /
+  `loop.` / `condition.` prefix (or op `slot`) addresses the extension
+  elements of a nested element (`loop.camunda:failedJobRetryTimeCycle`).
+  `ext list` and `show <id>` print extension content as an indented tree.
+- **Engine rules in the ops**: bridges next to an event-based gateway that the
+  engines refuse are `E_INVALID_BRIDGE` (remove, move, move --in); a boundary
+  event on a compensation handler is `E_INVALID_HOST` (add / move --on, and a
+  structural check in `validate.ts`, so `set isForCompensation=true` on a host
+  with boundary events is blocked); `connect` warns `W_DUPLICATE_FLOW`;
+  `retype` names camunda content the new kind cannot use
+  (`W_PROPERTY_INAPPLICABLE`).
+- **Views**: `show` prints vendor values (nested ones under their set keys,
+  process- and flow-level content, `xN` counts), `find` matches vendor values
+  and prints the match.
+- **Camunda 7 profile** (`src/platform/{detect,c7,profile,finding}.ts`):
+  `validate` detects the platform (`--platform auto|c7|c8|none`) and runs 33
+  rules (`W_C7_DEPLOY_*` = the engines refuse the file; runtime and practice
+  findings), each with a `severity` and a hint naming the fixing command.
+  Every write reports only the profile findings it introduced
+  (`validation.platform.added/resolved`). Library: `validateDoc(doc,
+  { platform })`, `runProfile`, `detectPlatform`, `MutationOptions.platform`.
+- **Docs**: README "Camunda 7" section with a worked example (run on all three
+  engines), the guide's CAMUNDA 7 recipe, every new code in the error
+  catalogue (the catalogue test now also sees codes with digits, `W_C7_*`).
+
+Tests: `test/c7-semantic.test.ts`, `test/c7-ext-structure.test.ts`,
+`test/c7-profile.test.ts` (82 models with their engine verdict; live engines
+opt-in with `BPMN_C7_ENGINES`, see docs/testing.md),
+`test/c7-integration.test.ts`; all synthetic. Engine evidence (outside the
+repository): every finding's repro re-run on the integrated build (108 / 108
+checks), the real-file battery (same numbers as before, 0 regressions, 0
+unexpected camunda changes; the 37 former sweep regressions are refused now),
+the execution scenarios (65 / 65, including what the old CLI could not
+express).
 
 ## What step 1 changed
 
@@ -151,6 +220,12 @@ handful of elements (the fuzzer's minimiser tells you which ops matter).
 
 ## What to build next, most valuable first
 
+(Camunda 7 leftovers, smaller than the items below: a Camunda 8 profile
+(`W_C8_*`, mirroring `W_C7_FOREIGN_CONTENT`), XSD-level checks (element order,
+unprefixed attributes) in the C7 profile, `connect` / `add --after` refusing
+an event-gateway branch the engines reject like the bridges do. See the "Still
+open" list of the C7 audit.)
+
 1. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
    events colliding with annotations or new nodes (#42, #63), `route` and
@@ -172,6 +247,14 @@ handful of elements (the fuzzer's minimiser tells you which ops matter).
    clean engine honours, so formatting survives a full redraw.
 
 ## Known residuals
+
+- Camunda 7: `operaton:historyTimeToLive` satisfies the TTL rule although
+  Camunda 7 and CIB seven refuse it; the form-field type rule reports custom
+  form types; `W_EVENT_GATEWAY_TARGET` (generic lint) still accepts a receive
+  task; the TTL default for new pools uses `platformOf` (descriptor.ts) while
+  `validate` uses `detectPlatform` (detect.ts): the two agree on Modeler files
+  and on files that declare only the camunda or only the zeebe namespace
+  (an Operaton-namespace file or one declaring both differs).
 
 - See the open bugs in docs/audit-2026-10.md and its "Open findings from the
   gate".

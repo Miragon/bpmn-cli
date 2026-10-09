@@ -42,16 +42,32 @@
  *   W_BRANCH_NAME, W_NAMED_JOIN, W_NAMED_PARALLEL, W_NOT_IN_LANE,
  *   W_IMPLICIT_SPLIT, W_IMPLICIT_JOIN, W_EVENT_GATEWAY_TARGET,
  *   W_EMPTY_SUBPROCESS, W_DUPLICATE_NAME.
+ *
+ * Platform profile (src/platform/): with `validateDoc(doc, { platform })` the
+ * engine-specific rules of the detected (or given) platform run too and their
+ * findings (W_C7_*, each with a severity: deploy / runtime / practice) follow
+ * the lint warnings; `result.platform` says which platform was checked and how
+ * it was detected. Without the option nothing changes (show, library callers).
+ * Mutations report only the profile findings a change introduced
+ * (pipeline.ts, withProfile + profileDelta).
  */
 import type { Doc } from './document.js';
 import { isCliError, type Warning } from './errors.js';
 import { isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from './kinds.js';
 import { addTo, is, walk, type El } from './model.js';
 import { assertSequenceFlowEndpoints } from './ops/flows.js';
+import { profileDelta, runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
 
 export interface ValidationResult {
   errors: Warning[];
   warnings: Warning[];
+  /** the platform profile that ran (validateDoc with a platform option, mutations); its findings are among the warnings */
+  platform?: PlatformSummary;
+}
+
+export interface ValidateOptions {
+  /** run the platform profile: 'auto' detects the platform, 'c7' / 'c8' / 'none' force one; omitted = no profile */
+  platform?: PlatformChoice;
 }
 
 /** Flow order of one scope, shared by the view and the lint rules. */
@@ -456,6 +472,14 @@ function checkBoundaryEvent(ctx: Ctx, el: El, scope: El): void {
       hint: `Move the boundary event next to its host: \`bpmn remove <file> ${idOf(el)}\` and re-add it with --on ${idOf(host)}.`,
     });
   }
+  // like a sequence flow out of a compensation handler (checkSequenceFlow): bpmn-js does not attach
+  // boundary events to one, and Camunda 7 / CIB seven / Operaton refuse the file
+  if (peek<boolean>(host, 'isForCompensation') === true) {
+    pushFinding(ctx.errors, 'E_INVALID_HOST', `${describe(el)} is attached to ${idOf(host)}, a compensation handler (isForCompensation=true), which cannot carry boundary events`, idOf(el), {
+      related: [idOf(host)],
+      hint: `Remove it (\`bpmn remove <file> ${idOf(el)}\`), attach it to a normal activity (\`bpmn move <file> ${idOf(el)} --on <activityId>\`), or make ${idOf(host)} a normal activity (\`bpmn set <file> ${idOf(host)} isForCompensation=false\`).`,
+    });
+  }
   const trigger = triggerOf(el);
   if (trigger && peek<boolean>(el, 'cancelActivity') === false && NON_INTERRUPTING_FORBIDDEN.includes(trigger)) {
     pushFinding(ctx.errors, 'E_INVALID_TRIGGER', `boundaryEvent:${trigger} ${idOf(el)} cannot be non-interrupting`, idOf(el), {
@@ -710,9 +734,41 @@ function checkDuplicateNames(ctx: Ctx): void {
  * written (dangling references, impossible structures); `warnings` are lint
  * findings about modelling conventions. Missing incoming/outgoing mirror
  * entries are added first (see repairFlowLinks): the only change this makes
- * to the model is derived data every later stage relies on.
+ * to the model is derived data every later stage relies on. With
+ * `opts.platform` the platform profile runs too (see the module header).
  */
-export function validateDoc(doc: Doc): ValidationResult {
+export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult {
+  const result = validateStructure(doc);
+  if (opts.platform === undefined) return result;
+  const report = runProfile(doc, opts.platform);
+  return withProfile(result, report, report.findings);
+}
+
+/**
+ * Adds the profile findings `shown` to the warnings and the summary of
+ * `report` to the result (`added` / `resolved` for a mutation's delta). A lint
+ * W_EVENT_GATEWAY_TARGET about the same branch as a shown platform finding is
+ * dropped: the platform finding says the same with the engine's verdict.
+ */
+export function withProfile(result: ValidationResult, report: ProfileReport, shown: ProfileFinding[], delta?: { added: ProfileFinding[]; resolved: ProfileFinding[] }): ValidationResult {
+  const covered = new Set(shown.filter((f) => f.code.startsWith('W_C7_') && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
+  const warnings = result.warnings.filter((w) => w.code !== 'W_EVENT_GATEWAY_TARGET' || !covered.has(`${w.element}|${w.related?.[0] ?? ''}`));
+  const platform: PlatformSummary = { ...summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
+  return { errors: result.errors, warnings: [...warnings, ...shown], platform };
+}
+
+/**
+ * A mutation's view of the profile: runs it on the changed document and adds
+ * only the findings the change introduced (`before` is the run before the
+ * ops); `result.platform` lists them with the resolved ones and the totals.
+ */
+export function withProfileChanges(doc: Doc, result: ValidationResult, before: ProfileBaseline, choice: PlatformChoice = 'auto'): ValidationResult {
+  const after = runProfile(doc, choice);
+  const delta = profileDelta(doc, before, after);
+  return withProfile(result, after, delta.added, delta);
+}
+
+function validateStructure(doc: Doc): ValidationResult {
   const ctx: Ctx = { doc, errors: [], warnings: [] };
   repairFlowLinks(doc);
   checkDuplicateIds(ctx);

@@ -17,7 +17,16 @@
  *  2.0, see repairFlowLinks in validate.ts) so flows of hand-written files
  *  show up; a file with complete mirrors is left untouched.
  *  - findElements(doc, text, kind?): case-insensitive substring over ids and
- *    names (kind filter by canonical kind), returns ViewNode-like entries.
+ *    names (kind filter by canonical kind), returns ViewNode-like entries;
+ *    also over vendor attribute values (camunda:topic, camunda:assignee, ...,
+ *    of nested elements too) and the attributes / bodies of extension
+ *    elements (`match` says what matched), and, for a non-empty text, over
+ *    the ids of event definitions and loop characteristics.
+ *  Vendor content: nodes, processes and flows carry `attrs` (vendor attribute
+ *  values; those of nested elements under the `set` keys `definition.`,
+ *  `loop.`, `condition.`), `extensions` (extension element types and vendor
+ *  attribute names, deduplicated) and `extensionElements` (the extension
+ *  element types in document order, repeated ones included).
  */
 import type { Doc } from './document.js';
 import { usageError, type Warning } from './errors.js';
@@ -26,8 +35,8 @@ import { diExpansionState } from './layout.js';
 import { is, localType, walk, type El } from './model.js';
 import { laneOf } from './ops/containers.js';
 import { describeTrigger } from './ops/events.js';
-import { listExtensions } from './ops/ext.js';
-import { readProperties } from './ops/set.js';
+import { listExtensions, type ExtensionInfo } from './ops/ext.js';
+import { nestedElement, readProperties, slotsOf, vendorAttributes, type NestedSlot } from './ops/set.js';
 import { flowOrder, repairFlowLinks, validateDoc } from './validate.js';
 
 export interface ViewFlow {
@@ -35,7 +44,17 @@ export interface ViewFlow {
   target: string;
   name?: string;
   condition?: string;
+  /** camunda:resource of a script resource condition (it has no body) */
+  conditionResource?: string;
+  /** expression language of the condition */
+  language?: string;
   default?: boolean;
+  /** vendor attribute values of the flow and (`condition.` keys) of its condition, except the resource */
+  attrs?: Record<string, string>;
+  /** extension element types and vendor attribute names */
+  extensions?: string[];
+  /** extension element types in document order (repeats included) */
+  extensionElements?: string[];
 }
 
 export interface ViewNode {
@@ -59,8 +78,12 @@ export interface ViewNode {
   unreachable?: boolean;
   /** extra semantic facts, e.g. loop=parallel, calledElement=X */
   props?: Record<string, unknown>;
+  /** vendor attribute values; nested elements under their set keys (`loop.camunda:collection`) */
+  attrs?: Record<string, string>;
   /** vendor attributes and extension element types, for context */
   extensions?: string[];
+  /** extension element types in document order (repeats included) */
+  extensionElements?: string[];
 }
 
 export interface ViewLane {
@@ -92,6 +115,12 @@ export interface ViewProcess {
   name?: string;
   executable: boolean;
   participant?: string;
+  /** vendor attribute values, e.g. camunda:historyTimeToLive */
+  attrs?: Record<string, string>;
+  /** extension element types and vendor attribute names */
+  extensions?: string[];
+  /** extension element types in document order (repeats included) */
+  extensionElements?: string[];
   lanes: ViewLane[];
   nodes: ViewNode[];
   data: ViewData[];
@@ -115,6 +144,15 @@ export interface ModelView {
   problems: Warning[];
 }
 
+/** A nested element of `show <id>` (event definition, loop characteristics, condition). */
+export interface NestedDetail {
+  type: string;
+  id?: string;
+  /** vendor attributes, settable as `<slot>.<key>` */
+  attrs: Record<string, string>;
+  extensions: ExtensionInfo[];
+}
+
 export interface ElementDetail {
   id: string;
   kind: string;
@@ -131,6 +169,8 @@ export interface ElementDetail {
   children?: string[];
   extensions: unknown[];
   attrs: Record<string, string>;
+  /** nested elements by their set-key prefix */
+  nested?: Partial<Record<NestedSlot, NestedDetail>>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -255,13 +295,7 @@ function nodeProps(el: El): Record<string, unknown> | undefined {
 }
 
 function vendorAttrs(el: El): Record<string, string> {
-  const out: Record<string, string> = {};
-  const attrs = (el.$attrs ?? {}) as Record<string, unknown>;
-  for (const key of Object.keys(attrs)) {
-    if (key.startsWith('xmlns:') || !key.includes(':')) continue;
-    out[key] = String(attrs[key]);
-  }
-  return out;
+  return vendorAttributes(el);
 }
 
 function extensionTypes(el: El): string[] {
@@ -275,14 +309,44 @@ function extensionMentions(el: El): string[] | undefined {
   return mentions.length ? [...new Set(mentions)] : undefined;
 }
 
+/** Vendor attribute values of an element and, under `<slot>.<key>`, of its nested elements. */
+function vendorValues(el: El, skip: (slot: NestedSlot, key: string) => boolean = () => false): Record<string, string> | undefined {
+  const out: Record<string, string> = { ...vendorAttrs(el) };
+  for (const slot of slotsOf(el)) {
+    const nested = nestedElement(el, slot);
+    if (!nested) continue;
+    for (const [k, v] of Object.entries(vendorAttrs(nested))) if (!skip(slot, k)) out[`${slot}.${k}`] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function nonEmpty<T>(items: T[]): T[] | undefined {
+  return items.length ? items : undefined;
+}
+
+/** camunda:resource (any prefix) of an expression. */
+function resourceOf(expr: El | undefined): { key: string; value: string } | undefined {
+  if (!expr) return undefined;
+  const key = Object.keys(expr.$attrs ?? {}).find((k) => /:resource$/.test(k) && !k.startsWith('xmlns'));
+  const value = key ? expr.$attrs[key] : undefined;
+  return key && typeof value === 'string' && value ? { key, value } : undefined;
+}
+
 function flowView(flow: El): ViewFlow {
   const source = peek<El>(flow, 'sourceRef');
+  const cond = peek<El>(flow, 'conditionExpression');
+  const resource = resourceOf(cond);
   return compact({
     id: idOf(flow),
     target: idOf(peek<El>(flow, 'targetRef')),
     name: nameOf(flow),
-    condition: bodyOf(peek<El>(flow, 'conditionExpression')),
+    condition: bodyOf(cond),
+    conditionResource: resource?.value,
+    language: cond ? peek<string>(cond, 'language') || undefined : undefined,
     default: source && peek<El>(source, 'default') === flow ? true : undefined,
+    attrs: vendorValues(flow, (slot, key) => slot === 'condition' && key === resource?.key),
+    extensions: extensionMentions(flow),
+    extensionElements: nonEmpty(extensionTypes(flow)),
   });
 }
 
@@ -321,7 +385,9 @@ function buildNode(ctx: ViewCtx, el: El, unreachable: Set<El>): ViewNode {
     expanded: isSub ? ctx.expansion.get(id) !== false : undefined,
     unreachable: unreachable.has(el) ? true : undefined,
     props: nodeProps(el),
+    attrs: vendorValues(el),
     extensions: extensionMentions(el),
+    extensionElements: nonEmpty(extensionTypes(el)),
   });
 }
 
@@ -396,6 +462,9 @@ function buildProcess(ctx: ViewCtx, process: El): ViewProcess {
     name: nameOf(process),
     executable: peek<boolean>(process, 'isExecutable') === true,
     participant: doc.participantOf(process)?.get<string>('id'),
+    attrs: vendorValues(process),
+    extensions: extensionMentions(process),
+    extensionElements: nonEmpty(extensionTypes(process)),
     lanes: list(process, 'laneSets').flatMap((ls) => buildLanes(ls)),
     nodes: buildNodes(ctx, process),
     data: buildData(doc, process),
@@ -534,9 +603,16 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
       source: idOf(source),
       name: nameOf(f),
       condition: bodyOf(peek<El>(f, 'conditionExpression')),
+      conditionResource: resourceOf(peek<El>(f, 'conditionExpression'))?.value,
       default: source && peek<El>(source, 'default') === f ? true : undefined,
     });
   });
+  const nested: Partial<Record<NestedSlot, NestedDetail>> = {};
+  for (const slot of slotsOf(el)) {
+    const n = nestedElement(el, slot);
+    if (!n) continue;
+    nested[slot] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: listExtensions(n) });
+  }
   const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(idOf) : [];
   const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(idOf) : [];
   const listed = listExtensions(el);
@@ -558,12 +634,18 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
     children: children.length ? children : undefined,
     extensions,
     attrs: vendorAttrs(el),
+    nested: Object.keys(nested).length ? nested : undefined,
   });
 }
 
 /* ------------------------------------------------------------------ */
 /* search                                                               */
 /* ------------------------------------------------------------------ */
+
+/** Nested elements `find` lists by id (only for a non-empty text: modeler files give every event definition an id). */
+function isNestedSearchable(el: El): boolean {
+  return is(el, 'bpmn:EventDefinition') || is(el, 'bpmn:LoopCharacteristics');
+}
 
 /** Element types `find` looks at (what the AI can address by id). */
 function isSearchable(el: El): boolean {
@@ -607,18 +689,59 @@ function kindFilter(kind: string): (el: El) => boolean {
  * plus `sequenceFlow`, `messageFlow`, `lane`, `participant`, ... An empty
  * `text` lists every element (of the kind).
  */
-export function findElements(doc: Doc, text: string, kind?: string): Array<{ id: string; kind: string; name?: string; scope?: string }> {
+/** A find hit; `match` says which vendor value matched when neither the id nor the name did. */
+export interface FindHit {
+  id: string;
+  kind: string;
+  name?: string;
+  scope?: string;
+  match?: string;
+}
+
+/** The first vendor value of `el` containing `q`: an attribute (also of a nested element) or an extension element attribute / body. */
+function vendorMatch(el: El, q: string): string | undefined {
+  for (const [k, v] of Object.entries(vendorValues(el) ?? {})) if (v.toLowerCase().includes(q)) return `${k}=${v}`;
+  const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
+    for (const e of exts ?? []) {
+      for (const [k, v] of Object.entries(e.attrs ?? {})) if (String(v).toLowerCase().includes(q)) return `${path}${e.type} ${k}=${v}`;
+      if (e.body && e.body.toLowerCase().includes(q)) return `${path}${e.type} ${truncateText(e.body, 60)}`;
+      const hit = visit(e.children as ExtensionInfo[] | undefined, path);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const own = visit(listExtensions(el), '');
+  if (own) return own;
+  for (const slot of slotsOf(el)) {
+    const nested = nestedElement(el, slot);
+    const hit = nested ? visit(listExtensions(nested), `${slot}.`) : undefined;
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function truncateText(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 3)}...` : flat;
+}
+
+export function findElements(doc: Doc, text: string, kind?: string): FindHit[] {
   const q = text.trim().toLowerCase();
   const filter = kind ? kindFilter(kind) : undefined;
-  const out: Array<{ id: string; kind: string; name?: string; scope?: string }> = [];
+  const out: FindHit[] = [];
   for (const el of walk(doc.definitions)) {
-    if (!isSearchable(el)) continue;
+    const nested = !isSearchable(el) && !!q && isNestedSearchable(el);
+    if (!isSearchable(el) && !nested) continue;
     const id = peek<string>(el, 'id');
     if (!id) continue;
     const name = nameOf(el) ?? (is(el, 'bpmn:TextAnnotation') ? peek<string>(el, 'text') : undefined);
-    if (q && !id.toLowerCase().includes(q) && !(name ?? '').toLowerCase().includes(q)) continue;
+    let match: string | undefined;
+    if (q && !id.toLowerCase().includes(q) && !(name ?? '').toLowerCase().includes(q)) {
+      match = nested ? undefined : vendorMatch(el, q);
+      if (!match) continue;
+    }
     if (filter && !filter(el)) continue;
-    out.push(compact({ id, kind: labelOf(el), name, scope: is(el, 'bpmn:Process') ? undefined : doc.scopeOf(el)?.get<string>('id') }));
+    out.push(compact<FindHit>({ id, kind: labelOf(el), name, scope: is(el, 'bpmn:Process') ? undefined : doc.scopeOf(el)?.get<string>('id'), match }));
   }
   return out;
 }

@@ -45,6 +45,7 @@
   "dependencies": {
     "bpmn-auto-layout": "2.0.0-alpha.2",
     "bpmn-moddle": "^10.2.0",
+    "camunda-bpmn-moddle": "8.0.1",
     "commander": "^15.0.0"
   },
   "devDependencies": {

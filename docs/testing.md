@@ -1,6 +1,7 @@
 # Testing bpmn-cli
 
-Five layers, from fast to thorough:
+Five layers, from fast to thorough (plus the opt-in Camunda 7 engine check,
+see [Engine checks](#engine-checks-camunda-7)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -229,6 +230,35 @@ defects, hard defects added or global hard counts increased. Only hard kinds
 known to both runs are compared, so a newly added metric kind is not a
 regression of the code. With `--engine`, set `BASELINE_BIN` so that both runs
 draw the engine corpus with the same CLI.
+
+## Engine checks (Camunda 7)
+
+The Camunda 7 profile of `bpmn validate` (`src/platform/c7.ts`) states for
+every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
+model per rule (82 models) with the expected codes and the engine verdict;
+by default it checks only the profile. To re-check the verdicts against live
+engines (REST, no authentication), list their REST roots:
+
+```
+BPMN_C7_ENGINES=http://localhost:8080/engine-rest[,http://host:port/engine-rest ...] npx vitest run test/c7-profile.test.ts
+```
+
+Each model is deployed to every listed engine, the test asserts the engine's
+verdict and that a deploy-severity finding (`W_C7_DEPLOY_*`) is reported
+exactly for the refused ones, and every deployment is deleted again. The
+verdicts were identical on Camunda 7.24.0, CIB seven 2.2.0 and Operaton 2.1.5
+(341 tests with three engines).
+
+The other C7 regression tests (`test/c7-semantic.test.ts`,
+`test/c7-ext-structure.test.ts`, `test/c7-integration.test.ts`) run without
+engines; their engine evidence (deploy and run the CLI-built models, real
+customer files before and after edits) was collected outside the repository,
+see [audit-2026-10.md](audit-2026-10.md#camunda-7-audit-2026-10-09). When you
+change how vendor content is written, build a small model with the CLI, deploy
+it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
+complete, correlate), and run the real-file battery on your private corpus:
+deploy every file before and after each edit and compare the camunda content
+element by element.
 
 ## Private corpora
 

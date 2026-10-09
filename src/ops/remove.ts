@@ -22,7 +22,12 @@
  *    predecessor and successor are the same non-activity (a self-loop
  *    `connect` would refuse; activities may loop to themselves); a condition
  *    carried onto the predecessor's default flow is dropped instead
- *    (W_CONDITION_DROPPED), a default flow has no condition.
+ *    (W_CONDITION_DROPPED), a default flow has no condition. A bridge from an
+ *    event-based gateway to a target the engines reject (not a message /
+ *    timer / signal / conditional catch event, a catch event with another
+ *    incoming flow, a second branch waiting for the same message or signal)
+ *    fails with E_INVALID_BRIDGE (eventGatewayTargetProblem in flows.ts),
+ *    unless the successor is removed by the same command.
  *
  * The cascade is reference-driven: after an element (and its containment
  * subtree) is detached, every remaining reference to any of those elements
@@ -34,7 +39,7 @@ import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { detachNode, flowChange, removeSequenceFlow } from './flows.js';
+import { detachNode, eventGatewayTargetProblem, flowChange, removeSequenceFlow } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
 import type { RemoveOp } from './types.js';
 
@@ -43,6 +48,7 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
   const cs = new ChangeSet();
   if (!op.ids?.length) throw usageError('remove needs at least one element id');
   const bridge = op.bridge ?? true;
+  const removing = new Set(op.ids);
   const gone = new Set<string>();
   for (const id of op.ids) {
     if (gone.has(id)) {
@@ -61,7 +67,7 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
     if (is(el, 'bpmn:Definitions')) {
       throw modelError('E_INVALID_REMOVE', 'The definitions element cannot be removed', { element: id, hint: 'Delete the file instead.' });
     }
-    if (is(el, 'bpmn:FlowNode')) detachWithBridge(doc, el, bridge, cs);
+    if (is(el, 'bpmn:FlowNode')) detachWithBridge(doc, el, bridge, cs, removing);
     cascadeRemove(doc, el, cs);
     for (const r of cs.removed) gone.add(r.id);
   }
@@ -81,7 +87,7 @@ export function canLoopToItself(node: El): boolean {
  * predecessor's default flow is dropped again with W_CONDITION_DROPPED (a
  * default flow has no condition).
  */
-export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): void {
+export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): void {
   const incoming = doc.incoming(node);
   const outgoing = doc.outgoing(node);
   if (!bridge || incoming.length !== 1 || outgoing.length !== 1) {
@@ -97,6 +103,7 @@ export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: Change
     if (predecessor !== node) cs.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
     return;
   }
+  assertBridgeAllowed(doc, node, inFlow, outFlow, removing, command);
   const outCond = outFlow.get<El | undefined>('conditionExpression');
   const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
   const inHadCondition = !!inFlow.get<El | undefined>('conditionExpression');
@@ -111,6 +118,33 @@ export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: Change
       hint: `A default flow has no condition; use \`bpmn set ${idOf(inFlow)} condition=...\` if the condition should replace the default marker.`,
     });
   }
+}
+
+/** The command that detaches (its hint differs: `move` has no --no-bridge). */
+export type BridgeCommand = 'remove' | 'move';
+
+/**
+ * Refuses a bridge that would give an event-based gateway a target the
+ * engines reject (eventGatewayTargetProblem): E_INVALID_BRIDGE. A successor
+ * that the same command removes as well is not checked (its own removal
+ * decides). `via` names what is bridged (the node, or a moved group).
+ */
+export function assertBridgeAllowed(doc: Doc, node: El, inFlow: El, outFlow: El, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove', via: string = idOf(node)): void {
+  const predecessor = inFlow.get<El>('sourceRef');
+  const successor = outFlow.get<El>('targetRef');
+  if (!is(predecessor, 'bpmn:EventBasedGateway') || successor === node) return;
+  if (removing?.has(idOf(successor))) return;
+  const problem = eventGatewayTargetProblem(doc, predecessor, successor, [outFlow, inFlow]);
+  if (!problem) return;
+  const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${idOf(successor)} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${idOf(outFlow)} --timer PT1H\`)`;
+  throw modelError('E_INVALID_BRIDGE', `${command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${idOf(predecessor)} to ${idOf(successor)}, which the engines reject: ${problem}`, {
+    element: idOf(node),
+    related: [idOf(predecessor), idOf(successor)],
+    hint:
+      command === 'move'
+        ? `A move always bridges its old place: ${catchFirst}, or take ${via} out without a bridge (\`bpmn remove <file> ${via.split(', ').join(' ')} --no-bridge\`) and add it again at the new place.`
+        : `Remove without bridging (\`bpmn remove <file> ${idOf(node)} --no-bridge\`; the gateway loses that branch) and wire the gateway yourself, or ${catchFirst}, or remove ${idOf(successor)} in the same command.`,
+  });
 }
 
 /* ------------------------------------------------------------------ */

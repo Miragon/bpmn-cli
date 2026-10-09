@@ -1,4 +1,4 @@
-export { Doc } from './document.js';
+export { Doc, TARGETS, type NewDocOptions } from './document.js';
 export { CliError, type Warning } from './errors.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './kinds.js';
 export { layoutModel, layoutXml } from './layout.js';
@@ -26,7 +26,11 @@ export type {
 } from './ops/types.js';
 export { mutateFile, mutateDoc, checkFile, loadDoc, LAYOUT_MODES, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
 export { ChangeSet } from './result.js';
-export { validateDoc } from './validate.js';
+export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';
+/* the platform profile (Camunda 7 rules; validate --platform) */
+export { runProfile, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profile.js';
+export { detectPlatform } from './platform/detect.js';
+export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 export { buildView, elementDetail, findElements } from './view.js';
 export { parseOps, OPS_SCHEMA } from './batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */

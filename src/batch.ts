@@ -88,7 +88,7 @@ export const FLOW_FIELDS: FieldsOf<FlowOptions> = {
 export const TRIGGER_FIELDS: FieldsOf<TriggerOptions> = {
   timer: str('ISO 8601 timer: "R/PT1H" (cycle), "PT5M" (duration) or "2026-01-31T09:00:00Z" (date); classified automatically.'),
   timerKind: str('Override the automatic timer classification.', { values: ['cycle', 'duration', 'date'] }),
-  message: str('Name of the bpmn:Message (created at root level when missing).'),
+  message: str('Name of the bpmn:Message (created at root level when missing); message events and send / receive tasks.'),
   error: str('Name of the bpmn:Error (created at root level when missing).'),
   errorCode: str('errorCode of the bpmn:Error.'),
   signal: str('Name of the bpmn:Signal (created at root level when missing).'),
@@ -182,12 +182,13 @@ export const ORDER_FIELDS: FieldsOf<OrderOp> = {
 export const EXT_FIELDS: FieldsOf<ExtOp> = {
   id: ref('Element id.', { required: true }),
   action: str('What to do with the extension elements.', { required: true, values: ['add', 'remove'] }),
-  type: str('Prefixed element type, e.g. "zeebe:taskDefinition" (add: what to create; remove: every element of that type).'),
+  type: str('Prefixed element type or path (add: what to create, e.g. "zeebe:taskDefinition", "camunda:inputParameter" (filed into its container) or "camunda:connector/camunda:inputParameter"; remove: a selector such as "camunda:inputParameter[name=x]", every element of a bare type). A "definition." / "loop." / "condition." prefix addresses the nested element.'),
   attrs: map('add: attributes of the new element.'),
   body: str('add: text content of the new element.'),
   xml: str('add: raw XML snippet (may contain nested elements), parsed and appended instead of type/attrs/body.'),
   replace: bool('add: replace existing elements of the same type first.'),
   index: { type: 'integer', description: 'remove: index within extensionElements (alternative to type; see `ext list`).' },
+  slot: str('A nested element of id instead of the element itself: the event definition, the loop characteristics or the condition expression (same as a "definition." / "loop." / "condition." prefix of type, e.g. "loop.camunda:failedJobRetryTimeCycle").', { values: ['definition', 'loop', 'condition'] }),
 };
 
 export const SPLIT_FIELDS: FieldsOf<SplitOp> = {
@@ -543,7 +544,9 @@ function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string
   if (expectFamily && family !== expectFamily) {
     throw fail(ctx, `"kind" must be a ${expectFamily} kind, "${kind}" is a ${family}`, expectFamily === 'gateway' ? 'Use exclusiveGateway, parallelGateway, inclusiveGateway or eventBasedGateway.' : undefined);
   }
-  const triggers = presentKeys(obj, TRIGGER_KEYS);
+  // send and receive tasks reference a message too (`add sendTask --message X`, ops/add.ts)
+  const messageTask = ['sendTask', 'receiveTask'].includes(parseKind(kind).def.kind);
+  const triggers = presentKeys(obj, TRIGGER_KEYS).filter((k) => !(messageTask && k === 'message'));
   if (triggers.length && family !== 'event') {
     throw fail(ctx, `${triggers.map((k) => `"${k}"`).join(', ')} only apply to events, but "${kind}" is a ${family}`, 'Use an event kind such as startEvent:timer or boundaryEvent:message, or drop the trigger options.');
   }
