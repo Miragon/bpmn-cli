@@ -39,6 +39,7 @@
     "bench": "node tools/bench/run.mjs",
     "bench:summary": "node tools/bench/summary.mjs",
     "fuzz": "node tools/fuzz/run.mjs",
+    "roundtrip": "node tools/roundtrip.mjs",
     "gate": "npm run build && vitest run && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build"
   },

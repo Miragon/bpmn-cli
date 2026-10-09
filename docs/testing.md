@@ -1,6 +1,6 @@
 # Testing bpmn-cli
 
-Five layers, from fast to thorough (plus the opt-in Camunda 7 engine check,
+Six layers, from fast to thorough (plus the opt-in Camunda 7 engine check,
 see [Engine checks](#engine-checks-camunda-7)):
 
 | layer | what it catches | command | time |
@@ -10,6 +10,7 @@ see [Engine checks](#engine-checks-camunda-7)):
 | layout regression | quality of the clean full-layout engine on tools/scenarios | `npm run layout:regress` | ~20 s |
 | fuzzer | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s – hours |
 | benchmark | stability, quality, hard defects and semantic success of six typical edits, against a baseline | `npm run bench` | ~30 s per arm on the scenarios |
+| roundtrip | how much of a file a no-op, a rename and an insert rewrite (byte-identical no-ops, changed lines, the replaced text region) | `npm run roundtrip` | ~10 s on the scenarios |
 
 `npm run gate` runs the build, all unit tests (including the property test),
 the layout-regression budget and a short fuzz campaign (12 walks of 15 steps).
@@ -230,6 +231,43 @@ defects, hard defects added or global hard counts increased. Only hard kinds
 known to both runs are compared, so a newly added metric kind is not a
 regression of the code. With `--engine`, set `BASELINE_BIN` so that both runs
 draw the engine corpus with the same CLI.
+
+## Roundtrip fidelity
+
+A write changes the text of the elements it changed and nothing else
+(src/preserve.ts, src/mirror.ts; README "What a write changes"). Two checks
+keep it that way:
+
+- `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
+  fixtures in `test/fixtures/roundtrip/` (prolog, comments, CDATA, vendor
+  attributes before typed ones, four-space indentation, `/>` without a
+  space, a file without incoming / outgoing lists) with exact expected
+  texts for a no-op, a rename, an insert, a condition, a retype, a removed
+  element with a comment and a new namespace; and every fixture and
+  scenario of the repository: a no-op is `unchanged`, a rename changes one
+  line.
+- `tools/roundtrip.mjs` measures a corpus in-process (dry runs, nothing is
+  written): per file a no-op (`set <first named activity> name=<its
+  name>`, layout auto and `--no-layout`), a rename (`--no-layout` and
+  auto) and an insert after the first task with one outgoing flow. It
+  prints the byte-identical no-ops (the others with their cause), the
+  changed lines, and the share of the file that a host replacing one text
+  region per save (design-iq's Y.Text `diffRegion`) rewrites, plus the
+  notes about fall-backs and dropped comments.
+
+```
+npm run build
+npm run roundtrip                                   # tools/scenarios + test/fixtures
+node tools/roundtrip.mjs ~/corpora/hand --list      # a private corpus; --list names the non-identical no-ops
+node tools/roundtrip.mjs --baseline <old>/dist/index.js ~/corpora/hand   # against another build
+```
+
+A no-op that is not byte-identical in layout auto comes from the layout,
+not from the writer: a file without a diagram is drawn, and the incremental
+layout completes missing DI (an edge, a shape, the plane's `bpmnElement`).
+With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
+above zero means preserve.ts could not keep a file's text (the note says
+why) and deserves a synthetic fixture.
 
 ## Engine checks (Camunda 7)
 
