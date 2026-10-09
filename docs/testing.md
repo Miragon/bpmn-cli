@@ -1,7 +1,8 @@
 # Testing bpmn-cli
 
-Five layers, from fast to thorough (plus the opt-in Camunda 7 engine check,
-see [Engine checks](#engine-checks-camunda-7)):
+Five layers, from fast to thorough (plus the isomorphism check of the
+browser-safe core, see [Isomorphism check](#isomorphism-check), and the
+opt-in Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -12,7 +13,8 @@ see [Engine checks](#engine-checks-camunda-7)):
 | benchmark | stability, quality, hard defects and semantic success of six typical edits, against a baseline | `npm run bench` | ~30 s per arm on the scenarios |
 
 `npm run gate` runs the build, all unit tests (including the property test),
-the layout-regression budget and a short fuzz campaign (12 walks of 15 steps).
+the isomorphism check, the layout-regression budget and a short fuzz campaign
+(12 walks of 15 steps).
 Run it before every change you hand over; it exits non-zero on the first
 failing stage. The gate's fuzz campaign is strict on the robustness invariants
 and reports new hard layout defects as warnings (`--hard warn`): while layout
@@ -100,6 +102,44 @@ nondeterministic bytes, a crash) and checks that the oracles notice them.
 Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
+
+## Isomorphism check
+
+The package's main entry (`src/index.ts`, published as `@miragon/bpmn-cli`)
+must run in a browser; only `src/node/` (`@miragon/bpmn-cli/node`) and
+`src/cli.ts` may touch files, `process` or other Node builtins.
+
+```
+npm run build && npm run check:iso     # node tools/iso/check.mjs [--json]
+npx vitest run test/isomorphic.test.ts
+```
+
+- `tools/iso/check.mjs` (part of the gate) bundles `dist/index.js` with
+  esbuild for `platform=browser` and fails on an import of a Node builtin or a
+  free reference to `process`, `Buffer`, `global`, `require`, `__dirname`,
+  `__filename`, `setImmediate` / `clearImmediate`, naming the module
+  (`tools/iso/bundle.mjs`: the globals are replaced through esbuild's `define`,
+  which leaves local variables and properties of that name alone). It also
+  fails when the bundle contains `dist/node/` or `dist/cli.js`, when the
+  package `exports` do not resolve, or when a strict TypeScript consumer
+  (`skipLibCheck: false`, no `@types/node`, lib ES2022) of both entries does
+  not compile. It prints the minified and gzipped sizes, split like a host's
+  bundler would split them.
+- `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
+  needed), checks that the check sees a planted `node:fs` import and
+  `process` read, and runs the bundle in a `vm` context without any Node
+  global: `applyToXml`, `layoutXml` (both engines), `newXml`, `validateXml`
+  with the Camunda 7 profile, `showXml`, `findXml` and `metricsXml` must give
+  there exactly what they give in Node. It also checks that the inlined
+  Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
+  installed `camunda-bpmn-moddle`; regenerate it with
+  `node tools/gen-camunda-descriptor.mjs`.
+- `test/api.test.ts` checks that the in-memory API gives what the CLI writes
+  and prints for the same input.
+
+When the check fails, move the Node-only code into `src/node/` (or behind an
+option, like the layout debug lines: `setLayoutDebug`, which the CLI maps to
+`BPMN_LAYOUT_DEBUG`).
 
 ## Layout regression
 
