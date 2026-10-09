@@ -22,8 +22,10 @@
  * (src/report.ts) gives the CLI's text for it. The CLI's guards apply: a
  * lossy import (E_IMPORT_LOSSY), validation errors the ops would introduce
  * (E_VALIDATION) and content a retype would delete (E_WOULD_DROP_CONTENT)
- * are refused unless `force`; the layout modes, the format ops and the
- * platform profile's new findings work as in the CLI.
+ * are refused unless `force`; the layout modes, the format ops, the
+ * platform profile's new findings and the validators (the design profile,
+ * a host's own: `validators`) work as in the CLI. The result keeps the
+ * input's text wherever the ops changed nothing (the text-preserving step).
  *
  * Errors are CliError instances (code, category, details with element,
  * candidates, hint, op), exactly what the CLI prints with --json; the input
@@ -42,7 +44,9 @@ import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline.js';
 import type { PlatformChoice } from './platform/profile.js';
+import type { ContentRepo, ProfileChoice } from './platform/repo.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report.js';
+import type { Validator } from './validators.js';
 import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './view.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
@@ -55,6 +59,17 @@ export interface EditOptions {
   force?: boolean;
   /** platform profile whose new findings are reported: 'auto' (default), 'c7', 'c8', 'none' */
   platform?: PlatformChoice;
+  /**
+   * validation profile (`--profile`): 'auto' (default) runs the design profile
+   * (design-iq's save gate) when `contentRepo` is given, 'design' always, 'none' never
+   */
+  profile?: ProfileChoice;
+  /** the design-iq content repository the document is a model of (its process / decision ids for the link checks) */
+  contentRepo?: ContentRepo;
+  /** validators run on the candidate XML inside the transaction: errors a change introduces refuse it (E_VALIDATION) */
+  validators?: Validator[];
+  /** the document's file name, for the validators (`ctx.file`) and the design profile (its own process id) */
+  file?: string;
   /** include the model view of the result (`--show`) */
   show?: boolean;
   /** receives the layout engines' diagnostic lines of this call (what BPMN_LAYOUT_DEBUG prints) */
@@ -134,9 +149,25 @@ export async function layoutXml(xml: string, opts: LayoutXmlOptions = {}): Promi
   return toEditResult(xml, await layoutDoc(doc, opts));
 }
 
-/** `bpmn validate --json`: structure, lint, the platform profile and a layout dry run. `ok` is false on errors. */
-export async function validateXml(xml: string, opts: { platform?: PlatformChoice; debug?: DebugSink } = {}): Promise<ValidationReport> {
-  return validationReport(await checkDoc(await Doc.fromXml(xml), opts));
+/** Options of validateXml (`bpmn validate`). */
+export interface ValidateXmlOptions {
+  /** platform profile: 'auto' (default) detects it, 'c7', 'c8', 'none' */
+  platform?: PlatformChoice;
+  /** validation profile: 'auto' (default: design when `contentRepo` is given), 'design', 'none' */
+  profile?: ProfileChoice;
+  /** the design-iq content repository the document is a model of */
+  contentRepo?: ContentRepo;
+  /** further validators; every finding is reported, their errors make `ok` false */
+  validators?: Validator[];
+  /** the document's file name, for the validators */
+  file?: string;
+  /** receives the layout engines' diagnostic lines of this call */
+  debug?: DebugSink;
+}
+
+/** `bpmn validate --json`: structure, lint, the platform profile, the validators and a layout dry run. `ok` is false on errors. */
+export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
+  return validationReport(await checkDoc(await Doc.fromXml(xml, opts.file), opts));
 }
 
 /** What viewXml / showXml show: the model (default, optionally one scope), one element, or the drawing. */

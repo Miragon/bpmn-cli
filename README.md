@@ -48,6 +48,7 @@ with a laid-out diagram.
 - [Placement grammar](#placement-grammar)
 - [Set keys](#set-keys)
 - [Camunda 7](#camunda-7)
+- [design-iq: the design profile and validators](#design-iq-the-design-profile-and-validators)
 - [Ops JSON (`bpmn apply`)](#ops-json-bpmn-apply)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
 - [Quoting](#quoting)
@@ -130,7 +131,9 @@ unchanged. Nothing else.
    errors that the change would introduce block the write (`--force`
    overrides); errors the file already had are reported as
    `W_PREEXISTING_ERROR` and do not block, so a file with an unsupported
-   element (a `complexGateway`) or another old problem stays editable.
+   element (a `complexGateway`) or another old problem stays editable. In a
+   design-iq content repository the same holds for design-iq's save gate
+   (the [design profile](#design-iq-the-design-profile-and-validators)).
 5. **Conventions instead of coordinates.** Sub-processes are expanded by
    default; the default flow (or, without one, the first outgoing flow) is
    the straight continuation and further branches alternate below and above
@@ -207,7 +210,7 @@ bpmn label <file> <id> --side above|below|left|right
 bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]
 bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>]
 bpmn tidy <file> [<id>...]
-bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]
+bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
@@ -233,6 +236,7 @@ always redraws, so it has no layout mode options):
 | `--show` | append the full model view (as `show` prints it) to the result |
 | `--strict` | exit with code 5 when the result has warnings |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
+| `--profile <auto\|design\|none>` | validation profile: `design` checks the result against design-iq's save gate and refuses a change that introduces an `E_DESIGN_*` error; `auto` (default) runs it for the models of a design-iq content repository (a `bpmiq.yml` above the file), see [design-iq](#design-iq-the-design-profile-and-validators) |
 
 ### `new`
 
@@ -266,7 +270,9 @@ the validation findings (`problems: none` when there are none). Vendor
 attributes appear with their values next to the properties, nested ones under
 their `set` keys, and repeated extension types are counted:
 `userTask Activity_Review "Review" [loop=parallel, camunda:assignee=demo,
-loop.camunda:collection=${items}, ext: camunda:taskListener x3]`. The process
+loop.camunda:collection=${items}, ext: camunda:taskListener x3]`; a business
+rule task shows its decision link as `calledDecision=<id>` whatever the
+spelling (see [`set`](#set)). The process
 line carries the process's own (`process P "P" executable
 [camunda:historyTimeToLive=180, ext: camunda:executionListener]`); flows show
 `language=`, their vendor attributes and extensions, and a script resource
@@ -386,8 +392,27 @@ dropped. `definition.activityRef` of a compensation event must name an
 activity of the event's own (sub-)process (from an event sub-process also one
 of the scope around it), else `E_CROSS_SCOPE`: the engines refuse anything
 else. An attribute without prefix that BPMN does not define (a hand-edited
-`calledDecision="..."`, which the engines refuse) is removed with `<attr>=`
+`assignee="..."`, which the engines refuse) is removed with `<attr>=`
 (also `definition.<attr>=`); it cannot be set.
+
+`calledDecision=<decision>` links a business rule task to the DMN decision
+it calls, in the spelling of the file's platform: an unprefixed
+`calledDecision="<decision>"` in a design model (no engine namespace, what
+Miragon's design-iq writes, its hard rule 5), `camunda:decisionRef` in a
+Camunda 7 file (`operaton:decisionRef` in an Operaton-only one) and a
+`zeebe:calledDecision decisionId` extension element in a Camunda 8 file (an
+existing `resultVariable` is kept; without one `W_DECISION_RESULT_VARIABLE`
+says Camunda 8 needs it). The other spellings are removed (also a
+hand-written unprefixed `calledElement`), so a task never carries two links;
+the change line names what was removed. An empty value removes the link in
+every spelling. In a Camunda 7 or 8 file the unprefixed attribute is never
+written (the engines validate the file against the BPMN schema and refuse
+it): `set <id> calledDecision=<d>` there converts a hand-written one into the
+engine's spelling, which is the fix the `W_C7_DEPLOY_SCHEMA` finding names.
+`show`, `show <id>` and `find` read every spelling (`calledDecision=risk` on
+the node line, also `match` in `find`). On another element the key is
+`E_UNKNOWN_KEY` (an unprefixed `calledDecision` there is still removed with
+`calledDecision=`).
 
 Conditions are changed in place: `condition=` keeps the expression's id and
 vendor attributes. An inline body replacing a script resource drops
@@ -635,7 +660,20 @@ definition the engines ignore). Every write runs the
 profile before and after and reports only the findings the change introduced
 (JSON `validation.platform` with `added`, `resolved` and the totals in
 `counts`), so a file's old problems are not repeated on every write; `bpmn
-show` does not run it. `layout` redraws the whole diagram from the
+show` does not run it.
+
+`--profile auto|design|none` selects the validation profile, independent of
+the platform: `design` checks the file against design-iq's save gate (see
+[design-iq](#design-iq-the-design-profile-and-validators)); its errors
+(`E_DESIGN_*`) are errors of `validate` (exit 2), its warnings
+(`W_DESIGN_*`) warnings, each line tagged `[design]`, followed by a
+`validator design (<why it ran>): n error(s), m warning(s) in the file`
+line. `auto` (the default) runs it for the models of a design-iq content
+repository; `--json` adds `"profile": {"profile", "source", "detail"}` and
+`"validators": [{"name", "detail", "errors", "warnings", "counts"}]`. The
+validators read the file's own diagram (before the layout dry run).
+
+`layout` redraws the whole diagram from the
 model (a hand layout is replaced, colours and DI ids survive); `--expand` /
 `--collapse` change which sub-processes are drawn expanded. `layout --tidy`
 keeps the drawing instead and only removes overlaps (= `bpmn tidy`).
@@ -664,7 +702,8 @@ problems it added and resolved.
 
 `kinds` prints the kind table, trigger options, set keys, placement grammar
 and the error catalogue; `kinds --json` adds the JSON Schema of the ops
-format (`ops`), the example (`opsExample`) and the exit codes. `guide` is the
+format (`ops`), the example (`opsExample`), the validation profiles
+(`profiles`) and the exit codes. `guide` is the
 cheat sheet for agents.
 
 ## Layout modes
@@ -859,6 +898,7 @@ are:
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow of a gateway / activity, the node-side twin of `set <flowId> default=true`; empty clears it) |
 | text annotations | `text` |
 | send / receive tasks | `message=<name>`: the root `bpmn:Message` found by id or name, created when missing; empty removes the reference |
+| business rule tasks | `calledDecision=<decision>`: the decision link in the file's spelling (design model: `calledDecision`, Camunda 7: `camunda:decisionRef`, Camunda 8: `zeebe:calledDecision`); the other spellings are removed, empty removes the link |
 | events | `definition.<key>`: attribute of the event definition, e.g. `definition.camunda:errorCodeVariable=errCode definition.camunda:errorMessageVariable=errMsg` (error), `definition.camunda:type=external definition.camunda:topic=notify` (message throw / end event; also `class`, `delegateExpression`, `expression`, `resultVariable`), `definition.camunda:variableName=amount definition.camunda:variableEvents=create,update` (conditional), `definition.camunda:escalationCodeVariable=code` (escalation), `definition.camunda:async=true` (signal); one of several event definitions: `'definition[1].<key>=...'` (0-based) or `'definition[timer].<key>=...'` |
 | activities | `loop.<key>`: attribute of the loop characteristics, e.g. `'loop.camunda:collection=${items}' loop.camunda:elementVariable=item loop.camunda:asyncBefore=true` (a parallel multi-instance loop is created when none exists), `loop.isSequential=true`, `loop.loopMaximum=5` |
 | sequence flows, conditional events | `condition.<key>`: attribute of the condition expression, e.g. `condition.camunda:resource=deployment://check.groovy language=groovy` (a script resource condition, no body; on a conditional event `condition.language=groovy`) |
@@ -964,7 +1004,9 @@ sub-process, a sub-process without start event, a connected ad-hoc
 sub-process, a link throw without its catch, two subscriptions to one message
 or signal in one engine scope, a compensation `activityRef` outside the
 throw event's scope, an attribute BPMN does not define (`W_C7_DEPLOY_SCHEMA`:
-the engines validate the whole file against the schema), ...), what they
+the engines validate the whole file against the schema; design-iq's
+unprefixed `calledDecision` on a business rule task is converted to
+`camunda:decisionRef` by `set <id> calledDecision=<decision>`), ...), what they
 silently ignore or fail on at run time (unknown or misplaced attributes and
 elements, settings on the wrong side of an event definition such as
 `camunda:topic` on a message catch event, `asyncBefore=yes`, a dangling error
@@ -1051,6 +1093,126 @@ the form refuses a submit without `approved`, the child process receives
 created per entry of `parties`, assigned to it. (`Mapping_NotCovered` follows
 a rename of `Error_NotCovered`: `bpmn set claim.bpmn Error_NotCovered
 id=Error_Rejected` re-points it.)
+
+## design-iq: the design profile and validators
+
+Miragon's design-iq validates every save of a model with its own validator
+(`@bpmiq/validator`) and refuses a model with an error (HTTP 422). Two
+things make bpmn-cli predictable there: the **design profile**, a built-in
+copy of those rules, and a **validator hook** through which an embedding
+host runs its own validator inside the write transaction.
+
+**The design profile** (`--profile design`, `MutationOptions.profile`)
+checks the result of every write, after the layout and the format
+operations, i.e. exactly what would be written. Its rules are design-iq's
+hard rules, checked the way design-iq checks them:
+
+| code | rule |
+| --- | --- |
+| `E_DESIGN_START_EVENTS` | a process with flow nodes has exactly one start event; an embedded sub-process (not an event sub-process) at most one. No start event is reported on the process, several on each start event (so a change that adds another one always counts as new) |
+| `E_DESIGN_UNREACHABLE` | every flow node except start events, boundary events and event sub-processes has an incoming sequence flow |
+| `E_DESIGN_DEAD_END` | every flow node except end events and event sub-processes (boundary events included) has an outgoing sequence flow |
+| `E_DESIGN_NOT_IN_LANE` | in a process with lanes every node except boundary events is listed by a top-level lane |
+| `E_DESIGN_NO_DI` | every flow node, sequence flow, data object / store reference, text annotation, association, group, top-level lane, participant and message flow has a shape or edge (design-iq's editor breaks without it) |
+| `E_DESIGN_NAMESPACE` | every namespace prefix the file uses is declared |
+| `E_DESIGN_NO_PROCESS` | the file has a process |
+| `W_DESIGN_COMPLEXITY` | warning: more than 9 activities in the file (7 +- 2) |
+| `W_DESIGN_CALL_LINK` / `W_DESIGN_DECISION_LINK` | warnings: a call activity / business rule task of a design model links no process / decision; inside a content repository, a link to a process / decision that is no `.bpmn` / `.dmn` of its models folder |
+
+The flow rules are degree checks, as in design-iq, not a reachability
+analysis, and they hold for every node: a compensation handler, a
+compensation boundary event, link events and the content of an ad-hoc
+sub-process are valid BPMN but design-iq errors (the messages say so). What
+the structural validation already refuses (a start event with incoming flows,
+dangling references) is not repeated.
+
+On a write the profile behaves like the structural validation: an error the
+change introduces refuses the write (`E_VALIDATION`, each finding tagged
+`[design]`), an error the file already had is a `W_PREEXISTING_ERROR`
+warning (it follows its element through a rename), a warning the change
+introduced is reported once, and the result names the validator and the
+totals:
+
+```
+$ bpmn add claims/models/claim.bpmn boundary:timer "2 days" --on Activity_Review --timer PT2D
+error E_VALIDATION: The change would introduce 1 error(s) reported by validator design; nothing was written
+  [design] E_DESIGN_DEAD_END Event_2Days: boundaryEvent:timer Event_2Days "2 days" has no outgoing sequence flow  (Continue the flow ...)
+  hint: Fix the listed problems (each names its validator in brackets), make the edit in one transaction ...
+$ bpmn apply claims/models/claim.bpmn ops.json      # the boundary event and its end event in one batch
+created boundaryEvent:timer Event_2Days "2 days" - on Activity_Review
+created endEvent Event_Escalated "Escalated" - after Event_2Days
+...
+validator design (bpmiq.yml in /work/claims: a design-iq content repository): 0 error(s), 0 warning(s) in the result
+layout: ok - ...
+written: claims/models/claim.bpmn
+```
+
+Edits that pass through an invalid state (a boundary event before its path,
+a node before its flows) go into one `apply` batch; `--profile none` drafts
+without the gate, and `bpmn validate --profile design` lists what is left. A
+`--no-layout` write leaves new elements without shapes, which the profile
+refuses (`E_DESIGN_NO_DI`).
+
+**When it runs.** `--profile auto` (the default) runs the design profile
+for the models of a design-iq content repository: a `bpmiq.yml` in the
+file's directory or above names (`models: <folder>`, legacy `processes:`) a
+folder that contains the file. There the call and decision links are also
+checked against the file stems of the repository's `.bpmn` and `.dmn` files
+(design-iq's id rule). Any other file gets no profile by default, also a file
+without engine namespace (what design-iq's PR #218 tool calls a "design"
+model and bpmn-cli's platform detector `none`; the two detectors agree on all
+394 real models measured): the profile refuses every intermediate state of a
+model built step by step (`add start` alone leaves a dead end), which is right
+for design-iq's save gate and wrong for plain BPMN editing. `--profile design`
+applies it anywhere, `--profile none` switches it off.
+
+**Decision links.** A business rule task's decision link is the set key
+`calledDecision` in every file (see [`set`](#set)): design models get
+design-iq's unprefixed `calledDecision`, Camunda 7 files `camunda:decisionRef`,
+Camunda 8 files `zeebe:calledDecision`. In a design model the unprefixed
+attribute is not reported as an import warning.
+
+**Measured** on 394 real models (private corpora; design-iq's validator
+crashes on one of them, a file with a DOCTYPE): the design profile's verdict
+equals design-iq's on all 393 others (65 refused, 328 accepted), and every
+one of the 540 findings matches by rule and element. bpmn-cli's own
+structural validation refuses 2 of the 328 files design-iq accepts (a plain
+start event in an event sub-process, a contradicting incoming / outgoing
+list). In 2,231 probe edits through the gate (an insert into a flow, a
+rename, a loose task, a boundary event with and without its path, a second
+start event), every write the gate let through was accepted by design-iq and
+every refused one would have added a design-iq error.
+
+**The validator hook** (library). `MutationOptions.validators` takes
+functions `(xml, ctx) => findings` (sync or async) or `{ name, validate }`
+objects; `checkFile(file, { validators })` takes the same. A mutation runs
+each one on the document before the ops and on the candidate XML after the
+layout, inside the transaction, with `ctx = { file, phase: 'before' |
+'after' | 'check', platform, ops, doc() }`. A finding is `{ severity:
+'error' | 'warning', code, message, element?, related?, hint?, key? }`;
+design-iq's `{ severity: 'ERROR' | 'WARN', ruleId, message }` is accepted as
+it is. Errors the change introduces block the write (`E_VALIDATION`, unless
+`force`), errors the document had before are `W_PREEXISTING_ERROR`, and
+findings are matched before / after by code and element (renames followed)
+or, without an element, by code and message (renamed ids replaced in the
+message); `key` overrides that identity. A validator that throws fails the
+write with `E_VALIDATOR_FAILED`. The reports are in
+`result.validation.validators` (`name`, `detail`, introduced `errors` and
+`warnings`, `preexisting`, `resolved`, `counts`), and the findings among
+`validation.errors` / `validation.warnings` with `validator` and `severity`:
+
+```js
+import { checkModel } from '@bpmiq/validator';
+import { Doc, mutateDoc } from '@miragon/bpmn-cli';
+
+const doc = await Doc.fromXml(xml, 'processes/order.bpmn');
+const result = await mutateDoc(doc, ops, {
+  dryRun: true,
+  profile: 'none', // the host's own validator below is the gate
+  validators: [{ name: 'design-iq', validate: (candidate) => checkModel(candidate, { path: 'processes/order.bpmn' }) ?? [] }],
+});
+// result.xml is what to save; E_VALIDATION (err.details.errors) is the 422
+```
 
 ## Ops JSON (`bpmn apply`)
 
@@ -1141,12 +1303,15 @@ an end event:
 
 Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
-Event_OrderReceived`), then notes (`note: inserted between A and B`),
-warnings (`warning W_CODE element: message  (hint)`), then the layout block,
-then `written: <file>` (`dry run: <file> not written` with `--dry-run`;
-`unchanged: <file> (the result equals the file; nothing written)` when the
-change left the file as it was). With `--show` the model view follows. The
-layout block:
+Event_OrderReceived`), then notes (`note: inserted between A and B`), the
+errors a `--force` write let through (`forced E_CODE element: message`),
+warnings (`warning W_CODE element: message  (hint)`; a validator's finding
+names it: `warning [design] W_DESIGN_COMPLEXITY ...`), one `validator <name>
+(<why it ran>): n error(s), m warning(s) in the result` line per validator
+that ran (the design profile), then the layout block, then `written: <file>`
+(`dry run: <file> not written` with `--dry-run`; `unchanged: <file> (the
+result equals the file; nothing written)` when the change left the file as
+it was). With `--show` the model view follows. The layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
@@ -1184,7 +1349,7 @@ and `resolved:` name them with ids).
       "added": [], "resolved": [{ "kind": "crossings", "ids": ["Flow_3", "Flow_7"] }]
     }
   },
-  "validation": { "errors": [], "warnings": [] },
+  "validation": { "errors": [], "warnings": [], "platform": { "...": "the engine profile" }, "validators": [{ "name": "design", "detail": "...", "errors": [], "warnings": [], "preexisting": [], "resolved": [], "counts": { "errors": 0, "warnings": 0 } }] },
   "importWarnings": [],
   "view": { "...": "only with --show" }
 }
@@ -1194,7 +1359,10 @@ and `resolved:` name them with ids).
 result equals the input file byte for byte, so nothing is written over it
 (`--out <other file>` still writes the copy). `importWarnings` lists what
 bpmn-moddle reported while reading the input file (informational, first line
-of each warning).
+of each warning; a design model's `calledDecision` is not one).
+`validation.validators` is there when a validator ran (the design profile,
+library validators); their findings in `validation.errors` /
+`validation.warnings` carry `"validator"` and `"severity"`.
 
 Errors go to stderr: `error E_CODE: message`, then `  hint: ...` and the
 candidate ids when a reference could not be resolved; with `--json`:
@@ -1729,6 +1897,22 @@ engine rules of the ops, e.g. which event-gateway rule a bridge follows),
 `runProfile`, `detectPlatform`, `PLATFORM_CHOICES` and the types
 `ProfileFinding`, `PlatformSummary`, `Severity`; `listExtensions` /
 `listAllExtensions` (what `ext list` prints).
+
+Validation in the transaction (see
+[design-iq](#design-iq-the-design-profile-and-validators)):
+`MutationOptions.validators` / `CheckOptions.validators` (also `validators`
+of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
+`ValidatorFn`, `NamedValidator`, `ValidatorFinding`, `ValidatorContext`,
+`ValidatorIssue`, `ValidatorReport`; `profile` (`'auto' | 'design' |
+'none'`, `PROFILE_CHOICES`, `resolveProfile`, `ProfileInfo`) and
+`contentRepo` (`ContentRepo`: the design-iq content repository the document
+is a model of, with its `processIds` / `decisionIds` for the link checks; in
+memory `auto` runs the design profile only when it is given; the file
+helpers find it on disk: `findContentRepo`, `contentRepoOf`,
+`resolveFileProfile` in `@miragon/bpmn-cli/node`), the design profile itself
+as `designFindings(doc, { processIds, decisionIds })` / `designValidator(...)`
+(`DESIGN_VALIDATOR` is its name), and `decisionLinkOf(element, doc)` (a
+business rule task's decision link in any spelling).
 
 Text preservation: `mutateDoc` returns the text to store as `result.xml`:
 the original text of everything the ops did not change (see [What a write

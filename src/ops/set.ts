@@ -31,6 +31,10 @@
  *    the vendor content that goes with it (W_PROPERTY_DROPPED).
  *  Send / receive tasks: message (name of a root bpmn:Message, created when
  *    missing; empty removes the reference).
+ *  Business rule tasks: calledDecision (the decision link, written in the
+ *    spelling of the file's platform: calledDecision= in a design model,
+ *    camunda:decisionRef in Camunda 7, zeebe:calledDecision in Camunda 8; the
+ *    other spellings are removed, empty removes the link; see decision.ts).
  *  Nested elements without an id of their own are addressed with a prefix:
  *    `definition.<key>` (the event definition), `loop.<key>` (the loop
  *    characteristics; a parallel multi-instance loop is created when missing),
@@ -78,6 +82,7 @@ import { addTo, is, localType, many, walk, type El } from '../model.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs } from '../platform/descriptor.js';
 import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
+import { setDecisionLink } from './decision.js';
 import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
 import { assertCondition, flowChange, redirectFlow, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
@@ -183,6 +188,7 @@ const APPLIES_TO: Record<string, (el: El) => boolean> = {
   subProcess: (el) => is(el, 'bpmn:SubProcess'),
   textAnnotation: (el) => is(el, 'bpmn:TextAnnotation'),
   'sendTask, receiveTask': (el) => is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'),
+  businessRuleTask: (el) => is(el, 'bpmn:BusinessRuleTask'),
   conditionalEvent: (el) => is(el, 'bpmn:Event') && triggerOf(el) === 'conditional',
 };
 
@@ -215,6 +221,7 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
   { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
+  { key: 'calledDecision', appliesTo: 'businessRuleTask', description: 'The decision the task calls, in the spelling of the file\'s platform: calledDecision="<id>" in a design model (no engine namespace, design-iq), camunda:decisionRef in Camunda 7, a zeebe:calledDecision decisionId in Camunda 8 (the other spellings are removed; empty removes the link)' },
   { key: 'definition.<key>', appliesTo: 'event', description: "Attribute of the event definition, e.g. definition.camunda:errorCodeVariable=code, definition.camunda:type=external + definition.camunda:topic=x (message throw / end), definition.camunda:variableName=amount (conditional); an event with several event definitions takes 'definition[<n>].<key>' (0-based) or 'definition[<trigger>].<key>'" },
   { key: 'loop.<key>', appliesTo: 'activity', description: 'Attribute of the loop characteristics, e.g. loop.camunda:collection=${items}, loop.camunda:elementVariable=item, loop.camunda:asyncBefore=true (creates a parallel multi-instance loop when none exists)' },
   { key: 'condition.<key>', appliesTo: 'sequenceFlow', description: 'Attribute of the condition expression, e.g. condition.camunda:resource=deployment://check.groovy (a script resource condition; set language= too)' },
@@ -465,6 +472,14 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw unknownKey(doc, el, key, 'applies to events, send tasks and receive tasks');
       setTaskMessage(doc, el, value, cs);
       break;
+    case 'calledDecision':
+      // another element: an unprefixed calledDecision="..." BPMN does not define can only be removed (W_C7_DEPLOY_SCHEMA)
+      if (is(el, 'bpmn:BusinessRuleTask') || value) {
+        cs.change(changeOf(el, setDecisionLink(doc, el, value, cs)));
+        return;
+      }
+      setModelProperty(doc, el, key, value);
+      break;
     default:
       if (key.includes(':')) {
         if (value) assertVendorHost(doc, el, key, value);
@@ -650,9 +665,10 @@ function setVendorAttribute(doc: Doc, el: El, key: string, value: string): void 
 
 /**
  * Removes an attribute without prefix that BPMN does not define but the
- * reader kept (`calledDecision="..."` on a business rule task: the engines
- * validate against the schema and refuse the file, W_C7_DEPLOY_SCHEMA).
- * Only removal: such a key cannot be set.
+ * reader kept (`assignee="..."` on a user task: the engines validate against
+ * the schema and refuse the file, W_C7_DEPLOY_SCHEMA). Only removal: such a
+ * key cannot be set. (A business rule task's `calledDecision` is its decision
+ * link, see decision.ts.)
  */
 function removeUndefinedAttr(el: El, key: string, value: string): boolean {
   if (value || key.includes(':') || descriptorOf(el).propertiesByName?.[key]) return false;

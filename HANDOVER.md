@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and the roundtrip step)
+# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and step 2: bpmn-cli as design-iq's editing engine)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -168,6 +168,56 @@ references. Evidence (private corpus, aggregate) and what is still open:
 [docs/audit-2026-10.md](docs/audit-2026-10.md#edits-follow-the-file-2026-10-09).
 Tests: `test/conventions-ids.test.ts`, `test/conventions-di.test.ts`,
 `test/conventions-stickies.test.ts`.
+
+## What step 2 changed: validation hook and design profile (2026-10-09)
+
+Goal: bpmn-cli as the editing engine inside Miragon's design-iq, whose save
+gate (`@bpmiq/validator`) refuses every model with an error. Table and
+evidence: [docs/audit-2026-10.md](docs/audit-2026-10.md#step-2-validation-hook-and-design-profile-2026-10-09);
+README section [design-iq](README.md#design-iq-the-design-profile-and-validators).
+
+- **Validator hook** (`src/validators.ts`, `pipeline.ts`):
+  `MutationOptions.validators` (functions `(xml, ctx) => findings` or
+  `{ name, validate }`, sync or async; design-iq's `Finding` shape is
+  accepted) run on the document before the ops and on the candidate XML
+  after the layout and the format ops. Introduced errors block
+  (`E_VALIDATION`, each finding with `validator`), pre-existing ones are
+  `W_PREEXISTING_ERROR` (matched by code + element through renames, or by
+  message with renamed ids replaced), introduced warnings are reported;
+  `validation.validators` has the reports. A throwing validator is
+  `E_VALIDATOR_FAILED`. `checkFile(file, { validators, profile })` runs them
+  once (before the layout dry run, which redraws the model in memory).
+- **Design profile** (`src/platform/design.ts`): design-iq's rules as it
+  checks them (degree checks, top-level lanes, DI coverage, start events
+  per process, complexity 7 +- 2, call / decision links against the content
+  repository): `E_DESIGN_*` / `W_DESIGN_*`. `--profile auto|design|none` on
+  `validate` and every mutating command, `MutationOptions.profile`; `auto`
+  (default) runs it for the models of a design-iq content repository (a
+  `bpmiq.yml` above the file naming a models folder that contains it,
+  `src/platform/repo.ts`), never for plain files: step-by-step editing of
+  plain BPMN stays as it was. Lint warnings a design error repeats about the
+  same node (W_DEAD_END, W_UNREACHABLE, W_NOT_IN_LANE, W_NO_START) are
+  dropped where it runs (`covers`).
+- **Decision link** (`src/ops/decision.ts`): `set <id> calledDecision=<d>`
+  on a business rule task writes design-iq's unprefixed attribute in a design
+  model, `camunda:decisionRef` (or `operaton:`) in Camunda 7, a
+  `zeebe:calledDecision decisionId` in Camunda 8 (`W_DECISION_RESULT_VARIABLE`
+  without a result variable) and removes the other spellings; `show`,
+  `show <id>` and `find` read all of them; the C7 profile's
+  `W_C7_DEPLOY_SCHEMA` hint for an unprefixed link is that command (converts
+  it); a design model's `calledDecision` is no import warning any more.
+- **Output**: `[design]` before a validator's codes, a `validator <name>
+  (<why>): n error(s), m warning(s)` line, `forced ...` lines for errors a
+  `--force` write let through; `validate --json` has `profile` and
+  `validators`; `kinds --json` has `profiles` and the `calledDecision` set key.
+
+Tests: `test/design-profile.test.ts` (28 models with design-iq's verdict;
+`BPMN_DESIGN_IQ_VALIDATOR` checks them against design-iq's validator, see
+docs/testing.md), `test/validators.test.ts`, `test/decision-link.test.ts`.
+Evidence (outside the repository): on 393 real / scenario files the design
+profile and design-iq's validator agree on every verdict (65 / 328) and every
+one of 540 findings; 2,231 probe edits through the gate: 1,117 written, none
+adds a design-iq error, 1,114 refused, each would have added one.
 
 ## What the Camunda 7 follow-ups changed (2026-10-09, after the step below)
 
@@ -453,12 +503,29 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
    no-op writes (#30, #31, #44–#46), a browser-safe core (#33), platform
    awareness (#27, #28). (Ids, DI ids and stickies follow the file now, see
    above.)
+
+   no-op writes (#30, #31, #44–#47), a browser-safe core (#33; the content
+   repository lookup of the design profile, `src/platform/repo.ts`, is
+   node-only like the pipeline's file access), platform awareness (#28; the
+   save-gate profile #27 is done), collision-resistant ids (#32). For
+   design-iq: lane conventions (a node in a nested lane should also be listed
+   by the parent lanes, as bpmn-js and design-iq expect; today `set lane=`
+   writes the child lane only and `E_LANE_CONFLICT` reports bpmn-js files that
+   list both).
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 
 ## Known residuals
+
+- Design profile: design-iq's flow rules are degree checks, so compensation
+  handlers, link events and ad-hoc sub-process content cannot be saved there;
+  the profile reports them with that explanation (BPMN allows them). A new
+  node next to a node in no lane inherits no lane and is refused
+  (`--lane` in the same command). The CLI cannot pass host validators (only
+  the library can); a host validator that needs repository context (design-iq's
+  `checkModel` with `modelIds`) gets it from the host.
 
 - Camunda 7: an Operaton-namespace file is checked the way Operaton reads it
   (operaton first, camunda as the fallback), so `operaton:historyTimeToLive`

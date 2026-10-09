@@ -338,7 +338,8 @@ describe('W_C7_DEPLOY_SCHEMA: `set <id> <attr>=` removes the attribute', () => {
     const file = join(dir, 'schema.bpmn');
     writeFileSync(file, CASES.find((c) => c.name.startsWith('unprefixed'))!.xml.replace('<bpmn:userTask', '<bpmn:userTask'));
     const findings = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings;
-    expect(findings.map((f) => f.hint)).toEqual(['Remove it: `bpmn set <file> R calledDecision=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).', 'Remove it: `bpmn set <file> W definition.foo=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
+    // a business rule task's calledDecision is design-iq's decision link: `set calledDecision=` writes the engines' spelling (step 2 of the design-iq work)
+    expect(findings.map((f) => f.hint)).toEqual(["Write the decision link in the engines' spelling: `bpmn set <file> R calledDecision=d1` (camunda:decisionRef; the unprefixed calledDecision is removed).", 'Remove it: `bpmn set <file> W definition.foo=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
     for (const f of findings) {
       for (const argv of commandsOf(f.hint!)) {
         const r = cli(...argv.map((a) => (a === '<file>' ? file : a)), '--no-layout');

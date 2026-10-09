@@ -1,8 +1,10 @@
 # Testing bpmn-cli
 
 Six layers, from fast to thorough (plus the isomorphism check of the
-browser-safe core, see [Isomorphism check](#isomorphism-check), and the
-opt-in Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7)):
+browser-safe core, see [Isomorphism check](#isomorphism-check), the opt-in
+Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), and
+the opt-in check against design-iq's validator, see
+[design-iq](#design-iq-validator-check)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -348,6 +350,39 @@ it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
 complete, correlate), and run the real-file battery on your private corpus:
 deploy every file before and after each edit and compare the camunda content
 element by element.
+
+## design-iq validator check
+
+The design profile (`src/platform/design.ts`) mirrors the save gate of
+Miragon's design-iq. `test/design-profile.test.ts` holds one synthetic model
+per rule with design-iq's verdict (`designIq: 'pass' | 'fail'`, and the number
+of its errors where it differs from the profile's); by default it checks the
+profile only. To check the verdicts against design-iq's own validator, point
+`BPMN_DESIGN_IQ_VALIDATOR` at `packages/validator/src/validate.ts` of a
+design-iq checkout whose dependencies are installed (Node 22.6+ strips the
+types; the test runs it in a child process and never imports it):
+
+```
+BPMN_DESIGN_IQ_VALIDATOR=<checkout>/packages/validator/src/validate.ts npx vitest run test/design-profile.test.ts
+```
+
+`test/validators.test.ts` covers the validator hook of the pipeline
+(blocking, pre-existing errors through renames, warnings, context, failing
+validators, the content-repository auto profile and the CLI output),
+`test/decision-link.test.ts` the decision link (`calledDecision`) in design,
+Camunda 7, Operaton and Camunda 8 files.
+
+**On a private corpus.** Compare, per file, design-iq's `checkModel(xml, {
+path })` errors with `checkFile(file, { profile: 'design' })` (the design
+profile's errors carry `validator: "design"`), file by file and finding by
+finding (design-iq names the element in its message: `<id> is a dead end`,
+`expected exactly one start event in process <id>`; it reports several start
+events once per process, the profile once per start event). For the gate
+itself, run edits through `mutateDoc(doc, ops, { dryRun: true, profile:
+'design' })` and check that a refused edit (E_VALIDATION with a `design`
+finding) is exactly one whose output (written with `force: true`) has an
+error design-iq did not report before. Keep the scripts and their output
+outside the repository and report counts only.
 
 ## Private corpora
 

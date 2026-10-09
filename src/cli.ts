@@ -24,7 +24,8 @@ import { listAllExtensions } from './ops/ext.js';
 import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { mutationReport, mutationWarnings, renderMutation, renderValidation, validationReport } from './report.js';
+import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
+import { mutationReport, mutationWarnings, renderMutation, renderValidation, validationReport, validatorTag } from './report.js';
 import { buildView, elementDetail, findElements, scopeView } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
@@ -68,7 +69,7 @@ function printError(err: unknown, json: boolean | undefined): never {
       if (d.element) lines.push(`  element: ${String(d.element)}`);
       if (Array.isArray(d.related) && d.related.length) lines.push(`  related: ${d.related.join(', ')}`);
       if (Array.isArray(d.candidates) && d.candidates.length) lines.push(`  candidates: ${d.candidates.join(', ')}`);
-      if (Array.isArray(d.errors)) for (const e of d.errors as Warning[]) lines.push(`  ${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}${e.hint ? `  (${e.hint})` : ''}`);
+      if (Array.isArray(d.errors)) for (const e of d.errors as Warning[]) lines.push(`  ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}${e.hint ? `  (${e.hint})` : ''}`);
       if (Array.isArray(d.warnings)) for (const w of d.warnings as string[]) lines.push(`  ${w}`);
       if (d.op !== undefined) lines.push(`  op: #${String(d.op)}`);
       if (d.hint) lines.push(`  hint: ${String(d.hint)}`);
@@ -86,6 +87,11 @@ function printError(err: unknown, json: boolean | undefined): never {
 /* option helpers                                                       */
 /* ------------------------------------------------------------------ */
 
+function profileArg(v: string): string {
+  if (!(PROFILE_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PROFILE_CHOICES.join(', ')}`);
+  return v;
+}
+
 function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): CommandType {
   cmd
     .option('--json', 'machine-readable output')
@@ -101,6 +107,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
   }
   return cmd
+    .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate: one start event, every node connected and in a lane, complete diagram) or none', profileArg)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
@@ -154,6 +161,7 @@ function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
     show: !!o['show'],
     strict: !!o['strict'],
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
+    ...(o['profile'] ? { profile: o['profile'] as ProfileChoice } : {}),
   };
 }
 
@@ -764,9 +772,10 @@ program
     if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
     return v;
   })
+  .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate) or none', profileArg)
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const report = validationReport(await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' }));
+      const report = validationReport(await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' }));
       if (o['json']) {
         const { ok, ...rest } = report;
         printJson({ ok, file, ...rest });

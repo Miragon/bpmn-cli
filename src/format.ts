@@ -346,13 +346,15 @@ export function renderChanges(cs: ChangeSet): string {
 }
 
 function problemLine(p: Warning): string {
-  let head = p.code;
+  // a validator's finding (src/validators.ts) names its validator: `[design] E_DESIGN_DEAD_END ...`
+  const validator = (p as Warning & { validator?: string }).validator;
+  let head = validator ? `[${validator}] ${p.code}` : p.code;
   if (p.element) head += ` ${p.element}`;
   if (p.related?.length) head += ` [${p.related.join(', ')}]`;
   return `${head}: ${p.message}${p.hint ? `  (${p.hint})` : ''}`;
 }
 
-/** One line per finding: `CODE element [related]: message  (hint)`. */
+/** One line per finding: `[validator] CODE element [related]: message  (hint)` (the validator only for a validator's finding). */
 export function renderProblems(problems: Warning[]): string {
   if (!problems.length) return 'no problems';
   return problems.map(problemLine).join('\n');

@@ -1,8 +1,8 @@
 /**
  * The one write pipeline every mutating command uses:
  *
- *   load -> refuse lossy imports -> run ops -> validate -> layout -> keep the
- *   file's text -> atomic write
+ *   load -> refuse lossy imports -> run ops -> validate -> layout -> format
+ *   ops -> stickies -> keep the file's text -> validators -> atomic write
  *
  * Nothing is written when any stage fails, nor when the result equals the
  * file (`unchanged`; the node layer skips that write).
@@ -42,6 +42,15 @@
  *    removed as `resolved`, and the totals (`bpmn validate` lists them all).
  *    An op warning that the added findings repeat item by item is dropped
  *    (retype's W_PROPERTY_INAPPLICABLE, ops/retype.ts withoutProfileDuplicates).
+ *  - validators (src/validators.ts; MutationOptions.validators and the
+ *    validation profile, MutationOptions.profile: the design profile runs for
+ *    the models of a design-iq content repository, MutationOptions.contentRepo,
+ *    or on request): each runs on the document before the ops and on the
+ *    candidate XML after the layout, the format ops and the text-preserving
+ *    step, i.e. on exactly what would be written. Errors the
+ *    change introduced block the write (E_VALIDATION, each finding names its
+ *    validator); errors the document already had are W_PREEXISTING_ERROR
+ *    warnings; introduced warnings are reported (`validation.validators`).
  *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
@@ -93,15 +102,19 @@ import { kindLabel } from './kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from './mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
+import { reportedImportWarnings } from './ops/decision.js';
 import { runOps } from './ops/index.js';
 import { ordersLanes } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
+import { resolvePlatform } from './platform/detect.js';
 import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './platform/profile.js';
 import { plainText, preserveText } from './preserve.js';
+import { profileValidators, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
 import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
+import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type NamedValidator, type Validator, type ValidatorContext, type ValidatorRun } from './validators.js';
 import { buildView, type ModelView } from './view.js';
 
 /**
@@ -127,6 +140,22 @@ export interface MutationOptions {
   platform?: PlatformChoice;
   /** receives the layout engines' diagnostic lines during this call (src/debug.ts; the CLI: BPMN_LAYOUT_DEBUG) */
   debug?: DebugSink;
+  /**
+   * validation profile: 'auto' (default) runs the design profile (the design-iq
+   * save gate, platform/design.ts) when the document is a model of a design-iq
+   * content repository (`contentRepo`), 'design' always, 'none' never
+   */
+  profile?: ProfileChoice;
+  /**
+   * the design-iq content repository the document is a model of (auto
+   * profile; with model ids also the call / decision link checks). The node
+   * layer finds it for a file (bpmiq.yml, src/node/repo.ts); a host passes it.
+   */
+  contentRepo?: ContentRepo;
+  /** validators run on the candidate XML inside the transaction (src/validators.ts); errors they find in the change block the write */
+  validators?: Validator[];
+  /** the file being written, for the validators (`ctx.file`) and the design profile's own process id; default doc.file (the node layer passes its target) */
+  file?: string;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -561,6 +590,14 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   const formatOnly = ops.length > 0 && ops.every(isFormatOp);
   const before = await captureBefore(doc, requested, formatOnly, asRead);
   const baseline = errorBaseline(doc, opts.platform);
+  const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
+  const file = opts.file ?? doc.file;
+  const validators = [...profileValidators(resolveProfile(opts.profile ?? 'auto', opts.contentRepo), file), ...namedValidators(opts.validators)];
+  const vctx: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(file ? { file } : {}), platform: validators.length ? resolvePlatform(doc, opts.platform ?? 'auto').platform : 'none', ops };
+  // the validators' baseline: the document before the ops (its text as read; the in-memory model serialised only for a created document)
+  const validatorsBefore: ValidatorRun[] = validators.length
+    ? await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...vctx, phase: 'before' })
+    : [];
   takeDroppedContent(doc);
 
   let changes: ChangeSet;
@@ -576,7 +613,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 
   const structural = separatePreexisting(doc, validateDoc(doc), baseline);
-  const validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
+  let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
   // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
   changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings);
   if (validation.errors.length && !opts.force) {
@@ -618,6 +655,17 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   if (followed.moved.length) layout.stickies = followed.moved;
 
   xml = await outputText(doc, xml, asRead, changes);
+
+  if (validators.length) {
+    // the candidate: exactly what would be written (after the text-preserving post-pass)
+    const candidate = xml;
+    const after = await runValidators(validators, { xml: async () => candidate, doc: once(() => Doc.fromXml(candidate, file)) }, { ...vctx, phase: 'after' });
+    const reports = compareRuns(validatorsBefore, after, renamesOf(doc, baseline.index));
+    const introduced = reports.flatMap((r) => r.errors);
+    if (introduced.length && !opts.force) throw validatorRefusal(introduced);
+    validation = withValidatorReports(validation, reports, after);
+  }
+
   const unchanged = doc.source !== undefined && xml === doc.source.text;
 
   const result: MutationResult = {
@@ -628,7 +676,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     changes,
     layout,
     validation,
-    importWarnings: doc.importWarnings.map((w) => w.message.split('\n')[0]!),
+    importWarnings,
     xml,
   };
   if (opts.show) {
@@ -674,24 +722,53 @@ export async function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<
   return result;
 }
 
+/** Options of `bpmn validate` (checkDoc, checkFile, validateXml). */
+export interface CheckOptions {
+  /** platform profile: 'auto' (default) detects it */
+  platform?: PlatformChoice;
+  /** validation profile: 'auto' (default: design for the models of a design-iq content repository), 'design', 'none' */
+  profile?: ProfileChoice;
+  /** the design-iq content repository of the document (see MutationOptions.contentRepo; checkFile finds it on disk) */
+  contentRepo?: ContentRepo;
+  /** further validators (src/validators.ts), run on the document's XML */
+  validators?: Validator[];
+  /** the file being checked, for the validators (default doc.file) */
+  file?: string;
+  /** receives the layout engines' diagnostic lines during this call */
+  debug?: DebugSink;
+}
+
 /** What `bpmn validate` finds in a document (checkDoc). */
 export interface CheckResult {
   validation: ValidationResult;
   layout: LayoutStatus | { status: 'failed'; error: Warning };
   importWarnings: string[];
+  /** the validation profile that ran (or why none did) */
+  profile: ProfileInfo;
 }
 
 /**
- * Validation (with the platform profile, auto-detected unless `opts.platform`)
- * and a layout dry run. The dry run redraws the in-memory document: pass a
- * document of its own (validateXml and checkFile parse one).
+ * Validation (with the platform profile, auto-detected unless `opts.platform`),
+ * the validators (the validation profile and `opts.validators`, every finding
+ * reported; their errors fail the check) and a layout dry run. The dry run
+ * redraws the in-memory document: pass a document of its own (validateXml
+ * and checkFile parse one).
  */
-export async function checkDoc(doc: Doc, opts: { platform?: PlatformChoice; debug?: DebugSink } = {}): Promise<CheckResult> {
+export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
   return withLayoutDebug(opts.debug, async () => {
-    const validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
-    const importWarnings = doc.importWarnings.map((w) => w.message.split('\n')[0]!);
+    let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
+    const structuralErrors = validation.errors.length;
+    const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
+    const file = opts.file ?? doc.file;
+    const profile = resolveProfile(opts.profile ?? 'auto', opts.contentRepo);
+    const validators: NamedValidator[] = [...profileValidators(profile, file), ...namedValidators(opts.validators)];
+    if (validators.length) {
+      // before the layout dry run, which redraws the model in memory: the validators see the document's own diagram
+      const runs = await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...(file ? { file } : {}), phase: 'check', platform: resolvePlatform(doc, opts.platform ?? 'auto').platform, ops: [] });
+      validation = withValidatorReports(validation, checkReports(runs), runs);
+    }
     let layout: CheckResult['layout'];
-    if (validation.errors.length) {
+    if (structuralErrors) {
       layout = { status: 'skipped', warnings: [], expanded: [] };
     } else {
       try {
@@ -702,7 +779,7 @@ export async function checkDoc(doc: Doc, opts: { platform?: PlatformChoice; debu
         layout = { status: 'failed', error: { code: e.code, message: e.message, element: e.details?.element as string | undefined } };
       }
     }
-    return { validation, layout, importWarnings };
+    return { validation, layout, importWarnings, profile };
   });
 }
 

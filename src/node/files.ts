@@ -10,7 +10,7 @@
  *   mutateFile(file, ops, opts)    -> loadDoc + mutateDoc + write (every mutating command)
  *   mutateDocToFile(doc, ops, opts)-> mutateDoc + write to opts.out ?? doc.file (`new`)
  *   layoutFile(file, opts)         -> loadDoc + layoutDoc + write (`layout`)
- *   checkFile(file, { platform })  -> readDoc + checkDoc (`validate`)
+ *   checkFile(file, opts)          -> readDoc + checkDoc (`validate`)
  *
  * Writing (FileMutationOptions): nothing is written with `dryRun` or when a
  * stage fails; `out` writes elsewhere; `backup` copies the input to
@@ -19,14 +19,22 @@
  * A result equal to the file it was read from (`unchanged`) is not written
  * back over that file (no new mtime, no sync event; `written: false`); `out`
  * to another file still gets the copy.
+ *
+ * Validation profile: unless `contentRepo` is given (or the profile is
+ * `none`), the design-iq content repository of the file being written or
+ * checked is looked up on disk (src/node/repo.ts: bpmiq.yml and the
+ * repository's model ids) and handed to the core, which runs the design
+ * profile for its models (`--profile auto`); the validators see that file as
+ * `ctx.file`.
  */
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../document.js';
 import { CliError, ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
-import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
-import type { PlatformChoice } from '../platform/profile.js';
+import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
+import type { ContentRepo } from '../platform/repo.js';
+import { contentRepoOf } from './repo.js';
 
 /** Where and whether the node layer writes the result of the in-memory pipeline. */
 export interface FileWriteOptions {
@@ -75,8 +83,25 @@ export async function writeAtomic(file: string, content: string): Promise<void> 
   await rename(tmp, file);
 }
 
+/** What the core gets to know about the file (MutationOptions.file / contentRepo). */
+interface FileContext {
+  file?: string;
+  contentRepo?: ContentRepo;
+}
+
+/** The file the validators see and its content repository (looked up unless given or the profile is none). */
+function fileContext(file: string | undefined, opts: { profile?: string; contentRepo?: ContentRepo; file?: string }): FileContext {
+  const named = opts.file ?? file;
+  const contentRepo = opts.contentRepo ?? (named && opts.profile !== 'none' ? contentRepoOf(named) : undefined);
+  return { ...(named ? { file: named } : {}), ...(contentRepo ? { contentRepo } : {}) };
+}
+
 /** Runs `compute` (an in-memory pipeline call) and writes its XML to opts.out ?? doc.file unless dryRun. */
-async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean }, compute: () => Promise<MutationResult>): Promise<MutationResult> {
+async function toFile(
+  doc: Doc,
+  opts: FileWriteOptions & { force?: boolean; profile?: string; contentRepo?: ContentRepo; file?: string },
+  compute: (context: FileContext) => Promise<MutationResult>,
+): Promise<MutationResult> {
   const target = opts.out ?? doc.file;
   if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
   if (opts.mustNotExist && target && !opts.force && !opts.dryRun) {
@@ -88,7 +113,7 @@ async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean }, co
       /* does not exist: fine */
     }
   }
-  const result = await compute();
+  const result = await compute(fileContext(target, opts));
   // a result equal to the file is not written back over it; --out to another file still gets its copy
   const inPlace = !!target && !!doc.file && resolve(target) === resolve(doc.file);
   if (!opts.dryRun && target && !(result.unchanged && inPlace)) {
@@ -112,7 +137,7 @@ async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean }, co
 
 /** Applies ops to a loaded (or created) document and writes the result to opts.out ?? doc.file. */
 export async function mutateDocToFile(doc: Doc, ops: Op[], opts: FileMutationOptions = {}): Promise<MutationResult> {
-  return toFile(doc, opts, () => mutateDoc(doc, ops, opts));
+  return toFile(doc, opts, (context) => mutateDoc(doc, ops, { ...opts, ...context }));
 }
 
 /** Loads a file, applies ops, writes back (or to opts.out). */
@@ -125,10 +150,16 @@ export async function mutateFile(file: string, ops: Op[], opts: FileMutationOpti
 export async function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> {
   assertLayoutOptions(opts);
   const doc = await loadDoc(file, opts);
-  return toFile(doc, opts, () => layoutDoc(doc, opts));
+  return toFile(doc, opts, (context) => layoutDoc(doc, { ...opts, ...context }));
 }
 
-/** `bpmn validate`: validation with the platform profile (auto-detected unless `opts.platform`) and a layout dry run; nothing is written. */
-export async function checkFile(file: string, opts: { platform?: PlatformChoice } = {}): Promise<CheckResult> {
-  return checkDoc(await readDoc(file), opts);
+/**
+ * `bpmn validate`: validation with the platform profile (auto-detected unless
+ * `opts.platform`), the validation profile (`opts.profile`; auto: design for
+ * the models of a design-iq content repository) and `opts.validators`, and a
+ * layout dry run; nothing is written.
+ */
+export async function checkFile(file: string, opts: CheckOptions = {}): Promise<CheckResult> {
+  const doc = await readDoc(file);
+  return checkDoc(doc, { ...opts, ...fileContext(file, opts) });
 }

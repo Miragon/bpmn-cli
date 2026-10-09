@@ -15,8 +15,10 @@ import type { Warning } from './errors.js';
 import { renderChanges, renderLayout, renderProblems, renderView } from './format.js';
 import type { CheckResult, LayoutStatus, MutationResult } from './pipeline.js';
 import type { PlatformSummary } from './platform/profile.js';
+import type { ProfileInfo } from './platform/repo.js';
 import { ChangeSet, type Change } from './result.js';
 import type { ValidationResult } from './validate.js';
+import type { ValidatorReport } from './validators.js';
 import type { ModelView } from './view.js';
 
 /** The JSON of a mutation (`--json`; `result` of applyToXml without file and written). */
@@ -47,6 +49,10 @@ export interface ValidationReport {
   /** lint, platform findings and the layout dry run's warnings (W_LAYOUT_<code>) */
   warnings: Warning[];
   platform?: PlatformSummary;
+  /** the validation profile that ran, or why none did (`--profile`; the repository's model ids left out) */
+  profile: Omit<ProfileInfo, 'repo'>;
+  /** the validators that ran (the design profile, host validators): every finding of each; they are among errors / warnings too */
+  validators?: ValidatorReport[];
   layout: CheckResult['layout'];
   /** content the reader could not keep or understand */
   importWarnings: string[];
@@ -92,8 +98,19 @@ export function mutationReport(result: MutationResult): MutationReport {
   };
 }
 
+/** `[design] ` for a validator's finding (src/validators.ts), else ''. */
+export function validatorTag(w: Warning): string {
+  const name = (w as Warning & { validator?: string }).validator;
+  return name ? `[${name}] ` : '';
+}
+
 function warningLine(w: Warning): string {
-  return `warning ${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+  return `warning ${validatorTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+}
+
+/** One line per validator that ran: its name, why it ran and the totals of the result (`what`: result / file). */
+function validatorLines(reports: readonly ValidatorReport[] | undefined, what: string): string[] {
+  return (reports ?? []).map((r) => `validator ${r.name}${r.detail ? ` (${r.detail})` : ''}: ${r.counts.errors} error(s), ${r.counts.warnings} warning(s) in the ${what}`);
 }
 
 /** A mutation report with or without the file it was written to (applyToXml's `result` has none). */
@@ -111,7 +128,10 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   // format ops change the drawing only: their lines follow in the layout block
   const formatOnly = changes.isEmpty && !!result.layout.format?.length && !changes.notes.length && !changes.warnings.length;
   if (text && !formatOnly) lines.push(text);
+  // errors only remain in a result written with --force
+  for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
   for (const w of [...result.validation.warnings, ...layoutWarnings(result.layout)]) lines.push(warningLine(w));
+  lines.push(...validatorLines(result.validation.validators, 'result'));
   lines.push(...renderLayout(result.layout));
   if (result.written) lines.push(`written: ${result.file}${result.unchanged ? ' (unchanged copy of the input)' : ''}`);
   else if (result.file && result.unchanged && !opts.dryRun) lines.push(`unchanged: ${result.file} (the result equals the file; nothing written)`);
@@ -124,7 +144,17 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
 export function validationReport(check: CheckResult): ValidationReport {
   const warnings = [...check.validation.warnings, ...(check.layout.status === 'ok' ? layoutWarnings(check.layout) : [])];
   const errors = [...check.validation.errors, ...(check.layout.status === 'failed' ? [check.layout.error] : [])];
-  return { ok: errors.length === 0, errors, warnings, platform: check.validation.platform, layout: check.layout, importWarnings: check.importWarnings };
+  const { repo: _repo, ...profile } = check.profile;
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    platform: check.validation.platform,
+    profile,
+    ...(check.validation.validators ? { validators: check.validation.validators } : {}),
+    layout: check.layout,
+    importWarnings: check.importWarnings,
+  };
 }
 
 /** The text `bpmn validate` prints. */
@@ -144,6 +174,7 @@ export function renderValidation(report: ValidationReport): string {
           : '';
     lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
   }
+  lines.push(...validatorLines(report.validators, 'file'));
   lines.push(report.layout.status === 'ok' ? 'layout: ok' : report.layout.status === 'failed' ? `layout: failed (${report.layout.error.code})` : 'layout: skipped');
   const imported = report.importWarnings.length ? `, ${report.importWarnings.length} import warning(s)` : '';
   lines.push(errors.length ? `${errors.length} error(s), ${warnings.length} warning(s)${imported}` : `valid, ${warnings.length} warning(s)${imported}`);

@@ -10,7 +10,7 @@
  * typecheck (skipLibCheck false) resolves them.
  */
 /* the in-memory API: strings in, strings / data out (README "Library use") */
-export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ViewOptions } from './api.js';
+export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, validationReport, renderValidation, type MutationReport, type MutationReportLike, type ValidationReport } from './report.js';
 export { renderView, renderDetail, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './format.js';
 export { setLayoutDebug, type DebugSink } from './debug.js';
@@ -42,9 +42,14 @@ export type {
   SpaceOp,
   TidyOp,
 } from './ops/types.js';
-export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
+export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
 export { preserveText, type PreservedText } from './preserve.js';
+/* validators run inside the write transaction (MutationOptions.validators) and the design profile (design-iq's save gate) */
+export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './validators.js';
+export { designFindings, designValidator, DESIGN_VALIDATOR, type DesignOptions } from './platform/design.js';
+export { resolveProfile, profileValidators, modelsFolderOf, PROFILE_CHOICES, CONTENT_CONFIG_FILE, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
+export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './result.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';
 /* the platform profile (Camunda 7 rules; validate --platform) */
