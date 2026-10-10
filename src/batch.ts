@@ -175,9 +175,10 @@ export const MOVE_FIELDS: FieldsOf<MoveOp> = {
 };
 
 export const ORDER_FIELDS: FieldsOf<OrderOp> = {
-  id: ref('Node whose outgoing flows are ordered, or the process / participant / parent lane whose lanes are ordered.', { required: true }),
+  id: ref('Node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered.', { required: true }),
   flows: list('Outgoing flow ids in the wanted top-to-bottom order; unlisted flows follow in their old order.', { minItems: 1 }),
   lanes: list('Lane ids (direct child lanes of `id`) in the wanted top-to-bottom order; unlisted lanes follow in their old order. The diagram bands are reordered too.', { minItems: 1 }),
+  pools: list('Participant ids (pools of the collaboration `id`, black boxes included) in the wanted top-to-bottom order; unlisted pools follow in their old order. The pool bands are reordered with their content, message flows are routed again.', { minItems: 1 }),
 };
 
 export const EXT_FIELDS: FieldsOf<ExtOp> = {
@@ -289,7 +290,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   remove: 'Remove elements with cascade (= `bpmn remove`).',
   retype: 'Change the kind of an element, keeping id, name, flows and extensions (= `bpmn retype`).',
   move: 'Relocate nodes to another place or lane (= `bpmn move`).',
-  order: 'Set the top-to-bottom order of the outgoing flows of a node, or of the lanes of a pool / process / parent lane (= `bpmn order`).',
+  order: 'Set the top-to-bottom order of the outgoing flows of a node, of the lanes of a pool / process / parent lane, or of the pools of a collaboration (= `bpmn order`).',
   ext: 'Add or remove vendor extension elements (= `bpmn ext`).',
   split: 'Macro: split gateway + branches + join gateway in one step (apply only; there is no split command).',
   place: 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).',
@@ -639,9 +640,9 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
       checkKind(ctx, out, 'gateway');
       break;
     case 'order': {
-      const both = out['flows'] !== undefined && out['lanes'] !== undefined;
-      if (both || (out['flows'] === undefined && out['lanes'] === undefined)) {
-        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node) or "lanes" (lanes of a pool / process / parent lane)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]} or {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]}.');
+      const given = ['flows', 'lanes', 'pools'].filter((k) => out[k] !== undefined);
+      if (given.length !== 1) {
+        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_1","pools":["Participant_Customer","Participant_X"]}.');
       }
       break;
     }
@@ -767,7 +768,7 @@ function buildSchema(): Record<string, unknown> {
       remove: objectSchema(REMOVE_FIELDS, { op: 'remove', description: OP_DESCRIPTIONS.remove }),
       retype: objectSchema(RETYPE_FIELDS, { op: 'retype', description: OP_DESCRIPTIONS.retype }),
       move: objectSchema(MOVE_FIELDS, { op: 'move', description: OP_DESCRIPTIONS.move, allOf: [...placementRules(), defaultRule(), { anyOf: [...PLACEMENT_KEYS.map((k) => ({ required: [k] })), { required: ['lane'] }] }] }),
-      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }] }] }),
+      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }, { required: ['pools'] }] }] }),
       ext: objectSchema(EXT_FIELDS, {
         op: 'ext',
         description: OP_DESCRIPTIONS.ext,

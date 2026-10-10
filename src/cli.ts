@@ -534,7 +534,7 @@ withMutationOptions(
 withMutationOptions(
   program
     .command('order <file> <id> <ids...>')
-    .description('order the outgoing flows of a node (top-to-bottom branch order), or the lanes of a pool / process / parent lane (top to bottom)'),
+    .description('order the outgoing flows of a node (top-to-bottom branch order), the lanes of a pool / process / parent lane, or the pools of a collaboration (top to bottom)'),
 ).action(async (file: string, nodeId: string, flowIds: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {

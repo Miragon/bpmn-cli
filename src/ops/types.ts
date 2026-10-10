@@ -115,12 +115,14 @@ export interface MoveOp extends Placement, FlowOptions {
 
 export interface OrderOp {
   op: 'order';
-  /** the node whose outgoing flows are ordered, or the process / participant / parent lane whose lanes are ordered */
+  /** the node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered */
   id: string;
-  /** outgoing flow ids (lane ids are accepted too and order the lanes) */
+  /** outgoing flow ids (lane or participant ids are accepted too and order the lanes / pools) */
   flows?: string[];
   /** lane ids, top to bottom */
   lanes?: string[];
+  /** participant ids (pools), top to bottom */
+  pools?: string[];
 }
 
 export interface ExtOp {

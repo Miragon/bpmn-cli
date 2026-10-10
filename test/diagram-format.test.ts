@@ -662,7 +662,7 @@ describe('format ops in the ops JSON', () => {
     expect(message([{ op: 'space', after: 'A', by: 'wide' }])).toMatch(/"by" must be "column", "row" or a positive integer \(pixels\), or "-column", "-row" or a negative integer to close space, got string "wide"/);
     expect(message([{ op: 'space', after: 'A', by: 0 }])).toMatch(/"by" must be/);
     expect(message([{ op: 'tidy', ids: [] }])).toMatch(/"ids" needs at least 1 entry/);
-    expect(message([{ op: 'order', id: 'P', flows: ['a'], lanes: ['b'] }])).toMatch(/give exactly one of "flows" .* or "lanes"/);
+    expect(message([{ op: 'order', id: 'P', flows: ['a'], lanes: ['b'] }])).toMatch(/give exactly one of "flows" .*, "lanes" .* or "pools"/);
     expect(message([{ op: 'order', id: 'P' }])).toMatch(/give exactly one of "flows"/);
     expect(parseOps([{ op: 'space', after: 'A', by: '120' }])).toEqual([{ op: 'space', after: 'A', by: 120 }]);
   });
@@ -674,7 +674,7 @@ describe('format ops in the ops JSON', () => {
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ not: { required: ['rowOf', 'below'] } }, { anyOf: ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'].map((k) => ({ required: [k] })) }]));
     expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }] });
     expect(defs['color']!.properties['color']).toMatchObject({ enum: ['blue', 'orange', 'green', 'red', 'purple', 'default'] });
-    expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes']);
+    expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes', 'pools']);
     const json = kindsJson();
     expect(json['layoutModes']).toEqual(['auto', 'incremental', 'full']);
     expect(json['colors']).toMatchObject({ red: { fill: '#ffcdd2', stroke: '#831311' } });

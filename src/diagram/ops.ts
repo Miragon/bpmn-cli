@@ -74,7 +74,7 @@
 import type { Doc } from '../document.js';
 import { CliError, modelError, type ErrorDetails } from '../errors.js';
 import { is, type El } from '../model.js';
-import { laneSetOf, ordersLanes } from '../ops/order.js';
+import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
 import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
@@ -170,7 +170,7 @@ function movableShape(ctx: Ctx, id: string): { plane: Plane; shape: DShape } {
   if (s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group' || s.kind === 'other') {
     throw modelError('E_WRONG_KIND', `"${id}" is a ${s.kind === 'participant' ? 'pool' : s.kind}, expected a node, data element or annotation`, {
       element: id,
-      hint: 'Pools and lanes are bands: `bpmn order <file> <poolId> <laneIds...>` reorders lanes, `bpmn space <file> --below <laneId>` makes one taller.',
+      hint: 'Pools and lanes are bands: `bpmn order <file> <collaborationId> <participantIds...>` reorders pools, `bpmn order <file> <poolId> <laneIds...>` reorders lanes, `bpmn space <file> --below <laneId>` makes one taller (`--by -row` smaller).',
     });
   }
   return found;
@@ -965,13 +965,62 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
   return settle(plane, snap);
 }
 
+/**
+ * Pool order: the pool bands of the collaboration follow the semantic order
+ * (ops/order.ts reordered `participants`), stacked from the top of the first
+ * band in the slots of the old order (each pool keeps its height and x, the
+ * gaps between the slots stay); a pool's content and the collaboration-level
+ * artifacts drawn in its band move with it; message flows are routed again
+ * (settle). Pools that are not stacked (two overlap on y) keep their places.
+ */
+function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[] {
+  const collab = ctx.doc.get(op.id);
+  const ids = rawList(collab, 'participants').map((p) => idOf(p)!).filter(Boolean);
+  const plane = ctx.planes.find((p) => p.rootId === op.id);
+  const bands = plane ? ids.map((id) => plane.shapes.get(id)).filter((s): s is DShape => !!s) : [];
+  if (!plane || bands.length < 2) {
+    if (ctx.planes.length) notes.push('fewer than two pools are drawn: nothing to reorder in the diagram');
+    return [];
+  }
+  const byY = [...bands].sort((a, b) => a.bounds.y - b.bounds.y);
+  if (bands.every((b, i) => b === byY[i])) return [];
+  for (let i = 0; i + 1 < byY.length; i++) {
+    if (byY[i + 1]!.bounds.y < bottom(byY[i]!.bounds) - 1) {
+      notes.push(`the pools are not stacked top to bottom (${byY[i]!.id} and ${byY[i + 1]!.id} share rows): the drawing keeps their places`);
+      return [];
+    }
+  }
+  const gaps = byY.slice(1).map((b, i) => b.bounds.y - bottom(byY[i]!.bounds));
+  // who moves with which pool (decided before anything moves)
+  const members = new Map<string, DShape[]>(bands.map((b) => [b.id, []]));
+  for (const s of plane.shapes.values()) {
+    if (s.kind === 'participant' || s.hostId || s.parentId) continue;
+    let pool = s.poolId && members.has(s.poolId) ? s.poolId : undefined;
+    // collaboration-level artifacts (no process) go with the pool they are drawn in
+    if (!pool && !s.poolId) pool = bands.find((b) => cy(s.bounds) >= b.bounds.y && cy(s.bounds) <= bottom(b.bounds) && cx(s.bounds) >= b.bounds.x && cx(s.bounds) <= right(b.bounds))?.id;
+    if (pool) members.get(pool)!.push(s);
+  }
+  let cursor = byY[0]!.bounds.y;
+  bands.forEach((b, i) => {
+    const dy = cursor - b.bounds.y;
+    cursor += b.bounds.height + (gaps[i] ?? 0);
+    if (!dy) return;
+    b.bounds.y += dy;
+    for (const s of members.get(b.id)!) {
+      if (s.kind === 'lane') s.bounds.y += dy;
+      else shiftShape(plane, s.id, 0, dy);
+    }
+  });
+  return settle(plane, snap);
+}
+
 /* ------------------------------------------------------------------ */
 /* entry point                                                          */
 /* ------------------------------------------------------------------ */
 
 function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
   const { op, index } = entry;
-  if (op.op === 'order' && !ordersLanes(ctx.doc, op)) return undefined;
+  if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
   const snap = snapshot(ctx.planes);
   const notes: string[] = [];
   let rerouted: string[] = [];
@@ -1002,7 +1051,7 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = compactOp(ctx, op, snap, notes);
       break;
     case 'order':
-      rerouted = orderBands(ctx, op, snap, notes);
+      rerouted = ordersPools(ctx.doc, op) ? orderPoolBands(ctx, op, snap, notes) : orderBands(ctx, op, snap, notes);
       break;
   }
   return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: unique(rerouted), ...extra, ...(notes.length ? { notes } : {}) };

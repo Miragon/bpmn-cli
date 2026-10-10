@@ -176,7 +176,7 @@ describe('parseOps: rejections name the op index', () => {
     expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, after/);
     expect(e.op).toBe(1);
     expect(failure([{ op: 'connect', source: 'a', target: 'b', ifabsent: true }]).message).toMatch(/did you mean "ifAbsent"/);
-    expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes$/);
+    expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes, pools$/);
   });
 
   it('rejects missing required keys and wrong value types', () => {

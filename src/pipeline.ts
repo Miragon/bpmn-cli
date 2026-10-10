@@ -110,7 +110,7 @@ import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El }
 import { collapsedIds } from './ops/add.js';
 import { reportedImportWarnings } from './ops/decision.js';
 import { runOps } from './ops/index.js';
-import { ordersLanes } from './ops/order.js';
+import { ordersLanes, ordersPools } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
@@ -455,7 +455,7 @@ async function moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ x
 function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
   const out: FormatEntry[] = [];
   ops.forEach((op, index) => {
-    if (isFormatOp(op) || (op.op === 'order' && ordersLanes(doc, op))) out.push({ op, index });
+    if (isFormatOp(op) || (op.op === 'order' && (ordersLanes(doc, op) || ordersPools(doc, op)))) out.push({ op, index });
   });
   return out;
 }
