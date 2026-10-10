@@ -26,7 +26,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1352 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1353 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -92,7 +92,7 @@ Evidence (291 real files, counts only): new ids that speak 1,745 / 1,745
 independent edits at two places share a new id in 0 / 225 file pairs (0.3.0:
 9), with unnamed elements 3 / 225 (0.3.0: 9), with the same name 225 / 225
 (0.3.0: 219: a name gives the id); 380 flows renamed after their ends; an
-insert changes 70 lines (median; 0.3.0: 66). Gate: 1,352 tests, layout
+insert changes 70 lines (median; 0.3.0: 66). Gate: 1,353 tests, layout
 regression 444, fuzz 0 errors; 80 x 25 fuzz walks as 0.3.0. The README's
 Camunda 7 example with speaking ids deploys on the three Camunda 7 engines.
 
