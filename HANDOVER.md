@@ -399,7 +399,73 @@ Private corpora used locally, outside the repository; counts only.
   worked example deploys on the three engines.
 - **Browser bundle**: whole entry 897 / 275 KB minified / gzip, `applyToXml`
   710 / 219 KB (+82 KB bpmn-auto-layout on demand); 0.3.0: 716 / 224 and
-  594 / 186 KB.
+  594 / 186 KB. After the Camunda 8 fixes (below): 922 / 284 and 733 / 227 KB.
+
+### Camunda 8 fixes after the round 1 verifier (`step3/fix-c8`)
+
+The independent verifier found the profile's deploy recall at 0.74 on 200
+adversarial models (W_C8_DEPLOY_* only; precision 0.94), false deploy
+findings for white-space values and a lower-case date-time, no way to
+address the message an op creates in a batch, a `zeebe:subscription` on the
+event (where Camunda 8 ignores it), and `kinds --help` without the
+zeebeElements section. Fixed, each rule checked on Camunda 8.9.22:
+
+- **FEEL is parsed** (`src/platform/feel.ts`, no dependency, about 23 KB /
+  7 KB gzip with the schema-text rules): a tokenizer and a recursive-descent
+  reading of the grammar Camunda 8.9 parses at deploy, written from 766
+  deployed expressions (`test/fixtures/c8/feel-verdicts.json`: 762 of them,
+  synthetic, with the verdict; the check agrees on every one). `feelProblem`
+  (c8.ts) keeps the JUEL messages and then runs it. Camunda's parser is
+  lenient where a plain grammar is not (`x andy` is `x and y`, `ifx then 1
+  else 2` an if, `x instanceof` is `x in stanceof`); the check splits a
+  keyword glued to a name the same way. Messages name the FEEL spelling
+  (`<> (FEEL: != ...)`, `if ... then without else`). Now also checked: a
+  signal name and a published message name starting with `=`, the
+  `zeebe:adHoc` expressions, an ad-hoc sub-process's completion condition
+  (`set <id> completion=` sets it).
+- **Schema rules from the file's text** (`src/platform/schema-text.ts`,
+  W_C8_DEPLOY_SCHEMA): child elements out of the XSD's order (from
+  bpmn-moddle's property order, with the places the XSD has a choice or
+  orders differently as one slot), IDREFs that name no id (lane
+  `flowNodeRef`, `default`, `dataObjectRef`, data associations, IO sets),
+  ids that are no NCName (`a:b` in the model, with `set id=`; ones
+  bpmn-moddle drops on import, `F:1`, from the text). Issues of an element an
+  edit removed are dropped; the text is read once per document text.
+- **Values**: `PT1.5H` is refused (a fraction on seconds only), a lower-case
+  `t` / `z` in a date-time deploys; a job type, message / signal name, error
+  / escalation code, process / decision id, result variable, listener type,
+  linked resource type or published correlation key of white space deploys
+  (only empty is refused: `missing()` in c8.ts), an empty priority deploys,
+  an empty link name is refused.
+- **`refAs`** on add / connect / set / retype binds the bpmn:Message /
+  Error / Signal / Escalation the element references after the op
+  (`bindRefAs`, ops/events.ts; E_USAGE when none or several); in the alias
+  table, `--summary` and `aliases`.
+- **The message a catching element waits for**: `ext add <event|receiveTask>
+  zeebe:subscription` and `set <event|receiveTask|message>
+  zeebe:correlationKey=` write the message's `zeebe:subscription`, with a
+  note naming the other elements that share the message (redirect, not a
+  refusal: the target is unambiguous, the result says where it went); an
+  element without a message is E_WRONG_HOST with the `set message=` to run
+  first. Camunda 7 has no such element (its descriptor has no message
+  correlation key), so nothing changed there.
+- `kinds --help` lists the sections from the section table; a test checks
+  that every `kinds --section` the guide names exists.
+
+Evidence (outside the repository; counts only): 126 probe models of this
+round agree with the engine (before: 22 disagreed); the verifier's 200
+adversarial models deployed again: W_C8_DEPLOY_* precision 0.938 -> 1.000,
+recall 0.741 -> 0.951 (the 4 left get a structural error, so any finding:
+recall 0.815 -> 1.000, precision 0.846 -> 0.910; the 8 left are structural
+rules stricter than Camunda 8, a start event with an incoming flow and
+similar, and an id with an umlaut bpmn-moddle cannot read); the 38 real
+Camunda 8 files: the profile agrees with the engine on 38 / 38, 0 of 97
+distinct real FEEL values flagged; the C8 edit battery (8 edit types, 304
+edits): 0 regressions, 299 / 299 agree; its message edit with `refAs` or
+the redirect instead of an id guess: 74 / 76 written (the 2 others keep an
+existing message's other key: E_DUPLICATE_EXTENSION), 0 regressions, 0
+misplaced subscriptions; the C8 engine suites 460 / 460. Tests:
+`test/step3-c8-fixes.test.ts`.
 
 ### Still open after round 1
 
@@ -425,8 +491,8 @@ Private corpora used locally, outside the repository; counts only.
   the fuzzer still finds `place` / `align` pushing a flow through a shape
   and a boundary event added on a host inside a sub-process intruding into
   another frame (the build before step 3 does the same).
-- Camunda 8: FEEL is not parsed, variables are not followed,
-  `zeebe:publishMessage` is reported as not run, event-based gateways of a
+- Camunda 8: FEEL syntax is checked but not its meaning (types, functions),
+  variables are not followed, `zeebe:publishMessage` is reported as not run, event-based gateways of a
   file without `<bpmn:outgoing>` lists have no repairing command, forms /
   called processes / decisions are not checked against a deployment; the
   Camunda 7 profile does not check timer values (`PT2D` deploys there and
@@ -937,8 +1003,8 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
   from a blank one; message start events of two executable pools with one
   message name are not reported (the engines refuse them).
 
-- Camunda 8: FEEL is not parsed (the common slips are); variables are not
-  followed (an input mapping's local variable read by a later gateway passes
+- Camunda 8: FEEL syntax is checked, not its meaning (unknown functions,
+  types); variables are not followed (an input mapping's local variable read by a later gateway passes
   the profile and fails at run time); `zeebe:publishMessage` is reported as
   accepted but not run by 8.9; an event-based gateway of a file without
   `<bpmn:outgoing>` lists is reported but cannot be repaired with a command;
