@@ -14,7 +14,8 @@ repository or in GitHub secrets.
      minor version instead (`bump-minor-pre-major` in `release-please-config.json`)
    - `docs:`, `chore:`, `ci:`, `test:`, `refactor:` → no release on their own
 2. The `release-please` workflow (`.github/workflows/release-please.yml`) keeps a release PR open. The PR
-   bumps `package.json`, `.release-please-manifest.json` and `CHANGELOG.md`.
+   bumps `package.json`, `.release-please-manifest.json` and `CHANGELOG.md`, and the version of the
+   Claude Code plugin (see [The Claude Code plugin](#the-claude-code-plugin)).
 3. Merging the release PR creates the tag `vX.Y.Z` and the GitHub release. The `publish` job of the same
    workflow then checks out the tag, runs `npm ci`, `npm run build` and `npm test`, and runs
    `npm publish` with an OIDC token.
@@ -43,6 +44,23 @@ package settings, add a trusted publisher for GitHub Actions with organization `
 Afterwards every release goes through the workflow. Optionally, in the package settings on npmjs.com, set
 "Publishing access" to require two-factor authentication and disallow tokens, so that only the trusted
 workflow can publish.
+
+## The Claude Code plugin
+
+`plugins/bpmn-cli` (listed in the marketplace `.claude-plugin/marketplace.json`) carries the package's
+version. `release-please-config.json` names two `extra-files`, so every release PR also bumps:
+
+- `plugins/bpmn-cli/.claude-plugin/plugin.json` (`json` updater, `$.version`);
+- the pinned `npx -y @miragon/bpmn-cli@X.Y.Z` of `plugins/bpmn-cli/skills/bpmn/SKILL.md` (`generic`
+  updater: it replaces the version on every line that carries the marker `x-release-please-version`,
+  so a new line with a pinned version needs the marker too).
+
+The version is set only in `plugin.json`, not in the marketplace entry. Installed plugins update when
+this version changes, so a change to the skill reaches users with the next release, together with the
+CLI version it describes (until then the pinned `npx` version is the previous release). The `ci`
+workflow's `plugin` job runs `claude plugin validate --strict` on the plugin and the marketplace (no
+credentials needed), and `test/plugin.test.ts` fails when `plugin.json`, the pinned `npx` version and
+`package.json` disagree.
 
 ## Notes
 
