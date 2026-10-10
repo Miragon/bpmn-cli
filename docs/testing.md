@@ -2,9 +2,10 @@
 
 Six layers, from fast to thorough (plus the isomorphism check of the
 browser-safe core, see [Isomorphism check](#isomorphism-check), the opt-in
-Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), and
-the opt-in check against design-iq's validator, see
-[design-iq](#design-iq-validator-check)):
+Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), the
+opt-in Camunda 8 engine check, see
+[Engine checks (Camunda 8)](#engine-checks-camunda-8), and the opt-in check
+against design-iq's validator, see [design-iq](#design-iq-validator-check)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -161,7 +162,8 @@ npx vitest run test/isomorphic.test.ts
   `process` read, and runs the bundle in a `vm` context without any Node
   global: `applyToXml` (also with the design profile and a host validator,
   and a no-op that must come back `unchanged`), `layoutXml` (both engines),
-  `newXml`, `validateXml` with the Camunda 7 and the design profile,
+  `newXml`, `validateXml` with the Camunda 7, the Camunda 8 and the design
+  profile,
   `showXml`, `findXml` and `metricsXml` must give there exactly what they
   give in Node. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
@@ -407,6 +409,48 @@ it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
 complete, correlate), and run the real-file battery on your private corpus:
 deploy every file before and after each edit and compare the camunda content
 element by element.
+
+## Engine checks (Camunda 8)
+
+The Camunda 8 profile (`src/platform/c8.ts`) states for every rule what
+Camunda 8.9 does; placement and known names come from the Zeebe descriptor
+(`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
+`node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
+while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
+rule (151 models) with the expected codes and Camunda 8's verdict, the timer
+and FEEL value checks with the values they were checked on, and the
+`validate` output; `test/c8-ops.test.ts` covers `set` / `ext` / `retype` /
+`show` in Camunda 8 files and runs the profile's hints through the real CLI
+until a refused model has no deploy finding left. By default they check the
+CLI only. To re-check against a live Camunda 8 (REST v2, no
+authentication), name its v2 root:
+
+```
+BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts
+```
+
+Each model is deployed (`POST /v2/deployments`), the test asserts that the
+profile reports a deploy-severity finding (or the structural error that
+stands for it) exactly for the models Camunda 8 refuses, and every
+deployment is deleted again (`POST /v2/resources/<key>/deletion`). The
+runtime block starts processes and drives them (`/v2/process-instances`,
+`/v2/jobs/activation`, `/v2/user-tasks`, `/v2/messages/publication`,
+`/v2/incidents/search`): a job worker gets its type, input mapping and
+headers, a message is correlated by its key, FEEL conditions route, a
+called decision and a call activity return their results, a Camunda user
+task is assigned and completed while a job worker user task is not listed,
+a multi-instance runs per item, and each runtime rule misbehaves the way its
+finding says (a flow without condition never taken, a condition out of a
+task ignored, a standard loop run once, a JUEL completion condition and
+non-numeric retries ending in an incident, camunda:* content and input
+mappings on a start event ignored, `zeebe:publishMessage` not run). The
+hint models of `c8-ops` are deployed after their hints were followed. With
+Camunda 8.9.22: 332 / 332.
+
+When you change how zeebe content is written, deploy the CLI-built models
+and run them, and run the real-file battery on your private corpus (deploy
+every file before and after each edit; compare every element's
+`<bpmn:extensionElements>` text outside the edited element byte for byte).
 
 ## design-iq validator check
 

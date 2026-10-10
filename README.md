@@ -49,6 +49,7 @@ with a laid-out diagram.
 - [Placement grammar](#placement-grammar)
 - [Set keys](#set-keys)
 - [Camunda 7](#camunda-7)
+- [Camunda 8](#camunda-8)
 - [design-iq: the design profile and validators](#design-iq-the-design-profile-and-validators)
 - [Ops JSON (`bpmn apply`)](#ops-json-bpmn-apply)
 - [Output, errors and exit codes](#output-errors-and-exit-codes)
@@ -98,7 +99,10 @@ belong where (placement, `validate`), and it is inlined into
 (run it after updating the package; a test fails while the copy differs), so
 the published package reads the copy, without the package and without file
 access. It is never registered with bpmn-moddle, so camunda content stays
-untyped and the serialisation is unchanged.
+untyped and the serialisation is unchanged. `zeebe-bpmn-moddle` (pinned to
+`2.0.0`) is the same for Camunda 8: its Zeebe descriptor is inlined into
+`src/platform/zeebe-descriptor.ts` by the same tool and read as data
+(placement and known names of zeebe content, [Camunda 8](#camunda-8)).
 
 ## The contract
 
@@ -289,7 +293,10 @@ Creates a file with one empty process. `--name` gives the process a name and
 drives its id (`Process_OrderHandling`); `--id` sets it explicitly; the process
 is executable unless `--no-executable`. `--target camunda8` declares the
 `zeebe:` and `modeler:` namespaces with `modeler:executionPlatform="Camunda
-Cloud"`, `--target camunda7` the `camunda:` and `modeler:` namespaces with
+Cloud"` and `modeler:executionPlatformVersion="8.9.0"` (in such a file new
+user tasks get `zeebe:userTask` and new event definitions an id, like the
+Modeler; see [Camunda 8](#camunda-8)),
+`--target camunda7` the `camunda:` and `modeler:` namespaces with
 `modeler:executionPlatform="Camunda Platform"`,
 `modeler:executionPlatformVersion="7.24.0"` and
 `camunda:historyTimeToLive="180"` on the process, which is what Camunda
@@ -324,7 +331,11 @@ their `set` keys, and repeated extension types are counted:
 `userTask Activity_Review "Review" [loop=parallel, camunda:assignee=demo,
 loop.camunda:collection=${items}, ext: camunda:taskListener x3]`; a business
 rule task shows its decision link as `calledDecision=<id>` whatever the
-spelling (see [`set`](#set)). The process
+spelling (see [`set`](#set)), and a node of a Camunda 8 file
+its zeebe settings the same way (`job=`, `calledElement=`, `script=`,
+`form=`, `assignee=` / `candidateGroups=` / `candidateUsers=`,
+`inputCollection=` / `inputElement=` / `outputCollection=` /
+`outputElement=`; a message its `correlationKey`). The process
 line carries the process's own (`process P "P" executable
 [camunda:historyTimeToLive=180, ext: camunda:executionListener]`); flows show
 `language=`, their vendor attributes and extensions, and a script resource
@@ -527,7 +538,10 @@ descriptor types as Boolean (`asyncBefore`, `exclusive`, ...) is written as
 exactly `true` / `false` (`yes`, `1`, `TRUE` are normalised; the engines read
 only the exact `true`); other values fail with `E_INVALID_VALUE`. The same
 rules apply to Operaton's own namespace (`operaton:asyncBefore`, see
-[Camunda 7](#camunda-7)).
+[Camunda 7](#camunda-7)). A `zeebe:` attribute that Camunda 8 reads on a
+zeebe extension element (`zeebe:assignee`, `zeebe:correlationKey`,
+`loop.zeebe:inputCollection`) is refused with `E_WRONG_HOST`; the hint is
+the `ext add` that writes it (see [Camunda 8](#camunda-8)).
 
 An event with several event definitions (BPMN "multiple"; the engines act on
 one of them only) needs a selector: `'definition[1].<key>=...'` (0-based) or
@@ -645,7 +659,10 @@ task; `operaton:` content alike) are named in one `W_PROPERTY_INAPPLICABLE`
 warning with the commands that remove them. In a Camunda 7 file the profile
 reports each of them as `W_C7_MISPLACED_ATTRIBUTE` / `W_C7_MISPLACED_EXTENSION`
 (with severity and a remove command each); a write then drops the summary, so
-every item is reported once. A
+every item is reported once. The same for `zeebe:` content the Zeebe
+descriptor does not allow on the new kind (`zeebe:assignmentDefinition` on
+a service task; `W_C8_MISPLACED_EXTENSION` in a Camunda 8 file), and a task
+retyped to a `userTask` in a Camunda 8 file gets `zeebe:userTask`. A
 sub-process with content becomes a task or call activity only with `--force`:
 without it the command fails with `E_WOULD_DROP_CONTENT` and lists every
 element that would be deleted (move what should stay out first, `move ...
@@ -756,8 +773,9 @@ kept:
 - `ext add` on `bpmn:definitions` is refused (`E_WRONG_KIND`; the BPMN schema
   has no extension elements there): use the process. Content the engines
   would not read where it was put (a loose `camunda:constraint` or
-  `camunda:value`, `camunda:field` on a user task) is added with
-  `W_MISPLACED_EXTENSION` and a path hint.
+  `camunda:value`, `camunda:field` on a user task, a zeebe element the Zeebe
+  descriptor does not allow there such as `zeebe:taskDefinition` on a user
+  task) is added with `W_MISPLACED_EXTENSION` and a path hint.
 
 `ext remove` takes a selector: a bare type removes every element of that type
 at the top level (a child type: inside its container),
@@ -775,8 +793,10 @@ on a multi-instance loop, `camunda:in` on a signal event definition,
 `camunda:field` / `camunda:connector` on a message event definition): give
 the type or selector the same prefix as the nested `set` keys,
 `loop.camunda:failedJobRetryTimeCycle`, `definition.camunda:in`,
-`condition.<type>`; in `ext remove` also `loop.0`. One of several event
-definitions: `'definition[1].camunda:field'` (or `definition[<trigger>].`).
+`condition.<type>`; in `ext remove` also `loop.0`. `ext add <id>
+loop.zeebe:loopCharacteristics ...` creates a parallel multi-instance loop
+on an activity that has none (Camunda 8's multi-instance settings live
+there). One of several event definitions: `'definition[1].camunda:field'` (or `definition[<trigger>].`).
 `ext list` prints the element's own extension elements and then those of its
 nested elements (`loop.0: ...`, `definition[1].0: ...`), each as an indented
 tree (a multi-line body as `body:` plus `| <line>` lines); `--json` gives the
@@ -824,17 +844,18 @@ reads it: `operaton:*` first, `camunda:*` as the fallback; only Operaton reads
 that namespace, Camunda 7 and CIB seven ignore it, which the detail line says
 (`3 operaton attribute(s)/element(s); only Operaton reads the operaton
 namespace, Camunda 7 and CIB seven ignore it`) and `--json` flags as
-`"operaton": true`. Only Camunda 7 has rules today (a Camunda 8 file's line
-says `no Camunda 8 engine rules yet`; see
-[Camunda 7](#camunda-7)): its findings are warnings named `W_C7_*` with a
-`severity` (`deploy`: the engines refuse the file, codes `W_C7_DEPLOY_*`;
+`"operaton": true`. Camunda 7 ([Camunda 7](#camunda-7)) and Camunda 8
+([Camunda 8](#camunda-8)) have rules (plain BPMN has none): the findings
+are warnings named `W_C7_*` / `W_C8_*` with a `severity` (`deploy`: the
+engine refuses the file, codes `W_C7_DEPLOY_*` / `W_C8_DEPLOY_*`;
 `runtime`: it deploys but the setting is ignored or fails when it runs;
 `practice`: it works, the engine logs a warning), so `--strict` exits 5 on
 them. `--json` adds `"platform": {"platform", "source", "detail", "counts":
 {"deploy", "runtime", "practice"}}`. Only executable processes are checked
-(the engines skip the others, and the content of ad-hoc sub-processes), plus
-file-level content and the BPMN schema rules, which the engines apply to the
-whole file (an attribute BPMN does not define, a conditional event definition
+(the engines skip the others; Camunda 7 also the content of ad-hoc
+sub-processes, which Camunda 8 checks; Camunda 8 refuses a file without an
+executable process), plus file-level content and the BPMN schema rules,
+which the engines apply to the whole file (an attribute BPMN does not define, a conditional event definition
 without condition, a link definition without name, also next to another
 definition the engines ignore). Every write runs the
 profile before and after and reports only the findings the change introduced
@@ -1044,7 +1065,7 @@ or inclusive gateways), choreographies, implicit throw events and groups.
 ## Triggers
 
 An event's trigger is the suffix of its kind (`startEvent:timer`); the details
-come from an option (`--timer PT2D`). Root elements (`bpmn:Message`,
+come from an option (`--timer P2D`). Root elements (`bpmn:Message`,
 `bpmn:Error`, `bpmn:Signal`, `bpmn:Escalation`) are looked up by name and
 created next to the process when missing. In ops JSON the keys are the option
 names in lowerCamelCase (`timerKind`, `errorCode`, `nonInterrupting`).
@@ -1053,7 +1074,7 @@ names in lowerCamelCase (`timerKind`, `errorCode`, `nonInterrupting`).
 | --- | --- | --- |
 | `none` | | plain event; the default for start / end / throw events in `add`; `retype` keeps the current trigger unless you write `<kind>:none` |
 | `message` | `--message <name>` | `bpmn:Message` by name (also on `sendTask` / `receiveTask`) |
-| `timer` | `--timer <iso>` `[--timer-kind cycle\|duration\|date]` | `R/PT1H` -> timeCycle, `PT2D` -> timeDuration, `2026-01-31T09:00:00Z` -> timeDate (auto-classified; `--timer-kind` overrides) |
+| `timer` | `--timer <iso>` `[--timer-kind cycle\|duration\|date]` | `R/PT1H` -> timeCycle, `P2D` -> timeDuration, `2026-01-31T09:00:00Z` -> timeDate (auto-classified; `--timer-kind` overrides) |
 | `error` | `--error <name>` `[--error-code <code>]` | `bpmn:Error` by name |
 | `signal` | `--signal <name>` | `bpmn:Signal` by name |
 | `escalation` | `--escalation <name>` `[--escalation-code <code>]` | `bpmn:Escalation` by name |
@@ -1114,7 +1135,7 @@ are:
 
 | applies to | keys |
 | --- | --- |
-| any element | `id` (rename, every reference follows, including `calledElement` strings), `name`, `doc` / `documentation`, any attribute-typed BPMN property of the element's type by its name (`isExecutable`, `isForCompensation`, `completionQuantity`, `processType`, `script`, `scriptFormat`, `implementation`, `calledElement`, `instantiate`, `gatewayDirection`, ...; enums are checked), vendor attributes with a prefix (`camunda:assignee`, `zeebe:formKey`; the xmlns is declared automatically for known prefixes) |
+| any element | `id` (rename, every reference follows, including `calledElement` strings), `name`, `doc` / `documentation`, any attribute-typed BPMN property of the element's type by its name (`isExecutable`, `isForCompensation`, `completionQuantity`, `processType`, `script`, `scriptFormat`, `implementation`, `calledElement`, `instantiate`, `gatewayDirection`, ...; enums are checked), vendor attributes with a prefix (`camunda:assignee`, `zeebe:modelerTemplate`; the xmlns is declared automatically for known prefixes; Camunda 8 settings are extension elements, see [Camunda 8](#camunda-8)) |
 | sequence flows | `condition`, `language`, `default` (`true`/`false`), `source`, `target` (redirect) |
 | events | `trigger` (`message`, `timer`, ...), `timer`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting` (`true`/`false`) |
 | activities | `loop` (`none`/`standard`/`parallel`/`sequential`), `cardinality`, `completion` (completion condition) |
@@ -1318,6 +1339,216 @@ created per entry of `parties`, assigned to it. (`Mapping_NotCovered` follows
 a rename of `Error_NotCovered`: `bpmn set claim.bpmn Error_NotCovered
 id=Error_Rejected` re-points it.)
 
+## Camunda 8
+
+Camunda 8 (Zeebe) reads the `zeebe:` namespace. The rules below and the
+worked example were checked on Camunda 8.9.22 (REST v2): every deploy rule by
+deploying, every runtime rule by running the process. Zeebe content stays
+untyped in the model and is kept byte for byte by every edit; the Zeebe
+descriptor (`zeebe-bpmn-moddle`, read as data like the Camunda 7 one) tells
+the CLI where a zeebe element belongs and which attributes it has.
+
+**A new file.** `bpmn new invoice.bpmn --name "Invoice approval" --target
+camunda8` declares the `zeebe:` and `modeler:` namespaces and the execution
+platform (`Camunda Cloud`, `8.9.0`), like Camunda Modeler. In a Camunda 8
+file a new user task (`add`, or `retype` to `userTask`) gets
+`<zeebe:userTask />`: a Camunda user task, which is what the Modeler creates.
+Without it Camunda 8 runs a job worker user task (a job of type
+`io.camunda.zeebe:userTask`, which the v2 user task API and Tasklist in V2
+mode do not list; `W_C8_JOB_WORKER_USER_TASK`). A new event definition gets
+an id derived from its event (`ConditionalEventDefinition_StockReady`):
+Camunda 8.9 refuses conditional, compensation and link catch event
+definitions without one.
+
+**Settings are extension elements.** Almost every Camunda 8 setting is a
+zeebe extension element, added with `ext add`; FEEL values start with `=`,
+so write `attr==<expression>` (the first `=` separates key and value:
+`source==order.total` is `source="=order.total"`). Child types go into their
+container, single elements are merged, keyed items replaced (see
+[`ext`](#ext)); `bpmn kinds` (section CAMUNDA 8, `kinds --json` ->
+`zeebeElements`) lists every zeebe element, where it goes and its
+attributes.
+
+| what | command |
+| --- | --- |
+| job worker (service, send, script, business rule task, message throw / end event) | `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType> retries=3` |
+| input / output mapping | `bpmn ext add <file> <id> zeebe:input source==<FEEL> target=<variable>` (`zeebe:output`; filed into `zeebe:ioMapping`, replaced by target) |
+| task header | `bpmn ext add <file> <id> zeebe:header key=<key> value=<value>` |
+| FEEL script task | `bpmn ext add <file> <id> zeebe:script expression==<FEEL> resultVariable=<variable>` |
+| DMN decision | `bpmn set <file> <id> calledDecision=<decisionId>`, then `bpmn ext add <file> <id> zeebe:calledDecision resultVariable=<variable>` |
+| call activity | `bpmn ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false` |
+| user task | `zeebe:assignmentDefinition assignee=<user> candidateGroups=<groups>`, `zeebe:formDefinition formId=<formId>` (or `externalReference=<url>`), `zeebe:taskSchedule dueDate=<date-time>`, `zeebe:priorityDefinition priority=<0..100>`, `zeebe:taskListener eventType=completing type=<jobType>` |
+| message correlation | `bpmn set <file> <id> message=<Name>` (or `add ... --message <Name>`), then `bpmn ext add <file> <messageId> zeebe:subscription correlationKey==<FEEL>` |
+| multi-instance | `bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<FEEL> inputElement=<variable>` (creates the parallel loop; `outputCollection=<variable> outputElement==<FEEL>` collect results; `set <id> loop=sequential`) |
+| execution listener | `bpmn ext add <file> <id> zeebe:executionListener eventType=start type=<jobType>` |
+| conditions | `add ... --condition '= amount > 1000'`, `bpmn set <file> <flowId> 'condition== amount > 1000'`, `when=` on a conditional event |
+| process | `bpmn ext add <file> <processId> zeebe:versionTag value=v1` |
+
+A zeebe attribute set on the element itself is refused, with the command
+that writes it where Camunda 8 reads it:
+
+```
+$ bpmn set invoice.bpmn Activity_ApproveInvoice zeebe:candidateGroups=finance
+error E_WRONG_HOST: zeebe:candidateGroups is not an attribute of userTask Activity_ApproveInvoice: Camunda 8 reads candidateGroups on the zeebe:assignmentDefinition extension element
+  element: Activity_ApproveInvoice
+  op: #0
+  hint: Use `bpmn ext add <file> Activity_ApproveInvoice zeebe:assignmentDefinition candidateGroups=finance`.
+```
+
+A zeebe element added where Camunda 8 does not read it (a
+`zeebe:taskDefinition` on a user task) is written with
+`W_MISPLACED_EXTENSION`; `retype` names the zeebe content the new kind
+cannot use (`W_PROPERTY_INAPPLICABLE`, in a Camunda 8 file one
+`W_C8_MISPLACED_EXTENSION` per item). `show` prints what a node does
+(`job=check-invoice`, `calledElement=...`, `script=...`, `form=...`,
+`assignee=...` / `candidateGroups=...`, `inputCollection=...`) and a message
+its correlation key; `show <id>` and `ext list` print the whole tree.
+
+**Validate before deploying.** `bpmn validate` runs the Camunda 8 profile in
+Camunda 8 files (`modeler:executionPlatform` "Camunda Cloud", or zeebe
+content; `--platform c8` forces it). Its findings are warnings named
+`W_C8_*` with a `severity`: `deploy` (`W_C8_DEPLOY_*`: Camunda 8 refuses the
+file), `runtime` (it deploys, but the setting is ignored or fails when the
+process runs), `practice`. The deploy rules: a service / send / script /
+business rule task or message throw / end event without job type (or
+script, called decision), a call activity without `zeebe:calledElement`
+(the BPMN `calledElement` is not read), a catching message without a
+`zeebe:subscription` correlation key, a JUEL `${...}` condition or any
+static value where Camunda 8 wants FEEL, a FEEL slip it refuses (`&&`, `||`,
+`==`, `!`, single quotes, unbalanced brackets, a dangling operator), a
+timer value it cannot parse (`PT2D` instead of `P2D`, a date without
+offset, a 5-field cron), a cycle on an intermediate or interrupting timer,
+a multi-instance loop without `zeebe:loopCharacteristics` or
+`inputCollection`, two of a zeebe element it reads once, form, priority,
+date, listener and mapping content it refuses, event and start-event
+combinations it does not support (several definitions, a triggered start
+in an embedded sub-process, two none starts, error codes or message names
+twice in a scope, an escalation boundary event on a task, a link without
+catch), unsupported elements (transaction, cancel events), an unprefixed
+attribute BPMN does not define, and a file without an executable process.
+The runtime rules: a flow without condition out of an exclusive or
+inclusive gateway with other outgoing flows is never taken, a condition on
+a flow out of a task or parallel gateway is ignored, a standard loop runs
+once, a JUEL completion condition and non-numeric job retries end in an
+incident, Camunda 7 content (`camunda:*`) is ignored, unknown and misplaced
+zeebe content (input mappings on start, boundary, none throw and none end
+events included) has no effect, `zeebe:publishMessage` is accepted but not
+run. Every finding names the command that fixes it (the worked example
+below after `set Flow_1p3kapg 'condition=${invoice.amount > 1000}'` and
+`ext remove Message_PaymentReceived zeebe:subscription`):
+
+```
+$ bpmn validate invoice.bpmn
+W_C8_DEPLOY_MESSAGE Activity_WaitForPayment [Message_PaymentReceived]: Message Message_PaymentReceived ("Payment received") of receiveTask Activity_WaitForPayment has no zeebe:subscription: Camunda 8 needs one with the correlation key that matches a message to an instance and refuses the file  (`bpmn ext add <file> Message_PaymentReceived zeebe:subscription correlationKey==<expression>` (e.g. correlationKey==orderId).)
+W_C8_DEPLOY_EXPRESSION Flow_1p3kapg: The condition "${invoice.amount > 1000}" of sequence flow Flow_1p3kapg is no FEEL expression; Camunda 8 needs one starting with = and refuses the file  (`bpmn set <file> Flow_1p3kapg 'condition== invoice.amount > 1000'` (check the FEEL syntax: and / or, = for equality).)
+platform: c8 (modeler:executionPlatform "Camunda Cloud") - 2 refused at deploy, 0 runtime, 0 practice finding(s)
+layout: ok
+valid, 2 warning(s)
+```
+
+Evidence (Camunda 8.9.22): 151 synthetic models (`test/c8-profile.test.ts`,
+re-checked with `BPMN_C8_ENGINE`) get a deploy finding exactly when the
+engine refuses them; on 38 real Camunda 8 files and 28 synthetic scenario
+files the profile has no false deploy finding and finds every refused file
+(32 / 32; every element the engine names is in a finding), following the
+hints (306 commands through the CLI) made all 32 refused files deployable,
+and an edit battery (rename, id rename, insert, remove, retype, boundary
+event, full redraw; 459 edits) has 0 regressions, the profile agrees with
+the engine on every result, and no zeebe content outside the edited element
+changed (1,689 / 1,689 extension blocks byte for byte). Like Camunda 8,
+the profile checks executable processes only (but a file without one is
+refused) and the content of ad-hoc sub-processes too. It does not parse
+FEEL: other syntax errors are found by the engine only.
+
+### A worked example: invoice approval
+
+An invoice is checked by a job worker (input mapping, task header), large
+amounts are approved by the finance group (FEEL condition, Camunda user
+task with assignment and form), the process waits for the payment message
+(correlation by invoice id), books the payment in another process (call
+activity with an output mapping) and notifies every party (multi-instance):
+
+```
+bpmn new invoice.bpmn --name "Invoice approval" --target camunda8
+bpmn add invoice.bpmn start "Invoice received"
+bpmn add invoice.bpmn serviceTask "Check invoice" --after Event_InvoiceReceived
+bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:taskDefinition type=check-invoice retries=3
+bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:input source==invoice.amount target=amount
+bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:header key=channel value=mail
+bpmn add invoice.bpmn exclusiveGateway "Amount over 1000?" --after Activity_CheckInvoice
+bpmn add invoice.bpmn userTask "Approve invoice" --after Gateway_AmountOver1000 --flow-name yes --condition '= invoice.amount > 1000'
+bpmn ext add invoice.bpmn Activity_ApproveInvoice zeebe:assignmentDefinition candidateGroups=finance
+bpmn ext add invoice.bpmn Activity_ApproveInvoice zeebe:formDefinition externalReference=https://forms.example.com/approve-invoice
+bpmn add invoice.bpmn exclusiveGateway --id Gateway_Approved --after Activity_ApproveInvoice
+bpmn connect invoice.bpmn Gateway_AmountOver1000 Gateway_Approved --name no --default
+bpmn add invoice.bpmn receiveTask "Wait for payment" --after Gateway_Approved --message "Payment received"
+bpmn ext add invoice.bpmn Message_PaymentReceived zeebe:subscription correlationKey==invoiceId
+bpmn add invoice.bpmn callActivity "Book payment" --after Activity_WaitForPayment
+bpmn ext add invoice.bpmn Activity_BookPayment zeebe:calledElement processId=Process_BookPayment propagateAllChildVariables=false
+bpmn ext add invoice.bpmn Activity_BookPayment zeebe:output source==bookingId target=bookingId
+bpmn add invoice.bpmn serviceTask "Notify party" --after Activity_BookPayment
+bpmn ext add invoice.bpmn Activity_NotifyParty zeebe:taskDefinition type=notify-party
+bpmn ext add invoice.bpmn Activity_NotifyParty loop.zeebe:loopCharacteristics inputCollection==parties inputElement=party
+bpmn add invoice.bpmn end "Invoice settled" --after Activity_NotifyParty
+
+bpmn new booking.bpmn --name "Book payment" --target camunda8
+bpmn add booking.bpmn start "Booking requested"
+bpmn add booking.bpmn scriptTask "Create booking" --after Event_BookingRequested
+bpmn ext add booking.bpmn Activity_CreateBooking zeebe:script 'expression== "B-" + invoiceId' resultVariable=bookingId
+bpmn add booking.bpmn end "Booked" --after Activity_CreateBooking
+```
+
+Each step reports what the profile finds until it is complete (`bpmn add
+... serviceTask` warns `W_C8_DEPLOY_IMPLEMENTATION` until the job type is
+there, the receive task `W_C8_DEPLOY_MESSAGE` until its message has a
+correlation key):
+
+```
+$ bpmn show invoice.bpmn
+namespaces: zeebe, modeler
+process Process_InvoiceApproval "Invoice approval" executable
+  startEvent Event_InvoiceReceived "Invoice received" -> Activity_CheckInvoice (Flow_1d9iq3c)
+  serviceTask Activity_CheckInvoice "Check invoice" [job=check-invoice, ext: zeebe:taskDefinition, zeebe:ioMapping, zeebe:taskHeaders] -> Gateway_AmountOver1000 (Flow_1j5bfq9)
+  exclusiveGateway Gateway_AmountOver1000 "Amount over 1000?" -> Activity_ApproveInvoice (Flow_1p3kapg "yes" if = invoice.amount > 1000), Gateway_Approved (Flow_0rx34hq "no" default)
+  userTask Activity_ApproveInvoice "Approve invoice" [form=https://forms.example.com/approve-invoice, candidateGroups=finance, ext: zeebe:userTask, zeebe:assignmentDefinition, zeebe:formDefinition] -> Gateway_Approved (Flow_02hoari)
+  exclusiveGateway Gateway_Approved -> Activity_WaitForPayment (Flow_040g1ya)
+  receiveTask Activity_WaitForPayment "Wait for payment" [message=Payment received] -> Activity_BookPayment (Flow_1ju8oiv)
+  callActivity Activity_BookPayment "Book payment" [calledElement=Process_BookPayment, ext: zeebe:calledElement, zeebe:ioMapping] -> Activity_NotifyParty (Flow_06d0vcw)
+  serviceTask Activity_NotifyParty "Notify party" [loop=parallel, job=notify-party, inputCollection==parties, inputElement=party, ext: zeebe:taskDefinition] -> Event_InvoiceSettled (Flow_0ys0mpu)
+  endEvent Event_InvoiceSettled "Invoice settled"
+root: message Message_PaymentReceived "Payment received" [correlationKey==invoiceId]
+problems: none
+
+$ bpmn show invoice.bpmn Activity_CheckInvoice
+...
+job: check-invoice
+extensions:
+  zeebe:taskDefinition type="check-invoice" retries="3"
+  zeebe:ioMapping
+    zeebe:input source="=invoice.amount" target="amount"
+  zeebe:taskHeaders
+    zeebe:header key="channel" value="mail"
+
+$ bpmn validate invoice.bpmn
+platform: c8 (modeler:executionPlatform "Camunda Cloud") - 0 refused at deploy, 0 runtime, 0 practice finding(s)
+layout: ok
+valid, 0 warning(s)
+```
+
+Both files deploy together to Camunda 8.9 and run: started with
+`{invoiceId: "INV-1", invoice: {amount: 5000}, parties: ["buyer",
+"seller"]}`, the `check-invoice` worker gets `amount = 5000` as a local
+variable and the header `channel = mail`; the gateway routes to "Approve
+invoice", a Camunda user task for the group `finance` with the external
+form; after it is completed the process waits until the message "Payment
+received" is published with the correlation key `INV-1`; the call activity
+runs "Book payment", whose FEEL script returns `bookingId = "B-INV-1"` to
+the parent through the output mapping; two `notify-party` jobs are created,
+one per party, and the instance completes. An instance with `amount: 100`
+takes the default flow and skips the approval. (The input mapping's
+`amount` is local to "Check invoice": the condition reads
+`invoice.amount`.)
+
 ## design-iq: the design profile and validators
 
 Miragon's design-iq validates every save of a model with its own validator
@@ -1373,7 +1604,7 @@ introduced is reported once, and the result names the validator and the
 totals:
 
 ```
-$ bpmn add claims/models/claim.bpmn boundary:timer "2 days" --on Activity_Review --timer PT2D
+$ bpmn add claims/models/claim.bpmn boundary:timer "2 days" --on Activity_Review --timer P2D
 error E_VALIDATION: The change would introduce 1 error(s) reported by validator design; nothing was written
   [design] E_DESIGN_DEAD_END Event_2Days: boundaryEvent:timer Event_2Days "2 days" has no outgoing sequence flow  (Continue the flow ...)
   hint: Fix the listed problems (each names its validator in brackets), make the edit in one transaction ...
@@ -1570,7 +1801,7 @@ an end event:
       "name": "Invoice ok?",
       "as": "$ok",
       "branches": [
-        { "flowName": "yes", "condition": "${ok}", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
+        { "flowName": "yes", "condition": "= ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
         {
           "flowName": "no",
           "default": true,
@@ -1578,17 +1809,20 @@ an end event:
         }
       ]
     },
-    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "$clarify", "timer": "P2D", "nonInterrupting": true, "as": "$reminder" },
     { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
     { "op": "add", "kind": "endEvent", "name": "Reminder sent", "in": "Process_OrderHandling", "as": "$sent" },
     { "op": "connect", "source": "$remind", "target": "$sent" },
     { "op": "set", "id": "$book", "values": { "name": "Book invoice in ERP", "doc": "Posts the invoice to the ledger." } },
-    { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } }
+    { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } },
+    { "op": "ext", "id": "$remind", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "remind-customer" } }
   ]
 }
 ```
 
-`bpmn kinds --json` -> `opsExample` returns exactly this object.
+`bpmn kinds --json` -> `opsExample` returns exactly this object; the result
+is a valid Camunda 8 file (FEEL condition, ISO duration, a job type for every
+service and send task).
 
 ## Output, errors and exit codes
 
@@ -1949,6 +2183,15 @@ touched, in the file's own style:
   refuse such a file before and after the edit; `bpmn layout` does not
   reorder either. A new element goes after the sibling bpmn-moddle writes
   before it (in a file in XSD order, its place in that order).
+- The Camunda 8 profile does not parse FEEL: it reports a static value
+  where FEEL is required and the common slips (`&&`, `||`, `==`, `!`,
+  `${...}`, single quotes, unbalanced brackets, a dangling operator); other
+  FEEL syntax errors are found by the engine only. An event-based gateway of
+  a file that leaves out the `<bpmn:outgoing>` lists is refused by Camunda 8
+  (it counts the listed flows; the profile reports it), and a write keeps
+  the file's way of listing them. `zeebe:publishMessage` (accepted by
+  Camunda 8.9, not run) is not in the Zeebe descriptor and known to the
+  profile only.
 - `bpmn-moddle` never sets `$parent` for elements created in memory; the CLI
   maintains containment, `incoming`/`outgoing` (complete in memory, written
   the way the file keeps them) and every reference itself. A hand-edited file
@@ -1980,6 +2223,8 @@ $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
 created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
+note: Activity_CheckInvoice is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them
+warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
 resolved: W_DEAD_END Event_OrderReceived
 1 warning already in the file (not repeated: `bpmn validate <file>` lists them)
@@ -2000,12 +2245,13 @@ $ cat > ops.json <<'EOF'
 { "ops": [
   { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?", "as": "$ok",
     "branches": [
-      { "flowName": "yes", "condition": "=ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
+      { "flowName": "yes", "condition": "= ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
       { "flowName": "no", "default": true, "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "as": "$clarify" }] } ] },
-  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "$clarify", "timer": "P2D", "nonInterrupting": true, "as": "$reminder" },
   { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
   { "op": "add", "kind": "end", "name": "Reminder sent", "after": "$remind" },
-  { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
+  { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } },
+  { "op": "ext", "id": "$remind", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "remind-customer" } }
 ] }
 EOF
 $ bpmn apply order.bpmn ops.json
@@ -2025,9 +2271,11 @@ created endEvent Event_ReminderSent "Reminder sent" - after Activity_RemindCusto
 created sequenceFlow Flow_RemindCustomerToReminderSent - Activity_RemindCustomer -> Event_ReminderSent
 changed sequenceFlow Flow_CheckInvoiceToInvoiceOk - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled) (renamed from Flow_CheckInvoiceToInvoiceHandled: its id named its old ends)
 changed serviceTask Activity_BookInvoice "Book invoice" - ext added zeebe:taskDefinition
+changed sendTask Activity_RemindCustomer "Remind customer" - ext added zeebe:taskDefinition
 note: inserted Gateway_InvoiceOk between Activity_CheckInvoice and Event_InvoiceHandled
 note: appended after Gateway_InvoiceOk
 note: appended after Gateway_InvoiceOk
+note: Activity_ClarifyInvoice is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them
 note: split Gateway_InvoiceOk: 2 branch(es) ending at Activity_BookInvoice, Activity_ClarifyInvoice, joined at Gateway_InvoiceOk_join, continues to Event_InvoiceHandled
 note: attached to Activity_ClarifyInvoice
 note: appended after Event_Reminder
@@ -2053,7 +2301,7 @@ process Process_OrderHandling "Order handling" executable
 root: message Message_OrderReceived "OrderReceived"
 problems: none
 
-$ bpmn set order.bpmn Activity_ClarifyInvoice name="Clarify invoice with customer" doc="Call the customer."
+$ bpmn set order.bpmn Activity_ClarifyInvoice "name=Clarify invoice with customer" "doc=Call the customer."
 changed userTask Activity_ClarifyInvoice "Clarify invoice with customer" - name=Clarify invoice with customer
 changed userTask Activity_ClarifyInvoice "Clarify invoice with customer" - doc=Call the customer.
 layout: ok - full (engine-owned diagram: redrawn)
@@ -2113,6 +2361,7 @@ created serviceTask Activity_ArchiveInvoice "Archive invoice" - after Activity_B
 created sequenceFlow Flow_ArchiveInvoiceToInvoiceOkJoin - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
 changed sequenceFlow Flow_BookInvoiceToArchiveInvoice - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join) (renamed from Flow_BookInvoiceToInvoiceOkJoin: its id named its old ends)
 note: inserted between Activity_BookInvoice and Gateway_InvoiceOk_join
+warning W_C8_DEPLOY_IMPLEMENTATION Activity_ArchiveInvoice: serviceTask Activity_ArchiveInvoice has no zeebe:taskDefinition: Camunda 8 needs the job type a worker subscribes to and refuses the file  (Give it a job type: `bpmn ext add <file> Activity_ArchiveInvoice zeebe:taskDefinition type=<jobType>`.)
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
   placed: Activity_ArchiveInvoice, Flow_ArchiveInvoiceToInvoiceOkJoin
   moved: Participant_OrderHandling, Event_InvoiceHandled, Activity_RemindCustomer, Event_ReminderSent, Gateway_InvoiceOk_join, Participant_Customer
@@ -2124,7 +2373,6 @@ $ bpmn metrics order.bpmn
 score 0: no layout problems
 
 $ bpmn validate order.bpmn
-platform: c8 (modeler:executionPlatform "Camunda Cloud") - no Camunda 8 engine rules yet (structure and lint only)
 layout: ok
 valid, 0 warning(s)
 ```
@@ -2138,7 +2386,10 @@ The last steps format the drawing without XML: `show --layout` reads it,
 `color` / `label` / `place` change it (the drawing is now hand-made), and the
 following `add` therefore keeps it and places "Archive invoice" locally
 between "Book invoice" and the join (`layout: ok - incremental`) instead of
-redrawing; `metrics` confirms that no layout problem was introduced.
+redrawing; `metrics` confirms that no layout problem was introduced. The
+file targets Camunda 8, so `validate` (and already the `add`) reports that
+the new service task has no job type; the `ext add` from the hint fixes it,
+and the result deploys to Camunda 8.9.
 
 (The result lines and the `show` views above are copied from the real output
 of this version; wording may change between versions, ids and structure are

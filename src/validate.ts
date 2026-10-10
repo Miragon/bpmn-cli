@@ -751,8 +751,8 @@ export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationRes
  * finding is dropped: the platform finding
  * says the same with the engine's verdict. The other way round, a platform
  * finding that a structural error already reports is dropped (and not
- * counted): W_C7_DEPLOY_BOUNDARY_HOST next to E_INVALID_HOST (also as
- * W_PREEXISTING_ERROR) for the same boundary event.
+ * counted): W_C7_DEPLOY_BOUNDARY_HOST / W_C8_DEPLOY_BOUNDARY_HOST next to
+ * E_INVALID_HOST (also as W_PREEXISTING_ERROR) for the same boundary event.
  */
 export function withProfile(result: ValidationResult, report: ProfileReport, shown: ProfileFinding[], delta?: { added: ProfileFinding[]; resolved: ProfileFinding[] }): ValidationResult {
   const invalidHost = new Set(
@@ -760,15 +760,15 @@ export function withProfile(result: ValidationResult, report: ProfileReport, sho
       .filter((e) => e.code === 'E_INVALID_HOST' || (e.code === 'W_PREEXISTING_ERROR' && e.message.startsWith('E_INVALID_HOST')))
       .map((e) => e.element),
   );
-  const repeated = (f: ProfileFinding): boolean => f.code === 'W_C7_DEPLOY_BOUNDARY_HOST' && invalidHost.has(f.element);
+  const repeated = (f: ProfileFinding): boolean => (f.code === 'W_C7_DEPLOY_BOUNDARY_HOST' || f.code === 'W_C8_DEPLOY_BOUNDARY_HOST') && invalidHost.has(f.element);
   if (invalidHost.size) {
     shown = shown.filter((f) => !repeated(f));
     report = { ...report, findings: report.findings.filter((f) => !repeated(f)) };
     if (delta) delta = { added: delta.added.filter((f) => !repeated(f)), resolved: delta.resolved };
   }
-  const covered = new Set(shown.filter((f) => f.code.startsWith('W_C7_') && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
+  const covered = new Set(shown.filter((f) => (f.code.startsWith('W_C7_') || f.code.startsWith('W_C8_')) && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
   // "(sub-)process X has no start event (is empty); the engines refuse the file" says what W_NO_START / W_EMPTY_SUBPROCESS say
-  const noStart = new Set(shown.filter((f) => (f.code === 'W_C7_DEPLOY_START_EVENT' || f.code === 'W_C7_TRANSACTION_NO_START') && !f.related?.length).map((f) => f.element));
+  const noStart = new Set(shown.filter((f) => (f.code === 'W_C7_DEPLOY_START_EVENT' || f.code === 'W_C7_TRANSACTION_NO_START' || f.code === 'W_C8_DEPLOY_START_EVENT') && !f.related?.length).map((f) => f.element));
   const warnings = result.warnings.filter((w) => (w.code !== 'W_EVENT_GATEWAY_TARGET' || !covered.has(`${w.element}|${w.related?.[0] ?? ''}`)) && ((w.code !== 'W_NO_START' && w.code !== 'W_EMPTY_SUBPROCESS') || !noStart.has(w.element)));
   const platform: PlatformSummary = { ...summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
   return { errors: result.errors, warnings: [...warnings, ...shown], platform };

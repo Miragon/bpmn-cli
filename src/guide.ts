@@ -11,11 +11,13 @@
 import { EXIT_CODES, usageError } from './errors.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from './kinds.js';
 import { Doc } from './document.js';
+import { SINGLE_TOP } from './ops/ext.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from './ops/set.js';
 import { OP_NAMES } from './ops/types.js';
 import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from './batch.js';
 import { SWATCHES } from './diagram/write.js';
 import { LAYOUT_MODES } from './pipeline.js';
+import { zeebeAllowedOn, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from './platform/zeebe.js';
 
 /* ------------------------------------------------------------------ */
 /* error catalogue                                                      */
@@ -99,7 +101,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_INVALID_MESSAGE_FLOW', meaning: 'A message flow ends at an element that cannot send or receive messages (gateway, data object, ...).', fix: 'Connect pools, tasks, events or sub-processes instead.' },
   { code: 'E_MESSAGE_FLOW_SAME_POOL', meaning: 'A message flow connects two elements inside the same pool.', fix: 'Use a sequence flow inside a pool; message flows only cross pool boundaries.' },
   // events & retype
-  { code: 'E_TRIGGER_REQUIRED', meaning: 'Boundary events need a trigger.', fix: 'Use boundaryEvent:<trigger> with its option, e.g. boundary:timer --timer PT2D or boundary:error --error PaymentFailed.' },
+  { code: 'E_TRIGGER_REQUIRED', meaning: 'Boundary events need a trigger.', fix: 'Use boundaryEvent:<trigger> with its option, e.g. boundary:timer --timer P2D or boundary:error --error PaymentFailed.' },
   { code: 'E_INVALID_TRIGGER', meaning: 'The trigger is not allowed here: e.g. startEvent:error outside an event sub-process, --non-interrupting on an error/cancel/compensate boundary event, a trigger the kind does not support.', fix: '`bpmn kinds` shows the allowed triggers per event kind; error/escalation/compensate start events go inside an eventSubProcess.' },
   { code: 'E_INVALID_REMOVE', meaning: '`remove` was asked to delete the bpmn:Definitions root.', fix: 'Delete the file instead; remove processes, participants or elements.' },
   { code: 'E_NO_CONDITION', meaning: '`set language=...` on a sequence flow that has no condition expression.', fix: 'Set condition=<expression> together with language.' },
@@ -133,7 +135,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_NAMED_JOIN', meaning: 'A joining gateway has a name (convention: joins are unnamed).', fix: '`bpmn set <file> <gatewayId> name=`.' },
   { code: 'W_NAMED_PARALLEL', meaning: 'A parallel gateway has a name (convention: parallel gateways are unnamed).', fix: '`bpmn set <file> <gatewayId> name=`.' },
   { code: 'W_NOT_IN_LANE', meaning: 'The process has lanes but this node is in none of them.', fix: '`bpmn set <file> <nodeId> lane=<laneId>` or `bpmn move <nodeId> --lane <laneId>`.' },
-  { code: 'W_EVENT_GATEWAY_TARGET', meaning: 'An event-based gateway leads to something BPMN 2.0 does not allow there: not a catching event or receive task (lint); in a plain file also a receive task mixed with message catch events, a receive task with boundary events, or a target with another incoming flow (`connect`, `add`, `move` warn about the edge they create). Camunda 7, CIB seven and Operaton accept only intermediate catch events: in a Camunda 7 file W_C7_DEPLOY_EVENT_GATEWAY reports it instead.', fix: 'Put intermediateCatchEvent:<message|timer|signal|conditional> nodes directly after the gateway (`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow <flowId> --message <Msg>`).' },
+  { code: 'W_EVENT_GATEWAY_TARGET', meaning: 'An event-based gateway leads to something BPMN 2.0 does not allow there: not a catching event or receive task (lint); in a plain file also a receive task mixed with message catch events, a receive task with boundary events, or a target with another incoming flow (`connect`, `add`, `move` warn about the edge they create). Camunda 7, CIB seven, Operaton and Camunda 8 accept only intermediate catch events: in a Camunda 7 / 8 file W_C7_DEPLOY_EVENT_GATEWAY / W_C8_DEPLOY_EVENT_GATEWAY reports it instead.', fix: 'Put intermediateCatchEvent:<message|timer|signal|conditional> nodes directly after the gateway (`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow <flowId> --message <Msg>`).' },
   { code: 'W_EMPTY_SUBPROCESS', meaning: 'A sub-process contains no nodes.', fix: '`bpmn add <file> startEvent --in <subProcessId>` and build its content, or remove it.' },
   { code: 'W_DUPLICATE_NAME', meaning: 'Several elements of the same kind share a name.', fix: 'Rename with `bpmn set <file> <id> name=...` unless intended.' },
   { code: 'W_IMPLICIT_SPLIT', meaning: 'A non-gateway node got a second outgoing flow (implicit parallel split).', fix: 'Route the branches through a gateway: a `split` op in `bpmn apply` (split exists only as an apply op, not as a command) or `bpmn add <file> exclusiveGateway --after <id>` plus `connect`; ignore it when the implicit split is intended.' },
@@ -196,6 +198,41 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_C7_DANGLING_REF', meaning: 'An id reference inside camunda content (camunda:errorEventDefinition errorRef) points to no element of the right type; the mapping is ignored at run time.', fix: 'Rebuild just that mapping (the hint has both commands; --replace would remove the other mappings): `bpmn ext remove <file> <id> \'camunda:errorEventDefinition[id=<mappingId>]\'`, then `bpmn ext add <file> <id> camunda:errorEventDefinition id=<mappingId> errorRef=<ErrorId> expression=${...}`.' },
   { code: 'W_C7_EXCLUSIVE_GATEWAY_DEFAULT', meaning: '(practice) An exclusive gateway has exactly one flow without condition and no default; the engine takes it as the default and logs a warning.', fix: '`bpmn set <file> <flowId> default=true`.' },
   { code: 'W_C7_DUPLICATE_EXTENSION', meaning: '(practice) A second camunda:failedJobRetryTimeCycle on an element that is not asynchronous yet; the engines refuse the file once it is.', fix: 'Keep one: `bpmn ext add <file> <id> camunda:failedJobRetryTimeCycle --replace --body R3/PT5M`.' },
+  { code: 'W_C8_*', meaning: 'A finding of the Camunda 8 profile, which runs in Camunda 8 files (modeler:executionPlatform "Camunda Cloud" or the zeebe namespace; `validate --platform c8` forces it). Every rule was checked against Camunda 8.9 (deploy and, for the runtime rules, running the process). Every finding has a severity (JSON field `severity`): deploy = Camunda 8 refuses the file (codes W_C8_DEPLOY_*); runtime = it deploys but the setting is ignored or fails when the process runs; practice = it works, but differently than intended. Executable processes are checked (Camunda 8 skips the others but refuses a file without any), the content of ad-hoc sub-processes included; the schema rules cover the whole file. Placement and known names come from the zeebe-bpmn-moddle descriptor. FEEL is not parsed: the common slips (&&, ||, ==, !, ${...}, single quotes, unbalanced brackets, a dangling operator) are reported, other syntax errors only by the engine. A mutation reports only the findings it introduced.', fix: 'Fix every W_C8_DEPLOY_* finding before deploying; the hint of each finding names the exact `bpmn ext` / `bpmn set` / `bpmn add|remove|retype` command. `bpmn validate <file>` lists all of them.' },
+  { code: 'W_C8_DEPLOY_EXECUTABLE', meaning: 'The file has processes, but none is executable; Camunda 8 refuses it ("Must contain at least one executable process").', fix: '`bpmn set <file> <processId> isExecutable=true`.' },
+  { code: 'W_C8_DEPLOY_IMPLEMENTATION', meaning: 'A service, send, script or business rule task, or a message throw / end event, has no implementation: Camunda 8 needs a zeebe:taskDefinition (the job type a worker subscribes to); a script task may have a zeebe:script (FEEL expression + resultVariable), a business rule task a zeebe:calledDecision (decisionId + resultVariable) instead, not both. Also: a job without type, a zeebe:script without expression or resultVariable, a zeebe:calledDecision without decisionId or resultVariable, a thrown message without name. Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType>` (retries=3 optional); `bpmn ext add <file> <id> zeebe:script expression==<FEEL> resultVariable=<variable>`; `bpmn set <file> <id> calledDecision=<decisionId>` plus `bpmn ext add <file> <id> zeebe:calledDecision resultVariable=<variable>`.' },
+  { code: 'W_C8_DEPLOY_CALLED_ELEMENT', meaning: 'A call activity without zeebe:calledElement (the BPMN calledElement attribute is not read by Camunda 8), or one without processId; Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false`.' },
+  { code: 'W_C8_DEPLOY_MULTI_INSTANCE', meaning: 'A multi-instance loop without exactly one zeebe:loopCharacteristics in its extension elements (a BPMN loop cardinality or a camunda:collection is not read; a zeebe:loopCharacteristics on the activity itself neither), one without inputCollection, or an outputCollection without outputElement (or the other way round); Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>` (creates a parallel loop when there is none; outputCollection=<results> outputElement==<expression> collects results).' },
+  { code: 'W_C8_DEPLOY_DUPLICATE_EXTENSION', meaning: 'Two of a zeebe element Camunda 8 reads once per element: taskDefinition, ioMapping, taskHeaders, userTask, formDefinition, assignmentDefinition, priorityDefinition, taskSchedule, versionTag, executionListeners, taskListeners, properties, linkedResources, adHoc, calledElement, calledDecision, script, publishMessage, subscription (on a message), loopCharacteristics (on a multi-instance loop), conditionalFilter. Camunda 8 refuses the file. (A second one added with ext add is merged into the first.)', fix: 'Merge them: `bpmn ext list <file> <id> --json`, then `bpmn ext add <file> <id> zeebe:<type> --replace --xml \'<zeebe:<type> ...>...</zeebe:<type>>\'`.' },
+  { code: 'W_C8_DEPLOY_EXTENSION', meaning: 'Invalid content of a zeebe element: an input / output mapping without target or with a target that is no variable path (a.b.c), an output mapping without source, two task headers with one key, a bindingType other than deployment / latest / versionTag (or versionTag without a versionTag), a linked resource without resourceType, conditional-filter variable events other than create / update, a zeebe:adHoc output collection without output element; Camunda 8 refuses the file.', fix: 'The hint has the command: keyed items (zeebe:input / zeebe:output by target, zeebe:header by key) are replaced when added again with ext add; others are rebuilt with `--replace` and every attribute they keep.' },
+  { code: 'W_C8_DEPLOY_EXPRESSION', meaning: 'A value Camunda 8 parses as FEEL at deploy is wrong: a static value where a FEEL expression (=...) is required (sequence-flow and conditional-event conditions, zeebe:script expression, multi-instance inputCollection / outputElement, correlationKey), or a FEEL expression with a slip the engine refuses (&& / || / == / ! / ${...} from JUEL, single quotes, unbalanced brackets or strings, an empty expression, a dangling operator). Camunda 8 refuses the file.', fix: 'Write FEEL with a leading =: `bpmn set <file> <flowId> \'condition== amount > 100 and approved\'` (and / or, = for equality, not(...), double-quoted strings); attributes of zeebe elements with `bpmn ext add <file> <id> zeebe:<type> <attr>==<expression> ... --replace`.' },
+  { code: 'W_C8_DEPLOY_MESSAGE', meaning: 'A catching message event or receive task without message, a message without name, a catching message (not a process start event) whose bpmn:Message has no zeebe:subscription with a correlationKey, a FEEL message name on a process start event, a zeebe:publishMessage without message or correlationKey, or one message name caught twice in one scope (the boundary events of one activity together with the activity when it is a receive task, the branches of an event-based gateway, the event sub-process starts of a scope, the start events of a process). Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> message=<MessageName>` (creates the bpmn:Message), then `bpmn ext add <file> <messageId> zeebe:subscription correlationKey==<expression>`.' },
+  { code: 'W_C8_DEPLOY_SIGNAL', meaning: 'A signal event without signal or with a nameless one, a FEEL signal name on a start event, or one signal name on two start events of a process or two boundary events of one activity; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> signal=<SignalName>`, or rename the signal.' },
+  { code: 'W_C8_DEPLOY_ERROR', meaning: 'An error end / throw event without error or whose bpmn:Error has no errorCode, a catching error event with an error code that is an expression, two error catch events with one code (or two without code, catch-alls) in one scope, or a non-interrupting error event; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> error=<ErrorName> errorCode=<CODE>` (or another code / remove one of the catch events; `nonInterrupting=false`).' },
+  { code: 'W_C8_DEPLOY_ESCALATION', meaning: 'An escalation throw / end event without escalation or escalationCode, or an escalation boundary event on something else than a sub-process or call activity; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> escalation=<Name> escalationCode=<CODE>`, or move / remove the boundary event.' },
+  { code: 'W_C8_DEPLOY_TIMER', meaning: 'A timer without date, cycle or duration; a static value Camunda 8 cannot parse (an ISO 8601 duration PT1H / P2D; a date-time with offset or Z, 2030-12-31T10:00:00Z; a repeating interval R/PT1H, R5/<start>/<duration> or a 6-field cron expression / @daily); a cycle on an intermediate timer catch event; an interrupting timer boundary event or event sub-process start with a cycle. Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> timer=PT1H` (R/... is a cycle, an ISO date-time a date); `bpmn set <file> <id> nonInterrupting=true` for a repeating boundary timer.' },
+  { code: 'W_C8_DEPLOY_EVENT_DEFINITION', meaning: 'An intermediate catch or boundary event without event definition, an event with several, a definition its position does not support (a non-none start in an embedded sub-process is W_C8_DEPLOY_START_EVENT; a none or compensation start in an event sub-process), a conditional, compensation or link catch event definition without id (Camunda 8.9 fails with an internal error), a compensation activityRef outside the throw event\'s scope, a compensation boundary event without association to a handler or with an outgoing flow, or (BPMN schema, every definition in the file) a conditional definition without condition. Camunda 8 refuses the file.', fix: 'The hint names it: `bpmn set <file> <id> trigger=<trigger>`, `bpmn set <file> <id> definition.id=<Id>`, `bpmn set <file> <id> definition.activityRef=<activityId>`, `bpmn connect <file> <boundaryId> <handlerId>`.' },
+  { code: 'W_C8_DEPLOY_EVENT_GATEWAY', meaning: 'An event-based gateway with fewer than two outgoing flows (Camunda 8 counts the <bpmn:outgoing> entries the file lists), or a branch that is not a message, timer, signal or conditional intermediate catch event (receive tasks included); Camunda 8 refuses the file.', fix: '`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after <gatewayId> --timer PT1H`; a receive task: `bpmn retype <file> <id> intermediateCatchEvent:message --message <Name>`.' },
+  { code: 'W_C8_DEPLOY_START_EVENT', meaning: 'A process without start event or with two none start events, an embedded sub-process without exactly one start event or with a start event that has a trigger, an event sub-process without exactly one start event; Camunda 8 refuses the file. Replaces W_NO_START / W_EMPTY_SUBPROCESS for the same (sub-)process.', fix: '`bpmn add <file> startEvent "<Name>" --before <firstNodeId>` (`--in <id>` when empty); a second none start: `bpmn remove <file> <id>` or `bpmn set <file> <id> trigger=message message=<Name>`.' },
+  { code: 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', meaning: 'An ad-hoc sub-process that contains a start or end event, or no activity; Camunda 8 refuses the file. (Its content is checked like any other: Camunda 8 runs ad-hoc sub-processes.)', fix: '`bpmn remove <file> <eventId>`; `bpmn add <file> serviceTask "<Name>" --in <id>`.' },
+  { code: 'W_C8_DEPLOY_LINK', meaning: 'A link throw event without a catch event of its name in its own (sub-)process, two link catch events with one name in a process (sub-processes included), or (BPMN schema, every definition in the file) a link definition without name; Camunda 8 refuses the file.', fix: '`bpmn add <file> intermediateCatchEvent:link "<Name>" --in <scopeId> --link <Name>`, or `bpmn set <file> <id> link=<Name>`.' },
+  { code: 'W_C8_DEPLOY_USER_TASK', meaning: 'A zeebe:formDefinition that is not exactly one of formId / externalReference (Camunda user task: an embedded formKey is not read) or of formId / formKey (job worker user task), a static priority that is not a number from 0 to 100, a static due or follow-up date that is no ISO 8601 date-time with offset; Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:formDefinition formId=<formId> --replace` (or externalReference=<url>); `bpmn ext add <file> <id> zeebe:priorityDefinition priority=50 --replace`.' },
+  { code: 'W_C8_DEPLOY_LISTENER', meaning: 'An execution or task listener without type (the job type of its worker) or event type, an unknown event type (execution: start / end; task: creating / assigning / updating / completing / canceling, the older create / assignment / update / complete / cancel too), a start listener on a start or boundary event, an end listener on a gateway, execution listeners on a sequence flow, or task listeners on a job worker user task; Camunda 8 refuses the file.', fix: 'Rebuild just that listener (the hint has both commands): `bpmn ext remove <file> <id> \'zeebe:executionListeners/zeebe:executionListener[0]\'`, then `bpmn ext add <file> <id> zeebe:executionListeners/zeebe:executionListener eventType=end type=<jobType>`.' },
+  { code: 'W_C8_DEPLOY_UNSUPPORTED', meaning: 'A transaction or a cancel event: Camunda 8 does not support them and refuses the file (a complex gateway is the structural E_UNSUPPORTED_KIND).', fix: '`bpmn retype <file> <id> subProcess` (a transaction); `bpmn set <file> <id> trigger=error` (a cancel boundary event).' },
+  { code: 'W_C8_DEPLOY_BOUNDARY_HOST', meaning: 'A boundary event is attached to a compensation handler (isForCompensation=true); Camunda 8 refuses the file. `validate` and writes report it as the structural error E_INVALID_HOST instead (the profile alone, `runProfile`, reports this code).', fix: '`bpmn remove <file> <id>` or `bpmn move <file> <id> --on <activityId>`.' },
+  { code: 'W_C8_DEPLOY_SCHEMA', meaning: 'An attribute without namespace prefix that the BPMN schema does not define (calledDecision="..." on a businessRuleTask), anywhere in the file, or bpmn:extensionElements on bpmn:definitions: Camunda 8 validates the file against the BPMN schema and refuses it.', fix: 'Remove it: `bpmn set <file> <id> <attr>=`; a business rule task\'s calledDecision is converted: `bpmn set <file> <id> calledDecision=<decision>` writes zeebe:calledDecision.' },
+  { code: 'W_C8_FOREIGN_CONTENT', meaning: 'camunda:* / operaton:* attributes or extension elements (Camunda 7 content) in a Camunda 8 file; Camunda 8 ignores them (engine-checked: camunda:assignee does not assign a Camunda user task).', fix: 'Remove it (`bpmn set <file> <id> camunda:<attr>=` / `bpmn ext remove <file> <id> <index>`) and use the zeebe element the hint names (zeebe:assignmentDefinition, zeebe:taskDefinition, zeebe:ioMapping, ...).' },
+  { code: 'W_C8_UNKNOWN_ELEMENT', meaning: 'A zeebe extension element the Zeebe descriptor does not know (a typo); Camunda 8 ignores it. The message suggests the closest known type.', fix: '`bpmn ext remove <file> <id> <index>` and add the right type.' },
+  { code: 'W_C8_UNKNOWN_ATTRIBUTE', meaning: 'An attribute a zeebe element does not have (zeebe:taskDefinition typo="..."), or a zeebe:* attribute on a BPMN element the descriptor does not know (most zeebe settings are extension elements); Camunda 8 ignores it.', fix: 'Rebuild the element without it (the hint has the command), or `bpmn set <file> <id> zeebe:<attr>=`.' },
+  { code: 'W_C8_MISPLACED_ATTRIBUTE', meaning: 'A zeebe attribute on an element type that does not carry it (zeebe:modelerTemplate on a lane); it has no effect.', fix: '`bpmn set <file> <id> zeebe:<attr>=`.' },
+  { code: 'W_C8_MISPLACED_EXTENSION', meaning: 'A zeebe element on a host that does not read it (zeebe:taskDefinition on a user task, zeebe:userTask on a service task, zeebe:calledDecision on a service task, zeebe:ioMapping on a gateway), a child type loose in extensionElements or in the wrong container, or input mappings on a start, boundary, none intermediate throw or none end event (Camunda 8 applies only their output mappings); it has no effect (engine-checked).', fix: '`bpmn ext remove <file> <id> <selector>` (the hint has it), then add it where it is read.' },
+  { code: 'W_C8_EXCLUSIVE_GATEWAY', meaning: '(runtime) A sequence flow out of an exclusive or inclusive gateway with other outgoing flows has no condition and is not the default flow: Camunda 8 never takes it, and an instance where no condition holds gets an incident ("Expected at least one condition to evaluate to true, or to have a default flow").', fix: '`bpmn set <file> <flowId> default=true`, or `bpmn set <file> <flowId> \'condition== <expression>\'`.' },
+  { code: 'W_C8_CONDITION_IGNORED', meaning: '(runtime) A condition on a sequence flow out of anything but an exclusive or inclusive gateway (a task, a parallel gateway): Camunda 8 ignores it and always takes the flow.', fix: '`bpmn set <file> <flowId> condition=`, or branch with a gateway (`bpmn add <file> exclusiveGateway "<Question?>" --after <sourceId>`).' },
+  { code: 'W_C8_STANDARD_LOOP', meaning: '(runtime) Standard loop characteristics: Camunda 8 does not support them and runs the activity once.', fix: '`bpmn set <file> <id> loop=none` and loop with a gateway, or a multi-instance: `bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>` after `bpmn set <file> <id> loop=sequential`.' },
+  { code: 'W_C8_EXPRESSION', meaning: '(runtime) A multi-instance completion condition that is no FEEL expression (a JUEL ${...}): it deploys, but every completed instance gets an incident ("Expected result of the expression to be BOOLEAN, but was STRING").', fix: '`bpmn set <file> <id> \'completion== <FEEL expression>\'`.' },
+  { code: 'W_C8_BAD_VALUE', meaning: '(runtime) A static job retries value that is no number (every instance gets an incident when it reaches the task), or a task header without key or value (Camunda 8 drops it, the job does not carry it).', fix: 'The hint has the command: `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType> retries=3 --replace`, `bpmn ext add <file> <id> zeebe:header key=<key> value=<value>`.' },
+  { code: 'W_C8_UNSUPPORTED_IMPLEMENTATION', meaning: '(runtime) zeebe:publishMessage (on a send task or in a message event definition): Camunda 8.9 accepts it at deploy but does not run it: a send task gets an incident ("only job worker-based implementation is supported"), a message throw / end event completes without sending anything.', fix: 'Use a job worker: `bpmn ext remove <file> <id> zeebe:publishMessage` (definition.zeebe:publishMessage for an event), then `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType>`.' },
+  { code: 'W_C8_JOB_WORKER_USER_TASK', meaning: '(practice) A user task without zeebe:userTask is a job worker user task: Camunda 8 creates a job of type io.camunda.zeebe:userTask instead of a user task, which the v2 user task API (/v2/user-tasks) and Tasklist in V2 mode do not list (engine-checked). `bpmn add` / `retype` give new user tasks of a Camunda 8 file zeebe:userTask, like Camunda Modeler.', fix: '`bpmn ext add <file> <id> zeebe:userTask` (a form then needs formId or externalReference instead of an embedded formKey).' },
   { code: 'W_DECISION_RESULT_VARIABLE', meaning: '`set <id> calledDecision=<decision>` in a Camunda 8 file wrote a zeebe:calledDecision without a resultVariable; Camunda 8 requires one to deploy.', fix: '`bpmn ext add <file> <id> zeebe:calledDecision decisionId=<decision> resultVariable=<variable> --replace`.' },
   // design profile (the design-iq save gate; `--profile design`, auto for the models of a content repository)
   { code: 'E_DESIGN_*', meaning: 'An error of the design profile, which mirrors the save gate of Miragon\'s design-iq (@bpmiq/validator): design-iq refuses to save a model with such an error. The profile runs with `--profile design`, and by default (`--profile auto`) for the models of a design-iq content repository (a bpmiq.yml in the file\'s directory or above names a models folder that contains the file). It checks the result after the layout; like a structural error, one a change introduces blocks the write (E_VALIDATION) and one the file already had is W_PREEXISTING_ERROR. Findings carry `"validator": "design"` (`[design]` in text).', fix: 'Each finding\'s hint names the command. Make an edit that passes through an invalid state (a new start event before its path exists) in one transaction (`bpmn apply <file> ops.json`), or draft with `--profile none` and fix what `bpmn validate <file> --profile design` reports before saving.' },
@@ -318,7 +355,7 @@ export interface CommandDoc {
 }
 
 export const COMMANDS: CommandDoc[] = [
-  { name: 'new', usage: 'bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]', summary: 'Create a file with one empty process. --target camunda7 (also for CIB seven and Operaton) writes what Camunda Modeler writes: the camunda / modeler namespaces, the platform version and camunda:historyTimeToLive=180 (the engines refuse an executable process without it).', examples: ['bpmn new order.bpmn --name "Order handling" --target camunda8', 'bpmn new order.bpmn --name "Order handling" --target camunda7'] },
+  { name: 'new', usage: 'bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]', summary: 'Create a file with one empty process. --target camunda7 (also for CIB seven and Operaton) writes what Camunda Modeler writes: the camunda / modeler namespaces, the platform version and camunda:historyTimeToLive=180 (the engines refuse an executable process without it). --target camunda8 writes the zeebe / modeler namespaces and the platform (Camunda Cloud, 8.9.0); in a Camunda 8 file new user tasks are Camunda user tasks (zeebe:userTask) and new event definitions get an id, like the Modeler.', examples: ['bpmn new order.bpmn --name "Order handling" --target camunda8', 'bpmn new order.bpmn --name "Order handling" --target camunda7'] },
   { name: 'show', usage: 'bpmn show <file> [<id> [--context]] [--json] [--scope <id>] | bpmn show <file> --around <id> [--depth <n>] [--inner] [--json] | bpmn show <file> --layout [--json]', summary: 'Print the model in flow order (no coordinates), or every detail of one element. Every node carries its lane (lane=<id>); vendor attributes appear with their values next to the properties (nested ones under their set keys: loop.camunda:collection=${items}), extension types as `ext: camunda:taskListener x3`; the process line carries the process\'s own; a business rule task shows its decision link as calledDecision=<id> in every spelling; message flows name their endpoints, the collaboration lists its annotations. --around <id> prints only the neighbourhood of an element (--depth flow steps both ways, default 2; see READING LARGE MODELS), <id> --context the element in its context (where, lane, before / after, catching events, message flows). --layout prints the drawing instead: per pool / lane the rows of node ids (left to right) with their column across the diagram (c0..cN; " … " where a wide gap splits a row), the wide empty gaps between columns, colours, labels off their default side and the layout problems with ids. `-` as the file reads stdin.', examples: ['bpmn show order.bpmn', 'bpmn show order.bpmn --around Activity_CheckInvoice', 'bpmn show order.bpmn Activity_CheckInvoice --context', 'bpmn show order.bpmn Activity_CheckInvoice --json', 'bpmn show order.bpmn --layout'] },
   { name: 'find', usage: 'bpmn find <file> <text> [--kind <kind>] [--json]', summary: 'Find elements by id or name substring, or by a vendor attribute value (topic, assignee, candidate groups, listener class, extension attributes and bodies; the hit shows the match); --kind accepts any kind plus sequenceFlow, messageFlow, association, dataAssociation, process, collaboration, message, error, signal, escalation.', examples: ['bpmn find order.bpmn invoice --kind userTask', 'bpmn find order.bpmn charge-card'] },
   { name: 'add', usage: 'bpmn add <file> <kind[:trigger]> [<name>] [--id <id>] [placement] [--to <id>] [--lane <laneId>] [flow options] [trigger options] [--collapsed] [--if-absent] [--doc <text>] [--text <text>] [--process <id>] [--black-box] [--members <id,...>] [key=value ...]', summary: 'Create one element and wire it in (see PLACEMENT and TRIGGERS). Pools: the first participant wraps the existing process, later ones get a new process; --black-box creates a pool without a process and never wraps, so add a normal pool first.', examples: ['bpmn add order.bpmn start "Order received"', 'bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived', 'bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice --timer PT2D --non-interrupting', 'bpmn add order.bpmn participant "Order handling"', 'bpmn add order.bpmn participant "Customer" --black-box'] },
@@ -338,10 +375,10 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'space', usage: 'bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>|-column|-row|-<px>]', summary: 'Diagram only: the modeler\'s space tool: everything right of (--after, within the pool) or below (--below) the element moves by one column / row (default) or <px>; frames grow. On a lane or pool it makes that frame bigger. A negative amount closes up to that much empty space there instead (only as far as it is empty; on a lane / pool: its own bottom / right).', examples: ['bpmn space order.bpmn --after Activity_CheckInvoice', 'bpmn space order.bpmn --below Lane_Sales --by 80', 'bpmn space order.bpmn --after Activity_CheckInvoice --by -column'] },
   { name: 'tidy', usage: 'bpmn tidy <file> [<id>...] [SELECTORS]', summary: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape). Same as `bpmn layout <file> --tidy`.', examples: ['bpmn tidy order.bpmn'] },
   { name: 'compact', usage: 'bpmn compact <file> [<poolId|laneId|subProcessId>...]', summary: 'Diagram only: close empty rows and columns and shrink expanded sub-processes, lanes and pools to their content (default: the whole drawing), keeping the order and relative positions. A gap whose closing would add a layout problem stays open (noted).', examples: ['bpmn compact order.bpmn', 'bpmn compact order.bpmn Lane_Backoffice'] },
-  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7 today: W_C7_* findings with a severity; W_C7_DEPLOY_* = the engines refuse the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
+  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, flows running backwards, flows merging before their target, labels outside their pool, message labels far from their line, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
-  { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
+  { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, zeebeElements, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
   { name: 'guide', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
 ];
 
@@ -483,6 +520,60 @@ function nestedKeysSection(): string {
   return out.join('\n');
 }
 
+/** One zeebe extension element type: where it goes (kinds, nested slots, containers), its attributes, whether it is single. */
+export interface ZeebeElementDoc {
+  type: string;
+  /** element kinds (`bpmn kinds`), nested slots (`loop.` of activities, `definition.` of events) or `message`; for a child type its container */
+  on: string[];
+  attributes: string[];
+  children?: string[];
+  /** Camunda 8 reads one per element: a second one is merged by ext add */
+  single: boolean;
+}
+
+/** Where each zeebe extension element goes, by the Zeebe descriptor (`bpmn kinds` section CAMUNDA 8, `kinds --json` -> zeebeElements). */
+export function zeebeElementTable(): ZeebeElementDoc[] {
+  const out: ZeebeElementDoc[] = [];
+  for (const name of zeebeTypeNames()) {
+    const t = zeebeType(name)!;
+    const on: string[] = [];
+    if (zeebeNestedOnly(name)) on.push(...zeebeContainersOf(name).map((c) => `in ${c}`));
+    else {
+      if (zeebeAllowedOn(name, 'bpmn:Process') === true) on.push('process');
+      // a whole family (all events, all tasks, ...) is named once
+      const families = new Map<string, KindDef[]>();
+      for (const k of KINDS) families.set(k.family, [...(families.get(k.family) ?? []), k]);
+      for (const [family, kinds] of families) {
+        const allowed = kinds.filter((k) => zeebeAllowedOn(name, k.type) === true);
+        if (allowed.length && allowed.length === kinds.length && kinds.length > 1) on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
+        else on.push(...allowed.map((k) => k.kind));
+      }
+      if (zeebeAllowedOn(name, 'bpmn:Message') === true && zeebeAllowedOn(name, 'bpmn:Task') !== true) on.push('message');
+      if (zeebeAllowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
+      const defs = ['Message', 'Conditional'].filter((d) => zeebeAllowedOn(name, `bpmn:${d}EventDefinition`) === true);
+      for (const d of defs) on.push(`definition. (${d.toLowerCase()} events)`);
+      if (zeebeAllowedOn(name, 'bpmn:Lane') === true && zeebeAllowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
+      for (const c of zeebeContainersOf(name)) on.push(`in ${c}`);
+    }
+    out.push({ type: name, on, attributes: t.attributes.map((a) => a.name), ...(t.children.length ? { children: t.children } : {}), single: ZEEBE_SINGLE.includes(name) });
+  }
+  return out;
+}
+
+/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ext.ts SINGLE_TOP). */
+const ZEEBE_SINGLE = [...SINGLE_TOP].filter((t) => t.startsWith('zeebe:'));
+
+function zeebeSection(): string {
+  const out: string[] = [heading('CAMUNDA 8  (zeebe extension elements: bpmn ext add <file> <id> <type> attr=value; FEEL values start with =, write attr==<expression>; from the Zeebe descriptor)')];
+  for (const z of zeebeElementTable()) {
+    out.push(`  ${z.type.padEnd(28)} ${[z.attributes.join(' '), z.children ? `children: ${z.children.join(', ')}` : ''].filter(Boolean).join('; ') || '(no attributes)'}${z.single ? '  (one per element)' : ''}`);
+    out.push(`      on: ${z.on.join(', ') || 'see the descriptor'}`);
+  }
+  out.push('  Child types go into their container (zeebe:input -> zeebe:ioMapping), a single element is merged, a keyed item (zeebe:input by target,');
+  out.push('  zeebe:header by key, zeebe:property by name) is replaced. A zeebe attribute set on the element itself is refused (E_WRONG_HOST).');
+  return out.join('\n');
+}
+
 function placementSection(): string {
   return [heading('PLACEMENT  (add / move; ops JSON key in parentheses)'), table(PLACEMENT_DOCS.map((p) => [p.option, `(${p.key})`, p.rule])), ...PLACEMENT_NOTES.map((n) => `  ${n}`)].join('\n');
 }
@@ -520,7 +611,7 @@ function opsSection(): string {
 
 /** `bpmn kinds`: kinds, triggers, set keys, placement grammar and the error catalogue as text. */
 export function kindsText(): string {
-  return [kindsSection(), triggersSection(), setKeysSection(), nestedKeysSection(), placementSection(), errorsSection()].join('\n') + '\n';
+  return [kindsSection(), triggersSection(), setKeysSection(), nestedKeysSection(), zeebeSection(), placementSection(), errorsSection()].join('\n') + '\n';
 }
 
 /** `bpmn kinds --json`: the same as one object, plus the ops schema and example. */
@@ -553,6 +644,7 @@ export function kindsJson(): Record<string, unknown> {
     setKeys: SET_KEYS,
     nestedKeys: nestedKeyTable(),
     nestedSelectors: NESTED_SELECTORS,
+    zeebeElements: zeebeElementTable(),
     placement: {
       options: PLACEMENT_DOCS,
       notes: PLACEMENT_NOTES,
@@ -698,7 +790,7 @@ export function guideText(): string {
       '  camunda:* as the fallback, Camunda 7 and CIB seven ignore operaton:* (validate says so in its platform line).',
     ].join('\n'),
   );
-  out.push(heading('CAMUNDA 8  (the zeebe: namespace)'));
+  out.push(heading('CAMUNDA 8  (Zeebe: the zeebe: namespace; `bpmn validate` runs the Camunda 8 profile)'));
   out.push(CAMUNDA8.join('\n'));
   out.push(heading('DESIGN-IQ  (content repositories with a bpmiq.yml; --profile design anywhere)'));
   out.push(
@@ -709,7 +801,7 @@ export function guideText(): string {
       '  sequence flow (boundary events too; compensation, link events and ad-hoc content cannot be saved there), every',
       '  node in a top-level lane when the process has lanes, a shape for every element. So build paths in one go:',
       "    echo '[{\"op\":\"add\",\"kind\":\"userTask\",\"name\":\"Review\",\"after\":\"Activity_Check\"}]' | bpmn apply f.bpmn -",
-      '    bpmn add f.bpmn boundary:timer "2 days" --on Activity_Review --timer PT2D    refused: the boundary event has no path',
+      '    bpmn add f.bpmn boundary:timer "2 days" --on Activity_Review --timer P2D     refused: the boundary event has no path',
       '    -> one transaction: the boundary event and `{"op":"add","kind":"end","name":"Escalated","after":"Event_2Days"}`',
       '  Links: a call activity names the process it calls (`set <id> calledElement=<file stem>`), a business rule task',
       '  its decision (`set <id> calledDecision=<file stem of the .dmn>`; written as calledDecision= in a design model,',
@@ -778,19 +870,35 @@ const READING = [
 
 /** CAMUNDA 8: zeebe extension elements in practice. */
 const CAMUNDA8 = [
-  '  bpmn new f.bpmn --name "Order" --target camunda8     zeebe + modeler namespaces (executionPlatform Camunda Cloud)',
-  '  The implementation lives in zeebe extension elements (`ext add`); child types go into their container, single',
-  '  elements are merged, an item with the same key (zeebe:input / output target, zeebe:header key) replaces the old one:',
-  '    bpmn ext add f.bpmn Activity_Charge zeebe:taskDefinition type=charge-card retries=3          job worker type',
-  "    bpmn ext add f.bpmn Activity_Charge zeebe:input source='=order.total' target=amount           -> zeebe:ioMapping",
-  "    bpmn ext add f.bpmn Activity_Charge zeebe:output source='=receipt' target=receipt",
-  '    bpmn ext add f.bpmn Activity_Charge zeebe:header key=channel value=web                         -> zeebe:taskHeaders',
-  '    bpmn ext add f.bpmn Activity_Bill zeebe:calledElement processId=billing                        call activity',
-  '    bpmn ext add f.bpmn Activity_Review zeebe:assignmentDefinition candidateGroups=sales',
+  '  bpmn new f.bpmn --name "Order" --target camunda8     zeebe + modeler namespaces, platform Camunda Cloud 8.9.0',
+  '  Camunda 8 settings are extension elements (`bpmn kinds --section zeebeElements` lists them per kind): child types go',
+  '  into their container, single elements are merged, an item with the same key (zeebe:input / output target,',
+  '  zeebe:header key) replaces the old one. FEEL values start with = (write attr==<expression>: the first = separates',
+  '  key and value):',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:taskDefinition type=charge-card retries=3          job worker',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:input source==order.total target=amount            -> zeebe:ioMapping',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:output source==receipt target=receipt',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:header key=channel value=web                       -> zeebe:taskHeaders',
+  '    bpmn ext add f.bpmn Activity_Review zeebe:assignmentDefinition candidateGroups=sales assignee==reviewer',
+  '    bpmn ext add f.bpmn Activity_Review zeebe:formDefinition formId=review-form                  linked form',
+  '    bpmn ext add f.bpmn Activity_Bill zeebe:calledElement processId=billing propagateAllChildVariables=false',
+  '    bpmn ext add f.bpmn Activity_Inform loop.zeebe:loopCharacteristics inputCollection==parties inputElement=party',
+  '                                                                  (creates the parallel multi-instance loop)',
+  '    bpmn set f.bpmn Activity_Wait message=PaymentReceived                                        receive task',
+  '    bpmn ext add f.bpmn Message_PaymentReceived zeebe:subscription correlationKey==orderId       message correlation',
   '    bpmn set f.bpmn Activity_Rate calledDecision=risk-rating      zeebe:calledDecision decisionId (business rule task)',
-  '  `bpmn ext list f.bpmn <id>` shows the tree; `show --around` / `show <id> --context` show the implementation in one',
-  '  line (zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt). `bpmn validate`: structure and',
-  '  lint only (no Camunda 8 engine rules yet).',
+  '    bpmn ext add f.bpmn Activity_Rate zeebe:calledDecision resultVariable=risk',
+  "    bpmn add f.bpmn userTask \"Approve\" --after Gateway_Big --condition '= amount > 1000' --flow-name yes   FEEL condition",
+  "    bpmn ext remove f.bpmn Activity_Charge 'zeebe:input[target=amount]'",
+  '  New user tasks of a Camunda 8 file get zeebe:userTask (a Camunda user task, like the Modeler); new event',
+  '  definitions an id (Camunda 8.9 refuses conditional, compensation and link catch definitions without one).',
+  '  A zeebe attribute that belongs on an extension element is refused (`set X zeebe:assignee=...`: E_WRONG_HOST,',
+  '  the hint is the ext add). `bpmn ext list f.bpmn <id>` shows the tree; `show --around` / `show <id> --context` show',
+  '  the implementation in one line (zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt).',
+  '  Before deploying: `bpmn validate f.bpmn`; fix every W_C8_DEPLOY_* finding (Camunda 8 refuses the file: a service',
+  '  task without job type, a JUEL ${...} condition, a message without correlation key, PT2D instead of P2D, ...; each',
+  '  hint is the command). Runtime findings (W_C8_*) deploy but misbehave: a flow without condition out of an exclusive',
+  '  gateway is never taken, camunda:* content is ignored, ...',
 ];
 
 /** OUTPUT: what a result reports, JSON, stdin / stdout. */
@@ -898,7 +1006,7 @@ export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string 
   errors: { sections: ['COMMON ERRORS', 'EXIT CODES'], summary: 'the common errors and the exit codes' },
   quoting: { sections: ['QUOTING'], summary: 'shell quoting of expressions' },
   camunda7: { sections: ['CAMUNDA 7'], summary: 'camunda: attributes, extensions, the deploy profile' },
-  camunda8: { sections: ['CAMUNDA 8'], summary: 'zeebe: extension elements' },
+  camunda8: { sections: ['CAMUNDA 8'], summary: 'zeebe: extension elements, the Camunda 8 profile' },
   design: { sections: ['DESIGN-IQ'], summary: 'the design profile (save gate)' },
   commands: { sections: ['COMMANDS'], summary: 'every command with examples' },
 };
@@ -950,6 +1058,7 @@ const KINDS_SECTIONS: Record<string, { text: () => string; keys: string[] }> = {
   triggers: { text: triggersSection, keys: ['triggers', 'nonInterrupting'] },
   setKeys: { text: setKeysSection, keys: ['setKeys'] },
   nestedKeys: { text: nestedKeysSection, keys: ['nestedKeys', 'nestedSelectors'] },
+  zeebeElements: { text: zeebeSection, keys: ['zeebeElements'] },
   placement: { text: placementSection, keys: ['placement'] },
   ops: { text: opsSection, keys: ['ops', 'opsExample'] },
   layoutModes: { text: () => simpleRows('LAYOUT MODES', LAYOUT_MODES.map((m) => [m])), keys: ['layoutModes'] },

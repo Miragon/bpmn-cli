@@ -838,8 +838,10 @@ export const OPS_SCHEMA: Record<string, unknown> = buildSchema();
 /**
  * A small but complete example. It assumes a file made with
  * `bpmn new order.bpmn --name "Order handling" --target camunda8` and a
- * start event -> "Check invoice" user task -> end event. Later ops refer to
- * what earlier ops create by batch alias (`as`).
+ * start event -> "Check invoice" user task -> end event; the result is a
+ * valid Camunda 8 file (FEEL condition, ISO duration, a job type for every
+ * service and send task; test/c8-ops.test.ts deploys nothing but checks it).
+ * Later ops refer to what earlier ops create by batch alias (`as`).
  */
 export function opsExample(): { ops: Op[] } {
   return {
@@ -851,16 +853,17 @@ export function opsExample(): { ops: Op[] } {
         name: 'Invoice ok?',
         as: '$ok',
         branches: [
-          { flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'serviceTask', name: 'Book invoice', as: '$book' }] },
+          { flowName: 'yes', condition: '= ok', nodes: [{ kind: 'serviceTask', name: 'Book invoice', as: '$book' }] },
           { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', as: '$clarify', set: { doc: 'Call the customer and clarify the open positions.' } }] },
         ],
       },
-      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: '$clarify', timer: 'PT2D', nonInterrupting: true, as: '$reminder' },
+      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: '$clarify', timer: 'P2D', nonInterrupting: true, as: '$reminder' },
       { op: 'add', kind: 'sendTask', name: 'Remind customer', after: '$reminder', as: '$remind' },
       { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling', as: '$sent' },
       { op: 'connect', source: '$remind', target: '$sent' },
       { op: 'set', id: '$book', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
       { op: 'ext', id: '$book', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
+      { op: 'ext', id: '$remind', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'remind-customer' } },
     ],
   };
 }

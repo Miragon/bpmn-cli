@@ -51,7 +51,7 @@ describe('parseOps: shapes', () => {
   it('accepts the example and returns typed ops in order', () => {
     const example = opsExample();
     const ops = parseOps(example);
-    expect(ops.map((o) => o.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext']);
+    expect(ops.map((o) => o.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext', 'ext']);
     expect(ops).toEqual(example.ops);
   });
 

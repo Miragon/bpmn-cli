@@ -26,6 +26,7 @@ import { kindLabel } from '../kinds.js';
 import { addTo, is, many, removeFrom, type El } from '../model.js';
 import { C7_URIS, CAMUNDA_URI, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
 import type { ChangeSet } from '../result.js';
+import { coversProfileSubjects } from './covers.js';
 
 export interface DecisionLink {
   /** the decision id (design-iq: the file stem of the .dmn) */
@@ -173,12 +174,18 @@ export function setDecisionLink(doc: Doc, el: El, value: string, cs: ChangeSet):
     (call as unknown as Record<string, unknown>)['decisionId'] = value;
     written = call.$type;
     if (!text((call as unknown as Record<string, unknown>)['resultVariable'])) {
-      cs.warn({
-        code: 'W_DECISION_RESULT_VARIABLE',
-        message: `${idOf(el)} calls decision ${value} without a resultVariable; Camunda 8 requires one to deploy`,
-        element: idOf(el),
-        hint: `Name the variable that receives the result: \`bpmn ext add <file> ${idOf(el)} ${call.$type} decisionId=${value} resultVariable=<variable> --replace\`.`,
-      });
+      // the Camunda 8 profile reports the same (W_C8_DEPLOY_IMPLEMENTATION) when it runs: then a write shows that one
+      cs.warn(
+        coversProfileSubjects(
+          {
+            code: 'W_DECISION_RESULT_VARIABLE',
+            message: `${idOf(el)} calls decision ${value} without a resultVariable; Camunda 8 requires one to deploy`,
+            element: idOf(el),
+            hint: `Name the variable that receives the result: \`bpmn ext add <file> ${idOf(el)} ${call.$type} decisionId=${value} resultVariable=<variable> --replace\`.`,
+          },
+          ['decision:resultVariable'],
+        ),
+      );
     }
   } else {
     // a design model (no engine namespace): design-iq's spelling

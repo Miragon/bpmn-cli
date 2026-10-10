@@ -196,12 +196,14 @@ describe('guide --short, guide <topic>, kinds --section', () => {
     ok(['add', file, 'callActivity', 'Bill', '--after', 'Activity_Charge', '--id', 'Activity_Bill']);
     ok(['add', file, 'userTask', 'Review', '--after', 'Activity_Bill', '--id', 'Activity_Review']);
     ok(['add', file, 'businessRuleTask', 'Rate', '--after', 'Activity_Review', '--id', 'Activity_Rate']);
-    ok(['add', file, 'end', 'Done', '--after', 'Activity_Rate']);
+    ok(['add', file, 'receiveTask', 'Wait for payment', '--after', 'Activity_Rate', '--id', 'Activity_Wait']);
+    ok(['add', file, 'sendTask', 'Inform', '--after', 'Activity_Wait', '--id', 'Activity_Inform']);
+    ok(['add', file, 'end', 'Done', '--after', 'Activity_Inform']);
     const recipe = guideTopic('camunda8')
       .split('\n')
       .map((l) => /^ {4}bpmn ((?:ext add|set) f\.bpmn .*?)(?: {2,}.*)?$/.exec(l)?.[1])
       .filter((c): c is string => !!c);
-    expect(recipe.length).toBeGreaterThanOrEqual(6);
+    expect(recipe.length).toBeGreaterThanOrEqual(12);
     for (const command of recipe) {
       // the shell's single quotes: `source='=order.total'` is one word
       const words = [...command.matchAll(/(?:[^\s']+|'[^']*')+/g)].map((m) => m[0].replace(/'/g, ''));

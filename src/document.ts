@@ -16,6 +16,7 @@ import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
+import { C8_PLATFORM_VERSION } from './platform/zeebe.js';
 import {
   createDefinitions,
   createModdle,
@@ -52,7 +53,7 @@ export interface NewDocOptions {
   processId?: string;
   processName?: string;
   executable?: boolean;
-  /** declare vendor namespaces up front (and, for camunda7, the Modeler's process defaults) */
+  /** declare vendor namespaces and the execution platform up front (and, for camunda7, the Modeler's process defaults) */
   target?: 'camunda8' | 'camunda7' | 'none';
 }
 
@@ -179,6 +180,7 @@ export class Doc {
       doc.declareNamespace('zeebe');
       doc.declareNamespace('modeler');
       definitions.$attrs['modeler:executionPlatform'] = 'Camunda Cloud';
+      definitions.$attrs['modeler:executionPlatformVersion'] = C8_PLATFORM_VERSION;
     } else if (opts.target === 'camunda7') {
       doc.declareNamespace('camunda');
       doc.declareNamespace('modeler');
