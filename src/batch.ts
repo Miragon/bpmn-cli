@@ -221,7 +221,7 @@ export const SPLIT_FIELDS: FieldsOf<SplitOp> = {
   name: str('Name of the split gateway (exclusive gateways: a question, e.g. "Invoice ok?").'),
   id: ref('Explicit id of the split gateway.'),
   as: alias('Batch alias of the split gateway.'),
-  join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true).'),
+  join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true). A branch ending in an end event terminates there; with only one branch that continues no join is created (it runs on to the old successor).'),
   joinId: ref('Explicit id of the join gateway (default <gatewayId>_join).'),
   joinAs: alias('Batch alias of the join gateway.'),
   joinName: str('Name of the join gateway.'),

@@ -461,12 +461,14 @@ until a refused model has no deploy finding left; `test/step3-c8-fixes.test.ts`
 checks the FEEL syntax check against `test/fixtures/c8/feel-verdicts.json`
 (762 synthetic expressions with the verdict of Camunda 8.9.22, one per line:
 add a new expression with the verdict you got from the engine) and the
-schema-text, white-space, `refAs` and subscription rules. By default they
+schema-text, white-space, `refAs` and subscription rules;
+`test/step3-followups-c8.test.ts` holds the timer range, cron field and
+xsd:boolean models (27, with the verdict) and the duplicate id. By default they
 check the CLI only. To re-check against a live Camunda 8 (REST v2, no
 authentication), name its v2 root:
 
 ```
-BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts test/step3-c8-fixes.test.ts
+BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts test/step3-c8-fixes.test.ts test/step3-followups-c8.test.ts
 ```
 
 Each model is deployed (`POST /v2/deployments`), the test asserts that the
@@ -486,8 +488,8 @@ non-numeric retries ending in an incident, camunda:* content and input
 mappings on a start event ignored, `zeebe:publishMessage` not run). The
 hint models of `c8-ops` are deployed after their hints were followed; the
 accepted FEEL expressions go in files of 100 conditions, each refused one on
-its own (about 270 deployments, refused ones leave nothing behind). With
-Camunda 8.9.22: 460 / 460.
+its own (about 300 deployments, refused ones leave nothing behind). With
+Camunda 8.9.22: 519 / 519.
 
 When you change how zeebe content is written, deploy the CLI-built models
 and run them, and run the real-file battery on your private corpus (deploy
