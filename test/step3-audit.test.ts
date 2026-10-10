@@ -110,6 +110,48 @@ describe('#69 a few px into a lane header do not refuse an alignment', () => {
   });
 });
 
+describe('#40 lane order keeps what hangs out of a band inside the pool', () => {
+  it('a boundary event on the bottom border of the band that becomes the last one: the band and the pool grow', async () => {
+    const process = `<bpmn:process id="P"><bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>A</bpmn:flowNodeRef><bpmn:flowNodeRef>B</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id="L2"><bpmn:flowNodeRef>X</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>
+      <bpmn:task id="A" name="A" /><bpmn:boundaryEvent id="B" attachedToRef="A"><bpmn:timerEventDefinition id="BT" /></bpmn:boundaryEvent><bpmn:task id="X" name="X" /></bpmn:process>`;
+    const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L1', 30, 0, 570, 150, ' isHorizontal="true"')}${sh('L2', 30, 150, 570, 150, ' isHorizontal="true"')}${sh('A', 100, 60, 100, 80)}${sh('B', 160, 122, 36, 36)}${sh('X', 300, 190, 100, 80)}`;
+    const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
+    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'order', id: 'Pool', lanes: ['L2', 'L1'] }], { dryRun: true });
+    const s = shapes(await Doc.fromXml(r.xml));
+    expect(s.get('L1')!.bounds.y).toBe(150);
+    expect(s.get('B')!.bounds.y + 36).toBeLessThanOrEqual(s.get('Pool')!.bounds.y + s.get('Pool')!.bounds.height);
+    expect(s.get('L1')!.bounds.y + s.get('L1')!.bounds.height).toBe(s.get('Pool')!.bounds.y + s.get('Pool')!.bounds.height);
+    expect(r.layout.metrics!.added.filter((p) => ['outsidePool', 'laneGap'].includes(p.kind))).toEqual([]);
+  });
+});
+
+describe('#12 a node is not placed beside its own sub-process', () => {
+  it('place --after the enclosing (or the grandparent) sub-process is E_LEAVES_CONTAINER; nothing stretches', async () => {
+    const r0 = await mutateDoc(
+      Doc.create({ processId: 'P' }),
+      [
+        { op: 'add', kind: 'startEvent', id: 'S' },
+        { op: 'add', kind: 'subProcess', id: 'Sub1', name: 'Outer', after: 'S' },
+        { op: 'add', kind: 'startEvent', id: 'S1', in: 'Sub1' },
+        { op: 'add', kind: 'subProcess', id: 'Sub2', name: 'Inner', after: 'S1' },
+        { op: 'add', kind: 'startEvent', id: 'S2', in: 'Sub2' },
+        { op: 'add', kind: 'task', id: 'Wrap', name: 'Wrap', after: 'S2' },
+        { op: 'add', kind: 'endEvent', id: 'E', after: 'Sub1' },
+      ],
+      { dryRun: true },
+    );
+    for (const ref of ['Sub1', 'Sub2']) {
+      await expect(mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'place', ids: ['Wrap'], after: ref }], { dryRun: true })).rejects.toMatchObject({
+        code: 'E_LEAVES_CONTAINER',
+        message: `Placing Wrap after ${ref} would move it out of its sub-process ${ref}`,
+      });
+    }
+    // centred on its own sub-process's column is fine: it stays inside
+    const ok = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'place', ids: ['Wrap'], columnOf: 'Sub2' }], { dryRun: true });
+    expect(ok.layout.metrics!.added.filter((p) => p.kind.startsWith('outside'))).toEqual([]);
+  });
+});
+
 describe('#62 route refuses a side that points into a boundary event host', () => {
   it('--exit top from a bottom boundary event is E_INVALID_VALUE; --exit bottom routes', async () => {
     const r0 = await mutateDoc(

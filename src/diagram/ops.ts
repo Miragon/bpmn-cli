@@ -592,6 +592,20 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
   }
   dx = Math.round(dx);
   dy = Math.round(dy);
+  // a reference that is one of the moved shapes' own frames: the shapes cannot go beside it (audit #12)
+  for (const t of fixed) {
+    if (!t.container) continue;
+    for (const s of group) {
+      if (!framesOf(plane, s).includes(t)) continue;
+      const u = unitBox(plane, s);
+      if (inside({ ...u, x: u.x + dx, y: u.y + dy }, t.bounds)) continue;
+      throw modelError('E_LEAVES_CONTAINER', `Placing ${s.id} ${parts.join(' and ')} would move it out of its ${frameWord(t)} ${t.id}`, {
+        element: s.id,
+        related: [t.id],
+        hint: `${t.id} holds ${s.id}: pick a reference inside it, or move the node out of it first (\`bpmn move <file> ${s.id} --in <scopeId>\` / \`--lane <laneId>\`).`,
+      });
+    }
+  }
   checkFrames(plane, group, dx, dy, parts.join(' and '));
   if (!dx && !dy) {
     notes.push(`${ref.id} is already there`);
@@ -992,6 +1006,14 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
       if (s.kind === 'lane') s.bounds.y += dy;
       else shiftShape(plane, id, 0, dy);
     }
+  }
+  // a band whose members hang out at its bottom (a boundary event on the border, a shape drawn below it) grows,
+  // so that nothing ends up in the band below or outside the pool (audit #40)
+  const pool = poolId ? plane.shapes.get(poolId) : undefined;
+  for (const b of bands) {
+    const lowest = Math.max(-Infinity, ...members.get(b.id)!.map((id) => plane.shapes.get(id)!).filter((s) => s.kind !== 'lane').map((s) => bottom(unitBox(plane, s))));
+    const over = lowest + 5 - bottom(b.bounds);
+    if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(b.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
   }
   return settle(plane, snap);
 }
