@@ -83,5 +83,10 @@ describe('a node added into a flow between two lanes (audit #14)', () => {
     const doc = await Doc.fromXml(before.xml);
     expect(laneOf(doc, doc.require('Activity_PrepareRefund'))?.get('id')).toBe('Lane_Accounting');
     expect(inside(bounds(before.xml, 'Activity_PrepareRefund'), bounds(before.xml, 'Lane_Accounting'))).toBe(true);
+    // before a node whose predecessor does not branch: the anchor's lane, and the message says so
+    const plain = await applyToXml(xml, [{ op: 'add', kind: 'serviceTask', name: 'Pay', after: 'Activity_Approve', lane: 'Lane_Accounting' }]);
+    const r = await applyToXml(plain.xml, [{ op: 'add', kind: 'task', name: 'Prepare', before: 'Activity_Pay' }], { layout: 'incremental' });
+    expect(r.result.warnings.find((x) => x.code === 'W_LANE_INHERITED')?.message).toBe('Activity_Prepare is in Lane_Accounting (the lane of Activity_Pay); the flow it went into runs from Activity_Approve in Lane_Clerk to Activity_Pay in Lane_Accounting');
+    expect(inside(bounds(r.xml, 'Activity_Prepare'), bounds(r.xml, 'Lane_Accounting'))).toBe(true);
   });
 });

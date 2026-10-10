@@ -352,7 +352,7 @@ function splicedFlow(doc: Doc, op: AddOp): El | undefined {
  * decided before it is placed; `cross` names both lanes of a cross-lane
  * splice (W_LANE_INHERITED).
  */
-function inheritedLane(doc: Doc, op: AddOp): { lane?: El; cross?: { source: El; target: El; from?: El; to?: El } } {
+function inheritedLane(doc: Doc, op: AddOp): { lane?: El; cross?: { source: El; target: El; from?: El; to?: El; branching: boolean } } {
   const anchor = laneAnchor(doc, op);
   const lane = anchor ? laneOf(doc, anchor) : undefined;
   const flow = splicedFlow(doc, op);
@@ -363,9 +363,9 @@ function inheritedLane(doc: Doc, op: AddOp): { lane?: El; cross?: { source: El; 
   const to = laneOf(doc, target);
   if (from === to) return lane ? { lane } : {};
   // after a branching source the node goes on the target's row (diagram/place.ts splice rule): the target's lane
-  const branching = doc.outgoing(source).length > 1;
-  const chosen = branching && to ? to : lane;
-  return { ...(chosen ? { lane: chosen } : {}), cross: { source, target, ...(from ? { from } : {}), ...(to ? { to } : {}) } };
+  const branching = doc.outgoing(source).length > 1 && !!to;
+  const chosen = branching ? to : lane;
+  return { ...(chosen ? { lane: chosen } : {}), cross: { source, target, ...(from ? { from } : {}), ...(to ? { to } : {}), branching } };
 }
 
 /* ------------------------------------------------------------------ */
@@ -469,7 +469,9 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
       const cross = inherited.cross;
       const other = cross ? (inherited.lane === cross.from ? cross.to : cross.from) : undefined;
       if (cross && other) {
-        const side = inherited.lane === cross.to ? `the lane of ${idOf(cross.target)}, on whose row the layout puts it after the branching ${idOf(cross.source)}` : `the lane of ${idOf(cross.source)}`;
+        const side = cross.branching
+          ? `the lane of ${idOf(cross.target)}, on whose row the layout puts it after the branching ${idOf(cross.source)}`
+          : `the lane of ${idOf(inherited.lane === cross.to ? cross.target : cross.source)}`;
         cs.warn({
           code: 'W_LANE_INHERITED',
           message: `${id} is in ${idOf(inherited.lane)} (${side}); the flow it went into runs from ${idOf(cross.source)} in ${cross.from ? idOf(cross.from) : 'no lane'} to ${idOf(cross.target)} in ${cross.to ? idOf(cross.to) : 'no lane'}`,
