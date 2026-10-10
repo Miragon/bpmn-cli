@@ -97,6 +97,8 @@ export interface FormatResult {
   moved: string[];
   /** connections routed again */
   rerouted: string[];
+  /** connections whose waypoints changed without being routed again (stretched or shortened by moves, the space tool, compact) */
+  reshaped?: string[];
   /** color: elements whose colour changed */
   colored?: string[];
   /** label: elements whose label was placed */
@@ -118,7 +120,7 @@ interface Ctx {
 /** minimum clearance between a placed shape and the element it is placed below / above / after / before */
 const CLEAR = 20;
 
-/** how far a moved shape may reach into the header of its lane / pool (or before the start of a sub-process) */
+/** how far a moved shape may reach into the header of its lane / pool (a sub-process has none: its border is the limit) */
 const HEADER_TOLERANCE = 10;
 
 /* ------------------------------------------------------------------ */
@@ -239,6 +241,17 @@ function changedShapes(planes: readonly Plane[], snap: Snap): string[] {
   return out;
 }
 
+function changedEdges(planes: readonly Plane[], snap: Snap): string[] {
+  const out: string[] = [];
+  for (const plane of planes) {
+    for (const e of plane.edges.values()) {
+      const p = snap.points.get(e.id);
+      if (p && !samePoints(p, e.points)) out.push(e.id);
+    }
+  }
+  return out;
+}
+
 /** Shape labels a fresh line runs over step aside, keeping their side. */
 function clearLabels(plane: Plane, fresh: readonly DEdge[]): void {
   const segs = fresh.flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i]!, q] as const));
@@ -331,7 +344,8 @@ function escape(plane: Plane, s: DShape, frame: DShape, box: Box): DShape | unde
   const inner = frameInterior(frame, 0);
   const c = { x: cx(box), y: cy(box) };
   // a few px into the header of a lane or pool is fine (audit #69: hand drawings sit that close)
-  if (box.x < inner.x - HEADER_TOLERANCE || box.y < frame.bounds.y - 0.5) return frame;
+  const tol = frame.kind === 'lane' || frame.kind === 'participant' ? HEADER_TOLERANCE : 0.5;
+  if (box.x < inner.x - tol || box.y < frame.bounds.y - 0.5) return frame;
   const otherPool = [...plane.shapes.values()].find((p) => p.kind === 'participant' && p.id !== s.poolId && containsPoint(p.bounds, c));
   if (otherPool) return otherPool;
   if (frame.kind !== 'lane') return undefined;
@@ -1134,7 +1148,9 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = ordersPools(ctx.doc, op) ? orderPoolBands(ctx, op, snap, notes) : orderBands(ctx, op, snap, notes);
       break;
   }
-  return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: unique(rerouted), ...extra, ...(notes.length ? { notes } : {}) };
+  const routed = unique(rerouted);
+  const reshaped = changedEdges(ctx.planes, snap).filter((id) => !routed.includes(id));
+  return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: routed, ...(reshaped.length ? { reshaped } : {}), ...extra, ...(notes.length ? { notes } : {}) };
 }
 
 /** Runs the format ops of a batch on the drawing of `doc` (see module contract). */

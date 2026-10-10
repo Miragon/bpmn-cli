@@ -20,7 +20,9 @@
  * with handler, connect, remove node / flow, move after / into a flow / to a
  * lane, retype, rename, split, sub-process with content, expand / collapse,
  * lane, data object / store, annotation, order flows. Format generators: place
- * (row and column variants), align, color, route, label, space, tidy, order
+ * (row and column variants), align, color, route, label, space (also closing),
+ * tidy, compact, selectors (color --path, align / color --kind, place --branch),
+ * order of pools and
  * lanes. Pure; no I/O.
  */
 
@@ -49,7 +51,7 @@ export function info(a) {
   }));
   const flows = sem.flows.map((f) => ({ id: f.id, source: f.sourceRef?.id, target: f.targetRef?.id, name: f.name }));
   const shapeOf = (id) => a.planes.map((p) => p.shapes.get(id)).find(Boolean);
-  return { nodes, flows, lanes: sem.lanes, leafLanes: sem.lanes.filter((l) => !l.hasChildren), participants: sem.participants, shapeOf };
+  return { nodes, flows, lanes: sem.lanes, leafLanes: sem.lanes.filter((l) => !l.hasChildren), participants: sem.participants, collab: sem.collab?.id, shapeOf };
 }
 
 const isActivity = (n) => /Task$|^task$|subProcess|callActivity|transaction|adHocSubProcess/i.test(n.type);
@@ -306,7 +308,41 @@ function space(c) {
   const dir = c.r.chance(0.6) ? 'after' : 'below';
   const op = { op: 'space', [dir]: x.id };
   if (c.r.chance(0.4)) op.by = c.r.pick(['column', 'row', 20 + c.r.int(200)]);
-  return one(`space-${dir}`, op);
+  // closing space (negative amounts)
+  else if (c.r.chance(0.3)) op.by = c.r.pick(['-column', '-row', -(20 + c.r.int(200))]);
+  return one(`space-${dir}${typeof op.by === 'string' && op.by.startsWith('-') || op.by < 0 ? '-close' : ''}`, op);
+}
+
+function compact(c) {
+  const frames = [...c.inf.participants.filter((p) => c.inf.shapeOf(p.id)).map((p) => p.id), ...c.inf.leafLanes.map((l) => l.id), ...c.N.filter((n) => isSub(n) && c.inf.shapeOf(n.id)?.container).map((n) => n.id)];
+  if (!frames.length || c.r.chance(0.5)) return one('compact', { op: 'compact' });
+  return one('compact-ids', { op: 'compact', ids: c.r.shuffle(frames).slice(0, 1 + c.r.int(2)) });
+}
+
+function orderPools(c) {
+  const { inf } = c;
+  const drawn = inf.participants.filter((p) => inf.shapeOf(p.id));
+  return inf.collab && drawn.length >= 2 ? one('order-pools', { op: 'order', id: inf.collab, pools: c.r.shuffle(drawn.map((p) => p.id)) }) : undefined;
+}
+
+/** format ops with selectors: a path, a kind, a branch */
+function select(c) {
+  const { r } = c;
+  const nodes = placeable(c);
+  const pick = r.int(3);
+  if (pick === 0) {
+    const [a, b] = r.shuffle(nodes.filter((n) => !isBoundary(n)));
+    return a && b ? one('color-path', { op: 'color', path: [a.id, b.id], color: r.pick(['blue', 'green', 'red']) }) : undefined;
+  }
+  if (pick === 1) {
+    const kind = r.pick(['endEvent', 'startEvent', 'exclusiveGateway', 'userTask', 'task']);
+    return r.chance(0.5) ? one('align-kind', { op: 'align', kind, axis: r.pick(['row', 'column']) }) : one('color-kind', { op: 'color', kind, color: r.pick(['orange', 'purple', 'default']) });
+  }
+  const split = r.pick(c.N.filter((n) => isGateway(n) && n.outgoing.length >= 2 && c.drawn(n)));
+  if (!split) return undefined;
+  const flow = r.pick(split.outgoing);
+  const ref = r.pick(sameFrame(c, split)) ?? split;
+  return one('place-branch', { op: 'place', branch: flow, [r.pick(['below', 'above'])]: ref.id });
 }
 
 function tidy(c) {
@@ -329,7 +365,7 @@ const SEMANTIC = [
   [5, move], [5, moveLane], [5, retype], [5, rename], [4, split], [3, addSubProcess], [2, toggleExpanded], [1, addLane],
   [2, addData], [1, addAnnotation], [1, orderFlows],
 ];
-const FORMAT = [[6, place], [3, align], [3, color], [4, route], [3, label], [3, space], [2, tidy], [1, orderLanes]];
+const FORMAT = [[6, place], [3, align], [3, color], [4, route], [3, label], [3, space], [2, tidy], [1, orderLanes], [2, compact], [1, orderPools], [3, select]];
 
 export function genStep(a, r, step, { semantic = true, format = true } = {}) {
   const c = context(a, r, step);
@@ -363,6 +399,8 @@ const ADD_FLAGS = [
 const MOVE_FLAGS = [['after', '--after'], ['before', '--before'], ['flow', '--flow'], ['in', '--in'], ['on', '--on'], ['lane', '--lane']];
 const PLACE_FLAGS = [['rowOf', '--row-of'], ['below', '--below'], ['above', '--above'], ['columnOf', '--column-of'], ['after', '--after'], ['before', '--before']];
 const TRIGGER_FLAGS = [['timer', '--timer'], ['message', '--message'], ['error', '--error'], ['signal', '--signal']];
+/** selectors last: --path / --via take every value up to the next flag */
+const selectorArgv = (o) => [...(o.path ? ['--path', ...o.path] : []), ...(o.via ? ['--via', ...o.via] : []), ...flags(o, [['kind', '--kind'], ['branch', '--branch']])];
 
 const ARGV = {
   add: (o) => ['add', '%F', o.kind, ...(o.name !== undefined ? [o.name] : []), ...flags(o, ADD_FLAGS)],
@@ -371,10 +409,11 @@ const ARGV = {
   remove: (o) => ['remove', '%F', ...o.ids, ...(o.bridge === false ? ['--no-bridge'] : [])],
   retype: (o) => ['retype', '%F', o.id, o.kind, ...flags(o, TRIGGER_FLAGS)],
   move: (o) => ['move', '%F', ...o.ids, ...flags(o, MOVE_FLAGS)],
-  order: (o) => ['order', '%F', o.id, ...(o.flows ?? o.lanes)],
-  place: (o) => ['place', '%F', ...o.ids, ...flags(o, PLACE_FLAGS)],
-  align: (o) => ['align', '%F', ...o.ids, '--axis', o.axis, ...flags(o, [['to', '--to']])],
-  color: (o) => ['color', '%F', ...o.ids, '--color', o.color],
+  order: (o) => ['order', '%F', o.id, ...(o.flows ?? o.lanes ?? o.pools)],
+  place: (o) => ['place', '%F', ...(o.ids ?? []), ...flags(o, PLACE_FLAGS), ...selectorArgv(o)],
+  align: (o) => ['align', '%F', ...(o.ids ?? []), '--axis', o.axis, ...flags(o, [['to', '--to']]), ...selectorArgv(o)],
+  color: (o) => ['color', '%F', ...(o.ids ?? []), '--color', o.color, ...selectorArgv(o)],
+  compact: (o) => ['compact', '%F', ...(o.ids ?? [])],
   label: (o) => ['label', '%F', o.id, '--side', o.side],
   route: (o) => ['route', '%F', o.id, ...flags(o, [['exit', '--exit'], ['entry', '--entry']])],
   space: (o) => ['space', '%F', ...flags(o, [['after', '--after'], ['below', '--below'], ['by', '--by']])],

@@ -182,6 +182,8 @@ export interface LayoutStatus {
   moved?: string[];
   /** incremental: pre-existing connections that were routed again */
   rerouted?: string[];
+  /** incremental: pre-existing connections stretched or shortened (their ends or bends moved) without being routed again */
+  reshaped?: string[];
   /** DI of removed elements that was deleted */
   pruned?: string[];
   notes?: string[];
@@ -542,6 +544,7 @@ async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: Muta
       placed: report.placed,
       moved: report.moved,
       rerouted: report.rerouted,
+      ...(report.reshaped.length ? { reshaped: report.reshaped } : {}),
       pruned: report.pruned,
       notes: report.notes,
     },

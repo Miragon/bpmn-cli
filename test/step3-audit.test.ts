@@ -108,6 +108,12 @@ describe('#69 a few px into a lane header do not refuse an alignment', () => {
     expect(shapes(await Doc.fromXml(r.xml)).get('T')!.bounds.x).toBe(58);
     await expect(mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev2', axis: 'column' }], { dryRun: true })).rejects.toMatchObject({ code: 'E_LEAVES_CONTAINER' });
   });
+
+  it('a sub-process has no header: 5 px past its border are still refused', async () => {
+    const process = `<bpmn:process id="P"><bpmn:startEvent id="Ev" /><bpmn:subProcess id="Sub"><bpmn:task id="T" name="T" /></bpmn:subProcess></bpmn:process>`;
+    const xml = defs(process, `${sh('Ev', 227, 40, 36, 36)}${sh('Sub', 200, 120, 400, 200, ' isExpanded="true"')}${sh('T', 300, 180, 100, 80)}`);
+    await expect(mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev', axis: 'column' }], { dryRun: true })).rejects.toMatchObject({ code: 'E_LEAVES_CONTAINER' });
+  });
 });
 
 describe('#40 lane order keeps what hangs out of a band inside the pool', () => {

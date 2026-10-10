@@ -77,7 +77,7 @@ import { layoutClean } from '../layout/engine.js';
 import { SIZES } from '../layout/types.js';
 import { is, layoutRoot, parseXml, type El } from '../model.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from './containers.js';
-import { bottom, copyBox, copyPoints, cy, inside, overlaps, right, sameBox, segmentHits, type Box, type Point } from './geom.js';
+import { bottom, copyBox, copyPoints, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
 import { boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
@@ -263,6 +263,8 @@ export interface IncrementalReport {
   placed: string[];
   moved: string[];
   rerouted: string[];
+  /** pre-existing connections whose waypoints changed without being routed again (the space tool stretched them) */
+  reshaped: string[];
   pruned: string[];
   notes: string[];
 }
@@ -1139,11 +1141,16 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   for (const p of ctx.planes) for (const x of [...p.shapes.values(), ...p.edges.values()]) if (x.di) live.add(x.di);
   const pruned = new Set(prunedNow);
   for (const [di, entry] of snap.byDi) if (!live.has(di) && !sem.byId.has(entry.id)) pruned.add(entry.id);
+  // connections the space tool stretched or shortened (audit #61): their waypoints changed, they were not routed again
+  const routed = new Set([...rerouted, ...ctx.newEdges]);
+  const reshaped: string[] = [];
+  for (const [e, b] of before) if (!routed.has(e.id) && !pruned.has(e.id) && !samePoints(b.points, e.points)) reshaped.push(e.id);
   return {
     mode: 'incremental',
     placed: [...ctx.place.placed, ...ctx.newEdges].filter((id, i, all) => all.indexOf(id) === i && !ctx.relocated.has(id)),
     moved: movedShapes(ctx),
     rerouted,
+    reshaped: reshaped.filter((id, i) => reshaped.indexOf(id) === i),
     pruned: [...pruned],
     notes,
   };
