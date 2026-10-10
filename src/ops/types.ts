@@ -175,10 +175,25 @@ export type SideName = 'left' | 'right' | 'top' | 'bottom';
 export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
-export interface PlaceOp {
+/**
+ * Selectors of place / align / color / tidy (src/diagram/select.ts): they add
+ * elements to `ids` (connections only for color).
+ */
+export interface Selectors {
+  /** [fromId, toId]: every node and flow on the shortest sequence-flow path between them */
+  path?: string[];
+  /** sequence flows the path must pass, in order */
+  via?: string[];
+  /** every element of this kind (`find --kind` grammar, e.g. endEvent, userTask, sequenceFlow) */
+  kind?: string;
+  /** the branch this sequence flow starts: what only it reaches, up to the join */
+  branch?: string;
+}
+
+export interface PlaceOp extends Selectors {
   op: 'place';
   /** shapes moved as one rigid group; the first id is the reference */
-  ids: string[];
+  ids?: string[];
   /** row: centre on the row of this element */
   rowOf?: string;
   /** row: the row below this element */
@@ -193,17 +208,17 @@ export interface PlaceOp {
   before?: string;
 }
 
-export interface AlignOp {
+export interface AlignOp extends Selectors {
   op: 'align';
-  ids: string[];
+  ids?: string[];
   axis: 'row' | 'column';
   /** reference element (default: the first id) */
   to?: string;
 }
 
-export interface ColorOp {
+export interface ColorOp extends Selectors {
   op: 'color';
-  ids: string[];
+  ids?: string[];
   color: ColorName;
 }
 
@@ -235,7 +250,7 @@ export interface SpaceOp {
   by?: 'column' | 'row' | '-column' | '-row' | number;
 }
 
-export interface TidyOp {
+export interface TidyOp extends Selectors {
   op: 'tidy';
   /** only these shapes (default: every shape of the diagram) */
   ids?: string[];

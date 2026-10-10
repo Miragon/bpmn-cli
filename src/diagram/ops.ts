@@ -86,6 +86,7 @@ import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from
 import type { Side } from './router.js';
 import { separate, tidy } from './separate.js';
 import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
+import { selection } from './select.js';
 import { setSwatch, writePlanes } from './write.js';
 
 export interface FormatResult {
@@ -535,7 +536,7 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
 /* ------------------------------------------------------------------ */
 
 function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
-  const items = unique(op.ids).map((id) => movableShape(ctx, id));
+  const items = unique(op.ids ?? []).map((id) => movableShape(ctx, id));
   const { plane, shape: ref } = items[0]!;
   for (const it of items) samePlane(plane, it.plane, it.shape.id, ref.id);
   const group = outermost(plane, items.map((i) => i.shape));
@@ -599,9 +600,9 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
 }
 
 function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
-  const refId = op.to ?? op.ids[0]!;
+  const refId = op.to ?? op.ids?.[0] ?? "";
   const { plane, shape: ref } = drawnShape(ctx, refId);
-  const items = unique(op.ids)
+  const items = unique(op.ids ?? [])
     .filter((id) => id !== refId)
     .map((id) => movableShape(ctx, id));
   for (const it of items) samePlane(plane, it.plane, it.shape.id, refId);
@@ -627,7 +628,7 @@ function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
 function colorOp(ctx: Ctx, op: ColorOp): string[] {
   const colored: string[] = [];
   const swatch = op.color === 'default' ? undefined : op.color;
-  for (const id of unique(op.ids)) {
+  for (const id of unique(op.ids ?? [])) {
     const el = ctx.doc.require(id);
     if (!ctx.planes.length) throw noDiagram();
     const shape = ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
@@ -1018,8 +1019,35 @@ function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): str
 /* entry point                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The ids of a format op with selectors (select.ts): explicit ids first, then
+ * what --branch, --path and --kind name (connections for color only). An
+ * align without explicit ids or `to` aligns on the first selected element,
+ * with only --kind and --axis column on the rightmost one (nothing moves left).
+ */
+function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): T {
+  if (op.op !== 'place' && op.op !== 'align' && op.op !== 'color' && op.op !== 'tidy') return op;
+  if (!op.path && !op.kind && !op.branch) return op;
+  if (!ctx.planes.length) throw noDiagram();
+  const shapeOf = (id: string): DShape | undefined => ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
+  const ids = selection(ctx.doc, op, {
+    shapesOnly: op.op !== 'color',
+    drawn: (id) => ctx.planes.some((p) => p.shapes.has(id) || p.edges.has(id)),
+    centreX: (id) => {
+      const s = shapeOf(id);
+      return s ? cx(s.bounds) : undefined;
+    },
+  });
+  if (op.op === 'align' && !op.to && !op.ids?.length && !op.path && !op.branch && op.axis === 'column') {
+    const right = [...ids].sort((a, b) => cx(shapeOf(b)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }) - cx(shapeOf(a)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }))[0];
+    return { ...op, ids, ...(right ? { to: right } : {}) };
+  }
+  return { ...op, ids };
+}
+
 function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
-  const { op, index } = entry;
+  const index = entry.index;
+  const op = entry.op.op === 'order' ? entry.op : resolveSelection(ctx, entry.op);
   if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
   const snap = snapshot(ctx.planes);
   const notes: string[] = [];

@@ -35,6 +35,7 @@ import {
   type RemoveOp,
   type RetypeOp,
   type SetOp,
+  type Selectors,
   type SplitBranch,
   type SplitOp,
   type TriggerOptions,
@@ -215,8 +216,16 @@ export const SIDE_VALUES = ['right', 'top', 'bottom', 'left'] as const;
 export const LABEL_SIDE_VALUES = ['above', 'below', 'left', 'right'] as const;
 export const COLOR_VALUES = ['blue', 'orange', 'green', 'red', 'purple', 'default'] as const;
 
+export const SELECTOR_FIELDS: FieldsOf<Selectors> = {
+  path: list('[fromId, toId]: add every node (and, for color, every flow) on the shortest sequence-flow path between them (default flows first on ties).', { minItems: 2 }),
+  via: list('With "path": sequence flows the path must pass, in order (to pick a branch).', { minItems: 1 }),
+  kind: ref('Add every element of this kind (the `find --kind` grammar: endEvent, userTask, startEvent:message, sequenceFlow, ...).'),
+  branch: ref('Add the branch this sequence flow starts: every node only it reaches up to the join (for color also its flows).'),
+};
+
 export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
-  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { required: true, minItems: 1 }),
+  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   rowOf: ref('Row: centre the reference vertically on this element.'),
   below: ref('Row: put the reference one row below this element.'),
   above: ref('Row: put the reference one row above this element.'),
@@ -226,13 +235,15 @@ export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
 };
 
 export const ALIGN_FIELDS: FieldsOf<AlignOp> = {
-  ids: list('Shapes to align (each moves on its own).', { required: true, minItems: 1 }),
+  ids: list('Shapes to align (each moves on its own).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   axis: str('row: same vertical centre (one horizontal line); column: same horizontal centre (one vertical line).', { required: true, values: ['row', 'column'] }),
   to: ref('Reference element that stays (default: the first id).'),
 };
 
 export const COLOR_FIELDS: FieldsOf<ColorOp> = {
-  ids: list('Shapes and connections to colour.', { required: true, minItems: 1 }),
+  ids: list('Shapes and connections to colour.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   color: str('A colour of the bpmn-js colour picker; "default" removes the colour.', { required: true, values: COLOR_VALUES }),
 };
 
@@ -255,6 +266,7 @@ export const SPACE_FIELDS: FieldsOf<SpaceOp> = {
 
 export const TIDY_FIELDS: FieldsOf<TidyOp> = {
   ids: list('Only these shapes (default: every shape of every diagram).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
 };
 
 export const COMPACT_FIELDS: FieldsOf<CompactOp> = {
@@ -606,6 +618,16 @@ function checkGroups(ctx: Ctx, obj: Record<string, unknown>, groups: string[][],
   if (!presentKeys(obj, groups.flat()).length) throw fail(ctx, atLeastOne);
 }
 
+const hasSelector = (obj: Record<string, unknown>): boolean => presentKeys(obj, ['path', 'kind', 'branch']).length > 0;
+
+/** Format ops with selectors: ids and / or a selector (`needed`), `path` is two ids, `via` only with `path`. */
+function checkSelection(ctx: Ctx, obj: Record<string, unknown>, needed: boolean): void {
+  if (needed && obj['ids'] === undefined && !hasSelector(obj)) throw fail(ctx, 'give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["Event_Start","Event_Done"],"color":"green"}.');
+  const path = obj['path'] as string[] | undefined;
+  if (path && path.length !== 2) throw fail(ctx, `"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["Event_Start", "Event_Done"], "via": ["Flow_Yes"].');
+  if (obj['via'] !== undefined && !path) throw fail(ctx, '"via" needs "path"');
+}
+
 function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
   const out = checkFields(ctx, raw, OP_FIELDS[name]);
   switch (name) {
@@ -647,19 +669,25 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
       break;
     }
     case 'place':
+      checkSelection(ctx, out, true);
       checkGroups(ctx, out, PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before")');
       break;
     case 'align':
-      if ((out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      checkSelection(ctx, out, true);
+      if (!hasSelector(out) && (out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      break;
+    case 'color':
+      checkSelection(ctx, out, true);
+      break;
+    case 'tidy':
+      checkSelection(ctx, out, false);
       break;
     case 'space':
       checkGroups(ctx, out, [['after', 'below']], 'give "after" (horizontal space right of an element) or "below" (vertical space below it)');
       break;
     case 'remove':
-    case 'color':
     case 'label':
     case 'route':
-    case 'tidy':
     case 'compact':
       break;
   }
@@ -726,6 +754,9 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
 }
 
 /** JSON-schema rules: at most one key per group, at least one key overall. */
+/** JSON-schema rule of place / align / color: ids and / or a selector. */
+const NAMED = { anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) };
+
 const groupRules = (groups: string[][]): unknown[] => [
   ...groups.flatMap((g) => g.flatMap((a, i) => g.slice(i + 1).map((b) => ({ not: { required: [a, b] } })))),
   { anyOf: groups.flat().map((k) => ({ required: [k] })) },
@@ -778,9 +809,9 @@ function buildSchema(): Record<string, unknown> {
         ],
       }),
       split: objectSchema(SPLIT_FIELDS, { op: 'split', description: OP_DESCRIPTIONS.split }),
-      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: groupRules(PLACE_GROUPS) }),
-      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [{ anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }] }] }),
-      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color }),
+      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: [NAMED, ...groupRules(PLACE_GROUPS)] }),
+      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [NAMED, { anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }, { required: ['path'] }, { required: ['kind'] }, { required: ['branch'] }] }] }),
+      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color, allOf: [NAMED] }),
       label: objectSchema(LABEL_FIELDS, { op: 'label', description: OP_DESCRIPTIONS.label }),
       route: objectSchema(ROUTE_FIELDS, { op: 'route', description: OP_DESCRIPTIONS.route }),
       space: objectSchema(SPACE_FIELDS, { op: 'space', description: OP_DESCRIPTIONS.space, allOf: [{ oneOf: [{ required: ['after'] }, { required: ['below'] }] }] }),

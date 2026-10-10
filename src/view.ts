@@ -707,7 +707,7 @@ function isSearchable(el: El): boolean {
 /** Non-kind labels `find --kind` also accepts. */
 const EXTRA_KINDS = ['sequenceFlow', 'messageFlow', 'association', 'dataAssociation', 'process', 'collaboration', 'message', 'error', 'signal', 'escalation'];
 
-function kindFilter(kind: string): (el: El) => boolean {
+export function kindFilter(kind: string): (el: El) => boolean {
   try {
     const { def, trigger } = parseKind(kind);
     return (el) => kindOf(el)?.kind === def.kind && (!trigger || triggerOf(el) === trigger);

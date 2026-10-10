@@ -670,7 +670,8 @@ describe('format ops in the ops JSON', () => {
   it('are in the JSON schema and in `kinds --json`', () => {
     const defs = OPS_SCHEMA['$defs'] as Record<string, { properties: Record<string, unknown>; required: string[]; allOf?: unknown[] }>;
     for (const name of FORMAT_OP_NAMES) expect(defs[name], name).toBeDefined();
-    expect(defs['place']!.required).toEqual(['op', 'ids']);
+    expect(defs['place']!.required).toEqual(['op']);
+    expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) }]));
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ not: { required: ['rowOf', 'below'] } }, { anyOf: ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'].map((k) => ({ required: [k] })) }]));
     expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }] });
     expect(defs['color']!.properties['color']).toMatchObject({ enum: ['blue', 'orange', 'green', 'red', 'purple', 'default'] });
