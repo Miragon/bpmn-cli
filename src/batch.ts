@@ -15,6 +15,7 @@
  * after the op that defines them.
  */
 import { usageError, type CliError } from './errors.js';
+import { editDistance } from './ids.js';
 import { KindError, kindByName, normalizeTrigger, parseKind } from './kinds.js';
 import { ALIAS, checkAliases } from './ops/aliases.js';
 import {
@@ -355,20 +356,6 @@ function describe(v: unknown): string {
   if (Array.isArray(v)) return 'an array';
   if (typeof v === 'object') return 'an object';
   return `${typeof v} ${JSON.stringify(v)}`;
-}
-
-/** Edit distance with adjacent transpositions (optimal string alignment; small strings only). */
-function editDistance(a: string, b: string): number {
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2]![j - 2]! + 1);
-      d[i]![j] = v;
-    }
-  }
-  return d[a.length]![b.length]!;
 }
 
 /** kebab-case / snake_case / wrong-case spellings and small typos of an allowed key. */

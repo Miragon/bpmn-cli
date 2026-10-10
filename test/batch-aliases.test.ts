@@ -118,7 +118,7 @@ describe('batch aliases', () => {
     const unknown = failure(() => parseOps([{ op: 'add', kind: 'start', name: 'S', as: '$start' }, { op: 'add', kind: 'task', name: 'T', after: '$strat' }]));
     expect(unknown.code).toBe('E_UNKNOWN_ALIAS');
     expect(unknown.exitCode).toBe(1);
-    expect(unknown.message).toBe('ops[1] (add): "after": alias $strat is not defined; defined so far: $start (ops[0])');
+    expect(unknown.message).toBe('ops[1] (add): "after": alias $strat is not defined (did you mean $start?); defined so far: $start (ops[0])');
     expect(unknown.details.candidates).toEqual(['$start']);
     expect(unknown.details.op).toBe(1);
     const later = failure(() => parseOps([{ op: 'remove', ids: ['$t'] }, { op: 'add', kind: 'task', name: 'T', as: '$t' }]));

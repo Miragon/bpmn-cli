@@ -11,7 +11,7 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
 import type { ChangeSet } from './result.js';
-import { IdRegistry, isValidId, transliterate } from './ids.js';
+import { editDistance, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
 import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
@@ -86,6 +86,22 @@ function foldUmlauts(text: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+/** An id without its prefix (`Activity_CheckInvoice` -> `CheckInvoice`; an id without `_` is its own stem). */
+function stemOf(id: string): string {
+  const i = id.indexOf('_');
+  return i === -1 ? id : id.slice(i + 1);
+}
+
+/** What a running `apply` batch did so far (ops/index.ts runBatch): E_NOT_FOUND points to it. */
+export interface BatchContext {
+  /** ids the ops before created, in order */
+  created: string[];
+  /** old id -> new id of the flows the ops before renamed (ops/flows.ts followEnds) */
+  renamed: Map<string, string>;
+  /** the batch aliases defined so far -> current ids */
+  aliases: () => Record<string, string>;
+}
+
 /** True for elements somewhere below a bpmn:extensionElements container. */
 function insideExtension(el: El): boolean {
   for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
@@ -95,6 +111,8 @@ function insideExtension(el: El): boolean {
 export class Doc {
   private index: Map<string, El> | null = null;
   private style: IdStyle | undefined;
+  /** set while an `apply` batch runs (ops/index.ts): E_NOT_FOUND names what it created and renamed */
+  batch: BatchContext | undefined;
   /** generated ids that took a collision suffix since the last takeSuffixed() (W_ID_SUFFIXED) */
   private suffixed: Array<{ id: string; base: string }> = [];
   /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
@@ -270,11 +288,21 @@ export class Doc {
           hint: `Vendor extension elements are edited through their BPMN element: \`bpmn ext list <file> ${owners[0]}\`, then \`bpmn ext add|remove <file> ${owners[0]} ...\`.`,
         });
       }
+      const renamed = this.batch?.renamed.get(id);
       const candidates = this.suggest(id);
-      throw modelError('E_NOT_FOUND', `No ${what} with id "${id}"${candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : ''}`, {
+      const alias = this.batch && Object.keys(this.batch.aliases()).find((a) => a.slice(1).toLowerCase() === id.toLowerCase());
+      const recent = (this.batch?.created ?? []).filter((c) => this.has(c));
+      const why = renamed ? `: an op before this one renamed it to ${renamed} (its id named its old ends)` : candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : '';
+      throw modelError('E_NOT_FOUND', `No ${what} with id "${id}"${why}`, {
         element: id,
         candidates,
-        hint: 'Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.',
+        hint: [
+          alias ? `In this batch ${alias} is an alias: write "${alias}".` : '',
+          recent.length ? `Created earlier in this batch: ${recent.slice(-8).join(', ')}${recent.length > 8 ? ` (and ${recent.length - 8} more)` : ''}; name them with "as": "$name" to refer to them.` : '',
+          'Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.',
+        ]
+          .filter(Boolean)
+          .join(' '),
       });
     }
     if (expect) {
@@ -300,28 +328,50 @@ export class Doc {
     return out;
   }
 
-  /** Case-insensitive fuzzy id/name candidates; umlaut spellings match each other (Pruefung, Prufung, Prüfung). */
+  /**
+   * "Did you mean" ids for an id that does not exist, best first: the id
+   * an op of the running batch renamed it to; the same id in another case,
+   * umlaut spelling (Pruefung, Prufung, Prüfung) or with another or no
+   * prefix (Task_CheckInvoice, CheckInvoice -> Activity_CheckInvoice); an id
+   * containing it or contained in it; a typo (edit distance 1, 2 from 12
+   * characters, on the whole id or without prefix); a name containing it.
+   * Within a tier the ids the running batch created come first.
+   */
   suggest(query: string, max = 5): string[] {
     const q = query.toLowerCase();
     const fq = foldUmlauts(query);
-    const hits: Array<{ id: string; score: number }> = [];
+    const fstem = foldUmlauts(stemOf(query));
+    const recent = new Set(this.batch?.created ?? []);
+    const renamed = this.batch?.renamed.get(query);
+    const hits: Array<{ id: string; score: number; dist: number }> = [];
     for (const [id, el] of this.byId()) {
       const name = String(el.get<string | undefined>('name') ?? '').toLowerCase();
       const lid = id.toLowerCase();
       const fid = foldUmlauts(id);
+      const fidStem = foldUmlauts(stemOf(id));
       let score = Infinity;
-      if (lid === q) score = 0;
-      else if (lid.includes(q) || q.includes(lid) || (fq && (fid.includes(fq) || fq.includes(fid)))) score = 1;
-      else if (name && (name === q || name.includes(q) || (!!fq && foldUmlauts(name).includes(fq)))) score = 2;
-      else if (lid.replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''))) score = 3;
-      if (score < Infinity) hits.push({ id, score });
+      let dist = 0;
+      if (id === renamed) score = -1;
+      else if (lid === q) score = 0;
+      else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
+      else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
+      else {
+        const whole = editDistance(fq, fid);
+        const bare = editDistance(fstem, fidStem);
+        if (fq && whole <= typoTolerance(fq.length)) [score, dist] = [3, whole];
+        else if (fstem && bare <= typoTolerance(fstem.length)) [score, dist] = [3, bare];
+        else if (name && (name === q || name.includes(q) || (!!fq && foldUmlauts(name).includes(fq)))) score = 4;
+        else if (q.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''))) score = 5;
+      }
+      if (score < Infinity) hits.push({ id, score, dist });
     }
     if (!hits.length) {
       // last resort: kind-alike suggestions are not ids; return nothing
       void suggestKinds;
     }
+    const fresh = (id: string): number => (recent.has(id) ? 0 : 1);
     return hits
-      .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))
+      .sort((a, b) => a.score - b.score || fresh(a.id) - fresh(b.id) || a.dist - b.dist || a.id.localeCompare(b.id))
       .slice(0, max)
       .map((h) => h.id);
   }

@@ -199,9 +199,15 @@ batch a later op refers to an element an earlier op created by an alias
 
 Names become ASCII words: German umlauts are transliterated (`ä` -> `ae`,
 `ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`),
-other accents dropped (`Café` -> `Cafe`). An id that is not found is
-matched against the other spellings (`Activity_Prufung`, `Activity_Prüfung`
-suggest `Activity_Pruefung`).
+other accents dropped (`Café` -> `Cafe`). An id that is not found
+(`E_NOT_FOUND`) comes with the ids that were probably meant, best first: the
+new id of a flow an earlier op of the batch renamed; the same id in another
+case, umlaut spelling or with another or no prefix (`Activity_Prufung`,
+`Activity_Prüfung` -> `Activity_Pruefung`; `Task_CheckInvoice`,
+`CheckInvoice` -> `Activity_CheckInvoice`); ids containing it; typos
+(`Activity_ChekInvoice`); names containing it. Inside an `apply` batch the
+ids it created come first, and the hint lists them (and points out an alias
+written without `$`).
 
 ## Command reference
 

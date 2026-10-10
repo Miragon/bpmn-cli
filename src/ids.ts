@@ -75,6 +75,25 @@ export function pascalSnakeSlug(name: string | undefined): string {
   return cut(nameWords(name).map(cap).join('_'));
 }
 
+/** Edit distance with adjacent transpositions (optimal string alignment; small strings only). */
+export function editDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2]![j - 2]! + 1);
+      d[i]![j] = v;
+    }
+  }
+  return d[a.length]![b.length]!;
+}
+
+/** The typos two spellings of one word may differ by: none below 5 characters, 1 up to 11, 2 from 12. */
+export function typoTolerance(length: number): number {
+  return length >= 12 ? 2 : length >= 5 ? 1 : 0;
+}
+
 /** BPMN ids must be XML NCNames. */
 export function isValidId(id: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(id);

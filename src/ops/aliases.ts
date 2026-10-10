@@ -27,6 +27,7 @@
  */
 import type { Doc } from '../document.js';
 import { CliError, usageError } from '../errors.js';
+import { editDistance, typoTolerance } from '../ids.js';
 import type { El } from '../model.js';
 import type { Op } from './types.js';
 
@@ -97,9 +98,13 @@ function listing(defined: ReadonlyMap<string, number>): string {
 
 function unknownAlias(index: number, op: Op, key: string, alias: string, defined: ReadonlyMap<string, number>, later?: number): CliError {
   const where = later === undefined ? '' : later === index ? ' yet (this op defines it: only the ops after it can use it)' : later > index ? ` before this op (ops[${later}] defines it)` : '';
-  return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}; ${listing(defined)}`, 'usage', {
+  // the defined aliases, the closest spelling first (case and typos: $chek -> $check)
+  const distance = (a: string): number => editDistance(a.toLowerCase(), alias.toLowerCase());
+  const candidates = [...defined.keys()].sort((a, b) => distance(a) - distance(b));
+  const close = candidates[0] !== undefined && later === undefined && distance(candidates[0]) <= Math.max(1, typoTolerance(alias.length)) ? ` (did you mean ${candidates[0]}?)` : '';
+  return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}${close}; ${listing(defined)}`, 'usage', {
     op: index,
-    candidates: [...defined.keys()],
+    candidates,
     hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node) or "joinAs" (split: the join gateway); only the ops after it can use it.',
   });
 }
