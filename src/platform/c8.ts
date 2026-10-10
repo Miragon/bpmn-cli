@@ -75,7 +75,9 @@
  *   W_C8_DEPLOY_BOUNDARY_HOST      boundary event on a compensation handler (validate.ts withProfile drops it next to
  *                                  the structural E_INVALID_HOST)
  *   W_C8_DEPLOY_SCHEMA             an attribute without prefix that the BPMN schema does not define (anywhere in the
- *                                  file), extension elements on bpmn:definitions
+ *                                  file), extension elements on bpmn:definitions, an id that is no NCName; from the
+ *                                  file's text (platform/schema-text.ts): child elements out of the schema's order,
+ *                                  IDREFs that name no id, ids bpmn-moddle could not read
  * severity runtime (it deploys, but the setting is ignored or fails when the process runs):
  *   W_C8_FOREIGN_CONTENT           camunda:* / operaton:* attributes or elements (Camunda 7 content) in a Camunda 8 file
  *   W_C8_UNKNOWN_ELEMENT           zeebe extension element the descriptor does not know (did you mean ...)
@@ -109,6 +111,7 @@ import { decisionLinkOf } from '../ops/decision.js';
 import { C7_URIS, ZEEBE_URI } from './descriptor.js';
 import { namespaceMap, uriOfElement, uriOfName } from './detect.js';
 import { feelSyntaxError } from './feel.js';
+import { NCNAME, schemaTextIssues, type SchemaTextIssue } from './schema-text.js';
 import { makeFinding, type ProfileFinding, type Severity } from './finding.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from './zeebe.js';
 
@@ -1355,6 +1358,54 @@ function checkSchema(ctx: Ctx): void {
   }
 }
 
+/** An id the BPMN schema does not allow (bpmn-moddle reads `prefix:name` ids; Camunda 8 refuses them, cvc-datatype-valid). */
+function checkIds(ctx: Ctx): void {
+  for (const el of walk(ctx.doc.definitions)) {
+    if (isGeneric(el)) continue;
+    const id = peek<string>(el, 'id');
+    if (typeof id !== 'string' || !id || NCNAME.test(id.trim())) continue;
+    const di = isDiElement(el);
+    const fixed = id.replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^(?=[^A-Za-z_])/, '_');
+    push(ctx, 'deploy', 'W_C8_DEPLOY_SCHEMA', el, undefined, `id:${id}`, `${di ? el.$type : describe(el)} has the id "${id}", which is no XML NCName (${id.includes(':') ? 'a colon is not allowed in an id' : 'letters, digits, _ . - and no leading digit'}); Camunda 8 validates the file against the BPMN schema and refuses it`, di ? `Rename it in the XML (or redraw the diagram: \`bpmn layout <file>\`).` : `\`bpmn set <file> ${sh(id)} id=${fixed}\`.`);
+  }
+}
+
+/** The schema-text issues of a document's text, read once per text (the profile runs before and after an edit). */
+const TEXT_ISSUES = new WeakMap<object, SchemaTextIssue[]>();
+
+/**
+ * Child element order and IDREFs that name no id, read from the file's text
+ * (platform/schema-text.ts): the model shows neither, Camunda 8 refuses both.
+ * After an edit an issue of an element the edit removed is gone.
+ */
+function checkSchemaText(ctx: Ctx): void {
+  const source = ctx.doc.source;
+  if (!source) return;
+  let issues = TEXT_ISSUES.get(source);
+  if (!issues) {
+    issues = schemaTextIssues(source.text, ctx.doc.moddle);
+    TEXT_ISSUES.set(source, issues);
+  }
+  for (const issue of issues) {
+    if (issue.kind === 'id') {
+      // an element bpmn-moddle read is checkIds' (with the rename); this one it could not read (an import warning)
+      if (ctx.doc.get(issue.value!)) continue;
+      push(ctx, 'deploy', 'W_C8_DEPLOY_SCHEMA', ctx.doc.definitions, undefined, `id:${issue.value}`, `<bpmn:${issue.element}> has the id "${issue.value}", which is no XML NCName (${issue.value!.includes(':') ? 'a colon is not allowed in an id' : 'letters, digits, _ . - and no leading digit'}); bpmn-moddle cannot read the element (an import warning) and Camunda 8 validates the file against the BPMN schema and refuses it`, `Rename it in the XML (and every reference to it), e.g. to ${issue.value!.replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^(?=[^A-Za-z_])/, '_')}.`);
+      continue;
+    }
+    const owner = issue.owner !== undefined ? ctx.doc.get(issue.owner) : undefined;
+    if (issue.owner !== undefined && !owner) continue;
+    const where = owner ? describe(owner) : `<${issue.element}>`;
+    if (issue.kind === 'order') {
+      const what = owner && issue.element !== localName(owner.$type).replace(/^./, (c) => c.toLowerCase()) ? `<bpmn:${issue.element}> of ${where}` : where;
+      push(ctx, 'deploy', 'W_C8_DEPLOY_SCHEMA', owner ?? ctx.doc.definitions, undefined, `order:${issue.element}/${issue.child}`, `In ${what}, <bpmn:${issue.child}> comes after <bpmn:${issue.before}>; the BPMN schema puts ${issue.child} before ${issue.before}, and Camunda 8 validates the file against the schema and refuses it`, `Move <bpmn:${issue.child}> before <bpmn:${issue.before}> in the XML of ${owner ? idOf(owner) : `<${issue.element}>`} (Camunda Modeler and \`bpmn\` write that order for the elements they create or change).`);
+    } else {
+      const ref = issue.attribute ? `${issue.ref}="${issue.value}"` : `<bpmn:${issue.ref}>${issue.value}</bpmn:${issue.ref}>`;
+      push(ctx, 'deploy', 'W_C8_DEPLOY_SCHEMA', owner ?? ctx.doc.definitions, undefined, `idref:${issue.ref}:${issue.value}`, `${where[0]!.toUpperCase()}${where.slice(1)} has ${ref}, but the file has no element with the id ${issue.value}; Camunda 8 checks such references against the ids of the file (cvc-id.1) and refuses it`, `Remove ${ref} from ${issue.owner ?? `<bpmn:${issue.element}>`} in the XML, or point it at an element of the file (bpmn-moddle drops the reference when it reads the file: \`bpmn\` refuses to write the file without --force, and a forced write leaves it out).`);
+    }
+  }
+}
+
 /**
  * The names of the messages and signals the file's elements use: Camunda 8
  * parses one starting with = as FEEL at deploy (a catch, a throw, a send
@@ -1438,5 +1489,7 @@ export function c8Findings(doc: Doc): ProfileFinding[] {
   checkSchemaEventDefinitions(ctx);
   checkFeelNames(ctx);
   checkSchema(ctx);
+  checkIds(ctx);
+  checkSchemaText(ctx);
   return ctx.out;
 }
