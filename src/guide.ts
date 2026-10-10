@@ -1,12 +1,14 @@
 /**
- * Self-description for agents: `bpmn kinds`, `bpmn kinds --json`, `bpmn guide`.
+ * Self-description for agents: `bpmn kinds [--section <names>]`, `bpmn kinds
+ * --json`, `bpmn guide` (everything), `bpmn guide --short` (the core in at
+ * most 5 KB) and `bpmn guide <topic>` (one section of the full guide).
  *
  * Everything here is derived from the live tables (KINDS, SET_KEYS, the ops
  * field specs and schema) so the text can never drift from the code; only
  * the error catalogue, exit codes, trigger options, placement rules and the
  * command reference are written by hand.
  */
-import { EXIT_CODES } from './errors.js';
+import { EXIT_CODES, usageError } from './errors.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from './kinds.js';
 import { Doc } from './document.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from './ops/set.js';
@@ -134,7 +136,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_LABEL_DROPPED', meaning: 'While bridging a removed node the outgoing flow label could not be carried over because the incoming flow has its own.', fix: 'Set the wanted label on the surviving flow with `bpmn set <file> <flowId> name=...`.' },
   { code: 'W_CONDITION_DROPPED', meaning: 'While bridging a removed node the outgoing flow condition could not be carried over.', fix: 'Set the condition on the surviving flow with `bpmn set <file> <flowId> condition=...`.' },
   { code: 'W_PROPERTY_DROPPED', meaning: '`retype` dropped a property the new kind does not have (e.g. script on a userTask); a trigger kind change (`set trigger=`, `retype`) dropped vendor attributes / extension elements of the old event definition (changing only the details of the same trigger keeps the definition; on an event with several definitions `set trigger=<t>` keeps that one and drops the others); `set loop=none|standard` (or standard -> multi-instance) dropped the vendor content of the old loop; a condition change dropped camunda:resource / the script language (an inline body replacing a script resource, a ${...} body that does not inherit a script language) or the inline body (a script resource replacing it); or `ext add` replaced a keyed item (same name / id) whose attributes, value or children the new one does not have.', fix: 'Re-add the information in a form the new kind supports (the hint says how, e.g. language=<lang> to keep a script language; for `ext add` the hint holds the `--xml` that keeps the old content), or accept the loss.' },
-  { code: 'W_PREEXISTING_ERROR', meaning: 'A structural error, or an error of a validator (the design profile: `[design]`), that the model already had before this change (the message starts with its original code); it does not block the write. A validator\'s error follows its element through a rename.', fix: 'Fix it when convenient: `bpmn validate <file>` lists it with its own code and hint.' },
+  { code: 'W_PREEXISTING_ERROR', meaning: 'A structural error, or an error of a validator (the design profile: `[design]`), that the model already had before this change (the message starts with its original code); it does not block the write. A validator\'s error follows its element through a rename. A result counts it with the other warnings the file already had (`N warnings already in the file`, JSON `warnings.preexistingCount`) instead of listing it; `MutationResult.validation.warnings` of the library keeps it.', fix: 'Fix it when convenient: `bpmn validate <file>` lists it with its own code and hint.' },
   // vendor content: nested keys of set, ext structure, retype, connect, remove
   { code: 'E_WRONG_HOST', meaning: '`set`: a known camunda attribute was given to an element that does not carry it: the Camunda descriptor places it on a nested element (the event definition, the multi-instance loop or the condition expression), it is a process attribute given to a participant, or a `<slot>.<attr>` the nested element cannot carry (loop.camunda:collection on a standard loop).', fix: 'Use the prefixed key from the hint, e.g. `bpmn set <file> <id> definition.camunda:errorCodeVariable=code`, `bpmn set <file> <id> \'loop.camunda:collection=${items}\'`, `bpmn set <file> <flowId> condition.camunda:resource=<uri>`; set the trigger it needs first (trigger=error ...), loop=parallel for multi-instance attributes, or set it on the process id.' },
   { code: 'E_NO_NESTED_ELEMENT', meaning: '`set`: a definition. or condition. key names a nested element that does not exist (an event without trigger has no event definition; a flow or conditional event without condition has no condition expression), or a `definition[<n>]` / `definition[<trigger>]` selector matches no event definition.', fix: 'Give the event a trigger in the same command (`bpmn set <file> <id> trigger=<t> definition.<key>=<value>`) or set condition=<expr> / when=<expr> first; a script resource condition is created directly with `condition.camunda:resource=<uri> language=<lang>`. (loop. never needs this: a parallel multi-instance loop is created.)' },
@@ -307,7 +309,7 @@ export interface CommandDoc {
 
 export const COMMANDS: CommandDoc[] = [
   { name: 'new', usage: 'bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]', summary: 'Create a file with one empty process. --target camunda7 (also for CIB seven and Operaton) writes what Camunda Modeler writes: the camunda / modeler namespaces, the platform version and camunda:historyTimeToLive=180 (the engines refuse an executable process without it).', examples: ['bpmn new order.bpmn --name "Order handling" --target camunda8', 'bpmn new order.bpmn --name "Order handling" --target camunda7'] },
-  { name: 'show', usage: 'bpmn show <file> [<id>] [--json] [--scope <id>] | bpmn show <file> --layout [--json]', summary: 'Print the model in flow order (no coordinates), or every detail of one element. Vendor attributes appear with their values next to the properties (nested ones under their set keys: loop.camunda:collection=${items}), extension types as `ext: camunda:taskListener x3`; the process line carries the process\'s own; a business rule task shows its decision link as calledDecision=<id> in every spelling. --layout prints the drawing instead: per pool / lane the rows of node ids (left to right), colours, labels off their default side and the layout problems with ids.', examples: ['bpmn show order.bpmn', 'bpmn show order.bpmn Activity_CheckInvoice --json', 'bpmn show order.bpmn --layout'] },
+  { name: 'show', usage: 'bpmn show <file> [<id> [--context]] [--json] [--scope <id>] | bpmn show <file> --around <id> [--depth <n>] [--inner] [--json] | bpmn show <file> --layout [--json]', summary: 'Print the model in flow order (no coordinates), or every detail of one element. Every node carries its lane (lane=<id>); vendor attributes appear with their values next to the properties (nested ones under their set keys: loop.camunda:collection=${items}), extension types as `ext: camunda:taskListener x3`; the process line carries the process\'s own; a business rule task shows its decision link as calledDecision=<id> in every spelling; message flows name their endpoints, the collaboration lists its annotations. --around <id> prints only the neighbourhood of an element (--depth flow steps both ways, default 2; see READING LARGE MODELS), <id> --context the element in its context (where, lane, before / after, catching events, message flows). --layout prints the drawing instead: per pool / lane the rows of node ids (left to right), colours, labels off their default side and the layout problems with ids. `-` as the file reads stdin.', examples: ['bpmn show order.bpmn', 'bpmn show order.bpmn --around Activity_CheckInvoice', 'bpmn show order.bpmn Activity_CheckInvoice --context', 'bpmn show order.bpmn Activity_CheckInvoice --json', 'bpmn show order.bpmn --layout'] },
   { name: 'find', usage: 'bpmn find <file> <text> [--kind <kind>] [--json]', summary: 'Find elements by id or name substring, or by a vendor attribute value (topic, assignee, candidate groups, listener class, extension attributes and bodies; the hit shows the match); --kind accepts any kind plus sequenceFlow, messageFlow, association, dataAssociation, process, collaboration, message, error, signal, escalation.', examples: ['bpmn find order.bpmn invoice --kind userTask', 'bpmn find order.bpmn charge-card'] },
   { name: 'add', usage: 'bpmn add <file> <kind[:trigger]> [<name>] [--id <id>] [placement] [--to <id>] [--lane <laneId>] [flow options] [trigger options] [--collapsed] [--if-absent] [--doc <text>] [--text <text>] [--process <id>] [--black-box] [--members <id,...>] [key=value ...]', summary: 'Create one element and wire it in (see PLACEMENT and TRIGGERS). Pools: the first participant wraps the existing process, later ones get a new process; --black-box creates a pool without a process and never wraps, so add a normal pool first.', examples: ['bpmn add order.bpmn start "Order received"', 'bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived', 'bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice --timer PT2D --non-interrupting', 'bpmn add order.bpmn participant "Order handling"', 'bpmn add order.bpmn participant "Customer" --black-box'] },
   { name: 'connect', usage: 'bpmn connect <file> <sourceId> <targetId> [--name <text>] [--id <id>] [--condition <expr>] [--language <lang>] [--default] [--message <name>] [--if-absent]', summary: 'Connect two elements; sequence flow, message flow, association or data association is inferred from the endpoints.', examples: ["bpmn connect order.bpmn Gateway_InvoiceOk Activity_BookInvoice --name yes --condition '${ok}'", 'bpmn connect order.bpmn Activity_SendOffer Participant_Customer --message Offer'] },
@@ -317,7 +319,7 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'move', usage: 'bpmn move <file> <id...> [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--lane <laneId>]', summary: 'Relocate nodes (they are detached with bridging, then placed again) and/or assign a lane.', examples: ['bpmn move order.bpmn Activity_Clarify --after Activity_CheckInvoice', 'bpmn move order.bpmn Activity_Book Activity_Ship --lane Lane_Backoffice'] },
   { name: 'order', usage: 'bpmn order <file> <nodeId> <flowId...> | bpmn order <file> <poolId|processId|laneId> <laneId...>', summary: 'Set the declaration order of a node\'s outgoing flows. In the diagram the default flow (else the first flow) continues straight and the others alternate below/above it in this order (see PLACEMENT). With lane ids: the lanes of a pool / process / parent lane top to bottom (laneSet and diagram bands).', examples: ['bpmn order order.bpmn Gateway_InvoiceOk Flow_yes Flow_no', 'bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales'] },
   { name: 'ext', usage: 'bpmn ext add <file> <id> <type|path> [attr=value ...] [--body <text>] [--xml <snippet>] [--replace] | bpmn ext remove <file> <id> <selector|index> | bpmn ext list <file> <id> [--json]', summary: 'Vendor extension elements inside <bpmn:extensionElements> (sub-command first, then file and element id). Child types go into their container (camunda:inputParameter -> camunda:inputOutput, camunda:formField -> camunda:formData, zeebe:input -> zeebe:ioMapping), single-instance containers are merged (E_DUPLICATE_EXTENSION on a conflict; --replace replaces), an item with the same key (name / id / target) is replaced. A path reaches nested containers (camunda:connector/camunda:inputParameter); remove takes a selector (\'camunda:inputParameter[name=x]\', \'camunda:formField[1]\'). A definition. / loop. / condition. prefix addresses the nested element (loop.camunda:failedJobRetryTimeCycle). Quote selectors in the shell.', examples: ['bpmn ext add order.bpmn Activity_BookInvoice zeebe:taskDefinition type=book-invoice retries=3', 'bpmn ext add order.bpmn Activity_BookInvoice zeebe:ioMapping --xml \'<zeebe:ioMapping><zeebe:input source="=amount" target="total"/></zeebe:ioMapping>\'', "bpmn ext add order.bpmn Activity_ChargeCard camunda:inputParameter name=amount --body '${order.total}'", "bpmn ext remove order.bpmn Activity_ChargeCard 'camunda:inputParameter[name=amount]'", 'bpmn ext list order.bpmn Activity_BookInvoice', 'bpmn ext remove order.bpmn Activity_BookInvoice zeebe:taskDefinition'] },
-  { name: 'apply', usage: 'bpmn apply <file> [<ops.json> | -]', summary: 'Run a list of ops (JSON) as one transaction: all or nothing, one layout at the end, then the format ops in batch order. `-` reads stdin.', examples: ['bpmn apply order.bpmn ops.json', "echo '[{\"op\":\"add\",\"kind\":\"userTask\",\"name\":\"Ship\",\"after\":\"Activity_BookInvoice\"}]' | bpmn apply order.bpmn -"] },
+  { name: 'apply', usage: 'bpmn apply <file> [<ops.json> | -]', summary: 'Run a list of ops (JSON) as one transaction: all or nothing, one layout at the end, then the format ops in batch order. `-` as the ops reads them from stdin; `-` as the file reads the model from stdin (the ops then come from a file) and writes the result to stdout.', examples: ['bpmn apply order.bpmn ops.json', "echo '[{\"op\":\"add\",\"kind\":\"userTask\",\"name\":\"Ship\",\"after\":\"Activity_BookInvoice\"}]' | bpmn apply order.bpmn -", 'cat order.bpmn | bpmn apply - ops.json > new.bpmn'] },
   { name: 'place', usage: 'bpmn place <file> <id...> [--row-of <id> | --below <id> | --above <id>] [--column-of <id> | --after <id> | --before <id>]', summary: 'Diagram only: move shapes as one rigid group so the first lands on the row and/or column of another element; boundary events and labels follow, others give way, flows are rerouted. Refuses to leave the lane / pool / sub-process (E_LEAVES_CONTAINER).', examples: ['bpmn place order.bpmn Activity_ClarifyInvoice Event_ReminderSent --below Activity_BookInvoice', 'bpmn place order.bpmn Event_InvoiceHandled --row-of Activity_CheckInvoice --after Gateway_InvoiceOk_join'] },
   { name: 'align', usage: 'bpmn align <file> <id...> --axis row|column [--to <id>]', summary: 'Diagram only: put shapes on one row (same vertical centre) or one column (same horizontal centre) as --to (default: the first id).', examples: ['bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column'] },
   { name: 'color', usage: `bpmn color <file> <id...> --color ${Object.keys(SWATCHES).join('|')}|default`, summary: 'Diagram only: colour shapes and connections with a bpmn-js colour picker colour; default removes it. Colours survive every later write.', examples: ['bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red'] },
@@ -328,8 +330,8 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7 today: W_C7_* findings with a severity; W_C7_DEPLOY_* = the engines refuse the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
-  { name: 'kinds', usage: 'bpmn kinds [--json]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue.', examples: ['bpmn kinds', 'bpmn kinds --json'] },
-  { name: 'guide', usage: 'bpmn guide', summary: 'This cheat sheet.', examples: ['bpmn guide'] },
+  { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
+  { name: 'guide', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
 ];
 
 /** The validation profiles (`--profile`, MutationOptions.profile; `bpmn kinds --json` -> profiles). */
@@ -344,8 +346,10 @@ export const PROFILE_DOCS: Array<{ profile: string; description: string; codes?:
 ];
 
 export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
-  { option: '--json', description: 'machine-readable result on stdout (errors as JSON on stderr)' },
-  { option: '-o, --out <file>', description: 'write to another file instead of in place (also when the result equals the input)' },
+  { option: '--json', description: 'machine-readable result on stdout, compact (errors as JSON on stderr)' },
+  { option: '--pretty', description: 'with --json: indented JSON' },
+  { option: '--summary', description: 'a short result: created ids by kind, changed / removed ids, the added warnings, one layout line (score, added problems)' },
+  { option: '-o, --out <file>', description: 'write to another file instead of in place (also when the result equals the input); `-o -` writes the XML to stdout (the report goes to stderr)' },
   { option: '--dry-run', description: 'report what would change, write nothing' },
   { option: '--layout <mode>', description: `${LAYOUT_MODES.join(' | ')}: auto (default) keeps a hand-made or formatted drawing and places changes locally, and redraws a new file or a drawing the engine made and nobody changed; incremental always keeps; full always redraws (colours and DI ids survive)` },
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
@@ -553,6 +557,7 @@ export function guideText(): string {
   const out: string[] = [];
   out.push('bpmn — edit BPMN 2.0 models semantically; the diagram is drawn for you');
   out.push('======================================================================');
+  out.push(`(\`bpmn guide --short\`: the core in 5 KB; \`bpmn guide <topic>\`: one section; topics: ${Object.keys(GUIDE_TOPICS).join(', ')})`);
   out.push(heading('CONTRACT'));
   out.push(
     [
@@ -584,7 +589,8 @@ export function guideText(): string {
   out.push(
     [
       '  1. bpmn new <file> --name "..."          create (or start from an existing .bpmn)',
-      '  2. bpmn show <file>                       read the model in flow order; note the ids',
+      '  2. bpmn show <file>                       read the model in flow order; note the ids (a large model:',
+      '                                            show --around <id> / show <id> --context, see READING LARGE MODELS)',
       '  3. bpmn add / connect / set / remove ...  one change per command, or many in one `bpmn apply <file> ops.json`',
       '                                            (the split macro is an apply-only op; there is no split command)',
       '  4. bpmn validate <file>                   new errors block a write anyway; warnings are lint hints',
@@ -592,6 +598,8 @@ export function guideText(): string {
       '  Prefer `apply` for more than two related changes: it is one transaction and one layout pass.',
     ].join('\n'),
   );
+  out.push(heading('READING LARGE MODELS  (by id only: names may repeat)'));
+  out.push(READING.join('\n'));
   out.push(heading('LAYOUT MODES  (every mutating command: --layout <auto|incremental|full>, --relayout, --no-layout)'));
   out.push(
     [
@@ -664,6 +672,8 @@ export function guideText(): string {
       '  camunda:* as the fallback, Camunda 7 and CIB seven ignore operaton:* (validate says so in its platform line).',
     ].join('\n'),
   );
+  out.push(heading('CAMUNDA 8  (the zeebe: namespace)'));
+  out.push(CAMUNDA8.join('\n'));
   out.push(heading('DESIGN-IQ  (content repositories with a bpmiq.yml; --profile design anywhere)'));
   out.push(
     [
@@ -681,6 +691,8 @@ export function guideText(): string {
       '  `--profile none` drafts without the gate, `--profile design` applies it outside a content repository.',
     ].join('\n'),
   );
+  out.push(heading('OUTPUT  (results, warnings, JSON, stdin / stdout)'));
+  out.push(OUTPUT.join('\n'));
   out.push(heading('COMMANDS'));
   for (const c of COMMANDS) {
     out.push(`\n  ${c.usage}`);
@@ -689,15 +701,17 @@ export function guideText(): string {
   }
   out.push('\n  Common options of every mutating command:');
   out.push(table(COMMON_OPTIONS.map((o) => [o.option, o.description]), '      '));
-  out.push('\n  Result (text): one line per created/changed/removed element, then notes, warnings, then');
-  out.push('  "layout: ok - <full|incremental> (<reason>)" or "layout: skipped", the ids the layout placed / moved / rerouted /');
+  out.push('\n  Result (text): one line per created/changed/removed element, then notes, the warnings the change added (see');
+  out.push('  OUTPUT), "layout: ok - <full|incremental> (<reason>)" or "layout: skipped", the ids the layout placed / moved / rerouted /');
   out.push('  pruned, one "format <op> #<index>: moved ...; rerouted ...; colored ..." line per format op, "layout quality:');
   out.push('  score <before> -> <after>; added: <kind> [ids]; resolved: ...", then "written: <file>" ("dry run: <file> not written";');
   out.push('  "unchanged: <file> (the result equals the file; nothing written)" when the change left the file as it was).');
-  out.push('  With --json: {ok, file, written, unchanged, created, changed, removed, warnings, notes, layout: {status, mode, reason,');
-  out.push('  warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op, index, moved, rerouted, colored?,');
-  out.push('  labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}}, validation: {errors, warnings,');
-  out.push('  platform?, validators?: [{name, detail?, errors, warnings, preexisting, resolved, counts}]}, importWarnings, view?}.');
+  out.push('  With --json: {ok, file, written, unchanged, created, changed, removed, warnings: {added, resolved, preexistingCount},');
+  out.push('  notes, layout: {status, mode, reason, warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op,');
+  out.push('  index, moved, rerouted, colored?, labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}},');
+  out.push('  validation: {errors, platform?, validators?: [{name, detail?, errors, warnings, preexisting, resolved, counts}]},');
+  out.push('  importWarnings, view?}. With --summary --json: {ok, file, written, unchanged, created: {<kind>: [ids]}, changed, removed,');
+  out.push('  forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status, mode?, score?: {before?, after}, added?}}.');
   out.push('  A validator\'s findings (the design profile) carry `validator` and `severity`; in text they read "[design] E_...".');
   out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates); with --json as');
   out.push('  {ok: false, error: {code, message, element?, related?, candidates?, hint?, op?}}.');
@@ -713,4 +727,238 @@ export function guideText(): string {
   }
   out.push('  The full catalogue: `bpmn kinds` (section ERRORS AND WARNINGS) or `bpmn kinds --json` -> errors.');
   return out.join('\n') + '\n';
+}
+
+/* ------------------------------------------------------------------ */
+/* the short guide and the topics                                       */
+/* ------------------------------------------------------------------ */
+
+/** READING LARGE MODELS: the views an agent reads a large model with. */
+const READING = [
+  '  bpmn show <file> --around <id> [--depth 2] [--inner]   the neighbourhood of one element: --depth flow steps along',
+  '      sequence flows both ways (boundary events and their hosts are neighbours; the first / last node of a sub-process',
+  '      leads out to it, --inner also leads into sub-processes); per node its lane, implementation (vendor values,',
+  '      `io: in a; out b`, zeebe:taskDefinition type=...) and flows, `<- Src (Flow)` for a flow from outside the window;',
+  '      the header counts what was left out; message flows, annotations and data of the window follow.',
+  '  bpmn show <file> <id> --context   the element in its context: `in:` pool > process > sub-processes, `lane:` (also',
+  '      inherited through sub-processes), `from:` / `to:` with names and flows, its boundary events, `caught by:` the',
+  '      error / escalation boundary events of the sub-processes around it, the event sub-processes around it,',
+  '      annotations, message flows with the partner and its pool, data it reads / writes, its implementation.',
+  '  bpmn show <file> <id>             every detail of one element (properties, extension tree, message flows, data)',
+  '  bpmn find <file> <text> [--kind k]   ids by id, name or vendor value (topic, assignee, ...)',
+  '  bpmn show <file> [--scope <id>]   the whole model (lane=<id> per node), or one process / pool / sub-process',
+  '  For a local edit read --around first; "what happens if X fails" / "who does X" is one --context call.',
+];
+
+/** CAMUNDA 8: zeebe extension elements in practice. */
+const CAMUNDA8 = [
+  '  bpmn new f.bpmn --name "Order" --target camunda8     zeebe + modeler namespaces (executionPlatform Camunda Cloud)',
+  '  The implementation lives in zeebe extension elements (`ext add`); child types go into their container, single',
+  '  elements are merged, an item with the same key (zeebe:input / output target, zeebe:header key) replaces the old one:',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:taskDefinition type=charge-card retries=3          job worker type',
+  "    bpmn ext add f.bpmn Activity_Charge zeebe:input source='=order.total' target=amount           -> zeebe:ioMapping",
+  "    bpmn ext add f.bpmn Activity_Charge zeebe:output source='=receipt' target=receipt",
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:header key=channel value=web                         -> zeebe:taskHeaders',
+  '    bpmn ext add f.bpmn Activity_Bill zeebe:calledElement processId=billing                        call activity',
+  '    bpmn ext add f.bpmn Activity_Review zeebe:assignmentDefinition candidateGroups=sales',
+  '    bpmn set f.bpmn Activity_Rate calledDecision=risk-rating      zeebe:calledDecision decisionId (business rule task)',
+  '  `bpmn ext list f.bpmn <id>` shows the tree; `show --around` / `show <id> --context` show the implementation in one',
+  '  line (zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt). `bpmn validate`: structure and',
+  '  lint only (no Camunda 8 engine rules yet).',
+];
+
+/** OUTPUT: what a result reports, JSON, stdin / stdout. */
+const OUTPUT = [
+  '  A mutating command reports what changed, the warnings the change ADDED (three or more of one code as one line:',
+  '  `warning W_UNREACHABLE x20 [ids]: ...`), `resolved:` what it fixed, and one line counting the warnings the file',
+  '  already had (not repeated: `bpmn validate <file>` lists them); then the layout block and the file line.',
+  '  --summary: `created <kind>: ids` per kind, `changed:` / `removed:` ids, the added warnings, one `warnings:` count line',
+  '  and one layout line (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`).',
+  '  --json is compact (one line; --pretty indents it): warnings: {added, resolved, preexistingCount}; with --summary the',
+  '  summary as JSON. Errors go to stderr (`error E_CODE: message` + hint; with --json one JSON line).',
+  '  stdin / stdout: `-` as the file reads the model from stdin: show -, find - <text>, validate -, metrics -,',
+  '  ext list - <id>; a mutating command on `-` (add -, apply - ops.json, layout -, ...) writes the result to stdout.',
+  '  `-o -` writes the result of any mutating command to stdout. With the XML on stdout the report goes to stderr.',
+];
+
+/** The errors the short guide lists, each with a one-line fix (the catalogue has the full text). */
+const TOP_ERRORS: Array<[string, string]> = [
+  ['E_NOT_FOUND', 'use a listed candidate id; `bpmn find <file> <text>` lists ids'],
+  ['E_HAS_SUCCESSOR', 'several outgoing flows: --flow <flowId> or --after X --before Y'],
+  ['E_AMBIGUOUS_SCOPE', 'several processes: add --in <processId|participantId>'],
+  ['E_INVALID_PLACEMENT', 'boundary events --on <activity>; data, annotations, lanes, pools --in only'],
+  ['E_CROSS_SCOPE', 'sequence flows stay in one scope; between pools `connect` makes a message flow'],
+  ['E_UNKNOWN_KEY', 'the message lists the settable keys; vendor keys need a prefix (camunda:assignee)'],
+  ['E_VALIDATION', 'the change would add a structural error: do it in one `apply` batch, or `bpmn validate`'],
+  ['E_LEAVES_CONTAINER', 'move --lane first, then place'],
+  ['E_NO_ROOM', 'make room with `bpmn space --after|--below <id>`, then place again'],
+];
+
+/** Every op with its keys (`*` = required); add / retype fold their trigger keys into `<trigger keys>`. */
+function opKeyLines(): string[] {
+  const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((t) => t.keys), 'nonInterrupting']);
+  return OP_NAMES.map((n) => {
+    const fields = Object.entries(OP_FIELDS[n]);
+    // an op with the whole set of trigger options (add, retype) shows them as one item
+    const folds = fields.filter(([k]) => triggerKeys.has(k)).length > 3;
+    const keys = fields.filter(([k]) => !folds || !triggerKeys.has(k)).map(([k, spec]) => (spec.required ? `${k}*` : k));
+    if (folds) keys.push('<trigger keys>');
+    return `  ${n.padEnd(8)} ${keys.join(' ')}`;
+  });
+}
+
+/** `bpmn guide --short`: contract, reading, changing, ops keys, placement and the top errors in at most 5 KB. */
+export function guideShort(): string {
+  const out: string[] = [];
+  out.push('bpmn — edit BPMN 2.0 models semantically (short guide; `bpmn guide <topic>` for one section, `bpmn guide` for all)');
+  out.push(heading('CONTRACT'));
+  out.push(
+    [
+      '  - You edit the model (kinds, names, flows, triggers, lanes, pools, properties, extensions), never the diagram: a',
+      '    hand-made drawing is kept and changes are placed locally; a new file is drawn for you.',
+      '  - Elements are addressed by id only (names may repeat). New ids follow the file\'s id conventions; an explicit id',
+      '    (--id, "id") always wins; every result names the ids it created.',
+      '  - Errors the file already had never block a write; a change that would add one is refused (E_VALIDATION).',
+    ].join('\n'),
+  );
+  out.push(heading('READ'));
+  out.push(
+    [
+      '  bpmn show <f> --around <id> [--depth 2]   neighbourhood: lanes, implementation, flows (cheap)',
+      '  bpmn show <f> <id> --context             where it is, lane, before / after, what catches it, message flows',
+      '  bpmn find <f> <text> [--kind <kind>]     ids by name or vendor value',
+      '  bpmn show <f> [--scope <id>]             the whole model (or one process / pool / sub-process)',
+    ].join('\n'),
+  );
+  out.push(heading('CHANGE'));
+  out.push(
+    [
+      '  bpmn add <f> <kind[:trigger]> [name] [--after|--before|--flow|--in|--on <id>] [--id <id>] [key=value ...]',
+      '  bpmn connect|set|remove|retype|move|order|ext ...     bpmn apply <f> ops.json   (one transaction, one layout)',
+      '  Options: --summary (short result), --dry-run, -o <file|->, --json [--pretty]; `-` as <f> reads stdin.',
+    ].join('\n'),
+  );
+  out.push(heading('OPS JSON  (bpmn apply; {"op": "<name>", ...}; * = required)'));
+  out.push(opKeyLines().join('\n'));
+  out.push(heading('PLACEMENT'));
+  out.push(
+    [
+      '  --after X     append after a gateway / end of a path, else splice into X\'s single outgoing flow',
+      '  --before Y    prepend before a join / start of a path, else splice into Y\'s single incoming flow',
+      '  --flow F      splice into flow F (F keeps id, name, condition)     --after X --before Y: into the flow X -> Y',
+      '  --in S        unconnected in process / sub-process / pool S       --on A: boundary event on activity A',
+      '  --to T        also connect the new node to T',
+    ].join('\n'),
+  );
+  out.push(heading('TOP ERRORS'));
+  out.push(table(TOP_ERRORS.map(([code, fix]) => [code, fix])));
+  out.push(`\nTopics (bpmn guide <topic>): ${Object.keys(GUIDE_TOPICS).join(', ')}. All codes: bpmn kinds --section errors.`);
+  return out.join('\n') + '\n';
+}
+
+/** The topics of `bpmn guide <topic>`: the sections of the full guide they print (by heading). */
+export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string }> = {
+  contract: { sections: ['CONTRACT'], summary: 'what the CLI does and keeps' },
+  workflow: { sections: ['WORKFLOW'], summary: 'the edit loop' },
+  reading: { sections: ['READING LARGE MODELS'], summary: 'show --around, --context, find' },
+  output: { sections: ['OUTPUT'], summary: 'results, warnings delta, --summary, JSON, stdin / stdout' },
+  layout: { sections: ['LAYOUT MODES'], summary: 'auto / incremental / full' },
+  format: { sections: ['FORMATTING WITHOUT XML'], summary: 'place, align, color, label, route, space, tidy' },
+  ops: { sections: ['OPS JSON'], summary: 'apply and its ops' },
+  placement: { sections: ['PLACEMENT'], summary: '--after / --before / --flow / --in / --on' },
+  triggers: { sections: ['TRIGGERS'], summary: 'event triggers and their options' },
+  errors: { sections: ['COMMON ERRORS', 'EXIT CODES'], summary: 'the common errors and the exit codes' },
+  quoting: { sections: ['QUOTING'], summary: 'shell quoting of expressions' },
+  camunda7: { sections: ['CAMUNDA 7'], summary: 'camunda: attributes, extensions, the deploy profile' },
+  camunda8: { sections: ['CAMUNDA 8'], summary: 'zeebe: extension elements' },
+  design: { sections: ['DESIGN-IQ'], summary: 'the design profile (save gate)' },
+  commands: { sections: ['COMMANDS'], summary: 'every command with examples' },
+};
+
+/** The guide's sections by heading (a heading is a line underlined with dashes). */
+function guideSections(): Array<{ title: string; text: string }> {
+  const lines = guideText().split('\n');
+  const out: Array<{ title: string; text: string }> = [];
+  let current: { title: string; lines: string[] } | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const next = lines[i + 1];
+    if (next !== undefined && line.length > 0 && /^-+$/.test(next) && next.length === line.length) {
+      if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+      current = { title: line, lines: [line, next] };
+      i++;
+      continue;
+    }
+    current?.lines.push(line);
+  }
+  if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+  return out;
+}
+
+/** `bpmn guide <topic>`: the sections of the full guide a topic names; E_USAGE with the topics for an unknown one. */
+export function guideTopic(topic: string): string {
+  const key = topic.trim().toLowerCase().replace(/[\s_-]/g, '');
+  const entry = Object.entries(GUIDE_TOPICS).find(([name]) => name === key);
+  if (!entry) {
+    const names = Object.keys(GUIDE_TOPICS);
+    throw usageError(`Unknown guide topic "${topic}"`, { candidates: names, hint: 'Pass one of the listed topics, or `bpmn guide --short` for the core.' });
+  }
+  const sections = guideSections();
+  const parts = entry[1].sections.map((title) => sections.find((s) => s.title.startsWith(title))?.text ?? '');
+  return parts.filter(Boolean).join('\n\n') + '\n';
+}
+
+/* ------------------------------------------------------------------ */
+/* kinds --section                                                      */
+/* ------------------------------------------------------------------ */
+
+function simpleRows(title: string, rows: string[][]): string {
+  return [heading(title), table(rows)].join('\n');
+}
+
+/** The parts of `bpmn kinds` / `kinds --json` by their JSON key; text renders the matching section. */
+const KINDS_SECTIONS: Record<string, { text: () => string; keys: string[] }> = {
+  kinds: { text: kindsSection, keys: ['kinds'] },
+  triggers: { text: triggersSection, keys: ['triggers', 'nonInterrupting'] },
+  setKeys: { text: setKeysSection, keys: ['setKeys'] },
+  nestedKeys: { text: nestedKeysSection, keys: ['nestedKeys', 'nestedSelectors'] },
+  placement: { text: placementSection, keys: ['placement'] },
+  ops: { text: opsSection, keys: ['ops', 'opsExample'] },
+  layoutModes: { text: () => simpleRows('LAYOUT MODES', LAYOUT_MODES.map((m) => [m])), keys: ['layoutModes'] },
+  ids: { text: () => [heading('IDS'), JSON.stringify(ID_CONVENTIONS, null, 2)].join('\n'), keys: ['ids'] },
+  profiles: { text: () => simpleRows('PROFILES', PROFILE_DOCS.map((p) => [p.profile, p.description])), keys: ['profiles'] },
+  colors: { text: () => simpleRows('COLORS', Object.entries(SWATCHES).map(([name, c]) => [name, JSON.stringify(c)])), keys: ['colors'] },
+  errors: { text: errorsSection, keys: ['errors'] },
+  exitCodes: { text: exitCodesSection, keys: ['exitCodes'] },
+};
+
+/** The section names `kinds --section` accepts (the JSON keys of `kinds --json`). */
+export const KINDS_SECTION_NAMES = Object.keys(KINDS_SECTIONS).join(', ');
+
+/** Resolves `--section a,b` (case and dashes ignored: set-keys = setKeys); E_USAGE with the names for an unknown one. */
+export function kindsSections(spec: string): string[] {
+  const names = Object.keys(KINDS_SECTIONS);
+  return spec
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const key = raw.toLowerCase().replace(/[\s_-]/g, '');
+      const found = names.find((n) => n.toLowerCase() === key) ?? names.find((n) => n.toLowerCase() === key.replace(/s$/, '')) ?? names.find((n) => KINDS_SECTIONS[n]!.keys.some((k) => k.toLowerCase() === key));
+      if (!found) throw usageError(`Unknown kinds section "${raw}"`, { candidates: names, hint: `Sections: ${names.join(', ')} (several: --section ops,errors).` });
+      return found;
+    });
+}
+
+/** `bpmn kinds --section <names>` as text. */
+export function kindsSectionText(sections: string[]): string {
+  return sections.map((s) => KINDS_SECTIONS[s]!.text()).join('\n').replace(/^\n/, '') + '\n';
+}
+
+/** `bpmn kinds --section <names> --json`: only those keys of kindsJson(). */
+export function kindsSectionJson(sections: string[]): Record<string, unknown> {
+  const all = kindsJson();
+  const out: Record<string, unknown> = {};
+  for (const s of sections) for (const k of KINDS_SECTIONS[s]!.keys) out[k] = all[k];
+  return out;
 }

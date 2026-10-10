@@ -10,6 +10,7 @@
  *   mutateFile(file, ops, opts)    -> loadDoc + mutateDoc + write (every mutating command)
  *   mutateDocToFile(doc, ops, opts)-> mutateDoc + write to opts.out ?? doc.file (`new`)
  *   layoutFile(file, opts)         -> loadDoc + layoutDoc + write (`layout`)
+ *   layoutDocToFile(doc, opts)     -> layoutDoc + write to opts.out ?? doc.file (`layout -`: a model read from stdin)
  *   checkFile(file, opts)          -> readDoc + checkDoc (`validate`)
  *
  * Writing (FileMutationOptions): nothing is written with `dryRun` or when a
@@ -182,7 +183,13 @@ export async function mutateFile(file: string, ops: Op[], opts: FileMutationOpti
 /** `bpmn layout`: loads a file, redraws it (or with `tidy` removes overlaps), writes back. */
 export async function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> {
   assertLayoutOptions(opts);
-  const doc = await loadDoc(file, opts);
+  return layoutDocToFile(await loadDoc(file, opts), opts);
+}
+
+/** `bpmn layout` on a loaded document (E_IMPORT_LOSSY unless force), written to opts.out ?? doc.file unless dryRun. */
+export async function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): Promise<MutationResult> {
+  assertLayoutOptions(opts);
+  assertLossless(doc, opts);
   return toFile(doc, opts, (context) => layoutDoc(doc, { ...opts, ...context }));
 }
 

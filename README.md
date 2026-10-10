@@ -64,7 +64,7 @@ Requires Node 20+ (developed on Node 24).
 
 ```
 npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
-bpmn guide                         # the agent cheat sheet
+bpmn guide --short                 # the agent cheat sheet, its 5 KB core (`bpmn guide` for all of it)
 ```
 
 From a checkout:
@@ -181,7 +181,8 @@ suggest `Activity_Pruefung`).
 
 ```
 bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]
-bpmn show <file> [<id>] [--json] [--scope <id>]
+bpmn show <file> [<id> [--context]] [--json] [--scope <id>]
+bpmn show <file> --around <id> [--depth <n>] [--inner] [--json]
 bpmn show <file> --layout [--json]
 bpmn find <file> <text> [--kind <kind>] [--json]
 bpmn add <file> <kind[:trigger]> [<name>] [--id <id>]
@@ -214,9 +215,14 @@ bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
-bpmn kinds [--json]
-bpmn guide
+bpmn kinds [--section <name,...>] [--json]
+bpmn guide [--short | <topic>]
 ```
+
+`-` as the file reads the model from stdin (`show -`, `find -`, `validate -`,
+`metrics -`, `ext list -`, and every mutating command, whose result then goes
+to stdout); see [stdin and stdout](#stdin-and-stdout). Every `--json` output
+is compact JSON on one line; `--pretty` indents it.
 
 Common options of every mutating command (`new`, `add`, `connect`, `set`,
 `remove`, `retype`, `move`, `order`, `ext add/remove`, `apply`, `place`,
@@ -225,8 +231,9 @@ always redraws, so it has no layout mode options):
 
 | option | effect |
 | --- | --- |
-| `--json` | machine-readable result on stdout, errors as JSON on stderr |
-| `-o, --out <file>` | write to another file instead of in place |
+| `--json` | machine-readable result on stdout (compact; `--pretty` indents it), errors as JSON on stderr |
+| `--summary` | a short result: created ids by kind, changed / removed ids, the added warnings, one layout line (see [Output](#output-errors-and-exit-codes)) |
+| `-o, --out <file>` | write to another file instead of in place; `-o -` writes the result to stdout (the report goes to stderr) |
 | `--dry-run` | run everything (including layout) but write nothing |
 | `--layout <auto\|incremental\|full>` | how the diagram is updated, see [Layout modes](#layout-modes); default `auto` |
 | `--relayout` | redraw the whole diagram (= `--layout full`) |
@@ -259,13 +266,20 @@ value fails with `E_USAGE`. Refuses to overwrite an existing file
 ### `show` and `find`
 
 `show <file>` starts with a `namespaces:` line (declared vendor namespaces,
-if any) and the collaboration (pools, message flows) when there is one, then
+if any) and the collaboration when there is one: its pools, its message
+flows with the names of their endpoints (`messageFlow Flow_Decision
+"Decision": Activity_SendDecision "Send decision" -> Participant_Customer
+"Customer" [message Decision]`) and the text annotations it owns (`~` names
+what they are attached to). Then it
 prints every process in flow order: depth-first from the start events,
 following the outgoing flows in declaration order (so a join and what follows
 it appear under the first branch that reaches it); unreachable nodes follow,
 flagged. Every flow is written as `-> Target (Flow_n "label" if condition)`.
 Boundary events are indented under their host, sub-process children under the
-sub-process. Then lanes, data, annotations, root messages/errors/signals and
+sub-process. Every node that is a lane member carries its lane as
+`lane=<laneId>` (the deepest lane; the nodes inside a sub-process are in the
+sub-process's lane). Then the lanes as a tree of names, data, annotations,
+root messages/errors/signals and
 the validation findings (`problems: none` when there are none). Vendor
 attributes appear with their values next to the properties, nested ones under
 their `set` keys, and repeated extension types are counted:
@@ -282,6 +296,13 @@ with labels and conditions, host, lane, scope, extension elements as an
 indented tree (children two spaces deeper than their parent) and vendor
 attributes; a nested element adds `definition.id`, `definition.camunda:...`,
 `loop.camunda:...`, `condition.camunda:resource` and `<slot>.extensions:`.
+It also lists the element's message flows with the partner at the other end
+(`message flows: out Flow_Decision "Decision" -> Participant_Customer
+"Customer"`; `in ... <-` for incoming ones, the partner's pool when the
+partner is inside one), the text annotations associated with it, the data
+objects / stores it `reads:` and `writes:` (a data element: `read by:` /
+`written by:`) and, for an annotation, what it is `attached to:`
+(`messageFlows`, `annotations`, `data`, `attachedTo` in `--json`).
 `--json` has the same: `attrs` (vendor values), `extensionElements` (types in
 order, repeats included), on flows `conditionResource` and `language`, and in
 the element detail `nested: {definition|loop|condition: {type, id, attrs,
@@ -323,6 +344,82 @@ colors: Activity_CheckInvoice red, Flow_024yl5b red
 labels off their default side: Gateway_InvoiceOk below (default above)
 layout quality: score 0: no layout problems
 ```
+
+#### Reading large models: `show --around` and `show <id> --context`
+
+The whole model view of a large model runs to 15–40 KB. Two views answer
+the questions of a local edit for a fraction of that; both address elements
+by id only (names may repeat).
+
+`show <file> --around <id> [--depth <n>]` prints the neighbourhood of an
+element: everything within `--depth` flow steps (default 2; 0 is the element
+alone) along sequence flows in both directions. A boundary event and its host
+are neighbours, so are a throwing and a catching link event of one name; the
+first and last node of a sub-process lead out to the sub-process, and with
+`--inner` the window also enters sub-processes from outside (their first and
+last nodes are neighbours of the sub-process). A sequence flow as `<id>`
+starts from both its ends. The nodes come in flow order in the grammar of
+`show` (nested like there), each with its lane, its vendor values and a
+compact summary of its extension elements (`io: in policyId; out covered`,
+`zeebe:taskDefinition type=charge-card retries=3`, `camunda:in x8`); a
+sub-process the window does not enter says how many nodes it holds
+(`content: 4 nodes`), a sub-process outside the window that holds window
+nodes is a heading (`in subProcess Activity_Assess "Assess claim"
+[lane=Lane_Office]:`), and an incoming flow from outside the window follows
+`<-`. The header says what is shown and what was left out; the message
+flows, annotations and data of the window's nodes close it:
+
+```
+$ bpmn show claims.bpmn --around Activity_Pay --depth 1
+around Activity_Pay (depth 1): 3 of 16 nodes, 3 of 12 flows; 13 nodes, 9 flows omitted
+process Process_Claims "Claims" in Participant_Insurer "Insurer"
+  exclusiveGateway Gateway_Covered "Covered?" [lane=Lane_Clerks] <- Activity_Assess (Flow_ToCovered) -> Activity_Pay (Flow_Covered "yes" if ${covered}), Activity_SendDecision (Flow_NotCovered "no" default)
+  serviceTask Activity_Pay "Pay claim" [lane=Lane_Clerks, camunda:type=external, camunda:topic=pay-claim] -> Activity_SendDecision (Flow_PaidToDecision)
+  sendTask Activity_SendDecision "Send decision" [lane=Lane_Clerks, camunda:type=external, camunda:topic=send-decision] -> Event_Done (Flow_ToDone)
+message flows:
+  messageFlow Flow_Decision "Decision": Activity_SendDecision "Send decision" -> Participant_Customer "Customer"
+annotations:
+  TextAnnotation_Pay "Paid by bank transfer" ~ Activity_Pay
+  TextAnnotation_Sla "Answer within 5 days" ~ Activity_SendDecision
+data:
+  dataObject DataObjectReference_ClaimFile "Claim file" (to Activity_Pay)
+```
+
+`show <file> <id> --context` prints the element in its context, one line
+each: `implementation:` (vendor values and extension elements, compact),
+`in:` (pool > process > sub-processes), `lane:` (a node inside a sub-process
+is in the sub-process's lane: `via`; nested lanes: `within`), `host:` (a
+boundary event), `from:` / `to:` (the neighbours with their names and the
+connecting flows), `boundary:` (its own boundary events), `caught by:` (the
+error and escalation boundary events of the sub-processes around it), `event
+sub-processes:` (those of every scope around it, with their start event),
+`annotations:`, `message flows:` (with the partner and its pool) and
+`reads:` / `writes:`. Lines without content are left out:
+
+```
+$ bpmn show claims.bpmn Activity_RateDamage --context
+userTask Activity_RateDamage "Rate damage"
+implementation: camunda:assignee=clerk
+in: participant Participant_Insurer "Insurer" > process Process_Claims "Claims" > subProcess Activity_Assess "Assess claim"
+lane: Lane_Office "Office" (via Activity_Assess)
+from: serviceTask Activity_CheckPolicy "Check policy" (Flow_ToRate)
+to: endEvent Event_AssessEnd "Assessed" (Flow_ToAssessEnd)
+caught by: boundaryEvent:error Event_FraudSuspected "Fraud suspected" on Activity_Assess [error Fraud (FRAUD)] -> Activity_Investigate
+event sub-processes: eventSubProcess Activity_OnCancel "Handle cancellation" in Process_Claims [startEvent:message Event_CancelRequested "Cancellation requested" [message Cancel, non-interrupting] -> Event_Cancelled]
+writes: DataObjectReference_ClaimFile "Claim file"
+```
+
+(`test/fixtures/views/claims.bpmn`.) `--json` gives the same data
+(`AroundView`: `around`, `depth`, `inner`, `process`, `scopes`, `nodes` with
+`scope`, `distance`, `lane`, `impl`, `outgoing`, `from`, then `messageFlows`,
+`annotations`, `data`, `shown`, `omitted`; `ElementContext`: `ancestors`,
+`pool`, `lane`, `host`, `from`, `to`, `boundary`, `caughtBy`,
+`eventSubProcesses`, `annotations`, `messageFlows`, `data`,
+`implementation`). On 278 real models (private corpora, centred on the
+middle activity) the neighbourhood (depth 2) is 1.2 KB in the median (p90
+2.1 KB) against 2.3 KB (7.6 KB) for the whole model and 1.4 KB (2.4 KB) for
+PR #218's `outline --around`; on the 30 models with 30 flow nodes or more it
+is 1.8 KB against 10.6 KB (17 % in the median, p90 24 %).
 
 ### `add`
 
@@ -703,8 +800,20 @@ problems it added and resolved.
 `kinds` prints the kind table, trigger options, set keys, placement grammar
 and the error catalogue; `kinds --json` adds the JSON Schema of the ops
 format (`ops`), the example (`opsExample`), the validation profiles
-(`profiles`) and the exit codes. `guide` is the
-cheat sheet for agents.
+(`profiles`) and the exit codes. `kinds --section <name,...>` prints only the
+named parts (`kinds`, `triggers`, `setKeys`, `nestedKeys`, `placement`,
+`ops`, `layoutModes`, `ids`, `profiles`, `colors`, `errors`, `exitCodes`;
+case and dashes do not matter, `set-keys` works), with `--json` only those
+keys (`ops` brings `opsExample`, `triggers` `nonInterrupting`, `nestedKeys`
+`nestedSelectors`); an unknown name is `E_USAGE` with the list.
+
+`guide` is the cheat sheet for agents (about 43 KB). `guide --short` is its
+core in at most 5 KB: the contract, the reading views, the commands that
+change a model, every op with its keys, the placement grammar and the most
+common errors. `guide <topic>` prints the sections of one topic: `contract`,
+`workflow`, `reading`, `output`, `layout`, `format`, `ops`, `placement`,
+`triggers`, `errors`, `quoting`, `camunda7`, `camunda8`, `design`,
+`commands` (an unknown topic is `E_USAGE` with the list).
 
 ## Layout modes
 
@@ -1143,7 +1252,8 @@ as in design-iq (the reader resolves the trimmed id, as the XSD says).
 On a write the profile behaves like the structural validation: an error the
 change introduces refuses the write (`E_VALIDATION`, each finding tagged
 `[design]`), an error the file already had is a `W_PREEXISTING_ERROR`
-warning (it follows its element through a rename), a warning the change
+warning (it follows its element through a rename; the result counts it with
+the file's other warnings instead of listing it), a warning the change
 introduced is reported once, and the result names the validator and the
 totals:
 
@@ -1222,7 +1332,9 @@ message); `key` overrides that identity. A validator that throws fails the
 write with `E_VALIDATOR_FAILED`. The reports are in
 `result.validation.validators` (`name`, `detail`, introduced `errors` and
 `warnings`, `preexisting`, `resolved`, `counts`), and the findings among
-`validation.errors` / `validation.warnings` with `validator` and `severity`:
+`validation.errors` / `warnings.added` (the pre-existing ones counted in
+`warnings.preexistingCount`) with `validator` and `severity`; `mutateDoc`'s
+`MutationResult.validation.warnings` keeps every warning of the result:
 
 ```js
 import { checkModel } from '@bpmiq/validator';
@@ -1330,13 +1442,22 @@ Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
 Event_OrderReceived`), then notes (`note: inserted between A and B`), the
 errors a `--force` write let through (`forced E_CODE element: message`),
-warnings (`warning W_CODE element: message  (hint)`; a validator's finding
-names it: `warning [design] W_DESIGN_COMPLEXITY ...`), one `validator <name>
+the warnings the change **added** (`warning W_CODE element: message
+(hint)`; a validator's finding names it: `warning [design]
+W_DESIGN_COMPLEXITY ...`; three or more of one code are one line with the
+ids: `warning W_UNREACHABLE x20 [Activity_A, Activity_B, ...]: <the first
+one's message>  (<its hint>)`), `resolved: W_DEAD_END Activity_A, ...` for
+the findings it fixed, and one line counting the warnings the file already
+had (``12 warnings already in the file (not repeated: `bpmn validate <file>`
+lists them)``; a pre-existing error, `W_PREEXISTING_ERROR`, counts among
+them). A warning keeps its identity through a rename (same code, element and
+related elements). One `validator <name>
 (<why it ran>): n error(s), m warning(s) in the result` line per validator
 that ran (the design profile), then the layout block, then `written: <file>`
 (`dry run: <file> not written` with `--dry-run`; `unchanged: <file> (the
 result equals the file; nothing written)` when the change left the file as
-it was). With `--show` the model view follows. The layout block:
+it was). With `--show` the model view follows. A new file (`new`) has no
+warnings of its own yet: its result lists them all. The layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
@@ -1354,14 +1475,35 @@ from the incremental layout, one `format <op> #<index>` line per format op
 and `layout quality` compares the layout problems before and after (`added:`
 and `resolved:` name them with ids).
 
-`--json` on stdout:
+`--summary` prints a short result instead: `created <kind>: <ids>` per kind,
+`changed:` and `removed:` with the ids, forced errors, the added warnings
+(floods as one line), `warnings: n added, n resolved, n already in the
+file`, one layout line (`layout: incremental, score 12 -> 14; added:
+crossings [Flow_1, Flow_3]`; without a drawing before, the number of layout
+problems instead of the list) and the file line:
+
+```
+$ bpmn add order.bpmn userTask "Archive" --after Activity_CheckInvoice --summary
+created userTask: Activity_Archive
+created sequenceFlow: Flow_0jurqec
+changed: Flow_024yl5b
+layout: full, score 0 -> 0
+written: order.bpmn
+```
+
+`--json` on stdout, compact on one line (`--pretty` indents it; shown
+indented here):
 
 ```json
 {
   "ok": true, "file": "order.bpmn", "written": true, "unchanged": false,
   "created": [{ "id": "Activity_X", "kind": "userTask", "name": "...", "detail": "after Event_Y" }],
   "changed": [], "removed": [],
-  "warnings": [{ "code": "W_...", "message": "...", "element": "...", "hint": "..." }],
+  "warnings": {
+    "added": [{ "code": "W_...", "message": "...", "element": "...", "hint": "..." }],
+    "resolved": [{ "code": "W_DEAD_END", "message": "...", "element": "Activity_Y" }],
+    "preexistingCount": 12
+  },
   "notes": ["..."],
   "layout": {
     "status": "ok", "mode": "incremental", "reason": "hand-made diagram: kept, changes placed locally",
@@ -1374,12 +1516,17 @@ and `resolved:` name them with ids).
       "added": [], "resolved": [{ "kind": "crossings", "ids": ["Flow_3", "Flow_7"] }]
     }
   },
-  "validation": { "errors": [], "warnings": [], "platform": { "...": "the engine profile" }, "validators": [{ "name": "design", "detail": "...", "errors": [], "warnings": [], "preexisting": [], "resolved": [], "counts": { "errors": 0, "warnings": 0 } }] },
+  "validation": { "errors": [], "platform": { "...": "the engine profile" }, "validators": [{ "name": "design", "detail": "...", "errors": [], "warnings": [], "preexisting": [], "resolved": [], "counts": { "errors": 0, "warnings": 0 } }] },
   "importWarnings": [],
   "view": { "...": "only with --show" }
 }
 ```
 
+`warnings.added` holds the op warnings, the validation findings the change
+introduced (lint, the platform profile, validators) and the layout warnings
+(`W_LAYOUT_<code>`); `warnings.resolved` the findings it fixed;
+`warnings.preexistingCount` how many warnings the file already had and still
+has (they are not repeated; `bpmn validate --json` lists every finding).
 `written` is `false` with `--dry-run`, and when `unchanged` is `true`: the
 result equals the input file byte for byte, so nothing is written over it
 (`--out <other file>` still writes the copy). `importWarnings` lists what
@@ -1387,7 +1534,26 @@ bpmn-moddle reported while reading the input file (informational, first line
 of each warning; a design model's `calledDecision` is not one).
 `validation.validators` is there when a validator ran (the design profile,
 library validators); their findings in `validation.errors` /
-`validation.warnings` carry `"validator"` and `"severity"`.
+`warnings.added` carry `"validator"` and `"severity"`. With `--summary
+--json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed,
+removed, forced?, warnings: {added, resolvedCount, preexistingCount},
+layout: {status, mode?, score?: {before?, after}, added?, problems?}}`.
+`--strict` still exits 5 when the result has any warning (also one the file
+already had).
+
+### stdin and stdout
+
+`-` as the file reads the model from stdin: `show -`, `find - <text>`,
+`validate -`, `metrics -`, `ext list - <id>`. A mutating command on `-`
+(`add -`, `set -`, `apply - ops.json`, `layout -`, `new -`, ...) writes its
+result to stdout unless `-o <file>` names a file; `-o -` writes the result of
+any mutating command to stdout and leaves its input file as it was. When the
+XML goes to stdout the report (text or `--json`) goes to stderr and says
+`written: -`; a `--dry-run` writes no XML and reports on stdout. stdin holds
+one input: `apply - -` (model and ops) is `E_USAGE`; pass the ops as a file
+(`bpmn apply - ops.json < model.bpmn > new.bpmn`) or the model as a file
+(`bpmn apply model.bpmn - < ops.json`). A model from stdin has no file name,
+so the design-iq repository lookup (`--profile auto`) does not apply to it.
 
 Errors go to stderr: `error E_CODE: message`, then `  hint: ...` and the
 candidate ids when a reference could not be resolved; with `--json`:
@@ -1645,8 +1811,9 @@ written: order.bpmn
 $ bpmn add order.bpmn start "Order received" --message OrderReceived
 created startEvent:message Event_OrderReceived "Order received" - in Process_OrderHandling
 created message Message_OrderReceived "OrderReceived" - root element
-warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Event_OrderReceived: startEvent:message Event_OrderReceived "Order received" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Event_OrderReceived`) or end it (`bpmn add <file> endEvent "<Name>" --after Event_OrderReceived`).)
+resolved: W_NO_START Process_OrderHandling
+1 warning already in the file (not repeated: `bpmn validate <file>` lists them)
 layout: ok - full (no diagram before: drawn from scratch)
 layout quality: score 0
 written: order.bpmn
@@ -1655,8 +1822,9 @@ $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
 created sequenceFlow Flow_1cat8ax - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
-warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
+resolved: W_DEAD_END Event_OrderReceived
+1 warning already in the file (not repeated: `bpmn validate <file>` lists them)
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1665,6 +1833,7 @@ $ bpmn add order.bpmn end "Invoice handled" --after Activity_CheckInvoice
 created endEvent Event_InvoiceHandled "Invoice handled" - after Activity_CheckInvoice
 created sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Event_InvoiceHandled
 note: appended after Activity_CheckInvoice
+resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1838,7 +2007,7 @@ Every function runs the code of the CLI command it names, without a file:
 | `newXml(opts?)` | `bpmn new` | `EditResult` |
 | `layoutXml(xml, opts?)` | `bpmn layout` | `EditResult` |
 | `validateXml(xml, opts?)` | `bpmn validate --json` | `ValidationReport` |
-| `viewXml(xml, opts?)` | `bpmn show --json` | `ModelView`, `ElementDetail` (with `id`), `LayoutView` (with `layout: true`) |
+| `viewXml(xml, opts?)` | `bpmn show --json` | `ModelView`, `ElementDetail` (with `id`), `ElementContext` (with `id` and `context: true`), `AroundView` (with `around`), `LayoutView` (with `layout: true`) |
 | `showXml(xml, opts?)` | `bpmn show` | the text |
 | `metricsXml(xml)` | `bpmn metrics --json` | `{ score, counts, problems }` |
 | `findXml(xml, text, { kind? })` | `bpmn find --json` | `FindHit[]` |
@@ -1858,9 +2027,11 @@ Every function runs the code of the CLI command it names, without a file:
   document's name for the validators), `show` (add the model view) and
   `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
   of `layout`; `newXml` takes `processName`, `processId`, `executable` and
-  `target`; `viewXml` and `showXml` take `id`, `scope` and `layout` like
-  `show`; `validateXml` takes `platform`, `profile`, `contentRepo`,
-  `validators` and `file`.
+  `target`; `viewXml` and `showXml` take `id`, `context`, `around`,
+  `depth`, `inner`, `scope` and `layout` like `show` (`viewDoc(doc, opts)`
+  and `renderShown(view)` do the same on a parsed `Doc`; `aroundView`,
+  `elementContext` and `implementationOf` are the builders); `validateXml`
+  takes `platform`, `profile`, `contentRepo`, `validators` and `file`.
 - `EditResult` is `{ xml, unchanged, result }`: the new document, which
   keeps the input's text wherever the ops changed nothing ([What a write
   changes](#what-a-write-changes)); `unchanged` is `true` when it is
@@ -1868,8 +2039,10 @@ Every function runs the code of the CLI command it names, without a file:
   there is nothing to save; a rename to the current name, `tidy` on a tidy
   drawing); `result` is what the CLI prints with `--json`
   ([Output](#output-errors-and-exit-codes)) without `file`, `written` and the
-  XML. `renderMutation(result)` gives the CLI's text for it,
-  `renderValidation(report)` the text of `validate`.
+  XML: the warnings as a delta (`result.warnings.added`, `resolved`,
+  `preexistingCount`). `renderMutation(result)` gives the CLI's text for it,
+  `mutationSummary(result)` / `renderSummary(summary)` the `--summary`
+  form, `renderValidation(report)` the text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
   errors the ops would introduce (`E_VALIDATION`, also those of the design
   profile and of `validators`) and content a retype would delete
@@ -1916,7 +2089,8 @@ latter when `BPMN_LAYOUT_DEBUG=1` and writes them to stderr.
 no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
 `writeAtomic(file, text)` (temp file, then rename), `mutateFile(file, ops,
 opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
-ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`) and
+ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`), `layoutDocToFile(doc,
+opts)` (`layout` on a loaded document, e.g. one read from stdin) and
 `checkFile(file, { platform, profile, validators })` (`validate`).
 `FileMutationOptions` adds the file options to the core options: `out`,
 `dryRun`, `backup` and `mustNotExist` (`E_FILE_EXISTS` unless `force`); the
@@ -2033,3 +2207,17 @@ bundler drops what a host does not import.
 - A full redraw gives an element it draws that has no id (a hand-written
   message flow, pool, process or collaboration) an id first; 0.2 wrote
   `bpmnElement="undefined"`.
+
+### Changes from 0.3
+
+- A mutation's result reports warnings as a delta: `warnings` is
+  `{ added, resolved, preexistingCount }` (0.3: the op warnings as an array),
+  and `validation` has no `warnings` (0.3: every warning of the result,
+  repeated on every write); the text lists the added warnings (three or more
+  of one code as one line), the resolved findings and one line counting the
+  file's own. `MutationResult.validation.warnings` (`mutateDoc`) is
+  unchanged; `MutationResult.delta` has the comparison.
+- `--json` prints compact JSON on one line; `--pretty` indents it.
+- `show` prints each node's lane (`lane=<id>`) instead of member lists in
+  the `lanes:` section, and message flows as `messageFlow <id> ["name"]:
+  <source> "name" -> <target> "name"`.

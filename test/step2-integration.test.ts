@@ -138,7 +138,7 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
       { phase: 'after', file: 'models/order.bpmn', comment: true, cdata: true },
     ]);
     expect(r.result.validation.validators).toMatchObject([{ name: 'spy', warnings: [{ code: 'audit/seen', validator: 'spy' }] }]);
-    expect(renderLines(r.result.validation.warnings)).toContain('[spy] audit/seen');
+    expect(renderLines(r.result.warnings.added)).toContain('[spy] audit/seen');
   });
 
   it('the design profile in memory: auto runs it for a content repository the host names, with its link checks', async () => {

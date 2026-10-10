@@ -113,6 +113,17 @@ touched, a full redraw keeps every DI start tag, a sticky keeps its text
 when it follows its node), validators see the text-preserving result, the
 design profile runs in memory with a content repository the host names, and
 the file helpers find the repository of the file they write.
+`test/views.test.ts` checks the reading views (`show --around`, `show <id>
+--context`, lanes and message-flow names in `show`, message flows and
+annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`
+and holds a byte budget: on a generated 120-task model the neighbourhood
+stays under 320 bytes per shown node and a tenth of `show`, and does not grow
+with the model. `test/report-delta.test.ts` checks that a result lists only
+the warnings a change added and resolved and counts the others (renames
+followed, floods as one line, `--summary`); `test/cli-views.test.ts` the
+same on the command line, plus compact JSON, stdin / stdout, `guide --short`
+(<= 5 KB), every `guide <topic>`, `kinds --section` and the guide's CAMUNDA 8
+recipe run command by command.
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile

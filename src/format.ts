@@ -5,17 +5,19 @@
  *  renderView(view): e.g.
  *    process Process_Order "Order handling" executable
  *      startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice
- *      userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk
+ *      userTask Activity_CheckInvoice "Check invoice" [lane=Lane_Sales] -> Gateway_InvoiceOk
  *      exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_Book (Flow_yes "yes" if ${ok}), Activity_Clarify (Flow_no "no" default)
  *        boundaryEvent:timer Event_Timeout "2 days" [PT2D, non-interrupting] -> Activity_Remind
  *      subProcess Activity_Payment "Payment" [expanded] -> Event_Done
  *        startEvent Event_PayStart -> ...
  *      endEvent Event_Done "Invoice booked"
  *      ! unreachable: task Activity_Old "Old step"
- *    lanes: Lane_Sales "Sales" [Event_OrderReceived, Activity_CheckInvoice]
+ *    lanes: Lane_Sales "Sales" (members carry `lane=Lane_Sales`; nested lanes indented)
  *    data: dataObject DataObjectReference_Order "Order" (from Activity_CheckInvoice; to Activity_Book)
  *    annotations: TextAnnotation_1 "note text" ~ Activity_Book
- *    collaboration Collaboration_1: participant Participant_Shop "Shop" = Process_Order; message flows: Flow_9 Activity_Send -> Participant_Customer "Order"
+ *    collaboration Collaboration_1: participant Participant_Shop "Shop" = Process_Order;
+ *      messageFlow Flow_9 "Order": Activity_Send "Send order" -> Participant_Customer "Customer" [message Order];
+ *      annotations owned by the collaboration (`TextAnnotation_2 "text" ~ Activity_Send`)
  *    root: message Message_OrderReceived "OrderReceived", error Error_PaymentFailed "PaymentFailed" (PAY-001)
  *    problems: E_... / W_... lines
  *  renderDetail(detail): key: value lines.
@@ -32,7 +34,9 @@
  *
  * Refined grammar (one line per node, flows inline, every id visible):
  *    <kind> <id> ["name"] [flags] -> <target> (<flowId> ["name"] [if <cond>] [default] [flags]), ...
- *  - flags: trigger text, non-interrupting, expanded|collapsed, key=value props,
+ *  - flags: lane=<laneId> (the lane the node is a member of; nodes inside a
+ *    sub-process are in the sub-process's lane), trigger text, non-interrupting,
+ *    expanded|collapsed, key=value props,
  *    vendor attributes with their values under their `set` keys
  *    (`camunda:assignee=demo`, `loop.camunda:collection=${items}`,
  *    `definition.camunda:topic=x`; values with spaces or commas quoted, long
@@ -46,13 +50,14 @@
  *    with its `lanes:` / `data:` / `annotations:` sections, then `root:` and
  *    `problems:`.
  */
+import type { AroundNode, AroundView, ContextCatch, ContextLink, ContextRef, ElementContext, Implementation } from './context.js';
 import { KEYS, type LayoutMetrics, type LayoutProblem } from './diagram/metrics.js';
 import type { FormatResult } from './diagram/ops.js';
 import type { LayoutView } from './diagram/view.js';
 import type { Warning } from './errors.js';
 import type { LayoutStatus } from './pipeline.js';
 import type { Change, ChangeSet } from './result.js';
-import type { ElementDetail, FindHit, ModelView, ViewFlow, ViewLane, ViewNode } from './view.js';
+import type { DetailMessageFlow, ElementDetail, FindHit, ModelView, ViewAnnotation, ViewFlow, ViewLane, ViewMessageFlow, ViewNode } from './view.js';
 
 const INDENT = '  ';
 const DOC_MAX = 80;
@@ -81,9 +86,12 @@ function scalar(value: unknown): string {
 /* ------------------------------------------------------------------ */
 
 /** A vendor value in a flag list: bare when unambiguous, else quoted (and truncated). */
-function flagValue(value: string): string {
-  return /^[^\s,[\]"]+$/.test(value) && value.length <= VALUE_MAX ? value : q(truncate(value, VALUE_MAX));
+function flagValue(value: string, max = VALUE_MAX): string {
+  return /^[^\s,[\]"]+$/.test(value) && value.length <= max ? value : q(truncate(value, max));
 }
+
+/** Vendor values in the around / context views: identifiers (topics, classes) up to this length stay whole. */
+const IMPL_VALUE_MAX = 120;
 
 /** `type`, or `type xN` for repeated extension element types, in first-seen order. */
 function extensionList(types: readonly string[]): string {
@@ -114,6 +122,7 @@ function flowText(f: ViewFlow): string {
 
 function nodeFlags(n: ViewNode): string[] {
   const flags: string[] = [];
+  if (n.lane) flags.push(`lane=${n.lane}`);
   if (n.trigger) flags.push(n.trigger);
   if (n.nonInterrupting) flags.push('non-interrupting');
   if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
@@ -142,12 +151,29 @@ function renderNodes(nodes: ViewNode[], depth: number, out: string[]): void {
   }
 }
 
+/** The lane tree (names only: the members carry `lane=<id>` in their node line; an empty lane says so). */
 function renderLanes(lanes: ViewLane[], depth: number, out: string[]): void {
   const pad = INDENT.repeat(depth);
   for (const lane of lanes) {
-    out.push(`${pad}${lane.id}${lane.name ? ` ${q(lane.name)}` : ''} [${lane.members.join(', ')}]`);
+    const empty = !lane.members.length && !lane.lanes?.length ? ' (empty)' : '';
+    out.push(`${pad}${lane.id}${lane.name ? ` ${q(lane.name)}` : ''}${empty}`);
     if (lane.lanes?.length) renderLanes(lane.lanes, depth + 1, out);
   }
+}
+
+/** `<id> "name"` of an endpoint, or just the id. */
+function named(id: string, name?: string): string {
+  return name ? `${id} ${q(name)}` : id;
+}
+
+/** `messageFlow <id> ["name"]: <source> ["name"] -> <target> ["name"] [message M]` */
+export function messageFlowLine(mf: ViewMessageFlow): string {
+  const head = `messageFlow ${mf.id}${mf.name ? ` ${q(mf.name)}` : ''}`;
+  return `${head}: ${named(mf.source, mf.sourceName)} -> ${named(mf.target, mf.targetName)}${mf.message ? ` [message ${mf.message}]` : ''}`;
+}
+
+function annotationLine(a: ViewAnnotation): string {
+  return `${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}${a.attachedTo.length ? ` ~ ${a.attachedTo.join(', ')}` : ''}`;
 }
 
 /** Renders the whole model as compact text (see contract). */
@@ -160,9 +186,10 @@ export function renderView(view: ModelView): string {
     for (const p of view.collaboration.participants) {
       out.push(`${INDENT}participant ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.process ? `= ${p.process}` : '(black box)'}`);
     }
-    for (const mf of view.collaboration.messageFlows) {
-      const extra = [mf.name ? q(mf.name) : '', mf.message ? `[message ${mf.message}]` : ''].filter(Boolean).join(' ');
-      out.push(`${INDENT}messageFlow ${mf.id} ${mf.source} -> ${mf.target}${extra ? ` ${extra}` : ''}`);
+    for (const mf of view.collaboration.messageFlows) out.push(INDENT + messageFlowLine(mf));
+    if (view.collaboration.annotations?.length) {
+      out.push(`${INDENT}annotations:`);
+      for (const a of view.collaboration.annotations) out.push(`${INDENT}${INDENT}${annotationLine(a)}`);
     }
   }
   for (const p of view.processes) {
@@ -183,9 +210,7 @@ export function renderView(view: ModelView): string {
     }
     if (p.annotations.length) {
       out.push(`${INDENT}annotations:`);
-      for (const a of p.annotations) {
-        out.push(`${INDENT}${INDENT}${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}${a.attachedTo.length ? ` ~ ${a.attachedTo.join(', ')}` : ''}`);
-      }
+      for (const a of p.annotations) out.push(`${INDENT}${INDENT}${annotationLine(a)}`);
     }
   }
   if (view.rootElements.length) {
@@ -197,6 +222,148 @@ export function renderView(view: ModelView): string {
   } else {
     out.push('problems: none');
   }
+  return out.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* around (show --around) and context (show <id> --context)             */
+/* ------------------------------------------------------------------ */
+
+/** Vendor values (`key=value`) and the compact extension items of an implementation. */
+function implementationFlags(impl: Implementation | undefined): string[] {
+  return [...Object.entries(impl?.attrs ?? {}).map(([k, v]) => `${k}=${flagValue(v, IMPL_VALUE_MAX)}`), ...(impl?.ext ?? [])];
+}
+
+function aroundFlags(n: AroundNode, hostShown: boolean): string[] {
+  const flags: string[] = [];
+  if (n.host && !hostShown) flags.push(`on ${n.host}`);
+  if (n.lane) flags.push(`lane=${n.lane}`);
+  if (n.trigger) flags.push(n.trigger);
+  if (n.nonInterrupting) flags.push('non-interrupting');
+  if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
+  if (n.content) flags.push(`content: ${n.content} node${n.content === 1 ? '' : 's'}`);
+  for (const [k, v] of Object.entries(n.props ?? {})) flags.push(`${k}=${scalar(v)}`);
+  flags.push(...implementationFlags(n.impl));
+  if (n.documentation) flags.push(`doc: ${q(truncate(n.documentation, DOC_MAX))}`);
+  return flags;
+}
+
+/**
+ * `bpmn show <file> --around <id>`: a header with what is shown and what was
+ * left out, the process line, then the window's nodes in the grammar of
+ * `show` (nested like there; a sub-process outside the window that holds
+ * window nodes is a `in <kind> <id> "name":` heading); incoming flows from
+ * outside the window follow `<-`. Then the message flows, annotations and
+ * data of the window's nodes.
+ */
+export function renderAround(view: AroundView): string {
+  const out: string[] = [];
+  const { shown, omitted } = view;
+  out.push(
+    `around ${view.around} (depth ${view.depth}${view.inner ? ', inner' : ''}): ${shown.nodes} of ${shown.nodes + omitted.nodes} nodes, ${shown.flows} of ${shown.flows + omitted.flows} flows` +
+      (omitted.nodes || omitted.flows ? `; ${omitted.nodes} nodes, ${omitted.flows} flows omitted` : ''),
+  );
+  const p = view.process;
+  out.push(`process ${named(p.id, p.name)}${p.participant ? ` in ${named(p.participant, p.participantName)}` : ''}`);
+  const scopes = new Map(view.scopes.map((s) => [s.id, s]));
+  const level = (id: string): number => {
+    const s = scopes.get(id);
+    return s?.parent ? level(s.parent) + 1 : 0;
+  };
+  const shownIds = new Set(view.nodes.map((n) => n.id));
+  const headed = new Set<string>();
+  const heading = (id: string): void => {
+    const s = scopes.get(id);
+    if (!s || !s.parent || s.inWindow || headed.has(id)) return;
+    heading(s.parent);
+    headed.add(id);
+    out.push(`${INDENT.repeat(level(id))}in ${s.kind} ${named(s.id, s.name)}${s.lane ? ` [lane=${s.lane}]` : ''}:`);
+  };
+  for (const n of view.nodes) {
+    heading(n.scope);
+    const hostShown = !!n.host && shownIds.has(n.host);
+    const parts = [n.kind, n.id];
+    if (n.name) parts.push(q(n.name));
+    const flags = aroundFlags(n, hostShown);
+    if (flags.length) parts.push(`[${flags.join(', ')}]`);
+    let line = parts.join(' ');
+    if (n.from?.length) line += ` <- ${n.from.map((f) => `${f.source} (${f.id}${f.name ? ` ${q(f.name)}` : ''})`).join(', ')}`;
+    if (n.outgoing.length) line += ` -> ${n.outgoing.map(flowText).join(', ')}`;
+    out.push(INDENT.repeat(level(n.scope) + 1 + (hostShown ? 1 : 0)) + line);
+  }
+  if (view.messageFlows.length) {
+    out.push('message flows:');
+    for (const mf of view.messageFlows) out.push(INDENT + messageFlowLine(mf));
+  }
+  if (view.annotations.length) {
+    out.push('annotations:');
+    for (const a of view.annotations) out.push(INDENT + annotationLine(a));
+  }
+  if (view.data.length) {
+    out.push('data:');
+    for (const d of view.data) {
+      const links = [d.from.length ? `from ${d.from.join(', ')}` : '', d.to.length ? `to ${d.to.join(', ')}` : ''].filter(Boolean).join('; ');
+      out.push(`${INDENT}${d.kind} ${named(d.id, d.name)}${links ? ` (${links})` : ''}`);
+    }
+  }
+  return out.join('\n');
+}
+
+function refText(r: ContextRef): string {
+  return `${r.kind} ${named(r.id, r.name)}`;
+}
+
+function linkText(l: ContextLink): string {
+  const flow = [l.flow];
+  if (l.flowName) flow.push(q(l.flowName));
+  if (l.condition) flow.push(`if ${truncate(l.condition, 120)}`);
+  if (l.default) flow.push('default');
+  return `${refText(l)} (${flow.join(' ')})`;
+}
+
+function catchText(c: ContextCatch): string {
+  const flags = [c.trigger, c.nonInterrupting ? 'non-interrupting' : undefined].filter(Boolean);
+  return `${refText(c)}${c.on ? ` on ${c.on}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}${c.to?.length ? ` -> ${c.to.join(', ')}` : ''}`;
+}
+
+/**
+ * `bpmn show <file> <id> --context`: the element's line (kind, id, name, its
+ * own facts), `implementation:` (vendor values, extension elements compact),
+ * then one line per context: `in:` (pool > process > sub-processes), `lane:`,
+ * `host:`, `from:` / `to:` (neighbours with names and the connecting flow),
+ * `boundary:`, `caught by:`, `event sub-processes:`, `annotations:`,
+ * `message flows:`, `reads:` / `writes:`; lines without content are left out.
+ */
+export function renderContext(c: ElementContext): string {
+  const out: string[] = [];
+  const flags: string[] = [];
+  if (c.trigger) flags.push(c.trigger);
+  if (c.nonInterrupting) flags.push('non-interrupting');
+  for (const [k, v] of Object.entries(c.props ?? {})) flags.push(`${k}=${scalar(v)}`);
+  if (c.documentation) flags.push(`doc: ${q(truncate(c.documentation, DOC_MAX))}`);
+  out.push(`${c.kind} ${named(c.id, c.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
+  const impl = implementationFlags(c.implementation);
+  if (impl.length) out.push(`implementation: ${impl.join(', ')}`);
+  const where = [...(c.pool ? [`participant ${named(c.pool.id, c.pool.name)}`] : []), ...c.ancestors.map(refText)];
+  if (where.length) out.push(`in: ${where.join(' > ')}`);
+  if (c.lane) {
+    const extra = [c.lane.via ? `via ${c.lane.via}` : '', c.lane.parents?.length ? `within ${c.lane.parents.map((l) => named(l.id, l.name)).join(' > ')}` : ''].filter(Boolean);
+    out.push(`lane: ${named(c.lane.id, c.lane.name)}${extra.length ? ` (${extra.join('; ')})` : ''}`);
+  }
+  if (c.host) out.push(`host: ${refText(c.host)}`);
+  if (c.from.length) out.push(`from: ${c.from.map(linkText).join('; ')}`);
+  if (c.to.length) out.push(`to: ${c.to.map(linkText).join('; ')}`);
+  if (c.boundary.length) out.push(`boundary: ${c.boundary.map(catchText).join('; ')}`);
+  if (c.caughtBy.length) out.push(`caught by: ${c.caughtBy.map(catchText).join('; ')}`);
+  if (c.eventSubProcesses.length) {
+    out.push(`event sub-processes: ${c.eventSubProcesses.map((e) => `${refText(e)} in ${e.in}${e.start ? ` [${catchText(e.start)}]` : ''}`).join('; ')}`);
+  }
+  if (c.annotations.length) out.push(`annotations: ${c.annotations.map((a) => `${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}`).join('; ')}`);
+  if (c.messageFlows.length) out.push(`message flows: ${c.messageFlows.map(detailMessageFlowText).join('; ')}`);
+  if (c.data?.reads?.length) out.push(`reads: ${c.data.reads.map((d) => named(d.id, d.name)).join(', ')}`);
+  if (c.data?.writes?.length) out.push(`writes: ${c.data.writes.map((d) => named(d.id, d.name)).join(', ')}`);
+  if (c.data?.readBy?.length) out.push(`read by: ${c.data.readBy.join(', ')}`);
+  if (c.data?.writtenBy?.length) out.push(`written by: ${c.data.writtenBy.join(', ')}`);
   return out.join('\n');
 }
 
@@ -261,6 +428,12 @@ export function renderExtensionList(items: ReadonlyArray<{ index: number; slot?:
   return items.flatMap((i) => extensionLines(i, '', `${i.slot ? `${i.slot}.` : ''}${i.index}: `)).join('\n');
 }
 
+/** `out Flow_9 "Order" -> Activity_Receive "Receive order" in Participant_Bank "Bank" [message Order]` (`in ... <-` for incoming). */
+export function detailMessageFlowText(mf: DetailMessageFlow): string {
+  const pool = mf.pool ? ` in ${named(mf.pool, mf.poolName)}` : '';
+  return `${mf.direction} ${mf.id}${mf.name ? ` ${q(mf.name)}` : ''} ${mf.direction === 'out' ? '->' : '<-'} ${named(mf.partner, mf.partnerName)}${pool}${mf.message ? ` [message ${mf.message}]` : ''}`;
+}
+
 /** Renders `bpmn show <id>` as `key: value` lines (property keys are `set` keys). */
 export function renderDetail(detail: ElementDetail): string {
   const out: string[] = [];
@@ -294,6 +467,13 @@ export function renderDetail(detail: ElementDetail): string {
   if (detail.outgoing.length) out.push(`outgoing: ${detail.outgoing.map(outgoingText).join('; ')}`);
   if (detail.boundary?.length) out.push(`boundary: ${detail.boundary.join(', ')}`);
   if (detail.children?.length) out.push(`children: ${detail.children.join(', ')}`);
+  if (detail.messageFlows?.length) out.push(`message flows: ${detail.messageFlows.map(detailMessageFlowText).join('; ')}`);
+  if (detail.data?.reads?.length) out.push(`reads: ${detail.data.reads.map((d) => named(d.id, d.name)).join(', ')}`);
+  if (detail.data?.writes?.length) out.push(`writes: ${detail.data.writes.map((d) => named(d.id, d.name)).join(', ')}`);
+  if (detail.data?.readBy?.length) out.push(`read by: ${detail.data.readBy.join(', ')}`);
+  if (detail.data?.writtenBy?.length) out.push(`written by: ${detail.data.writtenBy.join(', ')}`);
+  if (detail.annotations?.length) out.push(`annotations: ${detail.annotations.map((a) => `${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}`).join('; ')}`);
+  if (detail.attachedTo?.length) out.push(`attached to: ${detail.attachedTo.join(', ')}`);
   if (detail.extensions.length) {
     out.push('extensions:');
     for (const ext of detail.extensions) out.push(...extensionLines(ext, INDENT));
