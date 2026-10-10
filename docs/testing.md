@@ -141,8 +141,10 @@ fuzz campaign on the integrated build).
 The round 1 verifier's findings, each with a test that fails on round 1:
 `test/step3-ids-report.test.ts` (ids and the report: flows at unnamed
 gateways named by their speaking ids (no `_2`), unnamed elements in a row
-(the nearest named anchor once, each element named from its own
-predecessor), the 64-character cap, transliteration beyond German, the
+(the nearest named anchor once; where the prefix says the kind, `Task_`,
+`task_`, the anchor's kind where an id would repeat the anchor's,
+`Task_AfterCheckGateway`; flow ends that begin alike keep their last word
+when cut), the 64-character cap, transliteration beyond German, the
 definitions id of `new`, and the warnings delta: platform findings counted,
 a shrinking `W_DUPLICATE_NAME`, a bridge that takes over a removed flow's
 id, warnings of a batch's final state, `new` with the platform's findings),
@@ -157,7 +159,11 @@ scenarios the fuzzer hit), `test/move-lanes.test.ts` (a node moved into a
 flow between two lanes gets add's lane when it has none, keeps its own
 otherwise and is drawn on a row of it, like `add --lane`) and
 `test/remove-join.test.ts` (a plain remove bridges a merge, refuses a
-parallel / inclusive join).
+parallel / inclusive join); `test/step3-fixes-integration.test.ts` checks the
+fixes together (the message of `refAs` and speaking ids in `--summary`,
+created elements not also listed as changed, the subscription redirect in the
+warnings delta, a plain remove of a merge and `move` into a cross-lane flow
+renaming flows after their new ends).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile

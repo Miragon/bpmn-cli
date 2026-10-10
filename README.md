@@ -174,7 +174,7 @@ What the body says:
 | element | body | examples |
 | --- | --- | --- |
 | named | the name | `Activity_CheckInvoice`, `Gateway_InvoiceOk` |
-| unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes); after or before an unnamed anchor placed the same way, the nearest named anchor, once | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimerOnCheckInvoice`, `Event_ErrorStartInHandleErrors`; after `Gateway_AfterCheckInvoice`: `Event_EndAfterCheckInvoice` (never `EndAfterAfterCheckInvoice`) |
+| unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes); after or before an unnamed anchor placed the same way, the nearest named anchor, once (and the anchor's kind where the id would repeat the anchor's: see below) | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimerOnCheckInvoice`, `Event_ErrorStartInHandleErrors`; after `Gateway_AfterCheckInvoice`: `Event_EndAfterCheckInvoice` (never `EndAfterAfterCheckInvoice`) |
 | flow | its ends: `<Source>To<Target>` (in the file's case: `checkStockToShip`, `check_stock_to_ship`) | `Flow_CheckInvoiceToBookInvoice`, `Flow_CheckInvoiceToAfterCheckInvoice` (to the unnamed gateway after it), `Flow_BookInvoiceToCheckInvoiceJoin` (to that split's join) |
 | join of a split | the split gateway's id + `_join` (camelCase files: `Join`) | `Gateway_InvoiceOk_join`, `gateway_fanOutJoin` |
 | other | what it belongs to | `Collaboration_OrderHandling` (its process), `LaneSet_OrderHandling`, `Process_Customer` (its pool), `TextAnnotation_CheckWithinTwoDays` (its text), `Association_CheckInvoiceToCheckWithinTwoDays`, `DataInputAssociation_OrderToCheckInvoice` |
@@ -202,8 +202,19 @@ gateway or activity whose id is taken, or whose body the id of another
 element already has (the unnamed gateway it follows), first spells out its
 kind where the prefix does not say it (`Gateway_ParallelAfterCheckInvoice`
 after `Gateway_AfterCheckInvoice`, `Activity_ServiceTaskAfterCheckInvoice`
-after it). A taken id gets `_2`, `_3` (the file-learned `stemTo` /
-`scopedTo` flows: `2`, `3`) and a `W_ID_SUFFIXED` warning. Edits made
+after it); after an unnamed anchor whose place it would repeat, it then
+names that anchor's kind (`Task_AfterCheckInvoiceGateway` after
+`ExclusiveGateway_AfterCheckInvoice` in a file whose task prefix says the
+kind, `Task_AfterCheckInvoiceGatewayTask` after that one,
+`Activity_AfterCheckInvoiceServiceTask` after
+`Activity_ServiceTaskAfterCheckInvoice`). Unnamed elements in a row get
+bodies of their own that way, and the flows between them never read
+`AfterCheckInvoiceToAfterCheckInvoice` (where the two ends of a flow begin
+with the same word, the length cut keeps each end's last word). A taken id gets `_2`, `_3`
+(the file-learned `stemTo` / `scopedTo` flows: `2`, `3`) and a
+`W_ID_SUFFIXED` warning: a name the file already has, or two unnamed
+elements that only an index tells apart (two unnamed tasks right after the
+same unnamed gateway: `Task_AfterCheckInvoiceGateway_2`). Edits made
 independently on two branches of a file (git, two agents) produce the same
 new id only when they add the same thing in the same place.
 
@@ -1999,7 +2010,8 @@ and `layout quality` compares the layout problems before and after (`added:`
 and `resolved:` name them with ids).
 
 `--summary` prints a short result instead: `created <kind>: <ids>` per kind,
-the batch aliases (`aliases: $archive = Activity_Archive`), `changed:`,
+the batch aliases (`aliases: $archive = Activity_Archive`), `changed:` (an
+element the change created is listed under `created` only),
 `renamed: <old> -> <new>` (a flow whose id named its old ends, renamed after
 its new ones: use the new id from now on) and `removed:` with the ids (every
 id once: when a bridge takes over the id of the flow the change removed,

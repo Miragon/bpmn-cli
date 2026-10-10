@@ -1,4 +1,4 @@
-# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3 round 1: views, speaking ids, layout ergonomics, Camunda 8)
+# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3 round 1 with its fixes: views, speaking ids, layout ergonomics, Camunda 8)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -32,7 +32,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1631 tests (+159 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1729 tests (+219 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -42,6 +42,338 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Step 3 round 1 fixes (2026-10-10)
+
+An independent verifier re-checked `step3/round1` (gate, dogfooding on large
+real models, the corpora, the four engines). Its findings were fixed on
+three branches built in parallel on round 1, `step3/fix-ids`,
+`step3/fix-c8` and `step3/fix-views`, and merged on `step3/round1` together
+with the leftover of the ids branch and the integration below. The user's
+decisions hold throughout: elements are addressed by id only (names
+repeat), new ids speak in the file's prefix, separator and case (never a
+random, hash or numbered id), an explicit `--id` wins. With #53 fixed the
+audit stands at 49 fixed, 5 partly fixed, 23 open of 77. Tables and
+evidence (counts only):
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-round-1-fixes-2026-10-10).
+
+### Ids and report (`step3/fix-ids`)
+
+The verifier's findings on ids and on the report (one medium, seven low).
+Every fix has a test in `test/step3-ids-report.test.ts` that fails on
+round 1.
+
+- **Flows at unnamed elements** (`src/idstyle.ts labelOf`): an unnamed flow
+  end is named by the speaking part of its own id, its kind and place
+  (`Gateway_AfterCheck` -> `AfterCheck`; the join of the split after Check
+  -> `CheckJoin`, `joinLabel`), not by a kind word, so the flows at two
+  unnamed gateways differ without `_2` (`Flow_CheckToAfterCheck`,
+  `Flow_AfterCheckToCheckJoin`, `Flow_FixJoinToCheckJoin`; round 1:
+  `Flow_CheckToGateway`, `Flow_GatewayToJoin_2`, `Flow_JoinToJoin`). A flow
+  renamed after its new ends (`followEnds`) gets the same rule; a flow an
+  earlier build named with a kind word (`Flow_CheckToGateway`) still counts
+  as named after its ends (`formerLabels`). Existing ids stay.
+- **The context once** (`contextOf`, used by add, split, artifacts, lanes and
+  the redraw's id-less elements): after / before an unnamed anchor placed
+  the same way, the nearest named anchor (`Event_EndAfterCheck` after
+  `Gateway_AfterCheck`; never `AfterAfter...`). An unnamed gateway or
+  activity whose id is taken, or whose body another id has (the unnamed
+  gateway it follows), first spells out its kind (`IdStyle.spelledBase`:
+  `Gateway_ParallelAfterCheck`, `Activity_ServiceTaskAfterCheck`; not where
+  the prefix says the kind, `Task_`, `parallelGateway_`); the merged build
+  then names the anchor (see "The fixes together"), and only then `_2`.
+- **Length** (`src/ids.ts cutAt`, `MAX_ID` = 64): bodies are cut at a word
+  boundary (a name at 40 characters as before, now at a word; a join's
+  `Join` and a number at the end are kept), the two ends of a flow share
+  the room (`fitPair`), a suffix never makes an id longer than 64;
+  `derivedBases` still recognises a flow a file got before the cap.
+- **Transliteration** (`transliterate`): the letters NFKD does not reduce to
+  a base letter are spelled out (`ø` -> `oe`, `å` -> `aa`, `æ` -> `ae`, `œ`
+  -> `oe`, `ł` -> `l`, `đ` / `ð` -> `d`, `þ` -> `th`, `ı` -> `i`); a name
+  without a letter (`123`, `✓✓✓`, `审批 订单`) names nothing
+  (`hasIdWords`): the element gets the id of an unnamed one.
+- **`bpmn new`** (`Doc.create`): `--name` or a speaking `--id` names the
+  definitions (`Definitions_OrderToCash`, `Definitions_Billing`); without
+  either they stay `Process_1` / `Definitions_1`. Round 1 wrote
+  `Definitions_1` also with `--name` (this handover said otherwise).
+- **Warnings delta** (`src/pipeline.ts validationDelta`, `src/result.ts
+  ChangeSet.rename`, `src/ops/index.ts runBatch`): (a) the platform
+  profile's findings the file had (`W_C7_*` / `W_C8_*`) count among "already
+  in the file", so `preexistingCount` is what `bpmn validate` lists (a lint
+  warning such a finding says again counts once, as there); (b) a group
+  warning (`W_DUPLICATE_NAME`) stays the old one while its group only
+  shrinks, list warnings (`W_BRANCH_NAME`, `W_IMPLICIT_SPLIT` / `_JOIN`)
+  while their elements are among the old ones; (c) a bridge that takes the
+  id of the flow the change removed is a takeover (`Rename.takeover`): the
+  bridged flow's old id is removed, the taken id changed, no `renamed`;
+  (d) op warnings about the model's state (`W_LANES_WITHOUT_POOL`,
+  `W_IMPLICIT_SPLIT`, `W_IMPLICIT_JOIN`) are checked against the batch's
+  final state (`stillHolds`); (e) a document created in memory has an empty
+  platform baseline, so `new --target camunda8` lists
+  `W_C8_DEPLOY_START_EVENT` (not `W_NO_START`), which the next edit
+  resolves.
+
+### Camunda 8 (`step3/fix-c8`)
+
+The independent verifier found the profile's deploy recall at 0.74 on 200
+adversarial models (W_C8_DEPLOY_* only; precision 0.94), false deploy
+findings for white-space values and a lower-case date-time, no way to
+address the message an op creates in a batch, a `zeebe:subscription` on the
+event (where Camunda 8 ignores it), and `kinds --help` without the
+zeebeElements section. Fixed, each rule checked on Camunda 8.9.22:
+
+- **FEEL is parsed** (`src/platform/feel.ts`, no dependency, about 23 KB /
+  7 KB gzip with the schema-text rules): a tokenizer and a recursive-descent
+  reading of the grammar Camunda 8.9 parses at deploy, written from 766
+  deployed expressions (`test/fixtures/c8/feel-verdicts.json`: 762 of them,
+  synthetic, with the verdict; the check agrees on every one). `feelProblem`
+  (c8.ts) keeps the JUEL messages and then runs it. Camunda's parser is
+  lenient where a plain grammar is not (`x andy` is `x and y`, `ifx then 1
+  else 2` an if, `x instanceof` is `x in stanceof`); the check splits a
+  keyword glued to a name the same way. Messages name the FEEL spelling
+  (`<> (FEEL: != ...)`, `if ... then without else`). Now also checked: a
+  signal name and a published message name starting with `=`, the
+  `zeebe:adHoc` expressions, an ad-hoc sub-process's completion condition
+  (`set <id> completion=` sets it).
+- **Schema rules from the file's text** (`src/platform/schema-text.ts`,
+  W_C8_DEPLOY_SCHEMA): child elements out of the XSD's order (from
+  bpmn-moddle's property order, with the places the XSD has a choice or
+  orders differently as one slot), IDREFs that name no id (lane
+  `flowNodeRef`, `default`, `dataObjectRef`, data associations, IO sets),
+  ids that are no NCName (`a:b` in the model, with `set id=`; ones
+  bpmn-moddle drops on import, `F:1`, from the text). Issues of an element an
+  edit removed are dropped; the text is read once per document text.
+- **Values**: `PT1.5H` is refused (a fraction on seconds only), a lower-case
+  `t` / `z` in a date-time deploys; a job type, message / signal name, error
+  / escalation code, process / decision id, result variable, listener type,
+  linked resource type or published correlation key of white space deploys
+  (only empty is refused: `missing()` in c8.ts), an empty priority deploys,
+  an empty link name is refused.
+- **`refAs`** on add / connect / set / retype binds the bpmn:Message /
+  Error / Signal / Escalation the element references after the op
+  (`bindRefAs`, ops/events.ts; E_USAGE when none or several); in the alias
+  table, `--summary` and `aliases`.
+- **The message a catching element waits for**: `ext add <event|receiveTask>
+  zeebe:subscription` and `set <event|receiveTask|message>
+  zeebe:correlationKey=` write the message's `zeebe:subscription`, with a
+  note naming the other elements that share the message (redirect, not a
+  refusal: the target is unambiguous, the result says where it went); an
+  element without a message is E_WRONG_HOST with the `set message=` to run
+  first. Camunda 7 has no such element (its descriptor has no message
+  correlation key), so nothing changed there.
+- `kinds --help` lists the sections from the section table; a test checks
+  that every `kinds --section` the guide names exists.
+
+Evidence on the branch (outside the repository; counts only): 126 probe models of this
+round agree with the engine (before: 22 disagreed); the verifier's 200
+adversarial models deployed again: W_C8_DEPLOY_* precision 0.938 -> 1.000,
+recall 0.741 -> 0.951 (the 4 left get a structural error, so any finding:
+recall 0.815 -> 1.000, precision 0.846 -> 0.910; the 8 left are structural
+rules stricter than Camunda 8, a start event with an incoming flow and
+similar, and an id with an umlaut bpmn-moddle cannot read); the 38 real
+Camunda 8 files: the profile agrees with the engine on 38 / 38, 0 of 97
+distinct real FEEL values flagged; the C8 edit battery (8 edit types, 304
+edits): 0 regressions, 299 / 299 agree; its message edit with `refAs` or
+the redirect instead of an id guess: 74 / 76 written (the 2 others keep an
+existing message's other key: E_DUPLICATE_EXTENSION), 0 regressions, 0
+misplaced subscriptions; the C8 engine suites 460 / 460. Tests:
+`test/step3-c8-fixes.test.ts`.
+
+### Views and layout (`step3/fix-views`)
+
+The verifier's findings on the reading views and the format ops, and two
+items the ids package left open (#14 for `move`, #53).
+
+- **`show <id> --context`** (`src/context.ts elementContext`, `format.ts
+  renderContext`): `caught by:` lists every boundary event of every
+  sub-process around the element (message, timer, signal, conditional,
+  error, escalation, compensation; inner first, non-interrupting marked;
+  the element's own boundary events stay `boundary:`, the event
+  sub-processes that catch it `event sub-processes:`, both of every kind);
+  `message:` (id, name, Camunda 8 correlation key; `ElementContext.message`)
+  on message events and send / receive tasks, which also list the message
+  flows of their message drawn to their pool (`DetailMessageFlow.at`,
+  `(at pool P)`); a message flow: `message:`, `in: collaboration`, `from:` /
+  `to:` with their pools (`ContextLink.pool`); a message, signal, error or
+  escalation: `used by:` (`usedBy`). `view.ts`: `correlationKeyOf`,
+  `messageFlowEntry`. On 394 files the median stays 430 bytes (middle
+  activity, p90 916; every node 441, before 424; message nodes 501).
+- **Format ops never take a shape out of its sub-process**
+  (`diagram/ops.ts`): `checkFrames` takes the references: a sub-process
+  grows towards a reference inside it, never out to one outside it
+  (`E_LEAVES_CONTAINER`); `alignOp` leaves out (note `left out <id>
+  (sub-process <id>): ...`) a member only a selector named
+  (`resolveSelection` returns `picked`); `makeRoom` refuses (`E_NO_ROOM`)
+  when making room would take a shape out of a sub-process, lane or pool
+  that held it. On 396 files: 0 runs adding `outside*` (19 before), more ops
+  succeed (6,412 / 7,467, before 6,057); with `--path` / `--branch` sets
+  (align, tidy, place; 6,295 runs) 0 add `outside*` (1 before).
+- **`move` into a cross-lane flow** (#14 for move; `src/ops/lanes.ts`
+  `inheritedLane` / `laneInheritedWarning` / `crossLaneNote`, shared with
+  `add`): a node without a lane at its new place gets add's lane
+  (`W_LANE_INHERITED`); a node in a lane keeps it, with a note when the flow
+  runs between two other lanes, and is drawn on a row of that lane
+  (`diagram/place.ts placeAfter`: after a branching anchor, the target's row
+  in another lane than the node's own is replaced by a free row of its lane,
+  `rowInLane`; before, the anchor's lane stretched over to the target's row,
+  +125 px for the next lane, +265 px two lanes away; `add --lane` the same).
+- **A plain `remove` of a join** (#53, `ops/remove.ts isMerge` /
+  `refuseSynchronisingJoin`): a merge that does not synchronise is bridged
+  from every predecessor like `--bridge-all`; a parallel / inclusive /
+  complex join is `E_AMBIGUOUS_BRIDGE` with the two exact commands. The
+  verifier's one Camunda 7 deploy regression (a plain remove in its
+  battery) deploys now; on the battery's 66 merges: 62 bridged, all deploy
+  on the three engines, 4 joins refused, 0 `W_UNREACHABLE` (before: 43
+  refused by the engines, 379 `W_UNREACHABLE`). With #53 fixed the audit
+  stands at 49 fixed, 5 partly fixed, 23 open of 77.
+
+Tests: `test/views-context.test.ts`, `test/format-frames.test.ts`,
+`test/move-lanes.test.ts`, `test/remove-join.test.ts` (each fails on
+`step3/round1`); `test/diagram-format.test.ts` expects `E_LEAVES_CONTAINER`
+for the column outside a sub-process (was `E_NO_ROOM`), the sub-process test
+of `test/ops-mutate.test.ts` removes without bridging.
+
+Evidence on the branch (private corpora local, counts only): `npm run gate` passes with
+1,635 tests + 159 opt-in, the isomorphism check (86 modules, 904 / 277 KB
+minified / gzip), layout regression 115 files score 444 (budget 444) and
+fuzz 12 x 15 (0 errors, 0 warnings); the layout bench (175 models, 935
+edits, 525 global runs) against `step3/round1`: no regression, every
+figure equal (2 semantic failures in both, 0 runs adding hard defects).
+
+### The fixes together (`step3/round1`)
+
+Merged in the order ids, Camunda 8, views (merge commits). Git merged the
+code of all three without conflict except one import line of
+`src/ops/add.ts` (`bindRefAs` of the Camunda 8 branch next to the lane
+helpers of the views branch); the docs were merged by hand. Then, each with
+a test that fails on the merge before it:
+
+- **Unnamed elements in a row** (the ids branch's leftover; `src/idstyle.ts
+  anchorContext`, `IdRequest.anchorKind`, `IdStyle.qualifiedBase`,
+  `fitPair`). In a file whose task prefix says the kind (`Task_`, `task_`,
+  the older Camunda Modeler's files) a task after an unnamed gateway had
+  the gateway's body (`Task_AfterCheck` after `ExclusiveGateway_AfterCheck`:
+  `SequenceFlow_AfterCheckToAfterCheck`) and the next one `_2`. Now the
+  context of an element after an unnamed anchor carries the anchor's kind,
+  and where the id would repeat the anchor's (the base or its body taken,
+  the spelled-out kind taken or not possible) the element names that
+  anchor: `Task_AfterCheckGateway` ("after the Check gateway"), then
+  `Task_AfterCheckGatewayTask`; in the default style
+  `Activity_ServiceTaskAfterCheck`, then `Activity_AfterCheckServiceTask`
+  (round 1 and the ids branch: `Activity_AfterCheck`, the gateway's body).
+  Two unnamed tasks right after the same unnamed gateway take `_2` on the
+  form that names the gateway (`Task_AfterCheckGateway_2`), never the
+  gateway's body. The two ends of a flow that begin with the same word
+  (the elements after one anchor) keep their last word when the 64
+  character cap cuts them (`cutKeepingLast`), so a long anchor name no
+  longer makes `flow_afterXToAfterX`. `W_ID_SUFFIXED` is a signal again: a
+  name the file already has, a second flow between the same pair, or
+  unnamed elements that only an index tells apart.
+- **`--summary`** (`src/report.ts mutationSummary`): an element the change
+  created is listed once, under `created` (before, a batch in lanes listed
+  every new node under `changed` too, for the lane it got, and a message
+  `refAs` named and an `ext` op then completed). The full result keeps those
+  change entries.
+- Checked together (`test/step3-fixes-integration.test.ts`): the message of
+  `refAs` in the aliases and `--summary` next to speaking ids; the
+  subscription redirect of a receive task in the warnings delta (the deploy
+  finding resolved once, nothing added, the note in the result); a plain
+  remove of a merge renames the bridged flows after their new ends
+  (`renamed`), a parallel join is refused with both commands; `move` out of
+  a sub-process into a cross-lane flow takes add's lane
+  (`W_LANE_INHERITED`) and renames the split flow after its new ends.
+
+### Evidence on the merged build
+
+Private corpora used locally, outside the repository; counts only.
+
+- **Gate**: `npm run typecheck` clean; `npm run gate` 1,729 tests + 219
+  opt-in (engine tests), isomorphism check (88 modules), layout regression
+  115 files score 444 (budget 444), fuzz 12 x 15: 0 errors, 0 warnings.
+- **Engines**: the Camunda 7 live-engine suites 804 / 804 (Camunda 7.24.0,
+  CIB seven 2.2.0, Operaton 2.1.5); the Camunda 8 suites 460 / 460 (Camunda
+  8.9.22).
+- **Camunda 7 real-file battery** (50 files, 48 deployable on all three
+  engines before; 8 edit types: rename, an external task with an input
+  parameter, a plain remove, a boundary timer path, a split with a JUEL
+  condition, retype, compact, `remove --bridge-all` of a join): 373 edits,
+  all written, 0 regressions on any of the three engines (round 1: 1, the
+  plain remove the views branch fixed).
+- **Camunda 8 corpus** (38 real files, 4 refused by Camunda 8.9.22): the
+  profile agrees with the engine on 38 / 38, 0 false deploy findings.
+- **Roundtrip** (`tools/roundtrip.mjs`; 289 of the 291 real files are
+  still on disk, 276 with a rename target): a no-op is byte-identical in
+  260 / 276 in layout auto (260 / 263 of the files with a diagram, 98.9 %;
+  the 13 without one are drawn) and 276 / 276 with `--no-layout`; a rename
+  changes 2 lines (median, p90, max); an insert 56 lines in the median, a
+  region of 83.2 %. Round 1 gives the same figures on the same files.
+- **Ids** (the ids branch's probe set: 15 edits on each of 271 real files,
+  4,017 edits, 21,000 new ids, 10,144 new flows; round 1 -> `fix-ids` ->
+  merged): `W_ID_SUFFIXED` 394 -> 542 -> 221, of it unnamed elements in a
+  row and names without letters 11 -> 332 -> 11 (all 11 in files with the
+  `scopedTo` flow form); new flows whose two ends read alike 168 -> 507 ->
+  3; flows with a kind word for an end 1,879 -> 178 -> 178; ids over 64
+  characters 2,533 -> 0 -> 0 (longest 110 -> 61 -> 61);
+  `tools/speaking-ids.mjs` on the 289 files: 1,731 / 1,731 new ids speak,
+  two edits with unnamed elements at two places share an id in 0 / 223
+  file pairs. The rest of
+  `W_ID_SUFFIXED`: a data object, task or pool of a name the file already
+  has, a second flow between the same pair (also the bridge of a remove),
+  and the `AfterToAfter` flows of the `scopedTo` files (nested splits).
+- **Browser bundle**: whole entry 936.5 / 288.2 KB minified / gzip,
+  `applyToXml` 742.3 / 229.7 KB (+82 KB bpmn-auto-layout on demand);
+  round 1: 897 / 275 and 710 / 219 KB, most of the growth the FEEL parser
+  and schema rules of the Camunda 8 fixes.
+- **Docs**: `guide --short` 4,172 bytes (budget 5 KB).
+
+### Still open after the round 1 fixes
+
+- **Breaking for hosts** (design-iq): the mutation JSON / `EditReport` has
+  `warnings: {added, resolved, preexistingCount}` and no
+  `validation.warnings`; `--json` is compact; `show` puts `lane=` on each
+  node and writes message flows differently; new ids speak and a flow whose
+  id named its ends is renamed (`renamed` in the result).
+- Ids: two branches adding an element of the same name (or an unnamed one
+  at anchors of the same name) get the same id, a merge of both a
+  duplicate; a flow renamed after its ends is the one exception to "ids
+  never change" (`Doc.followFlowEnds = false` in the library, no CLI
+  switch); `bpmn new` without `--name` (and without a speaking `--id`)
+  writes `Process_1` / `Definitions_1`; `move` of a node with several
+  incoming flows still disconnects them (only `remove` bridges a merge),
+  and removing a join together with its predecessors (the join first) is
+  refused rather than bridged; a context is read from the anchor's id, so
+  a cut anchor id gives a cut context
+  (`Gateway_After4AugenPrinzipPruefenFreigeben2`); in files with the
+  learned `scopedTo` flow form (`Flow_KotO_ValidateToReserve`: the first
+  word of each end) the flows between unnamed elements after one anchor
+  read `AfterToAfter` and take `2`.
+- Views: no `find --attr` / `list --fields` projections, no `vars` view,
+  no `render` command; the full `show` keeps vendor values but not the
+  extension summary; JSON is compact but not slimmer; `--strict` still
+  counts every warning, also the file's own.
+- Layout: compaction closes strips only, pools side by side are not
+  compacted against each other, a full redraw orders pools by its own rule;
+  open bugs #13, #15, #16, #19, #25, #63–#68, #70, #76 (#40, #74 partly);
+  the fuzzer still finds `place` / `align` pushing a flow through a shape
+  and a boundary event added on a host inside a sub-process intruding into
+  another frame (the build before step 3 does the same); format ops with
+  selector sets still add overlaps or a flow through a shape on some real
+  files (as many as before the round 1 fixes, which removed `outsideSub`).
+- Camunda 8: FEEL syntax is checked but not its meaning (types, functions),
+  variables are not followed, `zeebe:publishMessage` is reported as not
+  run, event-based gateways of a file without `<bpmn:outgoing>` lists have
+  no repairing command, forms / called processes / decisions are not
+  checked against a deployment; some structural rules are stricter than
+  Camunda 8 (a start event with an incoming flow and similar: 7 of the
+  verifier's accepted models get an error), an id with an umlaut is
+  unreadable for bpmn-moddle; the Camunda 7 profile does not check timer
+  values (`PT2D` deploys there and fails at run time).
+- `--summary` drops the notes, also the one that says where a
+  subscription given to a catch event went (`changed:` names the message);
+  the full result and `--json` keep it.
+- The core grew by about 220 KB minified / 64 KB gzip since 0.3.0 (most of
+  it the Camunda 8 profile, its descriptor and the FEEL parser): a lazily
+  loaded profile per platform would be the lever.
 
 ## What step 3 round 1 changed (2026-10-10)
 
@@ -55,8 +387,8 @@ speak** (`Activity_CheckInvoice`, `Gateway_InvoiceOk`,
 while following the file's prefix, separator and case; an explicit `--id` /
 `"id"` always wins. 18 audit bugs are fixed and 3 partly (#12, #14, #21,
 #22, #28, #39, #41, #42, #48, #58, #60, #61, #62, #69, #71, #72, #73, #77;
-#40, #53, #74 partly): 48 fixed, 6 partly fixed, 23 open of 77. Tables and
-evidence:
+#40, #53, #74 partly): 48 fixed, 6 partly fixed, 23 open of 77 (after the
+round 1 fixes above 49, 5 and 23). Tables and evidence:
 [docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-round-1-2026-10-10-the-packages-together).
 
 ### Views and output (`step3/views`)
@@ -371,68 +703,6 @@ conflict resolutions), then integration commits with their tests in
   session, `--summary` examples and Camunda 7 / 8 worked examples re-run
   with the integrated build.
 
-### Verifier fixes: views and layout (`step3/fix-views`)
-
-The independent verifier's findings on the reading views and the format
-ops, and two items the ids package left open; table and evidence in
-[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-round-1-verifier-fixes-views-and-layout-2026-10-10).
-
-- **`show <id> --context`** (`src/context.ts elementContext`, `format.ts
-  renderContext`): `caught by:` lists every boundary event of every
-  sub-process around the element (message, timer, signal, conditional,
-  error, escalation, compensation; inner first, non-interrupting marked;
-  the element's own boundary events stay `boundary:`, the event
-  sub-processes that catch it `event sub-processes:`, both of every kind);
-  `message:` (id, name, Camunda 8 correlation key; `ElementContext.message`)
-  on message events and send / receive tasks, which also list the message
-  flows of their message drawn to their pool (`DetailMessageFlow.at`,
-  `(at pool P)`); a message flow: `message:`, `in: collaboration`, `from:` /
-  `to:` with their pools (`ContextLink.pool`); a message, signal, error or
-  escalation: `used by:` (`usedBy`). `view.ts`: `correlationKeyOf`,
-  `messageFlowEntry`. On 394 files the median stays 430 bytes (middle
-  activity, p90 916; every node 441, before 424; message nodes 501).
-- **Format ops never take a shape out of its sub-process**
-  (`diagram/ops.ts`): `checkFrames` takes the references: a sub-process
-  grows towards a reference inside it, never out to one outside it
-  (`E_LEAVES_CONTAINER`); `alignOp` leaves out (note `left out <id>
-  (sub-process <id>): ...`) a member only a selector named
-  (`resolveSelection` returns `picked`); `makeRoom` refuses (`E_NO_ROOM`)
-  when making room would take a shape out of a sub-process, lane or pool
-  that held it. On 396 files: 0 runs adding `outside*` (19 before), more ops
-  succeed (6,412 / 7,467, before 6,057); with `--path` / `--branch` sets
-  (align, tidy, place; 6,295 runs) 0 add `outside*` (1 before).
-- **`move` into a cross-lane flow** (#14 for move; `src/ops/lanes.ts`
-  `inheritedLane` / `laneInheritedWarning` / `crossLaneNote`, shared with
-  `add`): a node without a lane at its new place gets add's lane
-  (`W_LANE_INHERITED`); a node in a lane keeps it, with a note when the flow
-  runs between two other lanes, and is drawn on a row of that lane
-  (`diagram/place.ts placeAfter`: after a branching anchor, the target's row
-  in another lane than the node's own is replaced by a free row of its lane,
-  `rowInLane`; before, the anchor's lane stretched over to the target's row,
-  +125 px for the next lane, +265 px two lanes away; `add --lane` the same).
-- **A plain `remove` of a join** (#53, `ops/remove.ts isMerge` /
-  `refuseSynchronisingJoin`): a merge that does not synchronise is bridged
-  from every predecessor like `--bridge-all`; a parallel / inclusive /
-  complex join is `E_AMBIGUOUS_BRIDGE` with the two exact commands. The
-  verifier's one Camunda 7 deploy regression (a plain remove in its
-  battery) deploys now; on the battery's 66 merges: 62 bridged, all deploy
-  on the three engines, 4 joins refused, 0 `W_UNREACHABLE` (before: 43
-  refused by the engines, 379 `W_UNREACHABLE`). With #53 fixed the audit
-  stands at 49 fixed, 5 partly fixed, 23 open of 77.
-
-Tests: `test/views-context.test.ts`, `test/format-frames.test.ts`,
-`test/move-lanes.test.ts`, `test/remove-join.test.ts` (each fails on
-`step3/round1`); `test/diagram-format.test.ts` expects `E_LEAVES_CONTAINER`
-for the column outside a sub-process (was `E_NO_ROOM`), the sub-process test
-of `test/ops-mutate.test.ts` removes without bridging.
-
-Evidence (private corpora local, counts only): `npm run gate` passes with
-1,635 tests + 159 opt-in, the isomorphism check (86 modules, 904 / 277 KB
-minified / gzip), layout regression 115 files score 444 (budget 444) and
-fuzz 12 x 15 (0 errors, 0 warnings); the layout bench (175 models, 935
-edits, 525 global runs) against `step3/round1`: no regression, every
-figure equal (2 semantic failures in both, 0 runs adding hard defects).
-
 ### Evidence on the integrated build
 
 Private corpora used locally, outside the repository; counts only.
@@ -465,194 +735,6 @@ Private corpora used locally, outside the repository; counts only.
 - **Browser bundle**: whole entry 897 / 275 KB minified / gzip, `applyToXml`
   710 / 219 KB (+82 KB bpmn-auto-layout on demand); 0.3.0: 716 / 224 and
   594 / 186 KB. After the Camunda 8 fixes (below): 922 / 284 and 733 / 227 KB.
-
-### Camunda 8 fixes after the round 1 verifier (`step3/fix-c8`)
-
-The independent verifier found the profile's deploy recall at 0.74 on 200
-adversarial models (W_C8_DEPLOY_* only; precision 0.94), false deploy
-findings for white-space values and a lower-case date-time, no way to
-address the message an op creates in a batch, a `zeebe:subscription` on the
-event (where Camunda 8 ignores it), and `kinds --help` without the
-zeebeElements section. Fixed, each rule checked on Camunda 8.9.22:
-
-- **FEEL is parsed** (`src/platform/feel.ts`, no dependency, about 23 KB /
-  7 KB gzip with the schema-text rules): a tokenizer and a recursive-descent
-  reading of the grammar Camunda 8.9 parses at deploy, written from 766
-  deployed expressions (`test/fixtures/c8/feel-verdicts.json`: 762 of them,
-  synthetic, with the verdict; the check agrees on every one). `feelProblem`
-  (c8.ts) keeps the JUEL messages and then runs it. Camunda's parser is
-  lenient where a plain grammar is not (`x andy` is `x and y`, `ifx then 1
-  else 2` an if, `x instanceof` is `x in stanceof`); the check splits a
-  keyword glued to a name the same way. Messages name the FEEL spelling
-  (`<> (FEEL: != ...)`, `if ... then without else`). Now also checked: a
-  signal name and a published message name starting with `=`, the
-  `zeebe:adHoc` expressions, an ad-hoc sub-process's completion condition
-  (`set <id> completion=` sets it).
-- **Schema rules from the file's text** (`src/platform/schema-text.ts`,
-  W_C8_DEPLOY_SCHEMA): child elements out of the XSD's order (from
-  bpmn-moddle's property order, with the places the XSD has a choice or
-  orders differently as one slot), IDREFs that name no id (lane
-  `flowNodeRef`, `default`, `dataObjectRef`, data associations, IO sets),
-  ids that are no NCName (`a:b` in the model, with `set id=`; ones
-  bpmn-moddle drops on import, `F:1`, from the text). Issues of an element an
-  edit removed are dropped; the text is read once per document text.
-- **Values**: `PT1.5H` is refused (a fraction on seconds only), a lower-case
-  `t` / `z` in a date-time deploys; a job type, message / signal name, error
-  / escalation code, process / decision id, result variable, listener type,
-  linked resource type or published correlation key of white space deploys
-  (only empty is refused: `missing()` in c8.ts), an empty priority deploys,
-  an empty link name is refused.
-- **`refAs`** on add / connect / set / retype binds the bpmn:Message /
-  Error / Signal / Escalation the element references after the op
-  (`bindRefAs`, ops/events.ts; E_USAGE when none or several); in the alias
-  table, `--summary` and `aliases`.
-- **The message a catching element waits for**: `ext add <event|receiveTask>
-  zeebe:subscription` and `set <event|receiveTask|message>
-  zeebe:correlationKey=` write the message's `zeebe:subscription`, with a
-  note naming the other elements that share the message (redirect, not a
-  refusal: the target is unambiguous, the result says where it went); an
-  element without a message is E_WRONG_HOST with the `set message=` to run
-  first. Camunda 7 has no such element (its descriptor has no message
-  correlation key), so nothing changed there.
-- `kinds --help` lists the sections from the section table; a test checks
-  that every `kinds --section` the guide names exists.
-
-Evidence (outside the repository; counts only): 126 probe models of this
-round agree with the engine (before: 22 disagreed); the verifier's 200
-adversarial models deployed again: W_C8_DEPLOY_* precision 0.938 -> 1.000,
-recall 0.741 -> 0.951 (the 4 left get a structural error, so any finding:
-recall 0.815 -> 1.000, precision 0.846 -> 0.910; the 8 left are structural
-rules stricter than Camunda 8, a start event with an incoming flow and
-similar, and an id with an umlaut bpmn-moddle cannot read); the 38 real
-Camunda 8 files: the profile agrees with the engine on 38 / 38, 0 of 97
-distinct real FEEL values flagged; the C8 edit battery (8 edit types, 304
-edits): 0 regressions, 299 / 299 agree; its message edit with `refAs` or
-the redirect instead of an id guess: 74 / 76 written (the 2 others keep an
-existing message's other key: E_DUPLICATE_EXTENSION), 0 regressions, 0
-misplaced subscriptions; the C8 engine suites 460 / 460. Tests:
-`test/step3-c8-fixes.test.ts`.
-
-### Still open after round 1
-
-- **Breaking for hosts** (design-iq): the mutation JSON / `EditReport` has
-  `warnings: {added, resolved, preexistingCount}` and no
-  `validation.warnings`; `--json` is compact; `show` puts `lane=` on each
-  node and writes message flows differently; new ids speak and a flow whose
-  id named its ends is renamed (`renamed` in the result).
-- Ids: two branches adding an element of the same name (or an unnamed one
-  at anchors of the same name) get the same id, a merge of both a
-  duplicate; a flow renamed after its ends is the one exception to "ids
-  never change" (`Doc.followFlowEnds = false` in the library, no CLI
-  switch); `bpmn new` without `--name` (and without a speaking `--id`)
-  writes `Process_1` / `Definitions_1`; `move` of a node with several
-  incoming flows still disconnects them (only `remove` bridges a merge).
-- Views: no `find --attr` / `list --fields` projections, no `vars` view,
-  no `render` command; the full `show` keeps vendor values but not the
-  extension summary; JSON is compact but not slimmer; `--strict` still
-  counts every warning, also the file's own.
-- Layout: compaction closes strips only, pools side by side are not
-  compacted against each other, a full redraw orders pools by its own rule;
-  open bugs #13, #15, #16, #19, #25, #63–#68, #70, #76 (#40, #74 partly);
-  the fuzzer still finds `place` / `align` pushing a flow through a shape
-  and a boundary event added on a host inside a sub-process intruding into
-  another frame (the build before step 3 does the same); format ops with
-  selector sets still add overlaps or a flow through a shape on some real
-  files (as many as before the round 1 fixes, which removed `outsideSub`).
-- Camunda 8: FEEL syntax is checked but not its meaning (types, functions),
-  variables are not followed, `zeebe:publishMessage` is reported as not run, event-based gateways of a
-  file without `<bpmn:outgoing>` lists have no repairing command, forms /
-  called processes / decisions are not checked against a deployment; the
-  Camunda 7 profile does not check timer values (`PT2D` deploys there and
-  fails at run time).
-- The core grew by about 180 KB minified / 51 KB gzip since 0.3.0 (most of
-  it the Camunda 8 profile and descriptor): a lazily loaded profile per
-  platform would be the lever.
-
-### Ids and report after the round 1 verifier (`step3/fix-ids`)
-
-The round 1 verifier's findings on ids and on the report (one medium,
-seven low), fixed on `step3/fix-ids` (based on `step3/round1`). Every fix
-has a test in `test/step3-ids-report.test.ts` that fails on round 1; table
-and evidence in
-[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-after-round-1-ids-and-report-2026-10-10).
-
-- **Flows at unnamed elements** (`src/idstyle.ts labelOf`): an unnamed flow
-  end is named by the speaking part of its own id, its kind and place
-  (`Gateway_AfterCheck` -> `AfterCheck`; the join of the split after Check
-  -> `CheckJoin`, `joinLabel`), not by a kind word, so the flows at two
-  unnamed gateways differ without `_2` (`Flow_CheckToAfterCheck`,
-  `Flow_AfterCheckToCheckJoin`, `Flow_FixJoinToCheckJoin`; round 1:
-  `Flow_CheckToGateway`, `Flow_GatewayToJoin_2`, `Flow_JoinToJoin`). A flow
-  renamed after its new ends (`followEnds`) gets the same rule; a flow an
-  earlier build named with a kind word (`Flow_CheckToGateway`) still counts
-  as named after its ends (`formerLabels`). Existing ids stay.
-- **The context once** (`contextOf`, used by add, split, artifacts, lanes and
-  the redraw's id-less elements): after / before an unnamed anchor placed
-  the same way, the nearest named anchor (`Event_EndAfterCheck` after
-  `Gateway_AfterCheck`; never `AfterAfter...`). An unnamed gateway or
-  activity whose id is taken, or whose body another id has (the unnamed
-  gateway it follows), first spells out its kind (`IdStyle.spelledBase`:
-  `Gateway_ParallelAfterCheck`, `Activity_ServiceTaskAfterCheck`; not where
-  the prefix says the kind, `Task_`, `parallelGateway_`), then takes `_2`.
-- **Length** (`src/ids.ts cutAt`, `MAX_ID` = 64): bodies are cut at a word
-  boundary (a name at 40 characters as before, now at a word; a join's
-  `Join` and a number at the end are kept), the two ends of a flow share
-  the room (`fitPair`), a suffix never makes an id longer than 64;
-  `derivedBases` still recognises a flow a file got before the cap.
-- **Transliteration** (`transliterate`): the letters NFKD does not reduce to
-  a base letter are spelled out (`ø` -> `oe`, `å` -> `aa`, `æ` -> `ae`, `œ`
-  -> `oe`, `ł` -> `l`, `đ` / `ð` -> `d`, `þ` -> `th`, `ı` -> `i`); a name
-  without a letter (`123`, `✓✓✓`, `审批 订单`) names nothing
-  (`hasIdWords`): the element gets the id of an unnamed one.
-- **`bpmn new`** (`Doc.create`): `--name` or a speaking `--id` names the
-  definitions (`Definitions_OrderToCash`, `Definitions_Billing`); without
-  either they stay `Process_1` / `Definitions_1`. Round 1 wrote
-  `Definitions_1` also with `--name` (this handover said otherwise).
-- **Warnings delta** (`src/pipeline.ts validationDelta`, `src/result.ts
-  ChangeSet.rename`, `src/ops/index.ts runBatch`): (a) the platform
-  profile's findings the file had (`W_C7_*` / `W_C8_*`) count among "already
-  in the file", so `preexistingCount` is what `bpmn validate` lists (a lint
-  warning such a finding says again counts once, as there); (b) a group
-  warning (`W_DUPLICATE_NAME`) stays the old one while its group only
-  shrinks, list warnings (`W_BRANCH_NAME`, `W_IMPLICIT_SPLIT` / `_JOIN`)
-  while their elements are among the old ones; (c) a bridge that takes the
-  id of the flow the change removed is a takeover (`Rename.takeover`): the
-  bridged flow's old id is removed, the taken id changed, no `renamed`;
-  (d) op warnings about the model's state (`W_LANES_WITHOUT_POOL`,
-  `W_IMPLICIT_SPLIT`, `W_IMPLICIT_JOIN`) are checked against the batch's
-  final state (`stillHolds`); (e) a document created in memory has an empty
-  platform baseline, so `new --target camunda8` lists
-  `W_C8_DEPLOY_START_EVENT` (not `W_NO_START`), which the next edit
-  resolves.
-
-Evidence (private corpus, local only, counts only; round 1 -> this branch):
-15 probe edits on each of 271 real files (4,017 edits, 21,000 new ids, 10,144
-new flows): flows with a kind word for an end 1,879 -> 178 (the rest: ends
-with a hash id and no name, the documented fallback); ids over 64
-characters 2,533 -> 0 (max 110 -> 61); `W_ID_SUFFIXED` 394 -> 542: nested
-splits 106 -> 22, signal + conditional events 84 -> 0, connect 9 -> 5, the
-other everyday probes as before, but the two probes of unnamed tasks in a
-row 11 -> 332 (files whose task prefix says the kind, `Task_` / `task_`:
-the second unnamed task after the same named anchor takes `_2`; round 1
-named it after its anchor's kind, `Activity_AfterTask`, or chained
-`AfterAfter`). `tools/speaking-ids.mjs` (291 files): 1,745 / 1,745 new ids
-speak, two edits with unnamed elements at two places share an id in 0 /
-225 file pairs (round 1: 3). A rename's `N already in the file` + added =
-what `validate` lists afterwards in 274 / 274 files (round 1: 238; the
-differences are pre-existing errors, which validate lists as errors, and
-validate's DI warnings); removing one of 3+ equally named tasks re-reports
-`W_DUPLICATE_NAME` in 0 / 5 files (round 1: 5 / 5); a remove with bridge
-lists an id twice in 0 / 684 (round 1: 3). `tools/roundtrip.mjs` unchanged:
-no-op identical 262 / 278 (auto) and 278 / 278 (`--no-layout`), rename 2
-lines, insert 56 lines median. Gate: 1,631 tests + 159 opt-in, isomorphism
-check (85 modules), layout regression 444 (budget 444), fuzz 12 x 15: 0
-errors, 0 warnings.
-
-Still open: in files whose prefix says the kind (`Task_`, `serviceTask_`)
-an unnamed task after an unnamed gateway shares the gateway's body
-(`Flow_AfterCheckToAfterCheck`) and a second one takes `_2`; a context is
-read from the anchor's id, so a cut id gives a cut context
-(`Gateway_After4AugenPrinzipPruefenFreigeben2`).
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
