@@ -218,7 +218,7 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'nonInterrupting', appliesTo: 'event', description: 'true|false: boundary events (cancelActivity) and event sub-process start events (isInterrupting); never for error/cancel/compensate triggers or untyped start events' },
   { key: 'loop', appliesTo: 'activity', description: 'none|standard|parallel|sequential (parallel/sequential = multi-instance)' },
   { key: 'cardinality', appliesTo: 'activity', description: 'Multi-instance loop cardinality expression (creates a parallel multi-instance loop when none exists)' },
-  { key: 'completion', appliesTo: 'activity', description: 'Multi-instance completion condition expression' },
+  { key: 'completion', appliesTo: 'activity', description: 'Multi-instance completion condition expression (an ad-hoc sub-process without a multi-instance loop: its own completion condition)' },
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
   { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
@@ -572,6 +572,11 @@ function setDefaultKey(doc: Doc, el: El, value: string, cs: ChangeSet): void {
 function setLoopKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): void {
   const current = el.get<El | undefined>('loopCharacteristics');
   const isMulti = is(current, 'bpmn:MultiInstanceLoopCharacteristics');
+  // an ad-hoc sub-process has a completion condition of its own (the one of a multi-instance loop when it has one)
+  if (key === 'completion' && is(el, 'bpmn:AdHocSubProcess') && !isMulti) {
+    el.set('completionCondition', value ? expression(doc, value, el) : undefined);
+    return;
+  }
   if (key === 'loop') {
     const mode = (value || 'none').trim().toLowerCase();
     if (mode === 'none') {
@@ -1590,6 +1595,8 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     } else if (is(loop, 'bpmn:StandardLoopCharacteristics')) {
       out['loop'] = 'standard';
     }
+    const own = is(el, 'bpmn:AdHocSubProcess') && !is(loop, 'bpmn:MultiInstanceLoopCharacteristics') ? el.get<El | undefined>('completionCondition')?.get<string | undefined>('body') : undefined;
+    if (own) out['completion'] = own;
   }
   if (is(el, 'bpmn:SubProcess')) {
     const requested = expansionRequests.get(doc)?.get(idOf(el));

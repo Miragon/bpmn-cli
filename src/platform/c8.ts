@@ -32,7 +32,9 @@
  *                                  filter events other than create / update, ad-hoc output collection without element
  *   W_C8_DEPLOY_EXPRESSION         a static value where Camunda 8 requires a FEEL expression (=...): conditions of
  *                                  sequence flows and conditional events, zeebe:script expression, multi-instance
- *                                  inputCollection / outputElement, correlation keys
+ *                                  inputCollection / outputElement, correlation keys, an ad-hoc sub-process's
+ *                                  completion condition; a FEEL syntax error (platform/feel.ts) in a value Camunda 8
+ *                                  parses at deploy (FEEL_ATTRS, conditions, message / signal names starting with =)
  *   W_C8_DEPLOY_MESSAGE            message event / receive task without message, message without name, a catching
  *                                  message (not a process start) without exactly one zeebe:subscription with a
  *                                  correlationKey, a FEEL message name on a start event, one message name twice in
@@ -95,9 +97,6 @@
  *   W_C8_JOB_WORKER_USER_TASK      user task without zeebe:userTask: Camunda 8 creates a job of type
  *                                  io.camunda.zeebe:userTask instead of a user task (not in the v2 user task API)
  *
- * FEEL is not parsed: a syntax error in an expression (`=a +`) is refused by the
- * engine but not reported here.
- *
  * White space: a name, job type, code, process / decision id or result variable
  * of white space deploys (only an empty one is refused); FEEL, path and enum
  * attributes, form ids and correlation keys of white space are refused.
@@ -109,6 +108,7 @@ import { unkeptEntries } from '../mirror.js';
 import { decisionLinkOf } from '../ops/decision.js';
 import { C7_URIS, ZEEBE_URI } from './descriptor.js';
 import { namespaceMap, uriOfElement, uriOfName } from './detect.js';
+import { feelSyntaxError } from './feel.js';
 import { makeFinding, type ProfileFinding, type Severity } from './finding.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from './zeebe.js';
 
@@ -347,11 +347,10 @@ export function validDateTime(value: string): boolean {
 }
 
 /**
- * A FEEL slip Camunda 8 refuses at deploy, in the text after the `=`, or
- * undefined. Not a FEEL parser: it finds what commonly goes wrong when JUEL
- * habits meet FEEL (&&, ||, ==, !, ${...}, single quotes, ?:), unbalanced
- * brackets or strings, an empty expression and a dangling operator
- * (engine-checked on 45 expressions: every valid one passes).
+ * Why Camunda 8 refuses a FEEL expression at deploy (the text after the `=`),
+ * or undefined. The JUEL habits first, with their FEEL spelling (&&, ||, ==,
+ * !, ${...}, single quotes), then the syntax check of platform/feel.ts (the
+ * grammar Camunda 8.9 parses, engine-checked; every valid probe passes).
  */
 export function feelProblem(expression: string): string | undefined {
   let code = '';
@@ -359,8 +358,8 @@ export function feelProblem(expression: string): string | undefined {
     const c = expression[i]!;
     if (c === '"' || c === '`') {
       let j = i + 1;
-      while (j < expression.length && expression[j] !== c) j += expression[j] === '\\' ? 2 : 1;
-      if (j >= expression.length) return c === '"' ? 'an unterminated string' : 'an unterminated `name`';
+      while (j < expression.length && expression[j] !== c) j += expression[j] === '\\' && c === '"' ? 2 : 1;
+      if (j >= expression.length) break;
       code += c === '"' ? ' "s" ' : ' n ';
       i = j;
     } else if (c === '/' && expression[i + 1] === '/') {
@@ -368,33 +367,19 @@ export function feelProblem(expression: string): string | undefined {
       i = end === -1 ? expression.length : end;
     } else if (c === '/' && expression[i + 1] === '*') {
       const end = expression.indexOf('*/', i + 2);
-      if (end === -1) return 'an unterminated comment';
+      if (end === -1) break;
       i = end + 1;
     } else {
       code += c;
     }
   }
-  const t = code.trim();
-  if (!t) return 'an empty expression';
-  if (/[$#]\{/.test(t)) return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';
-  if (t.includes('&&')) return '&& (FEEL: and)';
-  if (t.includes('||')) return '|| (FEEL: or)';
-  if (t.includes('==')) return '== (FEEL compares with a single =)';
-  if (/!(?!=)/.test(t)) return '! (FEEL: not(...))';
-  if (t.includes("'")) return "single quotes (FEEL strings use double quotes)";
-  if (t.includes('?')) return '?: (FEEL: if ... then ... else ...)';
-  if (t.includes('\\')) return 'a backslash outside a string';
-  const open: string[] = [];
-  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
-  for (const ch of t) {
-    if (ch === '(' || ch === '[' || ch === '{') open.push(ch);
-    else if (ch in pairs) {
-      if (open.pop() !== pairs[ch]) return `an unmatched ${ch}`;
-    }
-  }
-  if (open.length) return `an unclosed ${open[open.length - 1]}`;
-  if (/(?:[-+*/<>=,.]|\b(?:and|or|not|in|between|instance of|then|else|return|satisfies))$/.test(t)) return 'a dangling operator at the end';
-  return undefined;
+  if (/[$#]\{/.test(code)) return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';
+  if (code.includes('&&')) return '&& (FEEL: and)';
+  if (code.includes('||')) return '|| (FEEL: or)';
+  if (code.includes('==')) return '== (FEEL compares with a single =)';
+  if (/!(?!=)/.test(code)) return '! (FEEL: not(...))';
+  if (code.includes("'")) return 'single quotes (FEEL strings use double quotes)';
+  return feelSyntaxError(expression);
 }
 
 /** Zeebe attributes Camunda 8 parses as FEEL when they start with = (engine-checked). */
@@ -410,6 +395,7 @@ const FEEL_ATTRS: Record<string, string[]> = {
   assignmentDefinition: ['assignee', 'candidateGroups', 'candidateUsers'],
   taskSchedule: ['dueDate', 'followUpDate'],
   priorityDefinition: ['priority'],
+  adHoc: ['activeElementsCollection', 'outputElement'],
 };
 
 /** W_C8_DEPLOY_EXPRESSION for a FEEL value (=...) with a slip feelProblem finds; true when it reported one. */
@@ -1111,7 +1097,6 @@ function checkMessageCatch(ctx: Ctx, el: El): void {
     push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${mid} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${mid} name=<MessageName>\`.`, [mid]);
     return;
   }
-  checkFeel(ctx, msg, undefined, 'name', `The name of message ${mid}`, name, `\`bpmn set <file> ${mid} ${sh('name==<FEEL expression>')}\` (check the FEEL syntax), or a static name.`);
   const processStart = is(el, 'bpmn:StartEvent') && is(el.$parent as El, 'bpmn:Process');
   if (processStart) {
     if (isFeel(name)) push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'messageName', `Start event ${id} catches the message "${name}", a FEEL expression; Camunda 8 needs a static message name on process start events and refuses the file`, `\`bpmn set <file> ${mid} name=<MessageName>\`.`, [mid]);
@@ -1182,6 +1167,14 @@ function checkAdHoc(ctx: Ctx, el: El): void {
   }
   if (!nodes.some((n) => is(n, 'bpmn:Activity'))) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, 'adHoc:empty', `Ad-hoc sub-process ${id} contains no activity; Camunda 8 refuses the file`, `\`bpmn add <file> serviceTask "<Name>" --in ${id}\`.`);
+  }
+  // its completion condition is FEEL, checked at deploy (unlike a multi-instance one, a static value is refused)
+  const cc = peek<El>(el, 'completionCondition');
+  if (cc) {
+    const body = peek<string>(cc, 'body') ?? '';
+    const fix = `\`bpmn set <file> ${id} ${sh(`completion==${feelOf(isFeel(body) ? body.trim().slice(1) : body)}`)}\` (check the FEEL syntax)`;
+    if (!isFeel(body)) push(ctx, 'deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'adHoc:completion', `The completion condition "${body.trim()}" of ad-hoc sub-process ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `${fix}, or remove it: \`bpmn set <file> ${id} completion=\`.`);
+    else checkFeel(ctx, el, undefined, 'adHoc:completion', `The completion condition of ad-hoc sub-process ${id}`, body, `${fix}.`);
   }
 }
 
@@ -1362,6 +1355,30 @@ function checkSchema(ctx: Ctx): void {
   }
 }
 
+/**
+ * The names of the messages and signals the file's elements use: Camunda 8
+ * parses one starting with = as FEEL at deploy (a catch, a throw, a send
+ * task: engine-checked); each name is checked once.
+ */
+function checkFeelNames(ctx: Ctx): void {
+  const used = new Set<El>();
+  for (const el of walk(ctx.doc.definitions, { bpmnOnly: true })) {
+    if (!is(el, 'bpmn:FlowNode')) continue;
+    const msg = messageOf(el);
+    if (msg) used.add(msg);
+    for (const def of list(el, 'eventDefinitions')) {
+      const sig = is(def, 'bpmn:SignalEventDefinition') ? peek<El>(def, 'signalRef') : undefined;
+      if (sig) used.add(sig);
+    }
+  }
+  for (const ref of used) {
+    const id = idOf(ref);
+    if (!id) continue;
+    const what = is(ref, 'bpmn:Signal') ? 'signal' : 'message';
+    checkFeel(ctx, ref, undefined, 'name', `The name of ${what} ${id}`, nameAttr(ref), `\`bpmn set <file> ${id} ${sh('name==<FEEL expression>')}\` (check the FEEL syntax), or a static name.`);
+  }
+}
+
 /** Schema rules on every event definition of the file: a conditional definition needs a condition, a link definition a name. */
 function checkSchemaEventDefinitions(ctx: Ctx): void {
   for (const def of walk(ctx.doc.definitions, { bpmnOnly: true })) {
@@ -1419,6 +1436,7 @@ export function c8Findings(doc: Doc): ProfileFinding[] {
     checkExtensions(ctx, m, undefined);
   }
   checkSchemaEventDefinitions(ctx);
+  checkFeelNames(ctx);
   checkSchema(ctx);
   return ctx.out;
 }
