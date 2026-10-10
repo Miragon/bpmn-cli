@@ -182,6 +182,32 @@ describe('#62 route refuses a side that points into a boundary event host', () =
   });
 });
 
+describe('#61 connections the space tool reshapes are reported', () => {
+  it('space --after: the flow across the line is stretched, reported as reshaped (not rerouted)', async () => {
+    const process = `<bpmn:process id="P"><bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent><bpmn:task id="A" name="A"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:task><bpmn:endEvent id="E"><bpmn:incoming>F2</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="A" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="E" /></bpmn:process>`;
+    const di = `${sh('S', 100, 182, 36, 36)}${sh('A', 196, 160, 100, 80)}${sh('E', 356, 182, 36, 36)}${ed('F1', [[136, 200], [196, 200]])}${ed('F2', [[296, 200], [356, 200]])}`;
+    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'space', after: 'A', by: 100 }], { dryRun: true });
+    expect(r.layout.format![0]).toMatchObject({ moved: ['E'], rerouted: [], reshaped: ['F2'] });
+  });
+
+  it('the incremental layout lists a loop flow the space tool stretched', async () => {
+    const process = `<bpmn:process id="P"><bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:task id="A" name="A"><bpmn:incoming>F1</bpmn:incoming><bpmn:incoming>F4</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:task>
+      <bpmn:exclusiveGateway id="G"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing><bpmn:outgoing>F4</bpmn:outgoing></bpmn:exclusiveGateway>
+      <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="A" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="G" />
+      <bpmn:sequenceFlow id="F3" sourceRef="G" targetRef="E" /><bpmn:sequenceFlow id="F4" sourceRef="G" targetRef="A" /></bpmn:process>`;
+    // F4 loops back over the top: G (beyond the insert) -> up -> left -> down into A
+    const di = `${sh('S', 100, 182, 36, 36)}${sh('A', 196, 160, 100, 80)}${sh('G', 356, 175, 50, 50)}${sh('E', 466, 182, 36, 36)}${ed('F1', [[136, 200], [196, 200]])}${ed('F2', [[296, 200], [356, 200]])}${ed('F3', [[406, 200], [466, 200]])}${ed('F4', [[381, 175], [381, 120], [246, 120], [246, 160]])}`;
+    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
+    const after = new Map([...readPlanes((await Doc.fromXml(r.xml)).definitions)[0]!.edges.values()].map((e) => [e.id, e.points.map((p) => `${p.x},${p.y}`).join(' ')]));
+    expect(after.get('F4')).not.toBe('381,175 381,120 246,120 246,160');
+    expect(r.layout.rerouted ?? []).not.toContain('F4');
+    expect(r.layout.reshaped).toContain('F4');
+  });
+});
+
 describe('#77 a splice pushes only by the room that is missing', () => {
   it('a task added into a wide gap moves the rest by less than a column, keeping one gap', async () => {
     const process = `<bpmn:process id="P">
