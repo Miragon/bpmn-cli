@@ -9,7 +9,8 @@
  *     container host that is resized they stay on its border: the ones whose
  *     centre is beyond the line move with the part of the border that moves
  *   - collaboration-level artifacts (no semantic pool) go with the pool they
- *     are drawn in
+ *     are drawn in; shapes no lane lists (data objects, annotations) go with
+ *     the lane they are drawn in (audit #41)
  *   - containers (pool, lane, expanded sub-process) entirely beyond the line
  *     move; containers crossing the line grow by `delta` (shrink for a
  *     negative delta); lanes of a pool that grows on x grow with it, and pools
@@ -60,7 +61,9 @@
  *  [from, to] after a removal: everything beyond `to` moves back by the strip
  *  width minus one `gap`, unless something that stays (leaf shape, label,
  *  bend, container border, in the band of `within`) reaches into
- *  [from + gap, to], where the moved content lands. Returns the result, or
+ *  [from + gap, to], where the moved content lands, or a shape that moved
+ *  (also a boundary event riding a shrinking border, beyond the band) would
+ *  land on another one (then nothing moves). Returns the result, or
  *  undefined when it did not close.
  *
  *  shiftShape(plane, id, dx, dy) moves one shape rigidly: label, boundary
@@ -243,6 +246,28 @@ function geometricPool(plane: Plane, s: DShape, before: ReadonlyMap<string, Box>
 }
 
 /**
+ * The lane a shape without lane membership is drawn in (a data object, an
+ * annotation, a node no lane lists): the innermost lane of its pool whose box
+ * (before the run) holds the shape's centre.
+ */
+function geometricLane(plane: Plane, s: DShape, before: ReadonlyMap<string, Box>): string | undefined {
+  if (s.laneId || s.hostId || s.parentId || s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group') return s.laneId;
+  const c = { x: s.bounds.x + s.bounds.width / 2, y: s.bounds.y + s.bounds.height / 2 };
+  let best: Box | undefined;
+  let id: string | undefined;
+  for (const l of plane.shapes.values()) {
+    if (l.kind !== 'lane' || (s.poolId && l.poolId !== s.poolId)) continue;
+    const b = before.get(l.id) ?? l.bounds;
+    if (c.x < b.x || c.x > right(b) || c.y < b.y || c.y > bottom(b)) continue;
+    if (!best || b.width * b.height < best.width * best.height) {
+      best = b;
+      id = l.id;
+    }
+  }
+  return id;
+}
+
+/**
  * A shrunk container never ends before its own content: its far border stays
  * at least `pad` beyond every member (leaf shapes and expanded sub-processes
  * whose frame chain contains it), and never moves out further than before.
@@ -387,8 +412,8 @@ function decideAll(p: Pass): Map<string, Decision> {
     let d: Decision = 'stay';
     const host = s.hostId ? plane.shapes.get(s.hostId) : undefined;
     // the outermost container (pool, lane, expanded sub-process) entirely beyond the line carries its content;
-    // collaboration-level artifacts go with the pool they are drawn in
-    const carrier = [s.kind === 'participant' ? undefined : geometricPool(plane, s, before), s.laneId, s.parentId]
+    // collaboration-level artifacts go with the pool they are drawn in, shapes no lane lists with the lane they are drawn in
+    const carrier = [s.kind === 'participant' ? undefined : geometricPool(plane, s, before), geometricLane(plane, s, before), s.parentId]
       .map((id) => (id ? plane.shapes.get(id) : undefined))
       .find((c) => !!c && near(before.get(c.id)!, axis) >= line);
     const hostDecision = host && depth < 20 ? decide(host, depth + 1) : undefined;
@@ -720,5 +745,29 @@ export function closeStrip(plane: Plane, req: StripRequest): SpaceResult | undef
       if (c > lo && c < hi && pointInBand(p, band, axis)) return undefined;
     }
   }
-  return makeSpace(plane, { axis, line, delta: -(width - gap), ...(req.within ? { within: req.within } : {}), ...(req.keep ? { keep: req.keep } : {}) });
+  // a close that would put a moved shape onto another one (a boundary event riding a shrinking border onto an
+  // annotation outside its host, audit #42) is undone: the strip stays open
+  const shapesBefore = new Map([...plane.shapes.values()].map((s) => [s, { bounds: { ...s.bounds }, label: s.label ? { ...s.label } : undefined }] as const));
+  const edgesBefore = new Map([...plane.edges.values()].map((e) => [e, { points: e.points.map((p) => ({ ...p })), label: e.label ? { ...e.label } : undefined }] as const));
+  const res = makeSpace(plane, { axis, line, delta: -(width - gap), ...(req.within ? { within: req.within } : {}), ...(req.keep ? { keep: req.keep } : {}) });
+  const leaves = [...plane.shapes.values()].filter(isLeaf);
+  for (const id of res.moved) {
+    const s = plane.shapes.get(id);
+    if (!s || !isLeaf(s)) continue;
+    const hit = leaves.find((o) => o !== s && o.hostId !== s.id && s.hostId !== o.id && overlaps(o.bounds, s.bounds) && !overlaps(shapesBefore.get(o)!.bounds, shapesBefore.get(s)!.bounds));
+    if (!hit) continue;
+    if (layoutDebugOn()) layoutDebug(`[strip] closing would put ${s.id} onto ${hit.id}: kept open`);
+    for (const [sh, v] of shapesBefore) {
+      sh.bounds = v.bounds;
+      if (v.label) sh.label = v.label;
+      else delete sh.label;
+    }
+    for (const [e, v] of edgesBefore) {
+      e.points = v.points;
+      if (v.label) e.label = v.label;
+      else delete e.label;
+    }
+    return undefined;
+  }
+  return res;
 }

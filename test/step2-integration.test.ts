@@ -119,8 +119,8 @@ describe('the in-memory API keeps the text (core + roundtrip + conventions)', ()
     );
     const r = await applyToXml(withSticky, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
     expect(r.result.layout.stickies).toEqual([{ sticky: 'Sticky_1', node: 'Task_Script' }]);
-    // Task_Script moved 152 px right; the sticky by the same shift, nothing else of its line changed
-    expect(r.xml).toContain('\n            <bpmiq:sticky id="Sticky_1" text="Who packs?" x="662" y="180" width="80" height="40"/>\n');
+    // Task_Script moved 149 px right (the space tool pushes only by the room that is missing); the sticky by the same shift, nothing else of its line changed
+    expect(r.xml).toContain('\n            <bpmiq:sticky id="Sticky_1" text="Who packs?" x="659" y="180" width="80" height="40"/>\n');
     expect((await applyToXml(withSticky, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }])).unchanged).toBe(true);
   });
 });
