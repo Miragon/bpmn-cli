@@ -356,13 +356,24 @@ function escape(plane: Plane, s: DShape, frame: DShape, box: Box): DShape | unde
   return below ? frame : undefined;
 }
 
-/** Refuses a move that takes a shape out of its innermost frame (E_LEAVES_CONTAINER, see escape). */
-function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: number, target: string): void {
+/**
+ * Refuses a move that takes a shape out of its innermost frame
+ * (E_LEAVES_CONTAINER, see escape). A sub-process grows towards a reference
+ * inside it (past its right / bottom edge), never towards one outside it:
+ * with every reference (`refs`) outside the shape's sub-process, the shape
+ * must land inside the sub-process as it is drawn (a sub-process grown
+ * towards a far reference is pushed aside by what it then covers and leaves
+ * the shapes it holds behind: outsideSub).
+ */
+function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: number, target: string, refs: readonly DShape[] = []): void {
   for (const s of shapes) {
     const frame = frameOf(plane, s);
     if (!frame) continue;
     const unit = unitBox(plane, s);
-    const there = escape(plane, s, frame, { ...unit, x: unit.x + dx, y: unit.y + dy });
+    const box = { ...unit, x: unit.x + dx, y: unit.y + dy };
+    let there = escape(plane, s, frame, box);
+    const farRef = !there && frame.kind === 'subProcess' && refs.length > 0 && refs.every((r) => r !== frame && !inFrameOf(plane, r, frame)) && !inside(box, frame.bounds);
+    if (farRef) there = frame;
     if (!there) continue;
     let hint: string;
     if (frame.kind === 'lane') {
@@ -370,7 +381,9 @@ function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: nu
         ? `That position is in lane ${there.id}. Assign the lane first (\`bpmn move <file> ${s.id} --lane ${there.id}\`, in a batch a move op with "lane" before this op), or make room in ${frame.id} first (\`bpmn space <file> --below ${frame.id}\`).`
         : `Pick a reference inside lane ${frame.id}, or assign another lane first (\`bpmn move <file> ${s.id} --lane <laneId>\`).`;
     } else if (frame.kind === 'subProcess') {
-      hint = `Pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`;
+      hint = farRef
+        ? `The reference lies outside sub-process ${frame.id}, which would have to grow out to it: pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`
+        : `Pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`;
     } else {
       hint = `Nodes cannot leave their pool; pick a reference inside ${frame.id}.`;
     }
@@ -513,7 +526,23 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
         !ids.includes(f.id) &&
         [...plane.shapes.values()].some((c) => c.kind === 'subProcess' && c.container && c.id !== f.id && !within(f, c.id) && overlaps(c.bounds, f.bounds) && !overlaps(snap.bounds.get(c.id) ?? c.bounds, snap.bounds.get(f.id) ?? f.bounds)),
     );
-  const attempt = (fixed: string[]): { ok: boolean; notes: string[]; swallowed: DShape[]; displaced: Array<{ ref: DShape; frame: DShape }>; collided: Array<[string, string]> } => {
+  // a shape out of a frame that held it before the op (its expanded sub-process, its lane, its pool): outsideSub / outsideLane / outsidePool
+  const strayed = (): Array<{ shape: DShape; frame: DShape }> => {
+    const out: Array<{ shape: DShape; frame: DShape }> = [];
+    for (const sh of plane.shapes.values()) {
+      if (sh.kind === 'participant' || sh.kind === 'lane') continue;
+      const was = snap.bounds.get(sh.id);
+      if (!was) continue;
+      for (const fid of [sh.parentId, sh.hostId ? undefined : sh.laneId, sh.poolId]) {
+        const f = fid ? plane.shapes.get(fid) : undefined;
+        const fb = f ? snap.bounds.get(f.id) : undefined;
+        if (!f || !fb || (f.kind === 'subProcess' && !f.container)) continue;
+        if (inside(was, fb) && !inside(sh.bounds, f.bounds)) out.push({ shape: sh, frame: f });
+      }
+    }
+    return out;
+  };
+  const attempt = (fixed: string[]): { ok: boolean; notes: string[]; swallowed: DShape[]; displaced: Array<{ ref: DShape; frame: DShape }>; collided: Array<[string, string]>; strayed: Array<{ shape: DShape; frame: DShape }> } => {
     const out: string[] = [];
     for (const s of moved) {
       fitInFrame(plane, s.id, 15, undefined, [...ids, ...fixed]);
@@ -531,7 +560,8 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
     const sw = swallowed();
     const gone = displaced();
     const collided = newOverlaps(plane, snap);
-    return { ok: !sw.length && !gone.length && !collided.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided };
+    const out_ = strayed();
+    return { ok: !sw.length && !gone.length && !collided.length && !out_.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: out_ };
   };
   const start = saveState(plane);
   let r = attempt(refIds);
@@ -547,10 +577,20 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
         ? `its frame would have to push away ${r.displaced.map((d) => `${frameWord(d.frame)} ${d.frame.id} of ${d.ref.id}`).join(', ')}`
         : r.collided.length
           ? `making room would put ${r.collided.map(([a, b]) => `${a} onto ${b}`).join(', ')}`
-          : 'what is in the way cannot give way without moving the reference or the shapes off it';
+          : r.strayed.length
+            ? `making room would take ${r.strayed.map((x) => `${x.shape.id} out of its ${frameWord(x.frame)} ${x.frame.id}`).join(', ')}`
+            : 'what is in the way cannot give way without moving the reference or the shapes off it';
     throw modelError('E_NO_ROOM', `There is no room to put ${names} ${target}: ${why}`, {
       element: moved[0]!.id,
-      related: r.swallowed.length ? r.swallowed.map((f) => f.id) : r.displaced.length ? r.displaced.flatMap((d) => [d.ref.id, d.frame.id]) : r.collided.length ? [...new Set(r.collided.flat())] : refs.map((f) => f.id),
+      related: r.swallowed.length
+        ? r.swallowed.map((f) => f.id)
+        : r.displaced.length
+          ? r.displaced.flatMap((d) => [d.ref.id, d.frame.id])
+          : r.collided.length
+            ? [...new Set(r.collided.flat())]
+            : r.strayed.length
+              ? [...new Set(r.strayed.flatMap((x) => [x.shape.id, x.frame.id]))]
+              : refs.map((f) => f.id),
       hint: 'Use a reference inside the same lane / sub-process, or make room first (`bpmn space <file> --after <id>` / `--below <id>`) and place it again.',
     });
   }
@@ -620,7 +660,7 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
       });
     }
   }
-  checkFrames(plane, group, dx, dy, parts.join(' and '));
+  checkFrames(plane, group, dx, dy, parts.join(' and '), fixed);
   if (!dx && !dy) {
     notes.push(`${ref.id} is already there`);
     return [];
@@ -639,7 +679,13 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
   return settle(plane, snap);
 }
 
-function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
+/**
+ * align: every id onto the line of the reference. A member a selector picked
+ * (`picked`: --kind, --path, --branch) that would leave its sub-process, lane
+ * or pool on that line is left out (noted); an explicit id is refused
+ * (E_LEAVES_CONTAINER).
+ */
+function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[], picked: ReadonlySet<string> = new Set()): string[] {
   const refId = op.to ?? op.ids?.[0] ?? "";
   const { plane, shape: ref } = drawnShape(ctx, refId);
   const items = unique(op.ids ?? [])
@@ -648,10 +694,22 @@ function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
   for (const it of items) samePlane(plane, it.plane, it.shape.id, refId);
   const shapes = outermost(plane, items.map((i) => i.shape));
   const moves = shapes.map((s) => ({ s, dx: op.axis === 'column' ? Math.round(cx(ref.bounds) - cx(s.bounds)) : 0, dy: op.axis === 'row' ? Math.round(cy(ref.bounds) - cy(s.bounds)) : 0 }));
-  for (const m of moves) checkFrames(plane, [m.s], m.dx, m.dy, `in the ${op.axis} of ${refId}`);
-  const moved = moves.filter((m) => m.dx || m.dy);
+  const kept: typeof moves = [];
+  const left: string[] = [];
+  for (const m of moves) {
+    try {
+      checkFrames(plane, [m.s], m.dx, m.dy, `in the ${op.axis} of ${refId}`, [ref]);
+      kept.push(m);
+    } catch (err) {
+      if (!(err instanceof CliError) || err.code !== 'E_LEAVES_CONTAINER' || !picked.has(m.s.id)) throw err;
+      const frame = plane.shapes.get(err.details.related?.[0] ?? '');
+      left.push(`${m.s.id}${frame ? ` (${frameWord(frame)} ${frame.id})` : ''}`);
+    }
+  }
+  if (left.length) notes.push(`left out ${left.join(', ')}: on the ${op.axis} of ${refId} ${left.length > 1 ? 'they' : 'it'} would leave ${left.length > 1 ? 'their frames' : 'its frame'}`);
+  const moved = kept.filter((m) => m.dx || m.dy);
   if (!moved.length) {
-    notes.push(`already aligned on the ${op.axis} of ${refId}`);
+    if (!left.length || kept.length) notes.push(`already aligned on the ${op.axis} of ${refId}`);
     return [];
   }
   for (const m of moved) shiftShape(plane, m.s.id, m.dx, m.dy);
@@ -1090,10 +1148,13 @@ function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): str
  * what --branch, --path and --kind name (connections for color only). An
  * align without explicit ids or `to` aligns on the first selected element,
  * with only --kind and --axis column on the rightmost one (nothing moves left).
+ * `picked`: the ids only a selector named (align leaves those out that would
+ * leave their frame, see alignOp).
  */
-function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): T {
-  if (op.op !== 'place' && op.op !== 'align' && op.op !== 'color' && op.op !== 'tidy') return op;
-  if (!op.path && !op.kind && !op.branch) return op;
+function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): { op: T; picked: Set<string> } {
+  const none = { op, picked: new Set<string>() };
+  if (op.op !== 'place' && op.op !== 'align' && op.op !== 'color' && op.op !== 'tidy') return none;
+  if (!op.path && !op.kind && !op.branch) return none;
   if (!ctx.planes.length) throw noDiagram();
   const shapeOf = (id: string): DShape | undefined => ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
   const ids = selection(ctx.doc, op, {
@@ -1104,16 +1165,19 @@ function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): T {
       return s ? cx(s.bounds) : undefined;
     },
   });
+  const explicit = new Set(op.ids ?? []);
+  const picked = new Set(ids.filter((id) => !explicit.has(id)));
   if (op.op === 'align' && !op.to && !op.ids?.length && !op.path && !op.branch && op.axis === 'column') {
     const right = [...ids].sort((a, b) => cx(shapeOf(b)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }) - cx(shapeOf(a)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }))[0];
-    return { ...op, ids, ...(right ? { to: right } : {}) };
+    return { op: { ...op, ids, ...(right ? { to: right } : {}) }, picked };
   }
-  return { ...op, ids };
+  return { op: { ...op, ids }, picked };
 }
 
 function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
   const index = entry.index;
-  const op = entry.op.op === 'order' ? entry.op : resolveSelection(ctx, entry.op);
+  const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : resolveSelection(ctx, entry.op);
+  const op = resolved.op;
   if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
   const snap = snapshot(ctx.planes);
   const notes: string[] = [];
@@ -1124,7 +1188,7 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = placeOp(ctx, op, snap, notes);
       break;
     case 'align':
-      rerouted = alignOp(ctx, op, snap, notes);
+      rerouted = alignOp(ctx, op, snap, notes, resolved.picked);
       break;
     case 'color':
       extra.colored = colorOp(ctx, op);

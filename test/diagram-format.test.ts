@@ -318,10 +318,10 @@ describe('align', () => {
     expect(done.r.layout.format![0]).toMatchObject({ moved: [], notes: ['already aligned on the row of S'] });
   });
 
-  it('refuses a column the sub-process would have to grow over (E_NO_ROOM) and aligns inside it', async () => {
+  it('refuses a column outside the sub-process, which would have to grow out to it (E_LEAVES_CONTAINER), and aligns inside it', async () => {
     const xml = await handXml(WITH_SUB);
     const e = await failure(xml, [{ op: 'align', ids: ['E', 'SE'], axis: 'column' }]);
-    expect(e).toMatchObject({ code: 'E_NO_ROOM', element: 'SE' });
+    expect(e).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'SE' });
     const { r, after } = await run(xml, [{ op: 'align', ids: ['ST', 'SS'], axis: 'row', to: 'SE' }]);
     expect(cy(shapes(after).get('SS')!)).toBe(cy(shapes(after).get('SE')!));
     expect(hardAdded(r)).toEqual([]);

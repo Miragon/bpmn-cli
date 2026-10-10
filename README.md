@@ -998,8 +998,14 @@ kind, nothing on the branch); in ops JSON the keys are `path` (two ids),
 Refusals: a node never leaves its lane, pool or expanded sub-process
 (`E_LEAVES_CONTAINER`; up to 10 px into the header of a lane or pool are
 fine, a sub-process's border is the limit; a node is not placed beside the
-sub-process it lives in; the hint names the lane at the target position:
-`move <id> --lane <laneId>` first, or `space --below <laneId>` to make room).
+sub-process it lives in; a sub-process grows towards a reference inside it,
+never out to a reference outside it; the hint names the lane at the target
+position: `move <id> --lane <laneId>` first, or `space --below <laneId>` to
+make room). `align` leaves out a member that only a selector named and that
+would leave its frame on the requested line, with a note (`left out
+Event_Packed (sub-process Activity_Prepare): on the column of Event_Shipped
+it would leave its frame`); named by id, the member refuses the op. `place`
+moves the selected set as one group, so such a member refuses it.
 `route --exit` / `--entry` on a boundary event refuses the side that points
 into its host (`E_INVALID_VALUE`).
 When the shapes in the way cannot give way without moving the reference off
@@ -1007,7 +1013,8 @@ the requested row / column, a sub-process would have to grow over a
 reference outside it, or the reference's own pool, lane or sub-process would
 be pushed away (a reference in another pool), the command fails with
 `E_NO_ROOM` and writes nothing. Making room never leaves two shapes on each
-other: a reference the neighbours would be pushed onto moves along with them
+other and never takes a shape out of a sub-process, lane or pool that held
+it: a reference the neighbours would be pushed onto moves along with them
 when its row / column still holds, otherwise the command fails with
 `E_NO_ROOM`. Elements without a
 shape fail with `E_NO_SHAPE` (for a pool use the participant id, not the
