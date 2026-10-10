@@ -75,9 +75,11 @@ import type { Doc } from '../document.js';
 import { CliError, modelError, type ErrorDetails } from '../errors.js';
 import { is, type El } from '../model.js';
 import { laneSetOf, ordersLanes } from '../ops/order.js';
-import type { AlignOp, ColorOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
+import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
+import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
+import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { spacingOf } from './place.js';
 import { frameInterior, frameOf, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
@@ -694,11 +696,186 @@ function columnWidth(plane: Plane): number {
   return Math.round((median(widths) ?? 100) + spacingOf(plane).gap);
 }
 
-function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap): string[] {
+/* ------------------------------------------------------------------ */
+/* guarded changes (compact, closing space)                             */
+/* ------------------------------------------------------------------ */
+
+const isHard = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
+
+/** The current layout problems of the document (the planes written first). */
+function measure(ctx: Ctx): LayoutMetrics {
+  writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
+  return layoutProblems(ctx.doc.definitions);
+}
+
+/**
+ * Runs changes of one plane that must not make the drawing worse: after each
+ * change the connections it broke are routed again, and the change is undone
+ * when it added a hard layout problem or raised the score (compact.ts
+ * Attempt). `rejected` collects what the undone changes would have added.
+ */
+function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProblem[] } {
+  const start = measure(ctx);
+  const hard = new Map<string, number>();
+  for (const p of start.problems.filter(isHard)) hard.set(problemKey(p), (hard.get(problemKey(p)) ?? 0) + 1);
+  let score = start.score;
+  let problems = start.problems;
+  const rejected: LayoutProblem[] = [];
+  const attempt: Attempt = (change, force = []) => {
+    const st = saveState(plane);
+    const before = new Map([...plane.edges.values()].map((e) => [e, edgeBefore(plane, e)] as const));
+    const r = change();
+    if (!r || (!r.moved.size && !r.resized.size)) {
+      restoreState(st);
+      return false;
+    }
+    const edges = [...plane.edges.values()].sort((p, q) => Number(p.kind === 'messageFlow') - Number(q.kind === 'messageFlow'));
+    const fresh = edges.filter((e) => (force.includes(e.id) || brokenEdge(plane, e, before.get(e))) && reroute(plane, e));
+    clearLabels(plane, fresh);
+    const m = measure(ctx);
+    const count = new Map(hard);
+    const added = m.problems.filter(isHard).filter((p) => {
+      const n = count.get(problemKey(p)) ?? 0;
+      count.set(problemKey(p), n - 1);
+      return n <= 0;
+    });
+    if (added.length || m.score > score) {
+      rejected.push(...(added.length ? added : diffProblems(problems, m.problems).added));
+      restoreState(st);
+      return false;
+    }
+    score = m.score;
+    problems = m.problems;
+    return true;
+  };
+  return { attempt, rejected };
+}
+
+function problemWords(ps: readonly LayoutProblem[]): string {
+  const uniq = [...new Map(ps.map((p) => [problemKey(p), p])).values()];
+  return uniq.slice(0, 3).map((p) => `${p.kind} [${p.ids.join(', ')}]`).join(', ') + (uniq.length > 3 ? ', ...' : '');
+}
+
+/** The frames `compact` takes: pools (participant ids), lanes, expanded sub-processes, and plane roots. */
+function compactTargets(ctx: Ctx, ids: readonly string[]): Map<Plane, Set<string> | undefined> {
+  const out = new Map<Plane, Set<string> | undefined>();
+  for (const id of unique(ids)) {
+    ctx.doc.require(id);
+    if (!ctx.planes.length) throw noDiagram();
+    // a diagram's own root (a process without pool, a collapsed sub-process's drill-down): the whole diagram
+    const root = ctx.planes.find((p) => p.rootId === id);
+    if (root && !root.shapes.has(id)) {
+      out.set(root, undefined);
+      continue;
+    }
+    const { plane, shape } = drawnShape(ctx, id);
+    if (!shape.container) {
+      throw modelError('E_WRONG_KIND', `"${id}" is not a pool, lane or expanded sub-process`, {
+        element: id,
+        hint: 'compact takes frames: participant ids, lane ids, expanded sub-process ids (or no id for the whole drawing); to close one gap use `bpmn space <file> --after <id> --by -column`.',
+      });
+    }
+    if (out.has(plane) && out.get(plane) === undefined) continue;
+    out.set(plane, new Set([...(out.get(plane) ?? []), id]));
+  }
+  return out;
+}
+
+function compactOp(ctx: Ctx, op: CompactOp, snap: Snap, notes: string[]): string[] {
+  if (!ctx.planes.length) throw noDiagram();
+  const targets = op.ids ? compactTargets(ctx, op.ids) : new Map(ctx.planes.map((p) => [p, undefined] as const));
+  const rerouted: string[] = [];
+  const total = { strips: { x: 0, y: 0 }, px: { x: 0, y: 0 }, refused: 0 };
+  const rejected: LayoutProblem[] = [];
+  for (const [plane, only] of targets) {
+    const g = guard(ctx, plane);
+    const st = compactPlane(plane, { ...(only ? { only } : {}), attempt: g.attempt });
+    for (const axis of ['x', 'y'] as const) {
+      total.strips[axis] += st.strips[axis];
+      total.px[axis] += st.px[axis];
+    }
+    total.refused += st.refused;
+    rejected.push(...g.rejected);
+    rerouted.push(...settle(plane, snap));
+  }
+  const n = total.strips.x + total.strips.y;
+  if (!n) notes.push('nothing to compact: no empty row or column to close');
+  else {
+    const part = (k: number, px: number, what: string): string[] => (k ? [`${k} empty ${what}${k > 1 ? 's' : ''} (${px} px)`] : []);
+    notes.push(`closed ${[...part(total.strips.x, total.px.x, 'column'), ...part(total.strips.y, total.px.y, 'row')].join(' and ')}`);
+  }
+  if (rejected.length) notes.push(`left ${total.refused} gap${total.refused > 1 ? 's' : ''} open: closing ${total.refused > 1 ? 'them' : 'it'} would add ${problemWords(rejected)}`);
+  return rerouted;
+}
+
+/** Negative `space`: closes up to `amount` px of the empty space right of / below an element (see module contract). */
+function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 'x' | 'y', amount: number, snap: Snap, notes: string[]): string[] {
+  const gaps = drawingGaps(plane);
+  const loose = looseEdges(plane);
+  const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
+  const far = (b: Box): number => (axis === 'x' ? right(b) : bottom(b));
+  const where = axis === 'x' ? `right of ${refId}` : `below ${refId}`;
+  let strip: { from: number; to: number; keep: number } | undefined;
+  let within: Box | undefined;
+  if (shape.container && shape.kind !== 'subProcess') {
+    // a pool or lane: its own trailing strip (the frame gets smaller; the band of the pool, so that the pool shrinks with a lane)
+    within = copyBox((pool ?? shape).bounds);
+    const lanes = [...plane.shapes.values()].filter((s) => s.kind === 'lane' && (s.poolId === shape.id || inFrameOf(plane, s, shape))).map((s) => s.id);
+    const occ = occupied(plane, axis, shape.bounds, { skip: new Set([shape.id, ...(pool ? [pool.id] : []), ...lanes]), loose });
+    const last = occ.length ? occ[occ.length - 1]![1] : undefined;
+    if (last !== undefined) strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
+  } else {
+    // a node or an expanded sub-process: the empty space after it, across the pool band (x) / the whole plane (y)
+    const unit = shape.container ? shape.bounds : unitBox(plane, shape);
+    within = axis === 'x' && pool ? copyBox(pool.bounds) : undefined;
+    const region = axis === 'x' ? { x: far(unit), y: (pool ?? shape).bounds.y, width: 1e6, height: (pool ?? shape).bounds.height } : { x: -1e6, y: far(unit), width: 2e6, height: 1e6 };
+    if (axis === 'x' && !pool) Object.assign(region, { y: -1e6, height: 2e6 });
+    const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((s) => s.kind === 'lane' || s.kind === 'participant').map((s) => s.id)]);
+    const occ = occupied(plane, axis, region, { skip, loose, solid: (s) => s.kind === 'subProcess' && s.container && s.id !== shape.id && !inFrameOf(plane, shape, s) });
+    // the strip starts where what touches X's far edge ends (its label, ...) and ends at the next thing
+    let from = far(unit);
+    for (const [a, b] of occ) if (a <= from + 1) from = Math.max(from, b);
+    const next = occ.find(([a]) => a > from + 1);
+    if (next) strip = { from, to: next[0], keep: axis === 'x' ? gaps.x : gaps.y };
+    else if (shape.container) {
+      notes.push(`nothing to close ${where}: nothing follows it`);
+      return [];
+    }
+  }
+  const room = strip ? Math.floor(strip.to - strip.from - strip.keep) : 0;
+  if (!strip || room < 1) {
+    notes.push(`nothing to close ${where}: no empty space there${strip ? ` (the next element is ${Math.round(strip.to - strip.from)} px away, the drawing keeps ${strip.keep} px)` : ''}`);
+    return [];
+  }
+  const close = Math.min(room, Math.round(amount));
+  const g = guard(ctx, plane);
+  const part = { from: strip.to - strip.keep - close, to: strip.to, keep: strip.keep };
+  const kept = g.attempt(() => closeEmpty(plane, axis, part, within));
+  if (!kept) {
+    throw modelError('E_NO_ROOM', `Closing the space ${where} would ${g.rejected.length ? `add ${problemWords(g.rejected)}` : 'move something that is in the way'}; nothing was written`, {
+      element: refId,
+      ...(g.rejected.length ? { related: [...new Set(g.rejected.flatMap((p) => p.ids))] } : {}),
+      hint: 'Close less (`--by -<px>`), or move what is in the way first (`bpmn place`), or use `bpmn compact`, which closes only what it can close without a new problem.',
+    });
+  }
+  if (close < amount) notes.push(`closed ${close} px ${where} (of ${Math.round(amount)} px asked for): the rest is not empty`);
+  return settle(plane, snap);
+}
+
+/** `s` lies inside frame `f` (its frame chain contains it). */
+function inFrameOf(plane: Plane, s: DShape, f: DShape): boolean {
+  return framesOf(plane, s).includes(f);
+}
+
+function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap, notes: string[]): string[] {
   const refId = (op.after ?? op.below)!;
   const { plane, shape } = drawnShape(ctx, refId);
   const axis = op.after ? 'x' : 'y';
   const by = op.by ?? (axis === 'x' ? 'column' : 'row');
+  if (by === '-column' || by === '-row' || (typeof by === 'number' && by < 0)) {
+    const amount = by === '-column' ? columnWidth(plane) : by === '-row' ? spacingOf(plane).row : -by;
+    return closeSpace(ctx, refId, plane, shape, axis, amount, snap, notes);
+  }
   const delta = by === 'column' ? columnWidth(plane) : by === 'row' ? spacingOf(plane).row : by;
   // a frame grows itself: the line runs just inside its far edge
   const box = shape.container ? shape.bounds : unitBox(plane, shape);
@@ -816,10 +993,13 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = routeOp(ctx, op);
       break;
     case 'space':
-      rerouted = spaceOp(ctx, op, snap);
+      rerouted = spaceOp(ctx, op, snap, notes);
       break;
     case 'tidy':
       rerouted = tidyOp(ctx, op, snap, notes);
+      break;
+    case 'compact':
+      rerouted = compactOp(ctx, op, snap, notes);
       break;
     case 'order':
       rerouted = orderBands(ctx, op, snap, notes);

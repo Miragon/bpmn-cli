@@ -26,6 +26,7 @@ import {
   type RouteOp,
   type SpaceOp,
   type TidyOp,
+  type CompactOp,
   type FlowOptions,
   type MoveOp,
   type Op,
@@ -248,11 +249,15 @@ export const ROUTE_FIELDS: FieldsOf<RouteOp> = {
 export const SPACE_FIELDS: FieldsOf<SpaceOp> = {
   after: ref('Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
   below: ref('Insert vertical space below this element (everything starting below it moves down, frames grow).'),
-  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1).' },
+  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1). Negative ("-column", "-row", an integer <= -1) closes up to that much empty space instead (only as far as it is empty).' },
 };
 
 export const TIDY_FIELDS: FieldsOf<TidyOp> = {
   ids: list('Only these shapes (default: every shape of every diagram).', { minItems: 1 }),
+};
+
+export const COMPACT_FIELDS: FieldsOf<CompactOp> = {
+  ids: list('Only these frames (pools by participant id, lanes, expanded sub-processes) and what is inside them (default: the whole drawing).', { minItems: 1 }),
 };
 
 /** Field specs per op name (`op` itself is implicit). */
@@ -273,6 +278,7 @@ export const OP_FIELDS: Record<Op['op'], Record<string, FieldSpec>> = {
   route: ROUTE_FIELDS,
   space: SPACE_FIELDS,
   tidy: TIDY_FIELDS,
+  compact: COMPACT_FIELDS,
 };
 
 /** One-line purpose of every op, for schema descriptions and the guide. */
@@ -293,6 +299,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   route: 'Diagram only: route one flow again, optionally forcing the exit / entry side (= `bpmn route`).',
   space: 'Diagram only: insert space right of / below an element like the modeler\'s space tool (= `bpmn space`).',
   tidy: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (= `bpmn tidy`, `bpmn layout --tidy`).',
+  compact: 'Diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content, keeping the order and relative positions; never adds a layout problem (= `bpmn compact`).',
 };
 
 const PLACEMENT_KEYS = Object.keys(PLACEMENT_FIELDS) as Array<keyof Placement>;
@@ -417,12 +424,12 @@ function checkStringList(ctx: Ctx, key: string, spec: FieldSpec, value: unknown)
   return out;
 }
 
-/** "column" | "row" | a positive integer (a string of digits is converted). */
-function checkSize(ctx: Ctx, key: string, value: unknown): 'column' | 'row' | number {
-  if (value === 'column' || value === 'row') return value;
-  if (typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1) return Number(value);
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value;
-  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), got ${describe(value)}`);
+/** "column" | "row" | "-column" | "-row" | a non-zero integer (a string of digits is converted). */
+function checkSize(ctx: Ctx, key: string, value: unknown): SpaceOp['by'] & {} {
+  if (value === 'column' || value === 'row' || value === '-column' || value === '-row') return value;
+  if (typeof value === 'string' && /^-?\d+$/.test(value) && Number(value) !== 0) return Number(value);
+  if (typeof value === 'number' && Number.isInteger(value) && value !== 0) return value;
+  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), or "-column", "-row" or a negative integer to close space, got ${describe(value)}`);
 }
 
 function checkMap(ctx: Ctx, key: string, value: unknown): Record<string, string> {
@@ -652,6 +659,7 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
     case 'label':
     case 'route':
     case 'tidy':
+    case 'compact':
       break;
   }
   return { op: name, ...out } as unknown as Op;
@@ -712,7 +720,7 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
     case 'nodes':
       return { type: 'array', items: { $ref: '#/$defs/node' }, ...d };
     case 'size':
-      return { oneOf: [{ type: 'string', enum: ['column', 'row'] }, { type: 'integer', minimum: 1 }], ...d };
+      return { oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }], ...d };
   }
 }
 
@@ -776,6 +784,7 @@ function buildSchema(): Record<string, unknown> {
       route: objectSchema(ROUTE_FIELDS, { op: 'route', description: OP_DESCRIPTIONS.route }),
       space: objectSchema(SPACE_FIELDS, { op: 'space', description: OP_DESCRIPTIONS.space, allOf: [{ oneOf: [{ required: ['after'] }, { required: ['below'] }] }] }),
       tidy: objectSchema(TIDY_FIELDS, { op: 'tidy', description: OP_DESCRIPTIONS.tidy }),
+      compact: objectSchema(COMPACT_FIELDS, { op: 'compact', description: OP_DESCRIPTIONS.compact }),
       branch: objectSchema(BRANCH_FIELDS, { description: 'One branch of a split: flow options of the gateway -> first node flow, then the nodes.', allOf: [defaultRule()] }),
       node: objectSchema(NODE_FIELDS, { description: 'A node inside a split branch: an add op without placement (it is chained after the previous node).', allOf: [defaultRule()] }),
     },

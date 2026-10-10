@@ -226,8 +226,11 @@ export interface SpaceOp {
   after?: string;
   /** insert vertical space below this element */
   below?: string;
-  /** how much: one column / row of the drawing (default), or pixels */
-  by?: 'column' | 'row' | number;
+  /**
+   * how much: one column / row of the drawing (default), or pixels; negative
+   * ('-column', '-row', a negative number) closes that much empty space instead
+   */
+  by?: 'column' | 'row' | '-column' | '-row' | number;
 }
 
 export interface TidyOp {
@@ -236,12 +239,18 @@ export interface TidyOp {
   ids?: string[];
 }
 
-export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp;
+export interface CompactOp {
+  op: 'compact';
+  /** only these frames (pools, lanes, expanded sub-processes) and what is inside them (default: the whole drawing) */
+  ids?: string[];
+}
+
+export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp | CompactOp;
 
 export type Op = AddOp | ConnectOp | SetOp | RemoveOp | RetypeOp | MoveOp | OrderOp | ExtOp | SplitOp | FormatOp;
 
 /** The diagram-only ops (they run after the semantic ops and the layout, in batch order). */
-export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy'];
+export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact'];
 
 export const OP_NAMES: Array<Op['op']> = ['add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'split', ...FORMAT_OP_NAMES];
 

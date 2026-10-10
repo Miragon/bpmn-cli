@@ -21,7 +21,7 @@ import { guideText, kindsJson, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
 import { checkFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
-import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
+import type { AddOp, AlignOp, ColorOp, CompactOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
 import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
@@ -697,10 +697,10 @@ withMutationOptions(
     .description('diagram only: insert space right of / below an element (the modeler\'s space tool)')
     .option('--after <id>', 'horizontal space right of this element')
     .option('--below <id>', 'vertical space below this element')
-    .option('--by <amount>', 'column (default for --after), row (default for --below) or pixels', (v: string) => {
-      if (v === 'column' || v === 'row') return v;
-      if (/^\d+$/.test(v) && Number(v) >= 1) return Number(v);
-      throw new InvalidArgumentError('expected column, row or a positive number of pixels');
+    .option('--by <amount>', 'column (default for --after), row (default for --below) or pixels; -column, -row or -<px> closes that much empty space instead', (v: string) => {
+      if (v === 'column' || v === 'row' || v === '-column' || v === '-row') return v;
+      if (/^-?\d+$/.test(v) && Number(v) !== 0) return Number(v);
+      throw new InvalidArgumentError('expected column, row or a number of pixels (negative: -column, -row, -<px> to close space)');
     }),
 ).action(async (file: string, o: RawOpts) => {
   await run(async () => {
@@ -714,6 +714,15 @@ withMutationOptions(
   program.command('tidy <file> [ids...]').description('diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape)'),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   const op: TidyOp = { op: 'tidy', ...(ids.length ? { ids } : {}) };
+  await runFormat(file, op, o);
+});
+
+withMutationOptions(
+  program
+    .command('compact <file> [ids...]')
+    .description('diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content (default: the whole drawing), keeping the order; never adds a layout problem'),
+).action(async (file: string, ids: string[], o: RawOpts) => {
+  const op: CompactOp = { op: 'compact', ...(ids.length ? { ids } : {}) };
   await runFormat(file, op, o);
 });
 

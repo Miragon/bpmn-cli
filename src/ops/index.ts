@@ -42,6 +42,7 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
     case 'route':
     case 'space':
     case 'tidy':
+    case 'compact':
       // diagram only: they run after the layout (src/diagram/ops.ts, called by the pipeline)
       return new ChangeSet();
     default:
