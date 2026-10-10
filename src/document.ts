@@ -88,6 +88,11 @@ function foldUmlauts(text: string): string {
 }
 
 /** An id without its prefix (`Activity_CheckInvoice` -> `CheckInvoice`; an id without `_` is its own stem). */
+/** The prefix of an id (`flow` of Flow_CheckToBook), lower case; undefined without one. */
+function prefixOf(id: string): string | undefined {
+  return /^([A-Za-z][A-Za-z0-9]*)_./.exec(id)?.[1]!.toLowerCase();
+}
+
 function stemOf(id: string): string {
   const i = id.indexOf('_');
   return i === -1 ? id : id.slice(i + 1);
@@ -345,7 +350,9 @@ export class Doc {
    * prefix (Task_CheckInvoice, CheckInvoice -> Activity_CheckInvoice); an id
    * containing it or contained in it; a typo (edit distance 1, 2 from 12
    * characters, on the whole id or without prefix); a name containing it.
-   * Within a tier the ids the running batch created come first.
+   * Ids with the query's prefix come first (a mistyped `Flow_...` suggests
+   * flows before the gateway its words contain), then the tiers; within a
+   * tier the ids the running batch created come first.
    */
   suggest(query: string, max = 5): string[] {
     const q = query.toLowerCase();
@@ -353,6 +360,7 @@ export class Doc {
     const fstem = foldUmlauts(stemOf(query));
     const recent = new Set(this.batch?.created ?? []);
     const renamed = this.batch?.renamed.get(query);
+    const prefix = prefixOf(query);
     const hits: Array<{ id: string; score: number; dist: number }> = [];
     for (const [id, el] of this.byId()) {
       const name = String(el.get<string | undefined>('name') ?? '').toLowerCase();
@@ -365,6 +373,8 @@ export class Doc {
       else if (lid === q) score = 0;
       else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
       else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
+      // the same prefix and one body inside the other (Flow_GatewayPurchaseApprovedToOrderGoods -> Flow_PurchaseApprovedToOrderGoods)
+      else if (prefix && prefixOf(id) === prefix && fstem.length >= 3 && fidStem.length >= 6 && (fidStem.includes(fstem) || fstem.includes(fidStem))) score = 2;
       else {
         const whole = editDistance(fq, fid);
         const bare = editDistance(fstem, fidStem);
@@ -380,8 +390,9 @@ export class Doc {
       void suggestKinds;
     }
     const fresh = (id: string): number => (recent.has(id) ? 0 : 1);
+    const own = (h: { id: string; score: number }): number => (h.score < 0 || (prefix && prefixOf(h.id) === prefix) ? 0 : 1);
     return hits
-      .sort((a, b) => a.score - b.score || fresh(a.id) - fresh(b.id) || a.dist - b.dist || a.id.localeCompare(b.id))
+      .sort((a, b) => own(a) - own(b) || a.score - b.score || fresh(a.id) - fresh(b.id) || a.dist - b.dist || a.id.localeCompare(b.id))
       .slice(0, max)
       .map((h) => h.id);
   }
