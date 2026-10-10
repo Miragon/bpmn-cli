@@ -44,7 +44,7 @@
  *     members and the artifacts whose centre lies in a band move with it.
  *  place / align refuse (E_LEAVES_CONTAINER) when a moved shape would leave
  *  its innermost frame (expanded sub-process, lane, pool): its box before the
- *  frame's start, its centre in another lane or pool, or below a lane with a
+ *  frame's start (more than 10 px into a header), its centre in another lane or pool, or below a lane with a
  *  sibling lane underneath; past the right / bottom edge the frame grows
  *  (also for the shape's label). Then the moved shapes stay and the others
  *  give way (separate.ts), first with the references fixed, else with them
@@ -83,7 +83,7 @@ import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, 
 import { spacingOf } from './place.js';
 import { frameInterior, frameOf, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
-import type { Side } from './router.js';
+import { attachedSide, type Side } from './router.js';
 import { separate, tidy } from './separate.js';
 import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
 import { selection } from './select.js';
@@ -117,6 +117,9 @@ interface Ctx {
 
 /** minimum clearance between a placed shape and the element it is placed below / above / after / before */
 const CLEAR = 20;
+
+/** how far a moved shape may reach into the header of its lane / pool (or before the start of a sub-process) */
+const HEADER_TOLERANCE = 10;
 
 /* ------------------------------------------------------------------ */
 /* lookup                                                               */
@@ -317,7 +320,7 @@ function laneAt(plane: Plane, poolId: string | undefined, p: Point): DShape | un
 
 /**
  * Where a moved shape would leave its innermost frame: its box before the
- * frame's start (left of its interior, above its top), its centre in another
+ * frame's start (more than 10 px left of its interior, above its top), its centre in another
  * lane or pool, or below a lane that has a sibling lane underneath. Past the
  * right edge (and the bottom of the last lane / a pool / a sub-process) is
  * fine: the frame grows. Returns the lane / pool the centre would land in,
@@ -327,7 +330,8 @@ function laneAt(plane: Plane, poolId: string | undefined, p: Point): DShape | un
 function escape(plane: Plane, s: DShape, frame: DShape, box: Box): DShape | undefined {
   const inner = frameInterior(frame, 0);
   const c = { x: cx(box), y: cy(box) };
-  if (box.x < inner.x - 0.5 || box.y < frame.bounds.y - 0.5) return frame;
+  // a few px into the header of a lane or pool is fine (audit #69: hand drawings sit that close)
+  if (box.x < inner.x - HEADER_TOLERANCE || box.y < frame.bounds.y - 0.5) return frame;
   const otherPool = [...plane.shapes.values()].find((p) => p.kind === 'participant' && p.id !== s.poolId && containsPoint(p.bounds, c));
   if (otherPool) return otherPool;
   if (frame.kind !== 'lane') return undefined;
@@ -416,13 +420,21 @@ function leafIds(plane: Plane): string[] {
   return [...plane.shapes.values()].filter((s) => isLeaf(s) || (s.kind === 'subProcess' && s.container)).map((s) => s.id);
 }
 
-/** Grows the frame of a moved shape when its external label hangs out at the bottom (lanes below, pools below make room). */
+/**
+ * Grows the frame of a moved shape when its external label hangs out at the
+ * bottom (lanes below, pools below make room) or at the right (the pool and
+ * its lanes get wider; audit #71).
+ */
 function fitLabel(plane: Plane, s: DShape, keep: string[]): void {
   const frame = frameOf(plane, s);
   if (!frame || !s.label) return;
+  const sub = frame.kind === 'subProcess';
   const over = bottom(s.label) + 5 - bottom(frame.bounds);
-  if (over <= 0.5) return;
-  makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(frame.kind === 'subProcess' ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+  if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+  const overRight = right(s.label) + 5 - right(frame.bounds);
+  if (overRight <= 0.5) return;
+  const pool = frame.kind === 'participant' ? frame : frame.poolId ? plane.shapes.get(frame.poolId) : undefined;
+  makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : pool ? { within: copyBox(pool.bounds) } : {}) });
 }
 
 /** Everything a plane draws (bounds, labels, waypoints), to try something and undo it. */
@@ -678,8 +690,26 @@ function labelOp(ctx: Ctx, op: LabelOp): string[] {
   return changed ? [op.id] : [];
 }
 
+const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
+/** A side forced on a boundary event that points into its host (the flow would run through the host, audit #62). */
+function intoHost(plane: Plane, endId: string | undefined, side: Side | undefined, role: 'exit' | 'entry', flowId: string): void {
+  const end = endId ? plane.shapes.get(endId) : undefined;
+  const host = end?.hostId ? plane.shapes.get(end.hostId) : undefined;
+  if (!end || !host || !side) return;
+  const border = attachedSide(end.bounds, host.bounds);
+  if (side !== OPPOSITE[border]) return;
+  throw modelError('E_INVALID_VALUE', `--${role} ${side} would run ${flowId} through ${host.id}: ${end.id} sits on the ${border} border of its host`, {
+    element: flowId,
+    related: [end.id, host.id],
+    hint: `A boundary event's flow leaves away from its host: use --${role} ${border}${border === 'bottom' || border === 'top' ? ', left or right' : ', top or bottom'}.`,
+  });
+}
+
 function routeOp(ctx: Ctx, op: RouteOp): string[] {
   const { plane, edge } = drawnEdge(ctx, op.id);
+  intoHost(plane, edge.sourceId, op.exit, 'exit', op.id);
+  intoHost(plane, edge.targetId, op.entry, 'entry', op.id);
   const before = copyPoints(edge.points);
   const ok = reroute(plane, edge, { ...(op.exit ? { sourceSides: [op.exit] } : {}), ...(op.entry ? { targetSides: [op.entry] } : {}) });
   if (!ok) throw modelError('E_NO_SHAPE', `${op.id} cannot be routed: an end has no shape in its diagram`, { element: op.id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });

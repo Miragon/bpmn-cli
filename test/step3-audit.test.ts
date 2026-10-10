@@ -81,6 +81,59 @@ describe('#42 closing a strip never puts a boundary event onto a shape', () => {
   });
 });
 
+describe('#71 a label moved past the right border of its pool widens the pool', () => {
+  it('align --axis column next to the border: the pool and its lane grow around the label', async () => {
+    const process = `<bpmn:process id="P"><bpmn:laneSet id="LS"><bpmn:lane id="L"><bpmn:flowNodeRef>A</bpmn:flowNodeRef><bpmn:flowNodeRef>E1</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>
+      <bpmn:task id="A" name="A" /><bpmn:endEvent id="E1" name="Rechnungspruefungsabschluss" /></bpmn:process>`;
+    const label = '<bpmndi:BPMNLabel><dc:Bounds x="23" y="240" width="190" height="14" /></bpmndi:BPMNLabel>';
+    const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L', 30, 0, 570, 300, ' isHorizontal="true"')}${sh('A', 480, 40, 100, 80)}<bpmndi:BPMNShape id="E1_di" bpmnElement="E1"><dc:Bounds x="100" y="200" width="36" height="36" />${label}</bpmndi:BPMNShape>`;
+    const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
+    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['E1'], to: 'A', axis: 'column' }], { dryRun: true });
+    const s = shapes(await Doc.fromXml(r.xml));
+    const labelRight = s.get('E1')!.label!.x + s.get('E1')!.label!.width;
+    expect(labelRight).toBeGreaterThan(600);
+    expect(s.get('Pool')!.bounds.x + s.get('Pool')!.bounds.width).toBeGreaterThanOrEqual(labelRight + 5);
+    expect(s.get('L')!.bounds.x + s.get('L')!.bounds.width).toBe(s.get('Pool')!.bounds.x + s.get('Pool')!.bounds.width);
+    expect(r.layout.metrics!.added.filter((p) => p.kind === 'labelOutsideFrame')).toEqual([]);
+  });
+});
+
+describe('#69 a few px into a lane header do not refuse an alignment', () => {
+  it('align --axis column puts a task 2 px into the lane header; 20 px are still refused', async () => {
+    const process = `<bpmn:process id="P"><bpmn:laneSet id="LS"><bpmn:lane id="L"><bpmn:flowNodeRef>Ev</bpmn:flowNodeRef><bpmn:flowNodeRef>T</bpmn:flowNodeRef><bpmn:flowNodeRef>Ev2</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>
+      <bpmn:startEvent id="Ev" /><bpmn:startEvent id="Ev2" /><bpmn:task id="T" name="T" /></bpmn:process>`;
+    const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L', 30, 0, 570, 300, ' isHorizontal="true"')}${sh('Ev', 90, 40, 36, 36)}${sh('Ev2', 72, 220, 36, 36)}${sh('T', 300, 150, 100, 80)}`;
+    const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
+    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev', axis: 'column' }], { dryRun: true });
+    expect(shapes(await Doc.fromXml(r.xml)).get('T')!.bounds.x).toBe(58);
+    await expect(mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev2', axis: 'column' }], { dryRun: true })).rejects.toMatchObject({ code: 'E_LEAVES_CONTAINER' });
+  });
+});
+
+describe('#62 route refuses a side that points into a boundary event host', () => {
+  it('--exit top from a bottom boundary event is E_INVALID_VALUE; --exit bottom routes', async () => {
+    const r0 = await mutateDoc(
+      Doc.create({ processId: 'P' }),
+      [
+        { op: 'add', kind: 'startEvent', id: 'S' },
+        { op: 'add', kind: 'task', id: 'A', name: 'Work', after: 'S' },
+        { op: 'add', kind: 'endEvent', id: 'E', after: 'A' },
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'TB', on: 'A', timer: 'PT1H' },
+        { op: 'add', kind: 'endEvent', id: 'TE', after: 'TB' },
+      ],
+      { dryRun: true },
+    );
+    const doc = await Doc.fromXml(r0.xml);
+    const flow = doc.outgoing(doc.get('TB')!)[0]!.get<string>('id');
+    await expect(mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'route', id: flow, exit: 'top' }], { dryRun: true })).rejects.toMatchObject({
+      code: 'E_INVALID_VALUE',
+      message: `--exit top would run ${flow} through A: TB sits on the bottom border of its host`,
+    });
+    const ok = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'route', id: flow, exit: 'bottom' }], { dryRun: true });
+    expect(ok.layout.metrics!.added.filter((p) => p.kind === 'through')).toEqual([]);
+  });
+});
+
 describe('#77 a splice pushes only by the room that is missing', () => {
   it('a task added into a wide gap moves the rest by less than a column, keeping one gap', async () => {
     const process = `<bpmn:process id="P">
