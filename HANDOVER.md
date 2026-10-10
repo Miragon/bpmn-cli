@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and step 2: bpmn-cli as design-iq's editing engine)
+# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3: the Camunda 8 profile)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -14,7 +14,9 @@ the change did not touch, and a result equal to the file is not written. The
 same pipeline runs in the browser on strings (`@miragon/bpmn-cli`:
 `applyToXml` and friends; the file helpers are `@miragon/bpmn-cli/node`), with
 host validators and a copy of design-iq's save gate inside the transaction.
-New ids follow the file's id style. A hand-made diagram is kept (new elements
+`validate` (and every write) runs the engine profile of the file's platform:
+Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
+engines. New ids follow the file's id style. A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
@@ -24,7 +26,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1318 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1493 tests (+159 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide  # the cheat sheet an agent reads first
@@ -34,6 +36,84 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## What step 3 changed (2026-10-10): the Camunda 8 profile
+
+Goal: mirror the Camunda 7 work for Camunda 8 (Zeebe), every rule checked
+against Camunda 8.9.22 (REST v2). Fixes #28 (no Camunda 8 rules). Table with
+the findings, the rules and the evidence:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-2026-10-10-camunda-8-profile).
+
+- **Zeebe descriptor as data** (`src/platform/zeebe.ts`): `zeebe-bpmn-moddle`
+  2.0.0 (pinned development dependency) is inlined as
+  `src/platform/zeebe-descriptor.ts` by `tools/gen-camunda-descriptor.mjs`
+  (which now writes both descriptors; `--check`; `test/isomorphic.test.ts`
+  compares both with the installed packages). Never registered with
+  bpmn-moddle. `zeebeType`, `zeebeAllowedOn`, `zeebeContainersOf`,
+  `zeebeNestedOnly`, `zeebeAttr`; corrections where Camunda 8.9 differs
+  (`zeebe:subscription` on bpmn:Message, `zeebe:properties` anywhere,
+  `zeebe:publishMessage`, which the descriptor does not know).
+- **Camunda 8 profile** (`src/platform/c8.ts`, wired in `profile.ts`;
+  `report.ts` counts its findings like Camunda 7's; `validate.ts` drops the
+  lint warnings a C8 finding repeats): 34 codes, 22 `W_C8_DEPLOY_*` (Camunda
+  8 refuses the file), 11 runtime, 1 practice; hints are exact commands
+  (single elements rebuilt with `--replace` and every attribute they keep).
+  Checks executable processes (also ad-hoc content, which Camunda 8
+  validates; a file without an executable process is refused), the root
+  elements they use and the schema rules on the whole file. Timer values
+  (`validDuration`, `validDateTime`, `validCycle`) and the FEEL slips
+  (`feelProblem`: `&&`, `||`, `==`, `!`, `${...}`, single quotes,
+  brackets, a dangling operator; FEEL is not parsed) were decided by
+  deploying 60 timer values and 45 expressions.
+- **Operations**: `new --target camunda8` writes
+  `modeler:executionPlatformVersion="8.9.0"`; `add` / `retype` give a user
+  task of a Camunda 8 file `zeebe:userTask` and a new event definition an id
+  derived from its event (`src/ops/platform.ts`: Camunda 8.9 refuses
+  conditional, compensation and link catch definitions without one); `ext
+  add <id> loop.zeebe:loopCharacteristics` creates the multi-instance loop;
+  a zeebe element where the descriptor says it is not read is
+  `W_MISPLACED_EXTENSION`; `zeebe:adHoc`, `conditionalFilter` and
+  `publishMessage` are kept single (merged); `set <id> zeebe:<attr>` for an
+  attribute of a zeebe element is `E_WRONG_HOST` with the `ext add` (also
+  `loop.zeebe:*`, `zeebe:correlationKey` -> the message's subscription);
+  `retype` names the zeebe content the new kind cannot use.
+  `src/ops/covers.ts` (moved out of retype.ts, re-exported there): an
+  operation warning the profile repeats item by item gives way to the
+  profile findings (retype's summary, the zeebe W_MISPLACED_EXTENSION,
+  `W_DECISION_RESULT_VARIABLE`).
+- **View**: `show` names what a Camunda 8 node does (`job=`,
+  `calledElement=`, `script=`, `form=`, `assignee=` / `candidateGroups=` /
+  `candidateUsers=`, `inputCollection=` ...), a message its correlation key.
+- **Docs and examples**: README "Camunda 8" (settings table, the profile,
+  the evidence, a worked example that deploys and runs), the guide's CAMUNDA
+  8 recipe, `bpmn kinds` section CAMUNDA 8 (`kinds --json` ->
+  `zeebeElements`), every `W_C8_*` code in the catalogue. The ops example
+  and the worked session are valid Camunda 8 now (FEEL condition, `P2D`:
+  the old examples' `PT2D` is no ISO 8601 duration and Camunda 8 refuses
+  it; a job type for every service and send task).
+
+Tests: `test/c8-profile.test.ts` (151 models with Camunda 8's verdict, the
+value checks, the validate output, the Modeler defaults; live engine opt-in
+with `BPMN_C8_ENGINE=<REST v2 root>`, which also runs 7 runtime scenarios),
+`test/c8-ops.test.ts` (set / ext / retype / show, the ops example, the
+hints run through the CLI and, with the engine, deployed). Evidence (outside
+the repository; counts only): the engine suites 332 / 332; 590 probe
+deployments, the profile disagreeing only on two XSD element-order errors
+and four cases the structural validation is stricter about; the 38 real
+Camunda 8 files and 28 scenario files: 0 false deploy findings, 32 / 32
+refused files found, following the hints made all 32 deployable (306
+commands); the edit battery (7 edit types, 459 edits): 0 regressions, the
+profile agrees with the engine on every result, 1,689 / 1,689 extension
+blocks outside the edited elements byte for byte unchanged; the Camunda 7
+live-engine suites unchanged (804 / 804).
+
+Still open from step 3: FEEL is not parsed (only the common slips); the
+profile does not follow variables (an input mapping's local variable read
+by a later gateway); `zeebe:publishMessage` is reported as not run by 8.9
+(drop the rule when Camunda runs it); a file without `<bpmn:outgoing>`
+lists cannot get them for an event-based gateway (reported, no command);
+linked forms, called processes and decisions are not checked against a
+deployment; the core grew by about 90 KB minified / 23 KB gzip.
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
@@ -471,6 +551,9 @@ node bin/bpmn.js metrics <file>                # problems with ids
 tools/render.sh /tmp/png <files>               # look at the result with real bpmn-js
 BASELINE_BIN=<old>/bin/bpmn.js npm run bench   # benchmark against an older build
 npm run fuzz                                   # random walks; see docs/testing.md
+BPMN_C7_ENGINES=<rest>[,<rest>] npx vitest run --no-file-parallelism test/c7-*.test.ts   # Camunda 7 profile vs live engines
+BPMN_C8_ENGINE=<v2 root> npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts      # Camunda 8 profile vs a live engine
+node tools/gen-camunda-descriptor.mjs          # after updating camunda-bpmn-moddle or zeebe-bpmn-moddle
 ```
 
 Rule of thumb: render and look at what you touched; the metrics do not see
@@ -481,10 +564,11 @@ handful of elements (the fuzzer's minimiser tells you which ops matter).
 
 ## What to build next, most valuable first
 
-(Camunda 7 leftovers, smaller than the items below: a Camunda 8 profile
-(`W_C8_*`, mirroring `W_C7_FOREIGN_CONTENT`), the XSD element order in the C7
-profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
-"Still open after the follow-ups" list of the C7 audit.)
+(Camunda 7 / 8 leftovers, smaller than the items below: the XSD element
+order in the C7 profile, the `activiti:` fallback namespace of Camunda 7 /
+CIB seven, a FEEL parser for the Camunda 8 profile (today: the common slips
+only), checking linked forms / called processes / decisions against a
+deployment. See the "Still open" lists of the C7 audit and of step 3.)
 
 1. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
@@ -507,7 +591,9 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
    reports bpmn-js files that list both) and lane inheritance for nodes
    placed next to a node in no lane; batch aliases (`as:`) so that an
    `apply` batch can refer to an element it creates without an explicit id;
-   a Camunda 8 profile (#28); the bundle size if design-iq needs it.
+   the bundle size if design-iq needs it (step 3 added about 90 KB minified
+   for the Camunda 8 profile: a lazily loaded profile per platform would be
+   the lever).
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
@@ -530,6 +616,18 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
   `activiti:` is not modelled; a text-less field child cannot be told apart
   from a blank one; message start events of two executable pools with one
   message name are not reported (the engines refuse them).
+
+- Camunda 8: FEEL is not parsed (the common slips are); variables are not
+  followed (an input mapping's local variable read by a later gateway passes
+  the profile and fails at run time); `zeebe:publishMessage` is reported as
+  accepted but not run by 8.9; an event-based gateway of a file without
+  `<bpmn:outgoing>` lists is reported but cannot be repaired with a command;
+  forms, called processes and decisions are not checked against a
+  deployment. The old examples' `PT2D` duration is no ISO 8601 duration:
+  Camunda 8 refuses it at deploy; Camunda 7.24, CIB seven 2.2 and Operaton
+  2.1 deploy it, and every instance fails when it reaches the timer
+  (ENGINE-09027, checked on all three); the docs say `P2D` now, the Camunda
+  7 profile does not check timer values yet (a follow-up for it).
 
 - See the open bugs in docs/audit-2026-10.md and its "Open findings from the
   gate".
