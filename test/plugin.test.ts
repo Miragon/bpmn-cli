@@ -445,6 +445,12 @@ describe('the eval suite', () => {
     const write = g('build-order-to-cash', 'no-bpmn-write');
     expect(matches(write, { file_path: '/w/order-to-cash.bpmn', content: '<?xml' })).toBe(true);
     expect(matches(write, { file_path: '/w/ops.json', content: '[]' })).toBe(false);
+    const built = g('build-order-to-cash', 'built-with-the-cli');
+    expect(matches(built, { command: `printf '%s' '[]' | bpmn apply order-to-cash.bpmn - --summary` })).toBe(true);
+    expect(matches(built, { command: 'bpmn new order-to-cash.bpmn --name "Order to cash"' })).toBe(true);
+    expect(matches(built, { command: 'npx -y @miragon/bpmn-cli@1.2.3 add order-to-cash.bpmn userTask "Check order" --after Event_OrderReceived' })).toBe(true);
+    expect(matches(built, { command: 'bpmn show order-to-cash.bpmn' })).toBe(false);
+    expect(matches(built, { command: `cat > order-to-cash.bpmn <<'EOF'\n<bpmn:definitions>` })).toBe(false);
     const validated = g('build-order-to-cash', 'validated');
     expect(matches(validated, { command: 'bpmn validate order-to-cash.bpmn --strict' })).toBe(true);
     expect(matches(validated, { command: 'npx -y @miragon/bpmn-cli@1.2.3 validate order-to-cash.bpmn' })).toBe(true);
@@ -482,4 +488,46 @@ describe('the eval suite', () => {
       }
     }, SLOW);
   }
+
+  it('the graders check structure and colour, not the CLI\'s id style or palette', () => {
+    const grader = (c: string, name: string) => graders(join(EVALS, c)).find((x) => x.name === name)!;
+    // edit-hand-drawn-model: Modeler-style hash ids fail speaking-new-ids only, not the structure graders
+    const edit = SOLUTIONS['edit-hand-drawn-model']!;
+    const dir = workDir('eval-hash-ids');
+    expect(spawnSync('bash', [join(EVALS, 'edit-hand-drawn-model', 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
+    const hashed = edit.script.replaceAll('Activity_ApprovePurchase', 'Activity_1a7mq4e').replaceAll('Event_ApprovalOverdue', 'Event_1x6rt2w');
+    const r = sh(hashed, dir);
+    expect(r.code, `${r.out}${r.err}`).toBe(0);
+    const model = readFileSync(join(dir, edit.file), 'utf8');
+    for (const name of ['approval-inserted', 'timer-reminder', 'reminder-path']) expect(regexPasses(grader('edit-hand-drawn-model', name), model), name).toBe(true);
+    expect(regexPasses(grader('edit-hand-drawn-model', 'speaking-new-ids'), model)).toBe(false);
+    // format-happy-path: any green counts, also one that is not the bpmn-js palette
+    const fmt = SOLUTIONS['format-happy-path']!;
+    const fdir = workDir('eval-other-green');
+    expect(spawnSync('bash', [join(EVALS, 'format-happy-path', 'scaffold.sh')], { cwd: fdir, encoding: 'utf8' }).status).toBe(0);
+    expect(sh(fmt.script, fdir).code).toBe(0);
+    const green = readFileSync(join(fdir, fmt.file), 'utf8');
+    expect(green).toMatch(/#205022/i);
+    const otherGreen = green.replace(/#205022/gi, '#43a047');
+    expect(regexPasses(grader('format-happy-path', 'happy-path-green'), otherGreen)).toBe(true);
+    const rejectionGreen = otherGreen.replace(/(bpmnElement="Activity_SendRejectionLetter")/, '$1 bioc:stroke="#43a047"');
+    expect(regexPasses(grader('format-happy-path', 'rejection-not-green'), rejectionGreen)).toBe(false);
+  }, SLOW);
+
+  it('edit-hand-drawn-model: a "no" path that joins a task without a gateway fails no-implicit-join', () => {
+    const dir = workDir('eval-implicit-join');
+    const caseDir = join(EVALS, 'edit-hand-drawn-model');
+    expect(spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
+    const r = sh(`bpmn apply purchase-request.bpmn - <<'EOF'
+[
+  { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "Activity_ApprovePurchase", "flow": "Flow_0yq6cfd" },
+  { "op": "add", "kind": "exclusiveGateway", "name": "Purchase approved?", "id": "Gateway_PurchaseApproved", "after": "Activity_ApprovePurchase" },
+  { "op": "connect", "source": "Gateway_PurchaseApproved", "target": "Activity_0f3j5ny", "name": "no", "default": true }
+]
+EOF`, dir);
+    expect(r.code, `${r.out}${r.err}`).toBe(0);
+    expect(r.out).toMatch(/W_IMPLICIT_JOIN Activity_0f3j5ny/);
+    const g = graders(caseDir).find((x) => x.name === 'no-implicit-join')!;
+    expect(regexPasses(g, readFileSync(join(dir, 'purchase-request.bpmn'), 'utf8'))).toBe(false);
+  });
 });
