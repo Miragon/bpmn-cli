@@ -1,13 +1,17 @@
 /**
- * Step 3, the verifier's id findings: flows at unnamed gateways name them by
- * their own speaking ids, no context chains, a length cap, transliteration
- * beyond German, speaking definitions ids of `new`. Synthetic models only.
+ * Step 3, the verifier's id and report findings: flows at unnamed gateways
+ * name them by their own speaking ids, no context chains, a length cap,
+ * transliteration beyond German, speaking definitions ids of `new`, and the
+ * warnings delta (platform findings counted, group warnings, a bridge that
+ * takes the removed flow's id, warnings of a batch's final state, `new` with
+ * the platform's findings). Synthetic models only.
  */
 import { describe, expect, it } from 'vitest';
-import { applyToXml, newXml } from '../src/api.js';
+import { applyToXml, newXml, validateXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
 import { cutAt, MAX_ID, transliterate } from '../src/ids.js';
 import { runOps } from '../src/ops/index.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/report.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const ids = (xml: string): string[] => [...xml.matchAll(/<bpmn:\w+ id="([^"]+)"/g)].map((m) => m[1]!);
@@ -193,5 +197,122 @@ describe('bpmn new: a speaking definitions id', () => {
     expect(defsId((await newXml({ processName: 'Order to cash', target: 'camunda8' })).xml)).toBe('Definitions_OrderToCash');
     expect(defsId((await newXml({ processId: 'Process_Billing' })).xml)).toBe('Definitions_Billing');
     expect(defsId((await newXml({})).xml)).toBe('Definitions_1');
+  });
+});
+
+describe('the warnings delta', () => {
+  it("counts the platform profile's findings the file already had", async () => {
+    const base = await newXml({ processName: 'Pf', target: 'camunda8' });
+    const built = await applyToXml(base.xml, [
+      { op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_Pf', as: '$s' },
+      { op: 'add', kind: 'serviceTask', name: 'Charge', after: '$s', as: '$c' },
+      { op: 'add', kind: 'serviceTask', name: 'Ship', after: '$c', as: '$h' },
+      { op: 'add', kind: 'endEvent', name: 'Done', after: '$h' },
+    ]);
+    expect((await validateXml(built.xml)).platform?.counts.deploy).toBe(2);
+    const r = await applyToXml(built.xml, [{ op: 'set', id: 'Event_Done', values: { name: 'Finished' } }]);
+    expect(r.result.warnings.added).toEqual([]);
+    expect(r.result.warnings.preexistingCount).toBe(2);
+    expect(renderSummary(mutationSummary(r.result))).toContain('warnings: 0 added, 0 resolved, 2 already in the file');
+  });
+
+  it('counts what `bpmn validate` lists: a missing start once, as the platform finding', async () => {
+    const base = await newXml({ processName: 'Empty', target: 'camunda8' });
+    const xml = (await applyToXml(base.xml, [{ op: 'add', kind: 'serviceTask', name: 'Charge', in: 'Process_Empty' }])).xml;
+    const listed = (await validateXml(xml)).warnings.map((w) => w.code);
+    expect(listed).toEqual(expect.arrayContaining(['W_C8_DEPLOY_START_EVENT', 'W_C8_DEPLOY_IMPLEMENTATION']));
+    expect(listed).not.toContain('W_NO_START');
+    const r = await applyToXml(xml, [{ op: 'set', id: 'Process_Empty', values: { name: 'Still empty' } }]);
+    expect(r.result.warnings.added).toEqual([]);
+    expect(r.result.warnings.preexistingCount).toBe(listed.length);
+  });
+
+  /** T1, T2, T3 all named "Check" between Go and Done. */
+  async function threeChecks(): Promise<string> {
+    const base = await newXml({ processName: 'Dn' });
+    return (
+      await applyToXml(base.xml, [
+        { op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_Dn', as: '$s' },
+        { op: 'add', kind: 'task', name: 'Check', id: 'T1', after: '$s' },
+        { op: 'add', kind: 'task', name: 'Check', id: 'T2', after: 'T1' },
+        { op: 'add', kind: 'task', name: 'Check', id: 'T3', after: 'T2' },
+        { op: 'add', kind: 'endEvent', name: 'Done', after: 'T3' },
+      ])
+    ).xml;
+  }
+
+  it('a duplicate-name warning whose group only shrank is the old one; gone is resolved; a new member is added', async () => {
+    const xml = await threeChecks();
+    const one = await applyToXml(xml, [{ op: 'remove', ids: ['T3'] }]);
+    expect(one.result.warnings.added.map((w) => w.code)).toEqual([]);
+    expect(one.result.warnings.resolved.map((w) => w.code)).toEqual([]);
+    expect(one.result.warnings.preexistingCount).toBe(1);
+    const both = await applyToXml(xml, [{ op: 'remove', ids: ['T2'] }, { op: 'remove', ids: ['T3'] }]);
+    expect(both.result.warnings.resolved.map((w) => w.code)).toEqual(['W_DUPLICATE_NAME']);
+    const first = await applyToXml(xml, [{ op: 'remove', ids: ['T1'] }]);
+    expect(first.result.warnings.added.map((w) => w.code)).toEqual([]);
+    expect(first.result.warnings.resolved.map((w) => w.code)).toEqual([]);
+    const more = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', id: 'T4', after: 'Event_Go' }]);
+    expect(more.result.warnings.added.map((w) => w.code)).toContain('W_DUPLICATE_NAME');
+    expect(more.result.warnings.resolved.map((w) => w.code)).toEqual([]);
+  });
+
+  it('a bridge that takes the id of the flow it replaces lists every id once: the old flow removed, the taken id changed', async () => {
+    const xml = await threeChecks();
+    const r = await applyToXml(xml, [{ op: 'remove', ids: ['T3'] }]);
+    expect(flowIds(r.xml)).toEqual(expect.arrayContaining(['Flow_CheckToDone']));
+    expect(flowIds(r.xml)).not.toContain('Flow_CheckToCheck_2');
+    const s = mutationSummary(r.result);
+    expect(s.removed).toEqual(['Flow_CheckToCheck_2', 'T3']);
+    expect(s.changed).toEqual(['Flow_CheckToDone']);
+    expect(s.renamed).toBeUndefined();
+    const text = renderMutation(r.result);
+    expect(text).toContain('changed sequenceFlow Flow_CheckToDone - T2 -> Event_Done (bridged T3)\n');
+    expect(text).toContain('removed sequenceFlow Flow_CheckToCheck_2 - T2 -> T3');
+    // the same over two ops of a batch: the flow from T1 that T2's bridge kept takes the id of T3's outgoing flow
+    const two = mutationSummary((await applyToXml(xml, [{ op: 'remove', ids: ['T2'] }, { op: 'remove', ids: ['T3'] }])).result);
+    expect([...two.removed].sort()).toEqual(['Flow_CheckToCheck', 'Flow_CheckToCheck_2', 'T2', 'T3']);
+    expect(two.changed).toEqual(['Flow_CheckToDone']);
+    expect(two.renamed).toBeUndefined();
+  });
+
+  it('a batch reports the warnings of its final state: lanes added before the participant that wraps the process', async () => {
+    const base = await newXml({ processName: 'Demo' });
+    const started = await applyToXml(base.xml, [{ op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Demo' }]);
+    const r = await applyToXml(started.xml, [
+      { op: 'add', kind: 'lane', name: 'Sales', in: 'Process_Demo', members: ['Event_Start'] },
+      { op: 'add', kind: 'participant', name: 'Seller', process: 'Process_Demo' },
+    ]);
+    expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_LANES_WITHOUT_POOL');
+    // without the participant it still holds
+    const lanesOnly = await applyToXml(started.xml, [{ op: 'add', kind: 'lane', name: 'Sales', in: 'Process_Demo', members: ['Event_Start'] }]);
+    expect(lanesOnly.result.warnings.added.map((w) => w.code)).toContain('W_LANES_WITHOUT_POOL');
+  });
+
+  it('a batch drops an implicit join a later op of it resolved', async () => {
+    const base = await newXml({ processName: 'Join' });
+    const built = await applyToXml(base.xml, [
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Join', as: '$s' },
+      { op: 'split', after: '$s', kind: 'parallelGateway', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Left' }] }, { nodes: [{ kind: 'task', name: 'Right' }] }] },
+      { op: 'add', kind: 'endEvent', name: 'Done', after: 'Activity_Left' },
+    ]);
+    const join = [
+      { op: 'connect', source: 'Activity_Right', target: 'Event_Done', as: '$right' },
+      { op: 'add', kind: 'parallelGateway', id: 'Gateway_Sync', flow: 'Flow_LeftToDone' },
+      { op: 'set', id: '$right', values: { target: 'Gateway_Sync' } },
+    ];
+    expect((await applyToXml(built.xml, join.slice(0, 1))).result.warnings.added.map((w) => w.code)).toContain('W_IMPLICIT_JOIN');
+    const r = await applyToXml(built.xml, join);
+    expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_IMPLICIT_JOIN');
+  });
+
+  it('new reports the platform findings an edit would, and the next edit resolves what new showed', async () => {
+    const base = await newXml({ processName: 'Order', target: 'camunda8' });
+    const shown = base.result.warnings.added.map((w) => w.code);
+    expect(shown).toContain('W_C8_DEPLOY_START_EVENT');
+    expect(shown).not.toContain('W_NO_START');
+    const r = await applyToXml(base.xml, [{ op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_Order' }]);
+    expect(r.result.warnings.resolved.map((w) => w.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
+    expect(shown).toEqual(expect.arrayContaining(r.result.warnings.resolved.map((w) => w.code)));
   });
 });

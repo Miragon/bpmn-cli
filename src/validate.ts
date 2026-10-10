@@ -791,8 +791,7 @@ export function withProfile(result: ValidationResult, report: ProfileReport, sho
  * only the findings the change introduced (`before` is the run before the
  * ops); `result.platform` lists them with the resolved ones and the totals.
  */
-export function withProfileChanges(doc: Doc, result: ValidationResult, before: ProfileBaseline, choice: PlatformChoice = 'auto'): ValidationResult {
-  const after = runProfile(doc, choice);
+export function withProfileChanges(doc: Doc, result: ValidationResult, before: ProfileBaseline, choice: PlatformChoice = 'auto', after: ProfileReport = runProfile(doc, choice)): ValidationResult {
   const delta = profileDelta(doc, before, after);
   return withProfile(result, after, delta.added, delta);
 }

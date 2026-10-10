@@ -13,6 +13,25 @@ export interface Change {
   detail?: string;
 }
 
+/** An id an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds). */
+export interface Rename {
+  from: string;
+  to: string;
+  /** what the old id named: the flow's old ends (`A -> B`) */
+  was?: string;
+  /**
+   * `to` was the id of an element the same change removed (a bridge takes
+   * the id of the flow it replaces): by id, `from` is removed and `to`
+   * changed, so the change lists each id once and no rename
+   */
+  takeover?: true;
+}
+
+/** ` (renamed from <old>: ...)`, the detail a change entry gets when followEnds renamed the flow. */
+export function renamedNote(old: string | undefined): string {
+  return old ? ` (renamed from ${old}: its id named its old ends)` : '';
+}
+
 export class ChangeSet {
   created: Change[] = [];
   changed: Change[] = [];
@@ -21,7 +40,7 @@ export class ChangeSet {
   /** human-readable remarks, e.g. "inserted between A and B" */
   notes: string[] = [];
   /** ids an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds): earlier entries name the new id */
-  renames: Array<{ from: string; to: string }> = [];
+  renames: Rename[] = [];
   /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/aliases.ts): the element itself */
   bindings: Array<{ alias: string; el: El }> = [];
 
@@ -50,11 +69,28 @@ export class ChangeSet {
     return this;
   }
 
-  /** Records renamed ids: the entries made so far (and later merged ones) name the element by its new id. */
-  rename(renames: Array<{ from: string; to: string }>): this {
+  /**
+   * Records renamed ids: the entries made so far (and later merged ones)
+   * name the element by its new id. A rename onto the id of an element this
+   * change removed is a takeover (Rename.takeover): the removed entry names
+   * the old id (and what it named), the changed entry keeps the id without
+   * the rename note, so every id is listed once.
+   */
+  rename(renames: Rename[]): this {
     for (const r of renames) {
+      const created = this.created.some((c) => c.id === r.from || c.id === r.to);
       for (const c of [...this.created, ...this.changed]) if (c.id === r.from) c.id = r.to;
-      this.renames.push(r);
+      const gone = r.takeover || created ? -1 : this.removed.findIndex((c) => c.id === r.to);
+      if (gone === -1) {
+        this.renames.push(r);
+        continue;
+      }
+      // the id the element had in the file (an earlier op of the batch may have renamed it already)
+      let origin = r.from;
+      for (let i = this.renames.length - 1; i >= 0; i--) if (this.renames[i]!.to === origin && !this.renames[i]!.takeover) origin = this.renames[i]!.from;
+      this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(r.was && origin === r.from ? { detail: r.was } : {}) };
+      for (const c of this.changed) if (c.id === r.to && c.detail) c.detail = c.detail.replace(renamedNote(r.from), '');
+      this.renames.push({ ...r, takeover: true });
     }
     return this;
   }
@@ -66,13 +102,14 @@ export class ChangeSet {
   }
 
   merge(other: ChangeSet): this {
-    this.rename(other.renames);
     this.bindings.push(...other.bindings);
     this.created.push(...other.created);
     for (const c of other.changed) this.change(c);
     this.removed.push(...other.removed);
     this.warnings.push(...other.warnings);
     this.notes.push(...other.notes);
+    // after the entries: a rename onto an id an earlier op removed finds both (a takeover)
+    this.rename(other.renames);
     return this;
   }
 

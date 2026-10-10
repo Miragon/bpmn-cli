@@ -2,7 +2,8 @@
  * Op dispatcher. Every CLI command and `apply` go through here.
  */
 import type { BatchContext, Doc } from '../document.js';
-import { usageError } from '../errors.js';
+import { usageError, type Warning } from '../errors.js';
+import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
@@ -117,7 +118,32 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
     doc.batch = outer;
   }
   all.bindings = [];
+  // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
+  all.warnings = all.warnings.filter((w) => stillHolds(doc, w));
   return { changes: all, ops: resolved, aliases: table.toRecord() };
+}
+
+/**
+ * Whether an op warning that describes a state of the model, not what the
+ * op did, still holds after the batch: W_LANES_WITHOUT_POOL (a later op
+ * added the participant), W_IMPLICIT_SPLIT / W_IMPLICIT_JOIN (a later op
+ * put a gateway in between). Every other warning holds.
+ */
+function stillHolds(doc: Doc, w: Warning): boolean {
+  const el = w.element ? doc.get(w.element) : undefined;
+  switch (w.code) {
+    case 'W_LANES_WITHOUT_POOL': {
+      let process = el?.$parent as El | undefined;
+      while (process && !is(process, 'bpmn:Process')) process = process.$parent as El | undefined;
+      return !!process && !doc.participantOf(process);
+    }
+    case 'W_IMPLICIT_SPLIT':
+      return !!el && !is(el, 'bpmn:Gateway') && doc.outgoing(el).length > 1;
+    case 'W_IMPLICIT_JOIN':
+      return !!el && doc.incoming(el).length > 1;
+    default:
+      return true;
+  }
 }
 
 /** Runs one step of op `i`; an error it throws names the op. */

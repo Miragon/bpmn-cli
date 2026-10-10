@@ -37,7 +37,7 @@ export interface WarningReport {
   added: Warning[];
   /** findings the change resolved (warnings and errors the file had before) */
   resolved: Warning[];
-  /** warnings the file already had and still has, W_PREEXISTING_ERROR included: counted, not repeated */
+  /** warnings the file already had and still has, W_PREEXISTING_ERROR and the platform profile's findings included: counted, not repeated */
   preexistingCount: number;
 }
 
@@ -104,10 +104,19 @@ export function mutationWarnings(result: MutationResult): Warning[] {
   return [...opWarnings(result), ...result.validation.warnings, ...layoutWarnings(result.layout)];
 }
 
-/** old id -> final id of what the ops renamed of the file's elements (a chain A -> B -> C as A -> C); absent without renames. */
+/**
+ * old id -> final id of what the ops renamed of the file's elements (a chain
+ * A -> B -> C as A -> C); absent without renames. A takeover (the id of an
+ * element the change removed, result.ts Rename.takeover) is no rename: the
+ * old id is listed as removed, the taken one as changed.
+ */
 function renamedIds(result: MutationResult): Record<string, string> | undefined {
   const out = new Map<string, string>();
-  for (const { from, to } of result.changes.renames ?? []) {
+  for (const { from, to, takeover } of result.changes.renames ?? []) {
+    if (takeover) {
+      for (const [old, now] of out) if (now === from) out.delete(old);
+      continue;
+    }
     let chained = false;
     for (const [old, now] of out) {
       if (now !== from) continue;
