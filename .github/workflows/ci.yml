@@ -1,5 +1,6 @@
 # Checks every pull request (including release-please's release PRs) and every push to main:
-# typecheck, build, tests, the layout-regression budget and a short seeded fuzz run (`npm run gate`).
+# typecheck, build, tests, the layout-regression budget and a short seeded fuzz run (`npm run gate`),
+# and the manifests of the Claude Code plugin and its marketplace (`claude plugin validate`).
 name: ci
 
 on:
@@ -22,3 +23,19 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run gate
+
+  # plugins/bpmn-cli and .claude-plugin/marketplace.json. Validation is local: no login, no API key.
+  # Claude Code is pinned so that a new release's checks do not fail an unrelated pull request;
+  # bump it from time to time (`npm view @anthropic-ai/claude-code dist-tags`).
+  plugin:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install -g @anthropic-ai/claude-code@2.1.296
+      - run: claude plugin validate --strict plugins/bpmn-cli
+      - run: claude plugin validate --strict .

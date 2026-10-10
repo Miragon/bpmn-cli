@@ -9,3 +9,4 @@ tools/fuzz/out/
 coverage/
 *.tgz
 .claude/worktrees/
+plugins/bpmn-cli/evals/results/
