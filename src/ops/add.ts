@@ -55,7 +55,7 @@
  */
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError } from '../errors.js';
-import { contextOf, kindRequest, type ContextWord, type IdRequest } from '../idstyle.js';
+import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../idstyle.js';
 import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -151,12 +151,13 @@ export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string })
  * What tells an unnamed element apart: its placement (`After <anchor>`,
  * `Before <anchor>`, `After <source of the flow>`, `On <host>`; `In <scope>`
  * for a sub-process, or a pool / process of a file with several), in the
- * words of contextOf (the nearest named anchor, once).
+ * words of anchorContext (the nearest named anchor, once; the kind of an
+ * unnamed anchor it names past, for when the id would repeat the anchor's).
  */
-function placementContext(doc: Doc, op: AddOp): string | undefined {
-  const at = (word: ContextWord, id: string | undefined): string => {
+function placementContext(doc: Doc, op: AddOp): AnchorContext | undefined {
+  const at = (word: ContextWord, id: string | undefined): AnchorContext => {
     const el = id ? doc.get(id) : undefined;
-    return el ? contextOf(word, el) : word;
+    return el ? anchorContext(word, el) : { context: word };
   };
   switch (placementMode(op)) {
     case 'after':
@@ -166,22 +167,26 @@ function placementContext(doc: Doc, op: AddOp): string | undefined {
       return at('Before', op.before);
     case 'flow': {
       const source = doc.get(op.flow!)?.get<El | undefined>('sourceRef');
-      return source ? contextOf('After', source) : undefined;
+      return source ? anchorContext('After', source) : undefined;
     }
     case 'on':
       return at('On', op.on);
     default: {
       const scope = op.in ? doc.get(op.in) : undefined;
       if (!scope) return undefined;
-      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? contextOf('In', scope) : undefined;
+      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? anchorContext('In', scope) : undefined;
     }
   }
 }
 
 /** The id request of a new element of `def` (the --if-absent hint recomputes it); `context` replaces the placement's. */
-function elementRequest(doc: Doc, def: KindDef, trigger: Trigger | undefined, op: AddOp, context?: string): IdRequest {
+function elementRequest(doc: Doc, def: KindDef, trigger: Trigger | undefined, op: AddOp, context?: AnchorContext): IdRequest {
   const where = context ?? placementContext(doc, op);
-  return kindRequest(def, { ...(def.family === 'event' && trigger && trigger !== 'none' ? { trigger } : {}), ...(op.name ? { name: op.name } : {}), ...(where ? { context: where } : {}) });
+  return kindRequest(def, {
+    ...(def.family === 'event' && trigger && trigger !== 'none' ? { trigger } : {}),
+    ...(op.name ? { name: op.name } : {}),
+    ...(where ? { context: where.context, ...(where.anchorKind ? { anchorKind: where.anchorKind } : {}) } : {}),
+  });
 }
 
 const FLOW_NODE_FAMILIES: ReadonlySet<KindDef['family']> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
@@ -333,7 +338,7 @@ function resolveLane(doc: Doc, op: AddOp): El | undefined {
   return lane;
 }
 
-function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: string | undefined): El {
+function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: AnchorContext | undefined): El {
   checkFlowOptions(op);
   const explicitLane = resolveLane(doc, op);
   const id = allocateElementId(doc, elementRequest(doc, def, trigger ?? inferTrigger(op), op, context), op);
@@ -432,7 +437,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
 /* ------------------------------------------------------------------ */
 
 /** Creates one element according to `op` and returns what changed; `idContext` is the context of an unnamed element's id when the placement does not tell it (split: `After <anchor>`). */
-export function addElement(doc: Doc, op: AddOp, idContext?: string): ChangeSet {
+export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): ChangeSet {
   const cs = new ChangeSet();
   const { def, trigger } = resolveKind(op.kind);
 

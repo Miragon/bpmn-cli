@@ -57,14 +57,21 @@
  *  typeRequest / connectionRequest / flowRequest) and the id it wanted
  *  (`base`); an unnamed gateway or activity whose base is taken, or whose
  *  body another id has, first spells out its kind (spelledBase:
- *  Gateway_ParallelAfterCheck); a taken base gets `_2`, `_3` (the
- *  file-learned flow forms stemTo and scopedTo: `2`, `3`), so the same
- *  request on the same document always gives the same id; `id !== base` is W_ID_SUFFIXED (Doc.allocateId
- *  records it). style.derivedBase(req) is that base without allocating
- *  (derivedBases: also the uncut one, for ids written before the cut);
- *  style.joinId(gatewayId) the id of a split's join gateway.
+ *  Gateway_ParallelAfterCheck), then, after an unnamed anchor whose context
+ *  it repeats (IdRequest.anchorKind, anchorContext), names the anchor's
+ *  kind (qualifiedBase: Task_AfterCheckGateway after
+ *  ExclusiveGateway_AfterCheck where the task prefix says the kind); a
+ *  taken base gets `_2`, `_3` (the file-learned flow forms stemTo and
+ *  scopedTo: `2`, `3`), so the same request on the same document always
+ *  gives the same id; `id !== base` is W_ID_SUFFIXED (Doc.allocateId
+ *  records it). A flow whose two ends begin with the same word (the unnamed
+ *  elements after one anchor) keeps each end's last word when the length
+ *  cap cuts it (fitPair), so the ends keep what tells them apart.
+ *  style.derivedBase(req) is that base without allocating (derivedBases:
+ *  also the uncut one, for ids written before the cut); style.joinId(gatewayId)
+ *  the id of a split's join gateway.
  */
-import { camelSlug, cutAt, hasIdWords, isValidId, MAX_ID, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
+import { camelSlug, cutAt, hasIdWords, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
 import { kindOf, triggerOf, type KindDef } from './kinds.js';
 import { is, isBpmnElement, walk, type El } from './model.js';
 
@@ -90,6 +97,14 @@ export interface IdRequest {
    * they are the body of its id
    */
   context?: string;
+  /**
+   * a word for the kind of the unnamed anchor whose context `context`
+   * repeats (anchorContext: `Gateway` for the gateway after Check, whose
+   * context `After Check` an element after it repeats): where the id from
+   * the context alone, or its body, is taken, the context names that anchor
+   * too (`After Check Gateway`), before a suffix
+   */
+  anchorKind?: string;
   /** connections (sequence / message flows): the ids of the ends */
   source?: string;
   target?: string;
@@ -126,7 +141,7 @@ function kindTypeNames(def: KindDef): string[] {
 }
 
 /** The request for an element of a kind of `bpmn kinds`. */
-export function kindRequest(def: KindDef, opts: { trigger?: string; name?: string; context?: string } = {}): IdRequest {
+export function kindRequest(def: KindDef, opts: { trigger?: string; name?: string; context?: string; anchorKind?: string } = {}): IdRequest {
   return { key: def.kind, prefix: def.prefix, typeNames: kindTypeNames(def), ...opts };
 }
 
@@ -366,16 +381,34 @@ function kindLabel(el: El): string {
  * context says its kind first (`On Task AfterCheck`).
  */
 export function contextOf(word: ContextWord, anchor: El): string {
+  return anchorContext(word, anchor).context;
+}
+
+/** The context of an unnamed element (contextOf) and, where it repeats an unnamed anchor's own context, a word for that anchor's kind (IdRequest.anchorKind). */
+export interface AnchorContext {
+  context: string;
+  anchorKind?: string;
+}
+
+/**
+ * contextOf with the kind of the anchor it names past: after or before an
+ * unnamed anchor placed the same way (Gateway_AfterCheck) the context is the
+ * anchor's own (`After Check`), and `anchorKind` (`Gateway`) tells the new
+ * element apart where its id would repeat the anchor's body
+ * (Task_AfterCheckGateway after ExclusiveGateway_AfterCheck in a file whose
+ * task prefix says the kind; IdStyle.next).
+ */
+export function anchorContext(word: ContextWord, anchor: El): AnchorContext {
   const label = labelOf(anchor);
   const id = anchor.get<string | undefined>('id');
   const own = id ? speakingStem(id) : undefined;
-  if (!own || is(anchor, 'bpmn:TextAnnotation') || hasIdWords(anchor.get<string | undefined>('name'))) return `${word} ${label}`;
+  if (!own || is(anchor, 'bpmn:TextAnnotation') || hasIdWords(anchor.get<string | undefined>('name'))) return { context: `${word} ${label}` };
   const parts = contextParts(own);
-  if (!parts) return `${word} ${label}`;
-  if (parts.word === word && (word === 'After' || word === 'Before')) return `${word} ${parts.tail.join(' ')}`;
+  if (!parts) return { context: `${word} ${label}` };
+  if (parts.word === word && (word === 'After' || word === 'Before')) return { context: `${word} ${parts.tail.join(' ')}`, anchorKind: kindLabel(anchor) };
   // the join's label says its kind (Check Join)
-  if (!parts.head.length && label === own) return `${word} ${kindLabel(anchor)} ${label}`;
-  return `${word} ${label}`;
+  if (!parts.head.length && label === own) return { context: `${word} ${kindLabel(anchor)} ${label}` };
+  return { context: `${word} ${label}` };
 }
 
 /**
@@ -746,8 +779,13 @@ export class IdStyle {
     return `${kindWord(req.key, req.trigger, !!context && !spelled)} ${context}`.trim();
   }
 
-  /** The id an element request wants (before collision handling): its name, else its kind and context, after the file's prefix; at most MAX_BASE characters. */
-  private derived(req: IdRequest, spelled = false): string {
+  /**
+   * The id an element request wants (before collision handling): its name,
+   * else its kind and context, after the file's prefix; at most MAX_BASE
+   * characters. `qualified`: the context ends with the anchor's kind
+   * (IdRequest.anchorKind), which a cut of a long context leaves in place.
+   */
+  private derived(req: IdRequest, spelled = false, qualified = false): string {
     const named = hasIdWords(req.name);
     const prefix = this.prefixFor(req);
     if (prefix === '' && named) {
@@ -756,8 +794,16 @@ export class IdStyle {
     }
     // an unnamed element keeps a prefix in a file whose named ids have none
     const p = prefix === '' ? this.prefixFor(req, false) : prefix;
+    const room = Math.max(MAX_BASE - p.length - 1, 8);
     const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled)) || this.bodyOf(kindWord(req.key, req.trigger));
-    return `${p}_${cutAt(body, Math.max(MAX_BASE - p.length - 1, 8))}`;
+    if (qualified && !named && req.anchorKind) return `${p}_${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG))}`;
+    return `${p}_${cutAt(body, room)}`;
+  }
+
+  /** A body with a word appended in the file's case (`AfterCheck` + Gateway -> `AfterCheckGateway`, `after_check_gateway`), the body cut so that the word stays within `max`. */
+  private withWord(body: string, word: string, max: number): string {
+    const tail = this.l.body === 'snake' ? `_${snakeSlug(word)}` : this.l.body === 'pascalSnake' ? `_${pascalSnakeSlug(word)}` : slugify(word);
+    return `${cutAt(body, Math.max(max - tail.length, 8))}${tail}`;
   }
 
   /**
@@ -774,6 +820,18 @@ export class IdStyle {
     const prefix = (this.prefixFor(req) || this.prefixFor(req, false)).toLowerCase();
     if (prefix.includes(word)) return undefined;
     return this.derived(req, true);
+  }
+
+  /**
+   * The id an unnamed element after an unnamed anchor takes where its own id
+   * (or its spelled one) repeats the anchor's: its context ends with the
+   * anchor's kind (`Task_AfterCheckGateway` after `ExclusiveGateway_AfterCheck`,
+   * `Activity_AfterCheckServiceTask` after `Activity_ServiceTaskAfterCheck`);
+   * undefined without IdRequest.anchorKind.
+   */
+  private qualifiedBase(req: IdRequest): string | undefined {
+    if (!req.anchorKind || hasIdWords(req.name) || !nameWords(req.context).length) return undefined;
+    return this.derived(req, false, true);
   }
 
   /** The id a request wants before collision handling (Doc.allocateId reports a different result as W_ID_SUFFIXED). */
@@ -815,12 +873,25 @@ export class IdStyle {
    * different when that one was taken); at most MAX_ID characters. An
    * unnamed gateway or activity whose id is taken, or whose body another
    * element's id has (the unnamed gateway it follows: Gateway_AfterCheck),
-   * first spells out its kind (spelledBase), then takes a suffix.
+   * first spells out its kind (spelledBase), then, after an unnamed anchor
+   * whose context it repeats, names that anchor's kind (qualifiedBase:
+   * Task_AfterCheckGateway): the first of them whose id and body are free,
+   * else the first whose id is free, else a suffix (on the anchor-qualified
+   * id when the base's own id is free but another id has its body).
    */
   next(req: IdRequest, ids: IdRegistry): { id: string; base: string } {
-    const { base, sep } = this.wanted(req);
-    const spelled = this.spelledBase(req);
-    if (spelled && spelled !== base && !ids.has(spelled) && (ids.has(base) || bodyTaken(base, ids))) return { id: spelled, base: spelled };
+    const wanted = this.wanted(req);
+    const { sep } = wanted;
+    let { base } = wanted;
+    const qualified = CONNECTIONS.has(req.key) ? undefined : this.qualifiedBase(req);
+    const others = CONNECTIONS.has(req.key) ? [] : [this.spelledBase(req), qualified].filter((x): x is string => !!x && x !== base);
+    const clash = (id: string): boolean => ids.has(id) || bodyTaken(id, ids);
+    if (others.length && clash(base)) {
+      const pick = others.find((x) => !clash(x)) ?? others.find((x) => !ids.has(x));
+      if (pick) return { id: pick, base: pick };
+      // every form is taken, and the base only by its body: the suffix goes on the form that names the anchor (its flows would name it like the anchor)
+      if (qualified && !ids.has(base)) base = qualified;
+    }
     let id = base;
     for (let n = 2; ids.has(id); n++) {
       const suffix = `${sep}${n}`;
@@ -918,9 +989,25 @@ function bodyTaken(id: string, ids: IdRegistry): boolean {
  */
 function fitPair(a: string, b: string, room: number): [string, string] {
   if (a.length + b.length <= room) return [a, b];
-  const first = cutAt(a, Math.max(Math.floor(room / 2), room - b.length));
-  const second = cutAt(b, room - first.length);
-  return [cutAt(a, room - second.length), second];
+  // ends that begin alike (the unnamed elements after one anchor: after_check_gateway, after_check_gateway_task) differ
+  // at their ends: a cut there would make them read alike, so it cuts inside and keeps each end's last word
+  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
+  return sharePair(a, b, room, first(a) === first(b) ? cutKeepingLast : cutAt);
+}
+
+/** fitPair's share of the room: the first end at least half, the second what is left, the first what the second leaves over. */
+function sharePair(a: string, b: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
+  const first = cut(a, Math.max(Math.floor(room / 2), room - b.length));
+  const second = cut(b, room - first.length);
+  return [cut(a, room - second.length), second];
+}
+
+/** cutAt that keeps the slug's last word (`after_check_order_gateway_task`, 25 -> `after_check_order_task`). */
+function cutKeepingLast(slug: string, max: number): string {
+  if (slug.length <= max) return slug;
+  const m = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
+  if (!m || m[2]!.length + 8 > max) return cutAt(slug, max);
+  return `${cutAt(m[1]!, max - m[2]!.length)}${m[2]}`;
 }
 
 /**

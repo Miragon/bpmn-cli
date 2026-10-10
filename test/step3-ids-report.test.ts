@@ -49,7 +49,7 @@ describe('flows at unnamed gateways name them by their speaking ids', () => {
     expect(new Set(ids(r.xml)).size).toBe(ids(r.xml).length);
   });
 
-  it('unnamed gateways and tasks in a row: the nearest named anchor once, the kind spelled out before a suffix', async () => {
+  it('unnamed gateways and tasks in a row: the nearest named anchor once, the kind spelled out, then the anchor named', async () => {
     const base = await newXml({ processName: 'Row' });
     const start = [
       { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Row', as: '$s' },
@@ -68,14 +68,15 @@ describe('flows at unnamed gateways name them by their speaking ids', () => {
     expect(gw.aliases).toMatchObject({ $g: 'Gateway_AfterCheck', $h: 'Gateway_ParallelAfterCheck', $e: 'Event_EndAfterCheck' });
     expect(gw.flows).toEqual(['Flow_AfterCheckToParallelAfterCheck', 'Flow_CheckToAfterCheck', 'Flow_ParallelAfterCheckToEndAfterCheck', 'Flow_StartToCheck']);
     expect(gw.suffixed).toBe(0);
-    // an unnamed task after the unnamed gateway: its body would be the gateway's (Flow_AfterCheckToAfterCheck), so it says its kind
+    // an unnamed task after the unnamed gateway: its body would be the gateway's (Flow_AfterCheckToAfterCheck), so it says its kind;
+    // the next one would repeat that, so it names its anchor (the Check service task), not the gateway's body again
     const tasks = await run([
       { op: 'add', kind: 'exclusiveGateway', after: '$c', as: '$g' },
       { op: 'add', kind: 'serviceTask', after: '$g', as: '$u' },
       { op: 'add', kind: 'serviceTask', after: '$u', as: '$v' },
     ]);
-    expect(tasks.aliases).toMatchObject({ $g: 'Gateway_AfterCheck', $u: 'Activity_ServiceTaskAfterCheck', $v: 'Activity_AfterCheck' });
-    expect(tasks.flows).toContain('Flow_AfterCheckToServiceTaskAfterCheck');
+    expect(tasks.aliases).toMatchObject({ $g: 'Gateway_AfterCheck', $u: 'Activity_ServiceTaskAfterCheck', $v: 'Activity_AfterCheckServiceTask' });
+    expect(tasks.flows).toEqual(expect.arrayContaining(['Flow_AfterCheckToServiceTaskAfterCheck', 'Flow_ServiceTaskAfterCheckToAfterCheckServiceTask']));
     expect(tasks.suffixed).toBe(0);
     // a split right after an unnamed split: no suffix, the flows of each split and join apart
     const splits = await run([
@@ -105,6 +106,104 @@ describe('flows at unnamed gateways name them by their speaking ids', () => {
     expect(flowBetween(doc, 'Gateway_AfterCheck', 'Activity_Pack')).toBe('Flow_AfterCheckToPack');
     expect(cs.renames).toEqual([expect.objectContaining({ from: 'Flow_GatewayToShip', to: 'Flow_AfterCheckToPack' })]);
     expect(flowBetween(doc, 'Activity_Check', 'Gateway_AfterCheck')).toBe('Flow_CheckToGateway');
+  });
+});
+
+/** Bodies of ids without their prefix: `Task_AfterCheck` and `ExclusiveGateway_AfterCheck` share `AfterCheck`. */
+const body = (id: string): string => id.slice(id.indexOf('_') + 1);
+/** A flow whose two ends read alike (Flow_AfterCheckToAfterCheck, flow_after_checkToAfter_check). */
+const SAME_ENDS = /^[A-Za-z]+_(\w+?)(?:To|_to_)(\w+)$/;
+const sameEnds = (id: string): boolean => {
+  const m = SAME_ENDS.exec(id);
+  return !!m && m[1]!.toLowerCase() === m[2]!.toLowerCase();
+};
+
+/** A file of the older Camunda Modeler: `Task_` for every task, gateways and flows named after their type with a hash. */
+const OLD_MODELER = definitionsXml(`
+    <bpmn:startEvent id="StartEvent_1"><bpmn:outgoing>SequenceFlow_0a1b2c3</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="Task_0k3x9qa" name="Check"><bpmn:incoming>SequenceFlow_0a1b2c3</bpmn:incoming><bpmn:outgoing>SequenceFlow_1d2e3f4</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="Task_1m2n3o4" name="Book"><bpmn:incoming>SequenceFlow_1d2e3f4</bpmn:incoming><bpmn:outgoing>SequenceFlow_0g5h6i7</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="ExclusiveGateway_0p9q8r7" />
+    <bpmn:endEvent id="EndEvent_0s1t2u3"><bpmn:incoming>SequenceFlow_0g5h6i7</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="SequenceFlow_0a1b2c3" sourceRef="StartEvent_1" targetRef="Task_0k3x9qa" />
+    <bpmn:sequenceFlow id="SequenceFlow_1d2e3f4" sourceRef="Task_0k3x9qa" targetRef="Task_1m2n3o4" />
+    <bpmn:sequenceFlow id="SequenceFlow_0g5h6i7" sourceRef="Task_1m2n3o4" targetRef="EndEvent_0s1t2u3" />`);
+
+/** snake_case bodies with `task_` for every task. */
+const SNAKE = definitionsXml(`
+    <bpmn:startEvent id="startEvent_order_received" name="Order received"><bpmn:outgoing>flow_1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="task_check_order" name="Check order"><bpmn:incoming>flow_1</bpmn:incoming><bpmn:outgoing>flow_2</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="task_book_order" name="Book order"><bpmn:incoming>flow_2</bpmn:incoming></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_1" sourceRef="startEvent_order_received" targetRef="task_check_order" />
+    <bpmn:sequenceFlow id="flow_2" sourceRef="task_check_order" targetRef="task_book_order" />`);
+
+describe('unnamed elements in a row where the prefix says the kind (Task_, task_)', () => {
+  const run = async (xml: string, ops: unknown[]) => {
+    const r = await applyToXml(xml, ops, { layout: false });
+    const before = new Set(ids(xml));
+    const fresh = ids(r.xml).filter((id) => !before.has(id));
+    return { aliases: r.result.aliases ?? {}, fresh, flows: flowIds(r.xml).filter((id) => !before.has(id)), suffixed: r.result.warnings.added.filter((w) => w.code === 'W_ID_SUFFIXED') };
+  };
+  const nodes = (fresh: string[], flows: string[]): string[] => fresh.filter((id) => !flows.includes(id));
+
+  it('a task after an unnamed gateway and the next task get bodies of their own: each names its anchor, no suffix', async () => {
+    const r = await run(OLD_MODELER, [
+      { op: 'add', kind: 'exclusiveGateway', after: 'Task_0k3x9qa', as: '$g' },
+      { op: 'add', kind: 'task', after: '$g', as: '$u' },
+      { op: 'add', kind: 'task', after: '$u', as: '$v' },
+    ]);
+    // before: Task_AfterCheck (the gateway's body: SequenceFlow_AfterCheckToAfterCheck) and Task_AfterCheck_2 with W_ID_SUFFIXED
+    expect(r.aliases).toMatchObject({ $g: 'ExclusiveGateway_AfterCheck', $u: 'Task_AfterCheckGateway', $v: 'Task_AfterCheckGatewayTask' });
+    expect(r.flows).toEqual(expect.arrayContaining(['SequenceFlow_AfterCheckToAfterCheckGateway', 'SequenceFlow_AfterCheckGatewayToAfterCheckGatewayTask']));
+    expect(r.suffixed).toEqual([]);
+    const bodies = nodes(r.fresh, r.flows).map(body);
+    expect(new Set(bodies).size).toBe(bodies.length);
+    for (const id of r.flows) expect(sameEnds(id)).toBe(false);
+  });
+
+  it('the same in a snake_case file, and after a task whose name gives no id words', async () => {
+    const snake = await run(SNAKE, [
+      { op: 'add', kind: 'exclusiveGateway', after: 'task_check_order', as: '$g' },
+      { op: 'add', kind: 'task', after: '$g', as: '$u' },
+      { op: 'add', kind: 'task', after: '$u', as: '$v' },
+    ]);
+    expect(snake.aliases).toMatchObject({ $u: 'task_after_check_order_gateway', $v: 'task_after_check_order_gateway_task' });
+    expect(snake.suffixed).toEqual([]);
+    for (const id of snake.flows) expect(sameEnds(id)).toBe(false);
+    // a service task named in CJK and a task named with symbols: both unnamed for their ids, both Task_
+    const tricky = await run(OLD_MODELER, [
+      { op: 'add', kind: 'serviceTask', name: '审批 订单', after: 'Task_0k3x9qa', as: '$c' },
+      { op: 'add', kind: 'task', name: '✓✓✓', after: '$c', as: '$k' },
+    ]);
+    expect(tricky.aliases).toMatchObject({ $c: 'Task_AfterCheck', $k: 'Task_AfterCheckServiceTask' });
+    expect(tricky.suffixed).toEqual([]);
+  });
+
+  it('a long anchor keeps the kind word through the length cut', async () => {
+    const r = await run(OLD_MODELER, [
+      { op: 'add', kind: 'userTask', name: 'Prüfen ob die eingereichten Unterlagen vollständig und fristgerecht vorliegen', after: 'Task_0k3x9qa', as: '$l' },
+      { op: 'add', kind: 'exclusiveGateway', after: '$l', as: '$g' },
+      { op: 'add', kind: 'task', after: '$g', as: '$u' },
+    ]);
+    expect(r.aliases['$u']).toMatch(/^Task_After\w+Gateway$/);
+    for (const id of r.fresh) expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    expect(r.suffixed).toEqual([]);
+  });
+
+  it('W_ID_SUFFIXED stays a signal: a repeated name, and two unnamed tasks that only an index could tell apart', async () => {
+    // the name of a task already in the file
+    const named = await run(OLD_MODELER, [
+      { op: 'add', kind: 'task', name: 'Ship', after: 'Task_0k3x9qa' },
+      { op: 'add', kind: 'task', name: 'Ship', after: 'Task_1m2n3o4' },
+    ]);
+    expect(named.fresh).toEqual(expect.arrayContaining(['Task_Ship', 'Task_Ship_2']));
+    expect(named.suffixed.map((w) => w.element)).toEqual(['Task_Ship_2']);
+    // two unnamed tasks on two branches right after the same unnamed gateway: the second one takes a suffix on the
+    // form that names the gateway, never the gateway's own body (SequenceFlow_AfterCheckToAfterCheck)
+    const branches = await run(OLD_MODELER, [{ op: 'split', after: 'Task_0k3x9qa', kind: 'parallelGateway', branches: [{ nodes: [{ kind: 'task' }] }, { nodes: [{ kind: 'task' }] }] }]);
+    expect(branches.fresh).toEqual(expect.arrayContaining(['Task_AfterCheckGateway', 'Task_AfterCheckGateway_2']));
+    expect(branches.suffixed.map((w) => w.element)).toEqual(['Task_AfterCheckGateway_2']);
+    for (const id of branches.flows) expect(sameEnds(id)).toBe(false);
   });
 });
 

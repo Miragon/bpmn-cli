@@ -16,7 +16,8 @@
  * (cutAt), the same way for the same input.
  */
 
-const MAX_SLUG = 40;
+/** The longest slug of a name or context (an id body before the prefix). */
+export const MAX_SLUG = 40;
 
 /** The longest id the id style generates, a collision suffix included (src/idstyle.ts). */
 export const MAX_ID = 64;
