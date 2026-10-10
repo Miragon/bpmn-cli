@@ -30,6 +30,7 @@ import {
   type RouteOp,
   type SpaceOp,
   type TidyOp,
+  type CompactOp,
   type FlowOptions,
   type MoveOp,
   type Op,
@@ -38,6 +39,7 @@ import {
   type RemoveOp,
   type RetypeOp,
   type SetOp,
+  type Selectors,
   type SplitBranch,
   type SplitOp,
   type TriggerOptions,
@@ -188,9 +190,10 @@ export const MOVE_FIELDS: FieldsOf<MoveOp> = {
 };
 
 export const ORDER_FIELDS: FieldsOf<OrderOp> = {
-  id: ref('Node whose outgoing flows are ordered, or the process / participant / parent lane whose lanes are ordered.', { required: true }),
+  id: ref('Node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered.', { required: true }),
   flows: list('Outgoing flow ids in the wanted top-to-bottom order; unlisted flows follow in their old order.', { minItems: 1 }),
   lanes: list('Lane ids (direct child lanes of `id`) in the wanted top-to-bottom order; unlisted lanes follow in their old order. The diagram bands are reordered too.', { minItems: 1 }),
+  pools: list('Participant ids (pools of the collaboration `id`, black boxes included) in the wanted top-to-bottom order; unlisted pools follow in their old order. The pool bands are reordered with their content, message flows are routed again.', { minItems: 1 }),
 };
 
 export const EXT_FIELDS: FieldsOf<ExtOp> = {
@@ -229,8 +232,16 @@ export const SIDE_VALUES = ['right', 'top', 'bottom', 'left'] as const;
 export const LABEL_SIDE_VALUES = ['above', 'below', 'left', 'right'] as const;
 export const COLOR_VALUES = ['blue', 'orange', 'green', 'red', 'purple', 'default'] as const;
 
+export const SELECTOR_FIELDS: FieldsOf<Selectors> = {
+  path: list('[fromId, toId]: add every node (and, for color, every flow) on the shortest sequence-flow path between them (default flows first on ties).', { minItems: 2 }),
+  via: list('With "path": sequence flows the path must pass, in order (to pick a branch).', { minItems: 1 }),
+  kind: ref('Add every element of this kind (the `find --kind` grammar: endEvent, userTask, startEvent:message, sequenceFlow, ...).'),
+  branch: ref('Add the branch this sequence flow starts: every node only it reaches up to the join (for color also its flows).'),
+};
+
 export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
-  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { required: true, minItems: 1 }),
+  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   rowOf: ref('Row: centre the reference vertically on this element.'),
   below: ref('Row: put the reference one row below this element.'),
   above: ref('Row: put the reference one row above this element.'),
@@ -240,13 +251,15 @@ export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
 };
 
 export const ALIGN_FIELDS: FieldsOf<AlignOp> = {
-  ids: list('Shapes to align (each moves on its own).', { required: true, minItems: 1 }),
+  ids: list('Shapes to align (each moves on its own).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   axis: str('row: same vertical centre (one horizontal line); column: same horizontal centre (one vertical line).', { required: true, values: ['row', 'column'] }),
   to: ref('Reference element that stays (default: the first id).'),
 };
 
 export const COLOR_FIELDS: FieldsOf<ColorOp> = {
-  ids: list('Shapes and connections to colour.', { required: true, minItems: 1 }),
+  ids: list('Shapes and connections to colour.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   color: str('A colour of the bpmn-js colour picker; "default" removes the colour.', { required: true, values: COLOR_VALUES }),
 };
 
@@ -264,11 +277,16 @@ export const ROUTE_FIELDS: FieldsOf<RouteOp> = {
 export const SPACE_FIELDS: FieldsOf<SpaceOp> = {
   after: ref('Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
   below: ref('Insert vertical space below this element (everything starting below it moves down, frames grow).'),
-  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1).' },
+  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1). Negative ("-column", "-row", an integer <= -1) closes up to that much empty space instead (only as far as it is empty).' },
 };
 
 export const TIDY_FIELDS: FieldsOf<TidyOp> = {
   ids: list('Only these shapes (default: every shape of every diagram).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
+};
+
+export const COMPACT_FIELDS: FieldsOf<CompactOp> = {
+  ids: list('Only these frames (pools by participant id, lanes, expanded sub-processes) and what is inside them (default: the whole drawing).', { minItems: 1 }),
 };
 
 /** Field specs per op name (`op` itself is implicit). */
@@ -289,6 +307,7 @@ export const OP_FIELDS: Record<Op['op'], Record<string, FieldSpec>> = {
   route: ROUTE_FIELDS,
   space: SPACE_FIELDS,
   tidy: TIDY_FIELDS,
+  compact: COMPACT_FIELDS,
 };
 
 /** One-line purpose of every op, for schema descriptions and the guide. */
@@ -299,7 +318,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   remove: 'Remove elements with cascade (= `bpmn remove`).',
   retype: 'Change the kind of an element, keeping id, name, flows and extensions (= `bpmn retype`).',
   move: 'Relocate nodes to another place or lane (= `bpmn move`).',
-  order: 'Set the top-to-bottom order of the outgoing flows of a node, or of the lanes of a pool / process / parent lane (= `bpmn order`).',
+  order: 'Set the top-to-bottom order of the outgoing flows of a node, of the lanes of a pool / process / parent lane, or of the pools of a collaboration (= `bpmn order`).',
   ext: 'Add or remove vendor extension elements (= `bpmn ext`).',
   split: 'Macro: split gateway + branches + join gateway in one step (apply only; there is no split command).',
   place: 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).',
@@ -309,6 +328,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   route: 'Diagram only: route one flow again, optionally forcing the exit / entry side (= `bpmn route`).',
   space: 'Diagram only: insert space right of / below an element like the modeler\'s space tool (= `bpmn space`).',
   tidy: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (= `bpmn tidy`, `bpmn layout --tidy`).',
+  compact: 'Diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content, keeping the order and relative positions; never adds a layout problem (= `bpmn compact`).',
 };
 
 const PLACEMENT_KEYS = Object.keys(PLACEMENT_FIELDS) as Array<keyof Placement>;
@@ -420,12 +440,12 @@ function checkStringList(ctx: Ctx, key: string, spec: FieldSpec, value: unknown)
   return out;
 }
 
-/** "column" | "row" | a positive integer (a string of digits is converted). */
-function checkSize(ctx: Ctx, key: string, value: unknown): 'column' | 'row' | number {
-  if (value === 'column' || value === 'row') return value;
-  if (typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1) return Number(value);
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value;
-  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), got ${describe(value)}`);
+/** "column" | "row" | "-column" | "-row" | a non-zero integer (a string of digits is converted). */
+function checkSize(ctx: Ctx, key: string, value: unknown): SpaceOp['by'] & {} {
+  if (value === 'column' || value === 'row' || value === '-column' || value === '-row') return value;
+  if (typeof value === 'string' && /^-?\d+$/.test(value) && Number(value) !== 0) return Number(value);
+  if (typeof value === 'number' && Number.isInteger(value) && value !== 0) return value;
+  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), or "-column", "-row" or a negative integer to close space, got ${describe(value)}`);
 }
 
 function checkMap(ctx: Ctx, key: string, value: unknown): Record<string, string> {
@@ -601,6 +621,16 @@ function checkGroups(ctx: Ctx, obj: Record<string, unknown>, groups: string[][],
   if (!presentKeys(obj, groups.flat()).length) throw fail(ctx, atLeastOne);
 }
 
+const hasSelector = (obj: Record<string, unknown>): boolean => presentKeys(obj, ['path', 'kind', 'branch']).length > 0;
+
+/** Format ops with selectors: ids and / or a selector (`needed`), `path` is two ids, `via` only with `path`. */
+function checkSelection(ctx: Ctx, obj: Record<string, unknown>, needed: boolean): void {
+  if (needed && obj['ids'] === undefined && !hasSelector(obj)) throw fail(ctx, 'give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["Event_Start","Event_Done"],"color":"green"}.');
+  const path = obj['path'] as string[] | undefined;
+  if (path && path.length !== 2) throw fail(ctx, `"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["Event_Start", "Event_Done"], "via": ["Flow_Yes"].');
+  if (obj['via'] !== undefined && !path) throw fail(ctx, '"via" needs "path"');
+}
+
 function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
   const out = checkFields(ctx, raw, OP_FIELDS[name]);
   switch (name) {
@@ -635,26 +665,33 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
       checkKind(ctx, out, 'gateway');
       break;
     case 'order': {
-      const both = out['flows'] !== undefined && out['lanes'] !== undefined;
-      if (both || (out['flows'] === undefined && out['lanes'] === undefined)) {
-        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node) or "lanes" (lanes of a pool / process / parent lane)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]} or {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]}.');
+      const given = ['flows', 'lanes', 'pools'].filter((k) => out[k] !== undefined);
+      if (given.length !== 1) {
+        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_1","pools":["Participant_Customer","Participant_X"]}.');
       }
       break;
     }
     case 'place':
+      checkSelection(ctx, out, true);
       checkGroups(ctx, out, PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before")');
       break;
     case 'align':
-      if ((out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      checkSelection(ctx, out, true);
+      if (!hasSelector(out) && (out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      break;
+    case 'color':
+      checkSelection(ctx, out, true);
+      break;
+    case 'tidy':
+      checkSelection(ctx, out, false);
       break;
     case 'space':
       checkGroups(ctx, out, [['after', 'below']], 'give "after" (horizontal space right of an element) or "below" (vertical space below it)');
       break;
     case 'remove':
-    case 'color':
     case 'label':
     case 'route':
-    case 'tidy':
+    case 'compact':
       break;
   }
   return { op: name, ...out } as unknown as Op;
@@ -717,11 +754,14 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
     case 'nodes':
       return { type: 'array', items: { $ref: '#/$defs/node' }, ...d };
     case 'size':
-      return { oneOf: [{ type: 'string', enum: ['column', 'row'] }, { type: 'integer', minimum: 1 }], ...d };
+      return { oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }], ...d };
   }
 }
 
 /** JSON-schema rules: at most one key per group, at least one key overall. */
+/** JSON-schema rule of place / align / color: ids and / or a selector. */
+const NAMED = { anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) };
+
 const groupRules = (groups: string[][]): unknown[] => [
   ...groups.flatMap((g) => g.flatMap((a, i) => g.slice(i + 1).map((b) => ({ not: { required: [a, b] } })))),
   { anyOf: groups.flat().map((k) => ({ required: [k] })) },
@@ -764,7 +804,7 @@ function buildSchema(): Record<string, unknown> {
       remove: objectSchema(REMOVE_FIELDS, { op: 'remove', description: OP_DESCRIPTIONS.remove }),
       retype: objectSchema(RETYPE_FIELDS, { op: 'retype', description: OP_DESCRIPTIONS.retype }),
       move: objectSchema(MOVE_FIELDS, { op: 'move', description: OP_DESCRIPTIONS.move, allOf: [...placementRules(), defaultRule(), { anyOf: [...PLACEMENT_KEYS.map((k) => ({ required: [k] })), { required: ['lane'] }] }] }),
-      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }] }] }),
+      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }, { required: ['pools'] }] }] }),
       ext: objectSchema(EXT_FIELDS, {
         op: 'ext',
         description: OP_DESCRIPTIONS.ext,
@@ -774,13 +814,14 @@ function buildSchema(): Record<string, unknown> {
         ],
       }),
       split: objectSchema(SPLIT_FIELDS, { op: 'split', description: OP_DESCRIPTIONS.split }),
-      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: groupRules(PLACE_GROUPS) }),
-      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [{ anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }] }] }),
-      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color }),
+      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: [NAMED, ...groupRules(PLACE_GROUPS)] }),
+      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [NAMED, { anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }, { required: ['path'] }, { required: ['kind'] }, { required: ['branch'] }] }] }),
+      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color, allOf: [NAMED] }),
       label: objectSchema(LABEL_FIELDS, { op: 'label', description: OP_DESCRIPTIONS.label }),
       route: objectSchema(ROUTE_FIELDS, { op: 'route', description: OP_DESCRIPTIONS.route }),
       space: objectSchema(SPACE_FIELDS, { op: 'space', description: OP_DESCRIPTIONS.space, allOf: [{ oneOf: [{ required: ['after'] }, { required: ['below'] }] }] }),
       tidy: objectSchema(TIDY_FIELDS, { op: 'tidy', description: OP_DESCRIPTIONS.tidy }),
+      compact: objectSchema(COMPACT_FIELDS, { op: 'compact', description: OP_DESCRIPTIONS.compact }),
       branch: objectSchema(BRANCH_FIELDS, { description: 'One branch of a split: flow options of the gateway -> first node flow, then the nodes.', allOf: [defaultRule()] }),
       node: objectSchema(NODE_FIELDS, { description: 'A node inside a split branch: an add op without placement (it is chained after the previous node).', allOf: [defaultRule()] }),
     },

@@ -30,6 +30,23 @@
  *                      semantically, overlapping by more than 1 px both ways
  *      degenerateEdge  a BPMNEdge with fewer than 2 waypoints or of zero
  *                      length
+ *  - QUALITY_KEYS are soft drawing-quality kinds the harness does not
+ *    measure either (weights below 6, so the bench and the fuzzer never count
+ *    them as hard):
+ *      backwardFlow      a sequence flow whose target's centre lies left of
+ *                        its source's left border, unless the target reaches
+ *                        the source again (a loop return); sequence flows and
+ *                        boundary events (host -> event) form the graph
+ *      segmentOverlap    two sequence flows into the same target running on
+ *                        top of each other for more than 20 px (a shared
+ *                        final segment: they merge before the target; a
+ *                        common first segment of a fork does not count)
+ *      labelOutsideFrame the label of a named event, gateway, data object /
+ *                        store or sequence flow reaching out of its home
+ *                        frame: the expanded sub-process it lives in, else
+ *                        the pool of its process (2 px tolerance)
+ *      messageLabelFar   a named message flow whose label is more than 50 px
+ *                        away from its line
  *  - `through` uses a real segment-rectangle test (an axis-parallel segment:
  *    the same as its bounding box); labelOnLine and msgThroughPool keep the
  *    harness's bounding-box test.
@@ -46,9 +63,12 @@
  *      edgeLeavesLane [flow, lane]             edgeOutside  [flow, participant | subProcess]
  *      msgThroughPool [messageFlow, participant]
  *      laneGap        [lane, participant]      failed       []
+ *      backwardFlow   [flow, source, target]   segmentOverlap [flowA, flowB, shared node]
+ *      labelOutsideFrame [labelOwner, frame]   messageLabelFar [messageFlow]
  *    `detail` carries the label variant ('label on shape' | 'label on label'),
  *    the lane side ('top' | 'bottom'), the collinear length of a parallel run
- *    ('35px') or the failure message.
+ *    or a segment overlap ('35px'), the distance of a far message label
+ *    ('80px') or the failure message.
  *  - `failed` only comes from import warnings, which layoutProblemsOfXml (or a
  *    caller passing `importWarnings`) reports; the harness additionally uses it
  *    for a crashed layout command.
@@ -63,6 +83,9 @@ import type { Box, Point } from '../layout/types.js';
 
 /** structural defects the regression harness does not measure (see contract) */
 export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge'] as const;
+
+/** soft drawing-quality kinds the regression harness does not measure (see contract) */
+export const QUALITY_KEYS = ['backwardFlow', 'segmentOverlap', 'labelOutsideFrame', 'messageLabelFar'] as const;
 
 export const KEYS = [
   'crossings',
@@ -84,13 +107,17 @@ export const KEYS = [
   'edgeOutside',
   'msgThroughPool',
   'laneGap',
+  'backwardFlow',
+  'segmentOverlap',
+  'labelOutsideFrame',
+  'messageLabelFar',
   'failed',
 ] as const;
 
 export type MetricKey = (typeof KEYS)[number];
 
 /** the kinds of the regression harness (tools/layout-regress.mjs), in its order */
-export const HARNESS_KEYS: readonly MetricKey[] = KEYS.filter((k) => !(EXTRA_KEYS as readonly string[]).includes(k));
+export const HARNESS_KEYS: readonly MetricKey[] = KEYS.filter((k) => !(EXTRA_KEYS as readonly string[]).includes(k) && !(QUALITY_KEYS as readonly string[]).includes(k));
 
 export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   crossings: 5,
@@ -112,6 +139,10 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   edgeOutside: 4,
   msgThroughPool: 5,
   laneGap: 2,
+  backwardFlow: 3,
+  segmentOverlap: 2,
+  labelOutsideFrame: 2,
+  messageLabelFar: 1,
   failed: 50,
 };
 
@@ -258,6 +289,8 @@ interface Semantics {
   poolOf: Map<string, El>;
   /** ids that need DI (only those of the laid-out processes) */
   need: Set<string>;
+  /** flow node id -> the nodes it leads to (sequence flows, host -> boundary event) */
+  next: Map<string, string[]>;
 }
 
 function collectLanes(lanes: El[], laneOf: Map<string, El>): void {
@@ -271,6 +304,13 @@ function collectLanes(lanes: El[], laneOf: Map<string, El>): void {
   }
 }
 
+function link(sem: Semantics, from: string | undefined, to: string | undefined): void {
+  if (!from || !to) return;
+  const list = sem.next.get(from);
+  if (list) list.push(to);
+  else sem.next.set(from, [to]);
+}
+
 function collectScope(scope: El, sem: Semantics): void {
   for (const fe of elsOf(scope, 'flowElements')) {
     const id = idOf(fe);
@@ -280,6 +320,8 @@ function collectScope(scope: El, sem: Semantics): void {
       if (drawn) sem.need.add(id);
     }
     if (is(fe, 'bpmn:SubProcess')) collectScope(fe, sem);
+    if (is(fe, 'bpmn:SequenceFlow')) link(sem, idOf(raw(fe, 'sourceRef')), idOf(raw(fe, 'targetRef')));
+    if (is(fe, 'bpmn:BoundaryEvent')) link(sem, idOf(raw(fe, 'attachedToRef')), id);
     for (const da of [...elsOf(fe, 'dataInputAssociations'), ...elsOf(fe, 'dataOutputAssociations')]) {
       const daId = idOf(da);
       if (daId) sem.need.add(daId);
@@ -320,7 +362,7 @@ function dropUnlaidProcesses(roots: El[], sem: Semantics): void {
 }
 
 function semantics(defs: El): Semantics {
-  const sem: Semantics = { parentOf: new Map(), laneOf: new Map(), poolOf: new Map(), need: new Set() };
+  const sem: Semantics = { parentOf: new Map(), laneOf: new Map(), poolOf: new Map(), need: new Set(), next: new Map() };
   const roots = elsOf(defs, 'rootElements');
   for (const root of roots) {
     if (is(root, 'bpmn:Process')) collectScope(root, sem);
@@ -684,6 +726,122 @@ function checkDegenerate({ edges, add }: PlaneCtx): void {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* drawing quality (QUALITY_KEYS)                                       */
+/* ------------------------------------------------------------------ */
+
+/** `to` is reachable from `from` along sequence flows (and host -> boundary event). */
+function reaches(sem: Semantics, from: string, to: string): boolean {
+  const seen = new Set<string>([from]);
+  const stack = [from];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (cur === to) return true;
+    for (const n of sem.next.get(cur) ?? []) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      stack.push(n);
+    }
+  }
+  return false;
+}
+
+/** sequence flows running backwards (target left of the source) that are not loop returns */
+function checkBackwardFlows({ sem, edges, byId, add }: PlaneCtx): void {
+  for (const e of edges) {
+    if (!is(e.el, 'bpmn:SequenceFlow')) continue;
+    const sid = idOf(raw(e.el, 'sourceRef'));
+    const tid = idOf(raw(e.el, 'targetRef'));
+    const s = lookup(byId, sid);
+    const t = lookup(byId, tid);
+    if (!s || !t || !sid || !tid) continue;
+    if (t.b.x + t.b.width / 2 >= s.b.x) continue;
+    if (reaches(sem, tid, sid)) continue;
+    add('backwardFlow', e.id, [e.id, sid, tid]);
+  }
+}
+
+/**
+ * two sequence flows into one target sharing a line for more than 20 px (they
+ * merge before the target; flows leaving one source on a common first
+ * segment are the usual fork and do not count)
+ */
+function checkSegmentOverlaps({ edges, add }: PlaneCtx): void {
+  const byTarget = new Map<string, Edge[]>();
+  for (const e of edges) {
+    const target = is(e.el, 'bpmn:SequenceFlow') ? idOf(raw(e.el, 'targetRef')) : undefined;
+    if (!target) continue;
+    const list = byTarget.get(target);
+    if (list) list.push(e);
+    else byTarget.set(target, [e]);
+  }
+  for (const [target, list] of byTarget) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i]!;
+        const b = list[j]!;
+        let len = 0;
+        for (const sa of a.segs) for (const sb of b.segs) len += Math.max(0, collinear(sa, sb));
+        if (len > 20) add('segmentOverlap', `${a.id}=${b.id}`, [a.id, b.id, target], `${len}px`);
+      }
+    }
+  }
+}
+
+const externallyLabelled = (el: El): boolean => is(el, 'bpmn:Event') || is(el, 'bpmn:Gateway') || is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference');
+
+/** The frame a node's or flow's label belongs in: its expanded sub-process, else the pool of its process. */
+function labelHome({ sem, byId }: PlaneCtx, id: string): Shape | undefined {
+  const parent = sem.parentOf.get(id);
+  if (!parent) return undefined;
+  if (is(parent, 'bpmn:SubProcess')) {
+    const sub = lookup(byId, idOf(parent));
+    if (sub?.expanded) return sub;
+  }
+  return lookup(byId, idOf(lookup(sem.poolOf, idOf(processOf(parent)))));
+}
+
+/** named labels reaching out of their sub-process / pool */
+function checkLabelFrames(ctx: PlaneCtx): void {
+  const owners: Array<{ id: string; el: El; label?: Box }> = [...ctx.shapes.filter((s) => externallyLabelled(s.el)), ...ctx.edges.filter((e) => is(e.el, 'bpmn:SequenceFlow'))];
+  for (const o of owners) {
+    if (!o.label || !raw<string>(o.el, 'name')?.trim()) continue;
+    const frame = labelHome(ctx, o.id);
+    if (!frame || inside(o.label, { x: frame.b.x - 2, y: frame.b.y - 2, width: frame.b.width + 4, height: frame.b.height + 4 })) continue;
+    ctx.add('labelOutsideFrame', `${o.id}#L@${frame.id}`, [o.id, frame.id]);
+  }
+}
+
+/** distance between a segment and a box (0 when they touch) */
+function segmentBoxDistance([p, q]: Seg, b: Box): number {
+  if (ptIn(p, b) || ptIn(q, b) || cuts([p, q], b, 0)) return 0;
+  const pointBox = (r: Point): number => Math.hypot(Math.max(b.x - r.x, 0, r.x - b.x - b.width), Math.max(b.y - r.y, 0, r.y - b.y - b.height));
+  const pointSeg = (r: Point): number => {
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, ((r.x - p.x) * dx + (r.y - p.y) * dy) / len)) : 0;
+    return Math.hypot(r.x - (p.x + t * dx), r.y - (p.y + t * dy));
+  };
+  const corners: Point[] = [
+    { x: b.x, y: b.y },
+    { x: b.x + b.width, y: b.y },
+    { x: b.x, y: b.y + b.height },
+    { x: b.x + b.width, y: b.y + b.height },
+  ];
+  return Math.min(pointBox(p), pointBox(q), ...corners.map(pointSeg));
+}
+
+/** named message flows whose label is far from their line */
+function checkMessageLabels({ edges, add }: PlaneCtx): void {
+  for (const e of edges) {
+    const label = e.label;
+    if (!is(e.el, 'bpmn:MessageFlow') || !label || !e.segs.length || !raw<string>(e.el, 'name')?.trim()) continue;
+    const d = Math.min(...e.segs.map((s) => segmentBoxDistance(s, label)));
+    if (d > 50) add('messageLabelFar', e.id, [e.id], `${Math.round(d)}px`);
+  }
+}
+
 function analysePlane(plane: unknown, sem: Semantics, seen: Set<string>, add: Add): void {
   const { shapes, edges } = readPlane(plane, seen);
   const ctx: PlaneCtx = {
@@ -706,6 +864,10 @@ function analysePlane(plane: unknown, sem: Semantics, seen: Set<string>, add: Ad
   checkIntrusions(ctx);
   checkFrameOverlaps(ctx);
   checkDegenerate(ctx);
+  checkBackwardFlows(ctx);
+  checkSegmentOverlaps(ctx);
+  checkLabelFrames(ctx);
+  checkMessageLabels(ctx);
 }
 
 /* ------------------------------------------------------------------ */
@@ -752,9 +914,9 @@ export async function layoutProblemsOfXml(xml: string): Promise<LayoutMetrics> {
 }
 
 /** kinds whose ids form an unordered pair */
-const SYMMETRIC = new Set<MetricKey>(['crossings', 'overlaps', 'frameOverlap', 'parallelRun']);
+const SYMMETRIC = new Set<MetricKey>(['crossings', 'overlaps', 'frameOverlap', 'parallelRun', 'segmentOverlap']);
 /** kinds whose detail is a measurement, not part of the identity */
-const MEASURED = new Set<MetricKey>(['parallelRun']);
+const MEASURED = new Set<MetricKey>(['parallelRun', 'segmentOverlap', 'messageLabelFar']);
 
 /** Identity of a problem across two measurements of the same model. */
 export function problemKey(p: LayoutProblem): string {

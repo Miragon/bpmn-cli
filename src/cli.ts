@@ -26,7 +26,7 @@ import { guideShort, guideText, guideTopic, kindsJson, kindsSectionJson, kindsSe
 import { assertKindToken } from './kinds.js';
 import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
-import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
+import type { AddOp, AlignOp, ColorOp, CompactOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
 import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
 import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
@@ -400,7 +400,7 @@ withJsonOptions(
     .option('--depth <n>', 'with --around: flow steps (default 2)', depthArg)
     .option('--inner', 'with --around: also enter sub-processes from outside')
     .option('--context', 'with an id: the element in its context (where, lane, before / after, what catches it, message flows)')
-    .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane, colours, label sides, layout problems'),
+    .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems'),
 ).action(async (file: string, id: string | undefined, o: RawOpts) => {
   await run(async () => {
     const opts: ViewOptions = {
@@ -629,7 +629,7 @@ withMutationOptions(
 withMutationOptions(
   program
     .command('order <file> <id> <ids...>')
-    .description('order the outgoing flows of a node (top-to-bottom branch order), or the lanes of a pool / process / parent lane (top to bottom)'),
+    .description('order the outgoing flows of a node (top-to-bottom branch order), the lanes of a pool / process / parent lane, or the pools of a collaboration (top to bottom)'),
 ).action(async (file: string, nodeId: string, flowIds: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
@@ -716,47 +716,78 @@ async function runFormat(file: string, op: Op, o: RawOpts): Promise<void> {
   }, opts.json);
 }
 
+/** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/diagram/select.ts). */
+function withSelectors(cmd: CommandType, what: string): CommandType {
+  return cmd
+    .option('--path <ids...>', `${what} every node${what === 'colour' ? ' and flow' : ''} on the shortest sequence-flow path <fromId> <toId>`)
+    .option('--via <flowIds...>', 'with --path: flows the path must pass, in order')
+    .option('--kind <kind>', `${what} every element of this kind (find --kind grammar: endEvent, userTask, ...)`)
+    .option('--branch <flowId>', `${what} the branch this sequence flow starts, up to the join`);
+}
+
+/** The ids and selectors of a format command; `need`: ids or a selector are required. */
+function selectorsOf(ids: string[], o: RawOpts, need: boolean): Pick<PlaceOp, 'ids' | 'path' | 'via' | 'kind' | 'branch'> {
+  const path = o['path'] as string[] | undefined;
+  if (path && path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${path.length}`, { hint: 'Put the other ids before --path, or end the list with --: `bpmn color f.bpmn --path Event_Start Event_Done --color green`.' });
+  if (o['via'] && !path) throw usageError('--via needs --path');
+  const out = { ...(ids.length ? { ids } : {}), ...(path ? { path } : {}), ...(o['via'] ? { via: o['via'] as string[] } : {}), ...pick(o, ['kind', 'branch'] as const) };
+  if (need && !ids.length && !path && !out.kind && !out.branch) throw usageError('name the elements: ids and / or --path <fromId> <toId>, --kind <kind>, --branch <flowId>');
+  return out;
+}
+
 withMutationOptions(
-  program
-    .command('place <file> <ids...>')
-    .description('diagram only: move shapes (one rigid group, the first id is the reference) to the row and/or column of another element')
-    .option('--row-of <id>', 'row: centre on the row of this element')
-    .option('--below <id>', 'row: the row below this element')
-    .option('--above <id>', 'row: the row above this element')
-    .option('--column-of <id>', 'column: centre on the column of this element')
-    .option('--after <id>', 'column: right of this element')
-    .option('--before <id>', 'column: left of this element'),
+  withSelectors(
+    program
+      .command('place <file> [ids...]')
+      .description('diagram only: move shapes (one rigid group, the first id is the reference) to the row and/or column of another element')
+      .option('--row-of <id>', 'row: centre on the row of this element')
+      .option('--below <id>', 'row: the row below this element')
+      .option('--above <id>', 'row: the row above this element')
+      .option('--column-of <id>', 'column: centre on the column of this element')
+      .option('--after <id>', 'column: right of this element')
+      .option('--before <id>', 'column: left of this element'),
+    'move',
+  ),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   await run(async () => {
     checkFlagGroups(o, [['rowOf', 'below', 'above'], ['columnOf', 'after', 'before']], 'place needs a row (--row-of, --below, --above) and/or a column (--column-of, --after, --before)');
-    const op: PlaceOp = { op: 'place', ids, ...pick(o, ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'] as const) };
+    const op: PlaceOp = { op: 'place', ...selectorsOf(ids, o, true), ...pick(o, ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'] as const) };
     await runFormat(file, op, o);
   }, !!o['json']);
 });
 
 withMutationOptions(
-  program
-    .command('align <file> <ids...>')
-    .description('diagram only: put shapes on one row (same vertical centre) or one column (same horizontal centre)')
-    .addOption(new Option('--axis <axis>', 'row or column').choices(['row', 'column']).makeOptionMandatory())
-    .option('--to <id>', 'reference element that stays (default: the first id)'),
+  withSelectors(
+    program
+      .command('align <file> [ids...]')
+      .description('diagram only: put shapes on one row (same vertical centre) or one column (same horizontal centre)')
+      .addOption(new Option('--axis <axis>', 'row or column').choices(['row', 'column']).makeOptionMandatory())
+      .option('--to <id>', 'reference element that stays (default: the first id; with only --kind and --axis column: the rightmost one)'),
+    'align',
+  ),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   await run(async () => {
-    if (ids.length < 2 && !o['to']) throw usageError('align needs two ids, or one id and --to <id>');
-    const op: AlignOp = { op: 'align', ids, axis: o['axis'] as AlignOp['axis'], ...pick(o, ['to'] as const) };
+    const sel = selectorsOf(ids, o, true);
+    if (!sel.path && !sel.kind && !sel.branch && ids.length < 2 && !o['to']) throw usageError('align needs two ids, or one id and --to <id>');
+    const op: AlignOp = { op: 'align', ...sel, axis: o['axis'] as AlignOp['axis'], ...pick(o, ['to'] as const) };
     await runFormat(file, op, o);
   }, !!o['json']);
 });
 
 withMutationOptions(
-  program
-    .command('color <file> <ids...>')
-    .alias('colour')
-    .description('diagram only: colour shapes and connections (bpmn-js colour picker colours; default removes the colour)')
-    .addOption(new Option('--color <color>', COLOR_VALUES.join(' | ')).choices([...COLOR_VALUES]).makeOptionMandatory()),
+  withSelectors(
+    program
+      .command('color <file> [ids...]')
+      .alias('colour')
+      .description('diagram only: colour shapes and connections (bpmn-js colour picker colours; default removes the colour)')
+      .addOption(new Option('--color <color>', COLOR_VALUES.join(' | ')).choices([...COLOR_VALUES]).makeOptionMandatory()),
+    'colour',
+  ),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
-  const op: ColorOp = { op: 'color', ids, color: o['color'] as ColorOp['color'] };
-  await runFormat(file, op, o);
+  await run(async () => {
+    const op: ColorOp = { op: 'color', ...selectorsOf(ids, o, true), color: o['color'] as ColorOp['color'] };
+    await runFormat(file, op, o);
+  }, !!o['json']);
 });
 
 withMutationOptions(
@@ -786,10 +817,10 @@ withMutationOptions(
     .description('diagram only: insert space right of / below an element (the modeler\'s space tool)')
     .option('--after <id>', 'horizontal space right of this element')
     .option('--below <id>', 'vertical space below this element')
-    .option('--by <amount>', 'column (default for --after), row (default for --below) or pixels', (v: string) => {
-      if (v === 'column' || v === 'row') return v;
-      if (/^\d+$/.test(v) && Number(v) >= 1) return Number(v);
-      throw new InvalidArgumentError('expected column, row or a positive number of pixels');
+    .option('--by <amount>', 'column (default for --after), row (default for --below) or pixels; -column, -row or -<px> closes that much empty space instead', (v: string) => {
+      if (v === 'column' || v === 'row' || v === '-column' || v === '-row') return v;
+      if (/^-?\d+$/.test(v) && Number(v) !== 0) return Number(v);
+      throw new InvalidArgumentError('expected column, row or a number of pixels (negative: -column, -row, -<px> to close space)');
     }),
 ).action(async (file: string, o: RawOpts) => {
   await run(async () => {
@@ -800,9 +831,20 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  program.command('tidy <file> [ids...]').description('diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape)'),
+  withSelectors(program.command('tidy <file> [ids...]').description('diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape)'), 'tidy'),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
-  const op: TidyOp = { op: 'tidy', ...(ids.length ? { ids } : {}) };
+  await run(async () => {
+    const op: TidyOp = { op: 'tidy', ...selectorsOf(ids, o, false) };
+    await runFormat(file, op, o);
+  }, !!o['json']);
+});
+
+withMutationOptions(
+  program
+    .command('compact <file> [ids...]')
+    .description('diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content (default: the whole drawing), keeping the order; never adds a layout problem'),
+).action(async (file: string, ids: string[], o: RawOpts) => {
+  const op: CompactOp = { op: 'compact', ...(ids.length ? { ids } : {}) };
   await runFormat(file, op, o);
 });
 

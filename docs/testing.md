@@ -47,8 +47,8 @@ The fuzzer and the property test check after every step
   standalone measurement, and its `added` list equals the measured difference;
 - **no unreported moves**: in incremental and format-only steps every shape
   whose bounds changed is listed in the result (`placed`, `moved`, ... or the
-  format entries); reshaped connections that are not listed are a warning
-  (`unreportedReroute`, audit bug #61);
+  format entries); reshaped connections that are not listed (`rerouted`, or
+  `reshaped` since step 3) are a warning (`unreportedReroute`, audit bug #61);
 - **determinism**: every n-th step is run a second time on the same input and
   must give the same bytes;
 - **failures stay clean**: no crash (internal error, signal, timeout), no
@@ -73,6 +73,9 @@ kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
 3. else every kind with weight >= 6 except `failed`. For the harness kinds
    this is overlaps, through, missing, outsideLane, outsidePool and
    outsideSub; the frame and degenerate-edge kinds weigh 10 and are hard too.
+   The drawing-quality kinds (`QUALITY_KEYS`: backwardFlow, segmentOverlap,
+   labelOutsideFrame, messageLabelFar) weigh less than 6: soft, reported
+   with the score but never counted as hard defects.
 
 Give a new kind a weight of 6 or more when it is a defect that must never be
 introduced (or export `HARD_KEYS`).
@@ -203,8 +206,10 @@ node tools/fuzz/minimize.mjs tools/fuzz/out/latest/walks/<walk> [--kind 'hard:ov
 - **Generators**: 18 semantic (add after / into a flow / as a branch,
   boundary event with handler, connect, remove, move, lane move, retype,
   rename, split, sub-process with content, expand / collapse, lane, data
-  object, annotation, flow order) and 8 format generators (place variants,
-  align, color, route, label, space, tidy, lane order). `--no-semantic` /
+  object, annotation, flow order) and 11 format generators (place variants,
+  align, color, route, label, space (also closing space), tidy, lane order,
+  compact, pool order, selectors: `color --path`, `align` / `color --kind`,
+  `place --branch`). `--no-semantic` /
   `--no-format` switch groups off.
 - **Executors**: by default each step runs through the built CLI (`bin/bpmn.js`,
   env `BPMN_BIN` for another build) as the equivalent single command, or as

@@ -110,7 +110,7 @@ import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El }
 import { collapsedIds } from './ops/add.js';
 import { reportedImportWarnings } from './ops/decision.js';
 import { runBatch, runOps } from './ops/index.js';
-import { ordersLanes } from './ops/order.js';
+import { ordersLanes, ordersPools } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
@@ -182,6 +182,8 @@ export interface LayoutStatus {
   moved?: string[];
   /** incremental: pre-existing connections that were routed again */
   rerouted?: string[];
+  /** incremental: pre-existing connections stretched or shortened (their ends or bends moved) without being routed again */
+  reshaped?: string[];
   /** DI of removed elements that was deleted */
   pruned?: string[];
   notes?: string[];
@@ -522,7 +524,7 @@ async function moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ x
 function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
   const out: FormatEntry[] = [];
   ops.forEach((op, index) => {
-    if (isFormatOp(op) || (op.op === 'order' && ordersLanes(doc, op))) out.push({ op, index });
+    if (isFormatOp(op) || (op.op === 'order' && (ordersLanes(doc, op) || ordersPools(doc, op)))) out.push({ op, index });
   });
   return out;
 }
@@ -611,6 +613,7 @@ async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: Muta
       placed: report.placed,
       moved: report.moved,
       rerouted: report.rerouted,
+      ...(report.reshaped.length ? { reshaped: report.reshaped } : {}),
       pruned: report.pruned,
       notes: report.notes,
     },

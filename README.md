@@ -16,8 +16,9 @@ redraws.
 
 To change the picture itself the agent uses diagram-only commands that name
 elements instead of coordinates (`place`, `align`, `color`, `label`, `route`,
-`space`, `tidy`, `order` of lanes) and reads the drawing back with
-`show --layout` and `metrics`: formatting without XML.
+`space`, `tidy`, `compact`, `order` of lanes and pools; selectors such as
+`--path <fromId> <toId>` name a whole path at once) and reads the drawing
+back with `show --layout` and `metrics`: formatting without XML.
 
 ```
 $ bpmn new order.bpmn --name "Order handling"
@@ -234,17 +235,20 @@ bpmn retype <file> <id> <kind[:trigger]> [trigger options as in add]        (ali
 bpmn move <file> <id...> [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--lane <laneId>]
 bpmn order <file> <nodeId> <flowId...>
 bpmn order <file> <poolId|processId|laneId> <laneId...>
+bpmn order <file> <collaborationId> <participantId...>
 bpmn ext add <file> <id> <type|path> [attr=value ...] [--body <text>] [--xml <snippet>] [--replace]
 bpmn ext remove <file> <id> <selector|index>
 bpmn ext list <file> <id> [--json]
 bpmn apply <file> [<ops.json> | -]                                           (- = stdin)
-bpmn place <file> <id...> [--row-of <id> | --below <id> | --above <id>] [--column-of <id> | --after <id> | --before <id>]
-bpmn align <file> <id...> --axis row|column [--to <id>]
-bpmn color <file> <id...> --color blue|orange|green|red|purple|default   (alias: colour)
+bpmn place <file> [<id...>] [--row-of <id> | --below <id> | --above <id>] [--column-of <id> | --after <id> | --before <id>] [SELECTORS]
+bpmn align <file> [<id...>] --axis row|column [--to <id>] [SELECTORS]
+bpmn color <file> [<id...>] --color blue|orange|green|red|purple|default [SELECTORS]   (alias: colour)
 bpmn label <file> <id> --side above|below|left|right
 bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]
-bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>]
-bpmn tidy <file> [<id>...]
+bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>|-column|-row|-<px>]
+bpmn tidy <file> [<id>...] [SELECTORS]
+bpmn compact <file> [<poolId|laneId|subProcessId>...]
+  SELECTORS: --path <fromId> <toId> [--via <flowId...>] | --kind <kind> | --branch <flowId>
 bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
@@ -260,7 +264,7 @@ is compact JSON on one line; `--pretty` indents it.
 
 Common options of every mutating command (`new`, `add`, `connect`, `set`,
 `remove`, `retype`, `move`, `order`, `ext add/remove`, `apply`, `place`,
-`align`, `color`, `label`, `route`, `space`, `tidy`, `layout`; `layout`
+`align`, `color`, `label`, `route`, `space`, `tidy`, `compact`, `layout`; `layout`
 always redraws, so it has no layout mode options):
 
 | option | effect |
@@ -358,21 +362,29 @@ characteristics are found by their id too.
 
 `show <file> --layout` prints the drawing instead of the model, still without
 coordinates: per diagram the frames as a tree (pools, lanes, expanded
-sub-processes) and in each frame the flow nodes as rows, `row 1: id, id, ...`
-top to bottom and left to right (centres within a quarter row spacing share a
-row; boundary events follow their host and are not listed), then the
+sub-processes) and in each frame the flow nodes as rows, `row 1: c0 id, c1 id,
+...` top to bottom and left to right (centres within a quarter row spacing
+share a row; boundary events follow their host and are not listed), then the
 coloured elements, the labels that are not on their default side, and the
-layout problems with ids (the same list as `bpmn metrics`). `--json` gives the
-same data (`diagrams[].groups[] {id, kind, name, parent, rows}`, `colors`,
-`labels`, `metrics`).
+layout problems with ids (the same list as `bpmn metrics`). Every node carries
+its column across the whole diagram (`c0` .. `cN`: centres within half a gap
+share a column), so x order can be compared across lanes and pools; the
+`columns:` line names the wide empty gaps between two neighbouring columns
+(more free width than one column of the drawing: room `compact` can close),
+and ` … ` instead of `, ` marks such a gap inside a row (a row that merely
+shares a y with an unrelated cluster). `--json` gives the same data
+(`diagrams[] {id, root, columns, gaps: [{after, width}], groups: [{id, kind,
+name, parent, rows, columns, gaps?: [{row, before}]}]}`, `colors`, `labels`,
+`metrics`).
 
 ```
 $ bpmn show order.bpmn --layout
 diagram BPMNPlane_Collaboration_OrderHandling (Collaboration_OrderHandling)
+  columns: c0..c4
   participant Participant_OrderHandling "Order handling"
     lane Lane_Sales "Sales"
-      row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Event_Done
-      row 2: Activity_ClarifyInvoice, Event_Clarified
+      row 1: c0 Event_OrderReceived, c1 Activity_CheckInvoice, c2 Gateway_InvoiceOk, c3 Activity_BookInvoice, c4 Event_Done
+      row 2: c3 Activity_ClarifyInvoice, c4 Event_Clarified
     lane Lane_Backoffice "Backoffice"
 colors: Activity_CheckInvoice red, Flow_CheckInvoiceToInvoiceOk red
 labels off their default side: Gateway_InvoiceOk below (default above)
@@ -661,7 +673,21 @@ default (`set <flowId> default=true` or `set <gatewayId> default=<flowId>`).
 are lanes): the lanes of a pool (or of its process) or the child lanes of a
 lane, top to bottom; unlisted lanes follow in their old order, a lane of
 another level is refused (`E_NOT_CHILD_LANE`). It rewrites `laneSet.lanes`,
-and a kept drawing gets its bands reordered with their content.
+and a kept drawing gets its bands reordered with their content (a band whose
+members hang out at its bottom, such as a boundary event on the border, grows
+with the pool, so nothing ends up outside it).
+
+`order <collaborationId> <participantId...>` orders the pools (the ids are
+participants, black-box partner pools included; ops JSON `"pools"`): top to
+bottom, unlisted pools follow in their old order, a participant of another
+collaboration is refused (`E_NOT_PARTICIPANT`). It rewrites
+`collaboration.participants`; a kept drawing restacks the pool bands in the
+slots of the old order (each pool keeps its height and x, the gaps between the
+slots stay) with their content and the collaboration-level artifacts drawn in
+them, and routes the message flows again. Pools that are not stacked top to
+bottom keep their places (a note says so). A full redraw (`bpmn layout`)
+orders pools by its own rule (fewest message flows crossing other pools,
+declared order on ties).
 
 ### `ext`
 
@@ -847,7 +873,16 @@ each weighted like an overlap: `frameIntrusion [Activity_A, Activity_Sub]`
 `degenerateEdge [Flow_3]` (a connection with fewer than two distinct
 waypoints). So the score of a drawing can be higher than the harness's.
 `through` uses a real segment-rectangle test (a diagonal association passing
-beside a shape does not count). `--json` gives `{file, score, counts,
+beside a shape does not count). Four soft drawing-quality kinds only the
+library measures (weights below 6: never a hard defect for the bench and the
+fuzzer): `backwardFlow [flow, source, target]` (the target's centre lies left
+of the source, and the target does not lead back to the source: not a loop
+return), `segmentOverlap [flowA, flowB, target]` (two flows into one target
+run on top of each other for more than 20 px: they merge before it; a fork's
+common first segment does not count), `labelOutsideFrame [owner, frame]` (a
+named event, gateway, data or flow label reaching out of its sub-process or
+pool) and `messageLabelFar [messageFlow]` (a message flow label more than
+50 px from its line). `--json` gives `{file, score, counts,
 problems: [{kind, ids, detail?}]}`. Every mutation reports the same
 measurement before and after in its `layout.metrics` block, with the
 problems it added and resolved.
@@ -880,12 +915,13 @@ Every mutating command updates the diagram in one of three modes
 | mode | what happens |
 | --- | --- |
 | `auto` (default) | A file without diagram is drawn from scratch. A drawing that the engine made and nobody changed since (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check) is redrawn in full, so it keeps the best global layout while the CLI owns it. Any other drawing, hand-made in a modeler or changed by a format command (also one that only reroutes a flow or moves a label), is kept: `incremental`. |
-| `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
+| `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool, by the room that is missing (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
 | `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) and the DI ids are carried over by element id (new DI gets the file's id style); positions are not. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why (`layout: ok - incremental (hand-made
 diagram: kept, changes placed locally)`), lists what was placed / moved /
-rerouted / pruned, and compares the layout quality before and after with the
+rerouted / pruned (`--json` also `reshaped`: connections the space tool
+stretched without routing them again), and compares the layout quality before and after with the
 problems added and resolved (`layout.metrics`, see [`metrics`](#metrics)).
 
 Because a format command that changes the geometry (moves a shape, reroutes
@@ -903,18 +939,37 @@ after the semantic ops and the layout, in batch order, all or nothing.
 
 | command / op | effect |
 | --- | --- |
-| `place <id...>` with `--row-of` / `--below` / `--above <id>` and/or `--column-of` / `--after` / `--before <id>` | Move the shapes as one rigid group so the first lands on the row (vertical centre) and/or column (horizontal centre) of another element; `below` / `above` keep one row of the drawing and clear the element, `after` / `before` one gap. Boundary events, labels and the content of an expanded sub-process follow; shapes in the way give way, frames grow, flows are rerouted. |
-| `align <id...> --axis row\|column [--to <id>]` | Put the shapes on one horizontal / vertical centre line, the one of `--to` (default: the first id). Shapes that would land on each other give way along the free axis. |
-| `color <id...> --color blue\|orange\|green\|red\|purple\|default` | The bpmn-js colour picker colours on shapes and connections (`bioc:fill` / `bioc:stroke` / `color:background-color` / `color:border-color`, labels `color:color`); `default` removes them. |
+| `place <id...>` with `--row-of` / `--below` / `--above <id>` and/or `--column-of` / `--after` / `--before <id>` | Move the shapes as one rigid group so the first lands on the row (vertical centre) and/or column (horizontal centre) of another element; `below` / `above` keep one row of the drawing and clear the element, `after` / `before` one gap. Boundary events, labels and the content of an expanded sub-process follow; shapes in the way give way, frames grow (also for a label that reaches past their right or bottom border), flows are rerouted. `place --branch <flowId> --below <id>` moves a whole branch (see selectors below). |
+| `align <id...> --axis row\|column [--to <id>]` | Put the shapes on one horizontal / vertical centre line, the one of `--to` (default: the first id; with only `--kind` and `--axis column`: the rightmost one, so nothing moves left). Shapes that would land on each other give way along the free axis. |
+| `color <id...> --color blue\|orange\|green\|red\|purple\|default` | The bpmn-js colour picker colours on shapes and connections (`bioc:fill` / `bioc:stroke` / `color:background-color` / `color:border-color`, labels `color:color`); `default` removes them. `color --path <fromId> <toId> --color green` colours a whole path. |
 | `label <id> --side above\|below\|left\|right` | The external label of an event, gateway, data object / store or flow on that side (flows: of their longest horizontal / vertical segment), off lines and other labels where possible. |
 | `route <flowId> [--exit <side>] [--entry <side>]` | Route one sequence / message flow again, optionally forcing the side it leaves its source and enters its target by (`--exit bottom --entry bottom` draws a loop below). |
-| `space --after <id> \| --below <id> [--by column\|row\|<px>]` | The space tool: everything starting right of (within the element's pool) / below the element moves by one column / row of the drawing or `<px>`; pools, lanes and the sub-processes holding the element grow, any other expanded sub-process crossing the line moves as a whole (mostly beyond it) or stays. On a lane or pool it makes that frame wider / taller. |
+| `space --after <id> \| --below <id> [--by column\|row\|<px>]` | The space tool: everything starting right of (within the element's pool) / below the element moves by one column / row of the drawing or `<px>`; pools, lanes and the sub-processes holding the element grow, any other expanded sub-process crossing the line moves as a whole (mostly beyond it) or stays. On a lane or pool it makes that frame wider / taller. A negative amount (`--by -column`, `-row`, `-<px>`) closes up to that much of the empty space right of / below the element instead (the drawing's gap stays; on a lane or pool: its own empty right / bottom part, the frame gets smaller); only as far as it is empty (a note says how much), and `E_NO_ROOM` when closing would add a layout problem. |
 | `tidy [<id>...]` (also `bpmn layout --tidy`) | Remove overlaps and gaps < 20 px with minimal moves, keeping the reading order (nothing moves left), default every shape. |
+| `compact [<poolId\|laneId\|subProcessId>...]` | Close the empty rows and columns and shrink the frames to their content, keeping the order and the relative positions: expanded sub-processes first (deepest first, everything outside stays), then the columns of each pool (all its lanes at once), then the rows of each lane (bottom up; the lanes and pools below move up, the pool shrinks; an empty lane keeps 120 px), then the rows between pools; pools that were right-aligned stay aligned. What stays between content is the drawing's gap (columns) or clamp(row spacing - 80, 30, 60) (rows), frames keep 30 px of padding (45 above the content of a sub-process). Message flows do not hold a gap open: their bends and labels in it are squeezed with it. Each strip is closed only when that adds no hard layout problem and does not raise the score, else it stays open (a note names what closing it would have added). With ids: only those frames and what is inside them. |
 | `order <poolId\|processId\|laneId> <laneId...>` | Lanes top to bottom; the bands move with their content. |
+| `order <collaborationId> <participantId...>` | Pools top to bottom (black boxes too); the bands move with their content, message flows are routed again. |
+
+Selectors name many elements at once on `place`, `align`, `color` and
+`tidy`; they add to the ids given (elements are always named by id):
+
+| selector | names |
+| --- | --- |
+| `--path <fromId> <toId> [--via <flowId...>]` | every node (for `color` also every flow) on the shortest sequence-flow path, the default flow of a node first on ties, then the declaration order (the straight continuation); `--via` flows must be on it, in order (to pick a branch). A host leads to its boundary events. |
+| `--kind <kind>` | every element of a kind, in the grammar of `find --kind` (`endEvent`, `userTask`, `startEvent:message`, `sequenceFlow`, ...) |
+| `--branch <flowId>` | what only that flow's branch reaches up to the join: the nodes reachable from its target that no other outgoing flow of its source reaches, following flows that run forward in the drawing (a loop back ends it); for `color` with the flows. `place --branch <flowId> --below <id>` moves the branch as one group. |
+
+A selector that names nothing is `E_NO_MATCH` (no path, no element of the
+kind, nothing on the branch); in ops JSON the keys are `path` (two ids),
+`via`, `kind` and `branch`.
 
 Refusals: a node never leaves its lane, pool or expanded sub-process
-(`E_LEAVES_CONTAINER`; its hint names the lane at the target position:
+(`E_LEAVES_CONTAINER`; up to 10 px into the header of a lane or pool are
+fine, a sub-process's border is the limit; a node is not placed beside the
+sub-process it lives in; the hint names the lane at the target position:
 `move <id> --lane <laneId>` first, or `space --below <laneId>` to make room).
+`route --exit` / `--entry` on a boundary event refuses the side that points
+into its host (`E_INVALID_VALUE`).
 When the shapes in the way cannot give way without moving the reference off
 the requested row / column, a sub-process would have to grow over a
 reference outside it, or the reference's own pool, lane or sub-process would
@@ -928,18 +983,21 @@ process id), a reference on another diagram (inside a collapsed sub-process)
 with `E_DIFFERENT_DIAGRAM`, a task given to `label` with `E_WRONG_KIND`, an
 unnamed element with `E_NO_LABEL`.
 
-Each format op reports `{op, index, moved, rerouted, colored?, labels?,
-notes?}` in `layout.format`, and `layout.metrics` measures the drawing after
-the last of them. A typical agent loop:
+Each format op reports `{op, index, moved, rerouted, reshaped?, colored?,
+labels?, notes?}` in `layout.format` (`reshaped`: connections stretched or
+shortened without being routed again), and `layout.metrics` measures the
+drawing after the last of them. A typical agent loop:
 
 ```
-$ bpmn show order.bpmn --layout                          # rows per lane, colours, problems
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_CheckInvoiceToInvoiceOk Gateway_InvoiceOk --color red
-$ bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column
-$ bpmn place order.bpmn Activity_ClarifyInvoice --below Activity_BookInvoice
+$ bpmn show order.bpmn --layout                                                                   # rows per lane, colours, problems
+$ bpmn color order.bpmn --path Event_OrderReceived Event_Done --color green                       # the happy path
+$ bpmn align order.bpmn --kind endEvent --axis column                                             # every end event in one column
+$ bpmn place order.bpmn --branch Flow_InvoiceOkToClarifyInvoice --below Activity_BookInvoice      # the whole branch, up to the join
 $ bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales
+$ bpmn order order.bpmn Collaboration_OrderHandling Participant_Customer                          # the customer pool on top
+$ bpmn compact order.bpmn                                                                         # close the empty rows / columns
 $ bpmn route order.bpmn Flow_ReminderToRemindCustomer --exit bottom --entry bottom
-$ bpmn metrics order.bpmn                                # no overlaps / through / outsideLane added?
+$ bpmn metrics order.bpmn                                                                         # no overlaps / through / outsideLane added?
 ```
 
 ## Kinds
@@ -1413,8 +1471,9 @@ await applyToXml(xml, ops, { contentRepo: { processIds: ['order', 'billing'], de
 `bpmn apply <file> ops.json` (or `-` for stdin) runs many operations as one
 transaction: the whole batch is validated first, then the semantic ops are
 applied to the model in memory, then it is validated and laid out, then the
-format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, the
-band part of a lane `order`) run on the drawing in batch order, and the file
+format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`,
+`compact`, the band part of a lane or pool `order`) run on the drawing in batch
+order, and the file
 is written once. If any op fails nothing is written and the error names the
 op index (`ops[3] (add): ...`, `"op": 3` in `--json`).
 
@@ -1431,15 +1490,17 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `remove` | `ids` (required list), `bridge` (default true), `bridgeAll`, `withBranch`, `ifExists` |
 | `retype` | `id`, `kind` (required), trigger keys |
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
-| `order` | `id` (required), exactly one of `flows` (outgoing flows of a node) or `lanes` (lanes of a pool / process / parent lane) |
+| `order` | `id` (required), exactly one of `flows` (outgoing flows of a node), `lanes` (lanes of a pool / process / parent lane) or `pools` (participants of the collaboration `id`) |
 | `ext` | `id`, `action` (`add` / `remove`, required), `type` (add: type or path; remove: selector such as `camunda:inputParameter[name=x]`, or an index from `ext list` such as `"2"`, `"loop.0"`, `"definition[1].0"`; a `definition.` / `loop.` / `condition.` prefix addresses the nested element, `definition[<n>].` / `definition[<trigger>].` one of several event definitions), `attrs` (map), `body`, `xml`, `replace`, `index`, `slot` (`definition` / `loop` / `condition` / `definition[<n>]`, the same as the type prefix) |
-| `place` | `ids` (required list; moved as one group, the first is the reference), at most one of `rowOf` / `below` / `above` and at most one of `columnOf` / `after` / `before` (at least one key) |
-| `align` | `ids` (required list), `axis` (`row` / `column`, required), `to` (reference; default the first id; without it two ids are needed) |
-| `color` | `ids` (required list), `color` (`blue` / `orange` / `green` / `red` / `purple` / `default`, required) |
+| `place` | `ids` (list; moved as one group, the first is the reference) and / or selectors, at most one of `rowOf` / `below` / `above` and at most one of `columnOf` / `after` / `before` (at least one key) |
+| `align` | `ids` (list) and / or selectors, `axis` (`row` / `column`, required), `to` (reference; default the first id; without it and without selectors two ids are needed) |
+| `color` | `ids` (list) and / or selectors, `color` (`blue` / `orange` / `green` / `red` / `purple` / `default`, required) |
 | `label` | `id`, `side` (`above` / `below` / `left` / `right`) (required) |
 | `route` | `id` (required), `exit`, `entry` (`right` / `top` / `bottom` / `left`) |
-| `space` | exactly one of `after` / `below`, `by` (`"column"`, `"row"` or pixels) |
-| `tidy` | `ids` (list; default every shape) |
+| `space` | exactly one of `after` / `below`, `by` (`"column"`, `"row"` or pixels; `"-column"`, `"-row"` or negative pixels close space) |
+| `tidy` | `ids` (list; default every shape), selectors |
+| `compact` | `ids` (list of pools, lanes, expanded sub-processes; default the whole drawing) |
+| selectors | `path` (`[fromId, toId]`), `via` (flow ids, with `path`), `kind`, `branch` (a sequence flow id), on `place`, `align`, `color`, `tidy` |
 | `split` | `after` (required), `kind` (gateway, default `exclusiveGateway`), `name`, `id`, `as`, `join` (default true), `joinId`, `joinAs`, `joinName`, `branches` (required): `[{ flowName?, flowId?, condition?, language?, default?, nodes: [ add-like objects without placement, `as` / `flowAs` included ] }]` |
 
 `split` is a macro without CLI counterpart: it places a gateway after the
@@ -1856,9 +1917,11 @@ touched, in the file's own style:
   expect long edges in models with many re-joins, and dotted association lines
   that cross a sequence flow where no free route exists. `--engine auto` uses
   `bpmn-auto-layout@2.0.0-alpha.2` (pinned) as a fallback.
-- The format commands move and grow, they never shrink: frames that became
-  too big after `place` or `space` stay big (`bpmn layout` redraws
-  everything). Groups (`bpmn:Group` boxes) are not frames: shapes may be
+- The format commands grow frames when they need room; `compact` (or
+  `space --by -<amount>`) closes empty rows and columns and shrinks them
+  again, but only strip by strip (rows and columns that are empty across the
+  whole pool / lane band), so a drawing with content spread over many rows
+  shrinks less than a full redraw (`bpmn layout`) would. Groups (`bpmn:Group` boxes) are not frames: shapes may be
   placed into or out of a group's box (a node placed next to an element
   inside a group goes into that group, which grows). Vertical pools and lanes
   (`isHorizontal="false"`) are not supported by the incremental layout and

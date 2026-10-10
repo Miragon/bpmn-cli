@@ -4,7 +4,8 @@
  * `"joinAs"`: its join gateway; the nodes of a split branch take `as` /
  * `flowAs` too), and later ops of the batch use the alias wherever an
  * element id goes (`"after": "$check"`, `"ids": ["$check", "$f"]`, the id of
- * set / ext / retype / order and of the format ops, `values.default` /
+ * set / ext / retype / order (and its flows, lanes, pools) and of the format
+ * ops with their selectors (`path`, `via`, `branch`), `values.default` /
  * `source` / `target` / `lane` of set and the same keys of the `set` map of
  * add and of split nodes, the `lane` of split nodes). Generated ids need not
  * be guessed.
@@ -48,16 +49,18 @@ export const REF_KEYS: Record<Op['op'], readonly string[]> = {
   remove: ['ids'],
   retype: ['id'],
   move: ['ids', 'after', 'before', 'flow', 'in', 'lane'],
-  order: ['id', 'flows', 'lanes'],
+  order: ['id', 'flows', 'lanes', 'pools'],
   ext: ['id'],
   split: ['after'],
-  place: ['ids', 'rowOf', 'below', 'above', 'columnOf', 'after', 'before'],
-  align: ['ids', 'to'],
-  color: ['ids'],
+  // the selectors of place / align / color / tidy (diagram/select.ts) name elements too: path, via, branch
+  place: ['ids', 'path', 'via', 'branch', 'rowOf', 'below', 'above', 'columnOf', 'after', 'before'],
+  align: ['ids', 'path', 'via', 'branch', 'to'],
+  color: ['ids', 'path', 'via', 'branch'],
   label: ['id'],
   route: ['id'],
   space: ['after', 'below'],
-  tidy: ['ids'],
+  tidy: ['ids', 'path', 'via', 'branch'],
+  compact: ['ids'],
 };
 
 /** `set` keys whose value is an element id. */
