@@ -560,8 +560,8 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
     const sw = swallowed();
     const gone = displaced();
     const collided = newOverlaps(plane, snap);
-    const out_ = strayed();
-    return { ok: !sw.length && !gone.length && !collided.length && !out_.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: out_ };
+    const stray = strayed();
+    return { ok: !sw.length && !gone.length && !collided.length && !stray.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: stray };
   };
   const start = saveState(plane);
   let r = attempt(refIds);
