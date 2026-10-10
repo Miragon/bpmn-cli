@@ -2,9 +2,10 @@
 
 Six layers, from fast to thorough (plus the isomorphism check of the
 browser-safe core, see [Isomorphism check](#isomorphism-check), the opt-in
-Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), and
-the opt-in check against design-iq's validator, see
-[design-iq](#design-iq-validator-check)):
+Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), the
+opt-in Camunda 8 engine check, see
+[Engine checks (Camunda 8)](#engine-checks-camunda-8), and the opt-in check
+against design-iq's validator, see [design-iq](#design-iq-validator-check)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -47,8 +48,8 @@ The fuzzer and the property test check after every step
   standalone measurement, and its `added` list equals the measured difference;
 - **no unreported moves**: in incremental and format-only steps every shape
   whose bounds changed is listed in the result (`placed`, `moved`, ... or the
-  format entries); reshaped connections that are not listed are a warning
-  (`unreportedReroute`, audit bug #61);
+  format entries); reshaped connections that are not listed (`rerouted`, or
+  `reshaped` since step 3) are a warning (`unreportedReroute`, audit bug #61);
 - **determinism**: every n-th step is run a second time on the same input and
   must give the same bytes;
 - **failures stay clean**: no crash (internal error, signal, timeout), no
@@ -73,6 +74,9 @@ kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
 3. else every kind with weight >= 6 except `failed`. For the harness kinds
    this is overlaps, through, missing, outsideLane, outsidePool and
    outsideSub; the frame and degenerate-edge kinds weigh 10 and are hard too.
+   The drawing-quality kinds (`QUALITY_KEYS`: backwardFlow, segmentOverlap,
+   labelOutsideFrame, messageLabelFar) weigh less than 6: soft, reported
+   with the score but never counted as hard defects.
 
 Give a new kind a weight of 6 or more when it is a defect that must never be
 introduced (or export `HARD_KEYS`).
@@ -113,6 +117,53 @@ touched, a full redraw keeps every DI start tag, a sticky keeps its text
 when it follows its node), validators see the text-preserving result, the
 design profile runs in memory with a content repository the host names, and
 the file helpers find the repository of the file they write.
+`test/views.test.ts` checks the reading views (`show --around`, `show <id>
+--context`, lanes and message-flow names in `show`, message flows and
+annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`
+and holds a byte budget: on a generated 120-task model the neighbourhood
+stays under 320 bytes per shown node and a tenth of `show`, and does not grow
+with the model. `test/report-delta.test.ts` checks that a result lists only
+the warnings a change added and resolved and counts the others (renames
+followed, floods as one line, `--summary`); `test/cli-views.test.ts` the
+same on the command line, plus compact JSON, stdin / stdout, `guide --short`
+(<= 5 KB), every `guide <topic>`, `kinds --section` and the guide's CAMUNDA 8
+recipe run command by command.
+`test/step3-integration.test.ts` checks the step 3 packages together: an
+`apply` batch that names everything by alias, with the selectors, the pool
+order and `compact` taking aliases; an alias of a flow renamed after its new
+ends followed into a format op, and `E_NOT_FOUND` naming the new id when a
+later op uses the old one; `--summary` with aliases, renamed ids and one line
+per format op; the event definition ids of a Camunda 8 file in the id style;
+`show --around` / `--context` printing each zeebe setting once; the Camunda 8
+profile in the warnings delta; and the strip of a removed node that must not
+pull an expanded sub-process over a shape of another row (found by the gate's
+fuzz campaign on the integrated build).
+The round 1 verifier's findings, each with a test that fails on round 1:
+`test/step3-ids-report.test.ts` (ids and the report: flows at unnamed
+gateways named by their speaking ids (no `_2`), unnamed elements in a row
+(the nearest named anchor once; where the prefix says the kind, `Task_`,
+`task_`, the anchor's kind where an id would repeat the anchor's,
+`Task_AfterCheckGateway`; flow ends that begin alike keep their last word
+when cut), the 64-character cap, transliteration beyond German, the
+definitions id of `new`, and the warnings delta: platform findings counted,
+a shrinking `W_DUPLICATE_NAME`, a bridge that takes over a removed flow's
+id, warnings of a batch's final state, `new` with the platform's findings),
+`test/step3-c8-fixes.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
+`test/views-context.test.ts` (`show <id> --context` on a synthetic shop
+model: every boundary event of the sub-processes around an element, the
+message of a message element with the flows of that message drawn to its
+pool, a message flow's ends, what uses a message / signal / error /
+escalation), `test/format-frames.test.ts` (align / place with selector sets
+and explicit ids never take a shape out of its sub-process, also on the two
+scenarios the fuzzer hit), `test/move-lanes.test.ts` (a node moved into a
+flow between two lanes gets add's lane when it has none, keeps its own
+otherwise and is drawn on a row of it, like `add --lane`) and
+`test/remove-join.test.ts` (a plain remove bridges a merge, refuses a
+parallel / inclusive join); `test/step3-fixes-integration.test.ts` checks the
+fixes together (the message of `refAs` and speaking ids in `--summary`,
+created elements not also listed as changed, the subscription redirect in the
+warnings delta, a plain remove of a merge and `move` into a cross-lane flow
+renaming flows after their new ends).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile
@@ -147,7 +198,8 @@ npx vitest run test/isomorphic.test.ts
   `process` read, and runs the bundle in a `vm` context without any Node
   global: `applyToXml` (also with the design profile and a host validator,
   and a no-op that must come back `unchanged`), `layoutXml` (both engines),
-  `newXml`, `validateXml` with the Camunda 7 and the design profile,
+  `newXml`, `validateXml` with the Camunda 7, the Camunda 8 and the design
+  profile,
   `showXml`, `findXml` and `metricsXml` must give there exactly what they
   give in Node. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
@@ -192,8 +244,10 @@ node tools/fuzz/minimize.mjs tools/fuzz/out/latest/walks/<walk> [--kind 'hard:ov
 - **Generators**: 18 semantic (add after / into a flow / as a branch,
   boundary event with handler, connect, remove, move, lane move, retype,
   rename, split, sub-process with content, expand / collapse, lane, data
-  object, annotation, flow order) and 8 format generators (place variants,
-  align, color, route, label, space, tidy, lane order). `--no-semantic` /
+  object, annotation, flow order) and 11 format generators (place variants,
+  align, color, route, label, space (also closing space), tidy, lane order,
+  compact, pool order, selectors: `color --path`, `align` / `color --kind`,
+  `place --branch`). `--no-semantic` /
   `--no-format` switch groups off.
 - **Executors**: by default each step runs through the built CLI (`bin/bpmn.js`,
   env `BPMN_BIN` for another build) as the equivalent single command, or as
@@ -327,6 +381,31 @@ With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
 above zero means preserve.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.
 
+## Speaking ids
+
+`tools/speaking-ids.mjs` measures new ids on a corpus in-process (dry runs):
+per file a named task, an unnamed gateway and an unnamed boundary event at
+the first task with one outgoing flow. It prints the share of new ids that
+speak (no Camunda Modeler hash, no number), the flows renamed because their
+ids named their old ends, with `--baseline` the share that keeps the prefix
+another build gives the same element, and how often two independent edits
+of one file (two branches) share a new id (different names, the same name,
+unnamed elements).
+
+```
+npm run build
+node tools/speaking-ids.mjs                                   # tools/scenarios
+node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
+```
+
+The regression tests: `test/speaking-ids.test.ts` and
+`test/conventions-ids.test.ts` (ids in every file style, renamed flows and
+their DI), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
+line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
+`test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
+`test/lane-splice.test.ts` (the lane and the geometry of a node added into a
+flow between two lanes).
+
 ## Engine checks (Camunda 7)
 
 The Camunda 7 profile of `bpmn validate` (`src/platform/c7.ts`) states for
@@ -366,6 +445,54 @@ it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
 complete, correlate), and run the real-file battery on your private corpus:
 deploy every file before and after each edit and compare the camunda content
 element by element.
+
+## Engine checks (Camunda 8)
+
+The Camunda 8 profile (`src/platform/c8.ts`) states for every rule what
+Camunda 8.9 does; placement and known names come from the Zeebe descriptor
+(`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
+`node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
+while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
+rule (151 models) with the expected codes and Camunda 8's verdict, the timer
+and FEEL value checks with the values they were checked on, and the
+`validate` output; `test/c8-ops.test.ts` covers `set` / `ext` / `retype` /
+`show` in Camunda 8 files and runs the profile's hints through the real CLI
+until a refused model has no deploy finding left; `test/step3-c8-fixes.test.ts`
+checks the FEEL syntax check against `test/fixtures/c8/feel-verdicts.json`
+(762 synthetic expressions with the verdict of Camunda 8.9.22, one per line:
+add a new expression with the verdict you got from the engine) and the
+schema-text, white-space, `refAs` and subscription rules. By default they
+check the CLI only. To re-check against a live Camunda 8 (REST v2, no
+authentication), name its v2 root:
+
+```
+BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts test/step3-c8-fixes.test.ts
+```
+
+Each model is deployed (`POST /v2/deployments`), the test asserts that the
+profile reports a deploy-severity finding (or the structural error that
+stands for it) exactly for the models Camunda 8 refuses, and every
+deployment is deleted again (`POST /v2/resources/<key>/deletion`). The
+runtime block starts processes and drives them (`/v2/process-instances`,
+`/v2/jobs/activation`, `/v2/user-tasks`, `/v2/messages/publication`,
+`/v2/incidents/search`): a job worker gets its type, input mapping and
+headers, a message is correlated by its key, FEEL conditions route, a
+called decision and a call activity return their results, a Camunda user
+task is assigned and completed while a job worker user task is not listed,
+a multi-instance runs per item, and each runtime rule misbehaves the way its
+finding says (a flow without condition never taken, a condition out of a
+task ignored, a standard loop run once, a JUEL completion condition and
+non-numeric retries ending in an incident, camunda:* content and input
+mappings on a start event ignored, `zeebe:publishMessage` not run). The
+hint models of `c8-ops` are deployed after their hints were followed; the
+accepted FEEL expressions go in files of 100 conditions, each refused one on
+its own (about 270 deployments, refused ones leave nothing behind). With
+Camunda 8.9.22: 460 / 460.
+
+When you change how zeebe content is written, deploy the CLI-built models
+and run them, and run the real-file battery on your private corpus (deploy
+every file before and after each edit; compare every element's
+`<bpmn:extensionElements>` text outside the edited element byte for byte).
 
 ## design-iq validator check
 

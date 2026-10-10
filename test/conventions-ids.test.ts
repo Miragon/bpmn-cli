@@ -1,17 +1,20 @@
 /**
  * Edits follow the file: generated ids take the id style of the file they
- * are written into (src/idstyle.ts), flows get collision-resistant ids, names
- * are transliterated the German way. All fixtures are synthetic.
+ * are written into (src/idstyle.ts) and say what they name (never a hash or
+ * a running number: names, kind + context, the ends of a flow), names are
+ * transliterated the German way. All fixtures are synthetic.
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
-import { hash7 } from '../src/ids.js';
 import { IdStyle } from '../src/idstyle.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
 import { guideText, kindsJson } from '../src/guide.js';
 import { mutateDoc } from '../src/pipeline.js';
-import { definitionsXml, flowBetween, HASHED } from './helpers.js';
+import { definitionsXml, flowBetween } from './helpers.js';
+
+/** A Camunda Modeler hash or a number: what a generated id must never end in. */
+const NOT_SPEAKING = /_([01][0-9a-z]{6}|\d+)$/;
 
 /** A chain of flow nodes `[tag, id, name?]` connected by flows with the given ids (incoming / outgoing kept). */
 function chain(nodes: Array<[string, string, string?]>, flowIds: string[]): string {
@@ -91,23 +94,29 @@ const OLD_MODELER = chain(
 describe('id style inference (edits follow the file)', () => {
   it('learns nothing from a file without conventions: the bpmn-cli default', async () => {
     const style = IdStyle.infer((await Doc.fromXml(definitionsXml('<bpmn:task id="T" name="Lonely" />'))).definitions).info();
-    expect(style).toEqual({ body: 'pascal', unnamed: 'hash', sequenceFlow: { form: 'hash', prefix: 'Flow' }, messageFlow: { form: 'hash', prefix: 'Flow' } });
+    expect(style).toEqual({ body: 'pascal', sequenceFlow: { form: 'named', prefix: 'Flow' }, messageFlow: { form: 'named', prefix: 'Flow' } });
   });
 
-  it('a Camunda Modeler file gets modeler-like ids: random-looking, but a hash of stable inputs', async () => {
+  it('a Camunda Modeler file gets speaking ids with the modeler prefixes; flows name their ends', async () => {
     const ops: Op[] = [{ op: 'add', kind: 'userTask', name: 'Pack order', after: 'Activity_0k3x9qa' }];
     const a = await created(MODELER, ops);
-    expect(IdStyle.infer((await Doc.fromXml(MODELER)).definitions).info().body).toBe('hash');
-    const [task, flow] = a.ids;
-    expect(task).toMatch(HASHED('Activity'));
-    expect(flow).toMatch(HASHED('Flow'));
-    // `--after` splices: the anchor's flow now ends at the new node, a new flow runs on to the old target
-    expect(flow).toBe(`Flow_${hash7(`${task}->Gateway_1d8vq2p`)}`);
+    // hashes show no case: pascal bodies, the file's prefixes and flow prefix
+    expect(IdStyle.infer((await Doc.fromXml(MODELER)).definitions).info()).toEqual({ body: 'pascal', sequenceFlow: { form: 'named', prefix: 'Flow' }, messageFlow: { form: 'named', prefix: 'Flow' } });
+    // `--after` splices: the anchor's (hashed) flow keeps its id and now ends at the new node, a new flow runs on to the
+    // old target, named after the ends (the gateway by its name: its id says nothing)
+    expect(a.ids).toEqual(['Activity_PackOrder', 'Flow_PackOrderToOrderOk']);
+    expect(flowBetween(a.doc, 'Activity_0k3x9qa', 'Activity_PackOrder')).toBe('Flow_1q2w3e4');
     // the same edit on the same file gives the same ids
     expect((await created(MODELER, ops)).ids).toEqual(a.ids);
-    // another placement gives other ids
-    const b = await created(MODELER, [{ op: 'add', kind: 'userTask', name: 'Pack order', after: 'Activity_1m2n3b4' }]);
-    expect(b.ids[0]).not.toBe(task);
+    // unnamed elements: a word for the kind and the context (Timer On <host>, After <anchor>)
+    const b = await created(MODELER, [
+      { op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_0k3x9qa', timer: 'PT1H' },
+      { op: 'add', kind: 'endEvent', after: 'Event_TimerOnCheckOrder' },
+      { op: 'add', kind: 'parallelGateway', after: 'Activity_1m2n3b4' },
+    ]);
+    // a flow names an unnamed end by its own id's speaking part (its kind and place), never by a bare kind word
+    expect(b.ids).toEqual(['Event_TimerOnCheckOrder', 'Event_EndAfterTimerOnCheckOrder', 'Flow_TimerOnCheckOrderToEndAfterTimerOnCheckOrder', 'Gateway_AfterShipOrder', 'Flow_AfterShipOrderToOrderShipped']);
+    for (const id of [...a.ids, ...b.ids]) expect(id).not.toMatch(NOT_SPEAKING);
   });
 
   it('type-named camelCase files: serviceTask_checkStock, flow_checkStockToApproveOrder', async () => {
@@ -119,10 +128,10 @@ describe('id style inference (edits follow the file)', () => {
     expect(ids.slice(0, 2)).toEqual(['userTask_packGoods', 'flow_packGoodsToApproveOrder']);
     // sendTask is new to the file: its type names the prefix like the other kinds' types do
     expect(ids.slice(2, 4)).toEqual(['sendTask_notifyCustomer', 'flow_notifyCustomerToOrderShipped']);
-    // an unnamed gateway: the file's gateway prefix, a hash
-    expect(ids[4]).toMatch(HASHED('gateway'));
-    // the spliced flow keeps its id (ids of existing elements never change)
-    expect(flowBetween(doc, 'serviceTask_checkStock', 'userTask_packGoods')).toBe('flow_checkStockToApproveOrder');
+    // an unnamed gateway: the file's gateway prefix, a word for the kind (no placement context: --in the process)
+    expect(ids[4]).toBe('gateway_parallel');
+    // the spliced flow named its old ends in the file's form: it is renamed after its new ones (and reported so)
+    expect(flowBetween(doc, 'serviceTask_checkStock', 'userTask_packGoods')).toBe('flow_checkStockToPackGoods');
   });
 
   it('snake_case files with flows named after their ends: Task_pack_goods, Flow_<from>_<to>', async () => {
@@ -133,22 +142,20 @@ describe('id style inference (edits follow the file)', () => {
     expect(ids).toEqual(['Task_pack_goods', 'Flow_Task_pack_goods_Gateway_risk_ok', 'Event_order_rejected', 'Flow_Gateway_risk_ok_Event_order_rejected']);
   });
 
-  it('numbered files continue the numbering of their prefixes', async () => {
+  it('numbered files keep their prefixes, but the bodies speak (no running numbers)', async () => {
     const { ids } = await created(NUMBERED, [
       { op: 'add', kind: 'task', name: 'Third', after: 'Task_2' },
       { op: 'add', kind: 'endEvent', name: 'Abort', in: 'Process_1' },
     ]);
-    expect(ids).toEqual(['Task_3', 'SF_4', 'End_2']);
+    expect(ids).toEqual(['Task_Third', 'SF_ThirdToFinish', 'End_Abort']);
   });
 
-  it('old modeler files: type-named prefixes and SequenceFlow_ hashes', async () => {
+  it('old modeler files: type-named prefixes and SequenceFlow_ flows, speaking bodies', async () => {
     const { ids } = await created(OLD_MODELER, [
       { op: 'add', kind: 'task', name: 'Archive', after: 'Task_0cde345' },
       { op: 'add', kind: 'exclusiveGateway', name: 'Ok?', in: 'Process_1' },
     ]);
-    expect(ids[0]).toMatch(HASHED('Task'));
-    expect(ids[1]).toMatch(HASHED('SequenceFlow'));
-    expect(ids[2]).toMatch(HASHED('ExclusiveGateway'));
+    expect(ids).toEqual(['Task_Archive', 'SequenceFlow_ArchiveToDone', 'ExclusiveGateway_Ok']);
   });
 
   it('custom prefixes per kind (Start_, End_), the family prefix (Task_) for a new task kind', async () => {
@@ -204,7 +211,7 @@ describe('id style inference (edits follow the file)', () => {
         '<bpmn:task id="Task_8" name="Store" />',
       ].join('\n'),
     );
-    expect((await created(xml, [{ op: 'add', kind: 'task', name: 'Check', in: 'Process_1' }])).ids).toEqual(['Task_9']);
+    expect((await created(xml, [{ op: 'add', kind: 'task', name: 'Check', in: 'Process_1' }])).ids).toEqual(['Task_Check']);
   });
 
   it('warns W_ID_SUFFIXED and names the --if-absent id in the file style', async () => {
@@ -221,13 +228,16 @@ describe('id style inference (edits follow the file)', () => {
     expect(hint).toContain('--id userTask_packGoods');
   });
 
-  it('a split joins at a gateway named in the file style (camel: <id>Join; hashed files: a hash)', async () => {
+  it('a split joins at a gateway named in the file style (camel: <id>Join; else <id>_join)', async () => {
     const split: Op = { op: 'split', after: 'userTask_approveOrder', kind: 'parallel', name: 'Fan out', branches: [{ nodes: [{ kind: 'task', name: 'Left' }] }, { nodes: [{ kind: 'task', name: 'Right' }] }] };
     expect((await created(CAMEL, [split])).ids).toContain('gateway_fanOutJoin');
     const modeler = await created(MODELER, [{ ...split, after: 'Activity_0k3x9qa' } as Op]);
-    const gateways = modeler.ids.filter((id) => id.startsWith('Gateway_'));
-    expect(gateways).toHaveLength(2);
-    for (const g of gateways) expect(g).toMatch(HASHED('Gateway'));
+    expect(modeler.ids.filter((id) => id.startsWith('Gateway_'))).toEqual(['Gateway_FanOut', 'Gateway_FanOut_join']);
+    // an unnamed split gateway: After <anchor>
+    const unnamed = await created(MODELER, [{ ...split, name: undefined, after: 'Activity_0k3x9qa' } as Op]);
+    expect(unnamed.ids.filter((id) => id.startsWith('Gateway_'))).toEqual(['Gateway_AfterCheckOrder', 'Gateway_AfterCheckOrder_join']);
+    // the gateways' flows name them by their ids' speaking parts: the split AfterCheckOrder, its join CheckOrderJoin
+    expect(unnamed.ids).toEqual(expect.arrayContaining(['Flow_AfterCheckOrderToLeft', 'Flow_LeftToCheckOrderJoin', 'Flow_CheckOrderJoinToOrderOk']));
   });
 });
 
@@ -244,21 +254,21 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     ['flow1', 'flow2', 'flow3', 'flow4'],
   );
 
-  it('a file whose ids have no prefix gets bare camelCase ids and the next glued flow number', async () => {
+  it('a file whose ids have no prefix gets bare camelCase ids; flows keep the glued prefix (flow12 -> flowReviewOrderToPackGoods)', async () => {
     const { ids } = await created(BARE, [{ op: 'add', kind: 'task', name: 'Review order', after: 'checkOrder' }]);
-    expect(ids).toEqual(['reviewOrder', 'flow5']);
+    expect(ids).toEqual(['reviewOrder', 'flowReviewOrderToPackGoods']);
     // another kind of the family (no own evidence) follows the family; a second one with the same name gets a suffix
     const more = await created(BARE, [
       { op: 'add', kind: 'userTask', name: 'Review order', after: 'checkOrder' },
       { op: 'add', kind: 'userTask', name: 'Review order', after: 'packGoods' },
     ]);
-    expect(more.ids).toEqual(['reviewOrder', 'flow5', 'reviewOrder_2', 'flow6']);
+    expect(more.ids).toEqual(['reviewOrder', 'flowReviewOrderToPackGoods', 'reviewOrder_2', 'flowReviewOrder2ToShipOrder']);
+    expect(more.warnings).toEqual(['W_ID_SUFFIXED']);
   });
 
-  it('an unnamed element in such a file still gets a prefix (a hash or a number needs one)', async () => {
+  it('an unnamed element in such a file still gets a prefix (its kind and context need one)', async () => {
     const { ids } = await created(BARE, [{ op: 'add', kind: 'exclusiveGateway', after: 'packGoods' }]);
-    expect(ids[0]).toMatch(HASHED('Gateway'));
-    expect(ids[1]).toBe('flow5');
+    expect(ids).toEqual(['Gateway_AfterPackGoods', 'flowAfterPackGoodsToShipOrder']);
   });
 
   it('single lower-case words read as camelCase (not snake_case, which would read as a prefix); a PascalCase file stays PascalCase', async () => {
@@ -272,7 +282,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       ],
       ['f0', 'f1', 'f2', 'f3'],
     );
-    expect((await created(lower, [{ op: 'add', kind: 'serviceTask', name: 'Check stock', after: 'prepare' }])).ids).toEqual(['checkStock', 'f4']);
+    expect((await created(lower, [{ op: 'add', kind: 'serviceTask', name: 'Check stock', after: 'prepare' }])).ids).toEqual(['checkStock', 'fCheckStockToBranch1']);
     const pascal = chain(
       [
         ['startEvent', 'OrderReceived', 'Order received'],
@@ -282,9 +292,9 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       ],
       ['Flow_1', 'Flow_2', 'Flow_3'],
     );
-    expect((await created(pascal, [{ op: 'add', kind: 'task', name: 'Review order', after: 'CheckOrder' }])).ids).toEqual(['ReviewOrder', 'Flow_4']);
+    expect((await created(pascal, [{ op: 'add', kind: 'task', name: 'Review order', after: 'CheckOrder' }])).ids).toEqual(['ReviewOrder', 'Flow_ReviewOrderToShipOrder']);
     // a kind of another family without own evidence: the file's flow nodes have no prefixes, so neither does it
-    expect((await created(pascal, [{ op: 'add', kind: 'exclusiveGateway', name: 'Order ok?', after: 'CheckOrder' }])).ids).toEqual(['OrderOk', 'Flow_4']);
+    expect((await created(pascal, [{ op: 'add', kind: 'exclusiveGateway', name: 'Order ok?', after: 'CheckOrder' }])).ids).toEqual(['OrderOk', 'Flow_OrderOkToShipOrder']);
   });
 
   it('a kind without prefix next to prefixed kinds: only that kind goes bare', async () => {
@@ -298,8 +308,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       ['Flow_03y1k7c', 'Flow_02qw1n8', 'Flow_01kyget'],
     );
     const { ids } = await created(mixed, [{ op: 'add', kind: 'userTask', name: 'Review order', after: 'first' }]);
-    expect(ids[0]).toBe('reviewOrder');
-    expect(ids[1]).toMatch(HASHED('Flow'));
+    expect(ids).toEqual(['reviewOrder', 'Flow_ReviewOrderToSecond']);
     // the events are prefixed (Event_16m42dv): a new event keeps a prefix
     expect((await created(mixed, [{ op: 'add', kind: 'boundaryEvent:timer', name: 'Timeout', on: 'first', timer: 'PT1H' }])).ids).toEqual(['Event_Timeout']);
   });
@@ -334,7 +343,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
   });
 });
 
-describe('collision-resistant flow ids (independent edits on two branches)', () => {
+describe('speaking ids on two branches of a file (independent edits)', () => {
   const base = chain(
     [
       ['startEvent', 'Event_Start', 'Start'],
@@ -351,18 +360,22 @@ describe('collision-resistant flow ids (independent edits on two branches)', () 
     expect(left.ids.filter((id) => right.ids.includes(id))).toEqual([]);
     // the merged file has no duplicate id: every new id of the right branch is free on the left
     for (const id of right.ids) expect(left.doc.ids.has(id)).toBe(false);
+    // the flow that CheckAddress -> B got when it was created names its new ends once the gateway is spliced in;
+    // the result lists every id as it is at the end of the batch
+    expect(left.ids).toEqual(['Activity_CheckAddress', 'Flow_CheckAddressToAfterCheckAddress', 'Gateway_AfterCheckAddress', 'Flow_AfterCheckAddressToB']);
+    expect(flowBetween(left.doc, 'Activity_CheckAddress', 'Gateway_AfterCheckAddress')).toBe('Flow_CheckAddressToAfterCheckAddress');
   });
 
-  it('new files hash their flows (Flow_<7 chars>) instead of numbering them', async () => {
+  it('new files name their flows after their ends', async () => {
     const doc = Doc.create({ processName: 'P' });
     const cs = runOps(doc, [
       { op: 'add', kind: 'startEvent', name: 'S' },
       { op: 'add', kind: 'task', name: 'T', after: 'Event_S' },
     ]);
-    expect(cs.created.map((c) => c.id)).toEqual(['Event_S', 'Activity_T', `Flow_${hash7('Event_S->Activity_T')}`]);
+    expect(cs.created.map((c) => c.id)).toEqual(['Event_S', 'Activity_T', 'Flow_SToT']);
   });
 
-  it('files numbering their flows keep numbering (Flow_12 style)', async () => {
+  it('files that number their flows get speaking flows with their prefix (Flow_12 -> Flow_BToEnd)', async () => {
     const xml = chain(
       [
         ['startEvent', 'Event_Start', 'Start'],
@@ -371,7 +384,10 @@ describe('collision-resistant flow ids (independent edits on two branches)', () 
       ],
       ['Flow_11', 'Flow_12'],
     );
-    expect((await created(xml, [{ op: 'add', kind: 'task', name: 'B', after: 'Activity_A' }])).ids).toEqual(['Activity_B', 'Flow_13']);
+    const r = await created(xml, [{ op: 'add', kind: 'task', name: 'B', after: 'Activity_A' }]);
+    expect(r.ids).toEqual(['Activity_B', 'Flow_BToEnd']);
+    // a numbered flow says nothing about its ends: it keeps its id when a splice changes them
+    expect(flowBetween(r.doc, 'Activity_A', 'Activity_B')).toBe('Flow_12');
   });
 });
 
@@ -405,9 +421,10 @@ describe('German names', () => {
 describe('documentation', () => {
   it('bpmn kinds --json describes the id conventions', () => {
     const ids = kindsJson()['ids'] as { bodies: Record<string, string>; flowForms: Record<string, string> };
-    expect(Object.keys(ids.bodies).sort()).toEqual(['camel', 'hash', 'numbered', 'pascal', 'pascalSnake', 'snake']);
-    expect(Object.keys(ids.flowForms).sort()).toEqual(['hash', 'idPair', 'idSnake', 'numbered', 'scopedTo', 'stemSnake', 'stemTo']);
-    expect(guideText()).toContain('Ids follow the file');
+    expect(Object.keys(ids.bodies).sort()).toEqual(['camel', 'pascal', 'pascalSnake', 'snake']);
+    expect(Object.keys(ids.flowForms).sort()).toEqual(['idPair', 'idSnake', 'named', 'scopedTo', 'stemSnake', 'stemTo']);
+    expect(guideText()).toContain('Ids speak and follow the file');
+    expect(JSON.stringify(kindsJson()['ids'])).not.toMatch(/hash of|base-36/);
   });
 });
 

@@ -12,6 +12,7 @@ export {
   mutateFile,
   mutateDocToFile,
   layoutFile,
+  layoutDocToFile,
   checkFile,
   type FileWriteOptions,
   type FileMutationOptions,

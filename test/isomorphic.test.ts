@@ -13,6 +13,7 @@ import vm from 'node:vm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as core from '../src/index.js';
 import { CAMUNDA_DESCRIPTOR, CAMUNDA_DESCRIPTOR_VERSION } from '../src/platform/camunda-descriptor.js';
+import { ZEEBE_DESCRIPTOR, ZEEBE_DESCRIPTOR_VERSION } from '../src/platform/zeebe-descriptor.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { bundleCore, NODE_GLOBALS } from '../tools/iso/bundle.mjs';
 
@@ -113,8 +114,28 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(edited.xml)));
     expect(await browser.showXml(edited.xml)).toBe(await core.showXml(edited.xml));
     expect(await browser.showXml(edited.xml, { id: 'Activity_Check' })).toContain('camunda:assignee');
+    // the reading views of large models (step 3)
+    expect(await browser.showXml(edited.xml, { around: 'Activity_Check', depth: 1 })).toBe(await core.showXml(edited.xml, { around: 'Activity_Check', depth: 1 }));
+    expect(await browser.showXml(edited.xml, { id: 'Activity_Check', context: true })).toBe(await core.showXml(edited.xml, { id: 'Activity_Check', context: true }));
+    expect(await browser.showXml(edited.xml, { around: 'Activity_Check' })).toContain('camunda:assignee=demo');
     expect(await browser.findXml(edited.xml, 'demo')).toEqual(await core.findXml(edited.xml, 'demo'));
     expect(await browser.metricsXml(edited.xml)).toEqual(await core.metricsXml(edited.xml));
+  });
+
+  it('creates and validates Camunda 8 files (zeebe descriptor, Camunda 8 profile) like Node', async () => {
+    const ops = [
+      { op: 'add', kind: 'start', name: 'Received' },
+      { op: 'add', kind: 'serviceTask', name: 'Check', after: 'Event_Received' },
+      { op: 'ext', id: 'Activity_Check', action: 'add', type: 'loop.zeebe:loopCharacteristics', attrs: { inputCollection: '=items' } },
+      { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_Check' },
+      { op: 'ext', id: 'Activity_Approve', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } },
+    ];
+    const edited = await browser.applyToXml((await browser.newXml({ processName: 'Order', target: 'camunda8' })).xml, ops);
+    expect(edited.xml).toBe((await core.applyToXml((await core.newXml({ processName: 'Order', target: 'camunda8' })).xml, ops)).xml);
+    expect(edited.xml).toContain('<zeebe:userTask />');
+    const report = await browser.validateXml(edited.xml);
+    expect(report.platform).toMatchObject({ platform: 'c8', counts: { deploy: 1, runtime: 1, practice: 0 } });
+    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(edited.xml)));
   });
 
   it('keeps the text, runs the design profile and host validators like Node (step 2 packages together)', async () => {
@@ -131,7 +152,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const opts = { profile: 'design' as const, contentRepo: { processIds: ['Process_Styled'], decisionIds: [] }, validators: [host] };
     const there = await browser.applyToXml(styled, ops, opts);
     expect(phases).toEqual(['before:true', 'after:true']);
-    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_5']);
+    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
     expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['design', 'host']);
     const here = await core.applyToXml(styled, ops, opts);
     expect(there.xml).toBe(here.xml);
@@ -148,11 +169,14 @@ describe('the browser bundle in a context without Node globals', () => {
   });
 });
 
-describe('the inlined Camunda 7 descriptor', () => {
-  it('equals the installed camunda-bpmn-moddle (run tools/gen-camunda-descriptor.mjs after an update)', () => {
+describe('the inlined Camunda 7 and Camunda 8 descriptors', () => {
+  it('equal the installed camunda-bpmn-moddle and zeebe-bpmn-moddle (run tools/gen-camunda-descriptor.mjs after an update)', () => {
     const require = createRequire(join(ROOT, 'package.json'));
     const dir = dirname(require.resolve('camunda-bpmn-moddle/package.json'));
     expect(CAMUNDA_DESCRIPTOR_VERSION).toBe(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version);
     expect(CAMUNDA_DESCRIPTOR).toEqual(JSON.parse(readFileSync(join(dir, 'resources', 'camunda.json'), 'utf8')));
+    const zeebe = dirname(require.resolve('zeebe-bpmn-moddle/package.json'));
+    expect(ZEEBE_DESCRIPTOR_VERSION).toBe(JSON.parse(readFileSync(join(zeebe, 'package.json'), 'utf8')).version);
+    expect(ZEEBE_DESCRIPTOR).toEqual(JSON.parse(readFileSync(join(zeebe, 'resources', 'zeebe.json'), 'utf8')));
   });
 });

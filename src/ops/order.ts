@@ -14,6 +14,13 @@
  * child lane of it (E_NOT_CHILD_LANE); unlisted lanes follow in their old
  * order. Rewrites `laneSet.lanes`. A kept diagram gets its bands reordered in
  * the diagram phase (src/diagram/ops.ts, orderBands).
+ *
+ * Pools: with `op.pools`, a collaboration as op.id (or participant ids in
+ * `op.flows`) the participants of that collaboration are ordered top to
+ * bottom instead (black-box pools included); every listed id must be one of
+ * its participants (E_NOT_PARTICIPANT); unlisted pools follow in their old
+ * order. Rewrites `collaboration.participants`; a kept diagram gets its pool
+ * bands reordered in the diagram phase (src/diagram/ops.ts, orderPools).
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
@@ -27,6 +34,46 @@ export function ordersLanes(doc: Doc, op: OrderOp): boolean {
   if (op.lanes?.length) return true;
   const first = op.flows?.[0];
   return !!first && is(doc.get(first), 'bpmn:Lane');
+}
+
+/** Whether an order op orders pools (explicit `pools`, a collaboration as `id`, or participant ids given as `flows`). */
+export function ordersPools(doc: Doc, op: OrderOp): boolean {
+  if (op.pools?.length) return true;
+  if (is(doc.get(op.id), 'bpmn:Collaboration')) return true;
+  const first = op.flows?.[0];
+  return !!first && is(doc.get(first), 'bpmn:Participant');
+}
+
+/** Reorders the participants of a collaboration (see module contract). */
+function orderPools(doc: Doc, op: OrderOp): ChangeSet {
+  const cs = new ChangeSet();
+  const collab = doc.require(op.id, 'bpmn:Collaboration', 'collaboration');
+  const ids = op.pools ?? op.flows ?? [];
+  if (!ids.length) throw usageError('order needs the participant ids in the wanted top-to-bottom order', { element: op.id });
+  const participants = many(collab, 'participants');
+  const listed: El[] = [];
+  for (const id of ids) {
+    const p = doc.require(id, 'bpmn:Participant', 'participant (pool)');
+    if (!participants.includes(p)) {
+      throw modelError('E_NOT_PARTICIPANT', `${id} is not a participant of ${idOf(collab)}`, {
+        element: idOf(collab),
+        related: [id],
+        candidates: participants.map(idOf),
+        hint: `Pools of ${idOf(collab)} (in declaration order): ${participants.map(idOf).join(', ')}.`,
+      });
+    }
+    if (listed.includes(p)) throw usageError(`Participant ${id} is listed twice`, { element: idOf(collab) });
+    listed.push(p);
+  }
+  const ordered = [...listed, ...participants.filter((p) => !listed.includes(p))];
+  if (ordered.every((p, i) => participants[i] === p)) {
+    cs.note(`${idOf(collab)}: pools already declared in this order (the drawing follows it)`);
+    return cs;
+  }
+  participants.splice(0, participants.length, ...ordered);
+  doc.invalidate();
+  cs.change(changeOf(collab, `pool order: ${ordered.map(idOf).join(', ')}`));
+  return cs;
 }
 
 /** The lane set whose lanes `owner` orders: a process's (first), a participant's process's, a lane's child lanes. */
@@ -73,6 +120,7 @@ function orderLanes(doc: Doc, op: OrderOp): ChangeSet {
 
 /** Reorders the outgoing flows of a node, or lanes (see module contract). */
 export function orderFlows(doc: Doc, op: OrderOp): ChangeSet {
+  if (ordersPools(doc, op)) return orderPools(doc, op);
   if (ordersLanes(doc, op)) return orderLanes(doc, op);
   const cs = new ChangeSet();
   const node = doc.require(op.id, 'bpmn:FlowNode');

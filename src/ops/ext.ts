@@ -70,11 +70,13 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError, type Warning } from '../errors.js';
-import { addTo, BPMN_NS, is, many, removeFrom, type El } from '../model.js';
+import { addTo, BPMN_NS, is, many, removeFrom, walk, type El } from '../model.js';
 import { allowedOn, allowedParents, CAMUNDA_URI, containersOf, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
+import { zeebeAllowedOn, zeebeType } from '../platform/zeebe.js';
 import { ChangeSet } from '../result.js';
 import { kindLabel } from '../kinds.js';
-import { changeOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
+import { coversProfileSubjects } from './covers.js';
+import { changeOf, definitionsOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';
 
 export interface ExtensionInfo {
@@ -130,6 +132,10 @@ export const SINGLE_TOP: ReadonlySet<string> = new Set([
   'zeebe:executionListeners',
   'zeebe:taskListeners',
   'zeebe:linkedResources',
+  // Camunda 8.9 refuses a second one (engine-checked, test/c8-profile.test.ts)
+  'zeebe:adHoc',
+  'zeebe:conditionalFilter',
+  'zeebe:publishMessage',
 ]);
 
 /** Children that occur at most once inside their vendor parent. */
@@ -628,10 +634,112 @@ function presentAt(doc: Doc, levels: Level[]): string[] {
 
 /** Runs an `ext` operation (add / remove). */
 export function extensionOp(doc: Doc, op: ExtOp): ChangeSet {
-  const owner = doc.require(op.id);
+  let owner = doc.require(op.id);
   if (op.action !== 'add' && op.action !== 'remove') throw usageError(`Unknown ext action "${String(op.action)}"; use add or remove`, { element: op.id });
-  const { host, op: inner } = resolveHost(doc, owner, normalizeIndex(op));
-  return inner.action === 'add' ? addExtension(doc, host, inner) : removeExtension(doc, host, inner);
+  const notes: string[] = [];
+  // Camunda 8 reads a correlation key on the message, not on the event that waits for it
+  const message = subscriptionMessage(doc, owner, op);
+  if (message) {
+    notes.push(subscriptionNote(doc, owner, message, `${addedTypeText(op)}`));
+    const split = op.type ? splitSlot(op.type) : undefined;
+    const { slot: _slot, ...rest } = op;
+    op = { ...rest, id: idOf(message), ...(split ? { type: split.rest } : {}) };
+    owner = message;
+  }
+  const { host, op: inner } = resolveHost(doc, owner, normalizeIndex(op), notes);
+  const cs = inner.action === 'add' ? addExtension(doc, host, inner) : removeExtension(doc, host, inner);
+  for (const n of notes) cs.note(n);
+  return cs;
+}
+
+/* ------------------------------------------------------------------ */
+/* zeebe:subscription: on the message, not on the event that waits      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The bpmn:Message a catching element waits for: a receive task's message,
+ * the message of a catch / boundary / start event's message event definition.
+ * undefined for anything else (a throw event, a send task, a timer event).
+ */
+function caughtMessage(el: El): { catching: boolean; message?: El } {
+  if (is(el, 'bpmn:ReceiveTask')) return { catching: true, message: el.get<El | undefined>('messageRef') };
+  if (!is(el, 'bpmn:CatchEvent')) return { catching: false };
+  const def = definitionsOf(el).find((d) => is(d, 'bpmn:MessageEventDefinition'));
+  return def ? { catching: true, message: def.get<El | undefined>('messageRef') } : { catching: false };
+}
+
+/** The canonical type an `ext add` adds: its type (without a slot prefix, first step of a path) or the root of its --xml. */
+function addedType(doc: Doc, op: ExtOp): string | undefined {
+  if (op.type) return canonicalName(doc, (splitSlot(op.type)?.rest ?? op.type).split('/')[0]!);
+  const m = op.xml ? /^\s*<([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)([^>]*)>/.exec(op.xml) : null;
+  if (!m) return undefined;
+  const inline = new RegExp(`xmlns:${m[1]!.replace(/[.-]/g, '\\$&')}\\s*=\\s*["']([^"']*)["']`).exec(m[3] ?? '')?.[1];
+  return canonicalName(doc, `${m[1]}:${m[2]}`, inline ? { [m[1]!]: inline } : {});
+}
+
+function addedTypeText(op: ExtOp): string {
+  return op.type ? (splitSlot(op.type)?.rest ?? op.type).split('/')[0]! : 'zeebe:subscription';
+}
+
+/**
+ * `ext add <event|receiveTask> zeebe:subscription ...`: Camunda 8 reads the
+ * subscription (the correlation key) on the bpmn:Message the element waits
+ * for, so the op goes to that message (returned); a catching element without
+ * a message is E_WRONG_HOST. Anything else: undefined (the op stays as it is).
+ */
+function subscriptionMessage(doc: Doc, owner: El, op: ExtOp): El | undefined {
+  if (op.action !== 'add' || addedType(doc, op) !== 'zeebe:subscription') return undefined;
+  const slot = op.slot ?? (op.type ? splitSlot(op.type)?.slot : undefined);
+  if (slot !== undefined && !slot.startsWith('definition')) return undefined;
+  const { catching, message } = caughtMessage(owner);
+  if (!catching) return undefined;
+  if (!message) {
+    const id = idOf(owner);
+    throw modelError('E_WRONG_HOST', `${addedTypeText(op)} belongs on the bpmn:Message ${kindLabel(owner)} ${id} waits for (Camunda 8 reads the correlation key there), and ${id} has no message`, {
+      element: id,
+      hint: `Give it one first: \`bpmn set <file> ${id} message=<MessageName>\` (in an apply batch with "refAs": "$msg" to name the message), then \`bpmn ext add <file> ${id} ${addedTypeText(op)} correlationKey==<expression>\`.`,
+    });
+  }
+  return message;
+}
+
+/** `zeebe:subscription goes to message Message_X, which Event_Y waits for ...` */
+function subscriptionNote(doc: Doc, owner: El, message: El, what: string): string {
+  const others: string[] = [];
+  for (const el of walk(doc.definitions, { bpmnOnly: true })) {
+    if (el !== owner && caughtMessage(el).message === message) others.push(idOf(el));
+  }
+  const shared = others.length ? ` (${others.join(', ')} wait${others.length === 1 ? 's' : ''} for it ${owner === message ? '' : 'too '}and share${others.length === 1 ? 's' : ''} it)` : '';
+  if (owner === message) return `${what} is written to the zeebe:subscription of message ${idOf(message)}${shared}`;
+  return `${what} goes to message ${idOf(message)}, which ${idOf(owner)} waits for: Camunda 8 reads the correlation key in the message's zeebe:subscription${shared}`;
+}
+
+/**
+ * `set <event|receiveTask|message> zeebe:correlationKey=<value>`: the
+ * correlation key is an attribute of the message's zeebe:subscription, so the
+ * value goes there (an existing subscription keeps everything else, a missing
+ * one is added). False when `key` is no zeebe correlationKey or the element
+ * waits for no message (set then refuses it with E_WRONG_HOST).
+ */
+export function setCorrelationKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): boolean {
+  const idx = key.indexOf(':');
+  if (idx <= 0 || key.slice(idx + 1) !== 'correlationKey' || doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) return false;
+  const message = is(el, 'bpmn:Message') ? el : caughtMessage(el).message;
+  if (!message) return false;
+  const type = `${key.slice(0, idx)}:subscription`;
+  const existing = (message.get<El | undefined>('extensionElements')?.get<El[]>('values') ?? []).filter((v) => typeOf(doc, v) === 'zeebe:subscription');
+  if (existing.length) {
+    const sub = existing[0]! as unknown as Raw;
+    if (sub['correlationKey'] !== value) {
+      sub['correlationKey'] = value;
+      cs.change(changeOf(message, `${existing[0]!.$type} correlationKey=${value}`));
+    }
+  } else {
+    cs.merge(addExtension(doc, message, { op: 'ext', id: idOf(message), action: 'add', type, attrs: { correlationKey: value } }));
+  }
+  cs.note(subscriptionNote(doc, el, message, key));
+  doc.invalidate();
+  return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -705,8 +813,13 @@ function normalizeIndex(op: ExtOp): ExtOp {
   return { ...rest, index: ref.index, ...(slot !== undefined ? { slot: slot as ExtOp['slot'] } : {}) };
 }
 
-/** The element the op works on: `owner`, or its nested element named by op.slot / a `<slot>.` prefix of op.type. */
-function resolveHost(doc: Doc, owner: El, op: ExtOp): { host: El; op: ExtOp } {
+/**
+ * The element the op works on: `owner`, or its nested element named by op.slot
+ * / a `<slot>.` prefix of op.type. Adding a zeebe:loopCharacteristics to an
+ * activity without loop creates a parallel multi-instance loop for it (what
+ * the element configures; `notes` says so), like `set loop.<key>=` does.
+ */
+function resolveHost(doc: Doc, owner: El, op: ExtOp, notes: string[] = []): { host: El; op: ExtOp } {
   const split = op.type ? splitSlot(op.type) : undefined;
   if (split && op.slot && op.slot !== split.slot) {
     throw usageError(`"slot": "${op.slot}" and the type prefix ${split.slot}. disagree`, { element: idOf(owner), hint: 'Give the slot once: as the type prefix (loop.camunda:...) or as "slot".' });
@@ -726,11 +839,21 @@ function resolveHost(doc: Doc, owner: El, op: ExtOp): { host: El; op: ExtOp } {
     });
   }
   const what = split?.rest ?? (op.index !== undefined ? String(op.index) : (op.type ?? '<type>'));
-  const nested = resolveNested(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${op.action} <file> ${id} '${prefix}.${what}'${op.action === 'add' ? ' ...' : ''}`);
+  let nested = resolveNested(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${op.action} <file> ${id} '${prefix}.${what}'${op.action === 'add' ? ' ...' : ''}`);
+  const zeebeLoop = (op.type !== undefined && canonicalName(doc, split?.rest ?? op.type) === 'zeebe:loopCharacteristics') || (op.xml !== undefined && /^\s*<[\w.-]+:loopCharacteristics[\s/>]/.test(op.xml) && op.type === undefined);
+  if (!nested && op.action === 'add' && slot === 'loop' && zeebeLoop && !owner.get<El | undefined>('loopCharacteristics')) {
+    nested = doc.moddle.create('bpmn:MultiInstanceLoopCharacteristics');
+    nested.$parent = owner;
+    owner.set('loopCharacteristics', nested);
+    notes.push(`${id}: created a parallel multi-instance loop for loop.${split?.rest ?? 'zeebe:loopCharacteristics'} (\`bpmn set <file> ${id} loop=sequential\` runs the items one after the other)`);
+  }
   if (!nested) {
     const first: Record<NestedSlot, string> = {
       definition: `give it a trigger first: \`bpmn set <file> ${id} trigger=<message|timer|error|signal|...>\``,
-      loop: `make it a loop first: \`bpmn set <file> ${id} loop=parallel\` (or sequential, or 'loop.camunda:collection=\${items}')`,
+      loop:
+        doc.platform() === 'camunda8'
+          ? `make it a multi-instance first: \`bpmn ext add <file> ${id} loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>\` (creates a parallel loop; \`bpmn set <file> ${id} loop=sequential\` for one after the other)`
+          : `make it a loop first: \`bpmn set <file> ${id} loop=parallel\` (or sequential, or 'loop.camunda:collection=\${items}')`,
       condition: `give it a condition first: \`bpmn set <file> ${id} 'condition=\${...}'\` (conditional events: when=)`,
     };
     throw modelError(op.action === 'remove' ? 'E_NO_EXTENSION' : 'E_NO_NESTED_ELEMENT', `${kindLabel(owner)} ${id} has no ${SLOT_TEXT[slot]}${op.action === 'remove' ? ', so no extension elements there' : ' to hold extension elements'}`, {
@@ -1087,10 +1210,34 @@ function describeOutcomes(out: Outcome[], prefix = ''): string {
   return `ext ${out.map((o) => `${o.verb} ${prefix}${o.text}`).join('; ')}`;
 }
 
-/** W_MISPLACED_EXTENSION for camunda content the engines never read where it was put. */
+/**
+ * W_MISPLACED_EXTENSION for vendor content the engines never read where it was
+ * put: loose camunda child types and fields, and zeebe elements the Zeebe
+ * descriptor does not allow on the host (zeebe:taskDefinition on a user task).
+ * In a Camunda 8 file the profile reports the zeebe case as
+ * W_C8_MISPLACED_EXTENSION, which replaces this warning on a write.
+ */
 function misplacedWarning(doc: Doc, host: El, v: El, cs: ChangeSet): void {
   if (!v.$parent || v.$parent !== host.get<El | undefined>('extensionElements')) return;
   const t = typeOf(doc, v);
+  if (t.startsWith('zeebe:')) {
+    const local = t.slice('zeebe:'.length);
+    const z = zeebeType(local);
+    if (!z || zeebeAllowedOn(local, host) !== false) return;
+    const hosts = z.allowedIn.filter((a) => a.startsWith('bpmn:')).map((a) => a.slice(5).replace(/^./, (c) => c.toLowerCase()));
+    cs.warn(
+      coversProfileSubjects(
+        {
+          code: 'W_MISPLACED_EXTENSION',
+          message: `${v.$type} on ${hostLabel(host)} (${host.$type}) is not read by Camunda 8: it belongs on ${hosts.length > 5 ? `${hosts.slice(0, 5).join(', ')}, ...` : hosts.join(', ')}`,
+          element: hostId(host),
+          hint: `Remove it (\`bpmn ext remove <file> ${hostId(host)} ${slotPrefix(host)}${v.$type}\`) and add it where it is read (\`bpmn kinds\` lists the zeebe elements per kind).`,
+        },
+        [`ext:${local}`],
+      ),
+    );
+    return;
+  }
   if (!isCamunda(t)) return;
   if (nestedOnly(t)) {
     const containers = containersOf(ruleName(t))

@@ -52,6 +52,12 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   kind: string;
   name?: string;
   id?: string;
+  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/aliases.ts) */
+  as?: string;
+  /** batch alias of the flow into the new node (the flow the flow options describe) */
+  flowAs?: string;
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the new element references (created or found by name) */
+  refAs?: string;
   /** also connect the new node to this target (branch that re-joins) */
   to?: string;
   lane?: string;
@@ -78,6 +84,10 @@ export interface ConnectOp {
   target: string;
   name?: string;
   id?: string;
+  /** batch alias of the new connection */
+  as?: string;
+  /** message flows: batch alias of the bpmn:Message it carries */
+  refAs?: string;
   condition?: string;
   language?: string;
   default?: boolean;
@@ -91,6 +101,8 @@ export interface SetOp {
   id: string;
   values: Record<string, string>;
   unset?: string[];
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  refAs?: string;
 }
 
 export interface RemoveOp {
@@ -98,6 +110,10 @@ export interface RemoveOp {
   ids: string[];
   /** reconnect predecessor and successor when a node with 1 in / 1 out is removed (default true) */
   bridge?: boolean;
+  /** a join (N incoming, 1 outgoing): connect every predecessor to the successor */
+  bridgeAll?: boolean;
+  /** also remove the node's exclusive downstream path (up to the next merge with another path, or the ends) */
+  withBranch?: boolean;
   ifExists?: boolean;
 }
 
@@ -105,6 +121,8 @@ export interface RetypeOp extends TriggerOptions {
   op: 'retype';
   id: string;
   kind: string;
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  refAs?: string;
 }
 
 export interface MoveOp extends Placement, FlowOptions {
@@ -115,12 +133,14 @@ export interface MoveOp extends Placement, FlowOptions {
 
 export interface OrderOp {
   op: 'order';
-  /** the node whose outgoing flows are ordered, or the process / participant / parent lane whose lanes are ordered */
+  /** the node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered */
   id: string;
-  /** outgoing flow ids (lane ids are accepted too and order the lanes) */
+  /** outgoing flow ids (lane or participant ids are accepted too and order the lanes / pools) */
   flows?: string[];
   /** lane ids, top to bottom */
   lanes?: string[];
+  /** participant ids (pools), top to bottom */
+  pools?: string[];
 }
 
 export interface ExtOp {
@@ -158,9 +178,13 @@ export interface SplitOp {
   kind?: string;
   name?: string;
   id?: string;
+  /** batch alias of the split gateway */
+  as?: string;
   /** create a joining gateway of the same kind (default true) */
   join?: boolean;
   joinId?: string;
+  /** batch alias of the join gateway */
+  joinAs?: string;
   joinName?: string;
   branches: SplitBranch[];
 }
@@ -173,10 +197,25 @@ export type SideName = 'left' | 'right' | 'top' | 'bottom';
 export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
-export interface PlaceOp {
+/**
+ * Selectors of place / align / color / tidy (src/diagram/select.ts): they add
+ * elements to `ids` (connections only for color).
+ */
+export interface Selectors {
+  /** [fromId, toId]: every node and flow on the shortest sequence-flow path between them */
+  path?: string[];
+  /** sequence flows the path must pass, in order */
+  via?: string[];
+  /** every element of this kind (`find --kind` grammar, e.g. endEvent, userTask, sequenceFlow) */
+  kind?: string;
+  /** the branch this sequence flow starts: what only it reaches, up to the join */
+  branch?: string;
+}
+
+export interface PlaceOp extends Selectors {
   op: 'place';
   /** shapes moved as one rigid group; the first id is the reference */
-  ids: string[];
+  ids?: string[];
   /** row: centre on the row of this element */
   rowOf?: string;
   /** row: the row below this element */
@@ -191,17 +230,17 @@ export interface PlaceOp {
   before?: string;
 }
 
-export interface AlignOp {
+export interface AlignOp extends Selectors {
   op: 'align';
-  ids: string[];
+  ids?: string[];
   axis: 'row' | 'column';
   /** reference element (default: the first id) */
   to?: string;
 }
 
-export interface ColorOp {
+export interface ColorOp extends Selectors {
   op: 'color';
-  ids: string[];
+  ids?: string[];
   color: ColorName;
 }
 
@@ -226,22 +265,31 @@ export interface SpaceOp {
   after?: string;
   /** insert vertical space below this element */
   below?: string;
-  /** how much: one column / row of the drawing (default), or pixels */
-  by?: 'column' | 'row' | number;
+  /**
+   * how much: one column / row of the drawing (default), or pixels; negative
+   * ('-column', '-row', a negative number) closes that much empty space instead
+   */
+  by?: 'column' | 'row' | '-column' | '-row' | number;
 }
 
-export interface TidyOp {
+export interface TidyOp extends Selectors {
   op: 'tidy';
   /** only these shapes (default: every shape of the diagram) */
   ids?: string[];
 }
 
-export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp;
+export interface CompactOp {
+  op: 'compact';
+  /** only these frames (pools, lanes, expanded sub-processes) and what is inside them (default: the whole drawing) */
+  ids?: string[];
+}
+
+export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp | CompactOp;
 
 export type Op = AddOp | ConnectOp | SetOp | RemoveOp | RetypeOp | MoveOp | OrderOp | ExtOp | SplitOp | FormatOp;
 
 /** The diagram-only ops (they run after the semantic ops and the layout, in batch order). */
-export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy'];
+export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact'];
 
 export const OP_NAMES: Array<Op['op']> = ['add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'split', ...FORMAT_OP_NAMES];
 

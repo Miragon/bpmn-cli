@@ -116,14 +116,14 @@ describe('bpmn cli session', () => {
   it('validates, sets properties and manages extensions', async () => {
     let r = ok('validate', file);
     expect(r.out).toMatch(/layout: ok/);
-    ok('set', file, 'Activity_CheckInvoice', 'name=Check the invoice', 'zeebe:formKey=check-form', 'doc=Compare with purchase order');
+    ok('set', file, 'Activity_CheckInvoice', 'name=Check the invoice', 'zeebe:modelerTemplate=check-form', 'doc=Compare with purchase order');
     ok('ext', 'add', file, 'Activity_BookInvoice', 'zeebe:taskDefinition', 'type=book-invoice', 'retries=3');
     r = ok('ext', 'list', file, 'Activity_BookInvoice');
     expect(r.out).toMatch(/zeebe:taskDefinition/);
     const doc = await reparse();
     const t = doc.get('Activity_CheckInvoice')!;
     expect(t.get('name')).toBe('Check the invoice');
-    expect(t.$attrs['zeebe:formKey']).toBe('check-form');
+    expect(t.$attrs['zeebe:modelerTemplate']).toBe('check-form');
     expect(t.get<any>('documentation')[0].text).toBe('Compare with purchase order');
     const xml = readFileSync(file, 'utf8');
     expect(xml).toMatch(/<zeebe:taskDefinition type="book-invoice" retries="3"/);

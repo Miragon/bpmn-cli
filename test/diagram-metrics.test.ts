@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXTRA_KEYS, HARNESS_KEYS, KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
+import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
 import { parseXml } from '../src/model.js';
 import { definitionsXml } from './helpers.js';
 
@@ -267,16 +267,119 @@ describe('layoutProblems', () => {
   });
 });
 
+describe('drawing-quality kinds (QUALITY_KEYS)', () => {
+  it('backwardFlow: a target left of its source, but not a loop return', async () => {
+    const body = `${task('A')}${task('B')}${task('C')}${flow('F1', 'A', 'B')}${flow('F2', 'B', 'C')}${flow('F3', 'C', 'B')}`;
+    const di = [
+      shape('A', [400, 100, 100, 80]),
+      shape('B', [100, 100, 100, 80]),
+      shape('C', [250, 250, 100, 80]),
+      edge('F1', [
+        [400, 140],
+        [200, 140],
+      ]),
+      edge('F2', [
+        [150, 180],
+        [150, 290],
+        [250, 290],
+      ]),
+      // C -> B runs back to the left too, but B reaches C again: a loop
+      edge('F3', [
+        [300, 250],
+        [300, 160],
+        [200, 160],
+      ]),
+    ];
+    const m = await measure(processXml(body, di));
+    expect(only(m.problems, 'backwardFlow')).toEqual([{ kind: 'backwardFlow', ids: ['F1', 'A', 'B'] }]);
+    expect(m.score).toBe(WEIGHTS.backwardFlow + scoreOf({ ...m.counts, backwardFlow: 0 }));
+  });
+
+  it('segmentOverlap: two flows merging on one line before their target, not a fork', async () => {
+    const body = `${task('A')}${task('B')}${task('J')}${task('X')}${task('Y')}${flow('F1', 'A', 'J')}${flow('F2', 'B', 'J')}${flow('F3', 'J', 'X')}${flow('F4', 'J', 'Y')}`;
+    const di = [
+      shape('A', [100, 100, 100, 80]),
+      shape('B', [100, 300, 100, 80]),
+      shape('J', [400, 100, 100, 80]),
+      shape('X', [600, 300, 100, 80]),
+      shape('Y', [600, 450, 100, 80]),
+      edge('F1', [
+        [200, 140],
+        [400, 140],
+      ]),
+      // up from below, then along F1's line into J for 100 px
+      edge('F2', [
+        [200, 340],
+        [300, 340],
+        [300, 140],
+        [400, 140],
+      ]),
+      // a fork: F3 and F4 share their first segment, which is fine
+      edge('F3', [
+        [450, 180],
+        [450, 340],
+        [600, 340],
+      ]),
+      edge('F4', [
+        [450, 180],
+        [450, 490],
+        [600, 490],
+      ]),
+    ];
+    const m = await measure(processXml(body, di));
+    expect(only(m.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['F1', 'F2', 'J'], detail: '100px' }]);
+  });
+
+  describe('labels', () => {
+    const collab = `<bpmn:collaboration id="Collab_1"><bpmn:participant id="Pool" processRef="Process_1" /><bpmn:participant id="Partner" />
+      <bpmn:messageFlow id="M1" name="Order" sourceRef="Partner" targetRef="Task_A" /></bpmn:collaboration>`;
+    const body = `<bpmn:startEvent id="Start" name="Go" />${task('Task_A')}${flow('F1', 'Start', 'Task_A')}`;
+    const xml = (startLabel: Rect, msgLabel: Rect): string =>
+      definitionsXml(body, {
+        nsDecl: DI_NS,
+        extraRoots:
+          collab +
+          diagram('Collab_1', [
+            shape('Pool', [100, 200, 500, 200]),
+            shape('Partner', [100, 0, 500, 60]),
+            shape('Start', [160, 282, 36, 36], { label: startLabel }),
+            shape('Task_A', [300, 260, 100, 80]),
+            edge('F1', [
+              [196, 300],
+              [300, 300],
+            ]),
+            `<bpmndi:BPMNEdge id="M1_di" bpmnElement="M1"><di:waypoint x="350" y="60" /><di:waypoint x="350" y="260" /><bpmndi:BPMNLabel>${bounds(msgLabel)}</bpmndi:BPMNLabel></bpmndi:BPMNEdge>`,
+          ]),
+      });
+
+    it('labelOutsideFrame: a label reaching out of its pool', async () => {
+      const ok = await measure(xml([160, 325, 36, 14], [356, 150, 40, 14]));
+      expect(only(ok.problems, 'labelOutsideFrame')).toEqual([]);
+      const out = await measure(xml([160, 395, 36, 14], [356, 150, 40, 14]));
+      expect(only(out.problems, 'labelOutsideFrame')).toEqual([{ kind: 'labelOutsideFrame', ids: ['Start', 'Pool'] }]);
+    });
+
+    it('messageLabelFar: a message flow label far from its line', async () => {
+      const ok = await measure(xml([160, 325, 36, 14], [356, 150, 40, 14]));
+      expect(only(ok.problems, 'messageLabelFar')).toEqual([]);
+      const far = await measure(xml([160, 325, 36, 14], [500, 100, 40, 14]));
+      expect(only(far.problems, 'messageLabelFar')).toEqual([{ kind: 'messageLabelFar', ids: ['M1'], detail: '150px' }]);
+    });
+  });
+});
+
 describe('KEYS and WEIGHTS', () => {
   it('equal the regression harness, plus the structural kinds only the library measures', () => {
     const src = readFileSync(join(import.meta.dirname, '..', 'tools', 'layout-regress.mjs'), 'utf8');
     const keys = /const KEYS = (\[[^\]]*\]);/.exec(src)?.[1];
     const weights = /const WEIGHTS = \{([^}]*)\};/.exec(src)?.[1];
     expect(JSON.parse((keys ?? '').replaceAll("'", '"'))).toEqual([...HARNESS_KEYS]);
-    expect(KEYS.filter((k) => !HARNESS_KEYS.includes(k))).toEqual([...EXTRA_KEYS]);
+    expect(KEYS.filter((k) => !HARNESS_KEYS.includes(k))).toEqual([...EXTRA_KEYS, ...QUALITY_KEYS]);
     const pairs = Object.fromEntries((weights ?? '').split(',').map((kv) => kv.split(':').map((s) => s.trim())).map(([k, v]) => [k, Number(v)]));
     expect(pairs).toEqual(Object.fromEntries(HARNESS_KEYS.map((k) => [k, WEIGHTS[k]])));
     for (const k of EXTRA_KEYS) expect(WEIGHTS[k]).toBe(WEIGHTS.overlaps);
+    // the quality kinds are soft: the bench and the fuzzer count weights >= 6 as hard
+    for (const k of QUALITY_KEYS) expect(WEIGHTS[k]).toBeLessThan(6);
   });
 });
 

@@ -11,13 +11,15 @@
  *    referenced via dataStoreRef.
  *  - createTextAnnotation(): bpmn:TextAnnotation in scope.artifacts with
  *    `text`; id TextAnnotation_<NameSlug> from `name` (the positional name of
- *    `add`), TextAnnotation_<hash of scope and text> when only `text` was given.
- *  - createAssociation(): bpmn:Association (Association_<hash of the ends>)
+ *    `add`), TextAnnotation_<TextSlug> when only `text` was given; an
+ *    unnamed data object / store: DataObjectReference_In<Scope>.
+ *  - createAssociation(): bpmn:Association (Association_<Source>To<Target>,
+ *    the labels of the ends)
  *    in the scope's artifacts between an element and a text annotation
  *    (either direction); also compensation associations (compensate boundary
  *    event -> handler).
  *  - createDataAssociation(): node -> data = bpmn:DataOutputAssociation
- *    (DataOutputAssociation_<hash of the ends>, targetRef = data) in node.dataOutputAssociations;
+ *    (DataOutputAssociation_<Node>To<Data>, targetRef = data) in node.dataOutputAssociations;
  *    data -> node = bpmn:DataInputAssociation (sourceRef=[data], targetRef =
  *    a bpmn:Property "__targetRef_placeholder" on the node, bpmn-js
  *    convention) in node.dataInputAssociations.
@@ -27,7 +29,7 @@
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
 import { kindByName, kindLabel, triggerOf } from '../kinds.js';
-import { kindRequest, typeRequest, type IdRequest } from '../idstyle.js';
+import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../idstyle.js';
 import { addTo, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
 
@@ -45,10 +47,13 @@ function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): str
   return doc.allocateId(req).id;
 }
 
-/** The id request of a data object / data store / annotation added by `add` (W_ID_SUFFIXED recomputes it). */
+/** The id request of a data object / data store / annotation added by `add`: its name, else its text, else `In <scope>`. */
 export function artifactRequest(kind: 'dataObject' | 'dataStore' | 'textAnnotation', scope: El, opts: { name?: string; text?: string }): IdRequest {
-  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), seed: `in:${idOf(scope)}|${opts.text ?? ''}` });
+  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), context: opts.text?.trim() ? opts.text : contextOf('In', scope) });
 }
+
+/** The context of an element that belongs to another one (`To` between the ends of a connection). */
+const between = (source: El, target: El): string => `${labelOf(source)} To ${labelOf(target)}`;
 
 function assertFlowScope(scope: El, what: string): void {
   if (!is(scope, 'bpmn:Process') && !is(scope, 'bpmn:SubProcess')) {
@@ -71,7 +76,7 @@ export function isDataReference(el: El): boolean {
 export function createDataObject(doc: Doc, scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
   assertFlowScope(scope, 'data objects');
   const id = allocateId(doc, artifactRequest('dataObject', scope, opts), opts.id);
-  const dataObject = doc.create('bpmn:DataObject', { id: doc.allocateId(typeRequest('bpmn:DataObject', { ...(opts.name ? { name: opts.name } : {}), seed: id })).id });
+  const dataObject = doc.create('bpmn:DataObject', { id: doc.allocateId(typeRequest('bpmn:DataObject', { ...(opts.name ? { name: opts.name } : {}), context: speakingStem(id) ?? '' })).id });
   const ref = doc.create('bpmn:DataObjectReference', { id, ...(opts.name ? { name: opts.name } : {}), dataObjectRef: dataObject });
   addTo(scope, 'flowElements', dataObject, ref);
   cs.create({ id, kind: 'dataObject', ...(opts.name ? { name: opts.name } : {}), detail: `in ${idOf(scope)}` });
@@ -84,7 +89,7 @@ export function createDataObject(doc: Doc, scope: El, opts: { id?: string; name?
 export function createDataStore(doc: Doc, scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
   assertFlowScope(scope, 'data stores');
   const id = allocateId(doc, artifactRequest('dataStore', scope, opts), opts.id);
-  const store = doc.create('bpmn:DataStore', { id: doc.allocateId(typeRequest('bpmn:DataStore', { ...(opts.name ? { name: opts.name } : {}), seed: id })).id, ...(opts.name ? { name: opts.name } : {}) });
+  const store = doc.create('bpmn:DataStore', { id: doc.allocateId(typeRequest('bpmn:DataStore', { ...(opts.name ? { name: opts.name } : {}), context: speakingStem(id) ?? '' })).id, ...(opts.name ? { name: opts.name } : {}) });
   addTo(doc.definitions, 'rootElements', store);
   const ref = doc.create('bpmn:DataStoreReference', { id, ...(opts.name ? { name: opts.name } : {}), dataStoreRef: store });
   addTo(scope, 'flowElements', ref);
@@ -155,7 +160,7 @@ export function createAssociation(doc: Doc, source: El, target: El, opts: { id?:
   if (!container) {
     throw modelError('E_INVALID_SCOPE', `Cannot find a process or collaboration to hold the association of ${idOf(note)}`, { element: idOf(note) });
   }
-  const id = allocateId(doc, typeRequest('bpmn:Association', { seed: `${idOf(source)}->${idOf(target)}` }), opts.id);
+  const id = allocateId(doc, typeRequest('bpmn:Association', { context: between(source, target) }), opts.id);
   const association = doc.create('bpmn:Association', {
     id,
     sourceRef: source,
@@ -179,7 +184,7 @@ export function createAssociation(doc: Doc, source: El, target: El, opts: { id?:
 function placeholderProperty(doc: Doc, node: El): El {
   const existing = many(node, 'properties').find((p) => p.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
   if (existing) return existing;
-  const property = doc.create('bpmn:Property', { id: doc.allocateId(typeRequest('bpmn:Property', { seed: idOf(node) })).id, name: PLACEHOLDER_PROPERTY });
+  const property = doc.create('bpmn:Property', { id: doc.allocateId(typeRequest('bpmn:Property', { context: labelOf(node) })).id, name: PLACEHOLDER_PROPERTY });
   addTo(node, 'properties', property);
   return property;
 }
@@ -212,12 +217,12 @@ export function createDataAssociation(doc: Doc, source: El, target: El, opts: { 
   let association: El;
   if (sourceIsData) {
     assertDataNode(target, 'input', source);
-    const id = allocateId(doc, typeRequest('bpmn:DataInputAssociation', { seed: `${idOf(source)}->${idOf(target)}` }), opts.id);
+    const id = allocateId(doc, typeRequest('bpmn:DataInputAssociation', { context: between(source, target) }), opts.id);
     association = doc.create('bpmn:DataInputAssociation', { id, sourceRef: [source], targetRef: placeholderProperty(doc, target) });
     addTo(target, 'dataInputAssociations', association);
   } else {
     assertDataNode(source, 'output', target);
-    const id = allocateId(doc, typeRequest('bpmn:DataOutputAssociation', { seed: `${idOf(source)}->${idOf(target)}` }), opts.id);
+    const id = allocateId(doc, typeRequest('bpmn:DataOutputAssociation', { context: between(source, target) }), opts.id);
     association = doc.create('bpmn:DataOutputAssociation', { id, targetRef: target });
     addTo(source, 'dataOutputAssociations', association);
   }

@@ -44,7 +44,7 @@
  *     members and the artifacts whose centre lies in a band move with it.
  *  place / align refuse (E_LEAVES_CONTAINER) when a moved shape would leave
  *  its innermost frame (expanded sub-process, lane, pool): its box before the
- *  frame's start, its centre in another lane or pool, or below a lane with a
+ *  frame's start (more than 10 px into a header), its centre in another lane or pool, or below a lane with a
  *  sibling lane underneath; past the right / bottom edge the frame grows
  *  (also for the shape's label). Then the moved shapes stay and the others
  *  give way (separate.ts), first with the references fixed, else with them
@@ -74,16 +74,19 @@
 import type { Doc } from '../document.js';
 import { CliError, modelError, type ErrorDetails } from '../errors.js';
 import { is, type El } from '../model.js';
-import { laneSetOf, ordersLanes } from '../ops/order.js';
-import type { AlignOp, ColorOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
+import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
+import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
+import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
+import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { spacingOf } from './place.js';
 import { frameInterior, frameOf, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
-import type { Side } from './router.js';
+import { attachedSide, type Side } from './router.js';
 import { separate, tidy } from './separate.js';
 import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
+import { selection } from './select.js';
 import { setSwatch, writePlanes } from './write.js';
 
 export interface FormatResult {
@@ -94,6 +97,8 @@ export interface FormatResult {
   moved: string[];
   /** connections routed again */
   rerouted: string[];
+  /** connections whose waypoints changed without being routed again (stretched or shortened by moves, the space tool, compact) */
+  reshaped?: string[];
   /** color: elements whose colour changed */
   colored?: string[];
   /** label: elements whose label was placed */
@@ -114,6 +119,9 @@ interface Ctx {
 
 /** minimum clearance between a placed shape and the element it is placed below / above / after / before */
 const CLEAR = 20;
+
+/** how far a moved shape may reach into the header of its lane / pool (a sub-process has none: its border is the limit) */
+const HEADER_TOLERANCE = 10;
 
 /* ------------------------------------------------------------------ */
 /* lookup                                                               */
@@ -168,7 +176,7 @@ function movableShape(ctx: Ctx, id: string): { plane: Plane; shape: DShape } {
   if (s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group' || s.kind === 'other') {
     throw modelError('E_WRONG_KIND', `"${id}" is a ${s.kind === 'participant' ? 'pool' : s.kind}, expected a node, data element or annotation`, {
       element: id,
-      hint: 'Pools and lanes are bands: `bpmn order <file> <poolId> <laneIds...>` reorders lanes, `bpmn space <file> --below <laneId>` makes one taller.',
+      hint: 'Pools and lanes are bands: `bpmn order <file> <collaborationId> <participantIds...>` reorders pools, `bpmn order <file> <poolId> <laneIds...>` reorders lanes, `bpmn space <file> --below <laneId>` makes one taller (`--by -row` smaller).',
     });
   }
   return found;
@@ -228,6 +236,17 @@ function changedShapes(planes: readonly Plane[], snap: Snap): string[] {
     for (const s of plane.shapes.values()) {
       const b = snap.bounds.get(s.id);
       if (b && !sameBox(b, s.bounds)) out.push(s.id);
+    }
+  }
+  return out;
+}
+
+function changedEdges(planes: readonly Plane[], snap: Snap): string[] {
+  const out: string[] = [];
+  for (const plane of planes) {
+    for (const e of plane.edges.values()) {
+      const p = snap.points.get(e.id);
+      if (p && !samePoints(p, e.points)) out.push(e.id);
     }
   }
   return out;
@@ -314,7 +333,7 @@ function laneAt(plane: Plane, poolId: string | undefined, p: Point): DShape | un
 
 /**
  * Where a moved shape would leave its innermost frame: its box before the
- * frame's start (left of its interior, above its top), its centre in another
+ * frame's start (more than 10 px left of its interior, above its top), its centre in another
  * lane or pool, or below a lane that has a sibling lane underneath. Past the
  * right edge (and the bottom of the last lane / a pool / a sub-process) is
  * fine: the frame grows. Returns the lane / pool the centre would land in,
@@ -324,7 +343,9 @@ function laneAt(plane: Plane, poolId: string | undefined, p: Point): DShape | un
 function escape(plane: Plane, s: DShape, frame: DShape, box: Box): DShape | undefined {
   const inner = frameInterior(frame, 0);
   const c = { x: cx(box), y: cy(box) };
-  if (box.x < inner.x - 0.5 || box.y < frame.bounds.y - 0.5) return frame;
+  // a few px into the header of a lane or pool is fine (audit #69: hand drawings sit that close)
+  const tol = frame.kind === 'lane' || frame.kind === 'participant' ? HEADER_TOLERANCE : 0.5;
+  if (box.x < inner.x - tol || box.y < frame.bounds.y - 0.5) return frame;
   const otherPool = [...plane.shapes.values()].find((p) => p.kind === 'participant' && p.id !== s.poolId && containsPoint(p.bounds, c));
   if (otherPool) return otherPool;
   if (frame.kind !== 'lane') return undefined;
@@ -335,13 +356,24 @@ function escape(plane: Plane, s: DShape, frame: DShape, box: Box): DShape | unde
   return below ? frame : undefined;
 }
 
-/** Refuses a move that takes a shape out of its innermost frame (E_LEAVES_CONTAINER, see escape). */
-function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: number, target: string): void {
+/**
+ * Refuses a move that takes a shape out of its innermost frame
+ * (E_LEAVES_CONTAINER, see escape). A sub-process grows towards a reference
+ * inside it (past its right / bottom edge), never towards one outside it:
+ * with every reference (`refs`) outside the shape's sub-process, the shape
+ * must land inside the sub-process as it is drawn (a sub-process grown
+ * towards a far reference is pushed aside by what it then covers and leaves
+ * the shapes it holds behind: outsideSub).
+ */
+function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: number, target: string, refs: readonly DShape[] = []): void {
   for (const s of shapes) {
     const frame = frameOf(plane, s);
     if (!frame) continue;
     const unit = unitBox(plane, s);
-    const there = escape(plane, s, frame, { ...unit, x: unit.x + dx, y: unit.y + dy });
+    const box = { ...unit, x: unit.x + dx, y: unit.y + dy };
+    let there = escape(plane, s, frame, box);
+    const farRef = !there && frame.kind === 'subProcess' && refs.length > 0 && refs.every((r) => r !== frame && !inFrameOf(plane, r, frame)) && !inside(box, frame.bounds);
+    if (farRef) there = frame;
     if (!there) continue;
     let hint: string;
     if (frame.kind === 'lane') {
@@ -349,7 +381,9 @@ function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: nu
         ? `That position is in lane ${there.id}. Assign the lane first (\`bpmn move <file> ${s.id} --lane ${there.id}\`, in a batch a move op with "lane" before this op), or make room in ${frame.id} first (\`bpmn space <file> --below ${frame.id}\`).`
         : `Pick a reference inside lane ${frame.id}, or assign another lane first (\`bpmn move <file> ${s.id} --lane <laneId>\`).`;
     } else if (frame.kind === 'subProcess') {
-      hint = `Pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`;
+      hint = farRef
+        ? `The reference lies outside sub-process ${frame.id}, which would have to grow out to it: pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`
+        : `Pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`;
     } else {
       hint = `Nodes cannot leave their pool; pick a reference inside ${frame.id}.`;
     }
@@ -413,13 +447,21 @@ function leafIds(plane: Plane): string[] {
   return [...plane.shapes.values()].filter((s) => isLeaf(s) || (s.kind === 'subProcess' && s.container)).map((s) => s.id);
 }
 
-/** Grows the frame of a moved shape when its external label hangs out at the bottom (lanes below, pools below make room). */
+/**
+ * Grows the frame of a moved shape when its external label hangs out at the
+ * bottom (lanes below, pools below make room) or at the right (the pool and
+ * its lanes get wider; audit #71).
+ */
 function fitLabel(plane: Plane, s: DShape, keep: string[]): void {
   const frame = frameOf(plane, s);
   if (!frame || !s.label) return;
+  const sub = frame.kind === 'subProcess';
   const over = bottom(s.label) + 5 - bottom(frame.bounds);
-  if (over <= 0.5) return;
-  makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(frame.kind === 'subProcess' ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+  if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+  const overRight = right(s.label) + 5 - right(frame.bounds);
+  if (overRight <= 0.5) return;
+  const pool = frame.kind === 'participant' ? frame : frame.poolId ? plane.shapes.get(frame.poolId) : undefined;
+  makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : pool ? { within: copyBox(pool.bounds) } : {}) });
 }
 
 /** Everything a plane draws (bounds, labels, waypoints), to try something and undo it. */
@@ -484,7 +526,23 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
         !ids.includes(f.id) &&
         [...plane.shapes.values()].some((c) => c.kind === 'subProcess' && c.container && c.id !== f.id && !within(f, c.id) && overlaps(c.bounds, f.bounds) && !overlaps(snap.bounds.get(c.id) ?? c.bounds, snap.bounds.get(f.id) ?? f.bounds)),
     );
-  const attempt = (fixed: string[]): { ok: boolean; notes: string[]; swallowed: DShape[]; displaced: Array<{ ref: DShape; frame: DShape }>; collided: Array<[string, string]> } => {
+  // a shape out of a frame that held it before the op (its expanded sub-process, its lane, its pool): outsideSub / outsideLane / outsidePool
+  const strayed = (): Array<{ shape: DShape; frame: DShape }> => {
+    const out: Array<{ shape: DShape; frame: DShape }> = [];
+    for (const sh of plane.shapes.values()) {
+      if (sh.kind === 'participant' || sh.kind === 'lane') continue;
+      const was = snap.bounds.get(sh.id);
+      if (!was) continue;
+      for (const fid of [sh.parentId, sh.hostId ? undefined : sh.laneId, sh.poolId]) {
+        const f = fid ? plane.shapes.get(fid) : undefined;
+        const fb = f ? snap.bounds.get(f.id) : undefined;
+        if (!f || !fb || (f.kind === 'subProcess' && !f.container)) continue;
+        if (inside(was, fb) && !inside(sh.bounds, f.bounds)) out.push({ shape: sh, frame: f });
+      }
+    }
+    return out;
+  };
+  const attempt = (fixed: string[]): { ok: boolean; notes: string[]; swallowed: DShape[]; displaced: Array<{ ref: DShape; frame: DShape }>; collided: Array<[string, string]>; strayed: Array<{ shape: DShape; frame: DShape }> } => {
     const out: string[] = [];
     for (const s of moved) {
       fitInFrame(plane, s.id, 15, undefined, [...ids, ...fixed]);
@@ -502,7 +560,8 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
     const sw = swallowed();
     const gone = displaced();
     const collided = newOverlaps(plane, snap);
-    return { ok: !sw.length && !gone.length && !collided.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided };
+    const stray = strayed();
+    return { ok: !sw.length && !gone.length && !collided.length && !stray.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: stray };
   };
   const start = saveState(plane);
   let r = attempt(refIds);
@@ -518,10 +577,20 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
         ? `its frame would have to push away ${r.displaced.map((d) => `${frameWord(d.frame)} ${d.frame.id} of ${d.ref.id}`).join(', ')}`
         : r.collided.length
           ? `making room would put ${r.collided.map(([a, b]) => `${a} onto ${b}`).join(', ')}`
-          : 'what is in the way cannot give way without moving the reference or the shapes off it';
+          : r.strayed.length
+            ? `making room would take ${r.strayed.map((x) => `${x.shape.id} out of its ${frameWord(x.frame)} ${x.frame.id}`).join(', ')}`
+            : 'what is in the way cannot give way without moving the reference or the shapes off it';
     throw modelError('E_NO_ROOM', `There is no room to put ${names} ${target}: ${why}`, {
       element: moved[0]!.id,
-      related: r.swallowed.length ? r.swallowed.map((f) => f.id) : r.displaced.length ? r.displaced.flatMap((d) => [d.ref.id, d.frame.id]) : r.collided.length ? [...new Set(r.collided.flat())] : refs.map((f) => f.id),
+      related: r.swallowed.length
+        ? r.swallowed.map((f) => f.id)
+        : r.displaced.length
+          ? r.displaced.flatMap((d) => [d.ref.id, d.frame.id])
+          : r.collided.length
+            ? [...new Set(r.collided.flat())]
+            : r.strayed.length
+              ? [...new Set(r.strayed.flatMap((x) => [x.shape.id, x.frame.id]))]
+              : refs.map((f) => f.id),
       hint: 'Use a reference inside the same lane / sub-process, or make room first (`bpmn space <file> --after <id>` / `--below <id>`) and place it again.',
     });
   }
@@ -533,7 +602,7 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
 /* ------------------------------------------------------------------ */
 
 function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
-  const items = unique(op.ids).map((id) => movableShape(ctx, id));
+  const items = unique(op.ids ?? []).map((id) => movableShape(ctx, id));
   const { plane, shape: ref } = items[0]!;
   for (const it of items) samePlane(plane, it.plane, it.shape.id, ref.id);
   const group = outermost(plane, items.map((i) => i.shape));
@@ -577,7 +646,21 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
   }
   dx = Math.round(dx);
   dy = Math.round(dy);
-  checkFrames(plane, group, dx, dy, parts.join(' and '));
+  // a reference that is one of the moved shapes' own frames: the shapes cannot go beside it (audit #12)
+  for (const t of fixed) {
+    if (!t.container) continue;
+    for (const s of group) {
+      if (!framesOf(plane, s).includes(t)) continue;
+      const u = unitBox(plane, s);
+      if (inside({ ...u, x: u.x + dx, y: u.y + dy }, t.bounds)) continue;
+      throw modelError('E_LEAVES_CONTAINER', `Placing ${s.id} ${parts.join(' and ')} would move it out of its ${frameWord(t)} ${t.id}`, {
+        element: s.id,
+        related: [t.id],
+        hint: `${t.id} holds ${s.id}: pick a reference inside it, or move the node out of it first (\`bpmn move <file> ${s.id} --in <scopeId>\` / \`--lane <laneId>\`).`,
+      });
+    }
+  }
+  checkFrames(plane, group, dx, dy, parts.join(' and '), fixed);
   if (!dx && !dy) {
     notes.push(`${ref.id} is already there`);
     return [];
@@ -596,19 +679,37 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
   return settle(plane, snap);
 }
 
-function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
-  const refId = op.to ?? op.ids[0]!;
+/**
+ * align: every id onto the line of the reference. A member a selector picked
+ * (`picked`: --kind, --path, --branch) that would leave its sub-process, lane
+ * or pool on that line is left out (noted); an explicit id is refused
+ * (E_LEAVES_CONTAINER).
+ */
+function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[], picked: ReadonlySet<string> = new Set()): string[] {
+  const refId = op.to ?? op.ids?.[0] ?? "";
   const { plane, shape: ref } = drawnShape(ctx, refId);
-  const items = unique(op.ids)
+  const items = unique(op.ids ?? [])
     .filter((id) => id !== refId)
     .map((id) => movableShape(ctx, id));
   for (const it of items) samePlane(plane, it.plane, it.shape.id, refId);
   const shapes = outermost(plane, items.map((i) => i.shape));
   const moves = shapes.map((s) => ({ s, dx: op.axis === 'column' ? Math.round(cx(ref.bounds) - cx(s.bounds)) : 0, dy: op.axis === 'row' ? Math.round(cy(ref.bounds) - cy(s.bounds)) : 0 }));
-  for (const m of moves) checkFrames(plane, [m.s], m.dx, m.dy, `in the ${op.axis} of ${refId}`);
-  const moved = moves.filter((m) => m.dx || m.dy);
+  const kept: typeof moves = [];
+  const left: string[] = [];
+  for (const m of moves) {
+    try {
+      checkFrames(plane, [m.s], m.dx, m.dy, `in the ${op.axis} of ${refId}`, [ref]);
+      kept.push(m);
+    } catch (err) {
+      if (!(err instanceof CliError) || err.code !== 'E_LEAVES_CONTAINER' || !picked.has(m.s.id)) throw err;
+      const frame = plane.shapes.get(err.details.related?.[0] ?? '');
+      left.push(`${m.s.id}${frame ? ` (${frameWord(frame)} ${frame.id})` : ''}`);
+    }
+  }
+  if (left.length) notes.push(`left out ${left.join(', ')}: on the ${op.axis} of ${refId} ${left.length > 1 ? 'they' : 'it'} would leave ${left.length > 1 ? 'their frames' : 'its frame'}`);
+  const moved = kept.filter((m) => m.dx || m.dy);
   if (!moved.length) {
-    notes.push(`already aligned on the ${op.axis} of ${refId}`);
+    if (!left.length || kept.length) notes.push(`already aligned on the ${op.axis} of ${refId}`);
     return [];
   }
   for (const m of moved) shiftShape(plane, m.s.id, m.dx, m.dy);
@@ -625,7 +726,7 @@ function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[]): string[] {
 function colorOp(ctx: Ctx, op: ColorOp): string[] {
   const colored: string[] = [];
   const swatch = op.color === 'default' ? undefined : op.color;
-  for (const id of unique(op.ids)) {
+  for (const id of unique(op.ids ?? [])) {
     const el = ctx.doc.require(id);
     if (!ctx.planes.length) throw noDiagram();
     const shape = ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
@@ -675,8 +776,26 @@ function labelOp(ctx: Ctx, op: LabelOp): string[] {
   return changed ? [op.id] : [];
 }
 
+const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
+/** A side forced on a boundary event that points into its host (the flow would run through the host, audit #62). */
+function intoHost(plane: Plane, endId: string | undefined, side: Side | undefined, role: 'exit' | 'entry', flowId: string): void {
+  const end = endId ? plane.shapes.get(endId) : undefined;
+  const host = end?.hostId ? plane.shapes.get(end.hostId) : undefined;
+  if (!end || !host || !side) return;
+  const border = attachedSide(end.bounds, host.bounds);
+  if (side !== OPPOSITE[border]) return;
+  throw modelError('E_INVALID_VALUE', `--${role} ${side} would run ${flowId} through ${host.id}: ${end.id} sits on the ${border} border of its host`, {
+    element: flowId,
+    related: [end.id, host.id],
+    hint: `A boundary event's flow leaves away from its host: use --${role} ${border}${border === 'bottom' || border === 'top' ? ', left or right' : ', top or bottom'}.`,
+  });
+}
+
 function routeOp(ctx: Ctx, op: RouteOp): string[] {
   const { plane, edge } = drawnEdge(ctx, op.id);
+  intoHost(plane, edge.sourceId, op.exit, 'exit', op.id);
+  intoHost(plane, edge.targetId, op.entry, 'entry', op.id);
   const before = copyPoints(edge.points);
   const ok = reroute(plane, edge, { ...(op.exit ? { sourceSides: [op.exit] } : {}), ...(op.entry ? { targetSides: [op.entry] } : {}) });
   if (!ok) throw modelError('E_NO_SHAPE', `${op.id} cannot be routed: an end has no shape in its diagram`, { element: op.id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });
@@ -694,11 +813,186 @@ function columnWidth(plane: Plane): number {
   return Math.round((median(widths) ?? 100) + spacingOf(plane).gap);
 }
 
-function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap): string[] {
+/* ------------------------------------------------------------------ */
+/* guarded changes (compact, closing space)                             */
+/* ------------------------------------------------------------------ */
+
+const isHard = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
+
+/** The current layout problems of the document (the planes written first). */
+function measure(ctx: Ctx): LayoutMetrics {
+  writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
+  return layoutProblems(ctx.doc.definitions);
+}
+
+/**
+ * Runs changes of one plane that must not make the drawing worse: after each
+ * change the connections it broke are routed again, and the change is undone
+ * when it added a hard layout problem or raised the score (compact.ts
+ * Attempt). `rejected` collects what the undone changes would have added.
+ */
+function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProblem[] } {
+  const start = measure(ctx);
+  const hard = new Map<string, number>();
+  for (const p of start.problems.filter(isHard)) hard.set(problemKey(p), (hard.get(problemKey(p)) ?? 0) + 1);
+  let score = start.score;
+  let problems = start.problems;
+  const rejected: LayoutProblem[] = [];
+  const attempt: Attempt = (change, force = []) => {
+    const st = saveState(plane);
+    const before = new Map([...plane.edges.values()].map((e) => [e, edgeBefore(plane, e)] as const));
+    const r = change();
+    if (!r || (!r.moved.size && !r.resized.size)) {
+      restoreState(st);
+      return false;
+    }
+    const edges = [...plane.edges.values()].sort((p, q) => Number(p.kind === 'messageFlow') - Number(q.kind === 'messageFlow'));
+    const fresh = edges.filter((e) => (force.includes(e.id) || brokenEdge(plane, e, before.get(e))) && reroute(plane, e));
+    clearLabels(plane, fresh);
+    const m = measure(ctx);
+    const count = new Map(hard);
+    const added = m.problems.filter(isHard).filter((p) => {
+      const n = count.get(problemKey(p)) ?? 0;
+      count.set(problemKey(p), n - 1);
+      return n <= 0;
+    });
+    if (added.length || m.score > score) {
+      rejected.push(...(added.length ? added : diffProblems(problems, m.problems).added));
+      restoreState(st);
+      return false;
+    }
+    score = m.score;
+    problems = m.problems;
+    return true;
+  };
+  return { attempt, rejected };
+}
+
+function problemWords(ps: readonly LayoutProblem[]): string {
+  const uniq = [...new Map(ps.map((p) => [problemKey(p), p])).values()];
+  return uniq.slice(0, 3).map((p) => `${p.kind} [${p.ids.join(', ')}]`).join(', ') + (uniq.length > 3 ? ', ...' : '');
+}
+
+/** The frames `compact` takes: pools (participant ids), lanes, expanded sub-processes, and plane roots. */
+function compactTargets(ctx: Ctx, ids: readonly string[]): Map<Plane, Set<string> | undefined> {
+  const out = new Map<Plane, Set<string> | undefined>();
+  for (const id of unique(ids)) {
+    ctx.doc.require(id);
+    if (!ctx.planes.length) throw noDiagram();
+    // a diagram's own root (a process without pool, a collapsed sub-process's drill-down): the whole diagram
+    const root = ctx.planes.find((p) => p.rootId === id);
+    if (root && !root.shapes.has(id)) {
+      out.set(root, undefined);
+      continue;
+    }
+    const { plane, shape } = drawnShape(ctx, id);
+    if (!shape.container) {
+      throw modelError('E_WRONG_KIND', `"${id}" is not a pool, lane or expanded sub-process`, {
+        element: id,
+        hint: 'compact takes frames: participant ids, lane ids, expanded sub-process ids (or no id for the whole drawing); to close one gap use `bpmn space <file> --after <id> --by -column`.',
+      });
+    }
+    if (out.has(plane) && out.get(plane) === undefined) continue;
+    out.set(plane, new Set([...(out.get(plane) ?? []), id]));
+  }
+  return out;
+}
+
+function compactOp(ctx: Ctx, op: CompactOp, snap: Snap, notes: string[]): string[] {
+  if (!ctx.planes.length) throw noDiagram();
+  const targets = op.ids ? compactTargets(ctx, op.ids) : new Map(ctx.planes.map((p) => [p, undefined] as const));
+  const rerouted: string[] = [];
+  const total = { strips: { x: 0, y: 0 }, px: { x: 0, y: 0 }, refused: 0 };
+  const rejected: LayoutProblem[] = [];
+  for (const [plane, only] of targets) {
+    const g = guard(ctx, plane);
+    const st = compactPlane(plane, { ...(only ? { only } : {}), attempt: g.attempt });
+    for (const axis of ['x', 'y'] as const) {
+      total.strips[axis] += st.strips[axis];
+      total.px[axis] += st.px[axis];
+    }
+    total.refused += st.refused;
+    rejected.push(...g.rejected);
+    rerouted.push(...settle(plane, snap));
+  }
+  const n = total.strips.x + total.strips.y;
+  if (!n) notes.push('nothing to compact: no empty row or column to close');
+  else {
+    const part = (k: number, px: number, what: string): string[] => (k ? [`${k} empty ${what}${k > 1 ? 's' : ''} (${px} px)`] : []);
+    notes.push(`closed ${[...part(total.strips.x, total.px.x, 'column'), ...part(total.strips.y, total.px.y, 'row')].join(' and ')}`);
+  }
+  if (rejected.length) notes.push(`left ${total.refused} gap${total.refused > 1 ? 's' : ''} open: closing ${total.refused > 1 ? 'them' : 'it'} would add ${problemWords(rejected)}`);
+  return rerouted;
+}
+
+/** Negative `space`: closes up to `amount` px of the empty space right of / below an element (see module contract). */
+function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 'x' | 'y', amount: number, snap: Snap, notes: string[]): string[] {
+  const gaps = drawingGaps(plane);
+  const loose = looseEdges(plane);
+  const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
+  const far = (b: Box): number => (axis === 'x' ? right(b) : bottom(b));
+  const where = axis === 'x' ? `right of ${refId}` : `below ${refId}`;
+  let strip: { from: number; to: number; keep: number } | undefined;
+  let within: Box | undefined;
+  if (shape.container && shape.kind !== 'subProcess') {
+    // a pool or lane: its own trailing strip (the frame gets smaller; the band of the pool, so that the pool shrinks with a lane)
+    within = copyBox((pool ?? shape).bounds);
+    const lanes = [...plane.shapes.values()].filter((s) => s.kind === 'lane' && (s.poolId === shape.id || inFrameOf(plane, s, shape))).map((s) => s.id);
+    const occ = occupied(plane, axis, shape.bounds, { skip: new Set([shape.id, ...(pool ? [pool.id] : []), ...lanes]), loose });
+    const last = occ.length ? occ[occ.length - 1]![1] : undefined;
+    if (last !== undefined) strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
+  } else {
+    // a node or an expanded sub-process: the empty space after it, across the pool band (x) / the whole plane (y)
+    const unit = shape.container ? shape.bounds : unitBox(plane, shape);
+    within = axis === 'x' && pool ? copyBox(pool.bounds) : undefined;
+    const region = axis === 'x' ? { x: far(unit), y: (pool ?? shape).bounds.y, width: 1e6, height: (pool ?? shape).bounds.height } : { x: -1e6, y: far(unit), width: 2e6, height: 1e6 };
+    if (axis === 'x' && !pool) Object.assign(region, { y: -1e6, height: 2e6 });
+    const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((s) => s.kind === 'lane' || s.kind === 'participant').map((s) => s.id)]);
+    const occ = occupied(plane, axis, region, { skip, loose, solid: (s) => s.kind === 'subProcess' && s.container && s.id !== shape.id && !inFrameOf(plane, shape, s) });
+    // the strip starts where what touches X's far edge ends (its label, ...) and ends at the next thing
+    let from = far(unit);
+    for (const [a, b] of occ) if (a <= from + 1) from = Math.max(from, b);
+    const next = occ.find(([a]) => a > from + 1);
+    if (next) strip = { from, to: next[0], keep: axis === 'x' ? gaps.x : gaps.y };
+    else if (shape.container) {
+      notes.push(`nothing to close ${where}: nothing follows it`);
+      return [];
+    }
+  }
+  const room = strip ? Math.floor(strip.to - strip.from - strip.keep) : 0;
+  if (!strip || room < 1) {
+    notes.push(`nothing to close ${where}: no empty space there${strip ? ` (the next element is ${Math.round(strip.to - strip.from)} px away, the drawing keeps ${strip.keep} px)` : ''}`);
+    return [];
+  }
+  const close = Math.min(room, Math.round(amount));
+  const g = guard(ctx, plane);
+  const part = { from: strip.to - strip.keep - close, to: strip.to, keep: strip.keep };
+  const kept = g.attempt(() => closeEmpty(plane, axis, part, within));
+  if (!kept) {
+    throw modelError('E_NO_ROOM', `Closing the space ${where} would ${g.rejected.length ? `add ${problemWords(g.rejected)}` : 'move something that is in the way'}; nothing was written`, {
+      element: refId,
+      ...(g.rejected.length ? { related: [...new Set(g.rejected.flatMap((p) => p.ids))] } : {}),
+      hint: 'Close less (`--by -<px>`), or move what is in the way first (`bpmn place`), or use `bpmn compact`, which closes only what it can close without a new problem.',
+    });
+  }
+  if (close < amount) notes.push(`closed ${close} px ${where} (of ${Math.round(amount)} px asked for): the rest is not empty`);
+  return settle(plane, snap);
+}
+
+/** `s` lies inside frame `f` (its frame chain contains it). */
+function inFrameOf(plane: Plane, s: DShape, f: DShape): boolean {
+  return framesOf(plane, s).includes(f);
+}
+
+function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap, notes: string[]): string[] {
   const refId = (op.after ?? op.below)!;
   const { plane, shape } = drawnShape(ctx, refId);
   const axis = op.after ? 'x' : 'y';
   const by = op.by ?? (axis === 'x' ? 'column' : 'row');
+  if (by === '-column' || by === '-row' || (typeof by === 'number' && by < 0)) {
+    const amount = by === '-column' ? columnWidth(plane) : by === '-row' ? spacingOf(plane).row : -by;
+    return closeSpace(ctx, refId, plane, shape, axis, amount, snap, notes);
+  }
   const delta = by === 'column' ? columnWidth(plane) : by === 'row' ? spacingOf(plane).row : by;
   // a frame grows itself: the line runs just inside its far edge
   const box = shape.container ? shape.bounds : unitBox(plane, shape);
@@ -785,6 +1079,63 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
       else shiftShape(plane, id, 0, dy);
     }
   }
+  // a band whose members hang out at its bottom (a boundary event on the border, a shape drawn below it) grows,
+  // so that nothing ends up in the band below or outside the pool (audit #40)
+  const pool = poolId ? plane.shapes.get(poolId) : undefined;
+  for (const b of bands) {
+    const lowest = Math.max(-Infinity, ...members.get(b.id)!.map((id) => plane.shapes.get(id)!).filter((s) => s.kind !== 'lane').map((s) => bottom(unitBox(plane, s))));
+    const over = lowest + 5 - bottom(b.bounds);
+    if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(b.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
+  }
+  return settle(plane, snap);
+}
+
+/**
+ * Pool order: the pool bands of the collaboration follow the semantic order
+ * (ops/order.ts reordered `participants`), stacked from the top of the first
+ * band in the slots of the old order (each pool keeps its height and x, the
+ * gaps between the slots stay); a pool's content and the collaboration-level
+ * artifacts drawn in its band move with it; message flows are routed again
+ * (settle). Pools that are not stacked (two overlap on y) keep their places.
+ */
+function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[] {
+  const collab = ctx.doc.get(op.id);
+  const ids = rawList(collab, 'participants').map((p) => idOf(p)!).filter(Boolean);
+  const plane = ctx.planes.find((p) => p.rootId === op.id);
+  const bands = plane ? ids.map((id) => plane.shapes.get(id)).filter((s): s is DShape => !!s) : [];
+  if (!plane || bands.length < 2) {
+    if (ctx.planes.length) notes.push('fewer than two pools are drawn: nothing to reorder in the diagram');
+    return [];
+  }
+  const byY = [...bands].sort((a, b) => a.bounds.y - b.bounds.y);
+  if (bands.every((b, i) => b === byY[i])) return [];
+  for (let i = 0; i + 1 < byY.length; i++) {
+    if (byY[i + 1]!.bounds.y < bottom(byY[i]!.bounds) - 1) {
+      notes.push(`the pools are not stacked top to bottom (${byY[i]!.id} and ${byY[i + 1]!.id} share rows): the drawing keeps their places`);
+      return [];
+    }
+  }
+  const gaps = byY.slice(1).map((b, i) => b.bounds.y - bottom(byY[i]!.bounds));
+  // who moves with which pool (decided before anything moves)
+  const members = new Map<string, DShape[]>(bands.map((b) => [b.id, []]));
+  for (const s of plane.shapes.values()) {
+    if (s.kind === 'participant' || s.hostId || s.parentId) continue;
+    let pool = s.poolId && members.has(s.poolId) ? s.poolId : undefined;
+    // collaboration-level artifacts (no process) go with the pool they are drawn in
+    if (!pool && !s.poolId) pool = bands.find((b) => cy(s.bounds) >= b.bounds.y && cy(s.bounds) <= bottom(b.bounds) && cx(s.bounds) >= b.bounds.x && cx(s.bounds) <= right(b.bounds))?.id;
+    if (pool) members.get(pool)!.push(s);
+  }
+  let cursor = byY[0]!.bounds.y;
+  bands.forEach((b, i) => {
+    const dy = cursor - b.bounds.y;
+    cursor += b.bounds.height + (gaps[i] ?? 0);
+    if (!dy) return;
+    b.bounds.y += dy;
+    for (const s of members.get(b.id)!) {
+      if (s.kind === 'lane') s.bounds.y += dy;
+      else shiftShape(plane, s.id, 0, dy);
+    }
+  });
   return settle(plane, snap);
 }
 
@@ -792,9 +1143,42 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
 /* entry point                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The ids of a format op with selectors (select.ts): explicit ids first, then
+ * what --branch, --path and --kind name (connections for color only). An
+ * align without explicit ids or `to` aligns on the first selected element,
+ * with only --kind and --axis column on the rightmost one (nothing moves left).
+ * `picked`: the ids only a selector named (align leaves those out that would
+ * leave their frame, see alignOp).
+ */
+function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): { op: T; picked: Set<string> } {
+  const none = { op, picked: new Set<string>() };
+  if (op.op !== 'place' && op.op !== 'align' && op.op !== 'color' && op.op !== 'tidy') return none;
+  if (!op.path && !op.kind && !op.branch) return none;
+  if (!ctx.planes.length) throw noDiagram();
+  const shapeOf = (id: string): DShape | undefined => ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
+  const ids = selection(ctx.doc, op, {
+    shapesOnly: op.op !== 'color',
+    drawn: (id) => ctx.planes.some((p) => p.shapes.has(id) || p.edges.has(id)),
+    centreX: (id) => {
+      const s = shapeOf(id);
+      return s ? cx(s.bounds) : undefined;
+    },
+  });
+  const explicit = new Set(op.ids ?? []);
+  const picked = new Set(ids.filter((id) => !explicit.has(id)));
+  if (op.op === 'align' && !op.to && !op.ids?.length && !op.path && !op.branch && op.axis === 'column') {
+    const right = [...ids].sort((a, b) => cx(shapeOf(b)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }) - cx(shapeOf(a)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }))[0];
+    return { op: { ...op, ids, ...(right ? { to: right } : {}) }, picked };
+  }
+  return { op: { ...op, ids }, picked };
+}
+
 function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
-  const { op, index } = entry;
-  if (op.op === 'order' && !ordersLanes(ctx.doc, op)) return undefined;
+  const index = entry.index;
+  const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : resolveSelection(ctx, entry.op);
+  const op = resolved.op;
+  if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
   const snap = snapshot(ctx.planes);
   const notes: string[] = [];
   let rerouted: string[] = [];
@@ -804,7 +1188,7 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = placeOp(ctx, op, snap, notes);
       break;
     case 'align':
-      rerouted = alignOp(ctx, op, snap, notes);
+      rerouted = alignOp(ctx, op, snap, notes, resolved.picked);
       break;
     case 'color':
       extra.colored = colorOp(ctx, op);
@@ -816,16 +1200,21 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
       rerouted = routeOp(ctx, op);
       break;
     case 'space':
-      rerouted = spaceOp(ctx, op, snap);
+      rerouted = spaceOp(ctx, op, snap, notes);
       break;
     case 'tidy':
       rerouted = tidyOp(ctx, op, snap, notes);
       break;
+    case 'compact':
+      rerouted = compactOp(ctx, op, snap, notes);
+      break;
     case 'order':
-      rerouted = orderBands(ctx, op, snap, notes);
+      rerouted = ordersPools(ctx.doc, op) ? orderPoolBands(ctx, op, snap, notes) : orderBands(ctx, op, snap, notes);
       break;
   }
-  return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: unique(rerouted), ...extra, ...(notes.length ? { notes } : {}) };
+  const routed = unique(rerouted);
+  const reshaped = changedEdges(ctx.planes, snap).filter((id) => !routed.includes(id));
+  return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: routed, ...(reshaped.length ? { reshaped } : {}), ...extra, ...(notes.length ? { notes } : {}) };
 }
 
 /** Runs the format ops of a batch on the drawing of `doc` (see module contract). */

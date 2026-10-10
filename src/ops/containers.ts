@@ -6,10 +6,11 @@
  *    bpmn:Collaboration as first root element, participant.processRef = the
  *    process). Further participants get a NEW empty process (id
  *    Process_<Slug>) unless op.process names an existing unbound process or
- *    op.blackBox is set. Participant ids: Participant_<Slug>. (Ids follow the
- *    file's style, src/idstyle.ts; the bpmn-cli default is given here.)
+ *    op.blackBox is set. Participant ids: Participant_<Slug> (unnamed: the
+ *    label of its process, or BlackBox). (Ids follow the file's style,
+ *    src/idstyle.ts; the bpmn-cli default is given here.)
  *  - createLane(): creates the process' laneSet when missing (id
- *    LaneSet_<hash of the process id>), lane id Lane_<Slug>; op.in may be a process, participant or a lane
+ *    LaneSet_<Process>), lane id Lane_<Slug>; op.in may be a process, participant or a lane
  *    (-> nested childLaneSet); op.members assigns nodes. The first child lane
  *    of a lane inherits ALL of the parent's members (a lane with child lanes
  *    has no direct members); members beyond op.members -> W_OPTION_IGNORED
@@ -23,7 +24,7 @@
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
 import { kindByName, kindLabel } from '../kinds.js';
-import { kindRequest, typeRequest, type IdRequest } from '../idstyle.js';
+import { contextOf, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
 import type { AddOp } from './types.js';
@@ -53,7 +54,8 @@ function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): str
 export function ensureCollaboration(doc: Doc, cs: ChangeSet): El {
   const existing = doc.collaboration();
   if (existing) return existing;
-  const collab = doc.create('bpmn:Collaboration', { id: doc.allocateId(typeRequest('bpmn:Collaboration', { seed: doc.processes().map(idOf).join(',') })).id });
+  const first = doc.processes()[0];
+  const collab = doc.create('bpmn:Collaboration', { id: doc.allocateId(typeRequest('bpmn:Collaboration', { context: first ? labelOf(first) : '' })).id });
   insertInto(doc.definitions, 'rootElements', 0, collab);
   cs.create({ id: idOf(collab), kind: 'collaboration' });
   doc.invalidate();
@@ -107,11 +109,12 @@ function resolveParticipantProcess(doc: Doc, op: AddOp): { process?: El; mode: '
  */
 export function createParticipant(doc: Doc, op: AddOp, cs: ChangeSet): El {
   const resolved = resolveParticipantProcess(doc, op);
-  const id = allocateId(doc, kindRequest(kindByName('participant')!, { ...(op.name ? { name: op.name } : {}), seed: resolved.process ? idOf(resolved.process) : resolved.mode }), op.id);
+  const context = resolved.process ? labelOf(resolved.process) : resolved.mode === 'blackBox' ? 'Black box' : 'Pool';
+  const id = allocateId(doc, kindRequest(kindByName('participant')!, { ...(op.name ? { name: op.name } : {}), context }), op.id);
   const collab = ensureCollaboration(doc, cs);
   let process = resolved.process;
   if (resolved.mode === 'new') {
-    const processId = doc.allocateId(typeRequest('bpmn:Process', { ...(op.name ? { name: op.name } : {}), seed: id })).id;
+    const processId = doc.allocateId(typeRequest('bpmn:Process', { ...(op.name ? { name: op.name } : {}), context: id.slice(id.indexOf('_') + 1) })).id;
     process = doc.create('bpmn:Process', { id: processId, isExecutable: false });
     insertProcess(doc, process);
     cs.create({ id: processId, kind: 'process', detail: `for participant ${id} (not executable)` });
@@ -137,7 +140,7 @@ export function createParticipant(doc: Doc, op: AddOp, cs: ChangeSet): El {
 function ensureLaneSet(doc: Doc, process: El, cs: ChangeSet): El {
   const sets = many(process, 'laneSets');
   if (sets[0]) return sets[0];
-  const laneSet = doc.create('bpmn:LaneSet', { id: doc.allocateId(typeRequest('bpmn:LaneSet', { seed: idOf(process) })).id });
+  const laneSet = doc.create('bpmn:LaneSet', { id: doc.allocateId(typeRequest('bpmn:LaneSet', { context: labelOf(process) })).id });
   addTo(process, 'laneSets', laneSet);
   cs.note(`created laneSet ${idOf(laneSet)} in ${idOf(process)}`);
   return laneSet;
@@ -146,7 +149,7 @@ function ensureLaneSet(doc: Doc, process: El, cs: ChangeSet): El {
 function ensureChildLaneSet(doc: Doc, lane: El, cs: ChangeSet): El {
   const existing = lane.get<El | undefined>('childLaneSet');
   if (existing) return existing;
-  const laneSet = doc.create('bpmn:LaneSet', { id: doc.allocateId(typeRequest('bpmn:LaneSet', { seed: idOf(lane) })).id });
+  const laneSet = doc.create('bpmn:LaneSet', { id: doc.allocateId(typeRequest('bpmn:LaneSet', { context: labelOf(lane) })).id });
   lane.set('childLaneSet', laneSet);
   laneSet.$parent = lane;
   cs.note(`created nested laneSet ${idOf(laneSet)} in lane ${idOf(lane)}`);
@@ -176,7 +179,7 @@ function resolveLaneContainer(doc: Doc, op: AddOp): { process: El; parentLane?: 
  */
 export function createLane(doc: Doc, op: AddOp, cs: ChangeSet): El {
   const { process, parentLane } = resolveLaneContainer(doc, op);
-  const id = allocateId(doc, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), seed: idOf(parentLane ?? process) }), op.id);
+  const id = allocateId(doc, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), context: contextOf('In', parentLane ?? process) }), op.id);
   const laneSet = parentLane ? ensureChildLaneSet(doc, parentLane, cs) : ensureLaneSet(doc, process, cs);
   const lane = doc.create('bpmn:Lane', { id, ...(op.name ? { name: op.name } : {}) });
   addTo(laneSet, 'lanes', lane);

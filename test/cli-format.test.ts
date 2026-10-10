@@ -121,7 +121,7 @@ describe('format commands', () => {
     const s = await shapesOf(file);
     expect(s.get('L2')!.bounds.y).toBeLessThan(s.get('L1')!.bounds.y);
     const view = bpmn('show', file, '--layout');
-    expect(view.out).toMatch(/ {4}lane L2 "Boss"\n {4}lane L1 "Clerk"\n {6}row 1: S, A, G, B, E\n {6}row 2: C, E2\n/);
+    expect(view.out).toMatch(/ {4}lane L2 "Boss"\n {4}lane L1 "Clerk"\n {6}row 1: c0 S, c1 A, c2 G, c3 B, c4 E\n {6}row 2: c3 C, c4 E2\n/);
   });
 
   it('reports refusals with code, hint and exit code', async () => {
@@ -177,12 +177,12 @@ describe('read side', () => {
     bpmn('color', file, 'A', '--color', 'blue');
     const r = bpmn('show', file, '--layout');
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/^diagram BPMNPlane_(Collaboration_[01][0-9a-z]{6}) \(\1\)\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: S, A, G, B, E\n {6}row 2: C\n {6}row 3: E2\n {4}lane L2 "Boss"\n/);
+    expect(r.out).toMatch(/^diagram BPMNPlane_(Collaboration_P) \(\1\)\n {2}columns: c0\.\.c4\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: c0 S, c1 A, c2 G, c3 B, c4 E\n {6}row 2: c3 C\n {6}row 3: c4 E2\n {4}lane L2 "Boss"\n/);
     expect(r.out).toMatch(/^colors: A blue$/m);
     expect(r.out).toMatch(/^layout quality: score \d+: .*overlaps 1/m);
     expect(r.out).toMatch(/^ {2}overlaps \[B, C\]$/m);
     const j = JSON.parse(bpmn('show', file, '--layout', '--json').out);
-    expect(j.diagrams[0].groups[1]).toEqual({ id: 'L1', kind: 'lane', name: 'Clerk', parent: 'Pool', rows: [['S', 'A', 'G', 'B', 'E'], ['C'], ['E2']] });
+    expect(j.diagrams[0].groups[1]).toEqual({ id: 'L1', kind: 'lane', name: 'Clerk', parent: 'Pool', rows: [['S', 'A', 'G', 'B', 'E'], ['C'], ['E2']], columns: [[0, 1, 2, 3, 4], [3], [4]] });
     expect(j.colors).toEqual([{ id: 'A', color: 'blue', fill: '#bbdefb', stroke: '#0d4372' }]);
     expect(j.metrics.problems).toEqual(expect.arrayContaining([{ kind: 'overlaps', ids: ['B', 'C'] }]));
     expect(bpmn('show', file, 'A', '--layout').err).toMatch(/E_USAGE: --layout shows the whole drawing/);

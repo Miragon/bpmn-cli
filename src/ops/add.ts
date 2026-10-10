@@ -2,10 +2,11 @@
  * `add`: create one element and wire it in.
  *
  *  - parseKind(op.kind); rejected/unknown kinds -> E_UNSUPPORTED_KIND / E_UNKNOWN_KIND
- *  - id: op.id (claimId) or an id in the file's style (doc.allocateId with
- *    kindRequest: kind, trigger, name, the placement as seed; src/idstyle.ts);
- *    when a name-derived id collides and a `_2` suffix is used, warn
- *    W_ID_SUFFIXED.
+ *  - id: op.id (claimId) or a speaking id in the file's style
+ *    (doc.allocateId with kindRequest: kind, trigger, name, and the placement
+ *    as the context of an unnamed element: Gateway_AfterCheckInvoice,
+ *    Event_TimerOnReview; src/idstyle.ts); a taken id gets a `_2` suffix
+ *    (W_ID_SUFFIXED, reported by ops/index.ts).
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).
  *  - flow options: default + condition -> E_USAGE, an empty condition ->
@@ -14,22 +15,33 @@
  *    into the node already existed) -> W_OPTION_IGNORED.
  *  - eventSubProcess: a trigger (`eventSubProcess:<trigger>` or inferred from
  *    --error/--message/--timer/...) also creates the triggered start event
- *    inside it (an unnamed event: Event_<hash> by default), so the event sub-process is valid in one op.
+ *    inside it (an unnamed event: Event_<Trigger>StartIn<SubProcess> by default), so the event sub-process is valid in one op.
  *  - send / receive tasks: --message <name> references a root bpmn:Message
  *    (found by id or name, created when missing), like a message event.
  *  - participants: a new process gets the platform defaults (Doc.initProcess:
- *    camunda:historyTimeToLive in a Camunda 7 file).
+ *    camunda:historyTimeToLive in a Camunda 7 file); a user task of a Camunda 8
+ *    file gets zeebe:userTask (ops/platform.ts).
  *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
  *    applyTrigger() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
  *    a missing trigger is inferred from --timer/--message/... when given),
  *    documentation (op.doc), sub-process expansion (op.collapsed ->
  *    requestCollapse), lane: op.lane -> assignLane, else inherit the lane of
- *    the after/before anchor (or of the host for boundary events).
+ *    the after/before anchor (or of the host for boundary events; --flow:
+ *    of the flow's source). A splice into a flow whose ends are in different
+ *    lanes takes the lane of the row the incremental layout puts the node
+ *    on (diagram/place.ts: the target's row after a branching source, so
+ *    then the target's lane; else the anchor's) and warns W_LANE_INHERITED
+ *    naming the other lane (decided before the placement, which may rename
+ *    the flow).
  *  - participant / lane -> containers.ts; dataObject / dataStore /
  *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
  *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them).
  *  - op.set -> setProperties() from ./set.js on the new element.
+ *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
+ *    --if-absent and an existing one: that one), op.flowAs the flow the flow
+ *    options describe (into the node; a prepend before a join / unconnected
+ *    node: out of it); flowAs without such a flow is E_USAGE.
  *  - a new flow out of an event-based gateway (--after, --flow, --before,
  *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
  *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
@@ -43,14 +55,16 @@
  */
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError } from '../errors.js';
-import { kindRequest, type IdRequest } from '../idstyle.js';
+import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../idstyle.js';
 import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
-import { applyTrigger } from './events.js';
+import { applyTrigger, bindRefAs } from './events.js';
+import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
+import { zeebeUserTaskDefault } from './platform.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 
@@ -124,40 +138,55 @@ function resolveKind(token: string): ParsedKind {
   }
 }
 
-/** Warns W_ID_SUFFIXED when the id generated from the name (in the file's style) had to be suffixed. */
-export function warnIfSuffixed(doc: Doc, req: IdRequest, op: { id?: string }, id: string, cs: ChangeSet): void {
-  if (op.id) return;
-  const base = doc.idStyle.derivedBase(req);
-  if (base && id !== base) {
-    cs.warn({
-      code: 'W_ID_SUFFIXED',
-      message: `Id ${base} is already taken; using ${id}`,
-      element: id,
-      hint: 'Pass --id <id> to choose the id yourself, or give the element a distinct name.',
-    });
-  }
-}
-
-/** Allocates the element id (explicit ids are validated and claimed) and warns about suffixes. */
-export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string }, cs: ChangeSet): string {
+/** Allocates the element id: an explicit one is validated and claimed, else a speaking one in the file's style. */
+export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string }): string {
   if (op.id) {
     doc.claimId(op.id);
     return op.id;
   }
-  const { id } = doc.allocateId(req);
-  warnIfSuffixed(doc, req, op, id, cs);
-  return id;
+  return doc.allocateId(req).id;
 }
 
-/** The placement of an add op (and an extra seed) as the stable input of a hashed id (tells unnamed elements of one kind apart). */
-function placementSeed(op: AddOp, extra: string | undefined): string {
-  const parts = (['after', 'before', 'flow', 'on', 'in', 'lane'] as const).filter((k) => op[k] !== undefined).map((k) => `${k}:${op[k]}`);
-  return [...parts, ...(extra ? [extra] : [])].join('|');
+/**
+ * What tells an unnamed element apart: its placement (`After <anchor>`,
+ * `Before <anchor>`, `After <source of the flow>`, `On <host>`; `In <scope>`
+ * for a sub-process, or a pool / process of a file with several), in the
+ * words of anchorContext (the nearest named anchor, once; the kind of an
+ * unnamed anchor it names past, for when the id would repeat the anchor's).
+ */
+function placementContext(doc: Doc, op: AddOp): AnchorContext | undefined {
+  const at = (word: ContextWord, id: string | undefined): AnchorContext => {
+    const el = id ? doc.get(id) : undefined;
+    return el ? anchorContext(word, el) : { context: word };
+  };
+  switch (placementMode(op)) {
+    case 'after':
+    case 'between':
+      return at('After', op.after);
+    case 'before':
+      return at('Before', op.before);
+    case 'flow': {
+      const source = doc.get(op.flow!)?.get<El | undefined>('sourceRef');
+      return source ? anchorContext('After', source) : undefined;
+    }
+    case 'on':
+      return at('On', op.on);
+    default: {
+      const scope = op.in ? doc.get(op.in) : undefined;
+      if (!scope) return undefined;
+      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? anchorContext('In', scope) : undefined;
+    }
+  }
 }
 
-/** The id request of a new element of `def` (W_ID_SUFFIXED and the --if-absent hint recompute it). */
-function elementRequest(def: KindDef, trigger: Trigger | undefined, op: AddOp, seed?: string): IdRequest {
-  return kindRequest(def, { ...(def.family === 'event' && trigger && trigger !== 'none' ? { trigger } : {}), ...(op.name ? { name: op.name } : {}), seed: placementSeed(op, seed) });
+/** The id request of a new element of `def` (the --if-absent hint recomputes it); `context` replaces the placement's. */
+function elementRequest(doc: Doc, def: KindDef, trigger: Trigger | undefined, op: AddOp, context?: AnchorContext): IdRequest {
+  const where = context ?? placementContext(doc, op);
+  return kindRequest(def, {
+    ...(def.family === 'event' && trigger && trigger !== 'none' ? { trigger } : {}),
+    ...(op.name ? { name: op.name } : {}),
+    ...(where ? { context: where.context, ...(where.anchorKind ? { anchorKind: where.anchorKind } : {}) } : {}),
+  });
 }
 
 const FLOW_NODE_FAMILIES: ReadonlySet<KindDef['family']> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
@@ -291,15 +320,6 @@ function placementDetail(doc: Doc, op: AddOp): string {
   }
 }
 
-/** The node whose lane a new node inherits (anchor / host / flow source). */
-function laneAnchor(doc: Doc, op: AddOp): El | undefined {
-  if (op.on) return doc.get(op.on);
-  if (op.after) return doc.get(op.after);
-  if (op.before) return doc.get(op.before);
-  if (op.flow) return doc.get(op.flow)?.get<El | undefined>('sourceRef');
-  return undefined;
-}
-
 /* ------------------------------------------------------------------ */
 /* flow nodes                                                           */
 /* ------------------------------------------------------------------ */
@@ -318,10 +338,10 @@ function resolveLane(doc: Doc, op: AddOp): El | undefined {
   return lane;
 }
 
-function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, seed: string | undefined): El {
+function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: AnchorContext | undefined): El {
   checkFlowOptions(op);
   const explicitLane = resolveLane(doc, op);
-  const id = allocateElementId(doc, elementRequest(def, trigger ?? inferTrigger(op), op, seed), op, cs);
+  const id = allocateElementId(doc, elementRequest(doc, def, trigger ?? inferTrigger(op), op, context), op);
   const el = doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
   const isEvent = def.family === 'event';
   const isEventSub = def.kind === 'eventSubProcess';
@@ -344,8 +364,21 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
 
   const entry = { id, kind: def.kind, ...(op.name ? { name: op.name } : {}), detail: placementDetail(doc, op) };
   cs.create(entry);
+  // before the placement: a splice may rename the flow op.flow names
+  const inherited: InheritedLane = explicitLane ? {} : inheritedLane(doc, op);
   const entryFlow = placeNode(doc, el, op, cs);
   warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
+  if (op.flowAs) {
+    // the flow the flow options describe: into the node, or out of it when `before` prepended it
+    const flow = entryFlow ?? (placementMode(op) === 'before' ? doc.outgoing(el)[0] : undefined);
+    if (!flow) {
+      throw usageError(`flowAs ${op.flowAs}: ${id} gets no flow from this placement (${placementMode(op) === 'none' ? 'no placement' : `--${placementMode(op)}`})`, {
+        element: id,
+        hint: 'Place the node with after / before / flow, or connect it with a connect op that has "as".',
+      });
+    }
+    cs.bind(op.flowAs, flow);
+  }
 
   if (isEvent) {
     let resolved = trigger ?? inferTrigger(op);
@@ -355,7 +388,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
         throw modelError('E_TRIGGER_REQUIRED', `Boundary event ${id} needs a trigger`, {
           element: id,
           candidates: def.triggers ?? [],
-          hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer PT2D or boundaryEvent:error --error PaymentFailed.`,
+          hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer P2D or boundaryEvent:error --error PaymentFailed.`,
         });
       }
       if (is(el, 'bpmn:StartEvent') && isEventSubProcess(scope)) {
@@ -371,6 +404,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     if (resolved !== 'none') entry.kind = kindLabel(el);
   }
   if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
+  if (zeebeUserTaskDefault(doc, el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
   // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
   for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) warnEventGatewayFlow(doc, f, cs);
   if (op.collapsed && def.family === 'subProcess') {
@@ -382,11 +416,11 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   if (explicitLane) {
     assignLane(doc, el, explicitLane, cs);
   } else {
-    const anchor = laneAnchor(doc, op);
     const scope = doc.scopeOf(el);
-    if (anchor && scope && is(scope, 'bpmn:Process')) {
-      const lane = laneOf(doc, anchor);
-      if (lane) assignLane(doc, el, lane, cs);
+    if (inherited.lane && scope && is(scope, 'bpmn:Process')) {
+      assignLane(doc, el, inherited.lane, cs);
+      const warning = laneInheritedWarning(id, inherited);
+      if (warning) cs.warn(warning);
     }
   }
   if (startTrigger) {
@@ -402,20 +436,23 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
 /* entry point                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Creates one element according to `op` and returns what changed; `idSeed` tells a hashed id apart (split: the join's gateway). */
-export function addElement(doc: Doc, op: AddOp, idSeed?: string): ChangeSet {
+/** Creates one element according to `op` and returns what changed; `idContext` is the context of an unnamed element's id when the placement does not tell it (split: `After <anchor>`). */
+export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): ChangeSet {
   const cs = new ChangeSet();
   const { def, trigger } = resolveKind(op.kind);
 
   if (op.ifAbsent && !op.id) {
-    const base = doc.idStyle.derivedBase(elementRequest(def, trigger, op));
+    const base = doc.idStyle.derivedBase(elementRequest(doc, def, trigger, op));
     throw usageError('--if-absent needs an explicit --id to check for', {
-      hint: base ? `Pass --id ${base} (the id add generates for "${op.name}"), or drop --if-absent.` : 'Pass --id <id> (the id the element should have), or drop --if-absent.',
+      hint: `Pass --id ${base} (the id add generates${op.name ? ` for "${op.name}"` : ''}), or drop --if-absent.`,
     });
   }
   if (op.ifAbsent && op.id && doc.has(op.id)) {
     const existing = doc.get(op.id)!;
     cs.note(`${op.id} already exists (${kindLabel(existing)}); nothing to do`);
+    cs.bind(op.as, existing);
+    if (op.flowAs) cs.bind(op.flowAs, doc.incoming(existing)[0]);
+    bindRefAs(cs, op.refAs, existing);
     if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
       cs.warn({
         code: 'W_KIND_MISMATCH',
@@ -458,12 +495,11 @@ export function addElement(doc: Doc, op: AddOp, idSeed?: string): ChangeSet {
       break;
     }
     default:
-      el = addFlowNode(doc, op, def, trigger, cs, idSeed);
+      el = addFlowNode(doc, op, def, trigger, cs, idContext);
       break;
   }
 
   if (!FLOW_NODE_FAMILIES.has(def.family)) {
-    warnIfSuffixed(doc, elementRequest(def, trigger, op), op, idOf(el), cs);
     addDocumentation(doc, el, op.doc);
     if (op.lane) {
       cs.warn({ code: 'W_OPTION_IGNORED', message: `--lane is ignored for ${def.kind} ${idOf(el)}`, element: idOf(el), hint: 'Only flow nodes can be lane members.' });
@@ -472,6 +508,9 @@ export function addElement(doc: Doc, op: AddOp, idSeed?: string): ChangeSet {
   if (op.set && Object.keys(op.set).length) {
     cs.merge(setProperties(doc, { op: 'set', id: idOf(el), values: op.set }));
   }
+  cs.bind(op.as, el);
+  bindRefAs(cs, op.refAs, el);
+  doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }

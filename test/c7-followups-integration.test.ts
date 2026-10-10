@@ -373,12 +373,12 @@ describe('W_C7_DEPLOY_SCHEMA: `set <id> <attr>=` removes the attribute', () => {
 /* ------------------------------------------------------------------ */
 
 describe('CLI output', () => {
-  it('validate: a Camunda 8 file has no engine rules to count', () => {
+  it('validate: a Camunda 8 file counts the findings of the Camunda 8 profile (step 3; before: "no Camunda 8 engine rules yet")', () => {
     const file = join(dir, 'c8.bpmn');
     writeFileSync(file, xml(chain([['T', '<bpmn:serviceTask id="T"><bpmn:extensionElements><zeebe:taskDefinition type="t" /></bpmn:extensionElements></bpmn:serviceTask>']]), { ns: 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"', attrs: '' }));
     const r = cli('validate', file);
-    expect(r.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - no Camunda 8 engine rules yet (structure and lint only)');
-    expect(r.out).not.toContain('refused at deploy');
+    expect(r.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - 0 refused at deploy, 0 runtime, 0 practice finding(s)');
+    expect(r.out).not.toContain('no Camunda 8 engine rules yet');
   });
 
   it('validate: import warnings are counted, and --strict fails on them', () => {
@@ -403,12 +403,20 @@ describe('CLI output', () => {
         { ns: '', attrs: '', roots: `${ROOTS}<bpmn:message id="M2" name="Ship" />` },
       ),
     );
-    const r = cli('connect', file, 'G', 'R', '--no-layout');
-    expect(r.code, r.err).toBe(0);
-    const lines = r.out.split('\n').filter((l) => l.includes('W_EVENT_GATEWAY_TARGET'));
-    // lint: G -> U (a user task); op: G -> R (a receive task mixed with a message catch event)
-    expect(lines.filter((l) => l.includes('leads to userTask U'))).toHaveLength(1);
+    // lint: G -> U (a user task, already in the file: counted, not repeated); op: G -> R (a receive task mixed with a message catch event)
+    const text = cli('connect', file, 'G', 'R', '--no-layout', '--dry-run');
+    expect(text.code, text.err).toBe(0);
+    const lines = text.out.split('\n').filter((l) => l.includes('W_EVENT_GATEWAY_TARGET'));
     expect(lines.filter((l) => l.includes('now leads to R'))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes('leads to userTask U'))).toHaveLength(0);
+    expect(text.out).toMatch(/^\d+ warnings? already in the file/m);
+    const r = cli('connect', file, 'G', 'R', '--no-layout', '--json');
+    expect(r.code, r.err).toBe(0);
+    const warnings = JSON.parse(r.out).warnings as { added: Array<{ code: string; message: string }>; preexistingCount: number };
+    const added = warnings.added.filter((w) => w.code === 'W_EVENT_GATEWAY_TARGET');
+    expect(added.filter((w) => w.message.includes('now leads to R'))).toHaveLength(1);
+    expect(added.filter((w) => w.message.includes('leads to userTask U'))).toHaveLength(0);
+    expect(warnings.preexistingCount).toBeGreaterThan(0);
   }, 30000);
 });
 

@@ -10,10 +10,14 @@
  *
  * Accepted input: `[op, op, ...]` or `{ "ops": [op, ...] }`. Every problem is
  * reported as a usage error whose message starts with `ops[<index>] (<op>)`
- * and whose details carry `op: <index>`.
+ * and whose details carry `op: <index>`. Batch aliases (`"as": "$name"`,
+ * ops/aliases.ts) are checked before anything runs: defined once, used only
+ * after the op that defines them.
  */
 import { usageError, type CliError } from './errors.js';
+import { editDistance } from './ids.js';
 import { KindError, kindByName, normalizeTrigger, parseKind } from './kinds.js';
+import { ALIAS, checkAliases } from './ops/aliases.js';
 import {
   OP_NAMES,
   type AddOp,
@@ -26,6 +30,7 @@ import {
   type RouteOp,
   type SpaceOp,
   type TidyOp,
+  type CompactOp,
   type FlowOptions,
   type MoveOp,
   type Op,
@@ -34,6 +39,7 @@ import {
   type RemoveOp,
   type RetypeOp,
   type SetOp,
+  type Selectors,
   type SplitBranch,
   type SplitOp,
   type TriggerOptions,
@@ -55,6 +61,8 @@ export interface FieldSpec {
   ref?: boolean;
   /** lists: minimum number of entries */
   minItems?: number;
+  /** defines a batch alias: `$name` */
+  alias?: boolean;
 }
 
 /** Exactly the keys of an op interface (minus `op`), each with a spec. */
@@ -68,6 +76,7 @@ const ref = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => 
 const bool = (description: string): FieldSpec => ({ type: 'boolean', description });
 const list = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => ({ type: 'string[]', description, ...extra });
 const map = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => ({ type: 'map', description, ...extra });
+const alias = (description: string): FieldSpec => str(`${description} Later ops of the batch use it wherever an element id goes ("after": "$check", "ids": ["$check"]); the result lists it with the final id.`, { alias: true });
 
 export const PLACEMENT_FIELDS: FieldsOf<Placement> = {
   after: ref("Anchor id: append after a gateway or an unconnected node, or splice into the anchor's single outgoing flow. Together with `before`: splice into the flow after -> before."),
@@ -99,13 +108,17 @@ export const TRIGGER_FIELDS: FieldsOf<TriggerOptions> = {
   nonInterrupting: bool('Boundary events: cancelActivity=false; start events of an event sub-process: isInterrupting=false.'),
 };
 
+const REF_AS = 'Batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the op (the one `message` / `error` / `signal` / `escalation` created or found; E_USAGE when it references none), e.g. "$msg"; then `{"op": "ext", "id": "$msg", "action": "add", "type": "zeebe:subscription", ...}`.';
 const KIND_FIELD = ref('Element kind with optional trigger suffix, e.g. "userTask", "startEvent:message", "boundaryEvent:timer" (see `bpmn kinds`).', { required: true });
 
 export const NODE_FIELDS: FieldsOf<SplitNode> = {
   kind: KIND_FIELD,
   name: str('Display name. Also drives the generated id (<Prefix>_<NameSlug> in the default style; new ids follow the id style of the file).'),
-  id: ref('Explicit id (default: generated in the id style of the file, else <Prefix>_<NameSlug>, or <Prefix>_<hash> for unnamed elements). Give an id to every element a later op of the batch refers to.'),
-  lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host).'),
+  id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
+  as: alias('Batch alias of the new element: "$" + a name, e.g. "$check".'),
+  flowAs: alias('Batch alias of the flow into the new node (the flow the flow options describe; with "before" on a join or an unconnected node: the flow out of it).'),
+  refAs: alias(REF_AS),
+  lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host; into a flow between two lanes: the target\'s after a branching source, else the anchor\'s, with W_LANE_INHERITED).'),
   ...FLOW_FIELDS,
   ...TRIGGER_FIELDS,
   collapsed: bool('Sub-processes: draw collapsed instead of expanded.'),
@@ -121,6 +134,9 @@ export const ADD_FIELDS: FieldsOf<AddOp> = {
   kind: NODE_FIELDS.kind,
   name: NODE_FIELDS.name,
   id: NODE_FIELDS.id,
+  as: NODE_FIELDS.as,
+  flowAs: NODE_FIELDS.flowAs,
+  refAs: NODE_FIELDS.refAs,
   ...PLACEMENT_FIELDS,
   to: ref('Also connect the new node to this target (a branch that re-joins).'),
   lane: NODE_FIELDS.lane,
@@ -141,6 +157,8 @@ export const CONNECT_FIELDS: FieldsOf<ConnectOp> = {
   target: ref('Target element id.', { required: true }),
   name: str('Label of the connection (sequence flows only).'),
   id: ref('Explicit id of the connection.'),
+  as: alias('Batch alias of the new connection (with ifAbsent and an existing one: that one).'),
+  refAs: alias('Message flows: batch alias of the bpmn:Message it carries (created or found by `message`).'),
   condition: str('Condition expression (sequence flows only).'),
   language: str('Expression language of `condition`.'),
   default: bool('Make it the default flow of the source (sequence flows only).'),
@@ -152,11 +170,14 @@ export const SET_FIELDS: FieldsOf<SetOp> = {
   id: ref('Element id.', { required: true }),
   values: map('Properties to set (`bpmn kinds` lists the keys per element family); an empty string removes the property.'),
   unset: list('Keys to remove.', { minItems: 1 }),
+  refAs: alias(REF_AS),
 };
 
 export const REMOVE_FIELDS: FieldsOf<RemoveOp> = {
   ids: list('Ids to remove (cascading: flows, boundary events, children, associations).', { required: true, minItems: 1 }),
-  bridge: bool('Reconnect predecessor and successor when a node with one incoming and one outgoing flow is removed (default true).'),
+  bridge: bool('Reconnect predecessor and successor when a node with one incoming and one outgoing flow is removed, every predecessor of a merge (several incoming, one outgoing; a parallel / inclusive join is refused: E_AMBIGUOUS_BRIDGE) (default true).'),
+  bridgeAll: bool('A join (several incoming flows, one outgoing): connect every predecessor to the successor. A split (several outgoing flows) is refused (E_AMBIGUOUS_BRIDGE).'),
+  withBranch: bool('Also remove the exclusive downstream path of each node or boundary event: every node only it leads to, up to the next merge with another path or the ends (a node several paths reach is refused: E_AMBIGUOUS_BRANCH). Nothing is bridged.'),
   ifExists: bool('Skip unknown ids with a note instead of failing.'),
 };
 
@@ -164,19 +185,21 @@ export const RETYPE_FIELDS: FieldsOf<RetypeOp> = {
   id: ref('Element id.', { required: true }),
   kind: KIND_FIELD,
   ...TRIGGER_FIELDS,
+  refAs: alias(REF_AS),
 };
 
 export const MOVE_FIELDS: FieldsOf<MoveOp> = {
   ids: list('Node ids to move (boundary events follow their host).', { required: true, minItems: 1 }),
   ...PLACEMENT_FIELDS,
   ...FLOW_FIELDS,
-  lane: str('Assign the nodes to this lane; an empty string removes lane membership.'),
+  lane: str('Assign the nodes to this lane; an empty string removes lane membership. Without it a node keeps its lane; one without a lane at its new place inherits like add (into a flow between two lanes: the target\'s after a branching source, else the anchor\'s, with W_LANE_INHERITED).'),
 };
 
 export const ORDER_FIELDS: FieldsOf<OrderOp> = {
-  id: ref('Node whose outgoing flows are ordered, or the process / participant / parent lane whose lanes are ordered.', { required: true }),
+  id: ref('Node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered.', { required: true }),
   flows: list('Outgoing flow ids in the wanted top-to-bottom order; unlisted flows follow in their old order.', { minItems: 1 }),
   lanes: list('Lane ids (direct child lanes of `id`) in the wanted top-to-bottom order; unlisted lanes follow in their old order. The diagram bands are reordered too.', { minItems: 1 }),
+  pools: list('Participant ids (pools of the collaboration `id`, black boxes included) in the wanted top-to-bottom order; unlisted pools follow in their old order. The pool bands are reordered with their content, message flows are routed again.', { minItems: 1 }),
 };
 
 export const EXT_FIELDS: FieldsOf<ExtOp> = {
@@ -196,8 +219,10 @@ export const SPLIT_FIELDS: FieldsOf<SplitOp> = {
   kind: ref('Gateway kind (default exclusiveGateway).'),
   name: str('Name of the split gateway (exclusive gateways: a question, e.g. "Invoice ok?").'),
   id: ref('Explicit id of the split gateway.'),
+  as: alias('Batch alias of the split gateway.'),
   join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true).'),
   joinId: ref('Explicit id of the join gateway (default <gatewayId>_join).'),
+  joinAs: alias('Batch alias of the join gateway.'),
   joinName: str('Name of the join gateway.'),
   branches: { type: 'branches', required: true, minItems: 1, description: 'Branches in top-to-bottom order.' },
 };
@@ -213,8 +238,16 @@ export const SIDE_VALUES = ['right', 'top', 'bottom', 'left'] as const;
 export const LABEL_SIDE_VALUES = ['above', 'below', 'left', 'right'] as const;
 export const COLOR_VALUES = ['blue', 'orange', 'green', 'red', 'purple', 'default'] as const;
 
+export const SELECTOR_FIELDS: FieldsOf<Selectors> = {
+  path: list('[fromId, toId]: add every node (and, for color, every flow) on the shortest sequence-flow path between them (default flows first on ties).', { minItems: 2 }),
+  via: list('With "path": sequence flows the path must pass, in order (to pick a branch).', { minItems: 1 }),
+  kind: ref('Add every element of this kind (the `find --kind` grammar: endEvent, userTask, startEvent:message, sequenceFlow, ...).'),
+  branch: ref('Add the branch this sequence flow starts: every node only it reaches up to the join (for color also its flows).'),
+};
+
 export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
-  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { required: true, minItems: 1 }),
+  ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   rowOf: ref('Row: centre the reference vertically on this element.'),
   below: ref('Row: put the reference one row below this element.'),
   above: ref('Row: put the reference one row above this element.'),
@@ -224,13 +257,15 @@ export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
 };
 
 export const ALIGN_FIELDS: FieldsOf<AlignOp> = {
-  ids: list('Shapes to align (each moves on its own).', { required: true, minItems: 1 }),
+  ids: list('Shapes to align (each moves on its own).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   axis: str('row: same vertical centre (one horizontal line); column: same horizontal centre (one vertical line).', { required: true, values: ['row', 'column'] }),
   to: ref('Reference element that stays (default: the first id).'),
 };
 
 export const COLOR_FIELDS: FieldsOf<ColorOp> = {
-  ids: list('Shapes and connections to colour.', { required: true, minItems: 1 }),
+  ids: list('Shapes and connections to colour.', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
   color: str('A colour of the bpmn-js colour picker; "default" removes the colour.', { required: true, values: COLOR_VALUES }),
 };
 
@@ -248,11 +283,16 @@ export const ROUTE_FIELDS: FieldsOf<RouteOp> = {
 export const SPACE_FIELDS: FieldsOf<SpaceOp> = {
   after: ref('Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
   below: ref('Insert vertical space below this element (everything starting below it moves down, frames grow).'),
-  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1).' },
+  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1). Negative ("-column", "-row", an integer <= -1) closes up to that much empty space instead (only as far as it is empty).' },
 };
 
 export const TIDY_FIELDS: FieldsOf<TidyOp> = {
   ids: list('Only these shapes (default: every shape of every diagram).', { minItems: 1 }),
+  ...SELECTOR_FIELDS,
+};
+
+export const COMPACT_FIELDS: FieldsOf<CompactOp> = {
+  ids: list('Only these frames (pools by participant id, lanes, expanded sub-processes) and what is inside them (default: the whole drawing).', { minItems: 1 }),
 };
 
 /** Field specs per op name (`op` itself is implicit). */
@@ -273,6 +313,7 @@ export const OP_FIELDS: Record<Op['op'], Record<string, FieldSpec>> = {
   route: ROUTE_FIELDS,
   space: SPACE_FIELDS,
   tidy: TIDY_FIELDS,
+  compact: COMPACT_FIELDS,
 };
 
 /** One-line purpose of every op, for schema descriptions and the guide. */
@@ -283,7 +324,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   remove: 'Remove elements with cascade (= `bpmn remove`).',
   retype: 'Change the kind of an element, keeping id, name, flows and extensions (= `bpmn retype`).',
   move: 'Relocate nodes to another place or lane (= `bpmn move`).',
-  order: 'Set the top-to-bottom order of the outgoing flows of a node, or of the lanes of a pool / process / parent lane (= `bpmn order`).',
+  order: 'Set the top-to-bottom order of the outgoing flows of a node, of the lanes of a pool / process / parent lane, or of the pools of a collaboration (= `bpmn order`).',
   ext: 'Add or remove vendor extension elements (= `bpmn ext`).',
   split: 'Macro: split gateway + branches + join gateway in one step (apply only; there is no split command).',
   place: 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).',
@@ -293,6 +334,7 @@ export const OP_DESCRIPTIONS: Record<Op['op'], string> = {
   route: 'Diagram only: route one flow again, optionally forcing the exit / entry side (= `bpmn route`).',
   space: 'Diagram only: insert space right of / below an element like the modeler\'s space tool (= `bpmn space`).',
   tidy: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (= `bpmn tidy`, `bpmn layout --tidy`).',
+  compact: 'Diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content, keeping the order and relative positions; never adds a layout problem (= `bpmn compact`).',
 };
 
 const PLACEMENT_KEYS = Object.keys(PLACEMENT_FIELDS) as Array<keyof Placement>;
@@ -344,20 +386,6 @@ function describe(v: unknown): string {
   return `${typeof v} ${JSON.stringify(v)}`;
 }
 
-/** Edit distance with adjacent transpositions (optimal string alignment; small strings only). */
-function editDistance(a: string, b: string): number {
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2]![j - 2]! + 1);
-      d[i]![j] = v;
-    }
-  }
-  return d[a.length]![b.length]!;
-}
-
 /** kebab-case / snake_case / wrong-case spellings and small typos of an allowed key. */
 export function closestKey(key: string, allowed: readonly string[]): string | undefined {
   const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -381,6 +409,7 @@ function checkString(ctx: Ctx, key: string, spec: FieldSpec, value: unknown): st
     throw fail(ctx, `"${key}" must be a string, got ${describe(value)}`, `Write it as a JSON string, e.g. "${key}": "...".`);
   }
   if (spec.ref && !value.trim()) throw fail(ctx, `"${key}" must not be empty`);
+  if (spec.alias && !ALIAS.test(value)) throw fail(ctx, `"${key}" must be an alias like "$check" ($ and a letter, then letters, digits, _ or -), got "${value}"`, `Example: "${key}": "$check", then "after": "$check" in a later op.`);
   if (spec.values && !spec.values.includes(value)) {
     throw fail(ctx, `"${key}" must be one of ${spec.values.map((v) => `"${v}"`).join(', ')}, got "${value}"`);
   }
@@ -417,12 +446,12 @@ function checkStringList(ctx: Ctx, key: string, spec: FieldSpec, value: unknown)
   return out;
 }
 
-/** "column" | "row" | a positive integer (a string of digits is converted). */
-function checkSize(ctx: Ctx, key: string, value: unknown): 'column' | 'row' | number {
-  if (value === 'column' || value === 'row') return value;
-  if (typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1) return Number(value);
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value;
-  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), got ${describe(value)}`);
+/** "column" | "row" | "-column" | "-row" | a non-zero integer (a string of digits is converted). */
+function checkSize(ctx: Ctx, key: string, value: unknown): SpaceOp['by'] & {} {
+  if (value === 'column' || value === 'row' || value === '-column' || value === '-row') return value;
+  if (typeof value === 'string' && /^-?\d+$/.test(value) && Number(value) !== 0) return Number(value);
+  if (typeof value === 'number' && Number.isInteger(value) && value !== 0) return value;
+  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), or "-column", "-row" or a negative integer to close space, got ${describe(value)}`);
 }
 
 function checkMap(ctx: Ctx, key: string, value: unknown): Record<string, string> {
@@ -513,7 +542,7 @@ function checkFlowOptions(ctx: Ctx, obj: Record<string, unknown>, needsPlacement
     throw fail(ctx, '"default" and "condition" are mutually exclusive: a default flow has no condition', 'Keep the condition on the other branches and mark this one as default.');
   }
   if (!needsPlacement) return;
-  const used = presentKeys(obj, FLOW_KEYS);
+  const used = presentKeys(obj, [...FLOW_KEYS, 'flowAs']);
   const createsFlow = obj['after'] !== undefined || obj['before'] !== undefined || obj['flow'] !== undefined;
   if (used.length && !createsFlow) {
     throw fail(ctx, `${used.map((k) => `"${k}"`).join(', ')} describe the flow into the node and need "after", "before" or "flow"`, 'With "in" or "on" no sequence flow is created; connect the node afterwards with a connect op.');
@@ -598,6 +627,16 @@ function checkGroups(ctx: Ctx, obj: Record<string, unknown>, groups: string[][],
   if (!presentKeys(obj, groups.flat()).length) throw fail(ctx, atLeastOne);
 }
 
+const hasSelector = (obj: Record<string, unknown>): boolean => presentKeys(obj, ['path', 'kind', 'branch']).length > 0;
+
+/** Format ops with selectors: ids and / or a selector (`needed`), `path` is two ids, `via` only with `path`. */
+function checkSelection(ctx: Ctx, obj: Record<string, unknown>, needed: boolean): void {
+  if (needed && obj['ids'] === undefined && !hasSelector(obj)) throw fail(ctx, 'give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["Event_Start","Event_Done"],"color":"green"}.');
+  const path = obj['path'] as string[] | undefined;
+  if (path && path.length !== 2) throw fail(ctx, `"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["Event_Start", "Event_Done"], "via": ["Flow_Yes"].');
+  if (obj['via'] !== undefined && !path) throw fail(ctx, '"via" needs "path"');
+}
+
 function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
   const out = checkFields(ctx, raw, OP_FIELDS[name]);
   switch (name) {
@@ -632,26 +671,33 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
       checkKind(ctx, out, 'gateway');
       break;
     case 'order': {
-      const both = out['flows'] !== undefined && out['lanes'] !== undefined;
-      if (both || (out['flows'] === undefined && out['lanes'] === undefined)) {
-        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node) or "lanes" (lanes of a pool / process / parent lane)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]} or {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]}.');
+      const given = ['flows', 'lanes', 'pools'].filter((k) => out[k] !== undefined);
+      if (given.length !== 1) {
+        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_OkToFix","Flow_OkToBook"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_X","pools":["Participant_Customer","Participant_X"]}.');
       }
       break;
     }
     case 'place':
+      checkSelection(ctx, out, true);
       checkGroups(ctx, out, PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before")');
       break;
     case 'align':
-      if ((out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      checkSelection(ctx, out, true);
+      if (!hasSelector(out) && (out['ids'] as string[]).length < 2 && out['to'] === undefined) throw fail(ctx, 'align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["Event_A","Event_B"],"axis":"column"}.');
+      break;
+    case 'color':
+      checkSelection(ctx, out, true);
+      break;
+    case 'tidy':
+      checkSelection(ctx, out, false);
       break;
     case 'space':
       checkGroups(ctx, out, [['after', 'below']], 'give "after" (horizontal space right of an element) or "below" (vertical space below it)');
       break;
     case 'remove':
-    case 'color':
     case 'label':
     case 'route':
-    case 'tidy':
+    case 'compact':
       break;
   }
   return { op: name, ...out } as unknown as Op;
@@ -687,7 +733,9 @@ export function parseOps(input: unknown): Op[] {
   }
   const list = ops as unknown[];
   if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "Event_Start"}.' });
-  return list.map(parseOne);
+  const parsed = list.map(parseOne);
+  checkAliases(parsed);
+  return parsed;
 }
 
 /* ------------------------------------------------------------------ */
@@ -698,7 +746,7 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
   const d = { description: spec.description };
   switch (spec.type) {
     case 'string':
-      return { type: 'string', ...(spec.ref ? { minLength: 1 } : {}), ...(spec.values ? { enum: [...spec.values] } : {}), ...d };
+      return { type: 'string', ...(spec.ref ? { minLength: 1 } : {}), ...(spec.alias ? { pattern: ALIAS.source } : {}), ...(spec.values ? { enum: [...spec.values] } : {}), ...d };
     case 'boolean':
       return { type: 'boolean', ...d };
     case 'integer':
@@ -712,11 +760,14 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
     case 'nodes':
       return { type: 'array', items: { $ref: '#/$defs/node' }, ...d };
     case 'size':
-      return { oneOf: [{ type: 'string', enum: ['column', 'row'] }, { type: 'integer', minimum: 1 }], ...d };
+      return { oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }], ...d };
   }
 }
 
 /** JSON-schema rules: at most one key per group, at least one key overall. */
+/** JSON-schema rule of place / align / color: ids and / or a selector. */
+const NAMED = { anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) };
+
 const groupRules = (groups: string[][]): unknown[] => [
   ...groups.flatMap((g) => g.flatMap((a, i) => g.slice(i + 1).map((b) => ({ not: { required: [a, b] } })))),
   { anyOf: groups.flat().map((k) => ({ required: [k] })) },
@@ -759,7 +810,7 @@ function buildSchema(): Record<string, unknown> {
       remove: objectSchema(REMOVE_FIELDS, { op: 'remove', description: OP_DESCRIPTIONS.remove }),
       retype: objectSchema(RETYPE_FIELDS, { op: 'retype', description: OP_DESCRIPTIONS.retype }),
       move: objectSchema(MOVE_FIELDS, { op: 'move', description: OP_DESCRIPTIONS.move, allOf: [...placementRules(), defaultRule(), { anyOf: [...PLACEMENT_KEYS.map((k) => ({ required: [k] })), { required: ['lane'] }] }] }),
-      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }] }] }),
+      order: objectSchema(ORDER_FIELDS, { op: 'order', description: OP_DESCRIPTIONS.order, allOf: [{ oneOf: [{ required: ['flows'] }, { required: ['lanes'] }, { required: ['pools'] }] }] }),
       ext: objectSchema(EXT_FIELDS, {
         op: 'ext',
         description: OP_DESCRIPTIONS.ext,
@@ -769,13 +820,14 @@ function buildSchema(): Record<string, unknown> {
         ],
       }),
       split: objectSchema(SPLIT_FIELDS, { op: 'split', description: OP_DESCRIPTIONS.split }),
-      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: groupRules(PLACE_GROUPS) }),
-      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [{ anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }] }] }),
-      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color }),
+      place: objectSchema(PLACE_FIELDS, { op: 'place', description: OP_DESCRIPTIONS.place, allOf: [NAMED, ...groupRules(PLACE_GROUPS)] }),
+      align: objectSchema(ALIGN_FIELDS, { op: 'align', description: OP_DESCRIPTIONS.align, allOf: [NAMED, { anyOf: [{ required: ['to'] }, { properties: { ids: { minItems: 2 } } }, { required: ['path'] }, { required: ['kind'] }, { required: ['branch'] }] }] }),
+      color: objectSchema(COLOR_FIELDS, { op: 'color', description: OP_DESCRIPTIONS.color, allOf: [NAMED] }),
       label: objectSchema(LABEL_FIELDS, { op: 'label', description: OP_DESCRIPTIONS.label }),
       route: objectSchema(ROUTE_FIELDS, { op: 'route', description: OP_DESCRIPTIONS.route }),
       space: objectSchema(SPACE_FIELDS, { op: 'space', description: OP_DESCRIPTIONS.space, allOf: [{ oneOf: [{ required: ['after'] }, { required: ['below'] }] }] }),
       tidy: objectSchema(TIDY_FIELDS, { op: 'tidy', description: OP_DESCRIPTIONS.tidy }),
+      compact: objectSchema(COMPACT_FIELDS, { op: 'compact', description: OP_DESCRIPTIONS.compact }),
       branch: objectSchema(BRANCH_FIELDS, { description: 'One branch of a split: flow options of the gateway -> first node flow, then the nodes.', allOf: [defaultRule()] }),
       node: objectSchema(NODE_FIELDS, { description: 'A node inside a split branch: an add op without placement (it is chained after the previous node).', allOf: [defaultRule()] }),
     },
@@ -792,7 +844,10 @@ export const OPS_SCHEMA: Record<string, unknown> = buildSchema();
 /**
  * A small but complete example. It assumes a file made with
  * `bpmn new order.bpmn --name "Order handling" --target camunda8` and a
- * start event -> "Check invoice" user task -> end event.
+ * start event -> "Check invoice" user task -> end event; the result is a
+ * valid Camunda 8 file (FEEL condition, ISO duration, a job type for every
+ * service and send task; test/c8-ops.test.ts deploys nothing but checks it).
+ * Later ops refer to what earlier ops create by batch alias (`as`).
  */
 export function opsExample(): { ops: Op[] } {
   return {
@@ -802,18 +857,19 @@ export function opsExample(): { ops: Op[] } {
         after: 'Activity_CheckInvoice',
         kind: 'exclusiveGateway',
         name: 'Invoice ok?',
-        id: 'Gateway_InvoiceOk',
+        as: '$ok',
         branches: [
-          { flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'serviceTask', name: 'Book invoice' }] },
-          { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', set: { doc: 'Call the customer and clarify the open positions.' } }] },
+          { flowName: 'yes', condition: '= ok', nodes: [{ kind: 'serviceTask', name: 'Book invoice', as: '$book' }] },
+          { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', as: '$clarify', set: { doc: 'Call the customer and clarify the open positions.' } }] },
         ],
       },
-      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: 'Activity_ClarifyInvoice', timer: 'PT2D', nonInterrupting: true },
-      { op: 'add', kind: 'sendTask', name: 'Remind customer', after: 'Event_Reminder' },
-      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling' },
-      { op: 'connect', source: 'Activity_RemindCustomer', target: 'Event_ReminderSent' },
-      { op: 'set', id: 'Activity_BookInvoice', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
-      { op: 'ext', id: 'Activity_BookInvoice', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
+      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: '$clarify', timer: 'P2D', nonInterrupting: true, as: '$reminder' },
+      { op: 'add', kind: 'sendTask', name: 'Remind customer', after: '$reminder', as: '$remind' },
+      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling', as: '$sent' },
+      { op: 'connect', source: '$remind', target: '$sent' },
+      { op: 'set', id: '$book', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
+      { op: 'ext', id: '$book', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
+      { op: 'ext', id: '$remind', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'remind-customer' } },
     ],
   };
 }

@@ -467,7 +467,8 @@ describe('remove', () => {
 
   it('removes a sub-process with its children (ids released) and a gateway default', async () => {
     const doc = await fullDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['Sub'] });
+    // Sub has two incoming flows: a plain remove would bridge them (a merge, see test/remove-join.test.ts)
+    const cs = removeElements(doc, { op: 'remove', ids: ['Sub'], bridge: false });
     for (const id of ['Sub', 'SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2', 'F3', 'F4', 'F5']) {
       expect(doc.get(id), id).toBeUndefined();
       expect(doc.ids.has(id), id).toBe(false);
@@ -1329,10 +1330,10 @@ describe('move: bridging with --in, no id recycling', () => {
     );
     const cs = moveElements(doc, { op: 'move', ids: ['X'], after: 'B' });
     expect(cs.removed.map((c) => c.id)).toEqual(['Flow_4']);
-    expect(cs.created.map((c) => c.id)).toEqual(['Flow_5']);
+    expect(cs.created.map((c) => c.id)).toEqual(['Flow_XToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
-    expect(doc.require('Flow_5').get<El>('sourceRef').get('id')).toBe('X');
-    expect(doc.require('Flow_5').get<El>('targetRef').get('id')).toBe('C');
+    expect(doc.require('Flow_XToC').get<El>('sourceRef').get('id')).toBe('X');
+    expect(doc.require('Flow_XToC').get<El>('targetRef').get('id')).toBe('C');
     expect(doc.require('Flow_1').get<El>('targetRef').get('id')).toBe('A');
     await expectRoundTrip(doc);
   });

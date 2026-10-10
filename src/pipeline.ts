@@ -109,17 +109,17 @@ import { serializeWithout, unkeptEntries, withoutEntries } from './mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
 import { reportedImportWarnings } from './ops/decision.js';
-import { runOps } from './ops/index.js';
-import { ordersLanes } from './ops/order.js';
+import { runBatch, runOps } from './ops/index.js';
+import { ordersLanes, ordersPools } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
 import { resolvePlatform } from './platform/detect.js';
-import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './platform/profile.js';
+import { profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
 import { plainText, preserveText } from './preserve.js';
 import { profileValidators, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
-import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
+import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type NamedValidator, type Validator, type ValidatorContext, type ValidatorRun } from './validators.js';
 import { buildView, type ModelView } from './view.js';
 
@@ -182,6 +182,8 @@ export interface LayoutStatus {
   moved?: string[];
   /** incremental: pre-existing connections that were routed again */
   rerouted?: string[];
+  /** incremental: pre-existing connections stretched or shortened (their ends or bends moved) without being routed again */
+  reshaped?: string[];
   /** DI of removed elements that was deleted */
   pruned?: string[];
   notes?: string[];
@@ -202,12 +204,32 @@ export interface MutationResult {
   /** the result is the input text byte for byte (the ops changed nothing that is written) */
   unchanged: boolean;
   changes: ChangeSet;
+  /** batch aliases (`"as": "$name"`, ops/aliases.ts) -> the final id of their element; absent without aliases */
+  aliases?: Record<string, string>;
   layout: LayoutStatus;
   validation: ValidationResult;
   /** import warnings of the loaded file (informational) */
   importWarnings: string[];
+  /**
+   * the validation findings against the document before the ops: the
+   * warnings the change added, the findings it resolved, and how many it
+   * left as they were (lint warnings the document had, W_PREEXISTING_ERROR);
+   * what a result reports instead of every warning of the document. Absent
+   * for a document created in memory (`new`): every warning is reported
+   */
+  delta?: ValidationDelta;
   view?: ModelView;
   xml: string;
+}
+
+/** A mutation's validation findings compared with the document before the ops (MutationResult.delta). */
+export interface ValidationDelta {
+  /** warnings the change introduced (lint, platform profile, validators) */
+  added: Warning[];
+  /** findings the change resolved: warnings and errors the document had before (lint, platform profile, validators) */
+  resolved: Warning[];
+  /** warnings the document already had and still has, W_PREEXISTING_ERROR and the platform profile's findings included (`bpmn validate` lists them) */
+  preexisting: number;
 }
 
 /** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content while importing the document (unless force). */
@@ -234,18 +256,28 @@ function refuseDroppedContent(drops: DroppedContent[]): void {
   });
 }
 
-/** The validation errors of a document before the ops, with the elements they named. */
+/** The validation errors (and warnings) of a document before the ops, with the elements they named. */
 export interface ErrorBaseline {
   errors: Warning[];
+  /** the structural / lint warnings before the ops (a mutation reports only the ones it added) */
+  warnings?: Warning[];
   /** id -> element before the ops (an element renamed or retyped by the ops is still recognised) */
   index: Map<string, El>;
   /** the platform profile before the ops (its findings are not repeated by the mutation) */
   profile?: ProfileBaseline;
 }
 
-/** Validates the document before the ops run (this also repairs missing incoming/outgoing entries, see repairFlowLinks). */
+/**
+ * Validates the document before the ops run (this also repairs missing
+ * incoming/outgoing entries, see repairFlowLinks). A document created in
+ * memory (`new`) had nothing before: its platform baseline is empty, so
+ * every platform finding is reported like every lint warning (and the lint
+ * warnings a platform finding says again give way to it).
+ */
 export function errorBaseline(doc: Doc, platform: PlatformChoice = 'auto'): ErrorBaseline {
-  return { errors: validateDoc(doc).errors, index: new Map(doc.byId()), profile: profileBaseline(doc, platform) };
+  const { errors, warnings } = validateDoc(doc);
+  const profile = profileBaseline(doc, platform);
+  return { errors, warnings, index: new Map(doc.byId()), profile: doc.source ? profile : { report: { ...profile.report, findings: [] }, elements: [] } };
 }
 
 /** Whether `after` is the finding `before` again: same code, about the same element (by id, or by identity after a rename). */
@@ -254,6 +286,105 @@ function sameFinding(doc: Doc, baseline: ErrorBaseline, before: Warning, after: 
   if (before.element === after.element) return true;
   const was = before.element ? baseline.index.get(before.element) : undefined;
   return !!was && !!after.element && doc.get(after.element) === was;
+}
+
+/**
+ * Lint warnings about a group of elements, listed as `element` + `related`
+ * (W_DUPLICATE_NAME: every element of one name, the first as `element`), or
+ * about one element and a list of others (the unnamed branches of a
+ * gateway, the flows of an implicit split / join): the same finding while
+ * the group only shrinks (one of three equally named tasks removed).
+ */
+const GROUP_CODES = new Set(['W_DUPLICATE_NAME']);
+const LIST_CODES = new Set(['W_BRANCH_NAME', 'W_IMPLICIT_SPLIT', 'W_IMPLICIT_JOIN']);
+
+/** The element before the ops that `id` (an id after them) is: by id, or the same element under a new id (a rename). */
+function sameElement(doc: Doc, baseline: ErrorBaseline, before: string, after: string): boolean {
+  if (before === after) return true;
+  const was = baseline.index.get(before);
+  return !!was && doc.get(after) === was;
+}
+
+/** The elements of a group / list warning that count (see GROUP_CODES, LIST_CODES). */
+function membersOf(w: Warning): string[] {
+  return GROUP_CODES.has(w.code) ? [...(w.element ? [w.element] : []), ...(w.related ?? [])] : (w.related ?? []);
+}
+
+/**
+ * Whether `after` is the warning `before` again: sameFinding, and the related
+ * elements are the same ones (by id or identity). A group or list warning
+ * is the same while its elements are among the ones it had (the group may
+ * shrink, not take in another element; a group's first element may change).
+ */
+function sameWarning(doc: Doc, baseline: ErrorBaseline, before: Warning, after: Warning): boolean {
+  if (before.code !== after.code) return false;
+  if (GROUP_CODES.has(after.code) || LIST_CODES.has(after.code)) {
+    if (LIST_CODES.has(after.code) && !sameFinding(doc, baseline, before, after)) return false;
+    const had = membersOf(before);
+    return membersOf(after).every((id) => had.some((b) => sameElement(doc, baseline, b, id)));
+  }
+  if (!sameFinding(doc, baseline, before, after)) return false;
+  const a = before.related ?? [];
+  const b = after.related ?? [];
+  return a.length === b.length && a.every((id, i) => sameElement(doc, baseline, id, b[i]!));
+}
+
+/** Whether a group or list warning after the ops is still about warning `before` (they share an element): `before` is not resolved, it changed. */
+function stillAbout(doc: Doc, baseline: ErrorBaseline, before: Warning, after: Warning): boolean {
+  if (before.code !== after.code || !(GROUP_CODES.has(after.code) || LIST_CODES.has(after.code))) return false;
+  if (LIST_CODES.has(after.code)) return sameFinding(doc, baseline, before, after);
+  const had = membersOf(before);
+  return membersOf(after).some((id) => had.some((b) => sameElement(doc, baseline, b, id)));
+}
+
+/** Takes the first item of `pool` that `match` accepts out of it; whether there was one. */
+function takeMatch<T>(pool: T[], match: (item: T) => boolean): boolean {
+  const i = pool.findIndex(match);
+  if (i === -1) return false;
+  pool.splice(i, 1);
+  return true;
+}
+
+/**
+ * The findings of a mutation against the document before the ops (each
+ * finding matched once): `raw` is the structural validation after the ops
+ * (before pre-existing errors became W_PREEXISTING_ERROR), `final` the
+ * validation the result reports (platform findings and validators included).
+ * A lint warning the document had (same code, element and related elements,
+ * followed through a rename; a group warning that only shrank) is
+ * pre-existing, so is every W_PREEXISTING_ERROR and every platform finding
+ * of `profile` (the profile run after the ops) the change did not add (a
+ * pre-existing lint warning such a finding says again is counted once, as
+ * the platform finding, like `bpmn validate` lists it); the rest of
+ * `final.warnings` was added. Resolved: the lint warnings and errors the
+ * document had that `raw` no longer has (a group warning that still has one
+ * of its elements is not), and the platform's and validators' resolved
+ * findings.
+ */
+export function validationDelta(doc: Doc, baseline: ErrorBaseline, raw: ValidationResult, final: ValidationResult, profile?: ProfileReport): ValidationDelta {
+  const before = baseline.warnings ?? [];
+  const remaining = [...raw.warnings];
+  // a lint warning the platform's resolved finding says again is reported once, as the platform finding (validate.ts withProfile)
+  const platformResolved = final.platform?.resolved ?? [];
+  const covered = lintCoveredBy(platformResolved);
+  const resolved = before.filter((b) => !takeMatch(remaining, (a) => sameWarning(doc, baseline, b, a)) && !raw.warnings.some((a) => stillAbout(doc, baseline, b, a)) && !covered(b));
+  const errors = [...raw.errors];
+  resolved.push(...baseline.errors.filter((b) => !takeMatch(errors, (a) => sameFinding(doc, baseline, b, a))));
+  resolved.push(...platformResolved, ...(final.validators ?? []).flatMap((r) => r.resolved));
+  // the platform findings the file had and still has: counted (the result lists the added ones only)
+  const addedFindings = new Set<ProfileFinding>(final.platform?.added ?? []);
+  const kept = (profile?.findings ?? []).filter((f) => !addedFindings.has(f));
+  const keptCount = final.platform ? Math.max(0, Object.values(final.platform.counts).reduce((a, b) => a + b, 0) - addedFindings.size) : 0;
+  const coveredByKept = lintCoveredBy(kept);
+  const pool = [...before];
+  const added: Warning[] = [];
+  let preexisting = keptCount;
+  for (const w of final.warnings) {
+    if (w.code === 'W_PREEXISTING_ERROR') preexisting++;
+    else if (takeMatch(pool, (b) => sameWarning(doc, baseline, b, w))) preexisting += coveredByKept(w) ? 0 : 1;
+    else added.push(w);
+  }
+  return { added, resolved, preexisting };
 }
 
 /**
@@ -455,7 +586,7 @@ async function moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ x
 function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
   const out: FormatEntry[] = [];
   ops.forEach((op, index) => {
-    if (isFormatOp(op) || (op.op === 'order' && ordersLanes(doc, op))) out.push({ op, index });
+    if (isFormatOp(op) || (op.op === 'order' && (ordersLanes(doc, op) || ordersPools(doc, op)))) out.push({ op, index });
   });
   return out;
 }
@@ -480,6 +611,8 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
   if (undrawn.length) {
     try {
       const reduced = await Doc.fromXml(xml);
+      // the bridged flows keep their ids: the drawing is compared edge by edge
+      reduced.followFlowEnds = false;
       runOps(reduced, [{ op: 'remove', ids: [...undrawn], ifExists: true }]);
       reference = await reduced.toXml();
     } catch {
@@ -542,6 +675,7 @@ async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: Muta
       placed: report.placed,
       moved: report.moved,
       rerouted: report.rerouted,
+      ...(report.reshaped.length ? { reshaped: report.reshaped } : {}),
       pruned: report.pruned,
       notes: report.notes,
     },
@@ -613,10 +747,13 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   takeDroppedContent(doc);
 
   let changes: ChangeSet;
+  // the ops with their batch aliases resolved (ops/aliases.ts): what the layout and the format phase run
+  let ran: Op[] = ops;
+  let aliases: Record<string, string> = {};
   // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
   doc.platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
   try {
-    changes = runOps(doc, ops);
+    ({ changes, ops: ran, aliases } = runBatch(doc, ops));
   } catch (err) {
     throw toCliError(err);
   } finally {
@@ -624,8 +761,11 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   }
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 
-  const structural = separatePreexisting(doc, validateDoc(doc), baseline);
-  let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
+  const raw = validateDoc(doc);
+  const structural = separatePreexisting(doc, raw, baseline);
+  // the profile after the ops: its added findings are reported, the others counted (validationDelta)
+  const profileAfter = baseline.profile ? runProfile(doc, opts.platform) : undefined;
+  let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform, profileAfter) : structural;
   // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
   changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings);
   if (validation.errors.length && !opts.force) {
@@ -650,7 +790,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else {
     let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ops, opts));
+      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ran, opts));
     } catch (err) {
       throw toCliError(err);
     }
@@ -660,7 +800,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     }
   }
 
-  const entries = formatEntries(doc, ops);
+  const entries = formatEntries(doc, ran);
   if (entries.length) {
     const formatted = await runFormat(xml, doc.file, entries);
     xml = formatted.xml;
@@ -691,9 +831,12 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     written: false,
     unchanged,
     changes,
+    ...(Object.keys(aliases).length ? { aliases } : {}),
     layout,
     validation,
     importWarnings,
+    // a document created in memory (`new`) has no file whose warnings were already there: everything is reported
+    ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation, profileAfter) } : {}),
     xml,
   };
   if (opts.show) {

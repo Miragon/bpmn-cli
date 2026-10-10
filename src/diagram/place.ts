@@ -10,7 +10,9 @@
  *  clamped 40..100, fallback 60; row = median row spacing, clamped 80..150):
  *   - splice (the flow P->S was split by N): x = P.right + gap, centred on
  *     S's row when S is in P's row band (or P is a branching node), else on
- *     P's row; only when that spot is taken: space tool at P.right + 1 by
+ *     P's row; S's row in another lane than N's own is replaced by a free
+ *     row of N's lane (rowInLane: N's lane never stretches over to S's row);
+ *     only when that spot is taken: space tool at P.right + 1 by
  *     N.width + gap within P's pool (inside an expanded sub-process: in
  *     frame mode, so the sub-process never grows over foreign shapes, see
  *     space.ts; the same for every space-tool run placement makes there)
@@ -753,6 +755,31 @@ function intoOwnLane(ctx: PlaceCtx, plane: Plane, probe: Probe, x: number, c: nu
   return rowInLane(ctx, plane, lane, x, size.width, size.height, prefer, new Set([probe.id]));
 }
 
+/**
+ * How far the space tool at `line` has to push for `box` when part of the room
+ * is free already (audit #77): what is in the way of the box (its obstacles
+ * with their clearance, the bends of connections in its rows) and the
+ * successor `S` (one gap) must end right of it. Undefined when something in
+ * the way does not start beyond the line (a push cannot clear it): then the
+ * caller makes a full column of room as before.
+ */
+function localShift(plane: Plane, box: Box, line: number, obs: { boxes: Box[]; labels: Box[] }, S: DShape | undefined, gap: number): number | undefined {
+  let need = 0;
+  const clear = (b: Box, room: number): boolean => {
+    if (!overlaps(b, box, room)) return true;
+    if (b.x < line) return false;
+    need = Math.max(need, right(box) + room - b.x);
+    return true;
+  };
+  for (const b of obs.boxes) if (!clear(b, 20)) return undefined;
+  for (const l of obs.labels) if (!clear(l, 4)) return undefined;
+  for (const e of plane.edges.values()) {
+    for (const p of e.points.slice(1, -1)) if (!clear({ x: p.x, y: p.y, width: 0, height: 0 }, 10)) return undefined;
+  }
+  if (S && S.bounds.x >= line && Math.abs(cy(S.bounds) - cy(box)) <= box.height / 2 + S.bounds.height / 2) need = Math.max(need, right(box) + gap - S.bounds.x);
+  return Math.ceil(need);
+}
+
 function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pending: ReadonlySet<string>): void {
   const sp = spacing(ctx, plane);
   const size = sizeFor(ctx, plane, id);
@@ -780,14 +807,20 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
   if (S || !succShapes.length) {
     // splice / continuation on the anchor's row
     const sameRow = S && Math.abs(cy(S.bounds) - cy(main.bounds)) <= sp.rowTol;
-    let c = S && (sameRow || succShapes.length) ? cy(S.bounds) : cy(main.bounds);
-    c = intoOwnLane(ctx, plane, probe, maxRight + sp.gap, c, size, S ? [Math.round(cy(S.bounds))] : [], main);
+    const onS = !!S && (sameRow || succShapes.length > 0);
+    let c = onS ? cy(S.bounds) : cy(main.bounds);
+    // S's row in another lane than the node's own (a node keeping or given the anchor's lane after a branching
+    // anchor): the row follows the node's lane, which never stretches over to S's row (audit #14)
+    const ownRow = !!S && onS && !!probe.laneId && S.laneId !== probe.laneId;
+    c = intoOwnLane(ctx, plane, probe, maxRight + sp.gap, c, size, S ? [Math.round(cy(S.bounds))] : [], ownRow ? undefined : main);
     const x = maxRight + sp.gap;
     const box = { x, y: c - size.height / 2, ...size };
     const blockers = obstacles(plane, frame, exclude);
     const succRoom = !S || Math.abs(cy(S.bounds) - c) > size.height / 2 + S.bounds.height / 2 || S.bounds.x >= right(box) + Math.min(sp.gap, 40);
     if (!isFree(box, blockers) || !succRoom) {
-      recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta: size.width + sp.gap, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
+      const full = size.width + sp.gap;
+      const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, sp.gap) ?? full);
+      recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
     placeAt(ctx, plane, id, x, c, size);
     return;

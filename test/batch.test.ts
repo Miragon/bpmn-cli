@@ -51,7 +51,7 @@ describe('parseOps: shapes', () => {
   it('accepts the example and returns typed ops in order', () => {
     const example = opsExample();
     const ops = parseOps(example);
-    expect(ops.map((o) => o.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext']);
+    expect(ops.map((o) => o.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext', 'ext']);
     expect(ops).toEqual(example.ops);
   });
 
@@ -113,6 +113,15 @@ describe('parseOps: shapes', () => {
       { op: 'space', below: 'Lane_1', by: 80 },
       { op: 'tidy', ids: ['Task_A'] },
       { op: 'tidy' },
+      { op: 'space', after: 'Task_A', by: '-column' },
+      { op: 'space', below: 'Lane_1', by: -80 },
+      { op: 'compact', ids: ['Participant_1', 'Lane_1'] },
+      { op: 'color', ids: ['Task_A'], path: ['Start', 'End'], via: ['F1'], kind: 'endEvent', branch: 'F2', color: 'green' },
+      { op: 'place', branch: 'F2', below: 'Task_B' },
+      { op: 'align', kind: 'endEvent', axis: 'column' },
+      { op: 'tidy', path: ['Start', 'End'] },
+      { op: 'order', id: 'Collaboration_1', pools: ['Participant_2', 'Participant_1'] },
+      { op: 'compact' },
       { op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, body: 'b', replace: true },
       { op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:ioMapping/>' },
       { op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' },
@@ -169,10 +178,10 @@ describe('parseOps: rejections name the op index', () => {
 
   it('rejects unknown keys with the allowed keys and a spelling hint', () => {
     const e = failure([{ op: 'remove', ids: ['a'] }, { op: 'add', kind: 'task', 'flow-name': 'x' }]);
-    expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, after/);
+    expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, as, flowAs, refAs, after/);
     expect(e.op).toBe(1);
     expect(failure([{ op: 'connect', source: 'a', target: 'b', ifabsent: true }]).message).toMatch(/did you mean "ifAbsent"/);
-    expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes$/);
+    expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes, pools$/);
   });
 
   it('rejects missing required keys and wrong value types', () => {
@@ -312,7 +321,7 @@ describe('guide', () => {
 
   it('guideText mentions every command with usage and an example', () => {
     const text = guideText();
-    const names = ['new', 'show', 'find', 'add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'apply', 'place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'validate', 'layout', 'metrics', 'kinds', 'guide'];
+    const names = ['new', 'show', 'find', 'add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'apply', 'place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact', 'validate', 'layout', 'metrics', 'kinds', 'guide'];
     expect(COMMANDS.map((c) => c.name)).toEqual(names);
     for (const name of names) {
       expect(text).toContain(`bpmn ${name}`);

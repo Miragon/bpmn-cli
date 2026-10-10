@@ -32,19 +32,25 @@
  *    does not allow on the new kind (camunda:assignee on a serviceTask,
  *    camunda:topic on a userTask, a camunda:taskListener outside a userTask)
  *    are named in one W_PROPERTY_INAPPLICABLE warning with the commands that
- *    remove them. (Not W_PROPERTY_DROPPED: nothing was dropped.) In a Camunda 7
- *    file the profile names each of them as well (W_C7_MISPLACED_ATTRIBUTE /
- *    W_C7_MISPLACED_EXTENSION); withoutProfileDuplicates() drops the summary
- *    then, so a write reports every item once.
+ *    remove them; the same for zeebe content by the Zeebe descriptor
+ *    (zeebe:assignmentDefinition on a serviceTask, zeebe:taskDefinition on a
+ *    userTask). (Not W_PROPERTY_DROPPED: nothing was dropped.) In a Camunda 7
+ *    or 8 file the profile names each of them as well (W_C7_MISPLACED_ATTRIBUTE,
+ *    W_C7_MISPLACED_EXTENSION, W_C8_MISPLACED_ATTRIBUTE, W_C8_MISPLACED_EXTENSION);
+ *    withoutProfileDuplicates() drops the summary then, so
+ *    a write reports every item once. Retyped to a userTask in a Camunda 8
+ *    file, the task gets zeebe:userTask (ops/platform.ts).
  */
 import type { Doc } from '../document.js';
 import { modelError, type Warning } from '../errors.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
-import { allowedOn, attrAppliesTo, isC7Uri } from '../platform/descriptor.js';
-import { subjectOf, type ProfileFinding } from '../platform/finding.js';
+import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
+import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
 import { ChangeSet } from '../result.js';
-import { applyTrigger } from './events.js';
+import { applyTrigger, bindRefAs } from './events.js';
+import { coversProfileSubjects } from './covers.js';
+import { zeebeUserTaskDefault } from './platform.js';
 import { cascadeRemove } from './remove.js';
 import {
   assertMessageFlowsFit,
@@ -61,6 +67,8 @@ import {
   type PropDescriptor,
 } from './set.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
+
+export { withoutProfileDuplicates } from './covers.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
 
@@ -190,6 +198,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const sameTrigger = trigger === oldTrigger;
   if (from === to && sameTrigger && !hasTriggerOptions) {
     cs.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
+    bindRefAs(cs, op.refAs, el);
     return cs;
   }
   if (to.kind === 'eventSubProcess' && (doc.incoming(el).length || doc.outgoing(el).length)) {
@@ -208,6 +217,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   if (target !== el) {
     const inapplicable = inapplicableCamundaContent(doc, target, to);
     if (inapplicable) cs.warn(inapplicable);
+    if (zeebeUserTaskDefault(doc, target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
   }
   let dropNonInterrupting = false;
   if (trigger !== undefined && (!sameTrigger || hasTriggerOptions)) {
@@ -228,6 +238,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
       ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
       : `retyped from ${oldLabel} to ${kindLabel(target)}`;
   cs.change(changeOf(target, detail));
+  bindRefAs(cs, op.refAs, target);
   return cs;
 }
 
@@ -238,16 +249,32 @@ function camundaName(doc: Doc, name: string): string | undefined {
   return `camunda:${name.slice(idx + 1)}`;
 }
 
-/** W_PROPERTY_INAPPLICABLE naming the camunda attributes / extension elements the new kind cannot use (they stay). */
+/** The local name when `name` is prefixed with a prefix bound to the zeebe namespace. */
+function zeebeLocal(doc: Doc, name: string): string | undefined {
+  const idx = name.indexOf(':');
+  if (idx <= 0 || doc.namespaceUri(name.slice(0, idx)) !== ZEEBE_URI) return undefined;
+  return name.slice(idx + 1);
+}
+
+/**
+ * W_PROPERTY_INAPPLICABLE naming the camunda / zeebe attributes and extension
+ * elements the new kind cannot use (they stay), by the Camunda 7 and the
+ * Camunda 8 (zeebe) descriptor.
+ */
 function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | undefined {
   const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
     const name = camundaName(doc, key);
-    return !!name && attrAppliesTo(name, el) === false;
+    if (name) return attrAppliesTo(name, el) === false;
+    const z = zeebeLocal(doc, key);
+    const def = z ? zeebeAttr(z) : undefined;
+    return !!def && !def.owners.some((o) => is(el, o));
   });
   const exts: string[] = [];
   for (const ext of el.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
     const name = camundaName(doc, ext.$type);
-    if (name && allowedOn(name, el) === false && !exts.includes(ext.$type)) exts.push(ext.$type);
+    const z = name ? undefined : zeebeLocal(doc, ext.$type);
+    const misplaced = name ? allowedOn(name, el) === false : z ? zeebeAllowedOn(z, el) === false && !zeebeNestedOnly(z) : false;
+    if (misplaced && !exts.includes(ext.$type)) exts.push(ext.$type);
   }
   const names = [...attrs, ...exts];
   if (!names.length) return undefined;
@@ -260,36 +287,10 @@ function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | un
     code: 'W_PROPERTY_INAPPLICABLE',
     message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
     element: id,
-    hint: `The Camunda descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
+    hint: `The ${names.every((n) => zeebeLocal(doc, n)) ? 'Zeebe (Camunda 8)' : names.some((n) => zeebeLocal(doc, n)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
   };
-  // what the Camunda 7 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
-  Object.defineProperty(warning, COVERS, { value: [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)], enumerable: false });
-  return warning;
-}
-
-/** The profile findings that name one misplaced camunda attribute / extension element each. */
-const MISPLACED = ['W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION'];
-
-/** Hidden list of profile subjects an operation warning repeats (not serialised). */
-const COVERS: unique symbol = Symbol('covered-profile-subjects');
-
-/**
- * The warnings of a mutation without the ones its platform-profile findings
- * already report: after a retype in a Camunda 7 file the profile names every
- * camunda attribute / extension element the new kind cannot use
- * (W_C7_MISPLACED_ATTRIBUTE / W_C7_MISPLACED_EXTENSION, with severity and a
- * remove command each), so the summary W_PROPERTY_INAPPLICABLE is dropped
- * when those findings cover everything it names. Without the profile
- * (`--platform none`, a file that is not Camunda 7) it stays. For the
- * pipeline / printMutation: `changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings)`.
- */
-export function withoutProfileDuplicates(warnings: Warning[], validation: readonly Warning[]): Warning[] {
-  return warnings.filter((w) => {
-    const covers = (w as Warning & { [COVERS]?: string[] })[COVERS];
-    if (!covers?.length) return true;
-    const reported = new Set(validation.filter((v) => v.element === w.element && MISPLACED.includes(v.code)).map((v) => subjectOf(v as ProfileFinding)));
-    return !covers.every((s) => reported.has(s));
-  });
+  // what the Camunda 7 / 8 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
+  return coversProfileSubjects(warning, [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)]);
 }
 
 /** Applies / clears the kind-specific creation props (e.g. triggeredByEvent for event sub-processes). */

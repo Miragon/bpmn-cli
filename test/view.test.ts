@@ -320,7 +320,10 @@ describe('buildView / renderView', () => {
       { id: 'Lane_IT', name: 'IT', members: ['End'] },
     ]);
     expect(view.processes[0]!.nodes.map((n) => n.lane)).toEqual(['Lane_Sales', 'Lane_Inner', 'Lane_IT']);
-    expect(renderView(view)).toContain('  lanes:\n    Lane_Sales "Sales" [Start]\n      Lane_Inner "Inner" [A]\n    Lane_IT "IT" [End]');
+    // every node carries its (deepest) lane; the lanes section is the tree of names
+    const text = renderView(view);
+    expect(text).toContain('  startEvent Start [lane=Lane_Sales] -> A (F1)\n  task A [lane=Lane_Inner] -> End (F2)\n  endEvent End [lane=Lane_IT]');
+    expect(text).toContain('  lanes:\n    Lane_Sales "Sales"\n      Lane_Inner "Inner"\n    Lane_IT "IT"');
     expect(view.problems).toEqual([]);
   });
 
@@ -372,8 +375,8 @@ describe('buildView / renderView', () => {
         { id: 'Participant_Customer', name: 'Customer' },
       ],
       messageFlows: [
-        { id: 'Flow_M1', source: 'Participant_Customer', target: 'Start', name: 'Order' },
-        { id: 'Flow_M2', source: 'Pay', target: 'Receive', message: 'Payment' },
+        { id: 'Flow_M1', source: 'Participant_Customer', target: 'Start', name: 'Order', sourceName: 'Customer' },
+        { id: 'Flow_M2', source: 'Pay', target: 'Receive', message: 'Payment', sourceName: 'Pay', targetName: 'Receive payment' },
       ],
     });
     expect(view.processes.map((p) => [p.id, p.executable, p.participant])).toEqual([
@@ -387,8 +390,8 @@ describe('buildView / renderView', () => {
         '  participant Participant_Shop "Shop" = Process_Shop',
         '  participant Participant_Bank "Bank" = Process_Bank',
         '  participant Participant_Customer "Customer" (black box)',
-        '  messageFlow Flow_M1 Participant_Customer -> Start "Order"',
-        '  messageFlow Flow_M2 Pay -> Receive [message Payment]',
+        '  messageFlow Flow_M1 "Order": Participant_Customer "Customer" -> Start',
+        '  messageFlow Flow_M2: Pay "Pay" -> Receive "Receive payment" [message Payment]',
         'process Process_Shop "Shop" executable in Participant_Shop',
       ].join('\n'),
     );
@@ -492,12 +495,12 @@ describe('buildView / renderView', () => {
     expect(view.definitions.namespaces).toEqual(['camunda', 'zeebe']);
     const task = view.processes[0]!.nodes[1]!;
     expect(task.extensions).toEqual(['zeebe:taskDefinition', 'zeebe:ioMapping', 'camunda:asyncBefore']);
-    expect(task.props).toEqual({ loop: 'sequential', cardinality: '3' });
+    expect(task.props).toEqual({ loop: 'sequential', cardinality: '3', job: 'pay' });
     expect(task.documentation).toBe('Talks to the   payment provider');
     expect(view.processes[0]!.nodes[2]!.props).toEqual({ calledElement: 'Other' });
     const text = renderView(view);
     expect(text.startsWith('namespaces: camunda, zeebe\n')).toBe(true);
-    expect(text).toContain('  serviceTask A "Call worker" [loop=sequential, cardinality=3, camunda:asyncBefore=true, ext: zeebe:taskDefinition, zeebe:ioMapping, doc: "Talks to the payment provider"] -> C (F2)');
+    expect(text).toContain('  serviceTask A "Call worker" [loop=sequential, cardinality=3, job=pay, camunda:asyncBefore=true, ext: zeebe:taskDefinition, zeebe:ioMapping, doc: "Talks to the payment provider"] -> C (F2)');
     expect(text).toContain('  callActivity C [calledElement=Other] -> End (F3)');
   });
 

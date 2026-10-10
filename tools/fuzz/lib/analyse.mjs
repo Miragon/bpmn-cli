@@ -282,7 +282,8 @@ export function geometry(a) {
   return { shapes, edges };
 }
 
-const sameBox = (s, t) => s.x === t.x && s.y === t.y && s.w === t.w && s.h === t.h;
+// Object.is: a coordinate the file has as NaN (no valid bounds) that stays NaN did not move
+const sameBox = (s, t) => Object.is(s.x, t.x) && Object.is(s.y, t.y) && Object.is(s.w, t.w) && Object.is(s.h, t.h);
 const samePts = (a, b) => a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
 
 /** Every waypoint keeps its place or shifts by one common dx and / or one common dy (translation or space tool). */
@@ -319,7 +320,7 @@ export function stability(before, after, reported) {
 export function reportedIds(layout) {
   const s = new Set();
   if (!layout) return s;
-  for (const k of ['placed', 'moved', 'rerouted', 'pruned']) for (const id of layout[k] ?? []) s.add(id);
-  for (const f of layout.format ?? []) for (const k of ['moved', 'rerouted', 'colored', 'labels']) for (const id of f[k] ?? []) s.add(id);
+  for (const k of ['placed', 'moved', 'rerouted', 'reshaped', 'pruned']) for (const id of layout[k] ?? []) s.add(id);
+  for (const f of layout.format ?? []) for (const k of ['moved', 'rerouted', 'reshaped', 'colored', 'labels']) for (const id of f[k] ?? []) s.add(id);
   return s;
 }

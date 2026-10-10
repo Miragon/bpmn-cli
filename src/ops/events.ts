@@ -27,11 +27,13 @@
  *  - triggerDetails(): the same as structured data for --json views.
  */
 import type { Doc } from '../document.js';
-import { modelError, type Warning } from '../errors.js';
+import { modelError, usageError, type Warning } from '../errors.js';
 import { typeRequest } from '../idstyle.js';
-import { kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
+import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { addTo, is, many, walk, type El } from '../model.js';
 import { isC7Uri } from '../platform/descriptor.js';
+import type { ChangeSet } from '../result.js';
+import { definitionIdDefault } from './platform.js';
 import type { TriggerOptions } from './types.js';
 
 export interface TriggerDetails {
@@ -92,6 +94,49 @@ export function ensureRootElement(doc: Doc, type: RootRefType, nameOrId: string,
   }
   doc.invalidate();
   return { el, created };
+}
+
+/**
+ * The root bpmn:Message / Error / Signal / Escalation an element references:
+ * the message of a send / receive task or message flow, the root element of
+ * each event definition of an event (distinct, in order).
+ */
+export function referencedRoots(el: El): El[] {
+  const out: El[] = [];
+  const add = (r: El | undefined): void => {
+    if (r && !out.includes(r)) out.push(r);
+  };
+  if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) add(el.get<El | undefined>('messageRef'));
+  if (is(el, 'bpmn:Event')) {
+    for (const def of el.get<El[] | undefined>('eventDefinitions') ?? []) {
+      for (const [type, prop] of DEFINITION_REFS) if (is(def, type)) add(def.get<El | undefined>(prop));
+    }
+  }
+  return out;
+}
+
+const DEFINITION_REFS: Array<[string, string]> = [
+  ['bpmn:MessageEventDefinition', 'messageRef'],
+  ['bpmn:ErrorEventDefinition', 'errorRef'],
+  ['bpmn:SignalEventDefinition', 'signalRef'],
+  ['bpmn:EscalationEventDefinition', 'escalationRef'],
+];
+
+/**
+ * Binds the batch alias `refAs` (ops/aliases.ts) to the root element `el`
+ * references after the op; E_USAGE when it references none or several.
+ */
+export function bindRefAs(cs: ChangeSet, alias: string | undefined, el: El | undefined): void {
+  if (!alias || !el) return;
+  const roots = referencedRoots(el);
+  const id = el.get<string | undefined>('id') ?? el.$type;
+  if (roots.length !== 1) {
+    throw usageError(`refAs ${alias}: ${kindLabel(el)} ${id} references ${roots.length ? `${roots.length} root elements (${roots.map((r) => r.get<string>('id')).join(', ')})` : 'no message, error, signal or escalation'}`, {
+      element: id,
+      hint: roots.length ? 'Refer to one of them by its id.' : 'refAs names the message / error / signal / escalation the element references: give it one in the same op ("message": "<Name>", "error": ..., "signal": ..., "escalation": ...).',
+    });
+  }
+  cs.bind(alias, roots[0]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -425,7 +470,10 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   }
   const fresh = trigger !== 'none' ? buildDefinition(doc, event, trigger, opts) : undefined;
   const warnings = dropDefinitions(doc, event, trigger);
-  if (fresh) addTo(event, 'eventDefinitions', fresh);
+  if (fresh) {
+    addTo(event, 'eventDefinitions', fresh);
+    definitionIdDefault(doc, event, fresh);
+  }
   doc.invalidate();
   return warnings;
 }

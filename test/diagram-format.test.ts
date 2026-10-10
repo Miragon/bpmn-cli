@@ -318,10 +318,10 @@ describe('align', () => {
     expect(done.r.layout.format![0]).toMatchObject({ moved: [], notes: ['already aligned on the row of S'] });
   });
 
-  it('refuses a column the sub-process would have to grow over (E_NO_ROOM) and aligns inside it', async () => {
+  it('refuses a column outside the sub-process, which would have to grow out to it (E_LEAVES_CONTAINER), and aligns inside it', async () => {
     const xml = await handXml(WITH_SUB);
     const e = await failure(xml, [{ op: 'align', ids: ['E', 'SE'], axis: 'column' }]);
-    expect(e).toMatchObject({ code: 'E_NO_ROOM', element: 'SE' });
+    expect(e).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'SE' });
     const { r, after } = await run(xml, [{ op: 'align', ids: ['ST', 'SS'], axis: 'row', to: 'SE' }]);
     expect(cy(shapes(after).get('SS')!)).toBe(cy(shapes(after).get('SE')!));
     expect(hardAdded(r)).toEqual([]);
@@ -589,18 +589,20 @@ describe('layoutView (show --layout)', () => {
     const view = layoutView(hand.definitions);
     expect(view.diagrams).toHaveLength(1);
     expect(view.diagrams[0]!.groups).toEqual([
-      { id: 'Pool', kind: 'participant', name: 'Org', rows: [] },
-      { id: 'L1', kind: 'lane', name: 'Clerk', parent: 'Pool', rows: [['S', 'A', 'G', 'B', 'E'], ['C', 'E2']] },
-      { id: 'L2', kind: 'lane', name: 'Boss', parent: 'Pool', rows: [] },
+      { id: 'Pool', kind: 'participant', name: 'Org', rows: [], columns: [] },
+      { id: 'L1', kind: 'lane', name: 'Clerk', parent: 'Pool', rows: [['S', 'A', 'G', 'B', 'E'], ['C', 'E2']], columns: [[0, 1, 2, 3, 4], [3, 4]] },
+      { id: 'L2', kind: 'lane', name: 'Boss', parent: 'Pool', rows: [], columns: [] },
     ]);
+    expect(view.diagrams[0]).toMatchObject({ columns: 5, gaps: [] });
     expect(view.metrics.score).toBe(0);
     expect(renderLayoutView(view)).toBe(
       [
         `diagram BPMNPlane_${collab} (${collab})`,
+        '  columns: c0..c4',
         '  participant Pool "Org"',
         '    lane L1 "Clerk"',
-        '      row 1: S, A, G, B, E',
-        '      row 2: C, E2',
+        '      row 1: c0 S, c1 A, c2 G, c3 B, c4 E',
+        '      row 2: c3 C, c4 E2',
         '    lane L2 "Boss"',
         'layout quality: score 0: no layout problems',
         '',
@@ -657,10 +659,10 @@ describe('format ops in the ops JSON', () => {
     expect(message([{ op: 'route', id: 'F', exit: 'up' }])).toMatch(/"exit" must be one of "right", "top", "bottom", "left"/);
     expect(message([{ op: 'space', after: 'A', below: 'B' }])).toMatch(/"after" and "below" cannot be combined/);
     expect(message([{ op: 'space' }])).toMatch(/give "after" .* or "below"/);
-    expect(message([{ op: 'space', after: 'A', by: 'wide' }])).toMatch(/"by" must be "column", "row" or a positive integer \(pixels\), got string "wide"/);
+    expect(message([{ op: 'space', after: 'A', by: 'wide' }])).toMatch(/"by" must be "column", "row" or a positive integer \(pixels\), or "-column", "-row" or a negative integer to close space, got string "wide"/);
     expect(message([{ op: 'space', after: 'A', by: 0 }])).toMatch(/"by" must be/);
     expect(message([{ op: 'tidy', ids: [] }])).toMatch(/"ids" needs at least 1 entry/);
-    expect(message([{ op: 'order', id: 'P', flows: ['a'], lanes: ['b'] }])).toMatch(/give exactly one of "flows" .* or "lanes"/);
+    expect(message([{ op: 'order', id: 'P', flows: ['a'], lanes: ['b'] }])).toMatch(/give exactly one of "flows" .*, "lanes" .* or "pools"/);
     expect(message([{ op: 'order', id: 'P' }])).toMatch(/give exactly one of "flows"/);
     expect(parseOps([{ op: 'space', after: 'A', by: '120' }])).toEqual([{ op: 'space', after: 'A', by: 120 }]);
   });
@@ -668,11 +670,12 @@ describe('format ops in the ops JSON', () => {
   it('are in the JSON schema and in `kinds --json`', () => {
     const defs = OPS_SCHEMA['$defs'] as Record<string, { properties: Record<string, unknown>; required: string[]; allOf?: unknown[] }>;
     for (const name of FORMAT_OP_NAMES) expect(defs[name], name).toBeDefined();
-    expect(defs['place']!.required).toEqual(['op', 'ids']);
+    expect(defs['place']!.required).toEqual(['op']);
+    expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) }]));
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ not: { required: ['rowOf', 'below'] } }, { anyOf: ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'].map((k) => ({ required: [k] })) }]));
-    expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', enum: ['column', 'row'] }, { type: 'integer', minimum: 1 }] });
+    expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }] });
     expect(defs['color']!.properties['color']).toMatchObject({ enum: ['blue', 'orange', 'green', 'red', 'purple', 'default'] });
-    expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes']);
+    expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes', 'pools']);
     const json = kindsJson();
     expect(json['layoutModes']).toEqual(['auto', 'incremental', 'full']);
     expect(json['colors']).toMatchObject({ red: { fill: '#ffcdd2', stroke: '#831311' } });

@@ -8,7 +8,7 @@
  *    descriptors, enums checked; e.g. isExecutable, isForCompensation,
  *    completionQuantity, processType, script, scriptFormat, implementation,
  *    calledElement, instantiate, gatewayDirection...), vendor attributes with
- *    a prefix (`camunda:assignee`, `zeebe:formKey`; the xmlns is declared
+ *    a prefix (`camunda:assignee`, `zeebe:modelerTemplate`; the xmlns is declared
  *    automatically for known prefixes, E_UNKNOWN_NAMESPACE otherwise).
  *  Flows: condition, language, default (true|false), source, target (redirect).
  *    default=true removes the flow's condition (W_CONDITION_DROPPED) and
@@ -79,12 +79,14 @@ import { modelError, usageError } from '../errors.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { diExpansionState } from '../layout.js';
 import { addTo, is, localType, many, walk, type El } from '../model.js';
-import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs } from '../platform/descriptor.js';
+import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
+import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
-import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
-import { assertCondition, flowChange, redirectFlow, setDefaultFlow, setFlowCondition } from './flows.js';
+import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
+import { setCorrelationKey } from './ext.js';
+import { assertCondition, flowChange, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -217,7 +219,7 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'nonInterrupting', appliesTo: 'event', description: 'true|false: boundary events (cancelActivity) and event sub-process start events (isInterrupting); never for error/cancel/compensate triggers or untyped start events' },
   { key: 'loop', appliesTo: 'activity', description: 'none|standard|parallel|sequential (parallel/sequential = multi-instance)' },
   { key: 'cardinality', appliesTo: 'activity', description: 'Multi-instance loop cardinality expression (creates a parallel multi-instance loop when none exists)' },
-  { key: 'completion', appliesTo: 'activity', description: 'Multi-instance completion condition expression' },
+  { key: 'completion', appliesTo: 'activity', description: 'Multi-instance completion condition expression (an ad-hoc sub-process without a multi-instance loop: its own completion condition)' },
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
   { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
@@ -420,6 +422,7 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
   if (eventKeys.size) applyEventKeys(doc, el, eventKeys, cs);
   for (const n of nested) if (!flowCondition.includes(n) && !resourceRemoval.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   doc.invalidate();
+  bindRefAs(cs, op.refAs, el);
   return cs;
 }
 
@@ -448,8 +451,8 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!is(el, 'bpmn:SequenceFlow')) throw unknownKey(doc, el, key, 'applies to sequence flows');
       if (!value) throw invalidValue(el, key, 'a flow always needs a source and a target');
       const node = doc.require(value, 'bpmn:FlowNode');
-      redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
-      cs.change({ ...flowChange(el), detail: `${flowChange(el).detail} (${key} changed)` });
+      const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
+      cs.change({ ...flowChange(el), detail: `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}` });
       return;
     }
     case 'loop':
@@ -482,7 +485,10 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       break;
     default:
       if (key.includes(':')) {
+        // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ext.ts)
+        if (value && setCorrelationKey(doc, el, key, value, cs)) return;
         if (value) assertVendorHost(doc, el, key, value);
+        if (value) assertZeebeHost(doc, el, key, value);
         setVendorAttribute(doc, el, key, value);
       } else setModelProperty(doc, el, key, value);
   }
@@ -570,6 +576,11 @@ function setDefaultKey(doc: Doc, el: El, value: string, cs: ChangeSet): void {
 function setLoopKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): void {
   const current = el.get<El | undefined>('loopCharacteristics');
   const isMulti = is(current, 'bpmn:MultiInstanceLoopCharacteristics');
+  // an ad-hoc sub-process has a completion condition of its own (the one of a multi-instance loop when it has one)
+  if (key === 'completion' && is(el, 'bpmn:AdHocSubProcess') && !isMulti) {
+    el.set('completionCondition', value ? expression(doc, value, el) : undefined);
+    return;
+  }
   if (key === 'loop') {
     const mode = (value || 'none').trim().toLowerCase();
     if (mode === 'none') {
@@ -1026,6 +1037,43 @@ function assertVendorHost(doc: Doc, el: El, key: string, value: string): void {
   });
 }
 
+/**
+ * E_WRONG_HOST for a zeebe attribute that is not an attribute of BPMN
+ * elements but of a zeebe extension element (zeebe:assignee is an attribute
+ * of zeebe:assignmentDefinition, zeebe:type of zeebe:taskDefinition): Camunda
+ * 8 settings are extension elements, so the hint names the `ext add` that
+ * writes it (by the Zeebe descriptor). The attributes the descriptor puts on
+ * BPMN elements (zeebe:modelerTemplate) and unknown names pass.
+ */
+function assertZeebeHost(doc: Doc, el: El, key: string, value: string): void {
+  const idx = key.indexOf(':');
+  if (idx <= 0 || doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) return;
+  const local = key.slice(idx + 1);
+  if (zeebeAttr(local)) return;
+  const prefix = key.slice(0, idx);
+  const id = idOf(el);
+  const pair = shellPair(local, value);
+  const owners = zeebeTypeNames().filter((t) => zeebeType(t)!.attributes.some((a) => a.name === local));
+  const here = owners.filter((t) => zeebeAllowedOn(t, el) === true);
+  const loop = is(el, 'bpmn:Activity') && owners.includes('zeebe:loopCharacteristics');
+  const message = owners.includes('zeebe:subscription') && (is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:Event'));
+  if (!here.length && !loop && !message) return;
+  const target = here[0] ?? (loop ? 'zeebe:loopCharacteristics' : 'zeebe:subscription');
+  const type = `${prefix}:${target.slice('zeebe:'.length)}`;
+  // (an element that waits for a message never gets here: set writes the key into the message's subscription, ext.ts setCorrelationKey)
+  const command = here.length
+    ? `\`bpmn ext add <file> ${id} ${type} ${pair}\``
+    : loop
+      ? `\`bpmn ext add <file> ${id} loop.${type} ${pair}\` (creates a parallel multi-instance loop when there is none)`
+      : is(el, 'bpmn:ReceiveTask') || definitionsOf(el).some((d) => is(d, 'bpmn:MessageEventDefinition'))
+        ? `\`bpmn set <file> ${id} message=<MessageName>\` first (the correlation key belongs to the message the element waits for), then \`bpmn set <file> ${id} ${shellPair(key, value)}\``
+        : `\`bpmn ext add <file> <messageId> ${type} ${pair}\` on a bpmn:Message (${kindLabel(el)} ${id} waits for no message)`;
+  throw modelError('E_WRONG_HOST', `${key} is not an attribute of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on the ${type} extension element`, {
+    element: id,
+    hint: `Use ${command}.`,
+  });
+}
+
 /** Keys of a nested element that have their own set key (or are generated). */
 const NESTED_BLOCKED: Record<string, string> = {
   body: 'use condition= / when= / timer= / cardinality= / completion=',
@@ -1102,6 +1150,18 @@ function createNested(doc: Doc, el: El, slot: NestedSlot, key: string, cs: Chang
 function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: string, prefix: string = slot): void {
   const id = idOf(el);
   const full = `${prefix}.${key}`;
+  const zi = key.indexOf(':');
+  if (zi > 0 && doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !zeebeAttr(key.slice(zi + 1))) {
+    // a zeebe setting of a nested element is an extension element of it (loop.zeebe:loopCharacteristics)
+    const local = key.slice(zi + 1);
+    const owner = zeebeTypeNames().find((t) => zeebeAllowedOn(t, target) === true && zeebeType(t)!.attributes.some((a) => a.name === local));
+    if (owner) {
+      throw modelError('E_WRONG_HOST', `${key} is not an attribute of the ${typeLabel(target)} of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
+        element: id,
+        hint: `Use \`bpmn ext add <file> ${id} ${prefix}.${key.slice(0, zi)}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
+      });
+    }
+  }
   if (key.includes(':')) {
     const local = camundaLocal(doc, key);
     if (!local || attrAppliesTo(`camunda:${local}`, target) !== false) return;
@@ -1540,6 +1600,8 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     } else if (is(loop, 'bpmn:StandardLoopCharacteristics')) {
       out['loop'] = 'standard';
     }
+    const own = is(el, 'bpmn:AdHocSubProcess') && !is(loop, 'bpmn:MultiInstanceLoopCharacteristics') ? el.get<El | undefined>('completionCondition')?.get<string | undefined>('body') : undefined;
+    if (own) out['completion'] = own;
   }
   if (is(el, 'bpmn:SubProcess')) {
     const requested = expansionRequests.get(doc)?.get(idOf(el));
