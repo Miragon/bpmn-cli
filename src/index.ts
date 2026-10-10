@@ -10,11 +10,13 @@
  * typecheck (skipLibCheck false) resolves them.
  */
 /* the in-memory API: strings in, strings / data out (README "Library use") */
-export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ValidateXmlOptions, type ViewOptions } from './api.js';
-export { mutationReport, mutationWarnings, opWarnings, renderMutation, validationReport, renderValidation, type MutationReport, type MutationReportLike, type ValidationReport } from './report.js';
-export { renderView, renderDetail, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './format.js';
+export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
+export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, warningLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report.js';
+export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './format.js';
 export { setLayoutDebug, type DebugSink } from './debug.js';
-export { guideText, kindsJson, kindsText, ERROR_CATALOGUE } from './guide.js';
+export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, kindsSections, kindsSectionJson, kindsSectionText, ERROR_CATALOGUE } from './guide.js';
+/* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
+export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './context.js';
 /* the building blocks */
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './document.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './errors.js';
@@ -42,7 +44,7 @@ export type {
   SpaceOp,
   TidyOp,
 } from './ops/types.js';
-export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline.js';
+export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult, type ValidationDelta } from './pipeline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
 export { preserveText, type PreservedText } from './preserve.js';
 /* validators run inside the write transaction (MutationOptions.validators) and the design profile (design-iq's save gate) */
@@ -56,7 +58,7 @@ export { validateDoc, type ValidateOptions, type ValidationResult } from './vali
 export { runProfile, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profile.js';
 export { detectPlatform } from './platform/detect.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
-export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type FindHit } from './view.js';
+export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './view.js';
 export { parseOps, OPS_SCHEMA } from './batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { layoutProblems, layoutProblemsOfXml, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';

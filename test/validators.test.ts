@@ -247,8 +247,14 @@ describe('design profile: auto in a content repository, and the CLI', () => {
     const forced = cli('add', file, 'task', 'Loose', '--in', 'P', '--force');
     expect(forced.code).toBe(0);
     expect(forced.out).toContain('forced [design] E_DESIGN_UNREACHABLE Activity_Loose');
+    // the error the file already had does not block; a result counts it instead of repeating it (--json lists nothing new)
     const pre = cli('set', file, 'Activity_Loose', 'name=Still loose');
-    expect(pre.out).toContain('warning [design] W_PREEXISTING_ERROR Activity_Loose: E_DESIGN_UNREACHABLE');
+    expect(pre.code, pre.err).toBe(0);
+    expect(pre.out).not.toContain('W_PREEXISTING_ERROR');
+    expect(pre.out).toMatch(/^\d+ warnings? already in the file \(not repeated/m);
+    const preJson = cli('set', file, 'Activity_Loose', 'name=Loose again', '--json');
+    expect(JSON.parse(preJson.out).warnings).toMatchObject({ added: [], preexistingCount: expect.any(Number) });
+    expect(JSON.parse(preJson.out).warnings.preexistingCount).toBeGreaterThan(0);
     expect(cli('set', file, 'Activity_Loose', 'name=x', '--profile', 'bogus').code).toBe(1);
     expect(existsSync(`${file}.bak`)).toBe(false);
   }, 60000);

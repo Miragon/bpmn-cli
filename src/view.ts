@@ -137,12 +137,21 @@ export interface ViewMessageFlow {
   target: string;
   name?: string;
   message?: string;
+  /** the names of the endpoints (a pool's name for a pool) */
+  sourceName?: string;
+  targetName?: string;
 }
 
 export interface ModelView {
   file?: string;
   definitions: { id: string; targetNamespace?: string; namespaces: string[] };
-  collaboration?: { id: string; participants: Array<{ id: string; name?: string; process?: string }>; messageFlows: ViewMessageFlow[] };
+  collaboration?: {
+    id: string;
+    participants: Array<{ id: string; name?: string; process?: string }>;
+    messageFlows: ViewMessageFlow[];
+    /** text annotations the collaboration owns (drawn next to pools; often attached to nodes inside them) */
+    annotations?: ViewAnnotation[];
+  };
   processes: ViewProcess[];
   rootElements: Array<{ id: string; kind: string; name?: string; code?: string }>;
   problems: Warning[];
@@ -177,6 +186,40 @@ export interface ElementDetail {
   attrs: Record<string, string>;
   /** nested elements by their set-key prefix (definition, loop, condition; definition[<n>] when an event has several) */
   nested?: Record<string, NestedDetail>;
+  /** message flows into (`in`) and out of (`out`) the element, with the partner at the other end */
+  messageFlows?: DetailMessageFlow[];
+  /** text annotations associated with the element */
+  annotations?: Array<{ id: string; text?: string }>;
+  /** a text annotation: the elements it is associated with */
+  attachedTo?: string[];
+  /** data associations: data objects / stores a node reads and writes, or the nodes reading / writing a data element */
+  data?: DetailData;
+}
+
+/** A message flow of `show <id>`: direction, the flow and the element at the other end (with its pool). */
+export interface DetailMessageFlow {
+  direction: 'in' | 'out';
+  id: string;
+  name?: string;
+  message?: string;
+  /** the element at the other end */
+  partner: string;
+  partnerName?: string;
+  /** the pool of the partner when the partner is inside one (absent when the partner is a pool) */
+  pool?: string;
+  poolName?: string;
+}
+
+/** Data associations of `show <id>`. */
+export interface DetailData {
+  /** a node: the data objects / stores it reads (data input associations) */
+  reads?: Array<{ id: string; name?: string }>;
+  /** a node: the data objects / stores it writes (data output associations) */
+  writes?: Array<{ id: string; name?: string }>;
+  /** a data object / store: the nodes reading it */
+  readBy?: string[];
+  /** a data object / store: the nodes writing it */
+  writtenBy?: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -222,11 +265,11 @@ export function labelOf(el: El): string {
   return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
-function isEventSubProcess(el: El): boolean {
+export function isEventSubProcess(el: El): boolean {
   return is(el, 'bpmn:SubProcess') && peek<boolean>(el, 'triggeredByEvent') === true;
 }
 
-function documentationOf(el: El): string | undefined {
+export function documentationOf(el: El): string | undefined {
   const texts = list(el, 'documentation')
     .map((d) => peek<string>(d, 'text'))
     .filter((t): t is string => typeof t === 'string' && !!t.trim());
@@ -245,7 +288,7 @@ function bodyOf(expr: El | undefined): string | undefined {
 }
 
 /** Trigger details from the first event definition (fallback while events.ts is a stub). */
-function triggerText(el: El): string | undefined {
+export function triggerText(el: El): string | undefined {
   const described = describeTrigger(el);
   if (described) return described;
   const def = list(el, 'eventDefinitions')[0];
@@ -274,14 +317,14 @@ function triggerText(el: El): string | undefined {
   return undefined;
 }
 
-function nonInterruptingOf(el: El): boolean | undefined {
+export function nonInterruptingOf(el: El): boolean | undefined {
   if (is(el, 'bpmn:BoundaryEvent')) return peek<boolean>(el, 'cancelActivity') === false ? true : undefined;
   if (is(el, 'bpmn:StartEvent')) return peek<boolean>(el, 'isInterrupting') === false ? true : undefined;
   return undefined;
 }
 
 /** Extra semantic facts of a node worth showing in one line. */
-function nodeProps(el: El): Record<string, unknown> | undefined {
+export function nodeProps(el: El): Record<string, unknown> | undefined {
   const props: Record<string, unknown> = {};
   const loop = peek<El>(el, 'loopCharacteristics');
   if (loop) {
@@ -322,7 +365,7 @@ function extensionMentions(el: El): string[] | undefined {
 }
 
 /** Vendor attribute values of an element and, under `<slot>.<key>` (`definition[1].<key>`), of its nested elements. */
-function vendorValues(el: El, skip: (slot: string, key: string) => boolean = () => false): Record<string, string> | undefined {
+export function vendorValues(el: El, skip: (slot: string, key: string) => boolean = () => false): Record<string, string> | undefined {
   const out: Record<string, string> = { ...vendorAttrs(el) };
   for (const { prefix, el: nested } of nestedEntries(el)) {
     for (const [k, v] of Object.entries(vendorAttrs(nested))) if (!skip(prefix, k)) out[`${prefix}.${k}`] = v;
@@ -342,7 +385,7 @@ function resourceOf(expr: El | undefined): { key: string; value: string } | unde
   return key && typeof value === 'string' && value ? { key, value } : undefined;
 }
 
-function flowView(flow: El): ViewFlow {
+export function flowView(flow: El): ViewFlow {
   const source = peek<El>(flow, 'sourceRef');
   const cond = peek<El>(flow, 'conditionExpression');
   const resource = resourceOf(cond);
@@ -419,7 +462,7 @@ function buildLanes(laneSet: El | undefined): ViewLane[] {
 }
 
 /** The process and every sub-process nested in it, in tree order. */
-function scopesWithin(process: El): El[] {
+export function scopesWithin(process: El): El[] {
   return [...walk(process)].filter((e) => is(e, 'bpmn:Process') || is(e, 'bpmn:SubProcess'));
 }
 
@@ -443,13 +486,18 @@ function buildData(doc: Doc, process: El): ViewData[] {
   return out;
 }
 
-function buildAnnotations(doc: Doc, process: El): ViewAnnotation[] {
-  const scopes = scopesWithin(process);
+/** Every association of the document: the artifacts of each process, sub-process and of the collaboration. */
+export function associationsOf(doc: Doc): El[] {
   const collab = doc.collaboration();
-  const associations = [...scopes, ...(collab ? [collab] : [])].flatMap((s) => list(s, 'artifacts')).filter((a) => is(a, 'bpmn:Association'));
+  const owners = [...doc.processes().flatMap(scopesWithin), ...(collab ? [collab] : [])];
+  return owners.flatMap((s) => list(s, 'artifacts')).filter((a) => is(a, 'bpmn:Association'));
+}
+
+/** The text annotations among the artifacts of `owners`, each with the elements it is associated with. */
+function annotationsIn(owners: El[], associations: El[]): ViewAnnotation[] {
   const out: ViewAnnotation[] = [];
-  for (const scope of scopes) {
-    for (const el of list(scope, 'artifacts')) {
+  for (const owner of owners) {
+    for (const el of list(owner, 'artifacts')) {
       if (!is(el, 'bpmn:TextAnnotation')) continue;
       const attachedTo: string[] = [];
       for (const a of associations) {
@@ -463,6 +511,74 @@ function buildAnnotations(doc: Doc, process: El): ViewAnnotation[] {
     }
   }
   return out;
+}
+
+function buildAnnotations(doc: Doc, process: El): ViewAnnotation[] {
+  return annotationsIn(scopesWithin(process), associationsOf(doc));
+}
+
+/** The text annotations associated with an element (either end of an association), in document order. */
+export function annotationsOf(doc: Doc, el: El, associations: El[] = associationsOf(doc)): Array<{ id: string; text?: string }> {
+  const out: Array<{ id: string; text?: string }> = [];
+  for (const a of associations) {
+    const source = peek<El>(a, 'sourceRef');
+    const target = peek<El>(a, 'targetRef');
+    const other = source === el ? target : target === el ? source : undefined;
+    if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((o) => o.id === idOf(other))) continue;
+    const text = peek<string>(other, 'text');
+    out.push(compact({ id: idOf(other), text: text ? String(text) : undefined }));
+  }
+  return out;
+}
+
+/** The pool an element is drawn in: itself for a participant, else the participant of its process. */
+export function poolOf(doc: Doc, el: El): El | undefined {
+  if (is(el, 'bpmn:Participant')) return el;
+  const process = doc.processOf(el);
+  return process ? doc.participantOf(process) : undefined;
+}
+
+/** The message flows into and out of an element, each with the partner at the other end and its pool. */
+export function messageFlowsOf(doc: Doc, el: El): DetailMessageFlow[] {
+  const out: DetailMessageFlow[] = [];
+  for (const mf of doc.messageFlows()) {
+    const source = peek<El>(mf, 'sourceRef');
+    const target = peek<El>(mf, 'targetRef');
+    const direction = source === el ? 'out' : target === el ? 'in' : undefined;
+    if (!direction) continue;
+    const partner = direction === 'out' ? target : source;
+    const pool = partner ? poolOf(doc, partner) : undefined;
+    const message = peek<El>(mf, 'messageRef');
+    out.push(
+      compact<DetailMessageFlow>({
+        direction,
+        id: idOf(mf),
+        name: nameOf(mf),
+        message: message ? refLabel(message) : undefined,
+        partner: idOf(partner),
+        partnerName: partner ? nameOf(partner) : undefined,
+        pool: pool && pool !== partner ? idOf(pool) : undefined,
+        poolName: pool && pool !== partner ? nameOf(pool) : undefined,
+      }),
+    );
+  }
+  return out;
+}
+
+/** Data associations of a node (what it reads and writes) or of a data object / store (who reads and writes it). */
+export function dataLinksOf(doc: Doc, el: El): DetailData | undefined {
+  const ref = (d: El | undefined) => (d ? compact({ id: idOf(d), name: nameOf(d) }) : undefined);
+  if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference')) {
+    const process = doc.processOf(el);
+    const nodes = process ? scopesWithin(process).flatMap((s) => doc.flowNodes(s)) : [];
+    const writtenBy = nodes.filter((n) => list(n, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)).map(idOf);
+    const readBy = nodes.filter((n) => list(n, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))).map(idOf);
+    return readBy.length || writtenBy.length ? compact<DetailData>({ readBy: nonEmpty(readBy), writtenBy: nonEmpty(writtenBy) }) : undefined;
+  }
+  const isData = (d: El | undefined): d is El => !!d && (is(d, 'bpmn:DataObjectReference') || is(d, 'bpmn:DataStoreReference'));
+  const reads = list(el, 'dataInputAssociations').flatMap((a) => list(a, 'sourceRef')).filter(isData).map((d) => ref(d)!);
+  const writes = list(el, 'dataOutputAssociations').map((a) => peek<El>(a, 'targetRef')).filter(isData).map((d) => ref(d)!);
+  return reads.length || writes.length ? compact<DetailData>({ reads: nonEmpty(reads), writes: nonEmpty(writes) }) : undefined;
 }
 
 function buildProcess(ctx: ViewCtx, process: El): ViewProcess {
@@ -507,19 +623,25 @@ function buildRootElements(doc: Doc): ModelView['rootElements'] {
 function buildCollaboration(doc: Doc): ModelView['collaboration'] {
   const collab = doc.collaboration();
   if (!collab) return undefined;
-  return {
+  const annotations = annotationsIn([collab], associationsOf(doc));
+  return compact({
     id: idOf(collab),
     participants: doc.participants().map((p) => compact({ id: idOf(p), name: nameOf(p), process: peek<El>(p, 'processRef')?.get<string>('id') })),
-    messageFlows: doc.messageFlows().map((mf) =>
-      compact<ViewMessageFlow>({
+    messageFlows: doc.messageFlows().map((mf) => {
+      const source = peek<El>(mf, 'sourceRef');
+      const target = peek<El>(mf, 'targetRef');
+      return compact<ViewMessageFlow>({
         id: idOf(mf),
-        source: idOf(peek<El>(mf, 'sourceRef')),
-        target: idOf(peek<El>(mf, 'targetRef')),
+        source: idOf(source),
+        target: idOf(target),
         name: nameOf(mf),
         message: peek<El>(mf, 'messageRef') ? refLabel(peek<El>(mf, 'messageRef')) : undefined,
-      }),
-    ),
-  };
+        sourceName: source ? nameOf(source) : undefined,
+        targetName: target ? nameOf(target) : undefined,
+      });
+    }),
+    annotations: nonEmpty(annotations),
+  });
 }
 
 /** Vendor namespace prefixes declared on the definitions (bpmn/di/xsi left out). */
@@ -655,6 +777,16 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
   const listed = listExtensions(el);
   const extensions: unknown[] = listed.length ? listed : extensionTypes(el).map((type, index) => ({ index, type }));
   const host = peek<El>(el, 'attachedToRef');
+  const associations = associationsOf(doc);
+  const messageFlows = is(el, 'bpmn:MessageFlow') ? [] : messageFlowsOf(doc, el);
+  const annotations = is(el, 'bpmn:TextAnnotation') ? [] : annotationsOf(doc, el, associations);
+  const attachedTo = is(el, 'bpmn:TextAnnotation')
+    ? associations.flatMap((a) => {
+        const source = peek<El>(a, 'sourceRef');
+        const target = peek<El>(a, 'targetRef');
+        return source === el && target ? [idOf(target)] : target === el && source ? [idOf(source)] : [];
+      })
+    : [];
   return compact<ElementDetail>({
     id: idOf(el),
     kind: labelOf(el),
@@ -672,6 +804,10 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
     extensions,
     attrs: vendorAttrs(el),
     nested: Object.keys(nested).length ? nested : undefined,
+    messageFlows: nonEmpty(messageFlows),
+    annotations: nonEmpty(annotations),
+    attachedTo: nonEmpty(attachedTo),
+    data: dataLinksOf(doc, el),
   });
 }
 

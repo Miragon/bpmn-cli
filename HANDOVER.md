@@ -24,16 +24,89 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1318 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1354 tests (+1 opt-in), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
-node bin/bpmn.js guide  # the cheat sheet an agent reads first
+node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
 ```
 
 An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## What step 3's views package changed (2026-10-10): reading and output for large models
+
+Goal: token-efficient reading for agents on large models and output that
+does not grow with the file's old problems. Elements are addressed by id
+only (names may repeat; no name-based addressing). Fixed audit bugs #21,
+#22, #58, #60; details and measurements in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-2026-10-10-views-and-output).
+
+- **`show --around <id> [--depth n] [--inner]`** and **`show <id>
+  --context`** (`src/context.ts`: `aroundView`, `elementContext`,
+  `implementationOf`; renderers `renderAround` / `renderContext` in
+  `src/format.ts`; `viewDoc` / `renderShown` in `src/api.ts` are what the CLI
+  and `viewXml` / `showXml` share, the option checks included). The window
+  follows sequence flows both ways (boundary event <-> host, link pairs; a
+  sub-process's first / last node leads out to it, `--inner` also in), lists
+  per node lane, vendor values and a compact extension summary (`io: in a;
+  out b`, `zeebe:taskDefinition type=...`, `type xN`), `<-` incoming flows
+  from outside, the omitted counts, and the window's message flows,
+  annotations and data. The context lists pool > process > sub-processes,
+  the effective lane (`via` a sub-process or a boundary event's host,
+  `within` parent lanes), from / to with names, own boundary events, the
+  error / escalation boundary events of the sub-processes around it
+  (`caught by`), the event sub-processes of every scope around it (not the
+  one it is in), annotations, message flows with partner and pool, data.
+- **`show`**: `lane=<id>` per node, the lanes section is a tree of names;
+  message-flow lines with endpoint names; collaboration annotations
+  (`ModelView.collaboration.annotations`). **`show <id>`**: `messageFlows`,
+  `annotations`, `attachedTo`, `data` (`src/view.ts`: `messageFlowsOf`,
+  `annotationsOf`, `dataLinksOf`, `poolOf`).
+- **Warnings as a delta** (`src/pipeline.ts validationDelta`,
+  `MutationResult.delta`; `src/report.ts`): a lint warning the file had
+  (code, element, related elements, followed through renames) and every
+  `W_PREEXISTING_ERROR` are counted, not listed; resolved = the lint warnings
+  and errors the file had that are gone, plus the platform's and validators'
+  resolved ones. A document created in memory (`new`) has no delta: all its
+  warnings are added. The report: `warnings: {added, resolved,
+  preexistingCount}`, `validation` without `warnings` (breaking for
+  consumers of the JSON / `EditReport`; `MutationResult.validation.warnings`
+  is unchanged, `--strict` still counts every warning). Text: added warnings
+  (`warningLines`: three or more of one code as one line), `resolved:`, one
+  count line. `--summary` (`mutationSummary` / `renderSummary`).
+- **Docs cost** (`src/guide.ts`): `guideShort()` (3.8 KB; test: <= 5 KB),
+  `guideTopic(topic)` slices the full guide by its headings (`GUIDE_TOPICS`;
+  new sections READING LARGE MODELS, OUTPUT, CAMUNDA 8), `kinds --section`
+  (`kindsSections` / `kindsSectionText` / `kindsSectionJson`). Every
+  `--json` is compact, `--pretty` indents.
+- **stdin / stdout** (`src/cli.ts readDocArg`, `runMutation`): `-` as the
+  file for every command; a mutation of stdin or `-o -` writes the XML to
+  stdout and the report to stderr; `apply - -` is `E_USAGE`.
+  `layoutDocToFile` (node layer) serves `layout -`.
+
+Tests: `test/views.test.ts` (views, #21, #22, the byte budget per node),
+`test/report-delta.test.ts` (delta, floods, summary), `test/cli-views.test.ts`
+(the CLI: flags, compact JSON, `--summary`, stdin / stdout, `guide --short` /
+topics, `kinds --section`, the CAMUNDA 8 recipe run), the isomorphism test
+runs `--around` / `--context` in the browser bundle; synthetic fixture
+`test/fixtures/views/claims.bpmn`. Gate: 1,354 tests + 1 opt-in, layout
+score 444, isomorphism and fuzz unchanged.
+
+Evidence (private corpora, local only): `--around` (depth 2) on 278 real
+files 1.2 KB median / 2.1 KB p90 vs `show` 2.3 / 7.6 KB vs PR #218's
+`outline --around` 1.4 / 2.4 KB; on the 30 models with >= 30 flow nodes
+1.8 KB vs 10.6 KB; 236 bytes per shown node (median); 0 failures on 383
+files. A rename's text result on the 97 real files with old warnings: 523
+-> 245 bytes median, JSON 2,597 -> 1,276.
+
+Still open from this package: `find --attr` / `list --fields` projections
+and a `vars` view (where is variable X used) were not built; `show --layout`
+still has no column information; `render` is not a command; the full `show`
+keeps vendor values but not the extension summary of `--around` (to keep
+its size); JSON is compact but not slimmer (the model view still repeats
+`type` / `extensions` / `extensionElements`).
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 

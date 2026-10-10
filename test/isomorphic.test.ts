@@ -113,6 +113,10 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(edited.xml)));
     expect(await browser.showXml(edited.xml)).toBe(await core.showXml(edited.xml));
     expect(await browser.showXml(edited.xml, { id: 'Activity_Check' })).toContain('camunda:assignee');
+    // the reading views of large models (step 3)
+    expect(await browser.showXml(edited.xml, { around: 'Activity_Check', depth: 1 })).toBe(await core.showXml(edited.xml, { around: 'Activity_Check', depth: 1 }));
+    expect(await browser.showXml(edited.xml, { id: 'Activity_Check', context: true })).toBe(await core.showXml(edited.xml, { id: 'Activity_Check', context: true }));
+    expect(await browser.showXml(edited.xml, { around: 'Activity_Check' })).toContain('camunda:assignee=demo');
     expect(await browser.findXml(edited.xml, 'demo')).toEqual(await core.findXml(edited.xml, 'demo'));
     expect(await browser.metricsXml(edited.xml)).toEqual(await core.metricsXml(edited.xml));
   });

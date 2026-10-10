@@ -9,7 +9,8 @@
  *   newXml(opts)                 `bpmn new`                                      -> EditResult
  *   layoutXml(xml, opts)         `bpmn layout` (expand / collapse / tidy)         -> EditResult
  *   validateXml(xml, opts)       `bpmn validate --json`                          -> ValidationReport
- *   viewXml(xml, opts)           `bpmn show --json` (an element with id, the drawing with layout)
+ *   viewXml(xml, opts)           `bpmn show --json` (an element with id, its context with id + context,
+ *                                the neighbourhood with around, the drawing with layout)
  *   showXml(xml, opts)           `bpmn show` as text
  *   metricsXml(xml)              `bpmn metrics --json`                           -> { score, counts, problems }
  *   findXml(xml, text, opts)     `bpmn find --json`                              -> FindHit[]
@@ -35,9 +36,10 @@ import { parseOps } from './batch.js';
 import type { DebugSink } from './debug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import { layoutView, type LayoutView } from './diagram/view.js';
+import { aroundView, elementContext, type AroundView, type ElementContext } from './context.js';
 import { Doc, type NewDocOptions } from './document.js';
 import { CliError, usageError } from './errors.js';
-import { renderDetail, renderLayoutView, renderView } from './format.js';
+import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './format.js';
 import { assertKindToken } from './kinds.js';
 import type { LayoutEngine } from './layout.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
@@ -170,40 +172,84 @@ export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): P
   return validationReport(await checkDoc(await Doc.fromXml(xml, opts.file), opts));
 }
 
-/** What viewXml / showXml show: the model (default, optionally one scope), one element, or the drawing. */
+/** What viewXml / showXml show: the model (default, optionally one scope), one element (in its context), the neighbourhood of one, or the drawing. */
 export interface ViewOptions {
   /** one element in detail (`bpmn show <file> <id>`) */
   id?: string;
+  /** with `id`: the element in its context instead of its details (`--context`) */
+  context?: boolean;
+  /** only the neighbourhood of this element (`--around <id>`) */
+  around?: string;
+  /** with `around`: flow steps from the element (`--depth`, default 2) */
+  depth?: number;
+  /** with `around`: also enter sub-processes from outside (`--inner`) */
+  inner?: boolean;
   /** only this process / participant / sub-process (`--scope`) */
   scope?: string;
   /** the drawing instead of the model: rows, colours, label sides, layout problems (`--layout`) */
   layout?: boolean;
 }
 
-async function viewOf(xml: string, opts: ViewOptions): Promise<{ kind: 'model'; view: ModelView } | { kind: 'detail'; view: ElementDetail } | { kind: 'layout'; view: LayoutView }> {
-  const doc = await Doc.fromXml(xml);
+/** What `show` shows, by kind (viewDoc). */
+export type ShownView =
+  | { kind: 'model'; view: ModelView }
+  | { kind: 'detail'; view: ElementDetail }
+  | { kind: 'context'; view: ElementContext }
+  | { kind: 'around'; view: AroundView }
+  | { kind: 'layout'; view: LayoutView };
+
+/** E_USAGE for show options that do not go together (the CLI's flags and the API's options alike). */
+function assertViewOptions(opts: ViewOptions): void {
+  const used = (keys: Array<keyof ViewOptions>) => keys.filter((k) => opts[k] !== undefined && opts[k] !== false);
+  const flag = (k: string) => (k === 'id' ? 'the element id' : `--${k}`);
   if (opts.layout) {
-    if (opts.id || opts.scope) throw usageError('--layout shows the whole drawing; drop the element id / --scope', { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
-    return { kind: 'layout', view: layoutView(doc.definitions) };
+    const extra = used(['id', 'scope', 'around', 'context']);
+    if (extra.length) throw usageError(`--layout shows the whole drawing; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
   }
-  if (opts.id) return { kind: 'detail', view: elementDetail(doc, doc.require(opts.id)) };
+  if (opts.around !== undefined) {
+    const extra = used(['id', 'scope', 'context']);
+    if (extra.length) throw usageError(`--around <id> names the element itself; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --around <id> [--depth n]`, or `bpmn show <file> <id> --context` for one element in its context.' });
+  } else {
+    const extra = used(['depth', 'inner']);
+    if (extra.length) throw usageError(`${extra.map(flag).join(' and ')} ${extra.length > 1 ? 'go' : 'goes'} only with --around <id>`, { hint: 'Use `bpmn show <file> --around <id> --depth <n>`.' });
+  }
+  if (opts.context && opts.id === undefined) throw usageError('--context needs an element id', { hint: 'Use `bpmn show <file> <id> --context`.' });
+  if (opts.context && opts.scope !== undefined) throw usageError('--context shows one element; drop --scope', { hint: 'Use `bpmn show <file> <id> --context`.' });
+}
+
+/** `bpmn show` on a parsed document: the view the options ask for (see ViewOptions). */
+export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
+  assertViewOptions(opts);
+  if (opts.layout) return { kind: 'layout', view: layoutView(doc.definitions) };
+  if (opts.around !== undefined) return { kind: 'around', view: aroundView(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }) };
+  if (opts.id !== undefined && opts.context) return { kind: 'context', view: elementContext(doc, opts.id) };
+  if (opts.id !== undefined) return { kind: 'detail', view: elementDetail(doc, doc.require(opts.id)) };
   const view = buildView(doc);
   return { kind: 'model', view: opts.scope ? scopeView(doc, view, opts.scope) : view };
 }
 
-/** `bpmn show --json`: the model as the agent sees it (no coordinates), one element with `id`, the drawing with `layout`. */
+/** The text of a view, as `bpmn show` prints it (without the final newline). */
+export function renderShown(v: ShownView): string {
+  const text =
+    v.kind === 'layout' ? renderLayoutView(v.view) : v.kind === 'detail' ? renderDetail(v.view) : v.kind === 'context' ? renderContext(v.view) : v.kind === 'around' ? renderAround(v.view) : renderView(v.view);
+  return text.replace(/\n$/, '');
+}
+
+/** `bpmn show --json`: the model as the agent sees it (no coordinates), one element with `id` (with `context`: in its context), the neighbourhood with `around`, the drawing with `layout`. */
 export function viewXml(xml: string, opts: ViewOptions & { layout: true }): Promise<LayoutView>;
+export function viewXml(xml: string, opts: ViewOptions & { around: string }): Promise<AroundView>;
+export function viewXml(xml: string, opts: ViewOptions & { id: string; context: true }): Promise<ElementContext>;
 export function viewXml(xml: string, opts: ViewOptions & { id: string }): Promise<ElementDetail>;
 export function viewXml(xml: string, opts?: ViewOptions): Promise<ModelView>;
-export async function viewXml(xml: string, opts: ViewOptions = {}): Promise<ModelView | ElementDetail | LayoutView> {
-  return (await viewOf(xml, opts)).view;
+export async function viewXml(xml: string, opts: ViewOptions = {}): Promise<ModelView | ElementDetail | ElementContext | AroundView | LayoutView> {
+  assertViewOptions(opts);
+  return viewDoc(await Doc.fromXml(xml), opts).view;
 }
 
 /** `bpmn show`: the same as text, exactly as the CLI prints it (without the final newline). */
 export async function showXml(xml: string, opts: ViewOptions = {}): Promise<string> {
-  const v = await viewOf(xml, opts);
-  const text = v.kind === 'layout' ? renderLayoutView(v.view) : v.kind === 'detail' ? renderDetail(v.view) : renderView(v.view);
-  return text.replace(/\n$/, '');
+  assertViewOptions(opts);
+  return renderShown(viewDoc(await Doc.fromXml(xml), opts));
 }
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */

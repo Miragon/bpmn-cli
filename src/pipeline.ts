@@ -206,8 +206,26 @@ export interface MutationResult {
   validation: ValidationResult;
   /** import warnings of the loaded file (informational) */
   importWarnings: string[];
+  /**
+   * the validation findings against the document before the ops: the
+   * warnings the change added, the findings it resolved, and how many it
+   * left as they were (lint warnings the document had, W_PREEXISTING_ERROR);
+   * what a result reports instead of every warning of the document. Absent
+   * for a document created in memory (`new`): every warning is reported
+   */
+  delta?: ValidationDelta;
   view?: ModelView;
   xml: string;
+}
+
+/** A mutation's validation findings compared with the document before the ops (MutationResult.delta). */
+export interface ValidationDelta {
+  /** warnings the change introduced (lint, platform profile, validators) */
+  added: Warning[];
+  /** findings the change resolved: warnings and errors the document had before (lint, platform profile, validators) */
+  resolved: Warning[];
+  /** warnings the document already had and still has, W_PREEXISTING_ERROR included (`bpmn validate` lists them) */
+  preexisting: number;
 }
 
 /** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content while importing the document (unless force). */
@@ -234,9 +252,11 @@ function refuseDroppedContent(drops: DroppedContent[]): void {
   });
 }
 
-/** The validation errors of a document before the ops, with the elements they named. */
+/** The validation errors (and warnings) of a document before the ops, with the elements they named. */
 export interface ErrorBaseline {
   errors: Warning[];
+  /** the structural / lint warnings before the ops (a mutation reports only the ones it added) */
+  warnings?: Warning[];
   /** id -> element before the ops (an element renamed or retyped by the ops is still recognised) */
   index: Map<string, El>;
   /** the platform profile before the ops (its findings are not repeated by the mutation) */
@@ -245,7 +265,8 @@ export interface ErrorBaseline {
 
 /** Validates the document before the ops run (this also repairs missing incoming/outgoing entries, see repairFlowLinks). */
 export function errorBaseline(doc: Doc, platform: PlatformChoice = 'auto'): ErrorBaseline {
-  return { errors: validateDoc(doc).errors, index: new Map(doc.byId()), profile: profileBaseline(doc, platform) };
+  const { errors, warnings } = validateDoc(doc);
+  return { errors, warnings, index: new Map(doc.byId()), profile: profileBaseline(doc, platform) };
 }
 
 /** Whether `after` is the finding `before` again: same code, about the same element (by id, or by identity after a rename). */
@@ -254,6 +275,50 @@ function sameFinding(doc: Doc, baseline: ErrorBaseline, before: Warning, after: 
   if (before.element === after.element) return true;
   const was = before.element ? baseline.index.get(before.element) : undefined;
   return !!was && !!after.element && doc.get(after.element) === was;
+}
+
+/** Whether `after` is the warning `before` again: sameFinding, and the related elements are the same ones (by id or identity). */
+function sameWarning(doc: Doc, baseline: ErrorBaseline, before: Warning, after: Warning): boolean {
+  if (!sameFinding(doc, baseline, before, after)) return false;
+  const a = before.related ?? [];
+  const b = after.related ?? [];
+  return a.length === b.length && a.every((id, i) => id === b[i] || (!!baseline.index.get(id) && doc.get(b[i]!) === baseline.index.get(id)));
+}
+
+/** Takes the first item of `pool` that `match` accepts out of it; whether there was one. */
+function takeMatch<T>(pool: T[], match: (item: T) => boolean): boolean {
+  const i = pool.findIndex(match);
+  if (i === -1) return false;
+  pool.splice(i, 1);
+  return true;
+}
+
+/**
+ * The findings of a mutation against the document before the ops (each
+ * finding matched once): `raw` is the structural validation after the ops
+ * (before pre-existing errors became W_PREEXISTING_ERROR), `final` the
+ * validation the result reports (platform findings and validators included).
+ * A lint warning the document had (same code, element and related elements,
+ * followed through a rename) is pre-existing, so is every W_PREEXISTING_ERROR;
+ * the rest of `final.warnings` was added. Resolved: the lint warnings and
+ * errors the document had that `raw` no longer has, and the platform's and
+ * validators' resolved findings.
+ */
+export function validationDelta(doc: Doc, baseline: ErrorBaseline, raw: ValidationResult, final: ValidationResult): ValidationDelta {
+  const before = baseline.warnings ?? [];
+  const remaining = [...raw.warnings];
+  const resolved = before.filter((b) => !takeMatch(remaining, (a) => sameWarning(doc, baseline, b, a)));
+  const errors = [...raw.errors];
+  resolved.push(...baseline.errors.filter((b) => !takeMatch(errors, (a) => sameFinding(doc, baseline, b, a))));
+  resolved.push(...(final.platform?.resolved ?? []), ...(final.validators ?? []).flatMap((r) => r.resolved));
+  const pool = [...before];
+  const added: Warning[] = [];
+  let preexisting = 0;
+  for (const w of final.warnings) {
+    if (w.code === 'W_PREEXISTING_ERROR' || takeMatch(pool, (b) => sameWarning(doc, baseline, b, w))) preexisting++;
+    else added.push(w);
+  }
+  return { added, resolved, preexisting };
 }
 
 /**
@@ -624,7 +689,8 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   }
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 
-  const structural = separatePreexisting(doc, validateDoc(doc), baseline);
+  const raw = validateDoc(doc);
+  const structural = separatePreexisting(doc, raw, baseline);
   let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform) : structural;
   // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
   changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings);
@@ -694,6 +760,8 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     layout,
     validation,
     importWarnings,
+    // a document created in memory (`new`) has no file whose warnings were already there: everything is reported
+    ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation) } : {}),
     xml,
   };
   if (opts.show) {

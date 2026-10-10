@@ -6,6 +6,11 @@
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
  * The file I/O is src/node/files.ts, everything else the browser-safe core;
  * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug).
+ *
+ * `-` as the file reads the model from stdin; a mutating command then writes
+ * its result to stdout (unless -o names a file), and `-o -` writes any
+ * result to stdout. With the XML on stdout the report goes to stderr.
+ * --json prints compact JSON (--pretty indents it).
  */
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -13,20 +18,20 @@ import { Command, CommanderError, type Command as CommandType, InvalidArgumentEr
 import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
 import { setLayoutDebug } from './debug.js';
 import { layoutProblems } from './diagram/metrics.js';
-import { layoutView } from './diagram/view.js';
+import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
-import { renderDetail, renderExtensionList, renderFind, renderLayoutView, renderMetrics, renderView } from './format.js';
-import { guideText, kindsJson, kindsText } from './guide.js';
+import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
+import { guideShort, guideText, guideTopic, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
-import { checkFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
+import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
 import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
-import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
+import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
 import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
-import { mutationReport, mutationWarnings, renderMutation, renderValidation, validationReport, validatorTag } from './report.js';
-import { buildView, elementDetail, findElements, scopeView } from './view.js';
+import { mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from './report.js';
+import { findElements } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -40,23 +45,93 @@ if (process.env['BPMN_LAYOUT_DEBUG']) setLayoutDebug((line) => process.stderr.wr
 
 interface OutputOptions {
   json?: boolean;
+  /** with json: indented */
+  pretty?: boolean;
   strict?: boolean;
+  /** the short result (mutationSummary) */
+  summary?: boolean;
 }
 
-function print(text: string): void {
-  process.stdout.write(text.endsWith('\n') ? text : `${text}\n`);
+type Out = NodeJS.WriteStream;
+
+function print(text: string, out: Out = process.stdout): void {
+  out.write(text.endsWith('\n') ? text : `${text}\n`);
 }
 
-function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+/** JSON on one line (tokens), indented with --pretty. */
+function printJson(value: unknown, pretty?: boolean, out: Out = process.stdout): void {
+  out.write(`${pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value)}\n`);
 }
 
 /** The result of a mutation (src/report.ts: the same for the CLI and the in-memory API); --strict exits 5 on any warning. */
-function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }): void {
+function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: Out = process.stdout): void {
   const report = mutationReport(result);
-  if (opts.json) printJson(report);
-  else print(renderMutation(report, { dryRun: opts.dryRun }));
+  if (opts.summary) {
+    const summary = mutationSummary(report);
+    if (opts.json) printJson(report.view ? { ...summary, view: report.view } : summary, opts.pretty, out);
+    else print(renderSummary(summary, { dryRun: opts.dryRun }) + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
+  } else if (opts.json) printJson(report, opts.pretty, out);
+  else print(renderMutation(report, { dryRun: opts.dryRun }), out);
   if (opts.strict && mutationWarnings(result).length) process.exit(5);
+}
+
+/* ------------------------------------------------------------------ */
+/* stdin / stdout                                                       */
+/* ------------------------------------------------------------------ */
+
+let stdinUsed: string | undefined;
+
+/** The whole of stdin as text (decoded like a file); stdin can feed one input per call. */
+function readStdin(what: string): Buffer {
+  if (stdinUsed) throw usageError(`stdin already holds ${stdinUsed}; it cannot also hold ${what}`, { hint: 'Read one of them from a file, e.g. `bpmn apply - ops.json < model.bpmn`.' });
+  stdinUsed = what;
+  try {
+    return readFileSync(0);
+  } catch (err) {
+    throw ioError('E_IO', `Cannot read ${what} from stdin: ${(err as Error).message}`, { hint: 'Pipe the input in, e.g. `cat model.bpmn | bpmn show -`.' });
+  }
+}
+
+/** The document of a file argument: `-` reads it from stdin (it then has no file name). */
+async function readDocArg(file: string): Promise<Doc> {
+  if (file !== '-') return readDoc(file);
+  return Doc.fromXml(decodeXmlBytes(readStdin('the model'), 'stdin'));
+}
+
+/**
+ * Runs a mutating command. The model comes from `file` (`-`: stdin); the
+ * result goes to the file, to `-o <file>`, or to stdout (`-o -`, or a model
+ * from stdin without -o; then the report goes to stderr).
+ */
+async function runMutation(
+  file: string,
+  opts: FileMutationOptions & OutputOptions,
+  fromFile: (o: FileMutationOptions) => Promise<MutationResult>,
+  fromDoc: (doc: Doc, o: FileMutationOptions) => Promise<MutationResult>,
+): Promise<void> {
+  const stdout = opts.out === '-' || (file === '-' && opts.out === undefined);
+  const fileOpts: FileMutationOptions = stdout ? { ...opts, out: undefined, dryRun: true, backup: false } : opts;
+  const result = file === '-' ? await fromDoc(await readDocArg('-'), fileOpts) : await fromFile(fileOpts);
+  const xmlOut = stdout && !opts.dryRun;
+  if (xmlOut) {
+    process.stdout.write(result.xml.endsWith('\n') ? result.xml : `${result.xml}\n`);
+    result.written = true;
+    result.file = '-';
+  }
+  printMutation(result, opts, xmlOut ? process.stderr : process.stdout);
+}
+
+/** A mutation of ops on `file` (`-`: stdin), see runMutation. */
+async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & OutputOptions): Promise<void> {
+  await runMutation(
+    file,
+    opts,
+    (o) => mutateFile(file, ops, o),
+    (doc, o) => {
+      assertLossless(doc, o);
+      return mutateDocToFile(doc, ops, o);
+    },
+  );
 }
 
 function printError(err: unknown, json: boolean | undefined): never {
@@ -92,10 +167,15 @@ function profileArg(v: string): string {
   return v;
 }
 
+/** --json, and --pretty to indent it. */
+function withJsonOptions(cmd: CommandType): CommandType {
+  return cmd.option('--json', 'machine-readable output (compact JSON)').option('--pretty', 'with --json: indented JSON');
+}
+
 function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): CommandType {
-  cmd
-    .option('--json', 'machine-readable output')
-    .option('-o, --out <file>', 'write to this file instead of the input file')
+  withJsonOptions(cmd)
+    .option('--summary', 'short result: created ids by kind, changed / removed ids, added warnings, one layout line')
+    .option('-o, --out <file>', 'write to this file instead of the input file (- = stdout)')
     .option('--dry-run', 'run everything but do not write');
   if (layoutToggle) {
     cmd
@@ -153,6 +233,8 @@ function layoutOption(o: RawOpts): FileMutationOptions['layout'] {
 function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
   return {
     json: !!o['json'],
+    pretty: !!o['pretty'],
+    summary: !!o['summary'],
     out: o['out'] as string | undefined,
     dryRun: !!o['dryRun'],
     layout: layoutOption(o),
@@ -280,6 +362,8 @@ withMutationOptions(
 ).action(async (file: string, o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
+    // `new -` (or -o -) writes the new model to stdout
+    const stdout = file === '-' || opts.out === '-';
     const doc = Doc.create(
       {
         processName: o['name'] as string | undefined,
@@ -287,59 +371,67 @@ withMutationOptions(
         executable: o['executable'] !== false,
         target: o['target'] as 'camunda8' | 'camunda7' | undefined,
       },
-      file,
+      file === '-' ? undefined : file,
     );
-    const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true });
+    const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
     result.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: o['name'] as string | undefined });
-    printMutation(result, opts);
+    const xmlOut = stdout && !opts.dryRun;
+    if (xmlOut) {
+      process.stdout.write(result.xml.endsWith('\n') ? result.xml : `${result.xml}\n`);
+      result.written = true;
+      result.file = '-';
+    }
+    printMutation(result, opts, xmlOut ? process.stderr : process.stdout);
   }, opts.json);
 });
 
 /* show --------------------------------------------------------------- */
-program
-  .command('show <file> [id]')
-  .description('print the model (or one element) as the AI sees it: no coordinates')
-  .option('--json', 'machine-readable output')
-  .option('--scope <id>', 'only this process / sub-process / participant')
-  .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane, colours, label sides, layout problems')
-  .action(async (file: string, id: string | undefined, o: RawOpts) => {
-    await run(async () => {
-      const doc = await readDoc(file);
-      if (o['layout']) {
-        if (id || o['scope']) throw usageError('--layout shows the whole drawing; drop the element id / --scope', { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
-        const view = layoutView(doc.definitions);
-        if (o['json']) printJson({ file, ...view });
-        else print(renderLayoutView(view));
-        return;
-      }
-      if (id) {
-        const el = doc.require(id);
-        const detail = elementDetail(doc, el);
-        if (o['json']) printJson(detail);
-        else print(renderDetail(detail));
-        return;
-      }
-      const view = buildView(doc);
-      if (o['scope']) scopeView(doc, view, String(o['scope']));
-      if (o['json']) printJson(view);
-      else print(renderView(view));
-    }, !!o['json']);
-  });
+function depthArg(v: string): number {
+  if (!/^\d+$/.test(v)) throw new InvalidArgumentError('expected a whole number >= 0');
+  return Number(v);
+}
+
+withJsonOptions(
+  program
+    .command('show <file> [id]')
+    .description('print the model (or one element) as the AI sees it: no coordinates (file - = stdin)')
+    .option('--scope <id>', 'only this process / sub-process / participant')
+    .option('--around <id>', 'only the neighbourhood of this element: --depth flow steps along sequence flows, both ways')
+    .option('--depth <n>', 'with --around: flow steps (default 2)', depthArg)
+    .option('--inner', 'with --around: also enter sub-processes from outside')
+    .option('--context', 'with an id: the element in its context (where, lane, before / after, what catches it, message flows)')
+    .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane, colours, label sides, layout problems'),
+).action(async (file: string, id: string | undefined, o: RawOpts) => {
+  await run(async () => {
+    const opts: ViewOptions = {
+      ...(id !== undefined ? { id } : {}),
+      ...(o['context'] ? { context: true } : {}),
+      ...(o['around'] !== undefined ? { around: String(o['around']) } : {}),
+      ...(o['depth'] !== undefined ? { depth: o['depth'] as number } : {}),
+      ...(o['inner'] ? { inner: true } : {}),
+      ...(o['scope'] !== undefined ? { scope: String(o['scope']) } : {}),
+      ...(o['layout'] ? { layout: true } : {}),
+    };
+    const shown = viewDoc(await readDocArg(file), opts);
+    if (o['json']) printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!o['pretty']);
+    else print(renderShown(shown));
+  }, !!o['json']);
+});
 
 /* find --------------------------------------------------------------- */
-program
-  .command('find <file> <text>')
-  .description('find elements by id, name or vendor attribute value (case-insensitive substring)')
-  .option('--kind <kind>', 'restrict to a kind', kindArg)
-  .option('--json', 'machine-readable output')
-  .action(async (file: string, text: string, o: RawOpts) => {
-    await run(async () => {
-      const doc = await readDoc(file);
-      const hits = findElements(doc, text, o['kind'] as string | undefined);
-      if (o['json']) printJson(hits);
-      else print(renderFind(hits));
-    }, !!o['json']);
-  });
+withJsonOptions(
+  program
+    .command('find <file> <text>')
+    .description('find elements by id, name or vendor attribute value (case-insensitive substring; file - = stdin)')
+    .option('--kind <kind>', 'restrict to a kind', kindArg),
+).action(async (file: string, text: string, o: RawOpts) => {
+  await run(async () => {
+    const doc = await readDocArg(file);
+    const hits = findElements(doc, text, o['kind'] as string | undefined);
+    if (o['json']) printJson(hits, !!o['pretty']);
+    else print(renderFind(hits));
+  }, !!o['json']);
+});
 
 /* add ---------------------------------------------------------------- */
 withTriggerOptions(
@@ -408,8 +500,7 @@ withTriggerOptions(
       ...(kv.length ? { set: parseKeyValues(kv) } : {}),
       ...triggerOptions(o),
     };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -441,8 +532,7 @@ withMutationOptions(
       ...(o['message'] ? { message: String(o['message']) } : {}),
       ...(o['ifAbsent'] ? { ifAbsent: true } : {}),
     };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -458,8 +548,7 @@ withMutationOptions(
     const unset = (o['unset'] as string[]) ?? [];
     if (!keyValues.length && !unset.length) throw new CliError('E_USAGE', 'Nothing to set: pass key=value pairs or --unset <key>', 'usage');
     const op: SetOp = { op: 'set', id, values: parseKeyValues(keyValues), ...(unset.length ? { unset } : {}) };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -475,8 +564,7 @@ withMutationOptions(
   const opts = mutationOptions(o);
   await run(async () => {
     const op: RemoveOp = { op: 'remove', ids, bridge: o['bridge'] !== false, ...(o['ifExists'] ? { ifExists: true } : {}) };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -492,8 +580,7 @@ withTriggerOptions(
   const opts = mutationOptions(o);
   await run(async () => {
     const op: RetypeOp = { op: 'retype', id, kind, ...triggerOptions(o) };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -525,8 +612,7 @@ withMutationOptions(
     if (!op.after && !op.before && !op.flow && !op.in && !op.on && op.lane === undefined) {
       throw usageError('move needs one of --after, --before, --flow, --in, --on or --lane');
     }
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -539,8 +625,7 @@ withMutationOptions(
   const opts = mutationOptions(o);
   await run(async () => {
     const op: OrderOp = { op: 'order', id: nodeId, flows: flowIds };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 
@@ -566,8 +651,7 @@ withMutationOptions(
       ...(o['xml'] ? { xml: String(o['xml']) } : {}),
       ...(o['replace'] ? { replace: true } : {}),
     };
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 });
 withMutationOptions(
@@ -583,24 +667,21 @@ withMutationOptions(
       const op: ExtOp = indexed
         ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as ExtOp['slot'] } : {}) }
         : { op: 'ext', id, action: 'remove', type: typeOrIndex };
-      const result = await mutateFile(file, [op], opts);
-      printMutation(result, opts);
+      await mutateArg(file, [op], opts);
     }, opts.json);
   },
 );
-ext
-  .command('list <file> <id>')
-  .description('list extension elements of an element (and of its event definition / loop / condition) as an indented tree')
-  .option('--json', 'machine-readable output')
-  .action(async (file: string, id: string, o: RawOpts) => {
+withJsonOptions(ext.command('list <file> <id>').description('list extension elements of an element (and of its event definition / loop / condition) as an indented tree')).action(
+  async (file: string, id: string, o: RawOpts) => {
     await run(async () => {
-      const doc = await readDoc(file);
+      const doc = await readDocArg(file);
       const el = doc.require(id);
       const items = listAllExtensions(el);
-      if (o['json']) printJson(items);
+      if (o['json']) printJson(items, !!o['pretty']);
       else print(renderExtensionList(items));
     }, !!o['json']);
-  });
+  },
+);
 
 /* format operations (diagram only) ----------------------------------- */
 
@@ -622,8 +703,7 @@ function pick<K extends string>(o: RawOpts, keys: readonly K[]): Partial<Record<
 async function runFormat(file: string, op: Op, o: RawOpts): Promise<void> {
   const opts = mutationOptions(o);
   await run(async () => {
-    const result = await mutateFile(file, [op], opts);
-    printMutation(result, opts);
+    await mutateArg(file, [op], opts);
   }, opts.json);
 }
 
@@ -718,28 +798,28 @@ withMutationOptions(
 });
 
 /* metrics ------------------------------------------------------------ */
-program
-  .command('metrics <file>')
-  .description('layout quality of the drawing: score, counts and every problem with the element ids')
-  .option('--json', 'machine-readable output')
-  .action(async (file: string, o: RawOpts) => {
+withJsonOptions(program.command('metrics <file>').description('layout quality of the drawing: score, counts and every problem with the element ids (file - = stdin)')).action(
+  async (file: string, o: RawOpts) => {
     await run(async () => {
-      const doc = await readDoc(file);
+      const doc = await readDocArg(file);
       const m = layoutProblems(doc.definitions);
-      if (o['json']) printJson({ file, score: m.score, counts: m.counts, problems: m.problems });
+      if (o['json']) printJson({ file, score: m.score, counts: m.counts, problems: m.problems }, !!o['pretty']);
       else print(renderMetrics(m));
     }, !!o['json']);
-  });
+  },
+);
 
 /* apply -------------------------------------------------------------- */
 withMutationOptions(
-  program.command('apply <file> [ops]').description('apply a JSON list of operations in one transaction (ops file or - for stdin)'),
+  program.command('apply <file> [ops]').description('apply a JSON list of operations in one transaction (ops file or - for stdin; file - = the model from stdin, the result to stdout)'),
 ).action(async (file: string, opsFile: string | undefined, o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
     let text: string;
-    if (!opsFile || opsFile === '-') text = readFileSync(0, 'utf8');
-    else {
+    if (!opsFile || opsFile === '-') {
+      if (file === '-') throw usageError('the model and the ops cannot both come from stdin', { hint: 'Pass the ops as a file: `bpmn apply - ops.json < model.bpmn` (or the model as a file: `bpmn apply model.bpmn - < ops.json`).' });
+      text = readStdin('the ops').toString('utf8');
+    } else {
       try {
         text = await readFile(opsFile, 'utf8');
       } catch (err) {
@@ -757,16 +837,16 @@ withMutationOptions(
       throw new CliError('E_USAGE', `Ops are not valid JSON: ${(err as Error).message}`, 'usage');
     }
     const ops: Op[] = parseOps(parsed);
-    const result = await mutateFile(file, ops, opts);
-    printMutation(result, opts);
+    await mutateArg(file, ops, opts);
   }, opts.json);
 });
 
 /* validate ----------------------------------------------------------- */
-program
-  .command('validate <file>')
-  .description('structural validation, lint, the engine profile (Camunda 7) and a layout dry run (nothing is written)')
-  .option('--json', 'machine-readable output')
+withJsonOptions(
+  program
+    .command('validate <file>')
+    .description('structural validation, lint, the engine profile (Camunda 7) and a layout dry run (nothing is written; file - = stdin)'),
+)
   .option('--strict', 'exit with code 5 when there are warnings')
   .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (v: string) => {
     if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
@@ -775,10 +855,11 @@ program
   .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate) or none', profileArg)
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const report = validationReport(await checkFile(file, { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' }));
+      const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' };
+      const report = validationReport(file === '-' ? await checkDoc(await readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
       if (o['json']) {
         const { ok, ...rest } = report;
-        printJson({ ok, file, ...rest });
+        printJson({ ok, file, ...rest }, !!o['pretty']);
       } else {
         print(renderValidation(report));
       }
@@ -803,26 +884,39 @@ withMutationOptions(
     // the ids are validated like `set <id> expanded=`: unknown ids and non-sub-processes are errors, not silent no-ops
     const expand = splitList(o['expand'] as string | undefined);
     const collapse = splitList(o['collapse'] as string | undefined);
-    const result = await layoutFile(file, { ...opts, tidy: !!o['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) });
-    printMutation(result, opts);
+    const layoutOpts = { tidy: !!o['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) };
+    await runMutation(
+      file,
+      opts,
+      (fo) => layoutFile(file, { ...fo, ...layoutOpts }),
+      (doc, fo) => layoutDocToFile(doc, { ...fo, ...layoutOpts }),
+    );
   }, opts.json);
 });
 
 /* kinds / guide ------------------------------------------------------ */
-program
-  .command('kinds')
-  .description('element kinds, triggers, settable keys, ops schema and error codes')
-  .option('--json', 'machine-readable output')
-  .action((o: RawOpts) => {
-    if (o['json']) printJson(kindsJson());
-    else print(kindsText());
-  });
+withJsonOptions(
+  program
+    .command('kinds')
+    .description('element kinds, triggers, settable keys, ops schema and error codes')
+    .option('--section <names>', 'only these parts (comma-separated): kinds, triggers, setKeys, nestedKeys, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes'),
+).action(async (o: RawOpts) => {
+  await run(async () => {
+    const sections = o['section'] !== undefined ? kindsSections(String(o['section'])) : undefined;
+    if (o['json']) printJson(sections ? kindsSectionJson(sections) : kindsJson(), !!o['pretty']);
+    else print(sections ? kindsSectionText(sections) : kindsText());
+  }, !!o['json']);
+});
 
 program
-  .command('guide')
-  .description('cheat sheet for AI agents')
-  .action(() => {
-    print(guideText());
+  .command('guide [topic]')
+  .description('cheat sheet for AI agents (--short: the core in 5 KB; a topic: one section)')
+  .option('--short', 'the core: contract, reading, ops keys, placement, top errors (at most 5 KB)')
+  .action(async (topic: string | undefined, o: RawOpts) => {
+    await run(async () => {
+      if (topic !== undefined && o['short']) throw usageError('--short and a topic cannot be combined', { hint: 'Use `bpmn guide --short` or `bpmn guide <topic>`.' });
+      print(o['short'] ? guideShort() : topic !== undefined ? guideTopic(topic) : guideText());
+    });
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

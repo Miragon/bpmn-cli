@@ -39,7 +39,11 @@ function cliError(stderr) {
 function cliInfo(stdout) {
   try {
     const j = JSON.parse(stdout);
-    return { layout: j.layout ? { status: j.layout.status, mode: j.layout.mode, reason: j.layout.reason } : undefined, warnings: (j.warnings || []).length, validationWarnings: (j.validation?.warnings || []).length };
+    // current builds report warnings as a delta ({added, resolved, preexistingCount}); older ones as op warnings + validation.warnings
+    const delta = j.warnings && !Array.isArray(j.warnings) ? j.warnings : undefined;
+    const warnings = delta ? delta.added.length : (j.warnings || []).length;
+    const validationWarnings = delta ? delta.added.length + delta.preexistingCount : (j.validation?.warnings || []).length;
+    return { layout: j.layout ? { status: j.layout.status, mode: j.layout.mode, reason: j.layout.reason } : undefined, warnings, validationWarnings };
   } catch {
     return {};
   }
