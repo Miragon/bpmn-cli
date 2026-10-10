@@ -2,7 +2,9 @@
  * Batch aliases: an op of an `apply` batch names an element it creates
  * (`"as": "$check"`; add also `"flowAs"`: the flow into the new node; split
  * `"joinAs"`: its join gateway; the nodes of a split branch take `as` /
- * `flowAs` too), and later ops of the batch use the alias wherever an
+ * `flowAs` too; add, connect, set and retype `"refAs"`: the bpmn:Message /
+ * Error / Signal / Escalation the element references, created or found by
+ * `message` / `error` / ...), and later ops of the batch use the alias wherever an
  * element id goes (`"after": "$check"`, `"ids": ["$check", "$f"]`, the id of
  * set / ext / retype / order (and its flows, lanes, pools) and of the format
  * ops with their selectors (`path`, `via`, `branch`), `values.default` /
@@ -69,10 +71,10 @@ export const SET_REF_KEYS: readonly string[] = ['default', 'source', 'target', '
 /** Keys that name the id of a new element: an alias there is a mistake (`as` gives one). */
 const NEW_ID_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['id', 'flowId'], connect: ['id'], split: ['id', 'joinId'] };
 
-/** Keys that define an alias, per op. */
-const DEF_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['as', 'flowAs'], connect: ['as'], split: ['as', 'joinAs'] };
+/** Keys that define an alias, per op (`refAs`: the root element the op's element references, ops/events.ts bindRefAs). */
+const DEF_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['as', 'flowAs', 'refAs'], connect: ['as', 'refAs'], split: ['as', 'joinAs'], set: ['refAs'], retype: ['refAs'] };
 
-const NODE_DEF_KEYS = ['as', 'flowAs'] as const;
+const NODE_DEF_KEYS = ['as', 'flowAs', 'refAs'] as const;
 
 type Raw = Record<string, unknown>;
 
@@ -144,7 +146,7 @@ function unknownAlias(index: number, op: Op, key: string, alias: string, defined
   return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}${close}; ${listing(defined)}`, 'usage', {
     op: index,
     candidates,
-    hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node) or "joinAs" (split: the join gateway); only the ops after it can use it.',
+    hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node), "joinAs" (split: the join gateway) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references); only the ops after it can use it.',
   });
 }
 

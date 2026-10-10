@@ -48,7 +48,7 @@ import { findReferences, is, many, removeFrom, walk, type El } from '../model.js
 import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
 import { ChangeSet } from '../result.js';
-import { applyTrigger } from './events.js';
+import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { zeebeUserTaskDefault } from './platform.js';
 import { cascadeRemove } from './remove.js';
@@ -198,6 +198,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const sameTrigger = trigger === oldTrigger;
   if (from === to && sameTrigger && !hasTriggerOptions) {
     cs.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
+    bindRefAs(cs, op.refAs, el);
     return cs;
   }
   if (to.kind === 'eventSubProcess' && (doc.incoming(el).length || doc.outgoing(el).length)) {
@@ -237,6 +238,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
       ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
       : `retyped from ${oldLabel} to ${kindLabel(target)}`;
   cs.change(changeOf(target, detail));
+  bindRefAs(cs, op.refAs, target);
   return cs;
 }
 

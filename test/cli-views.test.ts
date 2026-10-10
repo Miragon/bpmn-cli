@@ -158,7 +158,7 @@ describe('guide --short, guide <topic>, kinds --section', () => {
     for (const heading of ['CONTRACT', 'READ', 'CHANGE', 'OPS JSON', 'PLACEMENT', 'TOP ERRORS']) expect(short).toMatch(new RegExp(`^${heading}`, 'm'));
     expect(short).toContain('by id only');
     // every op is listed with its keys
-    expect(short).toMatch(/^ {2}add {6}kind\* name id as flowAs after before flow in on to lane/m);
+    expect(short).toMatch(/^ {2}add {6}kind\* name id as flowAs refAs after before flow in on to lane/m);
     expect(Buffer.byteLength(ok(['guide']).out)).toBeGreaterThan(5 * Buffer.byteLength(short));
   }, 60000);
 

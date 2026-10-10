@@ -558,9 +558,13 @@ exactly `true` / `false` (`yes`, `1`, `TRUE` are normalised; the engines read
 only the exact `true`); other values fail with `E_INVALID_VALUE`. The same
 rules apply to Operaton's own namespace (`operaton:asyncBefore`, see
 [Camunda 7](#camunda-7)). A `zeebe:` attribute that Camunda 8 reads on a
-zeebe extension element (`zeebe:assignee`, `zeebe:correlationKey`,
-`loop.zeebe:inputCollection`) is refused with `E_WRONG_HOST`; the hint is
-the `ext add` that writes it (see [Camunda 8](#camunda-8)).
+zeebe extension element (`zeebe:assignee`, `loop.zeebe:inputCollection`) is
+refused with `E_WRONG_HOST`; the hint is the `ext add` that writes it (see
+[Camunda 8](#camunda-8)). `zeebe:correlationKey` on a catch event or receive
+task (or on a bpmn:Message) is written into the `zeebe:subscription` of the
+message the element waits for, with a note; on an element that waits for no
+message it is `E_WRONG_HOST`. `completion=` on an ad-hoc sub-process without
+a multi-instance loop sets its own completion condition.
 
 An event with several event definitions (BPMN "multiple"; the engines act on
 one of them only) needs a selector: `'definition[1].<key>=...'` (0-based) or
@@ -776,6 +780,13 @@ kept:
   merged like the camunda one. A `camunda:` and an `operaton:` container are
   kept apart (Operaton reads one of each, Camunda 7 and CIB seven only the
   camunda one).
+- **A `zeebe:subscription` goes on the message.** Camunda 8 reads the
+  correlation key on the bpmn:Message a catch event or receive task waits
+  for, so `ext add <event|receiveTask> zeebe:subscription ...` writes it
+  there and notes it (naming the other elements that wait for the same
+  message); an element that waits for no message is `E_WRONG_HOST`, with the
+  `set ... message=` to run first. Camunda 7 has no such element, so nothing
+  changes there.
 - **Paths reach nested containers**:
   `'camunda:connector/camunda:inputParameter' name=url --body https://...`,
   `'camunda:formField[id=amount]/camunda:validation/camunda:constraint'
@@ -1158,7 +1169,7 @@ are:
 | any element | `id` (rename, every reference follows, including `calledElement` strings), `name`, `doc` / `documentation`, any attribute-typed BPMN property of the element's type by its name (`isExecutable`, `isForCompensation`, `completionQuantity`, `processType`, `script`, `scriptFormat`, `implementation`, `calledElement`, `instantiate`, `gatewayDirection`, ...; enums are checked), vendor attributes with a prefix (`camunda:assignee`, `zeebe:modelerTemplate`; the xmlns is declared automatically for known prefixes; Camunda 8 settings are extension elements, see [Camunda 8](#camunda-8)) |
 | sequence flows | `condition`, `language`, `default` (`true`/`false`), `source`, `target` (redirect) |
 | events | `trigger` (`message`, `timer`, ...), `timer`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting` (`true`/`false`) |
-| activities | `loop` (`none`/`standard`/`parallel`/`sequential`), `cardinality`, `completion` (completion condition) |
+| activities | `loop` (`none`/`standard`/`parallel`/`sequential`), `cardinality`, `completion` (completion condition of the multi-instance loop; an ad-hoc sub-process without one: its own) |
 | sub-processes | `expanded` (`true`/`false`, drives the diagram), `triggeredByEvent` |
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow of a gateway / activity, the node-side twin of `set <flowId> default=true`; empty clears it) |
 | text annotations | `text` |
@@ -1400,7 +1411,7 @@ attributes.
 | DMN decision | `bpmn set <file> <id> calledDecision=<decisionId>`, then `bpmn ext add <file> <id> zeebe:calledDecision resultVariable=<variable>` |
 | call activity | `bpmn ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false` |
 | user task | `zeebe:assignmentDefinition assignee=<user> candidateGroups=<groups>`, `zeebe:formDefinition formId=<formId>` (or `externalReference=<url>`), `zeebe:taskSchedule dueDate=<date-time>`, `zeebe:priorityDefinition priority=<0..100>`, `zeebe:taskListener eventType=completing type=<jobType>` |
-| message correlation | `bpmn set <file> <id> message=<Name>` (or `add ... --message <Name>`), then `bpmn ext add <file> <messageId> zeebe:subscription correlationKey==<FEEL>` |
+| message correlation | `bpmn set <file> <id> message=<Name>` (or `add ... --message <Name>`), then `bpmn set <file> <id> zeebe:correlationKey==<FEEL>` or `bpmn ext add <file> <id or messageId> zeebe:subscription correlationKey==<FEEL>` (both go to the message's `zeebe:subscription`; in `apply`, `"refAs": "$msg"` names the message) |
 | multi-instance | `bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<FEEL> inputElement=<variable>` (creates the parallel loop; `outputCollection=<variable> outputElement==<FEEL>` collect results; `set <id> loop=sequential`) |
 | execution listener | `bpmn ext add <file> <id> zeebe:executionListener eventType=start type=<jobType>` |
 | conditions | `add ... --condition '= amount > 1000'`, `bpmn set <file> <flowId> 'condition== amount > 1000'`, `when=` on a conditional event |
@@ -1439,18 +1450,41 @@ business rule task or message throw / end event without job type (or
 script, called decision), a call activity without `zeebe:calledElement`
 (the BPMN `calledElement` is not read), a catching message without a
 `zeebe:subscription` correlation key, a JUEL `${...}` condition or any
-static value where Camunda 8 wants FEEL, a FEEL slip it refuses (`&&`, `||`,
-`==`, `!`, single quotes, unbalanced brackets, a dangling operator), a
-timer value it cannot parse (`PT2D` instead of `P2D`, a date without
-offset, a 5-field cron), a cycle on an intermediate or interrupting timer,
+static value where Camunda 8 wants FEEL, a FEEL syntax error (below), a
+timer value it cannot parse (`PT2D` instead of `P2D`, `PT1.5H`: a fraction
+on seconds only, a date without offset, a 5-field cron), a cycle on an
+intermediate or interrupting timer,
 a multi-instance loop without `zeebe:loopCharacteristics` or
 `inputCollection`, two of a zeebe element it reads once, form, priority,
 date, listener and mapping content it refuses, event and start-event
 combinations it does not support (several definitions, a triggered start
 in an embedded sub-process, two none starts, error codes or message names
 twice in a scope, an escalation boundary event on a task, a link without
-catch), unsupported elements (transaction, cancel events), an unprefixed
-attribute BPMN does not define, and a file without an executable process.
+catch, an empty link name), unsupported elements (transaction, cancel
+events), what the BPMN schema refuses (an unprefixed attribute BPMN does not
+define, an id that is no XML NCName such as `a:b`, an IDREF that names no
+id such as a lane's `flowNodeRef`, child elements out of the schema's order
+such as `extensionElements` after `incoming`: the last two are read from the
+file's text, the model shows neither), and a file without an executable
+process. White space is a value to Camunda 8 where it is a name: a job type,
+message / signal name, error / escalation code, process / decision id or
+result variable of white space deploys (only an empty one is refused), so
+the profile reports only the empty one; a FEEL, path or enum attribute, a
+form id or a correlation key of white space is refused.
+
+**FEEL.** Every value Camunda 8 parses as FEEL at deploy (conditions, the
+zeebe attributes it reads as expressions, a message or signal name starting
+with `=`, `zeebe:adHoc` and an ad-hoc sub-process's completion condition) is
+parsed by a small built-in checker of the grammar Camunda 8.9 accepts
+(`src/platform/feel.ts`, no dependency). It reports `&` / `|` (FEEL: `and`
+/ `or`), `<>` (`!=`), `>>`, `%` (`modulo(a, b)`), `:=`, `AND` / `OR`
+(keywords are lower case), `if` without `else`, `for` without `return`,
+unbalanced brackets and strings, an operator without operand, and the JUEL
+habits (`&&`, `||`, `==`, `!`, `${...}`, single quotes, `?:`), each with its
+FEEL spelling. Where Camunda's parser is lenient, so is the check: ranges,
+unary tests, contexts, function names with spaces, `?`, a keyword glued to
+a name (`x andy` is `x and y`). 762 expressions with the engine's verdict
+are in `test/fixtures/c8/feel-verdicts.json`; the check agrees on every one.
 The runtime rules: a flow without condition out of an exclusive or
 inclusive gateway with other outgoing flows is never taken, a condition on
 a flow out of a task or parallel gateway is ignored, a standard loop runs
@@ -1482,8 +1516,12 @@ event, full redraw; 459 edits) has 0 regressions, the profile agrees with
 the engine on every result, and no zeebe content outside the edited element
 changed (1,689 / 1,689 extension blocks byte for byte). Like Camunda 8,
 the profile checks executable processes only (but a file without one is
-refused) and the content of ad-hoc sub-processes too. It does not parse
-FEEL: other syntax errors are found by the engine only.
+refused) and the content of ad-hoc sub-processes too. On 200 adversarial
+models (81 refused by Camunda 8.9.22) the deploy findings have precision
+1.000 and recall 0.951 (before the FEEL and schema-text rules: 0.938 /
+0.741); the 4 refused models without a deploy finding get a structural
+error (`E_DANGLING_REF`, `E_INVALID_DEFAULT`, `E_INVALID_HOST`), so every
+refused model gets a finding.
 
 ### A worked example: invoice approval
 
@@ -1749,11 +1787,11 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 
 | op | keys |
 | --- | --- |
-| `add` | `kind` (required), `name`, `id`, `as`, `flowAs`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
-| `connect` | `source`, `target` (required), `name`, `id`, `as`, `condition`, `language`, `default`, `message`, `ifAbsent` |
-| `set` | `id` (required), `values` (map), `unset` (list); at least one of the two |
+| `add` | `kind` (required), `name`, `id`, `as`, `flowAs`, `refAs`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
+| `connect` | `source`, `target` (required), `name`, `id`, `as`, `refAs` (message flows), `condition`, `language`, `default`, `message`, `ifAbsent` |
+| `set` | `id` (required), `values` (map), `unset` (list); at least one of the two; `refAs` |
 | `remove` | `ids` (required list), `bridge` (default true), `bridgeAll`, `withBranch`, `ifExists` |
-| `retype` | `id`, `kind` (required), trigger keys |
+| `retype` | `id`, `kind` (required), trigger keys, `refAs` |
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
 | `order` | `id` (required), exactly one of `flows` (outgoing flows of a node), `lanes` (lanes of a pool / process / parent lane) or `pools` (participants of the collaboration `id`) |
 | `ext` | `id`, `action` (`add` / `remove`, required), `type` (add: type or path; remove: selector such as `camunda:inputParameter[name=x]`, or an index from `ext list` such as `"2"`, `"loop.0"`, `"definition[1].0"`; a `definition.` / `loop.` / `condition.` prefix addresses the nested element, `definition[<n>].` / `definition[<trigger>].` one of several event definitions), `attrs` (map), `body`, `xml`, `replace`, `index`, `slot` (`definition` / `loop` / `condition` / `definition[<n>]`, the same as the type prefix) |
@@ -1779,7 +1817,12 @@ old successor. An empty `nodes` list is a direct gateway -> join flow.
 `connect`, `split` and the nodes of a split branch); `add` and split nodes
 also take `"flowAs"` (the flow into the new node, the one the flow options
 describe; a prepend before a join or an unconnected node: the flow out of
-it) and `split` takes `"joinAs"` (its join gateway). Later ops of the batch
+it) and `split` takes `"joinAs"` (its join gateway). `add`, `connect` (a
+message flow), `set` and `retype` take `"refAs"`: the bpmn:Message, Error,
+Signal or Escalation the element references after the op (the one its
+`message` / `error` / `signal` / `escalation` key created or found by name;
+`E_USAGE` when it references none or several), so a batch can give the
+message its correlation key without guessing the message's id. Later ops of the batch
 use the alias wherever an element id goes: `after`, `before`, `flow`, `in`,
 `on`, `to`, `lane`, `process`, `members`, `source`, `target`, the `id` /
 `ids` of `set`, `remove`, `retype`, `move`, `order` (and its `flows`,
@@ -1799,6 +1842,16 @@ never guesses a generated id:
   { "op": "set", "id": "$ok", "values": { "default": "$no" } },
   { "op": "set", "id": "$yes", "values": { "condition": "${vollstaendig}" } },
   { "op": "color", "ids": ["$check"], "color": "green" }
+]
+```
+
+In a Camunda 8 file, `refAs` names the message an op creates:
+
+```json
+[
+  { "op": "add", "kind": "intermediateCatchEvent:message", "name": "Antwort erhalten", "after": "$check",
+    "message": "Antwort", "as": "$reply", "refAs": "$msg" },
+  { "op": "ext", "id": "$msg", "action": "add", "type": "zeebe:subscription", "attrs": { "correlationKey": "= id" } }
 ]
 ```
 
@@ -2263,10 +2316,12 @@ touched, in the file's own style:
   of them while resolving the merge). A flow whose id names its ends is renamed when an edit changes
   its ends (the one exception to "existing ids never change"); the library
   keeps every id with `Doc.followFlowEnds = false`, the CLI has no switch.
-- The Camunda 8 profile does not parse FEEL: it reports a static value
-  where FEEL is required and the common slips (`&&`, `||`, `==`, `!`,
-  `${...}`, single quotes, unbalanced brackets, a dangling operator); other
-  FEEL syntax errors are found by the engine only. An event-based gateway of
+- The Camunda 8 profile checks FEEL syntax, not meaning: an unknown
+  variable or function, a type error or a FEEL value of an attribute
+  Camunda 8 parses only when the process runs is found by the engine only.
+  The FEEL check follows the 762 engine-checked expressions; where Camunda's
+  grammar was not probed it accepts (a missed error costs a deploy round
+  trip, a false one would block a valid file). An event-based gateway of
   a file that leaves out the `<bpmn:outgoing>` lists is refused by Camunda 8
   (it counts the listed flows; the profile reports it), and a write keeps
   the file's way of listing them. `zeebe:publishMessage` (accepted by
@@ -2676,8 +2731,8 @@ Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 897 KB | 275 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
-| `applyToXml` only (tree-shaken) | 710 KB | 219 KB | the same |
+| everything `@miragon/bpmn-cli` exports | 922 KB | 284 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 733 KB | 227 KB | the same |
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import.
@@ -2733,7 +2788,8 @@ bundler drops what a host does not import.
   characters; `new --name` (or a speaking `--id`) names the definitions too
   (`Definitions_OrderHandling`; 0.3: `Definitions_1`).
 - An `apply` batch refers to an element it creates by an alias (`"as":
-  "$check"`, `flowAs`, `joinAs`; `MutationResult.aliases` /
+  "$check"`, `flowAs`, `joinAs`, `refAs` for the message / error / signal /
+  escalation an op creates or finds; `MutationResult.aliases` /
   `result.aliases`: alias -> final id) or by an explicit `id`; new errors
   `E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`.
 - `--summary` (`mutationSummary` / `renderSummary`) is new; the summary and
@@ -2753,7 +2809,10 @@ bundler drops what a host does not import.
   `W_C8_*` codes; 0.3 said "no Camunda 8 engine rules yet"); `new --target
   camunda8` writes the platform version; new user tasks of a Camunda 8 file
   get `zeebe:userTask`, new event definitions an id; `set <id>
-  zeebe:<attr>` for an attribute of a zeebe element is `E_WRONG_HOST`;
-  `show` prints `job=`, `form=`, `assignee=` ... and a message's
-  correlation key. The core grew by about 180 KB minified / 50 KB gzip
-  ([Browser bundles](#browser-bundles)).
+  zeebe:<attr>` for an attribute of a zeebe element is `E_WRONG_HOST`,
+  except `zeebe:correlationKey`, which (like `ext add <id>
+  zeebe:subscription`) goes to the message a catch event or receive task
+  waits for; the profile parses FEEL; `show` prints `job=`, `form=`,
+  `assignee=` ... and a message's correlation key. The core grew by about
+  200 KB minified / 57 KB gzip ([Browser bundles](#browser-bundles); the
+  FEEL check and the schema-text rules about 23 KB / 7 KB of it).

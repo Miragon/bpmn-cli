@@ -61,8 +61,11 @@ describe('set: zeebe settings are extension elements', () => {
     expect(caught(() => runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:type': 'charge' } }])).hint).toBe('Use `bpmn ext add <file> X zeebe:taskDefinition type=charge`.');
     expect(caught(() => runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:inputCollection': '=items' } }])).hint).toBe("Use `bpmn ext add <file> X loop.zeebe:loopCharacteristics 'inputCollection==items'` (creates a parallel multi-instance loop when there is none).");
     expect(caught(() => runOps(st, [{ op: 'set', id: 'X', values: { 'loop.zeebe:inputCollection': '=items' } }])).hint).toBe('Use `bpmn ext add <file> X loop.zeebe:loopCharacteristics inputCollection=<value>`.');
-    const recv = await Doc.fromXml(xml('<bpmn:receiveTask id="X" messageRef="M1" />', { roots: '<bpmn:message id="M1" name="Paid" />' }));
-    expect(caught(() => runOps(recv, [{ op: 'set', id: 'X', values: { 'zeebe:correlationKey': '=orderId' } }])).hint).toBe("Use `bpmn ext add <file> M1 zeebe:subscription 'correlationKey==orderId'` (on the message the event waits for).");
+    // zeebe:correlationKey on an element that waits for no message: give it one first (with one, set writes the message's subscription)
+    const recv = await Doc.fromXml(xml('<bpmn:receiveTask id="X" />'));
+    expect(caught(() => runOps(recv, [{ op: 'set', id: 'X', values: { 'zeebe:correlationKey': '=orderId' } }])).hint).toBe("Use `bpmn set <file> X message=<MessageName>` first (the correlation key belongs to the message the element waits for), then `bpmn set <file> X 'zeebe:correlationKey==orderId'`.");
+    const timer = await Doc.fromXml(xml(`<bpmn:intermediateCatchEvent id="X">${'<bpmn:timerEventDefinition id="T"><bpmn:timeDuration>PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>'}</bpmn:intermediateCatchEvent>`));
+    expect(caught(() => runOps(timer, [{ op: 'set', id: 'X', values: { 'zeebe:correlationKey': '=orderId' } }])).hint).toBe("Use `bpmn ext add <file> <messageId> zeebe:subscription 'correlationKey==orderId'` on a bpmn:Message (intermediateCatchEvent:timer X waits for no message).");
     // the attributes the descriptor puts on BPMN elements, unknown names and other vendors pass
     runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' } }]);
     expect(st.require('X').$attrs).toMatchObject({ 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' });

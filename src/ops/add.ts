@@ -61,7 +61,7 @@ import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
-import { applyTrigger } from './events.js';
+import { applyTrigger, bindRefAs } from './events.js';
 import { assertCondition, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { zeebeUserTaskDefault } from './platform.js';
 import { setProperties, setTaskMessage } from './set.js';
@@ -514,6 +514,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: string): ChangeSet {
     cs.note(`${op.id} already exists (${kindLabel(existing)}); nothing to do`);
     cs.bind(op.as, existing);
     if (op.flowAs) cs.bind(op.flowAs, doc.incoming(existing)[0]);
+    bindRefAs(cs, op.refAs, existing);
     if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
       cs.warn({
         code: 'W_KIND_MISMATCH',
@@ -570,6 +571,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: string): ChangeSet {
     cs.merge(setProperties(doc, { op: 'set', id: idOf(el), values: op.set }));
   }
   cs.bind(op.as, el);
+  bindRefAs(cs, op.refAs, el);
   doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;

@@ -32,7 +32,7 @@ import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, is, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
-import { ensureRootElement } from './events.js';
+import { bindRefAs, ensureRootElement } from './events.js';
 import { createSequenceFlow, flowChange, warnEventGatewayFlow } from './flows.js';
 import type { ConnectOp } from './types.js';
 
@@ -223,6 +223,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     const same = existing ?? existingConnection(doc, kind, source, target);
     if (same) {
       cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
+      bindRefAs(cs, op.refAs, same);
       return cs.bind(op.as, same);
     }
   }
@@ -289,6 +290,8 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
   // the batch alias names the connection (not a root message created with it)
   const made = [...cs.created].reverse().find((c) => CONNECTION_KINDS.has(c.kind));
   cs.bind(op.as, made ? doc.get(made.id) : undefined);
+  // refAs: the message the new message flow carries
+  bindRefAs(cs, op.refAs, made ? doc.get(made.id) : undefined);
   doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;
