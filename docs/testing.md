@@ -138,6 +138,18 @@ per format op; the event definition ids of a Camunda 8 file in the id style;
 profile in the warnings delta; and the strip of a removed node that must not
 pull an expanded sub-process over a shape of another row (found by the gate's
 fuzz campaign on the integrated build).
+The verifier fixes of step 3 round 1: `test/views-context.test.ts` (`show
+<id> --context` on a synthetic shop model: every boundary event of the
+sub-processes around an element, the message of a message element with
+the flows of that message drawn to its pool, a message flow's ends, what
+uses a message / signal / error / escalation), `test/format-frames.test.ts`
+(align / place with selector sets and explicit ids never take a shape out
+of its sub-process, also on the two scenarios the fuzzer hit),
+`test/move-lanes.test.ts` (a node moved into a flow between two lanes gets
+add's lane when it has none, keeps its own otherwise and is drawn on a row
+of it, like `add --lane`) and
+`test/remove-join.test.ts` (a plain remove bridges a merge, refuses a
+parallel / inclusive join).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile
