@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Miragon/bpmn-cli/compare/v0.3.0...v0.4.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* generated ids are no longer hashes or running numbers (Flow_1cat8ax / Flow_12 become Flow_OrderReceivedToCheckInvoice), and a flow whose id named its old ends is renamed after its new ends.
+
+### Features
+
+* agent ergonomics (views, speaking ids, batch aliases, layout) and a Camunda 8 profile ([#7](https://github.com/Miragon/bpmn-cli/issues/7)) ([81172a4](https://github.com/Miragon/bpmn-cli/commit/81172a4b123b69248fa70ee9ecc1195867324c0e))
+* land the plugin ([#8](https://github.com/Miragon/bpmn-cli/issues/8)) and the step 3 follow-ups ([#9](https://github.com/Miragon/bpmn-cli/issues/9)) on main ([#11](https://github.com/Miragon/bpmn-cli/issues/11)) ([4f1b37f](https://github.com/Miragon/bpmn-cli/commit/4f1b37f56f3e5653ec6757d7b6e0689b33db10aa))
+
 ## [0.3.0](https://github.com/Miragon/bpmn-cli/compare/v0.2.0...v0.3.0) (2026-10-09)
 
 

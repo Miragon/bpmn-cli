@@ -1,7 +1,7 @@
 {
   "name": "bpmn-cli",
   "displayName": "BPMN CLI",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Create, read, change, format and validate BPMN 2.0 models with @miragon/bpmn-cli: semantic edits by id instead of hand-written XML, hand-made drawings kept, Camunda 7 and Camunda 8 implementation details, engine profiles in validate.",
   "author": {
     "name": "Miragon GmbH",

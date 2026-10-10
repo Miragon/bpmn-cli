@@ -4,7 +4,7 @@ description: Create, read, change, lay out and validate BPMN 2.0 process models 
 when_to_use: Any request that creates or touches a .bpmn file, even when it does not say BPMN. Typical phrases are "model the order process", "draw a BPMN diagram", "add an approval step", "add a reminder timer", "add a lane for accounting", "add the customer as a pool with message flows", "the rejection branch should go below", "colour the happy path", "tidy up the layout", "make it deployable on Camunda 8", "external task with input mapping", "Prozess modellieren", "BPMN anpassen", "BPMN-Diagramm erstellen", "Schritt einfügen", "Lane hinzufügen", "Diagramm aufräumen", "Camunda-8-Prozess bauen".
 allowed-tools:
   - Bash(bpmn *)
-  - Bash(npx -y @miragon/bpmn-cli@0.3.0 *) # x-release-please-version
+  - Bash(npx -y @miragon/bpmn-cli@0.4.0 *) # x-release-please-version
 ---
 
 # BPMN models with the bpmn CLI
@@ -24,7 +24,7 @@ If that fails or prints a version older than the one pinned here, use this
 instead of `bpmn` in every command (Node 20+; the first call downloads it):
 
 ```bash
-npx -y @miragon/bpmn-cli@0.3.0 --version   # x-release-please-version
+npx -y @miragon/bpmn-cli@0.4.0 --version   # x-release-please-version
 ```
 
 The examples below say `bpmn`. Run each `bpmn` command as its own command line
