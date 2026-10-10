@@ -182,8 +182,8 @@ Diagram-only commands name elements, never coordinates: `place` (to the row /
 column of another element), `align`, `color` (blue, orange, green, red, purple,
 default), `label` (side of an external label: above, below, left, right),
 `route` (exit / entry side), `space` (insert or close a column / row; `--by`
-takes `column`, `row` or pixels: `--by 2` is 2 px, repeat `--by column` for two
-columns), `tidy` (remove overlaps), `compact` (close empty rows / columns,
+takes `column`, `row`, `<n>col` / `<n>row` or pixels: `--by 2col` is two
+columns, `--by 2` only 2 px), `tidy` (remove overlaps), `compact` (close empty rows / columns,
 shrink frames), `order` (lanes, pools, branch order). Selectors
 `--path <fromId> <toId>`, `--branch <flowId>`, `--kind <kind>` name many
 elements at once. Read the drawing with `show --layout` first, `--dry-run` the

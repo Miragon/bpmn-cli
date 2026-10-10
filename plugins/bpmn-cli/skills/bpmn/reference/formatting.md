@@ -76,9 +76,10 @@ bpmn compact order-to-cash.bpmn
   moves a whole branch up to its join.
 - `align <ids...> --axis row|column [--to <ref>]`: same vertical centre (row)
   or same horizontal centre (column) as the reference (default: the first id).
-- `space --after <id>` / `--below <id>` `[--by column|row|<px>]`: moves
-  everything right of / below the element; a negative amount (`-column`,
-  `-row`, `-80`) closes up to that much empty space. On a lane or pool it grows
+- `space --after <id>` / `--below <id>` `[--by column|row|<n>col|<n>row|<px>]`:
+  moves everything right of / below the element (`--by 2col` = two columns, a
+  bare number is pixels); a negative amount (`-column`, `-2col`, `-row`, `-80`)
+  closes up to that much empty space; the result says how far it moved. On a lane or pool it grows
   that frame.
 - `compact [ids]` closes empty rows and columns and shrinks pools, lanes and
   expanded sub-processes to their content; it never adds a layout problem.
