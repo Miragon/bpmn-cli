@@ -90,18 +90,19 @@ describe('the in-memory API keeps the text (core + roundtrip + conventions)', ()
   it("an insert gets ids in the file's style and changes only the lines it touched", async () => {
     const r = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
     expect(r.unchanged).toBe(false);
-    // Task_ + PascalCase like Task_Check / Task_Script; the file numbers its flows (Flow_1, Flow_2, Flow_4)
-    expect(r.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_5']);
+    // Task_ + PascalCase like Task_Check / Task_Script; the file numbers its flows (Flow_1, Flow_2, Flow_4): a new one
+    // keeps the prefix and names its ends
+    expect(r.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
     // in the process only the spliced flow's target changed (its incoming entry moved to the new task); comments, CDATA and quoting stay
     expect(removedLines(semantic(STYLED), semantic(r.xml)).map((l) => l.trim())).toEqual(['<bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Gateway_Ok"/>']);
-    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>Flow_5</bpmn:incoming>');
+    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>Flow_AuditOrderToOrderOk</bpmn:incoming>');
     expect(r.xml.startsWith(STYLED.split('<bpmn:process')[0]!)).toBe(true);
     expect(r.xml).toContain('<bpmn:userTask id="Task_AuditOrder" name="Audit order">\n            <bpmn:incoming>Flow_2</bpmn:incoming>');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_5" sourceRef="Task_AuditOrder" targetRef="Gateway_Ok"/>');
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_AuditOrderToOrderOk" sourceRef="Task_AuditOrder" targetRef="Gateway_Ok"/>');
     // new DI in the file's DI id style (<id>_di), the old DI keeps its start tags
     expect(r.xml).toContain('<bpmndi:BPMNShape id="Task_AuditOrder_di" bpmnElement="Task_AuditOrder">');
-    expect(r.xml).toContain('<bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">');
-    expect(diTags(r.xml).filter((t) => !/Task_AuditOrder|Flow_5/.test(t))).toEqual(diTags(STYLED));
+    expect(r.xml).toContain('<bpmndi:BPMNEdge id="Flow_AuditOrderToOrderOk_di" bpmnElement="Flow_AuditOrderToOrderOk">');
+    expect(diTags(r.xml).filter((t) => !/Task_AuditOrder|Flow_AuditOrderToOrderOk/.test(t))).toEqual(diTags(STYLED));
     expect(r.xml.endsWith('<!-- end of the synthetic fixture -->\n</bpmn:definitions>')).toBe(true);
   });
 

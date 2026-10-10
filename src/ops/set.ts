@@ -84,7 +84,7 @@ import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
-import { assertCondition, flowChange, redirectFlow, setDefaultFlow, setFlowCondition } from './flows.js';
+import { assertCondition, flowChange, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -448,8 +448,8 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!is(el, 'bpmn:SequenceFlow')) throw unknownKey(doc, el, key, 'applies to sequence flows');
       if (!value) throw invalidValue(el, key, 'a flow always needs a source and a target');
       const node = doc.require(value, 'bpmn:FlowNode');
-      redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
-      cs.change({ ...flowChange(el), detail: `${flowChange(el).detail} (${key} changed)` });
+      const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
+      cs.change({ ...flowChange(el), detail: `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}` });
       return;
     }
     case 'loop':

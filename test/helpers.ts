@@ -30,7 +30,7 @@ export async function linearDoc(): Promise<Doc> {
   return docFromXml(LINEAR);
 }
 
-/** The id of the sequence / message flow from `source` to `target` (generated flow ids are hashes of their ends). */
+/** The id of the sequence / message flow from `source` to `target`. */
 export function flowBetween(doc: Doc, source: string, target: string): string {
   for (const el of doc.byId().values()) {
     if (el.$type !== 'bpmn:SequenceFlow' && el.$type !== 'bpmn:MessageFlow') continue;
@@ -38,6 +38,3 @@ export function flowBetween(doc: Doc, source: string, target: string): string {
   }
   throw new Error(`no flow ${source} -> ${target}`);
 }
-
-/** A generated id of the hashed style (`Flow_0k3x9qa`, like a Camunda Modeler id). */
-export const HASHED = (prefix: string): RegExp => new RegExp(`^${prefix}_[01][0-9a-z]{6}$`);

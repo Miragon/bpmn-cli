@@ -480,6 +480,8 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
   if (undrawn.length) {
     try {
       const reduced = await Doc.fromXml(xml);
+      // the bridged flows keep their ids: the drawing is compared edge by edge
+      reduced.followFlowEnds = false;
       runOps(reduced, [{ op: 'remove', ids: [...undrawn], ifExists: true }]);
       reference = await reduced.toXml();
     } catch {

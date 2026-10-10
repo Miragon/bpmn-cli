@@ -16,6 +16,16 @@ import { splitFlow } from './split.js';
 import type { Op } from './types.js';
 
 export function runOp(doc: Doc, op: Op): ChangeSet {
+  doc.takeSuffixed();
+  doc.takeRenames();
+  const cs = dispatch(doc, op);
+  doc.reportSuffixed(cs);
+  // a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too)
+  cs.rename(doc.takeRenames());
+  return cs;
+}
+
+function dispatch(doc: Doc, op: Op): ChangeSet {
   switch (op.op) {
     case 'add':
       return addElement(doc, op);

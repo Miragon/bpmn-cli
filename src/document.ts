@@ -10,6 +10,7 @@
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
+import type { ChangeSet } from './result.js';
 import { IdRegistry, isValidId, transliterate } from './ids.js';
 import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
@@ -94,6 +95,16 @@ function insideExtension(el: El): boolean {
 export class Doc {
   private index: Map<string, El> | null = null;
   private style: IdStyle | undefined;
+  /** generated ids that took a collision suffix since the last takeSuffixed() (W_ID_SUFFIXED) */
+  private suffixed: Array<{ id: string; base: string }> = [];
+  /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
+  private renamedIds: Array<{ from: string; to: string }> = [];
+  /**
+   * Whether a flow whose id names its ends is renamed when an op changes
+   * them (ops/flows.ts followEnds); false keeps every id (the pipeline's
+   * engine-ownership check simulates a remove on a copy and compares ids).
+   */
+  followFlowEnds = true;
 
   private constructor(
     public readonly model: Model,
@@ -322,13 +333,47 @@ export class Doc {
 
   /**
    * A new id in the document's style (src/idstyle.ts) for a kindRequest /
-   * typeRequest / connectionRequest; claims it. `derived` when the id comes
-   * from the name (W_ID_SUFFIXED compares it with style.derivedBase).
+   * typeRequest / connectionRequest / flowRequest; claims it. `base` is the
+   * id the request wanted: when it was taken the id carries a suffix, which
+   * is recorded for W_ID_SUFFIXED (takeSuffixed).
    */
-  allocateId(req: IdRequest): { id: string; derived: boolean } {
+  allocateId(req: IdRequest): { id: string; base: string } {
     const out = this.idStyle.next(req, this.ids);
     this.ids.claim(out.id);
+    if (out.id !== out.base) this.suffixed.push(out);
     return out;
+  }
+
+  /** Records that an op renamed an element (ops/index.ts rewrites the op's change entries). */
+  recordRename(from: string, to: string): void {
+    this.renamedIds.push({ from, to });
+  }
+
+  /** The renames since the last call. */
+  takeRenames(): Array<{ from: string; to: string }> {
+    const out = this.renamedIds;
+    this.renamedIds = [];
+    return out;
+  }
+
+  /** The generated ids that took a collision suffix since the last call (reportSuffixed reports them as W_ID_SUFFIXED). */
+  takeSuffixed(): Array<{ id: string; base: string }> {
+    const out = this.suffixed;
+    this.suffixed = [];
+    return out;
+  }
+
+  /** W_ID_SUFFIXED on `cs` for every generated id that took a collision suffix since the last call (the id it wanted was taken). */
+  reportSuffixed(cs: ChangeSet): void {
+    for (const { id, base } of this.takeSuffixed()) {
+      if (cs.warnings.some((w) => w.code === 'W_ID_SUFFIXED' && w.element === id)) continue;
+      cs.warn({
+        code: 'W_ID_SUFFIXED',
+        message: `Id ${base} is already taken; using ${id}`,
+        element: id,
+        hint: 'Pass an explicit id to choose it yourself (--id, "id"; --flow-id / "flowId" for the flow into a new node, "joinId" for a join), or give the element a distinct name.',
+      });
+    }
   }
 
   /** Next id for a prefix (the family of `bpmn kinds`, or a type name) and name in the document's style; claims it. */

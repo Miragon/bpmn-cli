@@ -104,7 +104,7 @@ const KIND_FIELD = ref('Element kind with optional trigger suffix, e.g. "userTas
 export const NODE_FIELDS: FieldsOf<SplitNode> = {
   kind: KIND_FIELD,
   name: str('Display name. Also drives the generated id (<Prefix>_<NameSlug> in the default style; new ids follow the id style of the file).'),
-  id: ref('Explicit id (default: generated in the id style of the file, else <Prefix>_<NameSlug>, or <Prefix>_<hash> for unnamed elements). Give an id to every element a later op of the batch refers to.'),
+  id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). Give an id to every element a later op of the batch refers to.'),
   lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host).'),
   ...FLOW_FIELDS,
   ...TRIGGER_FIELDS,

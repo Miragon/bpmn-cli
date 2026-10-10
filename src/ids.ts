@@ -1,10 +1,10 @@
 /**
- * Id building blocks: name words, slugs, short hashes, the id registry.
+ * Id building blocks: name words, slugs, the id registry.
  *
  * Which id a new element gets is decided by the file's id style
  * (src/idstyle.ts): new ids follow the conventions the file already uses,
  * and a file without a convention gets the bpmn-cli default
- * (`Activity_CheckInvoice`, `Flow_0k3x9qa`).
+ * (`Activity_CheckInvoice`, `Flow_CheckInvoiceToBookInvoice`).
  *
  * Names become ASCII words: German umlauts are transliterated (ä -> ae,
  * ö -> oe, ü -> ue, ß -> ss; Ä -> Ae, or AE inside an upper-case word),
@@ -73,18 +73,6 @@ export function snakeSlug(name: string | undefined): string {
 /** Pascal_Snake slug: `Check_Invoice`. */
 export function pascalSnakeSlug(name: string | undefined): string {
   return cut(nameWords(name).map(cap).join('_'));
-}
-
-/**
- * A short stable hash in base 36, seven characters like the random part of a
- * Camunda Modeler id (`Flow_0k3x9qa`): FNV-1a over the text, so the same
- * inputs always give the same id and different inputs (other flow ends,
- * another placement) give different ones.
- */
-export function hash7(text: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
-  return h.toString(36).padStart(7, '0').slice(-7);
 }
 
 /** BPMN ids must be XML NCNames. */

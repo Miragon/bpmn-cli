@@ -8,10 +8,17 @@
  * associations move along (carryAssociations, reported as changes); a flow
  * removed with a ChangeSet takes its associations with it (reported as
  * removed), so no association is ever left pointing at a removed flow.
+ *
+ * Speaking flow ids stay true: a flow whose id is the one the file's id
+ * style gives a flow between its old ends (Flow_CheckInvoiceToDone, also
+ * with a collision suffix) is renamed after its new ends when a splice, a
+ * bridge, a move or `set source= / target=` changes them (followEnds; its
+ * DI edge id follows when it was `<id>_di`, `BPMNEdge_<id>` or
+ * `Edge_<id>`). Every other id stays.
  */
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
-import { connectionRequest } from '../idstyle.js';
+import { flowRequest } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
@@ -294,7 +301,7 @@ export function createSequenceFlow(doc: Doc, source: El, target: El, attrs: Flow
   const scope = doc.scopeOf(source)!;
   let id = attrs.id;
   if (id) doc.claimId(id);
-  else id = doc.allocateId(connectionRequest('bpmn:SequenceFlow', idOf(source), idOf(target))).id;
+  else id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
   const flow = doc.create('bpmn:SequenceFlow', {
     id,
     ...(attrs.name ? { name: attrs.name } : {}),
@@ -368,7 +375,47 @@ export function removeSequenceFlow(doc: Doc, flow: El, cs?: ChangeSet): void {
   doc.invalidate();
 }
 
-export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: El }): void {
+/**
+ * Renames a flow whose id named its old ends (the id the file's style gives
+ * a flow between them, or that id with a collision suffix) after its new
+ * ends, together with a DI edge id derived from it; returns the old id when
+ * it renamed the flow. A flow with any other id keeps it.
+ */
+export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTarget: El | undefined): string | undefined {
+  if (!doc.followFlowEnds || !is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;
+  const source = flow.get<El | undefined>('sourceRef');
+  const target = flow.get<El | undefined>('targetRef');
+  if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
+  const old = idOf(flow);
+  const was = doc.idStyle.derivedBase(flowRequest('bpmn:SequenceFlow', oldSource, oldTarget));
+  if (old !== was && !(old.startsWith(was) && /^_?\d+$/.test(old.slice(was.length)))) return undefined;
+  doc.ids.release(old);
+  const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
+  if (id === old) return undefined;
+  flow.set('id', id);
+  doc.recordRename(old, id);
+  for (const diagram of many(doc.definitions, 'diagrams')) {
+    const plane = diagram.get<El | undefined>('plane');
+    for (const di of plane ? many(plane, 'planeElement') : []) {
+      if (di.get<El | undefined>('bpmnElement') !== flow) continue;
+      const diId = di.get<string | undefined>('id');
+      const next = diId === `${old}_di` ? `${id}_di` : diId === `BPMNEdge_${old}` ? `BPMNEdge_${id}` : diId === `Edge_${old}` ? `Edge_${id}` : undefined;
+      if (!diId || !next || doc.ids.has(next)) continue;
+      doc.ids.release(diId);
+      doc.ids.claim(next);
+      di.set('id', next);
+    }
+  }
+  doc.invalidate();
+  return old;
+}
+
+/** ` (renamed from <old>)` for a change detail when followEnds renamed the flow. */
+export function renamedNote(old: string | undefined): string {
+  return old ? ` (renamed from ${old}: its id named its old ends)` : '';
+}
+
+export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: El }): string | undefined {
   const source = ends.source ?? flow.get<El>('sourceRef');
   const target = ends.target ?? flow.get<El>('targetRef');
   assertSequenceFlowEndpoints(doc, source, target);
@@ -384,6 +431,7 @@ export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: E
   addTo(source, 'outgoing', flow);
   addTo(target, 'incoming', flow);
   doc.invalidate();
+  return followEnds(doc, flow, oldSource, oldTarget);
 }
 
 export function setDefaultFlow(doc: Doc, flow: El, isDefault: boolean): void {
@@ -420,10 +468,11 @@ export function setFlowCondition(doc: Doc, flow: El, expr: string | undefined, l
 
 /**
  * Inserts `node` into `flow` (A -> B becomes A -> node -> B). The original
- * flow keeps its id and attributes and now ends at `node`; a new plain flow
- * node -> B is created.
+ * flow keeps its attributes (and its id, unless the id named A and B:
+ * followEnds; `renamedFrom`) and now ends at `node`; a new plain flow node ->
+ * B is created.
  */
-export function spliceIntoFlow(doc: Doc, flow: El, node: El): { first: El; second: El } {
+export function spliceIntoFlow(doc: Doc, flow: El, node: El): { first: El; second: El; renamedFrom?: string } {
   const target = flow.get<El>('targetRef');
   const scope = doc.scopeOf(flow)!;
   const source = flow.get<El>('sourceRef');
@@ -435,9 +484,10 @@ export function spliceIntoFlow(doc: Doc, flow: El, node: El): { first: El; secon
   removeFrom(target, 'incoming', flow);
   flow.set('targetRef', node);
   addTo(node, 'incoming', flow);
+  const renamedFrom = followEnds(doc, flow, source, target);
   const second = createSequenceFlow(doc, node, target, {}, node);
   doc.invalidate();
-  return { first: flow, second };
+  return { first: flow, second, ...(renamedFrom ? { renamedFrom } : {}) };
 }
 
 /**
@@ -464,8 +514,8 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
       carryAssociations(doc, outFlow, inFlow, cs);
       removeSequenceFlow(doc, outFlow, cs);
       cs.remove(flowChange(outFlow));
-      redirectFlow(doc, inFlow, { target: successor });
-      cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})` });
+      const renamed = redirectFlow(doc, inFlow, { target: successor });
+      cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}` });
       cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
       return;
     }
@@ -605,9 +655,9 @@ function spliceWithOptions(doc: Doc, node: El, flow: El, p: PlacementOptions, cs
   assertSpliceable(doc, node, flow);
   const src = flow.get<El>('sourceRef');
   const tgt = flow.get<El>('targetRef');
-  const { second } = spliceIntoFlow(doc, flow, node);
+  const { second, renamedFrom } = spliceIntoFlow(doc, flow, node);
   cs.create(flowChange(second));
-  cs.change({ ...flowChange(flow), detail: `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})` });
+  cs.change({ ...flowChange(flow), detail: `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}` });
   cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
   applyFlowOptions(doc, flow, p, cs);
   return flow;

@@ -149,8 +149,8 @@ describe('design profile on mutations', () => {
   it('checks what would be written: without the layout a new node has no shape (E_DESIGN_NO_DI)', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { profile: 'design', layout: false });
-    // the new flow's id in the file's style (src/idstyle.ts): LINE numbers its flows F1, F2
-    expect(codes(r.errors)).toEqual(['[design] E_DESIGN_NO_DI Activity_Inserted', '[design] E_DESIGN_NO_DI F3']);
+    // the new flow's id in the file's style (src/idstyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
+    expect(codes(r.errors)).toEqual(['[design] E_DESIGN_NO_DI Activity_Inserted', '[design] E_DESIGN_NO_DI F_InsertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { profile: 'design', dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
 });
@@ -163,8 +163,8 @@ describe('host validators (MutationOptions.validators)', () => {
   it('design-iq shaped findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { profile: 'none', validators: [unnamedTasks] });
-    // an unnamed task gets a hashed id (Activity_<7 chars>, src/idstyle.ts)
-    expect(r.errors).toEqual([{ code: 'naming/task', message: expect.stringMatching(/^task Activity_[0-9a-z]{7} has no name$/), validator: 'unnamedTasks', severity: 'error' }]);
+    // an unnamed task gets its placement as id (Activity_After<anchor>, src/idstyle.ts)
+    expect(r.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));
     const renamed = await mutateFile(unnamed, [{ op: 'set', id: 'A', values: { id: 'Activity_Old' } }], { profile: 'none', validators: [{ name: 'design-iq', validate: unnamedTasks }] });

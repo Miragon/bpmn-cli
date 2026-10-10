@@ -687,8 +687,10 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
     expect(first.warnings.map((w) => w.code)).not.toContain('W_DUPLICATE_FLOW');
     const second = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
     const dup = second.warnings.find((w) => w.code === 'W_DUPLICATE_FLOW');
-    // the file numbers its flows F1, F2: the new one is F3
-    expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F3\b/);
+    // the file numbers its flows F1, F2: new ones keep the prefix and name their ends; the second one takes a suffix
+    expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F_StartToEnd\b/);
+    expect(second.created.map((c) => c.id)).toEqual(['F_StartToEnd_2']);
+    expect(second.warnings.map((w) => w.code)).toContain('W_ID_SUFFIXED');
     expect(dup?.hint).toMatch(/--if-absent/);
     const skipped = connectElements(doc, { op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);
