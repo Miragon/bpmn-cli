@@ -39,6 +39,7 @@ with a laid-out diagram.
 ## Contents
 
 - [Install](#install)
+- [Claude Code plugin](#claude-code-plugin)
 - [The contract](#the-contract)
 - [Ids](#ids)
 - [Command reference](#command-reference)
@@ -103,6 +104,69 @@ untyped and the serialisation is unchanged. `zeebe-bpmn-moddle` (pinned to
 `2.0.0`) is the same for Camunda 8: its Zeebe descriptor is inlined into
 `src/platform/zeebe-descriptor.ts` by the same tool and read as data
 (placement and known names of zeebe content, [Camunda 8](#camunda-8)).
+
+## Claude Code plugin
+
+This repository is also a [Claude Code](https://code.claude.com/docs/en/plugins) plugin
+marketplace, `miragon-bpmn`, with one plugin, `bpmn-cli`. Its skill `bpmn` makes Claude use this
+CLI whenever a request creates or touches a BPMN model ("model the order process", "add an
+approval step", "colour the happy path", "make it deployable on Camunda 8", "Prozess
+modellieren", "BPMN anpassen", ...) instead of writing BPMN XML by hand.
+
+Install it in a Claude Code session:
+
+```
+/plugin marketplace add Miragon/bpmn-cli
+/plugin install bpmn-cli@miragon-bpmn
+```
+
+or from the shell with `claude plugin marketplace add Miragon/bpmn-cli` and
+`claude plugin install bpmn-cli@miragon-bpmn` (Claude Code 2.1.275 and later also take one
+step: `/plugin install bpmn-cli --marketplace Miragon/bpmn-cli`). The repository is private:
+Claude Code clones it with the credentials of your machine and never prompts, so you need read
+access to `Miragon/bpmn-cli` and either an SSH key loaded in `ssh-agent` or a stored HTTPS
+credential (`gh auth login`, then `gh auth setup-git`; `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` skips
+the SSH attempt). `/plugin marketplace update miragon-bpmn` fetches a new release, or enable
+auto-update for the marketplace under `/plugin` > Marketplaces.
+
+What the skill does:
+
+- **Runs the CLI** - `bpmn` from `PATH`, else `npx -y @miragon/bpmn-cli@<version>` pinned to the
+  plugin's version (Node 20+); these two commands are the only ones it pre-approves. Batches are
+  piped in with `printf '%s' '<json>' | bpmn apply <file> -`, which runs under that
+  pre-approval (a heredoc holding JSON makes Claude Code ask first).
+- **Standing rules** - never write or patch `.bpmn` XML or BPMNDI; address elements by id only;
+  give every created element an explicit speaking id (`Activity_CheckInvoice`); aliases for back
+  references inside a batch; one `bpmn apply` batch per change; keep the user's drawing
+  (`--relayout` only on request).
+- **The loop** - orient with `show`, `show --around`, `show <id> --context`, `find`; change in one
+  batch; read the result (layout mode, placed / moved, added layout problems, the warnings the
+  change added); `validate` (`--strict` for deployable models); format with `show --layout`,
+  dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the common errors and
+  their fixes.
+- **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
+  5k when it fires); `reference/` has the batch format, formatting, Camunda 7, Camunda 8 and
+  complete recipes; for everything else the skill sends Claude to `bpmn guide <topic>` and
+  `bpmn kinds`, so the CLI's own documentation stays the single source.
+
+The plugin's version is the package version: release-please bumps
+`plugins/bpmn-cli/.claude-plugin/plugin.json` and the pinned `npx` version of the skill in each
+release PR ([docs/releasing.md](docs/releasing.md)). `test/plugin.test.ts` (part of `npm test`)
+keeps the skill honest: it runs every recipe and reference example against the CLI built from
+`src/`, checks that every `bpmn <command> --option` the skill mentions exists, and that the
+versions agree. To work on the plugin:
+
+```
+claude plugin validate --strict plugins/bpmn-cli   # the plugin (CI runs both)
+claude plugin validate --strict .                  # the marketplace
+claude --plugin-dir plugins/bpmn-cli               # a session with the local plugin loaded
+claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit
+```
+
+The eval suite (six cases: an order-to-cash model from scratch, a change to a hand-drawn model,
+a Camunda 7 external task, a formatting request, a German Camunda 8 request, and an unrelated
+question the skill must ignore) and how to run it are described in
+[plugins/bpmn-cli/evals/README.md](plugins/bpmn-cli/evals/README.md).
 
 ## The contract
 
