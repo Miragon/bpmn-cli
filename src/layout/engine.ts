@@ -17,7 +17,7 @@
  */
 import { addTo, is, many, type El, type Model } from '../model.js';
 import { layoutRoot } from '../model.js';
-import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, growToFit, layoutScope, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, framedSize, growToFit, layoutScope, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
 import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
@@ -221,7 +221,7 @@ function applyLanes(scope: ScopeLayout, process: El): void {
     es.box.y = extraY + METRICS.vGap;
     extraY = es.box.y + es.box.height;
   }
-  const contentBottom = Math.max(extraY, ...scope.nodes.map((n) => n.box.y + n.box.height), ...scope.artifacts.map((a) => a.box.y + a.box.height), ...scope.edges.flatMap((e) => e.points.map((p) => p.y)));
+  const contentBottom = Math.max(extraY, ...scope.nodes.map((n) => n.box.y + n.box.height), ...scope.artifacts.map((a) => a.box.y + a.box.height), ...scope.edges.flatMap((e) => e.points.map((p) => p.y)), ...nodeLabels(scope).map((l) => l.y + l.height));
   if (contentBottom > last.y + last.height - SIZES.lanePadding) last.height = Math.round(contentBottom + SIZES.lanePadding - last.y);
   scope.height = last.y + last.height;
   // parent bands span their children
@@ -234,7 +234,7 @@ function applyLanes(scope: ScopeLayout, process: El): void {
     }
   };
   top.forEach(finalize);
-  const width = Math.max(scope.width, ...scope.artifacts.map((a) => a.box.x + a.box.width), ...scope.nodes.map((n) => n.box.x + n.box.width), ...scope.eventSubs.map((n) => n.box.x + n.box.width)) + 2 * SIZES.lanePadding;
+  const width = Math.max(scope.width, ...scope.artifacts.map((a) => a.box.x + a.box.width), ...scope.nodes.map((n) => n.box.x + n.box.width), ...scope.eventSubs.map((n) => n.box.x + n.box.width), ...nodeLabels(scope).map((l) => l.x + l.width)) + 2 * SIZES.lanePadding;
   const depth = (bands: LaneBand[]): number => (bands.length ? 1 + Math.max(...bands.map((b) => depth(b.children))) : 0);
   const totalDepth = depth(top);
   const toBox = (b: LaneBand, level: number): LaneBox => ({
@@ -336,7 +336,9 @@ export function layoutClean(model: Model, expanded: Set<string>): { warnings: En
     for (const p of pools) {
       if (!p.scope) continue;
       const laneDepth = p.scope.lanes.length ? laneDepthOf(p.scope.lanes) : 0;
-      const contentW = p.scope.width + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader;
+      // the labels right of the content (an end event's): the pool holds them
+      const framed = framedSize(p.scope);
+      const contentW = framed.width - framed.left + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader;
       maxWidth = Math.max(maxWidth, SIZES.participantHeader + contentW);
       p.box.height = p.scope.lanes.length ? p.scope.height : Math.max(150, p.scope.height + 2 * SIZES.lanePadding);
     }
@@ -387,7 +389,8 @@ export function layoutClean(model: Model, expanded: Set<string>): { warnings: En
     applyLanes(scope, root);
     if (scope.lanes.length) {
       const laneDepth = laneDepthOf(scope.lanes);
-      for (const lane of scope.lanes) stretchLane(lane, scope.width + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader);
+      const framed = framedSize(scope);
+      for (const lane of scope.lanes) stretchLane(lane, framed.width - framed.left + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader);
       emitScope(scope, { x: margin + laneDepth * SIZES.laneHeader + SIZES.lanePadding, y: margin });
       for (const lane of scope.lanes) fixLaneShapes(lane, { box: { x: margin, y: margin, width: 0, height: 0 }, participant: root, origin: { x: 0, y: 0 } }, true);
     } else {
@@ -753,6 +756,7 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
     points?: Point[];
   }
   const shapes: Box[] = [];
+  const frames: Box[] = [];
   const lines: Seg[] = [];
   const items: Item[] = [];
   for (const d of di) {
@@ -762,6 +766,7 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
     const container = isShape && (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane') || (is(el, 'bpmn:SubProcess') && d.get<boolean | undefined>('isExpanded') === true));
     const shapeBox = isShape ? boxOf(d.get<El>('bounds')) : undefined;
     if (shapeBox && !container) shapes.push(shapeBox);
+    if (shapeBox && container) frames.push(shapeBox);
     const points = isShape ? undefined : many(d, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') }));
     if (points) lines.push(...segs(points));
     const label = d.get<El | undefined>('label');
@@ -770,6 +775,11 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
     items.push({ el, bounds, box: boxOf(bounds), ...(shapeBox ? { shape: shapeBox } : {}), ...(points ? { points } : {}) });
   }
   const placed: Box[] = [];
+  const holds = (f: Box, p: Point): boolean => p.x >= f.x && p.x <= f.x + f.width && p.y >= f.y && p.y <= f.y + f.height;
+  const within = (f: Box, b: Box): boolean => b.x >= f.x && b.y >= f.y && b.x + b.width <= f.x + f.width && b.y + b.height <= f.y + f.height;
+  // the innermost frame (lane, pool, expanded sub-process) around a shape / both ends of a flow: a label moves out of it only when no free spot is inside
+  const frameOf = (pts: Point[]): Box | undefined =>
+    frames.filter((f) => pts.every((p) => holds(f, p))).sort((a, b) => a.width * a.height - b.width * b.height)[0];
   const clashes = (b: Box, own?: Box): boolean =>
     shapes.some((s) => s !== own && boxesOverlap(s, b, 2)) ||
     placed.some((o) => boxesOverlap(o, b, 2)) ||
@@ -818,7 +828,10 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
         }
       }
     }
-    const win = cands.find((c) => !clashes(c, item.shape));
+    const frame = item.shape ? frameOf([{ x: item.shape.x + item.shape.width / 2, y: item.shape.y + item.shape.height / 2 }]) : item.points?.length ? frameOf([item.points[0]!, item.points[item.points.length - 1]!]) : undefined;
+    // a free spot inside the frame first, else any free spot
+    const free = cands.filter((c) => !clashes(c, item.shape));
+    const win = free.find((c) => !frame || !within(frame, b) || within(frame, c)) ?? free[0];
     const box = win ?? b;
     item.bounds.set('x', Math.round(box.x));
     item.bounds.set('y', Math.round(box.y));
