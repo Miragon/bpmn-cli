@@ -7,6 +7,17 @@ import { applyToXml, newXml, showXml } from '../src/api.js';
 import { CliError } from '../src/errors.js';
 import { mutationSummary, renderSummary } from '../src/report.js';
 
+/** The bounds of an element's shape. */
+function bounds(xml: string, id: string): { x: number; y: number; width: number; height: number } {
+  const m = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([\\d.-]+)" y="([\\d.-]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml);
+  if (!m) throw new Error(`no shape for ${id}`);
+  return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
+}
+
+function overlap(a: ReturnType<typeof bounds>, b: ReturnType<typeof bounds>): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
 async function rejection(p: Promise<unknown>): Promise<CliError> {
   try {
     await p;
@@ -205,5 +216,70 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
     expect(two.result.warnings.added).toEqual([]);
     expect(two.result.warnings.resolved.map((w) => w.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
     expect(renderSummary(mutationSummary(two.result))).toMatch(/^warnings: 0 added, 1 resolved, 0 already in the file$/m);
+  });
+});
+
+/**
+ * The gate's fuzz campaign on the integrated build (walk controlflow__s04,
+ * seed 1491033354, step 10): removing a node closed the strip on its row and
+ * pulled an expanded sub-process back over a gateway of the row below (the
+ * sub-process reaches into that row). Every package build did the same; the
+ * walk only showed up with the integrated ids. Rebuilt with a handful of shapes.
+ */
+const ROW_CLOSE = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_RowClose" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_RowClose" isExecutable="false">
+    <bpmn:startEvent id="Event_Start" name="Start" />
+    <bpmn:task id="Activity_Label" name="Label" />
+    <bpmn:task id="Activity_Ship" name="Ship" />
+    <bpmn:subProcess id="Activity_Sub" name="Sub">
+      <bpmn:startEvent id="Event_SubStart" />
+      <bpmn:endEvent id="Event_SubEnd" />
+      <bpmn:sequenceFlow id="Flow_SubStartToSubEnd" sourceRef="Event_SubStart" targetRef="Event_SubEnd" />
+    </bpmn:subProcess>
+    <bpmn:endEvent id="Event_End" name="End" />
+    <bpmn:startEvent id="Event_Start2" name="Start 2" />
+    <bpmn:task id="Activity_Check" name="Check" />
+    <bpmn:exclusiveGateway id="Gateway_Par" />
+    <bpmn:endEvent id="Event_End2" name="End 2" />
+    <bpmn:sequenceFlow id="Flow_StartToLabel" sourceRef="Event_Start" targetRef="Activity_Label" />
+    <bpmn:sequenceFlow id="Flow_LabelToShip" sourceRef="Activity_Label" targetRef="Activity_Ship" />
+    <bpmn:sequenceFlow id="Flow_ShipToSub" sourceRef="Activity_Ship" targetRef="Activity_Sub" />
+    <bpmn:sequenceFlow id="Flow_SubToEnd" sourceRef="Activity_Sub" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_Start2ToCheck" sourceRef="Event_Start2" targetRef="Activity_Check" />
+    <bpmn:sequenceFlow id="Flow_CheckToPar" sourceRef="Activity_Check" targetRef="Gateway_Par" />
+    <bpmn:sequenceFlow id="Flow_ParToEnd2" sourceRef="Gateway_Par" targetRef="Event_End2" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_RowClose">
+    <bpmndi:BPMNPlane id="BPMNPlane_RowClose" bpmnElement="Process_RowClose">
+      <bpmndi:BPMNShape id="Event_Start_di" bpmnElement="Event_Start"><dc:Bounds x="100" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Label_di" bpmnElement="Activity_Label"><dc:Bounds x="200" y="80" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Ship_di" bpmnElement="Activity_Ship"><dc:Bounds x="360" y="80" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Sub_di" bpmnElement="Activity_Sub" isExpanded="true"><dc:Bounds x="520" y="43" width="300" height="155" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_SubStart_di" bpmnElement="Event_SubStart"><dc:Bounds x="560" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_SubEnd_di" bpmnElement="Event_SubEnd"><dc:Bounds x="740" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_End_di" bpmnElement="Event_End"><dc:Bounds x="880" y="102" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Start2_di" bpmnElement="Event_Start2"><dc:Bounds x="100" y="322" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Check_di" bpmnElement="Activity_Check"><dc:Bounds x="250" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Par_di" bpmnElement="Gateway_Par" isMarkerVisible="true"><dc:Bounds x="385" y="180" width="50" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_End2_di" bpmnElement="Event_End2"><dc:Bounds x="520" y="322" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_StartToLabel_di" bpmnElement="Flow_StartToLabel"><di:waypoint x="136" y="120" /><di:waypoint x="200" y="120" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_LabelToShip_di" bpmnElement="Flow_LabelToShip"><di:waypoint x="300" y="120" /><di:waypoint x="360" y="120" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ShipToSub_di" bpmnElement="Flow_ShipToSub"><di:waypoint x="460" y="120" /><di:waypoint x="520" y="120" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SubToEnd_di" bpmnElement="Flow_SubToEnd"><di:waypoint x="820" y="120" /><di:waypoint x="880" y="120" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SubStartToSubEnd_di" bpmnElement="Flow_SubStartToSubEnd"><di:waypoint x="596" y="120" /><di:waypoint x="740" y="120" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Start2ToCheck_di" bpmnElement="Flow_Start2ToCheck"><di:waypoint x="136" y="340" /><di:waypoint x="250" y="340" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CheckToPar_di" bpmnElement="Flow_CheckToPar"><di:waypoint x="350" y="340" /><di:waypoint x="410" y="340" /><di:waypoint x="410" y="230" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ParToEnd2_di" bpmnElement="Flow_ParToEnd2"><di:waypoint x="435" y="205" /><di:waypoint x="538" y="205" /><di:waypoint x="538" y="322" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
+`;
+
+describe('closing the strip of a removed node', () => {
+  it('does not pull an expanded sub-process over a shape of another row', async () => {
+    const r = await applyToXml(ROW_CLOSE, [{ op: 'remove', ids: ['Activity_Label'] }], { layout: 'incremental' });
+    expect(overlap(bounds(r.xml, 'Activity_Sub'), bounds(r.xml, 'Gateway_Par'))).toBe(false);
+    expect(bounds(r.xml, 'Gateway_Par')).toEqual(bounds(ROW_CLOSE, 'Gateway_Par'));
   });
 });

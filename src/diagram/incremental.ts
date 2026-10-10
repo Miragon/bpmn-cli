@@ -615,7 +615,8 @@ function restoreState(st: PlaneState): void {
  * The strip of a removed node closes within its row only (module contract,
  * step 2): what lies on the row beyond the strip moves back, unless a moved
  * shape would come within 10 px of one that stays (a shape partly in the row,
- * a shape of another row reaching over it), would cross the border of a group
+ * a shape of another row reaching over it; a moved expanded sub-process
+ * whose border reaches into another row), would cross the border of a group
  * or frame that stays, or a connection would join a moved shape to one that
  * stays beyond the strip in the frame (what a full close would have moved
  * along) or to an artifact that stays.
@@ -635,6 +636,10 @@ function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: numbe
   const before = (s: DShape): Box => saved.shapes.get(s)!.bounds;
   const moved = leaves.filter((m) => r.moved.has(m.id));
   const clash = moved.some((m) => leaves.some((o) => !r.moved.has(o.id) && o.id !== m.hostId && o.hostId !== m.id && overlaps(m.bounds, o.bounds, 10) && !overlaps(before(m), before(o), 10)));
+  // a moved expanded sub-process must not come over a shape that stays (a shape of another row below its border)
+  const covers = [...plane.shapes.values()].some(
+    (f) => f.container && f.kind === 'subProcess' && r.moved.has(f.id) && leaves.some((o) => !r.moved.has(o.id) && o.hostId !== f.id && overlaps(f.bounds, o.bounds, 10) && !overlaps(before(f), before(o), 10)),
+  );
   // inside / across / outside a group or frame that stayed
   const relation = (b: Box, f: Box): number => (inside(b, f) ? 2 : overlaps(b, f) ? 1 : 0);
   const frames = [...plane.shapes.values()].filter((f) => (f.kind === 'group' || f.container) && !r.moved.has(f.id));
@@ -651,7 +656,7 @@ function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: numbe
     const stayed = r.moved.has(e.sourceId) ? e.targetId : e.sourceId;
     return e.kind === 'association' || e.kind === 'dataAssociation' || behind(stayed);
   });
-  if (clash || crossed || tethered || r.resized.size) {
+  if (clash || covers || crossed || tethered || r.resized.size) {
     restoreState(saved);
     return undefined;
   }
