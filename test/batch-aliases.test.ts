@@ -99,6 +99,23 @@ describe('batch aliases', () => {
     expect(r.result.layout.format?.[0]).toMatchObject({ colored: ['Flow_StartToPrepare'] });
   });
 
+  it('resolve in the lane of split nodes and in the set map of add', async () => {
+    const r = await applyToXml((await newXml({ processName: 'P' })).xml, [
+      { op: 'add', kind: 'participant', name: 'P' },
+      { op: 'add', kind: 'lane', name: 'Clerk', in: 'Participant_P', as: '$clerk' },
+      { op: 'add', kind: 'lane', name: 'Accounting', in: 'Participant_P', as: '$acc' },
+      { op: 'add', kind: 'start', name: 'S', in: 'Process_P', lane: '$clerk', as: '$s' },
+      { op: 'split', after: '$s', name: 'Ok?', as: '$ok', branches: [{ nodes: [{ kind: 'task', name: 'Book', lane: '$acc', set: { lane: '$acc' } }] }, { nodes: [{ kind: 'task', name: 'Ask', flowAs: '$ask' }] }] },
+      { op: 'add', kind: 'task', name: 'Log', in: 'Process_P', set: { lane: '$acc' } },
+      { op: 'set', id: '$ok', values: { default: '$ask' } },
+    ]);
+    const doc = await Doc.fromXml(r.xml);
+    expect(doc.lanesOf(doc.require('Activity_Book')).map((l) => l.get('id'))).toEqual(['Lane_Accounting']);
+    expect(doc.lanesOf(doc.require('Activity_Log')).map((l) => l.get('id'))).toEqual(['Lane_Accounting']);
+    expect(r.xml).toContain('default="Flow_OkToAsk"');
+    expect(() => parseOps([{ op: 'split', after: 'X', branches: [{ nodes: [{ kind: 'task', lane: '$nope' }] }] }])).toThrow(/"branches\[0\]\.nodes\[0\]\.lane": alias \$nope is not defined/);
+  });
+
   it('connect names the connection (not the message it creates); --if-absent binds the existing element', async () => {
     const base = await applyToXml((await newXml({ processName: 'Shop' })).xml, [
       { op: 'add', kind: 'start', name: 'Order' },

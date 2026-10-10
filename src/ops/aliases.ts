@@ -5,7 +5,9 @@
  * `flowAs` too), and later ops of the batch use the alias wherever an
  * element id goes (`"after": "$check"`, `"ids": ["$check", "$f"]`, the id of
  * set / ext / retype / order and of the format ops, `values.default` /
- * `source` / `target` / `lane` of set). Generated ids need not be guessed.
+ * `source` / `target` / `lane` of set and the same keys of the `set` map of
+ * add and of split nodes, the `lane` of split nodes). Generated ids need not
+ * be guessed.
  *
  * CONTRACT
  *  - An alias is `$` + a letter or `_` + letters, digits, `_`, `-`. A value
@@ -79,16 +81,39 @@ export function definedBy(op: Op): string[] {
   return out;
 }
 
+/** Where an op may hold aliases: [key path, read, write] (top-level id keys, set maps, the lane of split nodes). */
+function slots(op: Op): Array<{ key: string; get: () => unknown; put: (v: unknown) => void; holder: Raw; name: string }> {
+  const out: Array<{ key: string; get: () => unknown; put: (v: unknown) => void; holder: Raw; name: string }> = [];
+  const slot = (holder: Raw, name: string, key: string): void => {
+    out.push({ key, holder, name, get: () => holder[name], put: (v) => (holder[name] = v) });
+  };
+  const raw = op as unknown as Raw;
+  for (const key of REF_KEYS[op.op] ?? []) slot(raw, key, key);
+  const map = (holder: Raw, name: string, path: string): void => {
+    const m = holder[name];
+    if (m && typeof m === 'object') for (const k of SET_REF_KEYS) slot(m as Raw, k, `${path}.${k}`);
+  };
+  if (op.op === 'set') map(raw, 'values', 'values');
+  if (op.op === 'add') map(raw, 'set', 'set');
+  if (op.op === 'split') {
+    (op.branches ?? []).forEach((b, i) =>
+      (b.nodes ?? []).forEach((n, j) => {
+        slot(n as unknown as Raw, 'lane', `branches[${i}].nodes[${j}].lane`);
+        map(n as unknown as Raw, 'set', `branches[${i}].nodes[${j}].set`);
+      }),
+    );
+  }
+  return out;
+}
+
 /** Every alias an op refers to, with the key it stands in (`ids[1]`, `values.default`). */
 export function referencesOf(op: Op): Array<{ key: string; alias: string }> {
-  const raw = op as unknown as Raw;
   const out: Array<{ key: string; alias: string }> = [];
-  for (const key of REF_KEYS[op.op] ?? []) {
-    const v = raw[key];
-    if (isAlias(v)) out.push({ key, alias: v });
-    else if (Array.isArray(v)) v.forEach((x, i) => isAlias(x) && out.push({ key: `${key}[${i}]`, alias: x }));
+  for (const s of slots(op)) {
+    const v = s.get();
+    if (isAlias(v)) out.push({ key: s.key, alias: v });
+    else if (Array.isArray(v)) v.forEach((x, i) => isAlias(x) && out.push({ key: `${s.key}[${i}]`, alias: x }));
   }
-  if (op.op === 'set') for (const k of SET_REF_KEYS) if (isAlias(op.values?.[k])) out.push({ key: `values.${k}`, alias: op.values[k]! });
   return out;
 }
 
@@ -180,19 +205,13 @@ export class AliasTable {
 
 /** A copy of `op` with every alias replaced by the current id of its element (the op itself when it has none). */
 export function resolveOp(op: Op, table: AliasTable, index: number): Op {
-  const refs = referencesOf(op);
-  if (!refs.length) return op;
-  const raw = { ...(op as unknown as Raw) };
+  if (!referencesOf(op).length) return op;
+  const copy = JSON.parse(JSON.stringify(op)) as Op;
   const id = (alias: string, key: string): string => table.idOf(alias, index, op, key);
-  for (const key of REF_KEYS[op.op] ?? []) {
-    const v = raw[key];
-    if (isAlias(v)) raw[key] = id(v, key);
-    else if (Array.isArray(v)) raw[key] = v.map((x, i) => (isAlias(x) ? id(x, `${key}[${i}]`) : x));
+  for (const s of slots(copy)) {
+    const v = s.get();
+    if (isAlias(v)) s.put(id(v, s.key));
+    else if (Array.isArray(v)) s.put(v.map((x, i) => (isAlias(x) ? id(x, `${s.key}[${i}]`) : x)));
   }
-  if (op.op === 'set') {
-    const values = { ...op.values };
-    for (const k of SET_REF_KEYS) if (isAlias(values[k])) values[k] = id(values[k]!, `values.${k}`);
-    raw['values'] = values;
-  }
-  return raw as unknown as Op;
+  return copy;
 }
