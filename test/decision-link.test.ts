@@ -131,7 +131,11 @@ describe('set <id> calledDecision=<decision>', () => {
     const { xml, result } = await set(model('<bpmn:businessRuleTask id="R" calledDecision="old" />', C8), { calledDecision: 'risk' });
     expect(taskXml(xml)).toContain('<zeebe:calledDecision decisionId="risk" />');
     expect(taskTag(xml)).toBe('<bpmn:businessRuleTask id="R">');
-    expect(result.changes.warnings.map((w) => [w.code, w.hint])).toEqual([['W_DECISION_RESULT_VARIABLE', 'Name the variable that receives the result: `bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
+    // the Camunda 8 profile (step 3) reports the missing resultVariable itself; the op warning gives way to it
+    expect(result.changes.warnings).toEqual([]);
+    expect(result.validation.warnings.filter((w) => w.code.startsWith('W_C8_')).map((w) => [w.code, w.element, w.hint])).toEqual([['W_C8_DEPLOY_IMPLEMENTATION', 'R', '`bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
+    const op = runOps(await Doc.fromXml(model('<bpmn:businessRuleTask id="R" calledDecision="old" />', C8)), [{ op: 'set', id: 'R', values: { calledDecision: 'risk' } }]);
+    expect(op.warnings.map((w) => [w.code, w.hint])).toEqual([['W_DECISION_RESULT_VARIABLE', 'Name the variable that receives the result: `bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
     const kept = await set(model('<bpmn:businessRuleTask id="R"><bpmn:extensionElements><zeebe:calledDecision decisionId="old" resultVariable="score" /></bpmn:extensionElements></bpmn:businessRuleTask>', C8), { calledDecision: 'risk' });
     expect(taskXml(kept.xml)).toContain('<zeebe:calledDecision decisionId="risk" resultVariable="score" />');
     expect(kept.result.changes.warnings).toEqual([]);

@@ -24,7 +24,11 @@
  *    rule task (`calledDecision=<id>`), and, for a non-empty text, over the
  *    ids of event definitions and loop characteristics.
  *  The decision link of a business rule task is shown as the node fact
- *  `calledDecision` in every spelling (ops/decision.ts).
+ *  `calledDecision` in every spelling (ops/decision.ts). The Camunda 8
+ *  settings that say what a node does are node facts too (`job`,
+ *  `calledElement`, `script`, `form`, `assignee` / `candidateGroups` /
+ *  `candidateUsers`, `inputCollection` / `inputElement` / `outputCollection`
+ *  / `outputElement`), and a message shows its zeebe correlation key.
  *  Vendor content: nodes, processes and flows carry `attrs` (vendor attribute
  *  values; those of nested elements under the `set` keys `definition.`,
  *  `loop.`, `condition.`), `extensions` (extension element types and vendor
@@ -41,6 +45,7 @@ import { decisionLinkOf } from './ops/decision.js';
 import { describeTrigger } from './ops/events.js';
 import { listExtensions, type ExtensionInfo } from './ops/ext.js';
 import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from './ops/set.js';
+import { ZEEBE_URI } from './platform/descriptor.js';
 import { flowOrder, repairFlowLinks, validateDoc } from './validate.js';
 
 export interface ViewFlow {
@@ -144,7 +149,7 @@ export interface ModelView {
   definitions: { id: string; targetNamespace?: string; namespaces: string[] };
   collaboration?: { id: string; participants: Array<{ id: string; name?: string; process?: string }>; messageFlows: ViewMessageFlow[] };
   processes: ViewProcess[];
-  rootElements: Array<{ id: string; kind: string; name?: string; code?: string }>;
+  rootElements: Array<{ id: string; kind: string; name?: string; code?: string; correlationKey?: string }>;
   problems: Warning[];
   /** content the reader could not keep (a write needs --force and drops it), e.g. a duplicate loopCharacteristics */
   importWarnings?: string[];
@@ -280,6 +285,40 @@ function nonInterruptingOf(el: El): boolean | undefined {
   return undefined;
 }
 
+/** The first generic zeebe extension element `local` of `el` (any prefix bound to the zeebe namespace). */
+function zeebeExt(el: El | undefined, local: string): El | undefined {
+  const container = el ? peek<El>(el, 'extensionElements') : undefined;
+  return container ? list(container, 'values').find((v) => (v.$descriptor as { ns?: { uri?: string } }).ns?.uri === ZEEBE_URI && v.$type.endsWith(`:${local}`)) : undefined;
+}
+
+/**
+ * The Camunda 8 settings of a node that say what it does (they are zeebe
+ * extension elements, so `attrs` cannot show them): the job type, the called
+ * process, the FEEL script, the form, the assignment, the multi-instance
+ * collection.
+ */
+function zeebeProps(el: El, props: Record<string, unknown>): void {
+  const job = zeebeExt(el, 'taskDefinition');
+  if (job && peek<string>(job, 'type') !== undefined) props['job'] = peek<string>(job, 'type');
+  const called = zeebeExt(el, 'calledElement');
+  if (called && props['calledElement'] === undefined && peek<string>(called, 'processId') !== undefined) props['calledElement'] = peek<string>(called, 'processId');
+  const script = zeebeExt(el, 'script');
+  if (script) props['script'] = `${peek<string>(script, 'expression') ?? ''}${peek<string>(script, 'resultVariable') ? ` -> ${peek<string>(script, 'resultVariable')}` : ''}`;
+  const form = zeebeExt(el, 'formDefinition');
+  const formRef = form ? (peek<string>(form, 'formId') ?? peek<string>(form, 'externalReference') ?? peek<string>(form, 'formKey')) : undefined;
+  if (formRef !== undefined) props['form'] = formRef;
+  const assignment = zeebeExt(el, 'assignmentDefinition');
+  for (const k of ['assignee', 'candidateGroups', 'candidateUsers']) {
+    const v = assignment ? peek<string>(assignment, k) : undefined;
+    if (v !== undefined) props[k] = v;
+  }
+  const loop = zeebeExt(peek<El>(el, 'loopCharacteristics'), 'loopCharacteristics');
+  for (const k of ['inputCollection', 'inputElement', 'outputCollection', 'outputElement']) {
+    const v = loop ? peek<string>(loop, k) : undefined;
+    if (v !== undefined) props[k] = v;
+  }
+}
+
 /** Extra semantic facts of a node worth showing in one line. */
 function nodeProps(el: El): Record<string, unknown> | undefined {
   const props: Record<string, unknown> = {};
@@ -303,6 +342,7 @@ function nodeProps(el: El): Record<string, unknown> | undefined {
   // several event definitions on one event (the label shows the first one's trigger): name them all
   const defs = definitionsOf(el);
   if (defs.length > 1) props['definitions'] = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0] ?? d.$type).join('+');
+  zeebeProps(el, props);
   return Object.keys(props).length ? props : undefined;
 }
 
@@ -499,7 +539,9 @@ function buildRootElements(doc: Doc): ModelView['rootElements'] {
     const match = ROOT_KINDS.find(([type]) => is(el, type));
     if (!match) continue;
     const code = peek<string>(el, 'errorCode') ?? peek<string>(el, 'escalationCode');
-    out.push(compact({ id: idOf(el), kind: match[1], name: nameOf(el), code: code || undefined }));
+    // the correlation key Camunda 8 matches a message by
+    const subscription = zeebeExt(el, 'subscription');
+    out.push(compact({ id: idOf(el), kind: match[1], name: nameOf(el), code: code || undefined, correlationKey: subscription ? peek<string>(subscription, 'correlationKey') : undefined }));
   }
   return out;
 }

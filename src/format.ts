@@ -189,7 +189,7 @@ export function renderView(view: ModelView): string {
     }
   }
   if (view.rootElements.length) {
-    out.push(`root: ${view.rootElements.map((r) => `${r.kind} ${r.id}${r.name ? ` ${q(r.name)}` : ''}${r.code ? ` (${r.code})` : ''}`).join(', ')}`);
+    out.push(`root: ${view.rootElements.map((r) => `${r.kind} ${r.id}${r.name ? ` ${q(r.name)}` : ''}${r.code ? ` (${r.code})` : ''}${r.correlationKey !== undefined ? ` [correlationKey=${flagValue(r.correlationKey)}]` : ''}`).join(', ')}`);
   }
   if (view.problems.length) {
     out.push('problems:');

@@ -75,7 +75,7 @@ import { allowedOn, allowedParents, CAMUNDA_URI, containersOf, OPERATON_URI, ZEE
 import { zeebeAllowedOn, zeebeType } from '../platform/zeebe.js';
 import { ChangeSet } from '../result.js';
 import { kindLabel } from '../kinds.js';
-import { coversProfileSubjects } from './retype.js';
+import { coversProfileSubjects } from './covers.js';
 import { changeOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';
 

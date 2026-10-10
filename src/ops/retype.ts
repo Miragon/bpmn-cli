@@ -47,9 +47,9 @@ import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type 
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
 import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
-import { subjectOf, type ProfileFinding } from '../platform/finding.js';
 import { ChangeSet } from '../result.js';
 import { applyTrigger } from './events.js';
+import { coversProfileSubjects } from './covers.js';
 import { zeebeUserTaskDefault } from './platform.js';
 import { cascadeRemove } from './remove.js';
 import {
@@ -67,6 +67,8 @@ import {
   type PropDescriptor,
 } from './set.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
+
+export { withoutProfileDuplicates } from './covers.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
 
@@ -285,40 +287,8 @@ function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | un
     element: id,
     hint: `The ${names.every((n) => zeebeLocal(doc, n)) ? 'Zeebe (Camunda 8)' : names.some((n) => zeebeLocal(doc, n)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
   };
-  // what the Camunda 7 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
-  Object.defineProperty(warning, COVERS, { value: [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)], enumerable: false });
-  return warning;
-}
-
-/** The profile findings that name one misplaced camunda / zeebe attribute or extension element each. */
-const MISPLACED = ['W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION', 'W_C8_MISPLACED_ATTRIBUTE', 'W_C8_MISPLACED_EXTENSION'];
-
-/** Hidden list of profile subjects an operation warning repeats (not serialised). */
-const COVERS: unique symbol = Symbol('covered-profile-subjects');
-
-/** Marks an operation warning as repeating the given misplaced-content profile subjects (`ext:<local>`, `attr:<name>`): dropped when the profile reports them all. */
-export function coversProfileSubjects<W extends Warning>(warning: W, subjects: string[]): W {
-  Object.defineProperty(warning, COVERS, { value: subjects, enumerable: false });
-  return warning;
-}
-
-/**
- * The warnings of a mutation without the ones its platform-profile findings
- * already report: after a retype in a Camunda 7 file the profile names every
- * camunda attribute / extension element the new kind cannot use
- * (W_C7_MISPLACED_ATTRIBUTE / W_C7_MISPLACED_EXTENSION, with severity and a
- * remove command each), so the summary W_PROPERTY_INAPPLICABLE is dropped
- * when those findings cover everything it names. Without the profile
- * (`--platform none`, a file that is not Camunda 7) it stays. For the
- * pipeline / printMutation: `changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings)`.
- */
-export function withoutProfileDuplicates(warnings: Warning[], validation: readonly Warning[]): Warning[] {
-  return warnings.filter((w) => {
-    const covers = (w as Warning & { [COVERS]?: string[] })[COVERS];
-    if (!covers?.length) return true;
-    const reported = new Set(validation.filter((v) => v.element === w.element && MISPLACED.includes(v.code)).map((v) => subjectOf(v as ProfileFinding)));
-    return !covers.every((s) => reported.has(s));
-  });
+  // what the Camunda 7 / 8 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
+  return coversProfileSubjects(warning, [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)]);
 }
 
 /** Applies / clears the kind-specific creation props (e.g. triggeredByEvent for event sub-processes). */
