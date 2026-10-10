@@ -61,7 +61,7 @@
  *                                  triggered start event
  *   W_C8_DEPLOY_AD_HOC_SUBPROCESS  ad-hoc sub-process with a start or end event inside, or without an activity
  *   W_C8_DEPLOY_LINK               link throw without a catch of its name in its (sub-)process, two link catch events
- *                                  with one name in a process; schema: link definition without name
+ *                                  with one name in a process; link definition without name (schema) or an empty one
  *   W_C8_DEPLOY_USER_TASK          form definition that is not exactly one of formId / externalReference (Camunda user
  *                                  task) or formId / formKey (job worker user task), task listeners on a job worker user
  *                                  task, a static priority that is not 0..100, a static due / follow-up date that is no
@@ -97,6 +97,10 @@
  *
  * FEEL is not parsed: a syntax error in an expression (`=a +`) is refused by the
  * engine but not reported here.
+ *
+ * White space: a name, job type, code, process / decision id or result variable
+ * of white space deploys (only an empty one is refused); FEEL, path and enum
+ * attributes, form ids and correlation keys of white space are refused.
  */
 import type { Doc } from '../document.js';
 import { kindLabel } from '../kinds.js';
@@ -138,8 +142,24 @@ function idOf(el: El | undefined): string | undefined {
   return typeof id === 'string' && id ? id : undefined;
 }
 
+/** No value or only white space: what Camunda 8 refuses for FEEL / path / enum attributes and form ids. */
 function blank(v: string | undefined): boolean {
   return v === undefined || v.trim() === '';
+}
+
+/**
+ * No value at all: Camunda 8 refuses a missing or empty name, job type, code,
+ * process / decision id or result variable, but deploys one of white space
+ * (engine-checked on 8.9.22).
+ */
+function missing(v: string | undefined): boolean {
+  return v === undefined || v === null || v === '';
+}
+
+/** The name as written, or undefined when there is none (white space is a name to Camunda 8). */
+function nameAttr(el: El | undefined): string | undefined {
+  const n = peek<string>(el, 'name');
+  return typeof n === 'string' && n !== '' ? n : undefined;
 }
 
 function isGeneric(el: El): boolean {
@@ -305,11 +325,12 @@ function rebuildHint(ctx: Ctx, host: El, owner: El | undefined, type: string): s
 /* ------------------------------------------------------------------ */
 
 // what Camunda 8.9 parses (engine-checked on 60 values): an ISO 8601 period / duration (Java Period + Duration,
-// split at an upper-case T), a date-time with offset or Z (an optional [zone] after it), a repeating interval
-// R[n]/[start/]duration, a 6-field cron expression or one of its macros
+// split at an upper-case T; a fraction on the seconds only: PT1.5S, not PT1.5H), a date-time with offset or Z (an
+// optional [zone] after it; t and z in either case), a repeating interval R[n]/[start/]duration, a 6-field cron
+// expression or one of its macros
 const PERIOD = /^[-+]?[Pp](?:[-+]?\d+[Yy])?(?:[-+]?\d+[Mm])?(?:[-+]?\d+[Ww])?(?:[-+]?\d+[Dd])?$/;
-const DURATION = /^[-+]?P(?:T(?=[-+]?\d)(?:[-+]?\d+(?:[.,]\d{0,9})?H)?(?:[-+]?\d+(?:[.,]\d{0,9})?M)?(?:[-+]?\d+(?:[.,]\d{0,9})?S)?)$/i;
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:\d{2}(?::\d{2})?)(?:\[[^\]]+\])?$/;
+const DURATION = /^[-+]?P(?:T(?=[-+]?\d)(?:[-+]?\d+H)?(?:[-+]?\d+M)?(?:[-+]?\d+(?:[.,]\d{0,9})?S)?)$/i;
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:\d{2}(?::\d{2})?)(?:\[[^\]]+\])?$/;
 const CRON_MACROS = ['@yearly', '@annually', '@monthly', '@weekly', '@daily', '@midnight', '@hourly'];
 
 export function validDuration(value: string): boolean {
@@ -654,7 +675,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
       const label = `Execution listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
       const sel = addr ? `\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${z(ctx, 'executionListeners')}/${z(ctx, 'executionListener')}[${i}]`)}\`` : 'remove it from the XML';
       const again = (fix: string): string => `${sel}, then ${extAdd(ctx, host, owner, `${z(ctx, 'executionListeners')}/${z(ctx, 'executionListener')} ${fix}`)}`;
-      if (blank(attr(l, 'type'))) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
+      if (missing(attr(l, 'type'))) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
       if (ev === undefined || ev.trim() === '') push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
       else if (ev !== 'start' && ev !== 'end') push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label}: eventType "${ev}" is not start or end; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
       else if (ev === 'start' && (is(host, 'bpmn:StartEvent') || is(host, 'bpmn:BoundaryEvent'))) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:start`, `${label}: Camunda 8 does not support start listeners on ${is(host, 'bpmn:StartEvent') ? 'start' : 'boundary'} events and refuses the file`, `Make it an end listener or remove it: ${again(`eventType=end type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
@@ -671,7 +692,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
       const ev = attr(l, 'eventType');
       const label = `Task listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
       const again = (fix: string): string => `\`bpmn ext remove <file> ${idOf(host)} ${sh(`${z(ctx, 'taskListeners')}/${z(ctx, 'taskListener')}[${i}]`)}\`, then ${extAdd(ctx, host, owner, `${z(ctx, 'taskListeners')}/${z(ctx, 'taskListener')} ${fix}`)}`;
-      if (blank(attr(l, 'type'))) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
+      if (missing(attr(l, 'type'))) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
       if (blank(ev)) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
       else if (!TASK_LISTENER_EVENTS.includes(ev!)) push(ctx, 'deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label}: eventType "${ev}" is not one of creating, assigning, updating, completing, canceling; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
     });
@@ -679,7 +700,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
   }
   if (local === 'linkedResources') {
     kids(ctx, v, 'linkedResource').forEach((r, i) => {
-      if (blank(attr(r, 'resourceType'))) push(ctx, 'deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:resourceType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
+      if (missing(attr(r, 'resourceType'))) push(ctx, 'deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:resourceType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
       const b = attr(r, 'bindingType');
       if (b !== undefined && !BINDING_TYPES.includes(b)) push(ctx, 'deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:bindingType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="${b}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, rebuild());
       else if (b === 'versionTag' && blank(attr(r, 'versionTag'))) push(ctx, 'deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:versionTag`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, rebuild());
@@ -704,7 +725,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
   }
   if (local === 'priorityDefinition') {
     const prio = attr(v, 'priority');
-    if (prio !== undefined && !isFeel(prio) && (!/^\s*\d+\s*$/.test(prio) || Number(prio) > 100)) {
+    if (prio !== undefined && prio !== '' && !isFeel(prio) && (!/^\s*\d+\s*$/.test(prio) || Number(prio) > 100)) {
       push(ctx, 'deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, 'priority', `${z(ctx, 'priorityDefinition')} of ${where} has priority "${prio}"; Camunda 8 needs a number from 0 to 100 (or an expression) and refuses the file`, fixHint(ctx, host, owner, v, { priority: '50' }));
     }
     return;
@@ -767,7 +788,7 @@ function checkTaskDefinition(ctx: Ctx, el: El, label: string, alternative?: { lo
   }
   for (const td of tds.slice(0, 1)) {
     const type = attr(td, 'type');
-    if (blank(type)) {
+    if (missing(type)) {
       push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'impl:type', `The ${z(ctx, 'taskDefinition')} of ${label} has no type; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, td, { type: '<jobType>' }));
     }
     const retries = attr(td, 'retries');
@@ -780,7 +801,7 @@ function checkTaskDefinition(ctx: Ctx, el: El, label: string, alternative?: { lo
 /** The message a send task / message throw or end event references must have a name (when it references one). */
 function checkThrownMessage(ctx: Ctx, el: El, label: string): void {
   const msg = messageOf(el);
-  if (msg && !nameOf(msg)) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+  if (msg && !nameAttr(msg)) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
 }
 
 function checkServiceLike(ctx: Ctx, el: El): void {
@@ -801,15 +822,15 @@ function checkServiceLike(ctx: Ctx, el: El): void {
       const expr = attr(s, 'expression');
       if (blank(expr)) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:expression', `The ${z(ctx, 'script')} of ${label} has no expression; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, s, { expression: '=<expression>' }));
       else if (!isFeel(expr)) push(ctx, 'deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'script:expression', `The ${z(ctx, 'script')} expression "${expr}" of ${label} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, fixHint(ctx, el, undefined, s, { expression: `=${expr!.trim()}` }));
-      if (blank(attr(s, 'resultVariable'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:resultVariable', `The ${z(ctx, 'script')} of ${label} has no resultVariable; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, s, { resultVariable: '<variable>' }));
+      if (missing(attr(s, 'resultVariable'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:resultVariable', `The ${z(ctx, 'script')} of ${label} has no resultVariable; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, s, { resultVariable: '<variable>' }));
     }
   } else if (is(el, 'bpmn:BusinessRuleTask')) {
     const calls = zeebe(ctx, el, 'calledDecision');
     checkTaskDefinition(ctx, el, label, { local: 'calledDecision', count: calls.length, text: `a ${z(ctx, 'calledDecision')}` });
     const c = calls[0];
     if (c && !zeebe(ctx, el, 'taskDefinition').length) {
-      if (blank(attr(c, 'decisionId'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:decisionId', `The ${z(ctx, 'calledDecision')} of ${label} has no decisionId; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} calledDecision=<decisionId>\`.`);
-      if (blank(attr(c, 'resultVariable'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:resultVariable', `The ${z(ctx, 'calledDecision')} of ${label} has no resultVariable; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, c, { resultVariable: '<variable>' }));
+      if (missing(attr(c, 'decisionId'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:decisionId', `The ${z(ctx, 'calledDecision')} of ${label} has no decisionId; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} calledDecision=<decisionId>\`.`);
+      if (missing(attr(c, 'resultVariable'))) push(ctx, 'deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:resultVariable', `The ${z(ctx, 'calledDecision')} of ${label} has no resultVariable; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, c, { resultVariable: '<variable>' }));
     }
   }
 }
@@ -827,7 +848,7 @@ function checkMessageThrow(ctx: Ctx, el: El, def: El): void {
 function checkPublishMessage(ctx: Ctx, el: El, host: El, pm: El, label: string): void {
   const id = idOf(el)!;
   if (!messageOf(el)) push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:messageRef', `${label} publishes no message (no message reference); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} message=<MessageName>\`.`);
-  if (blank(attr(pm, 'correlationKey'))) push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:correlationKey', `The ${z(ctx, 'publishMessage')} of ${label} has no correlationKey; Camunda 8 refuses the file`, `${extAdd(ctx, host, host === el ? undefined : el, `${z(ctx, 'publishMessage')} correlationKey==<expression>`)}.`);
+  if (missing(attr(pm, 'correlationKey'))) push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:correlationKey', `The ${z(ctx, 'publishMessage')} of ${label} has no correlationKey; Camunda 8 refuses the file`, `${extAdd(ctx, host, host === el ? undefined : el, `${z(ctx, 'publishMessage')} correlationKey==<expression>`)}.`);
   const send = is(el, 'bpmn:SendTask');
   push(ctx, 'runtime', 'W_C8_UNSUPPORTED_IMPLEMENTATION', el, undefined, 'publishMessage', `${label} publishes its message with ${z(ctx, 'publishMessage')}: Camunda 8.9 accepts the file but does not run it (${send ? 'the instance gets an incident: only job worker send tasks are supported' : 'the event completes without sending anything'})`, `Use a job worker: \`bpmn ext remove <file> ${id} ${send ? '' : 'definition.'}${z(ctx, 'publishMessage')}\`, then \`bpmn ext add <file> ${id} ${z(ctx, 'taskDefinition')} type=<jobType>\`.`);
 }
@@ -840,7 +861,7 @@ function checkCallActivity(ctx: Ctx, el: El): void {
     push(ctx, 'deploy', 'W_C8_DEPLOY_CALLED_ELEMENT', el, undefined, 'calledElement', `Call activity ${id} has no ${z(ctx, 'calledElement')}${bpmnCalled ? ` (Camunda 8 does not read the BPMN calledElement="${bpmnCalled}")` : ''}; Camunda 8 refuses the file`, `\`bpmn ext add <file> ${id} ${z(ctx, 'calledElement')} processId=${sh(bpmnCalled || '<processId>')} propagateAllChildVariables=false\`.`);
     return;
   }
-  if (blank(attr(calls[0], 'processId'))) {
+  if (missing(attr(calls[0], 'processId'))) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_CALLED_ELEMENT', el, undefined, 'processId', `The ${z(ctx, 'calledElement')} of call activity ${id} has no processId; Camunda 8 refuses the file`, fixHint(ctx, el, undefined, calls[0]!, { processId: '<processId>' }));
   }
 }
@@ -1041,14 +1062,14 @@ function checkEvent(ctx: Ctx, el: El): void {
   } else if (is(def, 'bpmn:SignalEventDefinition')) {
     const sig = peek<El>(def, 'signalRef');
     if (!sig) push(ctx, 'deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
-    else if (!nameOf(sig)) push(ctx, 'deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+    else if (!nameAttr(sig)) push(ctx, 'deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
     else if (is(el, 'bpmn:StartEvent') && isFeel(nameOf(sig))) push(ctx, 'deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Start event ${id} catches the signal "${nameOf(sig)}", a FEEL expression; Camunda 8 needs a static signal name on start events and refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
   } else if (is(def, 'bpmn:ErrorEventDefinition')) {
     const err = peek<El>(def, 'errorRef');
     const code = peek<string>(err, 'errorCode');
     if (is(el, 'bpmn:ThrowEvent')) {
       if (!err) push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
-      else if (blank(code)) push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
+      else if (missing(code)) push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
     } else {
       if (isFeel(code)) push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `${label} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\` (or no code: it catches every error).`, err ? [idOf(err)!] : []);
       if (nonInterrupting(el)) push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'nonInterrupting', `${label} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, `\`bpmn set <file> ${id} nonInterrupting=false\`.`);
@@ -1057,7 +1078,7 @@ function checkEvent(ctx: Ctx, el: El): void {
     if (is(el, 'bpmn:ThrowEvent')) {
       const esc = peek<El>(def, 'escalationRef');
       if (!esc) push(ctx, 'deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
-      else if (blank(peek<string>(esc, 'escalationCode'))) push(ctx, 'deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
+      else if (missing(peek<string>(esc, 'escalationCode'))) push(ctx, 'deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
     } else if (is(el, 'bpmn:BoundaryEvent')) {
       const host = peek<El>(el, 'attachedToRef');
       if (host && !is(host, 'bpmn:SubProcess') && !is(host, 'bpmn:CallActivity')) {
@@ -1085,7 +1106,7 @@ function checkMessageCatch(ctx: Ctx, el: El): void {
     return;
   }
   const mid = idOf(msg)!;
-  const name = nameOf(msg);
+  const name = nameAttr(msg);
   if (!name) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${mid} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${mid} name=<MessageName>\`.`, [mid]);
     return;
@@ -1350,8 +1371,10 @@ function checkSchemaEventDefinitions(ctx: Ctx): void {
     const label = id ? describe(event!) : def.$type;
     if (is(def, 'bpmn:ConditionalEventDefinition') && !peek<El>(def, 'condition')) {
       push(ctx, 'deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', event ?? def, undefined, 'schema:condition', `The conditional event definition of ${label} has no condition element, which the BPMN schema requires; Camunda 8 refuses the file`, id ? `\`bpmn set <file> ${id} ${sh('when== <expression>')}\`.` : 'Fix it in the XML.');
-    } else if (is(def, 'bpmn:LinkEventDefinition') && (peek<string>(def, 'name') === undefined || peek<string>(def, 'name') === null)) {
-      push(ctx, 'deploy', 'W_C8_DEPLOY_LINK', event ?? def, undefined, 'schema:linkName', `The link event definition of ${label} has no name, which the BPMN schema requires; Camunda 8 refuses the file`, id ? `\`bpmn set <file> ${id} link=<Name>\` (the throw and the catch event of a pair share the name).` : 'Fix it in the XML.');
+    } else if (is(def, 'bpmn:LinkEventDefinition') && missing(peek<string>(def, 'name'))) {
+      // no name: the BPMN schema requires one; an empty one: Camunda 8 ("must be present and not empty"; white space passes)
+      const none = peek<string>(def, 'name') === undefined || peek<string>(def, 'name') === null;
+      push(ctx, 'deploy', 'W_C8_DEPLOY_LINK', event ?? def, undefined, 'schema:linkName', `The link event definition of ${label} has ${none ? 'no name, which the BPMN schema requires' : 'an empty name'}; Camunda 8 refuses the file`, id ? `\`bpmn set <file> ${id} link=<Name>\` (the throw and the catch event of a pair share the name).` : 'Fix it in the XML.');
     }
   }
 }
