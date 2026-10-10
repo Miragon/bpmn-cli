@@ -28,7 +28,7 @@
  *  - selection(doc, sel, drawn): explicit ids first, then the branch, the
  *    path and the kind, each in its own order, without repeats; with
  *    `shapesOnly` the connections are left out (place, align, tidy move
- *    shapes), and elements that are not drawn are left out of what the
+ *    shapes; boundary events too, they follow their host), and elements that are not drawn are left out of what the
  *    selectors found (explicit ids stay, the op reports them).
  */
 import type { Doc } from '../document.js';
@@ -159,8 +159,9 @@ export function selection(doc: Doc, sel: Selection, opts: { shapesOnly: boolean;
   if (sel.path) found.push(...pathOf(doc, sel.path[0]!, sel.path[1]!, sel.via ?? []));
   if (sel.kind) found.push(...kindOfElements(doc, sel.kind));
   const connection = (el: El): boolean => is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow') || is(el, 'bpmn:Association') || is(el, 'bpmn:DataAssociation');
+  // shape ops move hosts: boundary events follow them
   const picked = found
-    .filter((el) => !opts.shapesOnly || !connection(el))
+    .filter((el) => !opts.shapesOnly || (!connection(el) && !is(el, 'bpmn:BoundaryEvent')))
     .map((el) => idOf(el)!)
     .filter((id) => !!id && opts.drawn(id));
   const all = [...(sel.ids ?? []), ...picked];

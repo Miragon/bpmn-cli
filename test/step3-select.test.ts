@@ -151,6 +151,21 @@ describe('--branch', () => {
     expect(r.layout.format![0]!.moved).toEqual(expect.arrayContaining(['B1', 'B2']));
   });
 
+  it('a branch with a boundary event moves with it (the event follows its host, its path goes along)', async () => {
+    const hand = await handXml([
+      ...SPLIT,
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'TB', on: 'B1', timer: 'PT1H' },
+      { op: 'add', kind: 'endEvent', id: 'TE', name: 'Late', after: 'TB' },
+    ]);
+    const before = shapes(await Doc.fromXml(hand));
+    const { r, after } = await run(hand, [{ op: 'place', branch: 'F_b', above: 'A1' }]);
+    const s = shapes(after);
+    const dy = s.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
+    expect(dy).toBeLessThan(0);
+    for (const id of ['B2', 'TB', 'TE']) expect(s.get(id)!.bounds.y - before.get(id)!.bounds.y, id).toBe(dy);
+    expect(r.layout.metrics!.added.filter((p) => ['overlaps', 'through', 'outsidePool'].includes(p.kind))).toEqual([]);
+  });
+
   it('colours a branch with its flows; a branch straight to the join has nothing on it', async () => {
     const hand = await handXml(SPLIT);
     const { after } = await run(hand, [{ op: 'color', branch: 'F_a', color: 'orange' }]);
