@@ -43,10 +43,11 @@ describe('speaking ids in a Camunda Modeler file', () => {
       // the end event says nothing about itself (a hash, no name): a word for its kind
       'Flow_GroesseMessenToEnd',
       'Event_TimerOnPruefung',
-      'Event_EndAfterTimer',
-      'Flow_TimerToEnd',
+      // an unnamed end is named by its own id's speaking part: its kind and place
+      'Event_EndAfterTimerOnPruefung',
+      'Flow_TimerOnPruefungToEndAfterTimerOnPruefung',
       'Gateway_BeforeGroesseMessen',
-      'Flow_GatewayToGroesseMessen',
+      'Flow_BeforeGroesseMessenToGroesseMessen',
       'Activity_Nacharbeit',
       'Event_StartInNacharbeit',
     ]);
@@ -137,6 +138,6 @@ describe('speaking ids follow the file', () => {
       { op: 'add', kind: 'parallelGateway', after: 'Task_2' },
       { op: 'add', kind: 'task', name: 'Third', after: 'Gateway_AfterSecond' },
     ]);
-    expect(r.ids).toEqual(['Gateway_AfterSecond', 'SF_SecondToGateway', 'Task_Third', 'SF_GatewayToThird']);
+    expect(r.ids).toEqual(['Gateway_AfterSecond', 'SF_SecondToAfterSecond', 'Task_Third', 'SF_AfterSecondToThird']);
   });
 });

@@ -29,7 +29,7 @@
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
 import { kindByName, kindLabel, triggerOf } from '../kinds.js';
-import { kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../idstyle.js';
+import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../idstyle.js';
 import { addTo, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
 
@@ -49,7 +49,7 @@ function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): str
 
 /** The id request of a data object / data store / annotation added by `add`: its name, else its text, else `In <scope>`. */
 export function artifactRequest(kind: 'dataObject' | 'dataStore' | 'textAnnotation', scope: El, opts: { name?: string; text?: string }): IdRequest {
-  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), context: opts.text?.trim() ? opts.text : `In ${labelOf(scope)}` });
+  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), context: opts.text?.trim() ? opts.text : contextOf('In', scope) });
 }
 
 /** The context of an element that belongs to another one (`To` between the ends of a connection). */

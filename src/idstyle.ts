@@ -39,22 +39,32 @@
  *  bodies, the bpmn-cli prefixes, `named` flows with the prefix Flow.
  *
  *  Every generated id is SPEAKING (never a hash, a random or a running
- *  number): a named element's body is its name; an unnamed element's body
- *  is a word for its kind plus its context (IdRequest.context: Gateway_AfterCheckInvoice,
- *  Event_TimerOnReview, Event_StartInPayment, LaneSet_OrderHandling); a
- *  flow's body names its ends (labelOf: the speaking part of an end's id,
- *  else its name, else a word for its kind). Names and contexts are
- *  transliterated (ä -> ae, ö -> oe, ü -> ue, ß -> ss, src/ids.ts).
+ *  number): a named element's body is its name (a name needs a word with a
+ *  letter: `123` names nothing); an unnamed element's body is a word for its
+ *  kind plus its context (IdRequest.context: Gateway_AfterCheckInvoice,
+ *  Event_TimerOnReview, Event_StartInPayment, LaneSet_OrderHandling; built
+ *  by contextOf: an unnamed anchor that is itself after / before something
+ *  gives the nearest named anchor, once: the task after Gateway_AfterCheck
+ *  is Activity_AfterCheck, never Activity_AfterAfterCheck); a flow's body
+ *  names its ends (labelOf: the speaking part of an end's id, also an
+ *  unnamed end's own context, AfterCheck, and CheckJoin for the join of the
+ *  split after Check; else its name, else a word for its kind). Names and
+ *  contexts are transliterated (ä -> ae, ø -> oe, å -> aa, src/ids.ts). A
+ *  generated id has at most MAX_ID (64) characters: a long body is cut at a
+ *  word boundary, a flow's two ends share the room.
  *
  *  style.next(req, registry) returns a free id for a request (kindRequest /
  *  typeRequest / connectionRequest / flowRequest) and the id it wanted
- *  (`base`); a taken base gets `_2`, `_3` (the file-learned flow forms
- *  stemTo and scopedTo: `2`, `3`), so the same request on the same document
- *  always gives the same id; `id !== base` is W_ID_SUFFIXED (Doc.allocateId
- *  records it). style.derivedBase(req) is that base without allocating;
+ *  (`base`); an unnamed gateway or activity whose base is taken, or whose
+ *  body another id has, first spells out its kind (spelledBase:
+ *  Gateway_ParallelAfterCheck); a taken base gets `_2`, `_3` (the
+ *  file-learned flow forms stemTo and scopedTo: `2`, `3`), so the same
+ *  request on the same document always gives the same id; `id !== base` is W_ID_SUFFIXED (Doc.allocateId
+ *  records it). style.derivedBase(req) is that base without allocating
+ *  (derivedBases: also the uncut one, for ids written before the cut);
  *  style.joinId(gatewayId) the id of a split's join gateway.
  */
-import { camelSlug, isValidId, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
+import { camelSlug, cutAt, hasIdWords, isValidId, MAX_ID, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
 import { kindOf, triggerOf, type KindDef } from './kinds.js';
 import { is, isBpmnElement, walk, type El } from './model.js';
 
@@ -173,6 +183,9 @@ export function kindWord(key: string, trigger: string | undefined, withContext =
 
 const CONNECTIONS = new Set(['bpmn:SequenceFlow', 'bpmn:MessageFlow']);
 
+/** The longest base id: MAX_ID less room for a collision suffix (`_99`), so that a suffix never has to cut it further. */
+const MAX_BASE = MAX_ID - 3;
+
 /* ------------------------------------------------------------------ */
 /* classification                                                       */
 /* ------------------------------------------------------------------ */
@@ -270,45 +283,111 @@ export function speakingStem(id: string): string | undefined {
   return s;
 }
 
-/** Words that start the context of an unnamed element's id (Gateway_AfterCheckInvoice, Event_TimerOnReview). */
+/** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_StartInPayment). */
+export type ContextWord = 'After' | 'Before' | 'On' | 'In';
 const CONTEXT_WORDS = new Set(['after', 'before', 'on', 'in']);
 
-/** An id body made from a kind and a context (`AfterCheckInvoice`, `EndAfterTimer`, `timer_on_review`): a context word among its first three words. */
-function contextStem(stem: string): boolean {
-  return nameWords(stem)
-    .slice(0, 3)
-    .some((w) => CONTEXT_WORDS.has(w.toLowerCase()));
+/** The words of an id stem, split at case changes, between letters and digits and at separators (`After4AugenPrinzip` -> After, 4, Augen, Prinzip). */
+function stemWords(stem: string): string[] {
+  return stem
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
 }
 
 /**
- * How another id names an element (the ends of a flow, the context of an
- * unnamed element), so that ids are built from ids: the speaking part of
- * its id (Activity_CheckInvoice -> CheckInvoice, also after a rename of the
- * element); else, for an id that says too little (a hash, a number, one or
- * two letters such as Part_B), its name; a text annotation its text; else a
- * word for its kind (Gateway, End, Timer, UserTask, Flow, ...). An unnamed
- * element whose id tells its kind and context (Gateway_AfterCheckInvoice) is
- * named by its kind (Gateway), so ids do not repeat the contexts of their
- * neighbours (Flow_CheckInvoiceToGateway, not Flow_CheckInvoiceToAfterCheckInvoice).
+ * An id body made from a kind and a context (`AfterCheckInvoice`,
+ * `EndAfterTimer`, `timer_on_review`): the words before the first context
+ * word among its first three words (the kind: `End`, none for a gateway or
+ * task), that word and the words after it (the anchor); a collision suffix
+ * is not part of the anchor. Undefined for any other stem.
+ */
+function contextParts(stem: string): { head: string[]; word: ContextWord; tail: string[] } | undefined {
+  const words = stemWords(stem.replace(/_\d+$/, ''));
+  const i = words.slice(0, 3).findIndex((w) => CONTEXT_WORDS.has(w.toLowerCase()));
+  if (i === -1 || i === words.length - 1) return undefined;
+  return { head: words.slice(0, i), word: ucfirst(words[i]!.toLowerCase()) as ContextWord, tail: words.slice(i + 1) };
+}
+
+/**
+ * The label of an unnamed join a split gave its gateway's id (`<id>_join`,
+ * `<id>Join`): the split's anchor and Join (Gateway_AfterCheck_join ->
+ * `Check Join`; Gateway_InvoiceOk_join keeps `InvoiceOk_join`).
+ */
+function joinLabel(own: string): string | undefined {
+  const m = /^(.+?)_?join$/i.exec(own);
+  if (!m) return undefined;
+  const parts = contextParts(m[1]!);
+  return parts && !parts.head.length && parts.word === 'After' ? `${parts.tail.join(' ')} Join` : undefined;
+}
+
+/**
+ * How another id names an element (the ends of a flow, what an element
+ * belongs to), so that ids are built from ids: the speaking part of its id
+ * (Activity_CheckInvoice -> CheckInvoice, also after a rename of the
+ * element; an unnamed element's own context, Gateway_AfterCheckInvoice ->
+ * AfterCheckInvoice, so the flows at two unnamed gateways differ; the join
+ * of the split after Check -> `Check Join`); else, for an id that says too
+ * little (a hash, a number, one or two letters such as Part_B), its name; a
+ * text annotation its text; else a word for its kind (Gateway, End, Timer,
+ * UserTask, Flow, ...).
  */
 export function labelOf(el: El): string {
   const id = el.get<string | undefined>('id');
   const name = el.get<string | undefined>('name');
   const own = id ? speakingStem(id) : undefined;
-  const named = nameWords(name).length > 0;
+  const named = hasIdWords(name);
   if (is(el, 'bpmn:TextAnnotation')) {
     const text = el.get<string | undefined>('text');
     return own ?? (nameWords(text).length ? text! : 'TextAnnotation');
   }
-  if (own && (named ? own.replace(/[^A-Za-z]/g, '').length >= 3 : !contextStem(own))) return own;
+  if (own && (!named || own.replace(/[^A-Za-z]/g, '').length >= 3)) return named ? own : (joinLabel(own) ?? own);
   if (named) return name!;
-  if (own && !contextStem(own)) return own;
+  return kindLabel(el);
+}
+
+/** A word for the kind of an element without a speaking id or name (Gateway, End, Timer, UserTask, Flow, ...). */
+function kindLabel(el: El): string {
   if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) return 'Flow';
   const def = kindOf(el);
-  // the join of an unnamed split (Gateway_AfterCheckInvoice_join): Join
-  if (def?.family === 'gateway') return own && /join$/i.test(own) ? 'Join' : 'Gateway';
+  if (def?.family === 'gateway') return 'Gateway';
   if (def) return kindWord(def.kind, triggerOf(el));
   return localName(el.$type);
+}
+
+/**
+ * The context an anchor gives an unnamed element (`After Check invoice`,
+ * `On Review`, `In Payment`): `<word> <labelOf(anchor)>`, but an anchor
+ * that is itself unnamed and placed the same way gives its own anchor (the
+ * nearest named anchor, once: after Gateway_AfterCheck is `After Check`,
+ * never `After AfterCheck`), and an unnamed anchor whose id starts with its
+ * context says its kind first (`On Task AfterCheck`).
+ */
+export function contextOf(word: ContextWord, anchor: El): string {
+  const label = labelOf(anchor);
+  const id = anchor.get<string | undefined>('id');
+  const own = id ? speakingStem(id) : undefined;
+  if (!own || is(anchor, 'bpmn:TextAnnotation') || hasIdWords(anchor.get<string | undefined>('name'))) return `${word} ${label}`;
+  const parts = contextParts(own);
+  if (!parts) return `${word} ${label}`;
+  if (parts.word === word && (word === 'After' || word === 'Before')) return `${word} ${parts.tail.join(' ')}`;
+  // the join's label says its kind (Check Join)
+  if (!parts.head.length && label === own) return `${word} ${kindLabel(anchor)} ${label}`;
+  return `${word} ${label}`;
+}
+
+/**
+ * The labels earlier versions gave an element as a flow end (followEnds
+ * recognises a flow named by them): an unnamed element whose id tells its
+ * context was named by its kind (Gateway, Join, End, Timer).
+ */
+export function formerLabels(el: El): string[] {
+  const id = el.get<string | undefined>('id');
+  const own = id ? speakingStem(id) : undefined;
+  if (!own || hasIdWords(el.get<string | undefined>('name')) || is(el, 'bpmn:TextAnnotation') || !contextParts(own)) return [];
+  return [kindOf(el)?.family === 'gateway' && /join$/i.test(own) ? 'Join' : kindLabel(el)];
 }
 
 /** A flow form as read from a file: the forms new flows get, or hashed / numbered flows (new ones get `named` with their prefix). */
@@ -656,24 +735,45 @@ export class IdStyle {
     return body && isValidId(body) && !PREFIXED.test(body) ? body : '';
   }
 
-  /** What an unnamed element's id says: a word for its kind and its context (`Timer On Review`, `After Check invoice`). */
-  private unnamedText(req: IdRequest): string {
+  /**
+   * What an unnamed element's id says: a word for its kind and its context
+   * (`Timer On Review`, `After Check invoice`); `spelled`: the word for a
+   * gateway's or an activity's kind too, which the prefix otherwise says
+   * (`Parallel After Check invoice`).
+   */
+  private unnamedText(req: IdRequest, spelled = false): string {
     const context = nameWords(req.context).length ? req.context! : '';
-    return `${kindWord(req.key, req.trigger, !!context)} ${context}`.trim();
+    return `${kindWord(req.key, req.trigger, !!context && !spelled)} ${context}`.trim();
   }
 
-  /** The id an element request wants (before collision handling): its name, else its kind and context, after the file's prefix. */
-  private derived(req: IdRequest): string {
-    const named = nameWords(req.name).length > 0;
+  /** The id an element request wants (before collision handling): its name, else its kind and context, after the file's prefix; at most MAX_BASE characters. */
+  private derived(req: IdRequest, spelled = false): string {
+    const named = hasIdWords(req.name);
     const prefix = this.prefixFor(req);
     if (prefix === '' && named) {
       const bare = this.bareBody(req.name);
-      if (bare) return bare;
+      if (bare) return cutAt(bare, MAX_BASE);
     }
     // an unnamed element keeps a prefix in a file whose named ids have none
     const p = prefix === '' ? this.prefixFor(req, false) : prefix;
-    const body = this.bodyOf(named ? req.name : this.unnamedText(req)) || this.bodyOf(kindWord(req.key, req.trigger));
-    return `${p}_${body}`;
+    const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled)) || this.bodyOf(kindWord(req.key, req.trigger));
+    return `${p}_${cutAt(body, Math.max(MAX_BASE - p.length - 1, 8))}`;
+  }
+
+  /**
+   * The id an unnamed gateway or activity with a context takes before a
+   * collision suffix: its kind spelled out (`Gateway_ParallelAfterCheck`
+   * next to `Gateway_AfterCheck`, `Activity_TaskAfterCheck` next to
+   * `Activity_AfterCheck` or to the `Gateway_AfterCheck` it follows);
+   * undefined for every other request and where the prefix already says
+   * the kind (`parallelGateway_`, `Task_` for a task).
+   */
+  private spelledBase(req: IdRequest): string | undefined {
+    if (!SPELLABLE.has(req.key) || hasIdWords(req.name) || !nameWords(req.context).length) return undefined;
+    const word = kindWord(req.key, req.trigger).toLowerCase();
+    const prefix = (this.prefixFor(req) || this.prefixFor(req, false)).toLowerCase();
+    if (prefix.includes(word)) return undefined;
+    return this.derived(req, true);
   }
 
   /** The id a request wants before collision handling (Doc.allocateId reports a different result as W_ID_SUFFIXED). */
@@ -681,78 +781,146 @@ export class IdStyle {
     return this.wanted(req).base;
   }
 
+  /**
+   * The ids a request wants: derivedBase, and for a flow between ends with
+   * long ids also the id before the length cap (a flow a file got before
+   * the cut still names its ends: ops/flows.ts followEnds).
+   */
+  derivedBases(req: IdRequest): string[] {
+    return [...new Set([this.wanted(req).base, this.wanted(req, Infinity).base])];
+  }
+
   /** The id the request wants and the separator of its collision suffix (`_2`; the file-learned stemTo and scopedTo flows: `2`). */
-  private wanted(req: IdRequest): { base: string; sep: string } {
-    if (CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined) return this.connectionBase(req);
+  private wanted(req: IdRequest, max = MAX_BASE): { base: string; sep: string } {
+    if (CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined) return this.connectionBase(req, max);
     return { base: this.derived(req), sep: '_' };
   }
 
   /** The id of the join gateway of a split whose gateway is `gatewayId` (`<id>_join`, camel `<id>Join`, pascalSnake `<id>_Join`; a bare id `<id>Join`). */
   joinId(gatewayId: string): string {
-    if (!gatewayId.includes('_') && this.l.bareNodes) return `${gatewayId}Join`;
+    const base = cutAt(gatewayId, MAX_BASE - '_join'.length);
+    if (!gatewayId.includes('_') && this.l.bareNodes) return `${base}Join`;
     switch (this.l.body) {
       case 'camel':
-        return `${gatewayId}Join`;
+        return `${base}Join`;
       case 'pascalSnake':
-        return `${gatewayId}_Join`;
+        return `${base}_Join`;
       default:
-        return `${gatewayId}_join`;
+        return `${base}_join`;
     }
   }
 
-  /** A free id for the request (not claimed) and the id it wanted (`base`; different when that one was taken). */
+  /**
+   * A free id for the request (not claimed) and the id it wanted (`base`;
+   * different when that one was taken); at most MAX_ID characters. An
+   * unnamed gateway or activity whose id is taken, or whose body another
+   * element's id has (the unnamed gateway it follows: Gateway_AfterCheck),
+   * first spells out its kind (spelledBase), then takes a suffix.
+   */
   next(req: IdRequest, ids: IdRegistry): { id: string; base: string } {
     const { base, sep } = this.wanted(req);
+    const spelled = this.spelledBase(req);
+    if (spelled && spelled !== base && !ids.has(spelled) && (ids.has(base) || bodyTaken(base, ids))) return { id: spelled, base: spelled };
     let id = base;
-    for (let n = 2; ids.has(id); n++) id = `${base}${sep}${n}`;
+    for (let n = 2; ids.has(id); n++) {
+      const suffix = `${sep}${n}`;
+      id = `${cutAt(base, MAX_ID - suffix.length)}${suffix}`;
+    }
     return { id, base };
   }
 
-  /** The body of a `named` flow: the labels of its ends in the file's case (`CheckInvoiceToBookInvoice`). */
-  private flowBody(source: string, target: string, glued: boolean): string {
+  /** The ends of a `named` flow in the file's case and the word between them (`CheckInvoice`, `To`, `BookInvoice`). */
+  private flowParts(source: string, target: string, glued: boolean): [string, string, string] {
     switch (this.l.body) {
       case 'camel': {
-        const body = `${camelSlug(source)}To${slugify(target)}`;
-        return glued ? ucfirst(body) : body;
+        const a = camelSlug(source);
+        return [glued ? ucfirst(a) : a, 'To', slugify(target)];
       }
       case 'snake':
-        return `${snakeSlug(source)}_to_${snakeSlug(target)}`;
+        return [snakeSlug(source), '_to_', snakeSlug(target)];
       case 'pascalSnake':
-        return `${pascalSnakeSlug(source)}_To_${pascalSnakeSlug(target)}`;
+        return [pascalSnakeSlug(source), '_To_', pascalSnakeSlug(target)];
       default:
-        return `${slugify(source)}To${slugify(target)}`;
+        return [slugify(source), 'To', slugify(target)];
     }
   }
 
-  private connectionBase(req: IdRequest): { base: string; sep: string } {
+  private connectionBase(req: IdRequest, max: number): { base: string; sep: string } {
     const { form, prefix, sep, scope } = this.flowOf(req.key);
     const s = req.source!;
     const t = req.target!;
     /** an end in a form built from id stems: its stem when that says something, else its label */
     const endStem = (id: string, label: string | undefined, slug: (text: string) => string): string => speakingStem(id) ?? (label && slug(label) ? slug(label) : stem(id));
+    /** `<head><a><join><b>`, the two ends sharing the room up to `max` */
+    const pair = (head: string, a: string, join: string, b: string): string => {
+      const [x, y] = fitPair(a, b, max - head.length - join.length);
+      return `${head}${x}${join}${y}`;
+    };
     switch (form) {
       case 'scopedTo': {
         // the scope one of the ends names as a segment of its id (KotO in serviceTask_KotO_ValidatePayment), else the most used one
         const scopes = this.l.scopes.get(req.key) ?? this.l.scopes.get('bpmn:SequenceFlow') ?? [scope!];
         const own = scopes.find((x) => s.split('_').includes(x) || t.split('_').includes(x)) ?? scope!;
-        return { base: `${prefix}_${own}_${endWord(s, own, 'Start')}To${endWord(t, own, 'End')}`, sep: '' };
+        return { base: cutAt(`${prefix}_${own}_${endWord(s, own, 'Start')}To${endWord(t, own, 'End')}`, max), sep: '' };
       }
       case 'stemTo':
-        return { base: `${prefix}_${lcfirst(endStem(s, req.sourceLabel, camelSlug))}To${ucfirst(endStem(t, req.targetLabel, camelSlug))}`, sep: '' };
+        return { base: pair(`${prefix}_`, lcfirst(endStem(s, req.sourceLabel, camelSlug)), 'To', ucfirst(endStem(t, req.targetLabel, camelSlug))), sep: '' };
       case 'idPair':
-        return { base: `${prefix}_${s}_${t}`, sep: '_' };
+        return { base: pair(`${prefix}_`, s, '_', t), sep: '_' };
       case 'stemSnake':
-        return { base: `${prefix}_${endStem(s, req.sourceLabel, snakeSlug)}_to_${endStem(t, req.targetLabel, snakeSlug)}`, sep: '_' };
+        return { base: pair(`${prefix}_`, endStem(s, req.sourceLabel, snakeSlug), '_to_', endStem(t, req.targetLabel, snakeSlug)), sep: '_' };
       case 'idSnake':
-        return { base: `${prefix}_${s}_to_${t}`, sep: '_' };
+        return { base: pair(`${prefix}_`, s, '_to_', t), sep: '_' };
       default: {
         const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
         // a number glued to a lower-case prefix (flow12) glues the words too (flowCheckToShip); an upper-case one reads apart (F12 -> F_CheckToShip)
         const glued = sep === '' && /[a-z]/.test(prefix);
-        return { base: `${prefix}${glued ? '' : '_'}${this.flowBody(label(s, req.sourceLabel), label(t, req.targetLabel), glued)}`, sep: '_' };
+        const [a, join, b] = this.flowParts(label(s, req.sourceLabel), label(t, req.targetLabel), glued);
+        return { base: pair(`${prefix}${glued ? '' : '_'}`, a, join, b), sep: '_' };
       }
     }
   }
+}
+
+/** The kinds whose prefix says the kind, so that an unnamed one's id leaves it out (Gateway_AfterCheck, Activity_AfterCheck): spelledBase. */
+const SPELLABLE = new Set([
+  'task',
+  'userTask',
+  'serviceTask',
+  'scriptTask',
+  'sendTask',
+  'receiveTask',
+  'manualTask',
+  'businessRuleTask',
+  'subProcess',
+  'adHocSubProcess',
+  'transaction',
+  'callActivity',
+  'exclusiveGateway',
+  'parallelGateway',
+  'inclusiveGateway',
+  'eventBasedGateway',
+]);
+
+/** Whether another id has the body of `id` after its own prefix (`Gateway_AfterCheck` for `Activity_AfterCheck`): a flow between them would name both alike. */
+function bodyTaken(id: string, ids: IdRegistry): boolean {
+  const at = id.indexOf('_');
+  if (at === -1) return false;
+  const tail = id.slice(at);
+  for (const other of ids.values()) if (other !== id && other.endsWith(tail) && PREFIXED.test(other) && other.indexOf('_') === other.length - tail.length) return true;
+  return false;
+}
+
+/**
+ * Two ends that share `room` characters, each cut at a word boundary
+ * (cutAt): the first gets at least half, the second what is left, the
+ * first what the second leaves over.
+ */
+function fitPair(a: string, b: string, room: number): [string, string] {
+  if (a.length + b.length <= room) return [a, b];
+  const first = cutAt(a, Math.max(Math.floor(room / 2), room - b.length));
+  const second = cutAt(b, room - first.length);
+  return [cutAt(a, room - second.length), second];
 }
 
 /**

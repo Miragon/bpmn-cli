@@ -18,10 +18,10 @@
  */
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
-import { connectionRequest, flowRequest, labelOf, speakingStem } from '../idstyle.js';
+import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
-import type { ChangeSet } from '../result.js';
+import { renamedNote, type ChangeSet } from '../result.js';
 import type { FlowOptions, Placement } from './types.js';
 
 export interface FlowAttrs {
@@ -387,17 +387,18 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   const target = flow.get<El | undefined>('targetRef');
   if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
   const old = idOf(flow);
-  // the id a flow between the old ends gets, named by their names or (an end renamed since) by their ids
-  const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el))].filter((l): l is string => !!l))];
+  // the id a flow between the old ends gets, named by their names or (an end renamed since) by their ids, also as
+  // earlier versions named an unnamed end (by its kind: Flow_CheckToGateway) and before the length cap
+  const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l))];
   const derived = (base: string): boolean => old === base || (old.startsWith(base) && /^_?\d+$/.test(old.slice(base.length)));
   const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
-  const named = labels(oldSource).some((s) => labels(oldTarget).some((t) => derived(doc.idStyle.derivedBase(connectionRequest('bpmn:SequenceFlow', oldIds[0], oldIds[1], { sourceLabel: s, targetLabel: t })))));
+  const named = labels(oldSource).some((s) => labels(oldTarget).some((t) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', oldIds[0], oldIds[1], { sourceLabel: s, targetLabel: t })).some(derived)));
   if (!named) return undefined;
   doc.ids.release(old);
   const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
   if (id === old) return undefined;
   flow.set('id', id);
-  doc.recordRename(old, id);
+  doc.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`);
   for (const diagram of many(doc.definitions, 'diagrams')) {
     const plane = diagram.get<El | undefined>('plane');
     for (const di of plane ? many(plane, 'planeElement') : []) {
@@ -414,10 +415,8 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   return old;
 }
 
-/** ` (renamed from <old>)` for a change detail when followEnds renamed the flow. */
-export function renamedNote(old: string | undefined): string {
-  return old ? ` (renamed from ${old}: its id named its old ends)` : '';
-}
+/** ` (renamed from <old>)` for a change detail when followEnds renamed the flow (result.ts, where a takeover drops it again). */
+export { renamedNote };
 
 export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: El }): string | undefined {
   const source = ends.source ?? flow.get<El>('sourceRef');

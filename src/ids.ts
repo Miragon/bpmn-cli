@@ -7,22 +7,57 @@
  * (`Activity_CheckInvoice`, `Flow_CheckInvoiceToBookInvoice`).
  *
  * Names become ASCII words: German umlauts are transliterated (ä -> ae,
- * ö -> oe, ü -> ue, ß -> ss; Ä -> Ae, or AE inside an upper-case word),
- * other accents are dropped (é -> e), everything that is not a letter or
- * digit separates words.
+ * ö -> oe, ü -> ue, ß -> ss; Ä -> Ae, or AE inside an upper-case word), so
+ * are the letters NFKD does not decompose or decomposes to one letter where
+ * the language writes two (Nordic ø -> oe, å -> aa, æ -> ae; œ -> oe,
+ * ł -> l, đ / ð -> d, þ -> th, ı -> i), other accents are dropped (é -> e),
+ * everything that is not a letter or digit separates words. A generated id
+ * is at most MAX_ID characters long: slugs are cut at a word boundary
+ * (cutAt), the same way for the same input.
  */
 
 const MAX_SLUG = 40;
 
-const GERMAN: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ẞ: 'SS' };
+/** The longest id the id style generates, a collision suffix included (src/idstyle.ts). */
+export const MAX_ID = 64;
 
-/** The ASCII transliteration of a name (German umlauts as ae / oe / ue / ss, other accents dropped). */
+/** Letters that are spelled out (Å -> Aa, not the A NFKD would leave). */
+const SPELLED: Record<string, string> = {
+  ä: 'ae',
+  ö: 'oe',
+  ü: 'ue',
+  ß: 'ss',
+  Ä: 'Ae',
+  Ö: 'Oe',
+  Ü: 'Ue',
+  ẞ: 'SS',
+  ø: 'oe',
+  Ø: 'Oe',
+  å: 'aa',
+  Å: 'Aa',
+  æ: 'ae',
+  Æ: 'Ae',
+  œ: 'oe',
+  Œ: 'Oe',
+  ł: 'l',
+  Ł: 'L',
+  đ: 'd',
+  Đ: 'D',
+  ð: 'd',
+  Ð: 'D',
+  þ: 'th',
+  Þ: 'Th',
+  ı: 'i',
+};
+const SPELLED_RE = new RegExp(`[${Object.keys(SPELLED).join('')}]`, 'g');
+
+/** The ASCII transliteration of a name (see the module header: umlauts and Nordic letters spelled out, other accents dropped). */
 export function transliterate(name: string): string {
   return name
     .normalize('NFC')
-    .replace(/[äöüßÄÖÜẞ]/g, (c, at: number, all: string) => {
-      const out = GERMAN[c]!;
-      // Ä in an upper-case word (ÄNDERUNG) -> AE
+    .replace(SPELLED_RE, (c, at: number, all: string) => {
+      const out = SPELLED[c]!;
+      // Ä in an upper-case word (ÄNDERUNG) -> AE, Ø in ØRE -> OE
       const next = all.charAt(at + 1);
       return out.length === 2 && c === c.toUpperCase() && next && next !== next.toLowerCase() ? out.toUpperCase() : out;
     })
@@ -40,11 +75,48 @@ export function nameWords(name: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/** Whether a name gives an id words: at least one of its words has a letter (`123` or `✓✓✓` do not; an id is never a bare number). */
+export function hasIdWords(name: string | undefined): boolean {
+  return nameWords(name).some((w) => /[A-Za-z]/.test(w));
+}
+
 const cap = (w: string): string => w.charAt(0).toUpperCase() + w.slice(1);
 
-/** Cuts a slug to MAX_SLUG characters (and a trailing separator off). */
+/** The end of a slug that tells it apart from its neighbours and survives a cut: a join (`Join`, `_join`) and / or a number (`_2`, `2`). */
+const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
+
+/**
+ * Cuts an id or a slug to at most `max` characters at the last word
+ * boundary that fits (before an upper-case letter that follows a lower-case
+ * letter or a digit, before a digit that follows a letter, at `_`, `-` or
+ * `.`), without a trailing separator; a first word longer than `max` is cut
+ * inside. A join or number at its end is kept (`...ErstellenJoin` ->
+ * `...Join`), so the cut keeps what tells it apart. Deterministic: the same
+ * input gives the same result.
+ */
+export function cutAt(slug: string, max: number): string {
+  if (slug.length <= max) return slug;
+  const tail = KEPT_TAIL.exec(slug)?.[0] ?? '';
+  if (tail && tail.length < slug.length && max - tail.length >= 8) return `${cutWords(slug.slice(0, -tail.length), max - tail.length)}${tail}`;
+  return cutWords(slug, max);
+}
+
+/** cutAt without keeping a tail. */
+function cutWords(slug: string, max: number): string {
+  if (slug.length <= max) return slug;
+  let best = 0;
+  for (let i = 1; i <= max; i++) {
+    const prev = slug.charAt(i - 1);
+    const c = slug.charAt(i);
+    const boundary = /[_.-]/.test(c) || (/[A-Z]/.test(c) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(c) && /[A-Za-z]/.test(prev)) || /[_.-]/.test(prev);
+    if (boundary) best = i;
+  }
+  return (best > 0 ? slug.slice(0, best) : slug.slice(0, max)).replace(/[_.-]+$/, '');
+}
+
+/** Cuts a slug to MAX_SLUG characters at a word boundary. */
 function cut(slug: string): string {
-  return slug.length > MAX_SLUG ? slug.slice(0, MAX_SLUG).replace(/_+$/, '') : slug;
+  return cutAt(slug, MAX_SLUG);
 }
 
 /** ASCII-only PascalCase slug of a name, or '' when nothing usable remains (the bpmn-cli default body). */

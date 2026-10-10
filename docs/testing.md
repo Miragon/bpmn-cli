@@ -138,6 +138,14 @@ per format op; the event definition ids of a Camunda 8 file in the id style;
 profile in the warnings delta; and the strip of a removed node that must not
 pull an expanded sub-process over a shape of another row (found by the gate's
 fuzz campaign on the integrated build).
+`test/step3-ids-report.test.ts` checks the round 1 verifier's id and report
+findings: flows at unnamed gateways named by their speaking ids (no
+`_2`), unnamed elements in a row (the nearest named anchor once, the kind
+spelled out before a suffix), the 64-character cap, transliteration beyond
+German, the definitions id of `new`, and the warnings delta (platform
+findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge that takes over
+a removed flow's id, warnings of a batch's final state, `new` with the
+platform's findings).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile

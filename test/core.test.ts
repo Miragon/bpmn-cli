@@ -60,7 +60,11 @@ describe('ids', () => {
     // unnamed (a name without words counts as none): the context, after a word for the kind where the prefix does not say it
     const gw = kindByName('exclusiveGateway')!;
     expect(next(kindRequest(gw, { name: '???', context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice');
+    // a taken one spells out its kind first, then takes a suffix
+    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('Gateway_ExclusiveAfterCheckInvoice');
     expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice_2');
+    // so does an unnamed task whose body an unnamed gateway's id has (the flow between them names both apart)
+    expect(next(kindRequest(task, { context: 'After Check invoice' }))).toBe('Activity_TaskAfterCheckInvoice');
     expect(next(kindRequest(gw))).toBe('Gateway_Exclusive');
     expect(next(kindRequest(kindByName('boundaryEvent')!, { trigger: 'timer', context: 'On Check invoice' }))).toBe('Event_TimerOnCheckInvoice');
     expect(next(kindRequest(kindByName('startEvent')!, { trigger: 'message' }))).toBe('Event_MessageStart');

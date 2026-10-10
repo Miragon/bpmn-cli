@@ -10,9 +10,9 @@
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
-import type { ChangeSet } from './result.js';
-import { editDistance, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
-import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
+import type { ChangeSet, Rename } from './result.js';
+import { editDistance, hasIdWords, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
+import { IdStyle, speakingStem, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
@@ -117,7 +117,7 @@ export class Doc {
   /** generated ids that took a collision suffix since the last takeSuffixed() (W_ID_SUFFIXED) */
   private suffixed: Array<{ id: string; base: string }> = [];
   /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
-  private renamedIds: Array<{ from: string; to: string }> = [];
+  private renamedIds: Rename[] = [];
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
    * them (ops/flows.ts followEnds); false keeps every id (the pipeline's
@@ -168,13 +168,21 @@ export class Doc {
     const ids = new IdRegistry();
     const processId = opts.processId ?? (opts.processName ? IdStyle.DEFAULT.next(typeRequest('bpmn:Process', { name: opts.processName }), ids).id : 'Process_1');
     if (!isValidId(processId)) throw modelError('E_INVALID_ID', `"${processId}" is not a valid id (XML NCName)`);
+    ids.claim(processId);
+    // the definitions speak like the process (Definitions_OrderToCash); a process without name or speaking id: the tool defaults
+    const stem = speakingStem(processId);
+    const definitionsId = hasIdWords(opts.processName)
+      ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { name: opts.processName }), ids).id
+      : stem
+        ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { context: stem }), ids).id
+        : 'Definitions_1';
     const definitions = createDefinitions(moddle, {
+      definitionsId,
       processId,
       processName: opts.processName,
       executable: opts.executable ?? true,
     });
-    ids.claim('Definitions_1');
-    ids.claim(processId);
+    ids.claim(definitionsId);
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
     if (opts.target === 'camunda8') {
       doc.declareNamespace('zeebe');
@@ -396,13 +404,13 @@ export class Doc {
     return out;
   }
 
-  /** Records that an op renamed an element (ops/index.ts rewrites the op's change entries). */
-  recordRename(from: string, to: string): void {
-    this.renamedIds.push({ from, to });
+  /** Records that an op renamed an element (ops/index.ts rewrites the op's change entries); `was`: what the old id named (a flow's old ends). */
+  recordRename(from: string, to: string, was?: string): void {
+    this.renamedIds.push({ from, to, ...(was ? { was } : {}) });
   }
 
   /** The renames since the last call. */
-  takeRenames(): Array<{ from: string; to: string }> {
+  takeRenames(): Rename[] {
     const out = this.renamedIds;
     this.renamedIds = [];
     return out;

@@ -24,7 +24,7 @@
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
 import { kindByName, kindLabel } from '../kinds.js';
-import { kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
+import { contextOf, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
 import type { AddOp } from './types.js';
@@ -179,7 +179,7 @@ function resolveLaneContainer(doc: Doc, op: AddOp): { process: El; parentLane?: 
  */
 export function createLane(doc: Doc, op: AddOp, cs: ChangeSet): El {
   const { process, parentLane } = resolveLaneContainer(doc, op);
-  const id = allocateId(doc, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), context: `In ${labelOf(parentLane ?? process)}` }), op.id);
+  const id = allocateId(doc, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), context: contextOf('In', parentLane ?? process) }), op.id);
   const laneSet = parentLane ? ensureChildLaneSet(doc, parentLane, cs) : ensureLaneSet(doc, process, cs);
   const lane = doc.create('bpmn:Lane', { id, ...(op.name ? { name: op.name } : {}) });
   addTo(laneSet, 'lanes', lane);

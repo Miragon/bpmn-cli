@@ -55,7 +55,7 @@
  */
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError } from '../errors.js';
-import { kindRequest, labelOf, type IdRequest } from '../idstyle.js';
+import { contextOf, kindRequest, type ContextWord, type IdRequest } from '../idstyle.js';
 import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -150,29 +150,29 @@ export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string })
  * What tells an unnamed element apart: its placement (`After <anchor>`,
  * `Before <anchor>`, `After <source of the flow>`, `On <host>`; `In <scope>`
  * for a sub-process, or a pool / process of a file with several), in the
- * words of labelOf.
+ * words of contextOf (the nearest named anchor, once).
  */
 function placementContext(doc: Doc, op: AddOp): string | undefined {
-  const label = (id: string | undefined): string => {
+  const at = (word: ContextWord, id: string | undefined): string => {
     const el = id ? doc.get(id) : undefined;
-    return el ? labelOf(el) : '';
+    return el ? contextOf(word, el) : word;
   };
   switch (placementMode(op)) {
     case 'after':
     case 'between':
-      return `After ${label(op.after)}`;
+      return at('After', op.after);
     case 'before':
-      return `Before ${label(op.before)}`;
+      return at('Before', op.before);
     case 'flow': {
       const source = doc.get(op.flow!)?.get<El | undefined>('sourceRef');
-      return source ? `After ${labelOf(source)}` : undefined;
+      return source ? contextOf('After', source) : undefined;
     }
     case 'on':
-      return `On ${label(op.on)}`;
+      return at('On', op.on);
     default: {
       const scope = op.in ? doc.get(op.in) : undefined;
       if (!scope) return undefined;
-      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? `In ${labelOf(scope)}` : undefined;
+      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? contextOf('In', scope) : undefined;
     }
   }
 }

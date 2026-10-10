@@ -23,7 +23,7 @@
  *  need it: it never draws an element without id (the element keeps no DI).
  */
 import { IdRegistry } from '../ids.js';
-import { flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
+import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
 import { kindLabel, kindOf, triggerOf } from '../kinds.js';
 import { indexById, is, isDiElement, walk, type El } from '../model.js';
 
@@ -101,7 +101,7 @@ function contextOf(defs: El, el: El): string {
   // the nearest container that names something (a lane set or an id-less parent says nothing)
   let parent = el.$parent as El | undefined;
   while (parent && (!idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) parent = parent.$parent as El | undefined;
-  return parent && !is(parent, 'bpmn:Definitions') ? `In ${labelOf(parent)}` : '';
+  return parent && !is(parent, 'bpmn:Definitions') ? placeOf('In', parent) : '';
 }
 
 /** Gives the id-less elements a full redraw draws an id in the file's style (see the module contract). */

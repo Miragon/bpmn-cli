@@ -32,7 +32,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1615 tests (+159 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1631 tests (+159 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -143,10 +143,12 @@ and evidence in
   words: a named element from its name, an unnamed one from a word for its
   kind and its context (`IdRequest.context`, given by the ops:
   `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>`;
-  `Gateway_AfterCheckInvoice`, `Event_TimerOnReview`, `Event_EndAfterTimer`),
-  a flow from its ends (`flowRequest`, `labelOf`: the speaking part of an
-  end's id, its name when the id says too little, else a kind word;
-  `Flow_CheckInvoiceToBookInvoice`), the rest from its owner. The prefixes,
+  `Gateway_AfterCheckInvoice`, `Event_TimerOnReview`,
+  `Event_EndAfterTimerOnReview`), a flow from its ends (`flowRequest`,
+  `labelOf`: the speaking part of an end's id, its name when the id says
+  too little, else a kind word; `Flow_CheckInvoiceToBookInvoice`), the rest
+  from its owner (the verifier's fixes after round 1 refined the unnamed
+  cases, see below). The prefixes,
   the body case and the file's own flow forms are learned as in step 2;
   hashed and numbered files lend their prefix and separator to the new
   `named` flow form; `hash7` and running numbers are gone. Every collision
@@ -199,7 +201,8 @@ DI edge); `move --flow` / `move --after` into a cross-lane flow keep their
 old lane rule; a plain `remove` of a join still disconnects and floods the
 output (#53, `--bridge-all` / `--with-branch` are opt-in); `Process_1` /
 `Definitions_1` of `bpmn new` without `--name` are tool defaults, not
-speaking.
+speaking (round 1 wrote `Definitions_1` with `--name` too; since the ids &
+report fixes `--name` or a speaking `--id` names the definitions).
 
 ### Layout ergonomics (`step3/layout`)
 
@@ -414,7 +417,8 @@ Private corpora used locally, outside the repository; counts only.
   never change" (`Doc.followFlowEnds = false` in the library, no CLI
   switch); `move --flow` / `move --after` into a cross-lane flow keep their
   old lane rule; a plain `remove` of a join still disconnects (#53 partly);
-  `bpmn new` without `--name` writes `Process_1` / `Definitions_1`.
+  `bpmn new` without `--name` (and without a speaking `--id`) writes
+  `Process_1` / `Definitions_1`.
 - Views: no `find --attr` / `list --fields` projections, no `vars` view,
   no `render` command; the full `show` keeps vendor values but not the
   extension summary; JSON is compact but not slimmer; `--strict` still
@@ -434,6 +438,92 @@ Private corpora used locally, outside the repository; counts only.
 - The core grew by about 180 KB minified / 51 KB gzip since 0.3.0 (most of
   it the Camunda 8 profile and descriptor): a lazily loaded profile per
   platform would be the lever.
+
+### Ids and report after the round 1 verifier (`step3/fix-ids`)
+
+The round 1 verifier's findings on ids and on the report (one medium,
+seven low), fixed on `step3/fix-ids` (based on `step3/round1`). Every fix
+has a test in `test/step3-ids-report.test.ts` that fails on round 1; table
+and evidence in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-after-round-1-ids-and-report-2026-10-10).
+
+- **Flows at unnamed elements** (`src/idstyle.ts labelOf`): an unnamed flow
+  end is named by the speaking part of its own id, its kind and place
+  (`Gateway_AfterCheck` -> `AfterCheck`; the join of the split after Check
+  -> `CheckJoin`, `joinLabel`), not by a kind word, so the flows at two
+  unnamed gateways differ without `_2` (`Flow_CheckToAfterCheck`,
+  `Flow_AfterCheckToCheckJoin`, `Flow_FixJoinToCheckJoin`; round 1:
+  `Flow_CheckToGateway`, `Flow_GatewayToJoin_2`, `Flow_JoinToJoin`). A flow
+  renamed after its new ends (`followEnds`) gets the same rule; a flow an
+  earlier build named with a kind word (`Flow_CheckToGateway`) still counts
+  as named after its ends (`formerLabels`). Existing ids stay.
+- **The context once** (`contextOf`, used by add, split, artifacts, lanes and
+  the redraw's id-less elements): after / before an unnamed anchor placed
+  the same way, the nearest named anchor (`Event_EndAfterCheck` after
+  `Gateway_AfterCheck`; never `AfterAfter...`). An unnamed gateway or
+  activity whose id is taken, or whose body another id has (the unnamed
+  gateway it follows), first spells out its kind (`IdStyle.spelledBase`:
+  `Gateway_ParallelAfterCheck`, `Activity_ServiceTaskAfterCheck`; not where
+  the prefix says the kind, `Task_`, `parallelGateway_`), then takes `_2`.
+- **Length** (`src/ids.ts cutAt`, `MAX_ID` = 64): bodies are cut at a word
+  boundary (a name at 40 characters as before, now at a word; a join's
+  `Join` and a number at the end are kept), the two ends of a flow share
+  the room (`fitPair`), a suffix never makes an id longer than 64;
+  `derivedBases` still recognises a flow a file got before the cap.
+- **Transliteration** (`transliterate`): the letters NFKD does not reduce to
+  a base letter are spelled out (`ø` -> `oe`, `å` -> `aa`, `æ` -> `ae`, `œ`
+  -> `oe`, `ł` -> `l`, `đ` / `ð` -> `d`, `þ` -> `th`, `ı` -> `i`); a name
+  without a letter (`123`, `✓✓✓`, `审批 订单`) names nothing
+  (`hasIdWords`): the element gets the id of an unnamed one.
+- **`bpmn new`** (`Doc.create`): `--name` or a speaking `--id` names the
+  definitions (`Definitions_OrderToCash`, `Definitions_Billing`); without
+  either they stay `Process_1` / `Definitions_1`. Round 1 wrote
+  `Definitions_1` also with `--name` (this handover said otherwise).
+- **Warnings delta** (`src/pipeline.ts validationDelta`, `src/result.ts
+  ChangeSet.rename`, `src/ops/index.ts runBatch`): (a) the platform
+  profile's findings the file had (`W_C7_*` / `W_C8_*`) count among "already
+  in the file", so `preexistingCount` is what `bpmn validate` lists (a lint
+  warning such a finding says again counts once, as there); (b) a group
+  warning (`W_DUPLICATE_NAME`) stays the old one while its group only
+  shrinks, list warnings (`W_BRANCH_NAME`, `W_IMPLICIT_SPLIT` / `_JOIN`)
+  while their elements are among the old ones; (c) a bridge that takes the
+  id of the flow the change removed is a takeover (`Rename.takeover`): the
+  bridged flow's old id is removed, the taken id changed, no `renamed`;
+  (d) op warnings about the model's state (`W_LANES_WITHOUT_POOL`,
+  `W_IMPLICIT_SPLIT`, `W_IMPLICIT_JOIN`) are checked against the batch's
+  final state (`stillHolds`); (e) a document created in memory has an empty
+  platform baseline, so `new --target camunda8` lists
+  `W_C8_DEPLOY_START_EVENT` (not `W_NO_START`), which the next edit
+  resolves.
+
+Evidence (private corpus, local only, counts only; round 1 -> this branch):
+15 probe edits on each of 271 real files (4,017 edits, 21,000 new ids, 10,144
+new flows): flows with a kind word for an end 1,879 -> 178 (the rest: ends
+with a hash id and no name, the documented fallback); ids over 64
+characters 2,533 -> 0 (max 110 -> 61); `W_ID_SUFFIXED` 394 -> 542: nested
+splits 106 -> 22, signal + conditional events 84 -> 0, connect 9 -> 5, the
+other everyday probes as before, but the two probes of unnamed tasks in a
+row 11 -> 332 (files whose task prefix says the kind, `Task_` / `task_`:
+the second unnamed task after the same named anchor takes `_2`; round 1
+named it after its anchor's kind, `Activity_AfterTask`, or chained
+`AfterAfter`). `tools/speaking-ids.mjs` (291 files): 1,745 / 1,745 new ids
+speak, two edits with unnamed elements at two places share an id in 0 /
+225 file pairs (round 1: 3). A rename's `N already in the file` + added =
+what `validate` lists afterwards in 274 / 274 files (round 1: 238; the
+differences are pre-existing errors, which validate lists as errors, and
+validate's DI warnings); removing one of 3+ equally named tasks re-reports
+`W_DUPLICATE_NAME` in 0 / 5 files (round 1: 5 / 5); a remove with bridge
+lists an id twice in 0 / 684 (round 1: 3). `tools/roundtrip.mjs` unchanged:
+no-op identical 262 / 278 (auto) and 278 / 278 (`--no-layout`), rename 2
+lines, insert 56 lines median. Gate: 1,631 tests + 159 opt-in, isomorphism
+check (85 modules), layout regression 444 (budget 444), fuzz 12 x 15: 0
+errors, 0 warnings.
+
+Still open: in files whose prefix says the kind (`Task_`, `serviceTask_`)
+an unnamed task after an unnamed gateway shares the gateway's body
+(`Flow_AfterCheckToAfterCheck`) and a second one takes `_2`; a context is
+read from the anchor's id, so a cut id gives a cut context
+(`Gateway_After4AugenPrinzipPruefenFreigeben2`).
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
