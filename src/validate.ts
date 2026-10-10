@@ -744,6 +744,20 @@ export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationRes
 }
 
 /**
+ * The lint warnings that platform `findings` say again with the engine's
+ * verdict: a W_EVENT_GATEWAY_TARGET about the same branch as a platform
+ * event-gateway finding, a W_NO_START / W_EMPTY_SUBPROCESS about the same
+ * (sub-)process as a missing-start finding ("(sub-)process X has no start
+ * event; the engines refuse the file"). withProfile drops them from the
+ * warnings, pipeline.ts validationDelta from the resolved ones.
+ */
+export function lintCoveredBy(findings: readonly Warning[]): (w: Warning) => boolean {
+  const gateway = new Set(findings.filter((f) => (f.code.startsWith('W_C7_') || f.code.startsWith('W_C8_')) && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
+  const noStart = new Set(findings.filter((f) => (f.code === 'W_C7_DEPLOY_START_EVENT' || f.code === 'W_C7_TRANSACTION_NO_START' || f.code === 'W_C8_DEPLOY_START_EVENT') && !f.related?.length).map((f) => f.element));
+  return (w) => (w.code === 'W_EVENT_GATEWAY_TARGET' && gateway.has(`${w.element}|${w.related?.[0] ?? ''}`)) || ((w.code === 'W_NO_START' || w.code === 'W_EMPTY_SUBPROCESS') && noStart.has(w.element));
+}
+
+/**
  * Adds the profile findings `shown` to the warnings and the summary of
  * `report` to the result (`added` / `resolved` for a mutation's delta). A lint
  * W_EVENT_GATEWAY_TARGET about the same branch, or a W_NO_START /
@@ -766,10 +780,8 @@ export function withProfile(result: ValidationResult, report: ProfileReport, sho
     report = { ...report, findings: report.findings.filter((f) => !repeated(f)) };
     if (delta) delta = { added: delta.added.filter((f) => !repeated(f)), resolved: delta.resolved };
   }
-  const covered = new Set(shown.filter((f) => (f.code.startsWith('W_C7_') || f.code.startsWith('W_C8_')) && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
-  // "(sub-)process X has no start event (is empty); the engines refuse the file" says what W_NO_START / W_EMPTY_SUBPROCESS say
-  const noStart = new Set(shown.filter((f) => (f.code === 'W_C7_DEPLOY_START_EVENT' || f.code === 'W_C7_TRANSACTION_NO_START' || f.code === 'W_C8_DEPLOY_START_EVENT') && !f.related?.length).map((f) => f.element));
-  const warnings = result.warnings.filter((w) => (w.code !== 'W_EVENT_GATEWAY_TARGET' || !covered.has(`${w.element}|${w.related?.[0] ?? ''}`)) && ((w.code !== 'W_NO_START' && w.code !== 'W_EMPTY_SUBPROCESS') || !noStart.has(w.element)));
+  const covered = lintCoveredBy(shown);
+  const warnings = result.warnings.filter((w) => !covered(w));
   const platform: PlatformSummary = { ...summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
   return { errors: result.errors, warnings: [...warnings, ...shown], platform };
 }

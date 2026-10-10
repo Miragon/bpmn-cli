@@ -204,6 +204,12 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
     expect(await showXml(r.xml)).toContain('[job=charge-card, ext: zeebe:taskDefinition]');
   });
 
+  it('a missing start the edit fixes is resolved once, as the platform finding', async () => {
+    const base = await newXml({ processName: 'Order', target: 'camunda8' });
+    const r = await applyToXml(base.xml, [{ op: 'add', kind: 'start', name: 'Received' }]);
+    expect(r.result.warnings.resolved.map((w) => w.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
+  });
+
   it('the Camunda 8 profile reports as a delta: added by the edit, resolved by the fix', async () => {
     const base = await newXml({ processName: 'Order', target: 'camunda8' });
     const one = await applyToXml(base.xml, [

@@ -119,7 +119,7 @@ import { resolvePlatform } from './platform/detect.js';
 import { profileBaseline, type PlatformChoice, type ProfileBaseline } from './platform/profile.js';
 import { plainText, preserveText } from './preserve.js';
 import { profileValidators, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
-import { validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
+import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type NamedValidator, type Validator, type ValidatorContext, type ValidatorRun } from './validators.js';
 import { buildView, type ModelView } from './view.js';
 
@@ -311,10 +311,13 @@ function takeMatch<T>(pool: T[], match: (item: T) => boolean): boolean {
 export function validationDelta(doc: Doc, baseline: ErrorBaseline, raw: ValidationResult, final: ValidationResult): ValidationDelta {
   const before = baseline.warnings ?? [];
   const remaining = [...raw.warnings];
-  const resolved = before.filter((b) => !takeMatch(remaining, (a) => sameWarning(doc, baseline, b, a)));
+  // a lint warning the platform's resolved finding says again is reported once, as the platform finding (validate.ts withProfile)
+  const platformResolved = final.platform?.resolved ?? [];
+  const covered = lintCoveredBy(platformResolved);
+  const resolved = before.filter((b) => !takeMatch(remaining, (a) => sameWarning(doc, baseline, b, a)) && !covered(b));
   const errors = [...raw.errors];
   resolved.push(...baseline.errors.filter((b) => !takeMatch(errors, (a) => sameFinding(doc, baseline, b, a))));
-  resolved.push(...(final.platform?.resolved ?? []), ...(final.validators ?? []).flatMap((r) => r.resolved));
+  resolved.push(...platformResolved, ...(final.validators ?? []).flatMap((r) => r.resolved));
   const pool = [...before];
   const added: Warning[] = [];
   let preexisting = 0;
