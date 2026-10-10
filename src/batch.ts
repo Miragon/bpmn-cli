@@ -20,6 +20,7 @@ import { KindError, kindByName, normalizeTrigger, parseKind } from './kinds.js';
 import { ALIAS, checkAliases } from './ops/aliases.js';
 import {
   OP_NAMES,
+  parseSpaceAmount,
   type AddOp,
   type AlignOp,
   type ColorOp,
@@ -220,7 +221,7 @@ export const SPLIT_FIELDS: FieldsOf<SplitOp> = {
   name: str('Name of the split gateway (exclusive gateways: a question, e.g. "Invoice ok?").'),
   id: ref('Explicit id of the split gateway.'),
   as: alias('Batch alias of the split gateway.'),
-  join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true).'),
+  join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true). A branch ending in an end event terminates there; with only one branch that continues no join is created (it runs on to the old successor).'),
   joinId: ref('Explicit id of the join gateway (default <gatewayId>_join).'),
   joinAs: alias('Batch alias of the join gateway.'),
   joinName: str('Name of the join gateway.'),
@@ -283,7 +284,7 @@ export const ROUTE_FIELDS: FieldsOf<RouteOp> = {
 export const SPACE_FIELDS: FieldsOf<SpaceOp> = {
   after: ref('Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
   below: ref('Insert vertical space below this element (everything starting below it moves down, frames grow).'),
-  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`) or pixels (integer >= 1). Negative ("-column", "-row", an integer <= -1) closes up to that much empty space instead (only as far as it is empty).' },
+  by: { type: 'size', description: 'How much: "column" (one node width plus gap, default for `after`), "row" (one row, default for `below`), a number of them ("2col", "2columns", "3rows") or pixels (an integer >= 1, "80px"). Negative ("-column", "-2col", "-row", an integer <= -1) closes up to that much empty space instead (only as far as it is empty). The result notes the distance moved.' },
 };
 
 export const TIDY_FIELDS: FieldsOf<TidyOp> = {
@@ -448,10 +449,10 @@ function checkStringList(ctx: Ctx, key: string, spec: FieldSpec, value: unknown)
 
 /** "column" | "row" | "-column" | "-row" | a non-zero integer (a string of digits is converted). */
 function checkSize(ctx: Ctx, key: string, value: unknown): SpaceOp['by'] & {} {
-  if (value === 'column' || value === 'row' || value === '-column' || value === '-row') return value;
-  if (typeof value === 'string' && /^-?\d+$/.test(value) && Number(value) !== 0) return Number(value);
-  if (typeof value === 'number' && Number.isInteger(value) && value !== 0) return value;
-  throw fail(ctx, `"${key}" must be "column", "row" or a positive integer (pixels), or "-column", "-row" or a negative integer to close space, got ${describe(value)}`);
+  if (!parseSpaceAmount(value)) {
+    throw fail(ctx, `"${key}" must be "column", "row", a number of them ("2col", "3rows") or pixels (an integer, "80px"); negative ("-column", "-2col", -80) closes space; got ${describe(value)}`);
+  }
+  return typeof value === 'string' && /^\s*-?\d+\s*$/.test(value) ? Number(value) : (value as SpaceOp['by'] & {});
 }
 
 function checkMap(ctx: Ctx, key: string, value: unknown): Record<string, string> {
@@ -470,6 +471,31 @@ function checkMap(ctx: Ctx, key: string, value: unknown): Record<string, string>
   return out;
 }
 
+/** Keys that name the element an op acts on where the op says "id" (route: the flow). */
+const ID_LIKE = new Set(['flowId', 'flow', 'elementId', 'element', 'nodeId', 'node', 'target', 'ref']);
+
+/**
+ * The right shape for an op written in a common wrong one (never accepted
+ * silently): the element in "flowId" / "elementId" where the op has "id"
+ * (route), or properties at the top level of a set op instead of in
+ * "values". The hint shows the op rewritten.
+ */
+function shapeHint(value: Record<string, unknown>, key: string, fields: Record<string, FieldSpec>): { key: string; hint: string } | undefined {
+  const op = typeof value['op'] === 'string' ? value['op'] : undefined;
+  const show = (o: Record<string, unknown>): string => JSON.stringify(o);
+  if (fields['id'] && value['id'] === undefined && ID_LIKE.has(key)) {
+    const { [key]: id, ...rest } = value;
+    return { key: 'id', hint: `${op ?? 'This op'} names its ${op === 'route' ? 'flow' : 'element'} with "id": ${show({ ...(op ? { op } : {}), id, ...Object.fromEntries(Object.entries(rest).filter(([k]) => k !== 'op' && fields[k])) })}.` };
+  }
+  if (fields['values'] && fields['unset']) {
+    const props = Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'op' && !fields[k]));
+    const values = { ...(isPlainObject(value['values']) ? (value['values'] as Record<string, unknown>) : {}), ...props };
+    const known = Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'op' && k !== 'values' && fields[k]));
+    return { key: 'values', hint: `${op ?? 'set'} takes the properties to set in "values" (an object): ${show({ ...(op ? { op } : {}), ...known, values })}.` };
+  }
+  return undefined;
+}
+
 /** Validates `value` against `fields`; returns a clean copy with only known keys. */
 function checkFields(ctx: Ctx, value: unknown, fields: Record<string, FieldSpec>): Record<string, unknown> {
   if (!isPlainObject(value)) throw fail(ctx, `expected an object, got ${describe(value)}`);
@@ -479,11 +505,12 @@ function checkFields(ctx: Ctx, value: unknown, fields: Record<string, FieldSpec>
     if (key === 'op') continue;
     const spec = fields[key];
     if (!spec) {
-      const alt = closestKey(key, allowed);
+      const shape = shapeHint(value, key, fields);
+      const alt = shape?.key ?? closestKey(key, allowed);
       throw fail(
         ctx,
         `unknown key "${key}"${alt ? ` (did you mean "${alt}"?)` : ''}; allowed keys: ${allowed.join(', ')}`,
-        'Keys are the CLI flags in lowerCamelCase (--flow-name -> flowName). See `bpmn kinds --json` for the schema.',
+        shape?.hint ?? 'Keys are the CLI flags in lowerCamelCase (--flow-name -> flowName). See `bpmn kinds --json` for the schema.',
         alt ? [alt] : [],
       );
     }
@@ -760,7 +787,7 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
     case 'nodes':
       return { type: 'array', items: { $ref: '#/$defs/node' }, ...d };
     case 'size':
-      return { oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }], ...d };
+      return { oneOf: [{ type: 'string', pattern: '^\\s*-?\\s*(\\d*\\s*(cols?|columns?|rows?)|[1-9]\\d*\\s*px|0*[1-9]\\d*)\\s*$' }, { type: 'integer', not: { const: 0 } }], ...d };
   }
 }
 

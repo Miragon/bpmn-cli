@@ -659,7 +659,7 @@ describe('format ops in the ops JSON', () => {
     expect(message([{ op: 'route', id: 'F', exit: 'up' }])).toMatch(/"exit" must be one of "right", "top", "bottom", "left"/);
     expect(message([{ op: 'space', after: 'A', below: 'B' }])).toMatch(/"after" and "below" cannot be combined/);
     expect(message([{ op: 'space' }])).toMatch(/give "after" .* or "below"/);
-    expect(message([{ op: 'space', after: 'A', by: 'wide' }])).toMatch(/"by" must be "column", "row" or a positive integer \(pixels\), or "-column", "-row" or a negative integer to close space, got string "wide"/);
+    expect(message([{ op: 'space', after: 'A', by: 'wide' }])).toMatch(/"by" must be "column", "row", a number of them \("2col", "3rows"\) or pixels \(an integer, "80px"\); negative \("-column", "-2col", -80\) closes space; got string "wide"/);
     expect(message([{ op: 'space', after: 'A', by: 0 }])).toMatch(/"by" must be/);
     expect(message([{ op: 'tidy', ids: [] }])).toMatch(/"ids" needs at least 1 entry/);
     expect(message([{ op: 'order', id: 'P', flows: ['a'], lanes: ['b'] }])).toMatch(/give exactly one of "flows" .*, "lanes" .* or "pools"/);
@@ -673,7 +673,10 @@ describe('format ops in the ops JSON', () => {
     expect(defs['place']!.required).toEqual(['op']);
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ anyOf: ['ids', 'path', 'kind', 'branch'].map((k) => ({ required: [k] })) }]));
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ not: { required: ['rowOf', 'below'] } }, { anyOf: ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'].map((k) => ({ required: [k] })) }]));
-    expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', enum: ['column', 'row', '-column', '-row'] }, { type: 'integer', not: { const: 0 } }] });
+    expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', pattern: expect.any(String) }, { type: 'integer', not: { const: 0 } }] });
+    const pattern = new RegExp((defs['space']!.properties['by'] as { oneOf: Array<{ pattern?: string }> }).oneOf[0]!.pattern!);
+    for (const ok of ['column', '-row', '2col', '2 columns', '-3rows', '80px', '120']) expect(pattern.test(ok), ok).toBe(true);
+    for (const bad of ['wide', '0', '2x', 'px', '']) expect(pattern.test(bad), bad).toBe(false);
     expect(defs['color']!.properties['color']).toMatchObject({ enum: ['blue', 'orange', 'green', 'red', 'purple', 'default'] });
     expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes', 'pools']);
     const json = kindsJson();

@@ -12,8 +12,10 @@
  *      3. join gateway (same kind, id op.joinId or <gatewayId>_join) when
  *         op.join !== false; every branch end connects to it; if the anchor
  *         was spliced, join -> old successor. A branch ending in an end event
- *         terminates there (no flow onward); when every branch terminates no
- *         join is created.
+ *         terminates there (no flow onward); a join needs two branches that
+ *         reach it: when one continues, its end connects to the old
+ *         successor directly (no pass-through gateway), when none does no
+ *         join is created either.
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
 import type { Doc } from '../document.js';
@@ -164,11 +166,21 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const terminating = ends.filter((e) => !e.direct && is(doc.require(e.end), 'bpmn:EndEvent'));
   const continuing = ends.filter((e) => !terminating.includes(e));
   let joinId: string | undefined;
-  if (op.joinAs && (!withJoin || !continuing.length)) {
-    throw usageError(`joinAs ${op.joinAs}: split ${gatewayId} creates no join gateway (${withJoin ? 'every branch ends in an end event' : 'join is false'})`, { element: gatewayId, hint: 'Drop joinAs, or give a branch that continues.' });
+  const why = !withJoin ? 'join is false' : !continuing.length ? 'every branch ends in an end event' : continuing.length === 1 ? `only one branch continues (the others end in an end event), and a join needs two` : undefined;
+  if (op.joinAs && why) {
+    throw usageError(`joinAs ${op.joinAs}: split ${gatewayId} creates no join gateway (${why})`, { element: gatewayId, hint: 'Drop joinAs, or give another branch that continues.' });
+  }
+  const lone = continuing.length === 1 ? continuing[0]! : undefined;
+  if (withJoin && lone?.direct && !successor) {
+    throw modelError('E_INVALID_VALUE', 'An empty branch needs another branch that continues or a successor to connect to', {
+      element: gatewayId,
+      hint: 'Give the branch at least one node, or split after a node that has a successor.',
+    });
   }
   if (withJoin && !continuing.length) {
     cs.note('every branch ends in an end event; no join gateway created');
+  } else if (withJoin && lone) {
+    cs.note(`only the branch ending at ${lone.direct ? gatewayId : lone.end} continues; no join gateway created${successor ? ` (it runs on to ${idOf(successor)})` : ''}`);
   } else if (withJoin) {
     const wanted = joinIdFor(doc, op, gatewayId, cs);
     const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted, in: idOf(scope), ...laneOpt });
@@ -204,8 +216,8 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     cs.merge(connectElements(doc, { op: 'connect', source: joinId, target: idOf(successor) }));
   }
 
-  const branchIds = ends.map((e) => (e.direct ? '(direct)' : e.end));
-  cs.note(`split ${gatewayId}: ${ends.length} branch(es) ending at ${branchIds.join(', ')}${joinId ? `, joined at ${joinId}` : ''}${successor ? `, continues to ${idOf(successor)}` : ''}`);
+  const branchIds = ends.map((e) => (e.direct ? '(direct)' : terminating.includes(e) ? `${e.end} (end event)` : e.end));
+  cs.note(`split ${gatewayId}: ${ends.length} branch(es) ending at ${branchIds.join(', ')}${joinId ? `, joined at ${joinId}` : ''}${successor && continuing.length ? `, continues to ${idOf(successor)}` : ''}`);
   doc.invalidate();
   return cs;
 }

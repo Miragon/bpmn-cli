@@ -1,4 +1,4 @@
-# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3 round 1 with its fixes: views, speaking ids, layout ergonomics, Camunda 8)
+# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -32,7 +32,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1729 tests (+219 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1786 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -42,6 +42,105 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Step 3 follow-ups (2026-10-10, `step3/followups`)
+
+A second verifier round on `step3/round1` found six more issues, and the
+Claude Code plugin evals (agents using the plugin on real tasks) four
+more; all ten are fixed on `step3/followups` (built on `step3/round1`),
+each with a test that fails on round 1. The user's decisions hold: ids
+only, speaking ids in the file's style, an explicit `--id` wins.
+
+- **Anchor names with numbers** (`src/idstyle.ts speakingStem`, `hasWord`):
+  a stem with many digits counted as a machine id, so the flows and tasks
+  at the split after "Check 2024" were named by a kind word
+  (`Flow_Check2024ToGateway`, `Activity_AfterGateway`). A stem with a word
+  (a run of four letters with one that is no hex digit) speaks now:
+  `Flow_Check2024ToAfterCheck2024`, `Activity_ServiceTaskAfterCheck2024`;
+  `sid-...`, UUIDs and hex stay machine ids.
+- **Data objects** (`idstyle.ts kindTypeNames`, `ops/artifacts.ts
+  backingRequest`): in a file with type-named prefixes the reference and its
+  `bpmn:DataObject` both wanted `dataObject_invoice` (the second took `_2`
+  and a `W_ID_SUFFIXED`). The reference's type-named prefix is its own type
+  now (`dataObjectReference_invoice` + `dataObject_invoice`; data stores
+  alike); where a file names both with one prefix the backing element says
+  what it is (`data_invoiceObject`), never a suffix.
+- **DI ids** (`diagram/write.ts styledId`, `edgeStyleOf`): a DI id derived
+  from a long element id (`Edge_<flowId>`, `BPMNShape_<id>`, `<id>_di`,
+  planes, diagrams, the edge of a flow renamed after its ends) is cut at a
+  word boundary to stay within 64 characters.
+- **Camunda 8 values** (`platform/c8.ts dateTimeRangeProblem`,
+  `cronProblem`, `platform/schema-text.ts` kind `boolean`): a date that does
+  not exist (2030-02-30, 2031-02-29, 25:00, an offset over 18 hours) in a
+  timer, a cycle's start or a due date, a cron field out of Spring's range
+  (hour 25, month 13, day-of-week 8, a step of 0, a reversed range, `?`
+  outside the day fields, an unknown name; Quartz `L` / `W` / `#` pass) and
+  an xsd:boolean attribute that is not true / false / 1 / 0
+  (`cancelActivity="maybe"`, `isExpanded="TRUE"` on a shape; bpmn-moddle
+  reads it as false) are `W_C8_DEPLOY_TIMER` / `W_C8_DEPLOY_USER_TASK` /
+  `W_C8_DEPLOY_SCHEMA` with the reason. 27 models deployed to Camunda
+  8.9.22 (`test/step3-followups-c8.test.ts`), every verdict holds.
+- **Duplicate ids** (`validate.ts checkDuplicateIds`): bpmn-moddle keeps the
+  first element and drops the later one with an import warning, so
+  `validate` said "valid". It is `E_DUPLICATE_ID` now, on every platform,
+  naming the element it could not read and its line.
+- **split** (`ops/split.ts`): a join needs two branches that reach it. When
+  the other branches end in end events the one that continues runs on to
+  the old successor directly (no pass-through gateway; `joinAs` is a usage
+  error then); the note marks terminating ends `(end event)`.
+- **space --by** (`ops/types.ts parseSpaceAmount`, `diagram/ops.ts
+  spaceOp`): `<n>col`, `<n>column(s)`, `<n>row(s)`, `<n>px` besides
+  `column`, `row` and pixels; the result notes the distance (`inserted 320
+  px (2 columns of 160 px) right of X`), and a few pixels say how to ask
+  for columns (`--by 2` is 2 px).
+- **E_NOT_FOUND** (`document.ts suggest`): ids with the query's prefix
+  first; the same prefix with one body inside the other is a candidate (the
+  eval's `Flow_GatewayPurchaseApprovedToOrderGoods` suggests
+  `Flow_PurchaseApprovedToOrderGoods`, not `Gateway_PurchaseApproved`).
+- **Usage hints** (`cli.ts positionalHint`, `batch.ts shapeHint`): an
+  unknown option that is a positional argument or a key gets the command
+  rewritten (`add f.bpmn --kind userTask --name "Check it"` -> `bpmn add
+  f.bpmn userTask "Check it"`; `set f.bpmn X --name Y` -> `name=Y`); a
+  `route` op with `flowId` and a `set` op with its properties at the top
+  level get the op rewritten. Wrong shapes are still refused.
+- **Batch splices** (`diagram/place.ts spliceTarget`, `chainReaches`): the
+  incremental layout placed a node as a splice only when its own flow had
+  ended at the successor before the ops; in one batch that splices a task
+  and then a gateway after it, the task's successor is the new gateway, so
+  both went to a new branch row below (backward flow, crossing). A straight
+  chain of new nodes is spliced as a whole now: the eval's model gets the
+  same geometry as with two commands (score 0; before 9).
+- **Labels inside pools** (`layout/place.ts framedSize`, `nodeLabels`;
+  `layout/engine.ts` pool sizing, `declutterLabels`): a full layout made
+  pools and lanes as wide as the shapes, so an end event's label at the
+  right edge stuck out of the pool (the eval's order-to-cash model). Pools
+  and lanes hold the labels right of their content, the last lane the
+  labels below it, and a label the engine moves aside takes a free spot
+  inside its frame first. Sub-processes are not resized for labels (that
+  moved collaboration annotations on two corpus files).
+
+Evidence (private corpora local, counts only; round 1 -> this branch):
+gate 1,786 tests + 247 opt-in, isomorphism check (88 modules), layout
+regression 444 (budget 444), fuzz 12 x 15 0 / 0; Camunda 8 engine suites
+519 / 519; the new rules report nothing on the 38 real Camunda 8 files (the
+agreement 38 / 38 holds) nor on 394 corpus files; the verifier's id probes
+(96 files still on disk, 1,513 edits): `W_ID_SUFFIXED` 193 -> 142
+(annotation + data 51 -> 0), flows with a kind word for an end 53 -> 10
+(ends at unnamed gateways with hashed ids), ends that read alike 10 -> 7,
+ids over 64 characters 8 -> 0 (longest 61); roundtrip on the 291 real
+files unchanged (no-op identical 262 / 278 in layout auto, 278 / 278 with
+`--no-layout`, rename 2 lines, insert 56 lines median); full layouts of 509
+files: `labelOutsideFrame` 188 -> 160, score 2,653 -> 2,599; bundle 945.9 /
+291.7 KB (whole entry, minified / gzip), `applyToXml` 750.7 / 232.9 KB.
+Details: [docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-follow-ups-2026-10-10).
+
+Still open from these: a label left of a sub-process's content can stick
+out of it (sizing sub-processes for labels moved other things), labels
+above a gateway are not counted into a pool's height; new flows that end at
+an existing unnamed gateway with a hashed id still read `...ToGateway` (the
+documented fallback); two unnamed tasks after one unnamed gateway still
+differ only by `_2` (documented), and in some camelCase files the flow to
+the second reads `afterXToAfterX_2` (7 in the probes).
 
 ## Step 3 round 1 fixes (2026-10-10)
 

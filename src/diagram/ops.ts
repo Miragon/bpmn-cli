@@ -72,10 +72,10 @@
  *  column no longer holds, or a sub-process would grow over the reference).
  */
 import type { Doc } from '../document.js';
-import { CliError, modelError, type ErrorDetails } from '../errors.js';
+import { CliError, modelError, usageError, type ErrorDetails } from '../errors.js';
 import { is, type El } from '../model.js';
 import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
-import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
+import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
@@ -975,7 +975,7 @@ function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 
       hint: 'Close less (`--by -<px>`), or move what is in the way first (`bpmn place`), or use `bpmn compact`, which closes only what it can close without a new problem.',
     });
   }
-  if (close < amount) notes.push(`closed ${close} px ${where} (of ${Math.round(amount)} px asked for): the rest is not empty`);
+  notes.push(close < amount ? `closed ${close} px ${where} (of ${Math.round(amount)} px asked for): the rest is not empty` : `closed ${close} px ${where}`);
   return settle(plane, snap);
 }
 
@@ -988,12 +988,19 @@ function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap, notes: string[]): string[] {
   const refId = (op.after ?? op.below)!;
   const { plane, shape } = drawnShape(ctx, refId);
   const axis = op.after ? 'x' : 'y';
-  const by = op.by ?? (axis === 'x' ? 'column' : 'row');
-  if (by === '-column' || by === '-row' || (typeof by === 'number' && by < 0)) {
-    const amount = by === '-column' ? columnWidth(plane) : by === '-row' ? spacingOf(plane).row : -by;
-    return closeSpace(ctx, refId, plane, shape, axis, amount, snap, notes);
-  }
-  const delta = by === 'column' ? columnWidth(plane) : by === 'row' ? spacingOf(plane).row : by;
+  const by = parseSpaceAmount(op.by ?? (axis === 'x' ? 'column' : 'row'));
+  if (!by) throw usageError(`space: --by ${String(op.by)} is no amount (column, row, 2col, 3rows, 80px, 80; negative closes space)`);
+  const column = columnWidth(plane);
+  const row = spacingOf(plane).row;
+  const step = by.unit === 'column' ? column : by.unit === 'row' ? row : 1;
+  const delta = Math.abs(by.count) * step;
+  const where = axis === 'x' ? `right of ${refId}` : `below ${refId}`;
+  if (by.count < 0) return closeSpace(ctx, refId, plane, shape, axis, delta, snap, notes);
+  // the distance moved; a few pixels where a column or row was likely meant say how to ask for one
+  const steps = by.unit === 'px' ? '' : ` (${by.count} ${by.unit}${by.count > 1 ? 's' : ''} of ${step} px)`;
+  const own = axis === 'x' ? column : row;
+  const unitHint = by.unit === 'px' && delta < own / 4 ? `; one ${axis === 'x' ? 'column' : 'row'} is ${own} px: --by ${delta}${axis === 'x' ? 'col' : 'row'} moves by ${delta} ${axis === 'x' ? 'columns' : 'rows'}` : '';
+  notes.push(`inserted ${delta} px${steps} ${where}${unitHint}`);
   // a frame grows itself: the line runs just inside its far edge
   const box = shape.container ? shape.bounds : unitBox(plane, shape);
   const line = shape.container ? (axis === 'x' ? right(box) - 1 : bottom(box) - 1) : axis === 'x' ? right(box) + 1 : bottom(box) + 1;

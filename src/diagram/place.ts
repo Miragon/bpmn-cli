@@ -717,15 +717,25 @@ function makeRoomBelow(ctx: PlaceCtx, plane: Plane, host: DShape, event: Box): v
   recordSpace(ctx, makeSpace(plane, { axis: 'y', line: top - 0.5, delta: Math.ceil(bottom(zone) + 10 - top), anchors: [host.id], ...spaceBand(plane, host, host) }));
 }
 
-/** The successor S of a spliced node N (the flow into N ended at S before the ops). */
-function spliceTarget(ctx: PlaceCtx, id: string, pred: string): string | undefined {
+/**
+ * The successor S of a spliced node N (the flow into N ended at S before the
+ * ops), also through a straight chain of new nodes (one batch that splices a
+ * task and then a gateway after it into one flow: each is spliced before S
+ * like with two commands, the task first).
+ */
+function spliceTarget(ctx: PlaceCtx, plane: Plane, id: string, pred: string, depth = 0): string | undefined {
   const el = ctx.sem.byId.get(id);
+  // inside the chain: the predecessor was placed in this run as a splice of the same flow
+  if (depth < 50 && ctx.placed.has(pred) && predecessors(ctx.sem, pred).length === 1 && successors(ctx.sem, pred).length === 1) {
+    const before = spliceTarget(ctx, plane, pred, predecessors(ctx.sem, pred)[0]!, depth + 1);
+    if (before && before !== id && chainReaches(ctx, plane, pred, before)) return before;
+  }
   const succ = new Set(successors(ctx.sem, id));
   for (const f of flows(el, 'incoming')) {
     const fid = idOf(f);
     if (!fid || idOf(raw(f, 'sourceRef')) !== pred) continue;
     const old = ctx.oldTarget.get(fid);
-    if (old && old !== id && succ.has(old)) return old;
+    if (old && old !== id && (succ.has(old) || chainReaches(ctx, plane, id, old))) return old;
   }
   for (const f of flows(el, 'outgoing')) {
     const fid = idOf(f);
@@ -735,6 +745,24 @@ function spliceTarget(ctx: PlaceCtx, id: string, pred: string): string | undefin
     if (old === pred) return target;
   }
   return undefined;
+}
+
+/**
+ * Whether `target` follows `id` through a straight chain of new nodes (each
+ * with one incoming and one outgoing flow, not drawn before this run).
+ */
+function chainReaches(ctx: PlaceCtx, plane: Plane, id: string, target: string): boolean {
+  let at = id;
+  for (let i = 0; i < 50; i++) {
+    const next = successors(ctx.sem, at);
+    if (next.length !== 1) return false;
+    const n = next[0]!;
+    if (n === target) return true;
+    const drawnBefore = plane.shapes.has(n) && !ctx.placed.has(n);
+    if (drawnBefore || predecessors(ctx.sem, n).length !== 1 || n === id) return false;
+    at = n;
+  }
+  return false;
 }
 
 function placeAt(ctx: PlaceCtx, plane: Plane, id: string, x: number, centreY: number, size: { width: number; height: number }): DShape {
@@ -801,7 +829,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
   const succShapes = successors(ctx.sem, main.id)
     .filter((n) => n !== id && plane.shapes.has(n))
     .map((n) => plane.shapes.get(n)!);
-  const spliced = spliceTarget(ctx, id, main.id);
+  const spliced = spliceTarget(ctx, plane, id, main.id);
   const S = spliced ? plane.shapes.get(spliced) : undefined;
   const maxRight = Math.max(...preds.map((p) => right(p.bounds)));
   if (S || !succShapes.length) {
