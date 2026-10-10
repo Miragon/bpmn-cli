@@ -607,7 +607,14 @@ Cascades: a flow node loses its flows, boundary events (recursively), data
 associations, associations, message flows, lane membership and default-flow
 references; sub-process children go with it. A node with exactly one incoming
 and one outgoing flow is **bridged** (predecessor -> successor, carrying the
-label/condition over) unless `--no-bridge`. A lane un-assigns its members; a
+label/condition over) unless `--no-bridge`. A merge (several incoming flows,
+one outgoing) that does not synchronise, such as an exclusive gateway or a
+task two paths flow into, is bridged from every predecessor like
+`--bridge-all` (each path already ran on alone; note `bridged all: ...`). A
+synchronising join (parallel, inclusive, complex gateway) is refused with
+`E_AMBIGUOUS_BRIDGE`, because bridging ends the synchronisation and not
+bridging cuts off its successor: the hint names both commands
+(`bpmn remove <file> <id> --bridge-all`, `--no-bridge`). A lane un-assigns its members; a
 participant takes its process and message flows along (the collaboration is
 dropped when no pool remains); a data object reference also removes its
 `bpmn:DataObject` when unused. Associations on a flow that bridging replaces

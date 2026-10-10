@@ -557,7 +557,7 @@ withMutationOptions(
   program
     .command('remove <file> <ids...>')
     .alias('rm')
-    .description('remove elements (connected flows, boundary events, associations follow; a node with one in/out flow is bridged)')
+    .description('remove elements (connected flows, boundary events, associations follow; a node with one in/out flow is bridged, a merge from every predecessor; a parallel / inclusive join needs --bridge-all or --no-bridge)')
     .option('--no-bridge', 'do not reconnect predecessor and successor')
     .option('--bridge-all', 'a join (several incoming flows, one outgoing): connect every predecessor to the successor')
     .option('--with-branch', 'also remove the exclusive downstream path (every node only this one leads to, up to the next merge or the ends)')
