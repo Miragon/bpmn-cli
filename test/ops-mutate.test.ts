@@ -1329,10 +1329,10 @@ describe('move: bridging with --in, no id recycling', () => {
     );
     const cs = moveElements(doc, { op: 'move', ids: ['X'], after: 'B' });
     expect(cs.removed.map((c) => c.id)).toEqual(['Flow_4']);
-    expect(cs.created.map((c) => c.id)).toEqual(['Flow_5']);
+    expect(cs.created.map((c) => c.id)).toEqual(['Flow_XToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
-    expect(doc.require('Flow_5').get<El>('sourceRef').get('id')).toBe('X');
-    expect(doc.require('Flow_5').get<El>('targetRef').get('id')).toBe('C');
+    expect(doc.require('Flow_XToC').get<El>('sourceRef').get('id')).toBe('X');
+    expect(doc.require('Flow_XToC').get<El>('targetRef').get('id')).toBe('C');
     expect(doc.require('Flow_1').get<El>('targetRef').get('id')).toBe('A');
     await expectRoundTrip(doc);
   });

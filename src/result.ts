@@ -2,6 +2,7 @@
  * What a mutation did. Rendered as text or JSON after every write.
  */
 import type { Warning } from './errors.js';
+import type { El } from './model.js';
 
 export interface Change {
   id: string;
@@ -19,6 +20,10 @@ export class ChangeSet {
   warnings: Warning[] = [];
   /** human-readable remarks, e.g. "inserted between A and B" */
   notes: string[] = [];
+  /** ids an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds): earlier entries name the new id */
+  renames: Array<{ from: string; to: string }> = [];
+  /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/aliases.ts): the element itself */
+  bindings: Array<{ alias: string; el: El }> = [];
 
   create(change: Change): this {
     this.created.push(change);
@@ -45,7 +50,24 @@ export class ChangeSet {
     return this;
   }
 
+  /** Records renamed ids: the entries made so far (and later merged ones) name the element by its new id. */
+  rename(renames: Array<{ from: string; to: string }>): this {
+    for (const r of renames) {
+      for (const c of [...this.created, ...this.changed]) if (c.id === r.from) c.id = r.to;
+      this.renames.push(r);
+    }
+    return this;
+  }
+
+  /** Binds a batch alias to an element (ops/index.ts registers it). */
+  bind(alias: string | undefined, el: El | undefined): this {
+    if (alias && el) this.bindings.push({ alias, el });
+    return this;
+  }
+
   merge(other: ChangeSet): this {
+    this.rename(other.renames);
+    this.bindings.push(...other.bindings);
     this.created.push(...other.created);
     for (const c of other.changed) this.change(c);
     this.removed.push(...other.removed);

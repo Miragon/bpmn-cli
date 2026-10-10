@@ -46,17 +46,18 @@ describe('ids for id-less elements a full redraw draws', () => {
   it('a file without diagram: the collaboration, the pool and the message flows get ids in the file\'s style, each its own DI', async () => {
     const r = await applyToXml(COLLAB, [{ op: 'set', id: 'Task_1', values: { name: 'Check' } }]);
     await sound(r.xml);
-    // the file's style: it numbers its flows and unnamed elements, and its pool is Part_B
-    expect(r.xml).toContain('<bpmn:collaboration id="Collaboration_1">');
+    // the file's style: its pool is Part_B, its flows Flow_<n> (the prefix); the bodies speak: the collaboration is named
+    // after the process of its first pool, the message flows after their ends
+    expect(r.xml).toContain('<bpmn:collaboration id="Collaboration_A">');
     expect(r.xml).toContain('<bpmn:participant id="Part_Shop" name="Shop" processRef="Process_A"/>');
-    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_3" sourceRef="Part_B" targetRef="Task_1"/>');
-    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_4" name="Answer" sourceRef="Task_1" targetRef="Part_B"/>');
-    for (const id of ['Collaboration_1', 'Flow_3', 'Flow_4', 'Part_Shop', 'Part_B']) expect(r.xml).toMatch(new RegExp(`<bpmndi:BPMN(?:Shape|Edge|Plane) id="[^"]+" bpmnElement="${id}"`));
+    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_CustomerToCheck" sourceRef="Part_B" targetRef="Task_1"/>');
+    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_CheckToCustomer" name="Answer" sourceRef="Task_1" targetRef="Part_B"/>');
+    for (const id of ['Collaboration_A', 'Flow_CustomerToCheck', 'Flow_CheckToCustomer', 'Part_Shop', 'Part_B']) expect(r.xml).toMatch(new RegExp(`<bpmndi:BPMN(?:Shape|Edge|Plane) id="[^"]+" bpmnElement="${id}"`));
     expect(r.result.changed.filter((c) => c.detail?.startsWith('id added')).map((c) => [c.kind, c.id])).toEqual([
-      ['collaboration', 'Collaboration_1'],
+      ['collaboration', 'Collaboration_A'],
       ['participant', 'Part_Shop'],
-      ['messageFlow', 'Flow_3'],
-      ['messageFlow', 'Flow_4'],
+      ['messageFlow', 'Flow_CustomerToCheck'],
+      ['messageFlow', 'Flow_CheckToCustomer'],
     ]);
     expect(r.result.notes).toContainEqual(expect.stringContaining('4 element(s) without id got one'));
     // the same write gives the same ids
@@ -74,9 +75,10 @@ describe('ids for id-less elements a full redraw draws', () => {
     for (const engine of ['clean', 'auto'] as const) {
       const r = await layoutXml(xml, { engine });
       await sound(r.xml);
-      expect(r.xml).toContain('<bpmn:process id="Process_1" isExecutable="false">');
-      expect(r.xml).toContain('<bpmndi:BPMNPlane id="BPMNPlane_Process_1" bpmnElement="Process_1">');
-      expect([...r.xml.matchAll(/<bpmn:sequenceFlow id="(Flow_[01][0-9a-z]{6})"/g)]).toHaveLength(2);
+      // the one process of the file without name and pool: Main; flows after their ends (Start_1 says nothing: Start)
+      expect(r.xml).toContain('<bpmn:process id="Process_Main" isExecutable="false">');
+      expect(r.xml).toContain('<bpmndi:BPMNPlane id="BPMNPlane_Process_Main" bpmnElement="Process_Main">');
+      expect([...r.xml.matchAll(/<bpmn:sequenceFlow id="(Flow_StartToCheck|Flow_CheckToEnd)"/g)]).toHaveLength(2);
       expect([...r.xml.matchAll(/<bpmndi:BPMNEdge /g)]).toHaveLength(2);
     }
   });
@@ -89,13 +91,14 @@ describe('ids for id-less elements a full redraw draws', () => {
   </bpmn:collaboration>
   <bpmn:process id="Process_A" isExecutable="false">
 ${LINE}
-    <bpmn:task id="Flow_3" name="A task named like the next flow"/>
+    <bpmn:task id="Flow_ParticipantToCheck" name="A task named like the next flow"/>
   </bpmn:process>`);
     const doc = await Doc.fromXml(xml);
     const r = await mutateDoc(doc, [], { layout: 'full', force: true });
     await sound(r.xml);
-    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_4" sourceRef="P2" targetRef="Task_1"/>');
-    expect(doc.ids.has('Flow_4')).toBe(true);
+    // P2 says nothing (a number) and has no name: a participant
+    expect(r.xml).toContain('<bpmn:messageFlow id="Flow_ParticipantToCheck_2" sourceRef="P2" targetRef="Task_1"/>');
+    expect(doc.ids.has('Flow_ParticipantToCheck_2')).toBe(true);
   });
 
   it('a kept (incremental) drawing leaves id-less elements alone: a no-op stays unchanged', async () => {

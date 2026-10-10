@@ -9,7 +9,7 @@
  *   mutationReport(result)    the JSON of a mutation (no XML): warnings as a delta
  *                             (added / resolved / preexistingCount), not every warning of the file
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
- *   mutationSummary(report)   `--summary`: created ids by kind, changed / removed ids,
+ *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / removed ids,
  *                             the added warnings, the layout score and added problems
  *   renderSummary(summary, { dryRun })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
@@ -54,6 +54,8 @@ export interface MutationReport {
   /** the warnings the change added and resolved, and the number of the file's own (see WarningReport) */
   warnings: WarningReport;
   notes: string[];
+  /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
+  aliases?: Record<string, string>;
   layout: LayoutStatus;
   /** errors a forced write let through, the platform summary and the validators that ran; the warnings are in `warnings` */
   validation: Omit<ValidationResult, 'warnings'>;
@@ -114,6 +116,7 @@ export function mutationReport(result: MutationResult): MutationReport {
     removed: result.changes.removed,
     warnings: { added: [...opWarnings(result), ...delta.added, ...layoutWarnings(result.layout)], resolved: delta.resolved, preexistingCount: delta.preexisting },
     notes: result.changes.notes,
+    ...(result.aliases ? { aliases: result.aliases } : {}),
     layout: result.layout,
     validation,
     importWarnings: result.importWarnings,
@@ -204,6 +207,7 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   // format ops change the drawing only: their lines follow in the layout block
   const formatOnly = changes.isEmpty && !!result.layout.format?.length && !changes.notes.length;
   if (text && !formatOnly) lines.push(text);
+  if (result.aliases && Object.keys(result.aliases).length) lines.push(aliasLine(result.aliases));
   // errors only remain in a result written with --force
   for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
   lines.push(...warningLines(result.warnings.added));
@@ -214,6 +218,11 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   lines.push(...fileLines(result, opts));
   if (result.view) lines.push('', renderView(result.view).trimEnd());
   return lines.join('\n');
+}
+
+/** `aliases: $check = Activity_CheckInvoice, $ok = Gateway_InvoiceOk` */
+function aliasLine(aliases: Record<string, string>): string {
+  return `aliases: ${Object.entries(aliases).map(([a, id]) => `${a} = ${id}`).join(', ')}`;
 }
 
 /** The file line of a result: written / unchanged / dry run. */
@@ -232,6 +241,8 @@ export interface MutationSummary {
   unchanged: boolean;
   /** created ids by kind, in the order they were created */
   created: Record<string, string[]>;
+  /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
+  aliases?: Record<string, string>;
   changed: string[];
   removed: string[];
   /** errors a forced write (--force) let through */
@@ -263,6 +274,7 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     ...(report.written !== undefined ? { written: report.written } : {}),
     unchanged: report.unchanged,
     created,
+    ...(report.aliases && Object.keys(report.aliases).length ? { aliases: report.aliases } : {}),
     changed: uniqueIds(report.changed),
     removed: uniqueIds(report.removed),
     ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
@@ -287,6 +299,7 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
 export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean } = {}): string {
   const lines: string[] = [];
   for (const [kind, ids] of Object.entries(summary.created)) lines.push(`created ${kind}: ${ids.join(', ')}`);
+  if (summary.aliases) lines.push(aliasLine(summary.aliases));
   if (summary.changed.length) lines.push(`changed: ${summary.changed.join(', ')}`);
   if (summary.removed.length) lines.push(`removed: ${summary.removed.join(', ')}`);
   if (!lines.length) lines.push('no changes');

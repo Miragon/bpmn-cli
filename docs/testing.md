@@ -338,6 +338,31 @@ With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
 above zero means preserve.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.
 
+## Speaking ids
+
+`tools/speaking-ids.mjs` measures new ids on a corpus in-process (dry runs):
+per file a named task, an unnamed gateway and an unnamed boundary event at
+the first task with one outgoing flow. It prints the share of new ids that
+speak (no Camunda Modeler hash, no number), the flows renamed because their
+ids named their old ends, with `--baseline` the share that keeps the prefix
+another build gives the same element, and how often two independent edits
+of one file (two branches) share a new id (different names, the same name,
+unnamed elements).
+
+```
+npm run build
+node tools/speaking-ids.mjs                                   # tools/scenarios
+node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
+```
+
+The regression tests: `test/speaking-ids.test.ts` and
+`test/conventions-ids.test.ts` (ids in every file style, renamed flows and
+their DI), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
+line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
+`test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
+`test/lane-splice.test.ts` (the lane and the geometry of a node added into a
+flow between two lanes).
+
 ## Engine checks (Camunda 7)
 
 The Camunda 7 profile of `bpmn validate` (`src/platform/c7.ts`) states for

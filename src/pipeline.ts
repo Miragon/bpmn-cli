@@ -109,7 +109,7 @@ import { serializeWithout, unkeptEntries, withoutEntries } from './mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from './model.js';
 import { collapsedIds } from './ops/add.js';
 import { reportedImportWarnings } from './ops/decision.js';
-import { runOps } from './ops/index.js';
+import { runBatch, runOps } from './ops/index.js';
 import { ordersLanes } from './ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from './ops/retype.js';
 import { requestedExpansion } from './ops/set.js';
@@ -202,6 +202,8 @@ export interface MutationResult {
   /** the result is the input text byte for byte (the ops changed nothing that is written) */
   unchanged: boolean;
   changes: ChangeSet;
+  /** batch aliases (`"as": "$name"`, ops/aliases.ts) -> the final id of their element; absent without aliases */
+  aliases?: Record<string, string>;
   layout: LayoutStatus;
   validation: ValidationResult;
   /** import warnings of the loaded file (informational) */
@@ -545,6 +547,8 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
   if (undrawn.length) {
     try {
       const reduced = await Doc.fromXml(xml);
+      // the bridged flows keep their ids: the drawing is compared edge by edge
+      reduced.followFlowEnds = false;
       runOps(reduced, [{ op: 'remove', ids: [...undrawn], ifExists: true }]);
       reference = await reduced.toXml();
     } catch {
@@ -678,10 +682,13 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   takeDroppedContent(doc);
 
   let changes: ChangeSet;
+  // the ops with their batch aliases resolved (ops/aliases.ts): what the layout and the format phase run
+  let ran: Op[] = ops;
+  let aliases: Record<string, string> = {};
   // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
   doc.platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
   try {
-    changes = runOps(doc, ops);
+    ({ changes, ops: ran, aliases } = runBatch(doc, ops));
   } catch (err) {
     throw toCliError(err);
   } finally {
@@ -716,7 +723,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else {
     let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ops, opts));
+      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ran, opts));
     } catch (err) {
       throw toCliError(err);
     }
@@ -726,7 +733,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     }
   }
 
-  const entries = formatEntries(doc, ops);
+  const entries = formatEntries(doc, ran);
   if (entries.length) {
     const formatted = await runFormat(xml, doc.file, entries);
     xml = formatted.xml;
@@ -757,6 +764,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     written: false,
     unchanged,
     changes,
+    ...(Object.keys(aliases).length ? { aliases } : {}),
     layout,
     validation,
     importWarnings,

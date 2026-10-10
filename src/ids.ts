@@ -1,10 +1,10 @@
 /**
- * Id building blocks: name words, slugs, short hashes, the id registry.
+ * Id building blocks: name words, slugs, the id registry.
  *
  * Which id a new element gets is decided by the file's id style
  * (src/idstyle.ts): new ids follow the conventions the file already uses,
  * and a file without a convention gets the bpmn-cli default
- * (`Activity_CheckInvoice`, `Flow_0k3x9qa`).
+ * (`Activity_CheckInvoice`, `Flow_CheckInvoiceToBookInvoice`).
  *
  * Names become ASCII words: German umlauts are transliterated (ä -> ae,
  * ö -> oe, ü -> ue, ß -> ss; Ä -> Ae, or AE inside an upper-case word),
@@ -75,16 +75,23 @@ export function pascalSnakeSlug(name: string | undefined): string {
   return cut(nameWords(name).map(cap).join('_'));
 }
 
-/**
- * A short stable hash in base 36, seven characters like the random part of a
- * Camunda Modeler id (`Flow_0k3x9qa`): FNV-1a over the text, so the same
- * inputs always give the same id and different inputs (other flow ends,
- * another placement) give different ones.
- */
-export function hash7(text: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
-  return h.toString(36).padStart(7, '0').slice(-7);
+/** Edit distance with adjacent transpositions (optimal string alignment; small strings only). */
+export function editDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2]![j - 2]! + 1);
+      d[i]![j] = v;
+    }
+  }
+  return d[a.length]![b.length]!;
+}
+
+/** The typos two spellings of one word may differ by: none below 5 characters, 1 up to 11, 2 from 12. */
+export function typoTolerance(length: number): number {
+  return length >= 12 ? 2 : length >= 5 ? 1 : 0;
 }
 
 /** BPMN ids must be XML NCNames. */

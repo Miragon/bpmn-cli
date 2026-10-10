@@ -135,7 +135,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const opts = { profile: 'design' as const, contentRepo: { processIds: ['Process_Styled'], decisionIds: [] }, validators: [host] };
     const there = await browser.applyToXml(styled, ops, opts);
     expect(phases).toEqual(['before:true', 'after:true']);
-    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_5']);
+    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
     expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['design', 'host']);
     const here = await core.applyToXml(styled, ops, opts);
     expect(there.xml).toBe(here.xml);

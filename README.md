@@ -26,8 +26,8 @@ $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 $ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
 $ bpmn show order.bpmn
 process Process_OrderHandling "Order handling" executable
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_1cat8ax)
-  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_18s39x0)
+  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
+  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_CheckInvoiceToDone)
   endEvent Event_Done "Done"
 problems: none
 ```
@@ -114,18 +114,22 @@ untyped and the serialisation is unchanged.
    write rewrites only the elements the change touched; the rest of the file
    keeps its text, and a result equal to the file is not written at all
    ([What a write changes](#what-a-write-changes)).
-3. **Ids follow the file.** New ids take the id style the file already uses
-   ([Ids](#ids)): Camunda Modeler ids (`Activity_0k3x9qa`), type-named ones
-   (`serviceTask_checkStock`), `Task_check_stock`, numbered `Task_12`, flows
-   like `flow_checkStockToShip` or `Flow_<from>_<to>`. A new file gets
-   readable `<Prefix>_<NameSlug>` ids following the bpmn-js conventions:
+3. **Ids speak and follow the file.** Every new id says what it names, in
+   the id style the file already uses ([Ids](#ids)): its prefixes
+   (`Activity_`, `serviceTask_`, `Task_`, `SF_`), its case
+   (`Activity_CheckInvoice`, `serviceTask_checkStock`, `Task_check_stock`)
+   and its flow form (`flow_checkStockToShip`, `Flow_<from>_<to>`). Never a
+   hash or a running number: a Camunda Modeler file (`Activity_0k3x9qa`)
+   gets `Activity_CheckInvoice`, a file numbering `Task_12` gets
+   `Task_CheckInvoice`. A new file follows the bpmn-js conventions:
    `Activity_CheckInvoice`, `Event_OrderReceived`, `Gateway_InvoiceOk`,
-   `Participant_Customer`, `Lane_Sales`, `DataObjectReference_Order`; flows
-   and unnamed elements get a short hash of their ends or position
-   (`Flow_1cat8ax`), so independent edits on two branches of a file do not
-   produce the same id.
-   Name collisions get `_2`, `_3` (with a `W_ID_SUFFIXED` warning). Every
-   result lists the ids it created.
+   `Participant_Customer`, `Lane_Sales`, `DataObjectReference_Order`;
+   unnamed elements are named by their kind and place
+   (`Gateway_AfterCheckInvoice`, `Event_TimerOnReview`), flows by their ends
+   (`Flow_CheckInvoiceToBookInvoice`). Elements are addressed by id only
+   (names may repeat); a taken id gets `_2`, `_3` (with a `W_ID_SUFFIXED`
+   warning). Every result lists the ids it created; inside an `apply`
+   batch, an op names what it creates with an alias (`"as": "$check"`).
 4. **Nothing is half done.** A command (or a whole `apply` batch) either
    succeeds completely or leaves the file untouched. Structural validation
    errors that the change would introduce block the write (`--force`
@@ -143,39 +147,69 @@ untyped and the serialisation is unchanged.
 
 ## Ids
 
-New ids follow the conventions of the file they are written into (the
-modeler, a team convention, a generator): `bpmn` reads the ids the file has
-and generates new ones the same way. Explicit ids (`--id`, `"id"` in ops
-JSON) are always taken as given.
+Elements are addressed by id, never by name (names may repeat). Every new
+id says what it names, and follows the conventions of the file it is
+written into (the modeler, a team convention, a generator): `bpmn` reads
+the ids the file has and generates new ones the same way. Explicit ids
+(`--id`, `"id"` in ops JSON) are always taken as given.
 
 | what | learned from the file | examples |
 | --- | --- | --- |
 | prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case. No prefix is a convention too: where a kind's or family's ids have none, or the file's flow nodes mostly have none, a named element gets a bare id (camelCase, PascalCase in a PascalCase file); an unnamed one keeps a prefix | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_`; bare `reviewOrder` |
-| body of named elements | the case style of the named flow nodes' ids (of the other named elements when the flow nodes show none) | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice`, a modeler hash `0k3x9qa`, a number `12` |
-| unnamed elements | numbered when the file numbers them, else a hash | `Gateway_0k3x9qa`, `Gateway_3` |
-| sequence / message flows | the form of at least half of the flows | `Flow_0k3x9qa` (default), `SequenceFlow_1abc2de`, `Flow_12`, `flow12`, `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>`, `Flow_<scope>_<A>To<B>` (`Flow_KotO_ValidateToReserve`: the scope the flows share, the first word of each end, `Start` / `End` for start and end events) |
+| case of the body | the case of the named flow nodes' ids (of the other named elements when the flow nodes show none); Camunda Modeler hashes (`Activity_0k3x9qa`) and numbers (`Task_12`) show none: PascalCase | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice` |
+| sequence / message flows | the form of at least half of the flows; files whose flows are hashed (`Flow_0k3x9qa`, `SequenceFlow_1abc2de`) or numbered (`Flow_12`, `SF_3`, `flow12`) lend their prefix to the `named` form | `named`: `Flow_CheckInvoiceToBookInvoice` (default), `SequenceFlow_ArchiveToDone`, `SF_ThirdToFinish`, `flowReviewOrderToPackGoods`; the file's own forms: `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>`, `Flow_check_stock_to_ship_goods`, `Flow_<scope>_<A>To<B>` (`Flow_KotO_ValidateToReserve`: the scope the flows share, the first word of each end, `Start` / `End` for start and end events) |
 | diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
 
 One id is not a convention: a rule needs two ids that follow it (in a file
 whose ids are mostly prefixed, one id of a kind is enough for that kind). A
 file without a convention gets the bpmn-cli default.
 
-Hashed ids look like Camunda Modeler ids (`<Prefix>_` and seven base-36
-characters) but are not random: they hash stable inputs (the ends of a flow,
-the kind, name and placement of a node, the owner of a lane set), so the same
-edit on the same file always gives the same id, and edits made independently
-on two branches of a file (git, two agents) do not produce the same new id.
-Earlier versions numbered flows and unnamed elements (`Flow_3`); a file
-numbered like that keeps being numbered. In an `apply` batch, give an
-explicit `id` to an element a later op refers to: generated ids are not
-meant to be guessed. Ids of existing elements never change (a spliced or
-bridged flow keeps its id even when it names its old ends).
+What the body says:
+
+| element | body | examples |
+| --- | --- | --- |
+| named | the name | `Activity_CheckInvoice`, `Gateway_InvoiceOk` |
+| unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes) | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimer`, `Event_ErrorStartInHandleErrors` |
+| flow | its ends: `<Source>To<Target>` (in the file's case: `checkStockToShip`, `check_stock_to_ship`) | `Flow_CheckInvoiceToBookInvoice`, `Flow_CheckInvoiceToGateway` |
+| join of a split | the split gateway's id + `_join` (camelCase files: `Join`) | `Gateway_InvoiceOk_join`, `gateway_fanOutJoin` |
+| other | what it belongs to | `Collaboration_OrderHandling` (its process), `LaneSet_OrderHandling`, `Process_Customer` (its pool), `TextAnnotation_CheckWithinTwoDays` (its text), `Association_CheckInvoiceToCheckWithinTwoDays`, `DataInputAssociation_OrderToCheckInvoice` |
+
+An end or anchor is named by the speaking part of its id (ids are built
+from ids: `Activity_CheckInvoice` is `CheckInvoice`, also after its name
+changed), by its name when its id says too little (a hash, a number, one or
+two letters), else by a word for its kind (`Gateway`, `End`, `Timer`,
+`Join`): an unnamed element is never named after its own context again
+(`Flow_CheckInvoiceToGateway`, not `Flow_CheckInvoiceToAfterCheckInvoice`).
+Ids that say nothing (Camunda Modeler hashes, numbers, `StartEvent_1`) are
+never copied into new ids.
+
+The same edit on the same file always gives the same ids. A taken id gets
+`_2`, `_3` (the file-learned `stemTo` / `scopedTo` flows: `2`, `3`) and a
+`W_ID_SUFFIXED` warning. Edits made independently on two branches of a file
+(git, two agents) produce the same new id only when they add the same thing
+in the same place.
+
+A flow whose id names its ends (exactly the id the file's style gives a flow
+between them, also with a suffix) is renamed after its new ends when an edit
+changes them: a splice (`add --after`, `--flow`, `split`), a bridge
+(`remove`, `move`) or `set <flow> target=`. The change says so (`renamed
+from Flow_CheckInvoiceToDone: its id named its old ends`), its DI edge id
+follows when it was derived from the flow id, and every other id stays (a
+hashed `Flow_0k3x9qa` or a numbered `Flow_12` keeps its id). In an `apply`
+batch a later op refers to an element an earlier op created by an alias
+([Ops JSON](#ops-json-bpmn-apply)) or by an explicit `id`.
 
 Names become ASCII words: German umlauts are transliterated (`ä` -> `ae`,
 `ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`),
-other accents dropped (`Café` -> `Cafe`). An id that is not found is
-matched against the other spellings (`Activity_Prufung`, `Activity_Prüfung`
-suggest `Activity_Pruefung`).
+other accents dropped (`Café` -> `Cafe`). An id that is not found
+(`E_NOT_FOUND`) comes with the ids that were probably meant, best first: the
+new id of a flow an earlier op of the batch renamed; the same id in another
+case, umlaut spelling or with another or no prefix (`Activity_Prufung`,
+`Activity_Prüfung` -> `Activity_Pruefung`; `Task_CheckInvoice`,
+`CheckInvoice` -> `Activity_CheckInvoice`); ids containing it; typos
+(`Activity_ChekInvoice`); names containing it. Inside an `apply` batch the
+ids it created come first, and the hint lists them (and points out an alias
+written without `$`).
 
 ## Command reference
 
@@ -195,7 +229,7 @@ bpmn add <file> <kind[:trigger]> [<name>] [--id <id>]
 bpmn connect <file> <sourceId> <targetId> [--name <text>] [--id <id>] [--condition <expr>] [--language <lang>] [--default]
          [--message <name>] [--if-absent]
 bpmn set <file> <id> <key=value ...> [--unset <key>]...
-bpmn remove <file> <id...> [--no-bridge] [--if-exists]                       (alias: rm)
+bpmn remove <file> <id...> [--no-bridge | --bridge-all | --with-branch] [--if-exists]   (alias: rm)
 bpmn retype <file> <id> <kind[:trigger]> [trigger options as in add]        (alias: replace)
 bpmn move <file> <id...> [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--lane <laneId>]
 bpmn order <file> <nodeId> <flowId...>
@@ -334,13 +368,13 @@ same data (`diagrams[].groups[] {id, kind, name, parent, rows}`, `colors`,
 
 ```
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
+diagram BPMNPlane_Collaboration_OrderHandling (Collaboration_OrderHandling)
   participant Participant_OrderHandling "Order handling"
     lane Lane_Sales "Sales"
       row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Event_Done
       row 2: Activity_ClarifyInvoice, Event_Clarified
     lane Lane_Backoffice "Backoffice"
-colors: Activity_CheckInvoice red, Flow_024yl5b red
+colors: Activity_CheckInvoice red, Flow_CheckInvoiceToInvoiceOk red
 labels off their default side: Gateway_InvoiceOk below (default above)
 layout quality: score 0: no layout problems
 ```
@@ -427,9 +461,13 @@ is 1.8 KB against 10.6 KB (17 % in the median, p90 24 %).
 (see [Kinds](#kinds), [Triggers](#triggers) and the
 [placement grammar](#placement-grammar)). Trailing `key=value` pairs are
 applied like `set` (`camunda:assignee=kermit`). `--doc` sets the
-documentation, `--lane` the lane (default: the lane of the anchor or host),
-`--collapsed` draws a sub-process collapsed, `--if-absent` together with
-`--id` makes the command idempotent. `--message <name>` also works for
+documentation, `--lane` the lane (default: the lane of the anchor or host;
+`--flow`: of the flow's source), `--collapsed` draws a sub-process
+collapsed, `--if-absent` together with `--id` makes the command idempotent.
+A node added into a flow between two lanes without `--lane` gets the lane of
+the row the layout puts it on: after a branching node (a gateway) the
+target's row and lane, else the anchor's; `W_LANE_INHERITED` names both
+lanes and the `move --lane` that switches. `--message <name>` also works for
 `sendTask` and `receiveTask` (the root `bpmn:Message` is found by name or
 created), like `set <id> message=<name>`.
 
@@ -542,6 +580,25 @@ flow removed without a bridge takes its associations along. A removed flow is
 also dropped from stale `incoming` / `outgoing` entries of other nodes (files
 from other tools sometimes carry them). `--if-exists` skips unknown ids with
 a note.
+
+`--bridge-all` bridges a join or merge (several incoming flows, one
+outgoing): every incoming flow is re-pointed to the successor (keeping its
+label and condition; a predecessor already connected to the successor, or
+the successor itself, gets no second flow) and the outgoing flow goes. A
+parallel or inclusive join loses its synchronisation; `W_IMPLICIT_JOIN` says
+so. A node with several outgoing flows is refused (`E_AMBIGUOUS_BRIDGE`:
+which predecessor would go to which successor?).
+
+`--with-branch` removes a node or boundary event together with its exclusive
+downstream path: every node only it leads to (all incoming flows from the
+branch; a host takes its boundary events and their paths along, a
+compensate boundary event its compensation handler), up to the next node
+another path reaches (it stays, the flows into it go) or the ends. Nothing
+is bridged; a note lists the branch and where it stopped
+(`branch of Event_Reminder: 3 node(s) (...); it ends there`). A node several
+paths reach (two or more incoming flows) is refused (`E_AMBIGUOUS_BRANCH`):
+remove the branch from the first node after the split, or the node alone
+with `--bridge-all`. `apply`: `"bridgeAll": true`, `"withBranch": true`.
 
 A bridge from an event-based gateway is made only when the file's rule
 accepts it. In a Camunda 7 file that is the engines' rule: the successor is a
@@ -877,11 +934,11 @@ the last of them. A typical agent loop:
 
 ```
 $ bpmn show order.bpmn --layout                          # rows per lane, colours, problems
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_CheckInvoiceToInvoiceOk Gateway_InvoiceOk --color red
 $ bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column
 $ bpmn place order.bpmn Activity_ClarifyInvoice --below Activity_BookInvoice
 $ bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales
-$ bpmn route order.bpmn Flow_02tom5g --exit bottom --entry bottom
+$ bpmn route order.bpmn Flow_ReminderToRemindCustomer --exit bottom --entry bottom
 $ bpmn metrics order.bpmn                                # no overlaps / through / outsideLane added?
 ```
 
@@ -970,7 +1027,7 @@ with exactly one of these (`--after` + `--before` counts as one):
 | `--after <X>` | `after` | X is a gateway or has no outgoing flow: **append** `X -> node`. X has exactly one outgoing flow: **splice**, `X -> node -> old successor`. Otherwise `E_HAS_SUCCESSOR`: say which flow. |
 | `--before <Y>` | `before` | Symmetric: prepend before a join gateway or a node without incoming flow, else splice into its single incoming flow; several incoming flows -> `E_HAS_PREDECESSOR`. |
 | `--after <X> --before <Y>` | `after` + `before` | Splice into the flow `X -> Y` (`E_NO_FLOW` / `E_AMBIGUOUS_FLOW` when there is none / several). |
-| `--flow <F>` | `flow` | Splice into sequence flow F: `A -> B` becomes `A -> node -> B`. F keeps its id, name and condition and now ends at the node. |
+| `--flow <F>` | `flow` | Splice into sequence flow F: `A -> B` becomes `A -> node -> B`. F keeps its name and condition and now ends at the node; it keeps its id too, unless the id named A and B (then it names A and the node, [Ids](#ids)). |
 | `--in <S>` | `in` | Put the node into process / sub-process / participant S without connecting it. |
 | `--on <A>` | `on` | Boundary events only: attach to activity A (not to a compensation handler: `E_INVALID_HOST`). |
 | `--to <T>` | `to` | Additionally connect `node -> T` (a branch that re-joins the main path). |
@@ -1170,12 +1227,12 @@ bpmn add claim.bpmn end "Claim settled" --after Activity_InformParty
 $ bpmn show claim.bpmn
 namespaces: camunda, modeler
 process Process_ClaimHandling "Claim handling" executable [camunda:historyTimeToLive=180]
-  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_078nmus)
-  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_01d397f)
-    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_1vl2v2v)
-  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_0y359yr)
-  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_1fzbwrx)
-  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_0adcvrj)
+  startEvent Event_ClaimReceived "Claim received" -> Activity_CheckCoverage (Flow_ClaimReceivedToCheckCoverage)
+  serviceTask Activity_CheckCoverage "Check coverage" [camunda:type=external, camunda:topic=check-coverage, ext: camunda:inputOutput, camunda:errorEventDefinition] -> Activity_ApproveClaim (Flow_CheckCoverageToApproveClaim)
+    boundaryEvent:error Event_NotCovered "Not covered" [error Not covered (NOT_COVERED), definition.camunda:errorCodeVariable=rejectCode] -> Event_ClaimRejected (Flow_NotCoveredToClaimRejected)
+  userTask Activity_ApproveClaim "Approve claim" [camunda:candidateGroups=claims, ext: camunda:formData] -> Activity_PayOut (Flow_ApproveClaimToPayOut)
+  callActivity Activity_PayOut "Pay out" [calledElement=Process_PayOut, camunda:calledElementBinding=latest, ext: camunda:in, camunda:out] -> Activity_InformParty (Flow_PayOutToInformParty)
+  userTask Activity_InformParty "Inform party" [loop=parallel, camunda:assignee=${party}, loop.camunda:collection=${parties}, loop.camunda:elementVariable=party] -> Event_ClaimSettled (Flow_InformPartyToClaimSettled)
   endEvent Event_ClaimSettled "Claim settled"
   endEvent Event_ClaimRejected "Claim rejected"
 root: error Error_NotCovered "Not covered" (NOT_COVERED)
@@ -1368,10 +1425,10 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 
 | op | keys |
 | --- | --- |
-| `add` | `kind` (required), `name`, `id`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
-| `connect` | `source`, `target` (required), `name`, `id`, `condition`, `language`, `default`, `message`, `ifAbsent` |
+| `add` | `kind` (required), `name`, `id`, `as`, `flowAs`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
+| `connect` | `source`, `target` (required), `name`, `id`, `as`, `condition`, `language`, `default`, `message`, `ifAbsent` |
 | `set` | `id` (required), `values` (map), `unset` (list); at least one of the two |
-| `remove` | `ids` (required list), `bridge` (default true), `ifExists` |
+| `remove` | `ids` (required list), `bridge` (default true), `bridgeAll`, `withBranch`, `ifExists` |
 | `retype` | `id`, `kind` (required), trigger keys |
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
 | `order` | `id` (required), exactly one of `flows` (outgoing flows of a node) or `lanes` (lanes of a pool / process / parent lane) |
@@ -1383,7 +1440,7 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `route` | `id` (required), `exit`, `entry` (`right` / `top` / `bottom` / `left`) |
 | `space` | exactly one of `after` / `below`, `by` (`"column"`, `"row"` or pixels) |
 | `tidy` | `ids` (list; default every shape) |
-| `split` | `after` (required), `kind` (gateway, default `exclusiveGateway`), `name`, `id`, `join` (default true), `joinId`, `joinName`, `branches` (required): `[{ flowName?, flowId?, condition?, language?, default?, nodes: [ add-like objects without placement ] }]` |
+| `split` | `after` (required), `kind` (gateway, default `exclusiveGateway`), `name`, `id`, `as`, `join` (default true), `joinId`, `joinAs`, `joinName`, `branches` (required): `[{ flowName?, flowId?, condition?, language?, default?, nodes: [ add-like objects without placement, `as` / `flowAs` included ] }]` |
 
 `split` is a macro without CLI counterpart: it places a gateway after the
 anchor (splicing into its single outgoing flow if it has one), creates every
@@ -1391,6 +1448,42 @@ branch (the first node gets the branch's flow options, following nodes are
 chained), and a join gateway of the same kind (`<gatewayId>_join`) that every
 branch end connects to; when the anchor was spliced, the join continues to the
 old successor. An empty `nodes` list is a direct gateway -> join flow.
+
+**Batch aliases.** An op names what it creates with `"as": "$name"` (`add`,
+`connect`, `split` and the nodes of a split branch); `add` and split nodes
+also take `"flowAs"` (the flow into the new node, the one the flow options
+describe; a prepend before a join or an unconnected node: the flow out of
+it) and `split` takes `"joinAs"` (its join gateway). Later ops of the batch
+use the alias wherever an element id goes: `after`, `before`, `flow`, `in`,
+`on`, `to`, `lane`, `process`, `members`, `source`, `target`, the `id` /
+`ids` of `set`, `remove`, `retype`, `move`, `order`, `ext` and the format
+ops, and the `default`, `source`, `target`, `lane` values of `set`. So a
+batch never guesses a generated id:
+
+```json
+[
+  { "op": "add", "kind": "userTask", "name": "Vollständigkeit prüfen", "after": "Event_RechnungEingegangen", "as": "$check" },
+  { "op": "split", "after": "$check", "name": "Vollständig?", "as": "$ok",
+    "branches": [
+      { "flowName": "ja", "nodes": [{ "kind": "serviceTask", "name": "Buchen", "flowAs": "$yes" }] },
+      { "flowName": "nein", "nodes": [{ "kind": "userTask", "name": "Nachfordern", "flowAs": "$no" }] } ] },
+  { "op": "set", "id": "$ok", "values": { "default": "$no" } },
+  { "op": "set", "id": "$yes", "values": { "condition": "${vollstaendig}" } },
+  { "op": "color", "ids": ["$check"], "color": "green" }
+]
+```
+
+An alias is `$` and a letter or `_`, then letters, digits, `_` or `-`
+(`${...}` expressions are not aliases). It is defined once and used only
+after the op that defines it; both are checked before anything runs
+(`E_UNKNOWN_ALIAS` lists the aliases defined so far, `E_DUPLICATE_ALIAS`; an
+alias in `id`, `flowId` or `joinId` is a usage error pointing to `as`). An
+alias names the element itself, so it follows a rename later in the batch (a
+flow whose id named its ends, [Ids](#ids)); an alias of an element a later
+op removed is `E_NOT_FOUND`. The format ops see the ids at the end of the
+batch. The result lists every alias with the final id of its element
+(`aliases: $check = Activity_VollstaendigkeitPruefen, ...`; `"aliases"` in
+`--json` and in the library's `MutationResult`).
 
 Validation is strict: unknown ops or keys (with a "did you mean" for
 kebab-case spellings and small typos: `rowof` -> `rowOf`, `colour` ->
@@ -1414,22 +1507,22 @@ an end event:
       "after": "Activity_CheckInvoice",
       "kind": "exclusiveGateway",
       "name": "Invoice ok?",
-      "id": "Gateway_InvoiceOk",
+      "as": "$ok",
       "branches": [
-        { "flowName": "yes", "condition": "${ok}", "nodes": [{ "kind": "serviceTask", "name": "Book invoice" }] },
+        { "flowName": "yes", "condition": "${ok}", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
         {
           "flowName": "no",
           "default": true,
-          "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "set": { "doc": "Call the customer and clarify the open positions." } }]
+          "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "as": "$clarify", "set": { "doc": "Call the customer and clarify the open positions." } }]
         }
       ]
     },
-    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "Activity_ClarifyInvoice", "timer": "PT2D", "nonInterrupting": true },
-    { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "Event_Reminder" },
-    { "op": "add", "kind": "endEvent", "name": "Reminder sent", "in": "Process_OrderHandling" },
-    { "op": "connect", "source": "Activity_RemindCustomer", "target": "Event_ReminderSent" },
-    { "op": "set", "id": "Activity_BookInvoice", "values": { "name": "Book invoice in ERP", "doc": "Posts the invoice to the ledger." } },
-    { "op": "ext", "id": "Activity_BookInvoice", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } }
+    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+    { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
+    { "op": "add", "kind": "endEvent", "name": "Reminder sent", "in": "Process_OrderHandling", "as": "$sent" },
+    { "op": "connect", "source": "$remind", "target": "$sent" },
+    { "op": "set", "id": "$book", "values": { "name": "Book invoice in ERP", "doc": "Posts the invoice to the ledger." } },
+    { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } }
   ]
 }
 ```
@@ -1441,7 +1534,8 @@ an end event:
 Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
 Event_OrderReceived`), then notes (`note: inserted between A and B`), the
-errors a `--force` write let through (`forced E_CODE element: message`),
+batch aliases of an `apply` (`aliases: $check = Activity_CheckInvoice, ...`),
+the errors a `--force` write let through (`forced E_CODE element: message`),
 the warnings the change **added** (`warning W_CODE element: message
 (hint)`; a validator's finding names it: `warning [design]
 W_DESIGN_COMPLEXITY ...`; three or more of one code are one line with the
@@ -1505,6 +1599,7 @@ indented here):
     "preexistingCount": 12
   },
   "notes": ["..."],
+  "aliases": { "$check": "Activity_X" },
   "layout": {
     "status": "ok", "mode": "incremental", "reason": "hand-made diagram: kept, changes placed locally",
     "warnings": [], "expanded": [],
@@ -1576,7 +1671,7 @@ The full error catalogue with a fix for every code: `bpmn kinds` (section
 ## Quoting
 
 - Expressions and anything containing `$`: **single quotes**, e.g.
-  `--condition '${amount > 100}'`, `set Flow_1qqra0u condition='${ok}'`. In double
+  `--condition '${amount > 100}'`, `set Flow_InvoiceOkToBookInvoice condition='${ok}'`. In double
   quotes the shell expands `${...}` to nothing and the CLI rejects the empty
   expression (`E_INVALID_VALUE`).
 - Names with spaces: quote them, `add userTask "Check invoice"`.
@@ -1820,7 +1915,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
-created sequenceFlow Flow_1cat8ax - Event_OrderReceived -> Activity_CheckInvoice
+created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
 resolved: W_DEAD_END Event_OrderReceived
@@ -1831,7 +1926,7 @@ written: order.bpmn
 
 $ bpmn add order.bpmn end "Invoice handled" --after Activity_CheckInvoice
 created endEvent Event_InvoiceHandled "Invoice handled" - after Activity_CheckInvoice
-created sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Event_InvoiceHandled
+created sequenceFlow Flow_CheckInvoiceToInvoiceHandled - Activity_CheckInvoice -> Event_InvoiceHandled
 note: appended after Activity_CheckInvoice
 resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
 layout: ok - full (engine-owned diagram: redrawn)
@@ -1840,32 +1935,32 @@ written: order.bpmn
 
 $ cat > ops.json <<'EOF'
 { "ops": [
-  { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?", "id": "Gateway_InvoiceOk",
+  { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?", "as": "$ok",
     "branches": [
-      { "flowName": "yes", "condition": "=ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice" }] },
-      { "flowName": "no", "default": true, "nodes": [{ "kind": "userTask", "name": "Clarify invoice" }] } ] },
-  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "Activity_ClarifyInvoice", "timer": "PT2D", "nonInterrupting": true },
-  { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "Event_Reminder" },
-  { "op": "add", "kind": "end", "name": "Reminder sent", "after": "Activity_RemindCustomer" },
-  { "op": "ext", "id": "Activity_BookInvoice", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
+      { "flowName": "yes", "condition": "=ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
+      { "flowName": "no", "default": true, "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "as": "$clarify" }] } ] },
+  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+  { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
+  { "op": "add", "kind": "end", "name": "Reminder sent", "after": "$remind" },
+  { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
 ] }
 EOF
 $ bpmn apply order.bpmn ops.json
 created exclusiveGateway Gateway_InvoiceOk "Invoice ok?" - between Activity_CheckInvoice and Event_InvoiceHandled
 created serviceTask Activity_BookInvoice "Book invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_1qqra0u "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
+created sequenceFlow Flow_InvoiceOkToBookInvoice "yes" - Gateway_InvoiceOk -> Activity_BookInvoice
 created userTask Activity_ClarifyInvoice "Clarify invoice" - after Gateway_InvoiceOk
-created sequenceFlow Flow_0d0nlaf "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
+created sequenceFlow Flow_InvoiceOkToClarifyInvoice "no" - Gateway_InvoiceOk -> Activity_ClarifyInvoice
 created exclusiveGateway Gateway_InvoiceOk_join - join of Gateway_InvoiceOk
-created sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_0jz1192 - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
-created sequenceFlow Flow_1y8i3yl - Gateway_InvoiceOk_join -> Event_InvoiceHandled
+created sequenceFlow Flow_BookInvoiceToInvoiceOkJoin - Activity_BookInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_ClarifyInvoiceToInvoiceOkJoin - Activity_ClarifyInvoice -> Gateway_InvoiceOk_join
+created sequenceFlow Flow_InvoiceOkJoinToInvoiceHandled - Gateway_InvoiceOk_join -> Event_InvoiceHandled
 created boundaryEvent:timer Event_Reminder "Reminder" - on Activity_ClarifyInvoice
 created sendTask Activity_RemindCustomer "Remind customer" - after Event_Reminder
-created sequenceFlow Flow_02tom5g - Event_Reminder -> Activity_RemindCustomer
+created sequenceFlow Flow_ReminderToRemindCustomer - Event_Reminder -> Activity_RemindCustomer
 created endEvent Event_ReminderSent "Reminder sent" - after Activity_RemindCustomer
-created sequenceFlow Flow_1brj5dq - Activity_RemindCustomer -> Event_ReminderSent
-changed sequenceFlow Flow_024yl5b - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled)
+created sequenceFlow Flow_RemindCustomerToReminderSent - Activity_RemindCustomer -> Event_ReminderSent
+changed sequenceFlow Flow_CheckInvoiceToInvoiceOk - Activity_CheckInvoice -> Gateway_InvoiceOk (was -> Event_InvoiceHandled) (renamed from Flow_CheckInvoiceToInvoiceHandled: its id named its old ends)
 changed serviceTask Activity_BookInvoice "Book invoice" - ext added zeebe:taskDefinition
 note: inserted Gateway_InvoiceOk between Activity_CheckInvoice and Event_InvoiceHandled
 note: appended after Gateway_InvoiceOk
@@ -1874,6 +1969,7 @@ note: split Gateway_InvoiceOk: 2 branch(es) ending at Activity_BookInvoice, Acti
 note: attached to Activity_ClarifyInvoice
 note: appended after Event_Reminder
 note: appended after Activity_RemindCustomer
+aliases: $ok = Gateway_InvoiceOk, $book = Activity_BookInvoice, $clarify = Activity_ClarifyInvoice, $reminder = Event_Reminder, $remind = Activity_RemindCustomer
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1881,15 +1977,15 @@ written: order.bpmn
 $ bpmn show order.bpmn
 namespaces: zeebe, modeler
 process Process_OrderHandling "Order handling" executable
-  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_1cat8ax)
-  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_024yl5b)
-  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_1qqra0u "yes" if =ok), Activity_ClarifyInvoice (Flow_0d0nlaf "no" default)
-  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_08vgc8d)
-  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_1y8i3yl)
+  startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
+  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_CheckInvoiceToInvoiceOk)
+  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_InvoiceOkToBookInvoice "yes" if =ok), Activity_ClarifyInvoice (Flow_InvoiceOkToClarifyInvoice "no" default)
+  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_BookInvoiceToInvoiceOkJoin)
+  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_InvoiceOkJoinToInvoiceHandled)
   endEvent Event_InvoiceHandled "Invoice handled"
-  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_0jz1192)
-    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_02tom5g)
-  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_1brj5dq)
+  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_ClarifyInvoiceToInvoiceOkJoin)
+    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_ReminderToRemindCustomer)
+  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_RemindCustomerToReminderSent)
   endEvent Event_ReminderSent "Reminder sent"
 root: message Message_OrderReceived "OrderReceived"
 problems: none
@@ -1902,9 +1998,9 @@ layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn participant "Order handling"
-created collaboration Collaboration_17c2kqg
+created collaboration Collaboration_OrderHandling
 created participant Participant_OrderHandling "Order handling" - wraps process Process_OrderHandling
-note: collaboration Collaboration_17c2kqg created; Participant_OrderHandling wraps the existing process Process_OrderHandling
+note: collaboration Collaboration_OrderHandling created; Participant_OrderHandling wraps the existing process Process_OrderHandling
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1917,13 +2013,13 @@ written: order.bpmn
 
 $ bpmn connect order.bpmn Activity_RemindCustomer Participant_Customer --message Reminder
 created message Message_Reminder "Reminder" - root element
-created messageFlow Flow_1r0se6x - Activity_RemindCustomer -> Participant_Customer
+created messageFlow Flow_RemindCustomerToCustomer - Activity_RemindCustomer -> Participant_Customer
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
+diagram BPMNPlane_Collaboration_OrderHandling (Collaboration_OrderHandling)
   participant Participant_OrderHandling "Order handling"
     row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Gateway_InvoiceOk_join, Event_InvoiceHandled
     row 2: Activity_ClarifyInvoice
@@ -1931,9 +2027,9 @@ diagram BPMNPlane_Collaboration_17c2kqg (Collaboration_17c2kqg)
   participant Participant_Customer "Customer"
 layout quality: score 0: no layout problems
 
-$ bpmn color order.bpmn Activity_CheckInvoice Flow_024yl5b Gateway_InvoiceOk --color red
+$ bpmn color order.bpmn Activity_CheckInvoice Flow_CheckInvoiceToInvoiceOk Gateway_InvoiceOk --color red
 layout: ok - incremental (format operations only: drawing kept)
-  format color #0: colored Activity_CheckInvoice, Flow_024yl5b, Gateway_InvoiceOk
+  format color #0: colored Activity_CheckInvoice, Flow_CheckInvoiceToInvoiceOk, Gateway_InvoiceOk
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1945,19 +2041,19 @@ written: order.bpmn
 
 $ bpmn place order.bpmn Activity_RemindCustomer Event_ReminderSent --row-of Activity_ClarifyInvoice --after Activity_ClarifyInvoice
 layout: ok - incremental (format operations only: drawing kept)
-  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_02tom5g, Flow_0jz1192, Flow_1r0se6x
+  format place #0: moved Activity_RemindCustomer, Event_ReminderSent; rerouted Flow_ReminderToRemindCustomer, Flow_ClarifyInvoiceToInvoiceOkJoin, Flow_RemindCustomerToCustomer
 layout quality: score 0 -> 0
 written: order.bpmn
 
 $ bpmn add order.bpmn serviceTask "Archive invoice" --after Activity_BookInvoice
 created serviceTask Activity_ArchiveInvoice "Archive invoice" - after Activity_BookInvoice
-created sequenceFlow Flow_1l931fe - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
-changed sequenceFlow Flow_08vgc8d - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join)
+created sequenceFlow Flow_ArchiveInvoiceToInvoiceOkJoin - Activity_ArchiveInvoice -> Gateway_InvoiceOk_join
+changed sequenceFlow Flow_BookInvoiceToArchiveInvoice - Activity_BookInvoice -> Activity_ArchiveInvoice (was -> Gateway_InvoiceOk_join) (renamed from Flow_BookInvoiceToInvoiceOkJoin: its id named its old ends)
 note: inserted between Activity_BookInvoice and Gateway_InvoiceOk_join
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
-  placed: Activity_ArchiveInvoice, Flow_1l931fe
+  placed: Activity_ArchiveInvoice, Flow_ArchiveInvoiceToInvoiceOkJoin
   moved: Participant_OrderHandling, Event_InvoiceHandled, Activity_RemindCustomer, Event_ReminderSent, Gateway_InvoiceOk_join, Participant_Customer
-  rerouted: Flow_08vgc8d
+  rerouted: Flow_BookInvoiceToArchiveInvoice
 layout quality: score 0 -> 0
 written: order.bpmn
 
@@ -1965,8 +2061,8 @@ $ bpmn metrics order.bpmn
 score 0: no layout problems
 
 $ bpmn validate order.bpmn
+platform: c8 (modeler:executionPlatform "Camunda Cloud") - no Camunda 8 engine rules yet (structure and lint only)
 layout: ok
-platform: c8 (modeler:executionPlatform Camunda Cloud) - no Camunda 8 engine rules yet (structure and lint only)
 valid, 0 warning(s)
 ```
 
@@ -2040,7 +2136,8 @@ Every function runs the code of the CLI command it names, without a file:
   drawing); `result` is what the CLI prints with `--json`
   ([Output](#output-errors-and-exit-codes)) without `file`, `written` and the
   XML: the warnings as a delta (`result.warnings.added`, `resolved`,
-  `preexistingCount`). `renderMutation(result)` gives the CLI's text for it,
+  `preexistingCount`; with batch aliases, `result.aliases` maps each to the
+  final id of its element). `renderMutation(result)` gives the CLI's text for it,
   `mutationSummary(result)` / `renderSummary(summary)` the `--summary`
   form, `renderValidation(report)` the text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
@@ -2064,7 +2161,7 @@ const edit = await applyToXml(xml, [
   { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
 ]);
 if (!edit.unchanged) xml = edit.xml; // and save it
-edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_1cat8ax', 'Event_Done', 'Flow_18s39x0']
+edit.result.created.map((c) => c.id); // ['Event_OrderReceived', 'Activity_CheckInvoice', 'Flow_OrderReceivedToCheckInvoice', 'Event_Done', 'Flow_CheckInvoiceToDone']
 edit.result.layout.mode;              // 'full' (no diagram before: drawn from scratch)
 renderMutation(edit.result);          // the text `bpmn apply` prints: created ... / layout: ok - full (...)
 await showXml(xml);                   // the `bpmn show` text of the quick start above
@@ -2194,9 +2291,13 @@ bundler drops what a host does not import.
 - A write keeps the file's text outside what it changed, and a result equal
   to the file is not written (`MutationResult.unchanged`, `written: false`;
   [What a write changes](#what-a-write-changes)).
-- New ids follow the file's id style; flows and unnamed elements get a short
-  hash instead of `<Prefix>_<n>` ([Ids](#ids)): a batch that refers to an
-  element it creates gives it an explicit `id`.
+- New ids follow the file's id style and speak ([Ids](#ids)): names, a kind
+  and a place for unnamed elements (`Gateway_AfterCheckInvoice`), the ends
+  for flows (`Flow_CheckInvoiceToBookInvoice`), never a hash or `<Prefix>_<n>`;
+  a flow whose id names its ends is renamed when an edit changes them. A
+  batch refers to an element it creates by an alias (`"as": "$check"`,
+  `MutationResult.aliases` / `result.aliases`: alias -> final id) or by an
+  explicit `id`.
 - `checkFile` / `checkDoc` return the validation profile that ran
   (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
   `profile`, `contentRepo`, `validators` and `file`; in a design-iq content

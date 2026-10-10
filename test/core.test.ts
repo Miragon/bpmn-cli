@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
-import { hash7, IdRegistry, isValidId, slugify } from '../src/ids.js';
-import { IdStyle, kindRequest, typeRequest } from '../src/idstyle.js';
+import { IdRegistry, isValidId, slugify } from '../src/ids.js';
+import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/idstyle.js';
 import { kindByName } from '../src/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout.js';
@@ -10,7 +10,7 @@ import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { ChangeSet } from '../src/result.js';
-import { definitionsXml, flowBetween, HASHED, linearDoc } from './helpers.js';
+import { definitionsXml, flowBetween, linearDoc } from './helpers.js';
 
 function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {
   try {
@@ -47,7 +47,7 @@ describe('ids', () => {
     expect(slugify('a'.repeat(60)).length).toBe(40);
   });
 
-  it('generates Prefix_Slug ids and hashed ids for unnamed elements, without collisions (default style)', () => {
+  it('generates Prefix_Slug ids, kind + context ids for unnamed elements and flows named after their ends, without collisions (default style)', () => {
     const ids = new IdRegistry(['Activity_CheckInvoice', 'Flow_3', 'Flow_7']);
     const next = (req: Parameters<IdStyle['next']>[0]): string => {
       const { id } = IdStyle.DEFAULT.next(req, ids);
@@ -57,15 +57,19 @@ describe('ids', () => {
     const task = kindByName('task')!;
     expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_2');
     expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_3');
-    // unnamed: a hash of the stable inputs, like a Camunda Modeler id; a taken one is hashed again with a salt
+    // unnamed (a name without words counts as none): the context, after a word for the kind where the prefix does not say it
     const gw = kindByName('exclusiveGateway')!;
-    const first = next(kindRequest(gw, { name: '???', seed: 'after:A' }));
-    expect(first).toMatch(HASHED('Gateway'));
-    expect(first).toBe(`Gateway_${hash7('exclusiveGateway||' + '|after:A')}`);
-    const second = next(kindRequest(gw, { seed: 'after:A' }));
-    expect(second).toMatch(HASHED('Gateway'));
-    expect(second).not.toBe(first);
-    expect(next(typeRequest('bpmn:LaneSet', { seed: 'Process_1' }))).toMatch(HASHED('LaneSet'));
+    expect(next(kindRequest(gw, { name: '???', context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice');
+    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice_2');
+    expect(next(kindRequest(gw))).toBe('Gateway_Exclusive');
+    expect(next(kindRequest(kindByName('boundaryEvent')!, { trigger: 'timer', context: 'On Check invoice' }))).toBe('Event_TimerOnCheckInvoice');
+    expect(next(kindRequest(kindByName('startEvent')!, { trigger: 'message' }))).toBe('Event_MessageStart');
+    expect(next(typeRequest('bpmn:LaneSet', { context: 'Order handling' }))).toBe('LaneSet_OrderHandling');
+    expect(next(typeRequest('bpmn:Process'))).toBe('Process_Main');
+    // flows: the labels of their ends (default: the speaking part of the end ids); numbers in the registry play no part
+    const flow = connectionRequest('bpmn:SequenceFlow', 'Activity_CheckInvoice', 'Activity_0k3x9qa', { targetLabel: 'Book invoice' });
+    expect(next(flow)).toBe('Flow_CheckInvoiceToBookInvoice');
+    expect(IdStyle.DEFAULT.next(flow, ids)).toEqual({ id: 'Flow_CheckInvoiceToBookInvoice_2', base: 'Flow_CheckInvoiceToBookInvoice' });
   });
 
   it('validates NCNames', () => {
@@ -386,7 +390,8 @@ describe('layout', () => {
     const doc = await linearDoc();
     const cs = runOps(doc, [{ op: 'add', kind: 'textAnnotation', text: 'on the flow', to: 'F1' }]);
     const association = cs.created.find((c) => c.kind === 'association')!.id;
-    expect(association).toMatch(HASHED('Association'));
+    // F1 says nothing about its ends (a number): a flow
+    expect(association).toBe('Association_FlowToOnTheFlow');
     const r = await layoutModel(doc.model);
     expect(r.warnings).toEqual([]);
     expect(r.xml).toContain(`BPMNEdge_${association}`);

@@ -8,7 +8,7 @@
  *      2.0 does not allow there (Camunda 7 files: the platform profile reports
  *      the engines' rule instead, see warnEventGatewayFlow in flows.ts)
  *  - endpoints in different participants (or a participant itself) -> message
- *      flow in the collaboration (id Flow_<hash of the ends> in the default id style, only between InteractionNodes:
+ *      flow in the collaboration (id Flow_<Source>To<Target> in the default id style, only between InteractionNodes:
  *      participants, tasks, events, sub-processes/call activities; gateways ->
  *      E_INVALID_ENDPOINT), op.message -> messageRef (root bpmn:Message by name)
  *  - a text annotation on either side          -> association
@@ -27,7 +27,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
-import { connectionRequest } from '../idstyle.js';
+import { flowRequest } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, is, many, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -124,7 +124,7 @@ function createMessageFlow(doc: Doc, source: El, target: El, op: ConnectOp, cs: 
       hint: 'Use a sequence flow inside a pool.',
     });
   }
-  const id = op.id ? (doc.claimId(op.id), op.id) : doc.allocateId(connectionRequest('bpmn:MessageFlow', idOf(source), idOf(target))).id;
+  const id = op.id ? (doc.claimId(op.id), op.id) : doc.allocateId(flowRequest('bpmn:MessageFlow', source, target)).id;
   const message = op.message ? ensureRootElement(doc, 'bpmn:Message', op.message) : undefined;
   if (message?.created) {
     const name = message.el.get<string | undefined>('name');
@@ -223,7 +223,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     const same = existing ?? existingConnection(doc, kind, source, target);
     if (same) {
       cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
-      return cs;
+      return cs.bind(op.as, same);
     }
   }
   if (existing) {
@@ -286,6 +286,12 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     default:
       break;
   }
+  // the batch alias names the connection (not a root message created with it)
+  const made = [...cs.created].reverse().find((c) => CONNECTION_KINDS.has(c.kind));
+  cs.bind(op.as, made ? doc.get(made.id) : undefined);
+  doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }
+
+const CONNECTION_KINDS = new Set(['sequenceFlow', 'messageFlow', 'association', 'dataAssociation']);

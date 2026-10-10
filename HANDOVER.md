@@ -1,4 +1,4 @@
-# Handover, 2026-10-09 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, and step 2: bpmn-cli as design-iq's editing engine)
+# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and the ids package of step 3)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -14,7 +14,9 @@ the change did not touch, and a result equal to the file is not written. The
 same pipeline runs in the browser on strings (`@miragon/bpmn-cli`:
 `applyToXml` and friends; the file helpers are `@miragon/bpmn-cli/node`), with
 host validators and a copy of design-iq's save gate inside the transaction.
-New ids follow the file's id style. A hand-made diagram is kept (new elements
+Elements are addressed by id only; new ids speak (names, kind + place,
+the ends of a flow) in the file's id style, and an `apply` batch names what
+it creates with aliases (`"as": "$name"`). A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
@@ -107,6 +109,75 @@ still has no column information; `render` is not a command; the full `show`
 keeps vendor values but not the extension summary of `--around` (to keep
 its size); JSON is compact but not slimmer (the model view still repeats
 `type` / `extensions` / `extensionElements`).
+
+## What step 3 (ids & batches) changed (2026-10-10)
+
+User decisions: no name-based addressing (elements are addressed by id,
+names may repeat), and every new id must speak. Branch `step3/ids`; table
+and evidence in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-2026-10-10-speaking-ids-and-batches).
+
+- **Speaking ids** (`src/idstyle.ts`): `next(req)` always builds the id from
+  words: a named element from its name, an unnamed one from a word for its
+  kind and its context (`IdRequest.context`, given by the ops:
+  `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>`;
+  `Gateway_AfterCheckInvoice`, `Event_TimerOnReview`, `Event_EndAfterTimer`),
+  a flow from its ends (`flowRequest`, `labelOf`: the speaking part of an
+  end's id, its name when the id says too little, else a kind word;
+  `Flow_CheckInvoiceToBookInvoice`), the rest from its owner. The prefixes,
+  the body case and the file's own flow forms are learned as in step 2;
+  hashed and numbered files lend their prefix and separator to the new
+  `named` flow form; `hash7` and running numbers are gone. Every collision
+  suffix is recorded by `Doc.allocateId` and reported as `W_ID_SUFFIXED`
+  (`Doc.reportSuffixed`, called by `runOp`, `addElement`, `connectElements`).
+- **Flows follow their ends** (`ops/flows.ts followEnds`, called by
+  `redirectFlow` and `spliceIntoFlow`): a flow whose id is the one the
+  style gives a flow between its old ends (also with a suffix, also built
+  from an end's former name) is renamed after its new ends, its derived DI
+  edge id with it; the change says `renamed from ...`. `ChangeSet.rename`
+  rewrites the entries of earlier ops of the batch. `Doc.followFlowEnds =
+  false` keeps ids (the engine-ownership check simulates a remove).
+- **Batch aliases** (`src/ops/aliases.ts`, `ops/index.ts runBatch`): `as`
+  (add, connect, split, split nodes), `flowAs` (add, split nodes: the flow
+  into the node), `joinAs` (split); aliases bind elements
+  (`ChangeSet.bind`), are resolved per op (format ops at the end of the
+  batch), checked by `parseOps` (`checkAliases`); `MutationResult.aliases`
+  / the `aliases:` line. `mutateDoc` resolves typed ops the same way.
+- **E_NOT_FOUND** (`Doc.suggest`, `Doc.batch`): ranked candidates (renamed
+  in the batch, case / umlaut / other or no prefix, containment, typos with
+  `editDistance` from `src/ids.ts`, names), the batch's own ids first and in
+  the hint.
+- **remove** (`ops/remove.ts`): `--with-branch` (`branchOf`: the nodes only
+  the root leads to, boundary paths and compensation handlers included;
+  `E_AMBIGUOUS_BRANCH` for a node several paths reach) and `--bridge-all`
+  (a join from every predecessor; `E_AMBIGUOUS_BRIDGE` for a split).
+- **add into a cross-lane flow** (#14, `ops/add.ts inheritedLane`): the lane
+  of the row the incremental layout uses (the target's after a branching
+  source), `W_LANE_INHERITED`; decided before the placement.
+
+Tests: `test/speaking-ids.test.ts`, `test/batch-aliases.test.ts`,
+`test/not-found.test.ts`, `test/remove-branch.test.ts`,
+`test/lane-splice.test.ts`; expectations of hashed / numbered ids in the
+older tests now name speaking ids. Tool: `tools/speaking-ids.mjs`.
+
+Evidence (291 real files, counts only): new ids that speak 1,745 / 1,745
+(0.3.0: 645 / 1,365); the prefix step 2 learned kept for 1,628 / 1,630; two
+independent edits at two places share a new id in 0 / 225 file pairs (0.3.0:
+9), with unnamed elements 3 / 225 (0.3.0: 9), with the same name 225 / 225
+(0.3.0: 219: a name gives the id); 380 flows renamed after their ends; an
+insert changes 70 lines (median; 0.3.0: 66). Gate: 1,353 tests, layout
+regression 444, fuzz 0 errors; 80 x 25 fuzz walks as 0.3.0. The README's
+Camunda 7 example with speaking ids deploys on the three Camunda 7 engines.
+
+Still open from this package: two branches that add an element of the same
+name produce the same id (git merges both: a duplicate id), the same for
+unnamed elements at anchors of the same name; renaming a flow after its ends
+changes a few more lines of an insert (the flow, its ends' mirror lists, its
+DI edge); `move --flow` / `move --after` into a cross-lane flow keep their
+old lane rule; a plain `remove` of a join still disconnects and floods the
+output (#53, `--bridge-all` / `--with-branch` are opt-in); `Process_1` /
+`Definitions_1` of `bpmn new` without `--name` are tool defaults, not
+speaking.
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
@@ -280,8 +351,8 @@ regions per save); a write keeps the file's element order, so it no longer
 repairs an element in a place the BPMN XSD does not allow (0.2 rewrote such a
 file in bpmn-moddle's order; 1 of 218 real Camunda 7 files, refused by the
 engines before and after an edit); a spliced or bridged flow keeps its id
-(#48); files that number their flows can still collide across branches (9 of
-225 file pairs); in a process with two lane sets the design profile checks
+(#48) and files that number their flows can still collide across branches (9
+of 225 file pairs) (both resolved by step 3's speaking ids); in a process with two lane sets the design profile checks
 the lanes design-iq does not read (stricter, documented); a sticky moves by its node's centre shift only; nested lanes
 (`set lane=` writes the child lane only, design-iq reads top-level lanes) and
 lane inheritance of a node placed next to a node in no lane; design-iq's
@@ -578,9 +649,8 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
    in a child lane also listed by the parent lanes, as bpmn-js and design-iq
    expect; today `set lane=` writes the child lane only and `E_LANE_CONFLICT`
    reports bpmn-js files that list both) and lane inheritance for nodes
-   placed next to a node in no lane; batch aliases (`as:`) so that an
-   `apply` batch can refer to an element it creates without an explicit id;
-   a Camunda 8 profile (#28); the bundle size if design-iq needs it.
+   placed next to a node in no lane; a Camunda 8 profile (#28); the bundle
+   size if design-iq needs it.
 5. **Let the agent see the result**: a `render` command (`tools/render.sh`
    works).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the

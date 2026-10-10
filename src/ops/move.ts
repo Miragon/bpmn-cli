@@ -31,7 +31,7 @@ import { kindLabel } from '../kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { assignLane } from './containers.js';
-import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, warnEventGatewayFlow, type PlacementOptions } from './flows.js';
+import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type PlacementOptions } from './flows.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { changeOf, idOf } from './set.js';
 import type { MoveOp } from './types.js';
@@ -231,8 +231,8 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   removeSequenceFlow(doc, outFlow, cs);
   cs.remove(flowChange(outFlow));
   reserveIds(doc, [idOf(outFlow)]);
-  redirectFlow(doc, inFlow, { target: successor });
-  cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})` });
+  const renamed = redirectFlow(doc, inFlow, { target: successor });
+  cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}` });
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
 
