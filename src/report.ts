@@ -9,7 +9,7 @@
  *   mutationReport(result)    the JSON of a mutation (no XML): warnings as a delta
  *                             (added / resolved / preexistingCount), not every warning of the file
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
- *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / removed ids, the format ops,
+ *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / renamed / removed ids, the format ops,
  *                             the added warnings, the layout score and added problems
  *   renderSummary(summary, { dryRun })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
@@ -57,6 +57,8 @@ export interface MutationReport {
   notes: string[];
   /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
   aliases?: Record<string, string>;
+  /** ids the change renamed (a flow whose id named its old ends, renamed after its new ones): old id -> new id */
+  renamed?: Record<string, string>;
   layout: LayoutStatus;
   /** errors a forced write let through, the platform summary and the validators that ran; the warnings are in `warnings` */
   validation: Omit<ValidationResult, 'warnings'>;
@@ -102,11 +104,30 @@ export function mutationWarnings(result: MutationResult): Warning[] {
   return [...opWarnings(result), ...result.validation.warnings, ...layoutWarnings(result.layout)];
 }
 
+/** old id -> final id of what the ops renamed of the file's elements (a chain A -> B -> C as A -> C); absent without renames. */
+function renamedIds(result: MutationResult): Record<string, string> | undefined {
+  const out = new Map<string, string>();
+  for (const { from, to } of result.changes.renames ?? []) {
+    let chained = false;
+    for (const [old, now] of out) {
+      if (now !== from) continue;
+      out.set(old, to);
+      chained = true;
+    }
+    if (!chained) out.set(from, to);
+  }
+  // an element the change created is listed under its final id; only ids the file had before count
+  const created = new Set(result.changes.created.map((c) => c.id));
+  for (const [old, now] of out) if (old === now || created.has(now)) out.delete(old);
+  return out.size ? Object.fromEntries(out) : undefined;
+}
+
 /** The JSON the CLI prints for a mutation with --json. */
 export function mutationReport(result: MutationResult): MutationReport {
   // a result built without the pipeline's delta reports every validation warning as added
   const delta = result.delta ?? { added: result.validation.warnings, resolved: [], preexisting: 0 };
   const { warnings: _all, ...validation } = result.validation;
+  const renamed = renamedIds(result);
   return {
     ok: true,
     file: result.file,
@@ -118,6 +139,7 @@ export function mutationReport(result: MutationResult): MutationReport {
     warnings: { added: [...opWarnings(result), ...delta.added, ...layoutWarnings(result.layout)], resolved: delta.resolved, preexistingCount: delta.preexisting },
     notes: result.changes.notes,
     ...(result.aliases ? { aliases: result.aliases } : {}),
+    ...(renamed ? { renamed } : {}),
     layout: result.layout,
     validation,
     importWarnings: result.importWarnings,
@@ -245,6 +267,8 @@ export interface MutationSummary {
   /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
   aliases?: Record<string, string>;
   changed: string[];
+  /** ids the change renamed: old id -> new id (a flow whose id named its old ends) */
+  renamed?: Record<string, string>;
   removed: string[];
   /** errors a forced write (--force) let through */
   forced?: Warning[];
@@ -279,6 +303,7 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     created,
     ...(report.aliases && Object.keys(report.aliases).length ? { aliases: report.aliases } : {}),
     changed: uniqueIds(report.changed),
+    ...(report.renamed ? { renamed: report.renamed } : {}),
     removed: uniqueIds(report.removed),
     ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
     warnings: { added: report.warnings.added, resolvedCount: report.warnings.resolved.length, preexistingCount: report.warnings.preexistingCount },
@@ -294,8 +319,8 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
 }
 
 /**
- * The text of `--summary`: `created <kind>: ids` per kind, `changed:` and
- * `removed:` ids, one `format <op> #<i>: ...` line per format op, forced
+ * The text of `--summary`: `created <kind>: ids` per kind, `aliases:`,
+ * `changed:`, `renamed: old -> new` and `removed:` ids, one `format <op> #<i>: ...` line per format op, forced
  * errors, the added warnings (floods as one line),
  * `warnings: n added, n resolved, n already in the file`, one layout line
  * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`)
@@ -306,6 +331,8 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
   for (const [kind, ids] of Object.entries(summary.created)) lines.push(`created ${kind}: ${ids.join(', ')}`);
   if (summary.aliases) lines.push(aliasLine(summary.aliases));
   if (summary.changed.length) lines.push(`changed: ${summary.changed.join(', ')}`);
+  // a later command must use the new id: say which old one it replaces
+  if (summary.renamed) lines.push(`renamed: ${Object.entries(summary.renamed).map(([a, b]) => `${a} -> ${b}`).join(', ')}`);
   if (summary.removed.length) lines.push(`removed: ${summary.removed.join(', ')}`);
   // a format op changes the drawing only: its line says what it moved (or why it did not)
   for (const f of summary.format ?? []) lines.push(formatLine(f).trimStart());

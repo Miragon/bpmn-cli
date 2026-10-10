@@ -130,6 +130,24 @@ describe('--summary: aliases and format ops', () => {
     expect(text).toMatch(/^format place #1: /m);
   });
 
+  it('names the old id of a flow the change renamed after its new ends (text and JSON)', async () => {
+    const xml = await orderModel();
+    const r = await applyToXml(xml, [
+      { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' },
+      { op: 'add', kind: 'task', name: 'Notify', after: 'Activity_LogReason' },
+    ]);
+    // Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason (splice); Flow_LogReasonToClarifyOrder (new) -> Flow_LogReasonToNotify (second splice)
+    expect(r.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
+    const summary = mutationSummary(r.result);
+    expect(summary.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
+    expect(renderSummary(summary)).toMatch(/^renamed: Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason$/m);
+    const chain = await applyToXml(xml, [
+      { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' },
+      { op: 'add', kind: 'task', name: 'Prepare', before: 'Activity_LogReason' },
+    ]);
+    expect(chain.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToPrepare' });
+  });
+
   it('a format-only change is not "no changes": the line says what moved, or why nothing did', async () => {
     const xml = await orderModel();
     const r = await applyToXml(xml, [{ op: 'compact' }]);
