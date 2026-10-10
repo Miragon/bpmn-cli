@@ -1,0 +1,17 @@
+{
+  "name": "miragon-bpmn",
+  "description": "Miragon's Claude Code plugins for BPMN 2.0: model, change, format and validate processes with the bpmn CLI instead of hand-written XML.",
+  "owner": {
+    "name": "Miragon GmbH",
+    "url": "https://www.miragon.io"
+  },
+  "plugins": [
+    {
+      "name": "bpmn-cli",
+      "source": "./plugins/bpmn-cli",
+      "description": "A skill that creates, reads, changes, formats and validates BPMN 2.0 models (.bpmn) with @miragon/bpmn-cli: semantic edits by id, the drawing kept, Camunda 7 and Camunda 8 details, no XML by hand.",
+      "category": "development",
+      "tags": ["bpmn", "process-modeling", "camunda", "camunda-7", "camunda-8", "workflow"]
+    }
+  ]
+}

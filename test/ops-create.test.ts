@@ -1056,7 +1056,7 @@ describe('connect: self-loops', () => {
 });
 
 describe('split: terminating branches', () => {
-  it('a branch ending in an end event stops there; the others join and continue', async () => {
+  it('a branch ending in an end event stops there; the one that continues runs on without a pass-through join', async () => {
     const doc = await linearDoc();
     const cs = splitFlow(doc, {
       op: 'split',
@@ -1067,12 +1067,13 @@ describe('split: terminating branches', () => {
         { flowName: 'no', default: true, nodes: [{ kind: 'end', name: 'Rejected' }] },
       ],
     });
-    const join = doc.require('Gateway_Ok_join');
-    expect(doc.incoming(join).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_Book']);
+    // a join only Activity_Book would reach is no join: none is created
+    expect(doc.has('Gateway_Ok_join')).toBe(false);
+    expect(doc.outgoing(doc.require('Activity_Book')).map((f) => edge(doc, f.get<string>('id')))).toEqual(['Activity_Book->End']);
     expect(doc.outgoing(doc.require('Event_Rejected'))).toHaveLength(0);
     expect(doc.require('Gateway_Ok').get<El>('default').get<El>('targetRef').get('id')).toBe('Event_Rejected');
-    expect(edge(doc, ids(doc.outgoing(join))[0]!)).toBe('Gateway_Ok_join->End');
     expect(cs.notes.some((n) => n.includes('Event_Rejected terminates'))).toBe(true);
+    expect(cs.notes.some((n) => n.includes('no join gateway created'))).toBe(true);
     expect(cs.warnings).toHaveLength(0);
     await roundTrip(doc);
   });

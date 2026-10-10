@@ -39,6 +39,7 @@ with a laid-out diagram.
 ## Contents
 
 - [Install](#install)
+- [Claude Code plugin](#claude-code-plugin)
 - [The contract](#the-contract)
 - [Ids](#ids)
 - [Command reference](#command-reference)
@@ -104,6 +105,69 @@ untyped and the serialisation is unchanged. `zeebe-bpmn-moddle` (pinned to
 `src/platform/zeebe-descriptor.ts` by the same tool and read as data
 (placement and known names of zeebe content, [Camunda 8](#camunda-8)).
 
+## Claude Code plugin
+
+This repository is also a [Claude Code](https://code.claude.com/docs/en/plugins) plugin
+marketplace, `miragon-bpmn`, with one plugin, `bpmn-cli`. Its skill `bpmn` makes Claude use this
+CLI whenever a request creates or touches a BPMN model ("model the order process", "add an
+approval step", "colour the happy path", "make it deployable on Camunda 8", "Prozess
+modellieren", "BPMN anpassen", ...) instead of writing BPMN XML by hand.
+
+Install it in a Claude Code session:
+
+```
+/plugin marketplace add Miragon/bpmn-cli
+/plugin install bpmn-cli@miragon-bpmn
+```
+
+or from the shell with `claude plugin marketplace add Miragon/bpmn-cli` and
+`claude plugin install bpmn-cli@miragon-bpmn` (Claude Code 2.1.275 and later also take one
+step: `/plugin install bpmn-cli --marketplace Miragon/bpmn-cli`). The repository is private:
+Claude Code clones it with the credentials of your machine and never prompts, so you need read
+access to `Miragon/bpmn-cli` and either an SSH key loaded in `ssh-agent` or a stored HTTPS
+credential (`gh auth login`, then `gh auth setup-git`; `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` skips
+the SSH attempt). `/plugin marketplace update miragon-bpmn` fetches a new release, or enable
+auto-update for the marketplace under `/plugin` > Marketplaces.
+
+What the skill does:
+
+- **Runs the CLI** - `bpmn` from `PATH`, else `npx -y @miragon/bpmn-cli@<version>` pinned to the
+  plugin's version (Node 20+); these two commands are the only ones it pre-approves. Batches are
+  piped in with `printf '%s' '<json>' | bpmn apply <file> -`, which runs under that
+  pre-approval (a heredoc holding JSON makes Claude Code ask first).
+- **Standing rules** - never write or patch `.bpmn` XML or BPMNDI; address elements by id only;
+  give every created element an explicit speaking id (`Activity_CheckInvoice`); aliases for back
+  references inside a batch; one `bpmn apply` batch per change; keep the user's drawing
+  (`--relayout` only on request).
+- **The loop** - orient with `show`, `show --around`, `show <id> --context`, `find`; change in one
+  batch; read the result (layout mode, placed / moved, added layout problems, the warnings the
+  change added); `validate` (`--strict` for deployable models); format with `show --layout`,
+  dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the common errors and
+  their fixes.
+- **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
+  5k when it fires); `reference/` has the batch format, formatting, Camunda 7, Camunda 8 and
+  complete recipes; for everything else the skill sends Claude to `bpmn guide <topic>` and
+  `bpmn kinds`, so the CLI's own documentation stays the single source.
+
+The plugin's version is the package version: release-please bumps
+`plugins/bpmn-cli/.claude-plugin/plugin.json` and the pinned `npx` version of the skill in each
+release PR ([docs/releasing.md](docs/releasing.md)). `test/plugin.test.ts` (part of `npm test`)
+keeps the skill honest: it runs every recipe and reference example against the CLI built from
+`src/`, checks that every `bpmn <command> --option` the skill mentions exists, and that the
+versions agree. To work on the plugin:
+
+```
+claude plugin validate --strict plugins/bpmn-cli   # the plugin (CI runs both)
+claude plugin validate --strict .                  # the marketplace
+claude --plugin-dir plugins/bpmn-cli               # a session with the local plugin loaded
+claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit
+```
+
+The eval suite (six cases: an order-to-cash model from scratch, a change to a hand-drawn model,
+a Camunda 7 external task, a formatting request, a German Camunda 8 request, and an unrelated
+question the skill must ignore) and how to run it are described in
+[plugins/bpmn-cli/evals/README.md](plugins/bpmn-cli/evals/README.md).
+
 ## The contract
 
 1. **You edit the metamodel.** Every command names elements by id and changes
@@ -163,7 +227,7 @@ the ids the file has and generates new ones the same way. Explicit ids
 | prefix | per kind (and trigger); else what its family shares (`Task_` for every task kind); else the type when prefixes name types; else the bpmn-cli prefix in the file's case. No prefix is a convention too: where a kind's or family's ids have none, or the file's flow nodes mostly have none, a named element gets a bare id (camelCase, PascalCase in a PascalCase file); an unnamed one keeps a prefix | `Activity_`, `Task_`, `serviceTask_`, `End_`, `messageBoundaryEvent_`, `event_`; bare `reviewOrder` |
 | case of the body | the case of the named flow nodes' ids (of the other named elements when the flow nodes show none); Camunda Modeler hashes (`Activity_0k3x9qa`) and numbers (`Task_12`) show none: PascalCase | `CheckInvoice` (default), `checkInvoice`, `check_invoice`, `Check_Invoice` |
 | sequence / message flows | the form of at least half of the flows; files whose flows are hashed (`Flow_0k3x9qa`, `SequenceFlow_1abc2de`) or numbered (`Flow_12`, `SF_3`, `flow12`) lend their prefix to the `named` form | `named`: `Flow_CheckInvoiceToBookInvoice` (default), `SequenceFlow_ArchiveToDone`, `SF_ThirdToFinish`, `flowReviewOrderToPackGoods`; the file's own forms: `flow_checkStockToShipGoods`, `Flow_<from>_<to>`, `Flow_<from>_to_<to>`, `Flow_check_stock_to_ship_goods`, `Flow_<scope>_<A>To<B>` (`Flow_KotO_ValidateToReserve`: the scope the flows share, the first word of each end, `Start` / `End` for start and end events) |
-| diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
+| diagram (DI) | the form of the file's DI ids; a full redraw keeps every existing DI, plane and diagram id; a DI id derived from a long element id is cut like one (at most 64 characters) | `<id>_di`, `BPMNShape_<id>`, `Shape_<id>` |
 
 One id is not a convention: a rule needs two ids that follow it (in a file
 whose ids are mostly prefixed, one id of a kind is enough for that kind). A
@@ -177,6 +241,7 @@ What the body says:
 | unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes); after or before an unnamed anchor placed the same way, the nearest named anchor, once (and the anchor's kind where the id would repeat the anchor's: see below) | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimerOnCheckInvoice`, `Event_ErrorStartInHandleErrors`; after `Gateway_AfterCheckInvoice`: `Event_EndAfterCheckInvoice` (never `EndAfterAfterCheckInvoice`) |
 | flow | its ends: `<Source>To<Target>` (in the file's case: `checkStockToShip`, `check_stock_to_ship`) | `Flow_CheckInvoiceToBookInvoice`, `Flow_CheckInvoiceToAfterCheckInvoice` (to the unnamed gateway after it), `Flow_BookInvoiceToCheckInvoiceJoin` (to that split's join) |
 | join of a split | the split gateway's id + `_join` (camelCase files: `Join`) | `Gateway_InvoiceOk_join`, `gateway_fanOutJoin` |
+| data object / store | the reference (what `add` creates and the agent addresses) and the element it stands for each get the name after their own prefix; where a file names prefixes after types, the reference's is its own type | `DataObjectReference_Invoice` + `DataObject_Invoice`; `dataObjectReference_invoice` + `dataObject_invoice` |
 | other | what it belongs to | `Collaboration_OrderHandling` (its process), `LaneSet_OrderHandling`, `Process_Customer` (its pool), `TextAnnotation_CheckWithinTwoDays` (its text), `Association_CheckInvoiceToCheckWithinTwoDays`, `DataInputAssociation_OrderToCheckInvoice` |
 
 An end or anchor is named by the speaking part of its id (ids are built
@@ -185,7 +250,9 @@ changed; an unnamed element by its own kind and place, `Gateway_AfterCheckInvoic
 is `AfterCheckInvoice`, the join of the split after it `CheckInvoiceJoin`,
 so the flows at two unnamed gateways differ without a suffix), by its name
 when its id says too little (a hash, a number, one or two letters), else by
-a word for its kind (`Gateway`, `End`, `Timer`). Ids that say nothing
+a word for its kind (`Gateway`, `End`, `Timer`); an id with a number still
+speaks when it has a word (`Gateway_AfterCheck2024` is `AfterCheck2024`;
+machine ids such as `sid-6F1C...` or UUIDs do not). Ids that say nothing
 (Camunda Modeler hashes, numbers, `StartEvent_1`) are never copied into new
 ids. A name without a letter (`123`, `✓✓✓`) names nothing: the element gets
 the id of an unnamed one.
@@ -238,9 +305,13 @@ accents dropped (`Café` -> `Cafe`). An id that is not found
 new id of a flow an earlier op of the batch renamed; the same id in another
 case, umlaut spelling or with another or no prefix (`Activity_Prufung`,
 `Activity_Prüfung` -> `Activity_Pruefung`; `Task_CheckInvoice`,
-`CheckInvoice` -> `Activity_CheckInvoice`); ids containing it; typos
-(`Activity_ChekInvoice`); names containing it. Inside an `apply` batch the
-ids it created come first, and the hint lists them (and points out an alias
+`CheckInvoice` -> `Activity_CheckInvoice`); ids containing it, or with the
+same prefix and one body inside the other
+(`Flow_GatewayInvoiceOkToBookInvoice` -> `Flow_InvoiceOkToBookInvoice`);
+typos (`Activity_ChekInvoice`); names containing it. Ids with the prefix of
+the one asked for come first (a mistyped flow id suggests flows before the
+gateway its words contain). Inside an `apply` batch the ids it created come
+first within a tier, and the hint lists them (and points out an alias
 written without `$`).
 
 ## Command reference
@@ -276,7 +347,7 @@ bpmn align <file> [<id...>] --axis row|column [--to <id>] [SELECTORS]
 bpmn color <file> [<id...>] --color blue|orange|green|red|purple|default [SELECTORS]   (alias: colour)
 bpmn label <file> <id> --side above|below|left|right
 bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]
-bpmn space <file> (--after <id> | --below <id>) [--by column|row|<px>|-column|-row|-<px>]
+bpmn space <file> (--after <id> | --below <id>) [--by column|row|<n>col|<n>row|<px>|-column|-<n>col|-row|-<px>]
 bpmn tidy <file> [<id>...] [SELECTORS]
 bpmn compact <file> [<poolId|laneId|subProcessId>...]
   SELECTORS: --path <fromId> <toId> [--via <flowId...>] | --kind <kind> | --branch <flowId>
@@ -1033,7 +1104,7 @@ after the semantic ops and the layout, in batch order, all or nothing.
 | `color <id...> --color blue\|orange\|green\|red\|purple\|default` | The bpmn-js colour picker colours on shapes and connections (`bioc:fill` / `bioc:stroke` / `color:background-color` / `color:border-color`, labels `color:color`); `default` removes them. `color --path <fromId> <toId> --color green` colours a whole path. |
 | `label <id> --side above\|below\|left\|right` | The external label of an event, gateway, data object / store or flow on that side (flows: of their longest horizontal / vertical segment), off lines and other labels where possible. |
 | `route <flowId> [--exit <side>] [--entry <side>]` | Route one sequence / message flow again, optionally forcing the side it leaves its source and enters its target by (`--exit bottom --entry bottom` draws a loop below). |
-| `space --after <id> \| --below <id> [--by column\|row\|<px>]` | The space tool: everything starting right of (within the element's pool) / below the element moves by one column / row of the drawing or `<px>`; pools, lanes and the sub-processes holding the element grow, any other expanded sub-process crossing the line moves as a whole (mostly beyond it) or stays. On a lane or pool it makes that frame wider / taller. A negative amount (`--by -column`, `-row`, `-<px>`) closes up to that much of the empty space right of / below the element instead (the drawing's gap stays; on a lane or pool: its own empty right / bottom part, the frame gets smaller); only as far as it is empty (a note says how much), and `E_NO_ROOM` when closing would add a layout problem. |
+| `space --after <id> \| --below <id> [--by column\|row\|<n>col\|<n>row\|<px>]` | The space tool: everything starting right of (within the element's pool) / below the element moves by one column / row of the drawing, `<n>col` / `<n>column(s)` / `<n>row(s)` of them, or `<px>` (a number or `80px`; the result notes the distance moved, and a few pixels say how to ask for columns: `--by 2` is 2 px, `--by 2col` two columns); pools, lanes and the sub-processes holding the element grow, any other expanded sub-process crossing the line moves as a whole (mostly beyond it) or stays. On a lane or pool it makes that frame wider / taller. A negative amount (`--by -column`, `-row`, `-<px>`) closes up to that much of the empty space right of / below the element instead (the drawing's gap stays; on a lane or pool: its own empty right / bottom part, the frame gets smaller); only as far as it is empty (a note says how much), and `E_NO_ROOM` when closing would add a layout problem. |
 | `tidy [<id>...]` (also `bpmn layout --tidy`) | Remove overlaps and gaps < 20 px with minimal moves, keeping the reading order (nothing moves left), default every shape. |
 | `compact [<poolId\|laneId\|subProcessId>...]` | Close the empty rows and columns and shrink the frames to their content, keeping the order and the relative positions: expanded sub-processes first (deepest first, everything outside stays), then the columns of each pool (all its lanes at once), then the rows of each lane (bottom up; the lanes and pools below move up, the pool shrinks; an empty lane keeps 120 px), then the rows between pools; pools that were right-aligned stay aligned. What stays between content is the drawing's gap (columns) or clamp(row spacing - 80, 30, 60) (rows), frames keep 30 px of padding (45 above the content of a sub-process). Message flows do not hold a gap open: their bends and labels in it are squeezed with it. Each strip is closed only when that adds no hard layout problem and does not raise the score, else it stays open (a note names what closing it would have added). With ids: only those frames and what is inside them. |
 | `order <poolId\|processId\|laneId> <laneId...>` | Lanes top to bottom; the bands move with their content. |
@@ -1496,7 +1567,10 @@ script, called decision), a call activity without `zeebe:calledElement`
 `zeebe:subscription` correlation key, a JUEL `${...}` condition or any
 static value where Camunda 8 wants FEEL, a FEEL syntax error (below), a
 timer value it cannot parse (`PT2D` instead of `P2D`, `PT1.5H`: a fraction
-on seconds only, a date without offset, a 5-field cron), a cycle on an
+on seconds only, a date without offset, a 5-field cron) or that is out of
+range (a date that does not exist, `2030-02-30`, `25:00`, an offset over 18
+hours; a cron field out of range, hour 25, month 13, a step of 0, a
+reversed range, `?` outside the day fields; also a due date), a cycle on an
 intermediate or interrupting timer,
 a multi-instance loop without `zeebe:loopCharacteristics` or
 `inputCollection`, two of a zeebe element it reads once, form, priority,
@@ -1508,9 +1582,13 @@ catch, an empty link name), unsupported elements (transaction, cancel
 events), what the BPMN schema refuses (an unprefixed attribute BPMN does not
 define, an id that is no XML NCName such as `a:b`, an IDREF that names no
 id such as a lane's `flowNodeRef`, child elements out of the schema's order
-such as `extensionElements` after `incoming`: the last two are read from the
-file's text, the model shows neither), and a file without an executable
-process. White space is a value to Camunda 8 where it is a name: a job type,
+such as `extensionElements` after `incoming`, an `xsd:boolean` attribute of
+another value than `true` / `false` / `1` / `0` such as
+`cancelActivity="maybe"`: the last three are read from the file's text, the
+model shows none of them; bpmn-moddle reads such a boolean as false), and a
+file without an executable process. A duplicate id is a structural error on
+every platform (`E_DUPLICATE_ID`: bpmn-moddle keeps the first element and
+drops the later one with an import warning; both engines refuse the file). White space is a value to Camunda 8 where it is a name: a job type,
 message / signal name, error / escalation code, process / decision id or
 result variable of white space deploys (only an empty one is refused), so
 the profile reports only the empty one; a FEEL, path or enum attribute, a
@@ -1855,7 +1933,11 @@ anchor (splicing into its single outgoing flow if it has one), creates every
 branch (the first node gets the branch's flow options, following nodes are
 chained), and a join gateway of the same kind (`<gatewayId>_join`) that every
 branch end connects to; when the anchor was spliced, the join continues to the
-old successor. An empty `nodes` list is a direct gateway -> join flow.
+old successor. An empty `nodes` list is a direct gateway -> join flow. A
+branch that ends in an end event terminates there; a join needs two branches
+that reach it: when only one continues, it runs on to the old successor
+directly (no pass-through gateway; `joinAs` is then a usage error), when none
+does, no join is created.
 
 **Batch aliases.** An op names what it creates with `"as": "$name"` (`add`,
 `connect`, `split` and the nodes of a split branch); `add` and split nodes
@@ -1916,7 +1998,13 @@ kebab-case spellings and small typos: `rowof` -> `rowOf`, `colour` ->
 `color`), wrong value types, conflicting placements
 (`flow` + `in`, `after` + `on`, ...), flow options without a flow-creating
 placement, `default` together with `condition`, trigger keys on non-event
-kinds, and unknown kinds are all rejected before anything runs. Numbers and
+kinds, and unknown kinds are all rejected before anything runs. A common
+wrong shape gets a hint with the op rewritten (it is never accepted): a
+`route` with `"flowId"` (route names its flow with `"id"`), a `set` with its
+properties at the top level (they go in `"values"`). On the command line an
+unknown option that is a positional argument or a key gets the command
+rewritten: `add f.bpmn --kind userTask --name "Check"` -> `bpmn add f.bpmn
+userTask Check`, `set f.bpmn X --name Y` -> `bpmn set f.bpmn X name=Y`. Numbers and
 booleans inside `values` / `set` / `attrs` maps are converted to strings;
 `null` values are treated as absent. The JSON Schema (draft 2020-12) is
 available as `bpmn kinds --json` -> `ops`.

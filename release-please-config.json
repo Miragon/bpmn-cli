@@ -7,7 +7,18 @@
   "packages": {
     ".": {
       "package-name": "@miragon/bpmn-cli",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "plugins/bpmn-cli/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "plugins/bpmn-cli/skills/bpmn/SKILL.md"
+        }
+      ]
     }
   }
 }
