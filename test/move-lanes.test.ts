@@ -7,7 +7,9 @@
  * before, it took the anchor's (the flow source's) lane, so after a
  * branching gateway it sat in the source lane but on the target's row. A
  * node that is in a lane keeps it (a note when the flow runs between two
- * other lanes); --lane decides up front. Synthetic models only.
+ * other lanes) and is drawn on a row of that lane, like `add --lane` (before,
+ * on the target's row with its lane stretched over to it); --lane decides up
+ * front. Synthetic models only.
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
@@ -108,6 +110,24 @@ describe('move into a flow between two lanes (audit #14 for move)', () => {
     const one = await applyToXml(xml, [{ op: 'move', ids: ['Activity_Note'], flow: 'Flow_RefundToBookRefund' }], { layout: 'incremental' });
     expect(await laneIdOf(one.xml, 'Activity_Note')).toBe('Lane_Archive');
     expect(one.result.notes.filter((n) => n.includes('stays in its lane'))).toEqual([]);
+  });
+
+  it('a node that keeps the branching anchor\'s lane goes on a row of that lane: the lane never stretches over to the target\'s row (move and add --lane)', async () => {
+    const xml = await claims();
+    const before = { clerk: bounds(xml, 'Lane_Clerk'), acc: bounds(xml, 'Lane_Accounting') };
+    const moved = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CheckClaim'], flow: 'Flow_GoodwillToRefund' }], { layout: 'incremental' });
+    const added = await applyToXml(xml, [{ op: 'add', kind: 'task', id: 'Activity_Log', name: 'Log', flow: 'Flow_GoodwillToRefund', lane: 'Lane_Clerk' }], { layout: 'incremental' });
+    for (const [r, id] of [
+      [moved, 'Activity_CheckClaim'],
+      [added, 'Activity_Log'],
+    ] as const) {
+      expect(await laneIdOf(r.xml, id)).toBe('Lane_Clerk');
+      expect(inside(bounds(r.xml, id), bounds(r.xml, 'Lane_Clerk'))).toBe(true);
+      // before: drawn on Activity_Refund's row, Lane_Clerk stretched down over it and pushed Lane_Accounting away
+      expect(bounds(r.xml, 'Lane_Clerk').height).toBe(before.clerk.height);
+      expect(bounds(r.xml, 'Lane_Accounting').y).toBe(before.acc.y);
+      expect((r.result.layout.metrics?.added ?? []).filter((p) => p.kind.startsWith('outside') || p.kind === 'overlaps')).toEqual([]);
+    }
   });
 
   it('a flow inside one lane: the lane of the anchor, no warning', async () => {

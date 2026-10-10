@@ -500,7 +500,10 @@ collapsed, `--if-absent` together with `--id` makes the command idempotent.
 A node added into a flow between two lanes without `--lane` gets the lane of
 the row the layout puts it on: after a branching node (a gateway) the
 target's row and lane, else the anchor's; `W_LANE_INHERITED` names both
-lanes and the `move --lane` that switches. `--message <name>` also works for
+lanes and the `move --lane` that switches. With `--lane` the row follows
+the lane: a node whose lane is not the target's goes on a free row of its
+own lane (a new one when none is free), never on the target's row with its
+lane stretched over to it. `--message <name>` also works for
 `sendTask` and `receiveTask` (the root `bpmn:Message` is found by name or
 created), like `set <id> message=<name>`.
 
@@ -697,7 +700,8 @@ says so when the flow it went into runs between two other lanes); a node
 without a lane at its new place (out of a sub-process, from another pool, or
 one that had none) gets one like `add` gives it: the anchor's, and in a flow
 between two lanes the lane of the row the layout draws it on (the target's
-after a branching node), with `W_LANE_INHERITED`. Boundary events
+after a branching node), with `W_LANE_INHERITED`. A node that keeps its
+lane is drawn on a row of that lane, like `add --lane`. Boundary events
 travel with their host; `move --on` (like `add --on`) refuses a compensation
 handler (`isForCompensation=true`) as host (`E_INVALID_HOST`). The bridge left
 behind follows the event-based gateway rule of [`remove`](#remove)
