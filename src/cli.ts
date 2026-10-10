@@ -470,11 +470,20 @@ withMutationOptions(
     .alias('rm')
     .description('remove elements (connected flows, boundary events, associations follow; a node with one in/out flow is bridged)')
     .option('--no-bridge', 'do not reconnect predecessor and successor')
+    .option('--bridge-all', 'a join (several incoming flows, one outgoing): connect every predecessor to the successor')
+    .option('--with-branch', 'also remove the exclusive downstream path (every node only this one leads to, up to the next merge or the ends)')
     .option('--if-exists', 'ignore unknown ids'),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
-    const op: RemoveOp = { op: 'remove', ids, bridge: o['bridge'] !== false, ...(o['ifExists'] ? { ifExists: true } : {}) };
+    const op: RemoveOp = {
+      op: 'remove',
+      ids,
+      bridge: o['bridge'] !== false,
+      ...(o['bridgeAll'] ? { bridgeAll: true } : {}),
+      ...(o['withBranch'] ? { withBranch: true } : {}),
+      ...(o['ifExists'] ? { ifExists: true } : {}),
+    };
     const result = await mutateFile(file, [op], opts);
     printMutation(result, opts);
   }, opts.json);

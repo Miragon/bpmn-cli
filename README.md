@@ -174,9 +174,11 @@ What the body says:
 | join of a split | the split gateway's id + `_join` (camelCase files: `Join`) | `Gateway_InvoiceOk_join`, `gateway_fanOutJoin` |
 | other | what it belongs to | `Collaboration_OrderHandling` (its process), `LaneSet_OrderHandling`, `Process_Customer` (its pool), `TextAnnotation_CheckWithinTwoDays` (its text), `Association_CheckInvoiceToCheckWithinTwoDays`, `DataInputAssociation_OrderToCheckInvoice` |
 
-An end or anchor is named by its name, else by the speaking part of its id,
-else by a word for its kind (`Gateway`, `End`, `Timer`, `Join`): an
-unnamed element is never named after its own context again
+An end or anchor is named by the speaking part of its id (ids are built
+from ids: `Activity_CheckInvoice` is `CheckInvoice`, also after its name
+changed), by its name when its id says too little (a hash, a number, one or
+two letters), else by a word for its kind (`Gateway`, `End`, `Timer`,
+`Join`): an unnamed element is never named after its own context again
 (`Flow_CheckInvoiceToGateway`, not `Flow_CheckInvoiceToAfterCheckInvoice`).
 Ids that say nothing (Camunda Modeler hashes, numbers, `StartEvent_1`) are
 never copied into new ids.
@@ -226,7 +228,7 @@ bpmn add <file> <kind[:trigger]> [<name>] [--id <id>]
 bpmn connect <file> <sourceId> <targetId> [--name <text>] [--id <id>] [--condition <expr>] [--language <lang>] [--default]
          [--message <name>] [--if-absent]
 bpmn set <file> <id> <key=value ...> [--unset <key>]...
-bpmn remove <file> <id...> [--no-bridge] [--if-exists]                       (alias: rm)
+bpmn remove <file> <id...> [--no-bridge | --bridge-all | --with-branch] [--if-exists]   (alias: rm)
 bpmn retype <file> <id> <kind[:trigger]> [trigger options as in add]        (alias: replace)
 bpmn move <file> <id...> [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--lane <laneId>]
 bpmn order <file> <nodeId> <flowId...>
@@ -477,6 +479,25 @@ flow removed without a bridge takes its associations along. A removed flow is
 also dropped from stale `incoming` / `outgoing` entries of other nodes (files
 from other tools sometimes carry them). `--if-exists` skips unknown ids with
 a note.
+
+`--bridge-all` bridges a join or merge (several incoming flows, one
+outgoing): every incoming flow is re-pointed to the successor (keeping its
+label and condition; a predecessor already connected to the successor, or
+the successor itself, gets no second flow) and the outgoing flow goes. A
+parallel or inclusive join loses its synchronisation; `W_IMPLICIT_JOIN` says
+so. A node with several outgoing flows is refused (`E_AMBIGUOUS_BRIDGE`:
+which predecessor would go to which successor?).
+
+`--with-branch` removes a node or boundary event together with its exclusive
+downstream path: every node only it leads to (all incoming flows from the
+branch; a host takes its boundary events and their paths along, a
+compensate boundary event its compensation handler), up to the next node
+another path reaches (it stays, the flows into it go) or the ends. Nothing
+is bridged; a note lists the branch and where it stopped
+(`branch of Event_Reminder: 3 node(s) (...); it ends there`). A node several
+paths reach (two or more incoming flows) is refused (`E_AMBIGUOUS_BRANCH`):
+remove the branch from the first node after the split, or the node alone
+with `--bridge-all`. `apply`: `"bridgeAll": true`, `"withBranch": true`.
 
 A bridge from an event-based gateway is made only when the file's rule
 accepts it. In a Camunda 7 file that is the engines' rule: the successor is a
@@ -1291,7 +1312,7 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `add` | `kind` (required), `name`, `id`, `as`, `flowAs`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
 | `connect` | `source`, `target` (required), `name`, `id`, `as`, `condition`, `language`, `default`, `message`, `ifAbsent` |
 | `set` | `id` (required), `values` (map), `unset` (list); at least one of the two |
-| `remove` | `ids` (required list), `bridge` (default true), `ifExists` |
+| `remove` | `ids` (required list), `bridge` (default true), `bridgeAll`, `withBranch`, `ifExists` |
 | `retype` | `id`, `kind` (required), trigger keys |
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
 | `order` | `id` (required), exactly one of `flows` (outgoing flows of a node) or `lanes` (lanes of a pool / process / parent lane) |

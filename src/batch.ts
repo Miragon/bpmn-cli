@@ -169,6 +169,8 @@ export const SET_FIELDS: FieldsOf<SetOp> = {
 export const REMOVE_FIELDS: FieldsOf<RemoveOp> = {
   ids: list('Ids to remove (cascading: flows, boundary events, children, associations).', { required: true, minItems: 1 }),
   bridge: bool('Reconnect predecessor and successor when a node with one incoming and one outgoing flow is removed (default true).'),
+  bridgeAll: bool('A join (several incoming flows, one outgoing): connect every predecessor to the successor. A split (several outgoing flows) is refused (E_AMBIGUOUS_BRIDGE).'),
+  withBranch: bool('Also remove the exclusive downstream path of each node or boundary event: every node only it leads to, up to the next merge with another path or the ends (a node several paths reach is refused: E_AMBIGUOUS_BRANCH). Nothing is bridged.'),
   ifExists: bool('Skip unknown ids with a note instead of failing.'),
 };
 

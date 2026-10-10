@@ -104,6 +104,10 @@ export interface RemoveOp {
   ids: string[];
   /** reconnect predecessor and successor when a node with 1 in / 1 out is removed (default true) */
   bridge?: boolean;
+  /** a join (N incoming, 1 outgoing): connect every predecessor to the successor */
+  bridgeAll?: boolean;
+  /** also remove the node's exclusive downstream path (up to the next merge with another path, or the ends) */
+  withBranch?: boolean;
   ifExists?: boolean;
 }
 

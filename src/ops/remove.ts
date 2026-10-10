@@ -17,6 +17,22 @@
  *    uses it (same for the root bpmn:DataStore of a data store reference);
  *    text annotation: its associations.
  *  - op.ifExists: unknown ids are skipped with a note; else E_NOT_FOUND.
+ *  - op.withBranch: a flow node or boundary event goes together with its
+ *    exclusive downstream path (branchOf): every node it alone leads to
+ *    (all incoming flows from the branch; a boundary event with its host;
+ *    a compensation handler only its boundary events point to), up to the
+ *    next node another path reaches (it stays, the flows into it go) or the
+ *    ends. Nothing is bridged; a note names what went and where the branch
+ *    stopped. A node that several paths reach (2+ incoming flows) is
+ *    refused (E_AMBIGUOUS_BRANCH): its "branch" is not one path.
+ *  - op.bridgeAll: a node with several incoming flows and one outgoing
+ *    flow (a join or merge) is bridged from every predecessor to the
+ *    successor (each incoming flow is re-pointed, keeping its id unless it
+ *    named its ends, its label and condition; a predecessor already
+ *    connected to the successor, or the successor itself, gets no second
+ *    flow); a parallel / inclusive join loses its synchronisation
+ *    (W_IMPLICIT_JOIN says so). Several outgoing flows are refused
+ *    (E_AMBIGUOUS_BRIDGE: which predecessor to which successor?).
  *  - every removed element -> cs.remove({id, kind, name}); released ids.
  *  - bridging policy (detachWithBridge, shared with `move`): no bridge when
  *    predecessor and successor are the same non-activity (a self-loop
@@ -41,7 +57,7 @@ import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, removeSequenceFlow } from './flows.js';
+import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
 import type { RemoveOp } from './types.js';
 
@@ -52,6 +68,32 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
   const bridge = op.bridge ?? true;
   const removing = new Set(op.ids);
   const gone = new Set<string>();
+  if (op.withBranch && (op.bridgeAll || op.bridge === false)) {
+    throw usageError(`--with-branch removes the node's whole downstream path and bridges nothing: drop ${op.bridgeAll ? '--bridge-all' : '--no-bridge'}`);
+  }
+  if (op.bridgeAll && op.bridge === false) throw usageError('--bridge-all and --no-bridge contradict each other');
+  if (op.withBranch) {
+    for (const id of op.ids) {
+      if (gone.has(id)) continue;
+      if (!doc.get(id) && op.ifExists) {
+        cs.note(`${id} does not exist; skipped`);
+        continue;
+      }
+      const branch = branchOf(doc, doc.require(id, ['bpmn:FlowNode'], 'flow node'));
+      for (const el of branch.nodes) removing.add(idOf(el));
+      cs.note(
+        `branch of ${id}: ${branch.nodes.length} node(s) (${branch.nodes.map(idOf).join(', ')})${branch.stops.length ? `; it stops before ${branch.stops.map(idOf).join(', ')}, which other paths reach (they stay)` : '; it ends there'}`,
+      );
+      for (const el of branch.nodes) {
+        if (gone.has(idOf(el))) continue;
+        detachNode(doc, el, false, cs);
+        cascadeRemove(doc, el, cs);
+        for (const r of cs.removed) gone.add(r.id);
+      }
+    }
+    doc.invalidate();
+    return cs;
+  }
   for (const id of op.ids) {
     if (gone.has(id)) {
       cs.note(`${id} was already removed together with an earlier element`);
@@ -69,12 +111,129 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
     if (is(el, 'bpmn:Definitions')) {
       throw modelError('E_INVALID_REMOVE', 'The definitions element cannot be removed', { element: id, hint: 'Delete the file instead.' });
     }
-    if (is(el, 'bpmn:FlowNode')) detachWithBridge(doc, el, bridge, cs, removing);
+    if (is(el, 'bpmn:FlowNode')) {
+      if (op.bridgeAll) bridgeAll(doc, el, cs, removing);
+      else detachWithBridge(doc, el, bridge, cs, removing);
+    }
     cascadeRemove(doc, el, cs);
     for (const r of cs.removed) gone.add(r.id);
   }
   doc.invalidate();
   return cs;
+}
+
+/**
+ * The exclusive downstream path of a flow node or boundary event (see the
+ * module contract): `nodes` in document order (the root first), `stops` the
+ * nodes outside it that it flows into.
+ */
+export function branchOf(doc: Doc, root: El): { nodes: El[]; stops: El[] } {
+  const incoming = doc.incoming(root);
+  if (incoming.length > 1) {
+    throw modelError('E_AMBIGUOUS_BRANCH', `${idOf(root)} is reached by ${incoming.length} paths (${incoming.map((f) => idOf(f.get<El>('sourceRef'))).join(', ')}); its downstream is not the branch of one path`, {
+      element: idOf(root),
+      candidates: incoming.map((f) => idOf(f)),
+      hint: `Remove the branch from a node only one path reaches (the first node after the split), or remove ${idOf(root)} alone (\`bpmn remove <file> ${idOf(root)} --bridge-all\` reconnects the paths to its successor).`,
+    });
+  }
+  const inBranch = new Set<El>([root]);
+  /** what an element of the branch leads to: its targets, the boundary events on it, compensation handlers of a boundary event */
+  const next = (n: El): El[] => [
+    ...doc.outgoing(n).map((f) => f.get<El>('targetRef')),
+    ...(is(n, 'bpmn:Activity') ? doc.boundaryEventsOf(n) : []),
+    ...compensationHandlers(doc, n),
+  ];
+  /** who else leads to it */
+  const before = (n: El): El[] => {
+    if (is(n, 'bpmn:BoundaryEvent')) return [n.get<El>('attachedToRef')];
+    const preds = doc.incoming(n).map((f) => f.get<El>('sourceRef'));
+    if (n.get<boolean | undefined>('isForCompensation')) preds.push(...compensationSources(doc, n));
+    return preds;
+  };
+  const stops = new Set<El>();
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const n of [...inBranch]) {
+      for (const s of next(n)) {
+        if (inBranch.has(s)) continue;
+        if (before(s).every((p) => inBranch.has(p))) {
+          inBranch.add(s);
+          stops.delete(s);
+          grew = true;
+        } else stops.add(s);
+      }
+    }
+  }
+  const order = new Map([...doc.byId().values()].map((el, i) => [el, i]));
+  const sorted = [...inBranch].sort((a, b) => (a === root ? -1 : b === root ? 1 : (order.get(a) ?? 0) - (order.get(b) ?? 0)));
+  return { nodes: sorted, stops: [...stops].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)) };
+}
+
+/** Compensation handlers a compensate boundary event points to (bpmn:Association). */
+function compensationHandlers(doc: Doc, n: El): El[] {
+  if (!is(n, 'bpmn:BoundaryEvent')) return [];
+  return [...doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('sourceRef') === n).map((a) => a.get<El>('targetRef')).filter((t) => !!t && !!t.get<boolean | undefined>('isForCompensation'));
+}
+
+/** The boundary events whose compensation associations point to a handler. */
+function compensationSources(doc: Doc, handler: El): El[] {
+  return [...doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('targetRef') === handler).map((a) => a.get<El>('sourceRef')).filter((s): s is El => !!s && is(s, 'bpmn:BoundaryEvent'));
+}
+
+/**
+ * --bridge-all (see the module contract): every predecessor of a join gets
+ * the join's successor. One incoming flow is the ordinary bridge.
+ */
+function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<string>): void {
+  const incoming = doc.incoming(node);
+  const outgoing = doc.outgoing(node);
+  if (outgoing.length > 1) {
+    throw modelError('E_AMBIGUOUS_BRIDGE', `${idOf(node)} has ${outgoing.length} outgoing flows (${outgoing.map(idOf).join(', ')}): --bridge-all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
+      element: idOf(node),
+      candidates: outgoing.map(idOf),
+      hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${idOf(node)} without bridging (\`--no-bridge\`) and connect what should stay with \`bpmn connect\`.`,
+    });
+  }
+  if (incoming.length <= 1 || !outgoing.length) {
+    detachWithBridge(doc, node, true, cs, removing);
+    return;
+  }
+  const outFlow = outgoing[0]!;
+  const successor = outFlow.get<El>('targetRef');
+  for (const inFlow of incoming) assertBridgeAllowed(doc, node, inFlow, outFlow, removing);
+  const outName = outFlow.get<string | undefined>('name');
+  if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
+  if (outFlow.get<El | undefined>('conditionExpression')) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
+  removeSequenceFlow(doc, outFlow, cs);
+  cs.remove(flowChange(outFlow));
+  const bridged: string[] = [];
+  for (const inFlow of incoming) {
+    const predecessor = inFlow.get<El>('sourceRef');
+    const already = doc.outgoing(predecessor).some((f) => f !== inFlow && f.get<El | undefined>('targetRef') === successor);
+    if (predecessor === successor || predecessor === node || already) {
+      removeSequenceFlow(doc, inFlow, cs);
+      cs.remove(flowChange(inFlow));
+      cs.note(`not bridged: ${idOf(predecessor)} ${predecessor === successor ? 'is the successor itself' : predecessor === node ? 'is the removed node' : `already flows to ${idOf(successor)}`}`);
+      continue;
+    }
+    const renamed = redirectFlow(doc, inFlow, { target: successor });
+    cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}` });
+    bridged.push(idOf(predecessor));
+  }
+  cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
+  const sync = is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
+  if (sync) cs.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
+  const count = doc.incoming(successor).length;
+  if (count > 1 && (sync || !is(successor, 'bpmn:Gateway'))) {
+    cs.warn({
+      code: 'W_IMPLICIT_JOIN',
+      message: sync
+        ? `${idOf(successor)} now has ${count} incoming flows: the ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
+        : `${idOf(successor)} now has ${count} incoming flows (implicit join)`,
+      element: idOf(successor),
+      hint: sync ? `Keep a ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
+    });
+  }
 }
 
 /** The self-loop rule of `connect`: only activities may loop back to themselves with a sequence flow. */
