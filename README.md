@@ -1282,8 +1282,8 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 
 | op | keys |
 | --- | --- |
-| `add` | `kind` (required), `name`, `id`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
-| `connect` | `source`, `target` (required), `name`, `id`, `condition`, `language`, `default`, `message`, `ifAbsent` |
+| `add` | `kind` (required), `name`, `id`, `as`, `flowAs`, `after`, `before`, `flow`, `in`, `on`, `to`, `lane`, `flowName`, `flowId`, `condition`, `language`, `default`, trigger keys (`timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`; `message` also for `sendTask` / `receiveTask`), `collapsed`, `ifAbsent`, `doc`, `set` (map, nested keys included: `"loop.camunda:collection": "${items}"`), `process`, `blackBox`, `text`, `members` (list) |
+| `connect` | `source`, `target` (required), `name`, `id`, `as`, `condition`, `language`, `default`, `message`, `ifAbsent` |
 | `set` | `id` (required), `values` (map), `unset` (list); at least one of the two |
 | `remove` | `ids` (required list), `bridge` (default true), `ifExists` |
 | `retype` | `id`, `kind` (required), trigger keys |
@@ -1297,7 +1297,7 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `route` | `id` (required), `exit`, `entry` (`right` / `top` / `bottom` / `left`) |
 | `space` | exactly one of `after` / `below`, `by` (`"column"`, `"row"` or pixels) |
 | `tidy` | `ids` (list; default every shape) |
-| `split` | `after` (required), `kind` (gateway, default `exclusiveGateway`), `name`, `id`, `join` (default true), `joinId`, `joinName`, `branches` (required): `[{ flowName?, flowId?, condition?, language?, default?, nodes: [ add-like objects without placement ] }]` |
+| `split` | `after` (required), `kind` (gateway, default `exclusiveGateway`), `name`, `id`, `as`, `join` (default true), `joinId`, `joinAs`, `joinName`, `branches` (required): `[{ flowName?, flowId?, condition?, language?, default?, nodes: [ add-like objects without placement, `as` / `flowAs` included ] }]` |
 
 `split` is a macro without CLI counterpart: it places a gateway after the
 anchor (splicing into its single outgoing flow if it has one), creates every
@@ -1305,6 +1305,42 @@ branch (the first node gets the branch's flow options, following nodes are
 chained), and a join gateway of the same kind (`<gatewayId>_join`) that every
 branch end connects to; when the anchor was spliced, the join continues to the
 old successor. An empty `nodes` list is a direct gateway -> join flow.
+
+**Batch aliases.** An op names what it creates with `"as": "$name"` (`add`,
+`connect`, `split` and the nodes of a split branch); `add` and split nodes
+also take `"flowAs"` (the flow into the new node, the one the flow options
+describe; a prepend before a join or an unconnected node: the flow out of
+it) and `split` takes `"joinAs"` (its join gateway). Later ops of the batch
+use the alias wherever an element id goes: `after`, `before`, `flow`, `in`,
+`on`, `to`, `lane`, `process`, `members`, `source`, `target`, the `id` /
+`ids` of `set`, `remove`, `retype`, `move`, `order`, `ext` and the format
+ops, and the `default`, `source`, `target`, `lane` values of `set`. So a
+batch never guesses a generated id:
+
+```json
+[
+  { "op": "add", "kind": "userTask", "name": "Vollständigkeit prüfen", "after": "Event_RechnungEingegangen", "as": "$check" },
+  { "op": "split", "after": "$check", "name": "Vollständig?", "as": "$ok",
+    "branches": [
+      { "flowName": "ja", "nodes": [{ "kind": "serviceTask", "name": "Buchen", "flowAs": "$yes" }] },
+      { "flowName": "nein", "nodes": [{ "kind": "userTask", "name": "Nachfordern", "flowAs": "$no" }] } ] },
+  { "op": "set", "id": "$ok", "values": { "default": "$no" } },
+  { "op": "set", "id": "$yes", "values": { "condition": "${vollstaendig}" } },
+  { "op": "color", "ids": ["$check"], "color": "green" }
+]
+```
+
+An alias is `$` and a letter or `_`, then letters, digits, `_` or `-`
+(`${...}` expressions are not aliases). It is defined once and used only
+after the op that defines it; both are checked before anything runs
+(`E_UNKNOWN_ALIAS` lists the aliases defined so far, `E_DUPLICATE_ALIAS`; an
+alias in `id`, `flowId` or `joinId` is a usage error pointing to `as`). An
+alias names the element itself, so it follows a rename later in the batch (a
+flow whose id named its ends, [Ids](#ids)); an alias of an element a later
+op removed is `E_NOT_FOUND`. The format ops see the ids at the end of the
+batch. The result lists every alias with the final id of its element
+(`aliases: $check = Activity_VollstaendigkeitPruefen, ...`; `"aliases"` in
+`--json` and in the library's `MutationResult`).
 
 Validation is strict: unknown ops or keys (with a "did you mean" for
 kebab-case spellings and small typos: `rowof` -> `rowOf`, `colour` ->
@@ -1328,22 +1364,22 @@ an end event:
       "after": "Activity_CheckInvoice",
       "kind": "exclusiveGateway",
       "name": "Invoice ok?",
-      "id": "Gateway_InvoiceOk",
+      "as": "$ok",
       "branches": [
-        { "flowName": "yes", "condition": "${ok}", "nodes": [{ "kind": "serviceTask", "name": "Book invoice" }] },
+        { "flowName": "yes", "condition": "${ok}", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
         {
           "flowName": "no",
           "default": true,
-          "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "set": { "doc": "Call the customer and clarify the open positions." } }]
+          "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "as": "$clarify", "set": { "doc": "Call the customer and clarify the open positions." } }]
         }
       ]
     },
-    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "Activity_ClarifyInvoice", "timer": "PT2D", "nonInterrupting": true },
-    { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "Event_Reminder" },
-    { "op": "add", "kind": "endEvent", "name": "Reminder sent", "in": "Process_OrderHandling" },
-    { "op": "connect", "source": "Activity_RemindCustomer", "target": "Event_ReminderSent" },
-    { "op": "set", "id": "Activity_BookInvoice", "values": { "name": "Book invoice in ERP", "doc": "Posts the invoice to the ledger." } },
-    { "op": "ext", "id": "Activity_BookInvoice", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } }
+    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+    { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
+    { "op": "add", "kind": "endEvent", "name": "Reminder sent", "in": "Process_OrderHandling", "as": "$sent" },
+    { "op": "connect", "source": "$remind", "target": "$sent" },
+    { "op": "set", "id": "$book", "values": { "name": "Book invoice in ERP", "doc": "Posts the invoice to the ledger." } },
+    { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice", "retries": "3" } }
   ]
 }
 ```
@@ -1355,7 +1391,8 @@ an end event:
 Text result of a mutating command: one line per created / changed / removed
 element (`created userTask Activity_CheckInvoice "Check invoice" - after
 Event_OrderReceived`), then notes (`note: inserted between A and B`), the
-errors a `--force` write let through (`forced E_CODE element: message`),
+batch aliases of an `apply` (`aliases: $check = Activity_CheckInvoice, ...`),
+the errors a `--force` write let through (`forced E_CODE element: message`),
 warnings (`warning W_CODE element: message  (hint)`; a validator's finding
 names it: `warning [design] W_DESIGN_COMPLEXITY ...`), one `validator <name>
 (<why it ran>): n error(s), m warning(s) in the result` line per validator
@@ -1389,6 +1426,7 @@ and `resolved:` name them with ids).
   "changed": [], "removed": [],
   "warnings": [{ "code": "W_...", "message": "...", "element": "...", "hint": "..." }],
   "notes": ["..."],
+  "aliases": { "$check": "Activity_X" },
   "layout": {
     "status": "ok", "mode": "incremental", "reason": "hand-made diagram: kept, changes placed locally",
     "warnings": [], "expanded": [],
@@ -1697,14 +1735,14 @@ written: order.bpmn
 
 $ cat > ops.json <<'EOF'
 { "ops": [
-  { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?", "id": "Gateway_InvoiceOk",
+  { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?", "as": "$ok",
     "branches": [
-      { "flowName": "yes", "condition": "=ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice" }] },
-      { "flowName": "no", "default": true, "nodes": [{ "kind": "userTask", "name": "Clarify invoice" }] } ] },
-  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "Activity_ClarifyInvoice", "timer": "PT2D", "nonInterrupting": true },
-  { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "Event_Reminder" },
-  { "op": "add", "kind": "end", "name": "Reminder sent", "after": "Activity_RemindCustomer" },
-  { "op": "ext", "id": "Activity_BookInvoice", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
+      { "flowName": "yes", "condition": "=ok", "nodes": [{ "kind": "serviceTask", "name": "Book invoice", "as": "$book" }] },
+      { "flowName": "no", "default": true, "nodes": [{ "kind": "userTask", "name": "Clarify invoice", "as": "$clarify" }] } ] },
+  { "op": "add", "kind": "boundary:timer", "name": "Reminder", "on": "$clarify", "timer": "PT2D", "nonInterrupting": true, "as": "$reminder" },
+  { "op": "add", "kind": "sendTask", "name": "Remind customer", "after": "$reminder", "as": "$remind" },
+  { "op": "add", "kind": "end", "name": "Reminder sent", "after": "$remind" },
+  { "op": "ext", "id": "$book", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
 ] }
 EOF
 $ bpmn apply order.bpmn ops.json
@@ -1731,6 +1769,7 @@ note: split Gateway_InvoiceOk: 2 branch(es) ending at Activity_BookInvoice, Acti
 note: attached to Activity_ClarifyInvoice
 note: appended after Event_Reminder
 note: appended after Activity_RemindCustomer
+aliases: $ok = Gateway_InvoiceOk, $book = Activity_BookInvoice, $clarify = Activity_ClarifyInvoice, $reminder = Event_Reminder, $remind = Activity_RemindCustomer
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -1894,7 +1933,8 @@ Every function runs the code of the CLI command it names, without a file:
   there is nothing to save; a rename to the current name, `tidy` on a tidy
   drawing); `result` is what the CLI prints with `--json`
   ([Output](#output-errors-and-exit-codes)) without `file`, `written` and the
-  XML. `renderMutation(result)` gives the CLI's text for it,
+  XML (with batch aliases, `result.aliases` maps each to the final id of its
+  element). `renderMutation(result)` gives the CLI's text for it,
   `renderValidation(report)` the text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
   errors the ops would introduce (`E_VALIDATION`, also those of the design
@@ -2046,9 +2086,13 @@ bundler drops what a host does not import.
 - A write keeps the file's text outside what it changed, and a result equal
   to the file is not written (`MutationResult.unchanged`, `written: false`;
   [What a write changes](#what-a-write-changes)).
-- New ids follow the file's id style; flows and unnamed elements get a short
-  hash instead of `<Prefix>_<n>` ([Ids](#ids)): a batch that refers to an
-  element it creates gives it an explicit `id`.
+- New ids follow the file's id style and speak ([Ids](#ids)): names, a kind
+  and a place for unnamed elements (`Gateway_AfterCheckInvoice`), the ends
+  for flows (`Flow_CheckInvoiceToBookInvoice`), never a hash or `<Prefix>_<n>`;
+  a flow whose id names its ends is renamed when an edit changes them. A
+  batch refers to an element it creates by an alias (`"as": "$check"`,
+  `MutationResult.aliases` / `result.aliases`: alias -> final id) or by an
+  explicit `id`.
 - `checkFile` / `checkDoc` return the validation profile that ran
   (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
   `profile`, `contentRepo`, `validators` and `file`; in a design-iq content

@@ -31,6 +31,10 @@
  *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
  *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them).
  *  - op.set -> setProperties() from ./set.js on the new element.
+ *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
+ *    --if-absent and an existing one: that one), op.flowAs the flow the flow
+ *    options describe (into the node; a prepend before a join / unconnected
+ *    node: out of it); flowAs without such a flow is E_USAGE.
  *  - a new flow out of an event-based gateway (--after, --flow, --before,
  *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
  *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
@@ -357,6 +361,17 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   cs.create(entry);
   const entryFlow = placeNode(doc, el, op, cs);
   warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
+  if (op.flowAs) {
+    // the flow the flow options describe: into the node, or out of it when `before` prepended it
+    const flow = entryFlow ?? (placementMode(op) === 'before' ? doc.outgoing(el)[0] : undefined);
+    if (!flow) {
+      throw usageError(`flowAs ${op.flowAs}: ${id} gets no flow from this placement (${placementMode(op) === 'none' ? 'no placement' : `--${placementMode(op)}`})`, {
+        element: id,
+        hint: 'Place the node with after / before / flow, or connect it with a connect op that has "as".',
+      });
+    }
+    cs.bind(op.flowAs, flow);
+  }
 
   if (isEvent) {
     let resolved = trigger ?? inferTrigger(op);
@@ -427,6 +442,8 @@ export function addElement(doc: Doc, op: AddOp, idContext?: string): ChangeSet {
   if (op.ifAbsent && op.id && doc.has(op.id)) {
     const existing = doc.get(op.id)!;
     cs.note(`${op.id} already exists (${kindLabel(existing)}); nothing to do`);
+    cs.bind(op.as, existing);
+    if (op.flowAs) cs.bind(op.flowAs, doc.incoming(existing)[0]);
     if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
       cs.warn({
         code: 'W_KIND_MISMATCH',
@@ -482,6 +499,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: string): ChangeSet {
   if (op.set && Object.keys(op.set).length) {
     cs.merge(setProperties(doc, { op: 'set', id: idOf(el), values: op.set }));
   }
+  cs.bind(op.as, el);
   doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;

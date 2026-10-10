@@ -52,6 +52,10 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   kind: string;
   name?: string;
   id?: string;
+  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/aliases.ts) */
+  as?: string;
+  /** batch alias of the flow into the new node (the flow the flow options describe) */
+  flowAs?: string;
   /** also connect the new node to this target (branch that re-joins) */
   to?: string;
   lane?: string;
@@ -78,6 +82,8 @@ export interface ConnectOp {
   target: string;
   name?: string;
   id?: string;
+  /** batch alias of the new connection */
+  as?: string;
   condition?: string;
   language?: string;
   default?: boolean;
@@ -158,9 +164,13 @@ export interface SplitOp {
   kind?: string;
   name?: string;
   id?: string;
+  /** batch alias of the split gateway */
+  as?: string;
   /** create a joining gateway of the same kind (default true) */
   join?: boolean;
   joinId?: string;
+  /** batch alias of the join gateway */
+  joinAs?: string;
   joinName?: string;
   branches: SplitBranch[];
 }

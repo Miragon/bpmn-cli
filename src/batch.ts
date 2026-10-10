@@ -10,10 +10,13 @@
  *
  * Accepted input: `[op, op, ...]` or `{ "ops": [op, ...] }`. Every problem is
  * reported as a usage error whose message starts with `ops[<index>] (<op>)`
- * and whose details carry `op: <index>`.
+ * and whose details carry `op: <index>`. Batch aliases (`"as": "$name"`,
+ * ops/aliases.ts) are checked before anything runs: defined once, used only
+ * after the op that defines them.
  */
 import { usageError, type CliError } from './errors.js';
 import { KindError, kindByName, normalizeTrigger, parseKind } from './kinds.js';
+import { ALIAS, checkAliases } from './ops/aliases.js';
 import {
   OP_NAMES,
   type AddOp,
@@ -55,6 +58,8 @@ export interface FieldSpec {
   ref?: boolean;
   /** lists: minimum number of entries */
   minItems?: number;
+  /** defines a batch alias: `$name` */
+  alias?: boolean;
 }
 
 /** Exactly the keys of an op interface (minus `op`), each with a spec. */
@@ -68,6 +73,7 @@ const ref = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => 
 const bool = (description: string): FieldSpec => ({ type: 'boolean', description });
 const list = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => ({ type: 'string[]', description, ...extra });
 const map = (description: string, extra: Partial<FieldSpec> = {}): FieldSpec => ({ type: 'map', description, ...extra });
+const alias = (description: string): FieldSpec => str(`${description} Later ops of the batch use it wherever an element id goes ("after": "$check", "ids": ["$check"]); the result lists it with the final id.`, { alias: true });
 
 export const PLACEMENT_FIELDS: FieldsOf<Placement> = {
   after: ref("Anchor id: append after a gateway or an unconnected node, or splice into the anchor's single outgoing flow. Together with `before`: splice into the flow after -> before."),
@@ -104,7 +110,9 @@ const KIND_FIELD = ref('Element kind with optional trigger suffix, e.g. "userTas
 export const NODE_FIELDS: FieldsOf<SplitNode> = {
   kind: KIND_FIELD,
   name: str('Display name. Also drives the generated id (<Prefix>_<NameSlug> in the default style; new ids follow the id style of the file).'),
-  id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). Give an id to every element a later op of the batch refers to.'),
+  id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
+  as: alias('Batch alias of the new element: "$" + a name, e.g. "$check".'),
+  flowAs: alias('Batch alias of the flow into the new node (the flow the flow options describe; with "before" on a join or an unconnected node: the flow out of it).'),
   lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host).'),
   ...FLOW_FIELDS,
   ...TRIGGER_FIELDS,
@@ -121,6 +129,8 @@ export const ADD_FIELDS: FieldsOf<AddOp> = {
   kind: NODE_FIELDS.kind,
   name: NODE_FIELDS.name,
   id: NODE_FIELDS.id,
+  as: NODE_FIELDS.as,
+  flowAs: NODE_FIELDS.flowAs,
   ...PLACEMENT_FIELDS,
   to: ref('Also connect the new node to this target (a branch that re-joins).'),
   lane: NODE_FIELDS.lane,
@@ -141,6 +151,7 @@ export const CONNECT_FIELDS: FieldsOf<ConnectOp> = {
   target: ref('Target element id.', { required: true }),
   name: str('Label of the connection (sequence flows only).'),
   id: ref('Explicit id of the connection.'),
+  as: alias('Batch alias of the new connection (with ifAbsent and an existing one: that one).'),
   condition: str('Condition expression (sequence flows only).'),
   language: str('Expression language of `condition`.'),
   default: bool('Make it the default flow of the source (sequence flows only).'),
@@ -196,8 +207,10 @@ export const SPLIT_FIELDS: FieldsOf<SplitOp> = {
   kind: ref('Gateway kind (default exclusiveGateway).'),
   name: str('Name of the split gateway (exclusive gateways: a question, e.g. "Invoice ok?").'),
   id: ref('Explicit id of the split gateway.'),
+  as: alias('Batch alias of the split gateway.'),
   join: bool('Create a joining gateway of the same kind and connect every branch end to it (default true).'),
   joinId: ref('Explicit id of the join gateway (default <gatewayId>_join).'),
+  joinAs: alias('Batch alias of the join gateway.'),
   joinName: str('Name of the join gateway.'),
   branches: { type: 'branches', required: true, minItems: 1, description: 'Branches in top-to-bottom order.' },
 };
@@ -381,6 +394,7 @@ function checkString(ctx: Ctx, key: string, spec: FieldSpec, value: unknown): st
     throw fail(ctx, `"${key}" must be a string, got ${describe(value)}`, `Write it as a JSON string, e.g. "${key}": "...".`);
   }
   if (spec.ref && !value.trim()) throw fail(ctx, `"${key}" must not be empty`);
+  if (spec.alias && !ALIAS.test(value)) throw fail(ctx, `"${key}" must be an alias like "$check" ($ and a letter, then letters, digits, _ or -), got "${value}"`, `Example: "${key}": "$check", then "after": "$check" in a later op.`);
   if (spec.values && !spec.values.includes(value)) {
     throw fail(ctx, `"${key}" must be one of ${spec.values.map((v) => `"${v}"`).join(', ')}, got "${value}"`);
   }
@@ -513,7 +527,7 @@ function checkFlowOptions(ctx: Ctx, obj: Record<string, unknown>, needsPlacement
     throw fail(ctx, '"default" and "condition" are mutually exclusive: a default flow has no condition', 'Keep the condition on the other branches and mark this one as default.');
   }
   if (!needsPlacement) return;
-  const used = presentKeys(obj, FLOW_KEYS);
+  const used = presentKeys(obj, [...FLOW_KEYS, 'flowAs']);
   const createsFlow = obj['after'] !== undefined || obj['before'] !== undefined || obj['flow'] !== undefined;
   if (used.length && !createsFlow) {
     throw fail(ctx, `${used.map((k) => `"${k}"`).join(', ')} describe the flow into the node and need "after", "before" or "flow"`, 'With "in" or "on" no sequence flow is created; connect the node afterwards with a connect op.');
@@ -687,7 +701,9 @@ export function parseOps(input: unknown): Op[] {
   }
   const list = ops as unknown[];
   if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "Event_Start"}.' });
-  return list.map(parseOne);
+  const parsed = list.map(parseOne);
+  checkAliases(parsed);
+  return parsed;
 }
 
 /* ------------------------------------------------------------------ */
@@ -698,7 +714,7 @@ function fieldSchema(spec: FieldSpec): Record<string, unknown> {
   const d = { description: spec.description };
   switch (spec.type) {
     case 'string':
-      return { type: 'string', ...(spec.ref ? { minLength: 1 } : {}), ...(spec.values ? { enum: [...spec.values] } : {}), ...d };
+      return { type: 'string', ...(spec.ref ? { minLength: 1 } : {}), ...(spec.alias ? { pattern: ALIAS.source } : {}), ...(spec.values ? { enum: [...spec.values] } : {}), ...d };
     case 'boolean':
       return { type: 'boolean', ...d };
     case 'integer':
@@ -792,7 +808,8 @@ export const OPS_SCHEMA: Record<string, unknown> = buildSchema();
 /**
  * A small but complete example. It assumes a file made with
  * `bpmn new order.bpmn --name "Order handling" --target camunda8` and a
- * start event -> "Check invoice" user task -> end event.
+ * start event -> "Check invoice" user task -> end event. Later ops refer to
+ * what earlier ops create by batch alias (`as`).
  */
 export function opsExample(): { ops: Op[] } {
   return {
@@ -802,18 +819,18 @@ export function opsExample(): { ops: Op[] } {
         after: 'Activity_CheckInvoice',
         kind: 'exclusiveGateway',
         name: 'Invoice ok?',
-        id: 'Gateway_InvoiceOk',
+        as: '$ok',
         branches: [
-          { flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'serviceTask', name: 'Book invoice' }] },
-          { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', set: { doc: 'Call the customer and clarify the open positions.' } }] },
+          { flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'serviceTask', name: 'Book invoice', as: '$book' }] },
+          { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', as: '$clarify', set: { doc: 'Call the customer and clarify the open positions.' } }] },
         ],
       },
-      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: 'Activity_ClarifyInvoice', timer: 'PT2D', nonInterrupting: true },
-      { op: 'add', kind: 'sendTask', name: 'Remind customer', after: 'Event_Reminder' },
-      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling' },
-      { op: 'connect', source: 'Activity_RemindCustomer', target: 'Event_ReminderSent' },
-      { op: 'set', id: 'Activity_BookInvoice', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
-      { op: 'ext', id: 'Activity_BookInvoice', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
+      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: '$clarify', timer: 'PT2D', nonInterrupting: true, as: '$reminder' },
+      { op: 'add', kind: 'sendTask', name: 'Remind customer', after: '$reminder', as: '$remind' },
+      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling', as: '$sent' },
+      { op: 'connect', source: '$remind', target: '$sent' },
+      { op: 'set', id: '$book', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
+      { op: 'ext', id: '$book', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
     ],
   };
 }

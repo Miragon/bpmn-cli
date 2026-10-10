@@ -17,7 +17,7 @@
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
 import type { Doc } from '../document.js';
-import { modelError } from '../errors.js';
+import { modelError, usageError } from '../errors.js';
 import { parseKind, KindError } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -117,6 +117,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   cs.merge(gwCs);
   const gatewayId = createdId(gwCs);
   const gateway = doc.require(gatewayId);
+  cs.bind(op.as, gateway);
   if (spliced) {
     const renamed = redirectFlow(doc, spliced, { target: gateway });
     insertAfterInScope(scope, spliced, gateway);
@@ -163,6 +164,9 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const terminating = ends.filter((e) => !e.direct && is(doc.require(e.end), 'bpmn:EndEvent'));
   const continuing = ends.filter((e) => !terminating.includes(e));
   let joinId: string | undefined;
+  if (op.joinAs && (!withJoin || !continuing.length)) {
+    throw usageError(`joinAs ${op.joinAs}: split ${gatewayId} creates no join gateway (${withJoin ? 'every branch ends in an end event' : 'join is false'})`, { element: gatewayId, hint: 'Drop joinAs, or give a branch that continues.' });
+  }
   if (withJoin && !continuing.length) {
     cs.note('every branch ends in an end event; no join gateway created');
   } else if (withJoin) {
@@ -170,6 +174,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted, in: idOf(scope), ...laneOpt });
     cs.merge(joinCs);
     joinId = createdId(joinCs);
+    cs.bind(op.joinAs, doc.get(joinId));
     const joinEntry = cs.created.find((c) => c.id === joinId);
     if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;
   }

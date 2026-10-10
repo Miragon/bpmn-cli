@@ -223,7 +223,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     const same = existing ?? existingConnection(doc, kind, source, target);
     if (same) {
       cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
-      return cs;
+      return cs.bind(op.as, same);
     }
   }
   if (existing) {
@@ -286,7 +286,12 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     default:
       break;
   }
+  // the batch alias names the connection (not a root message created with it)
+  const made = [...cs.created].reverse().find((c) => CONNECTION_KINDS.has(c.kind));
+  cs.bind(op.as, made ? doc.get(made.id) : undefined);
   doc.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }
+
+const CONNECTION_KINDS = new Set(['sequenceFlow', 'messageFlow', 'association', 'dataAssociation']);

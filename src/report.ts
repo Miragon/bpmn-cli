@@ -35,6 +35,8 @@ export interface MutationReport {
   /** op warnings (the validator's own findings are in validation.warnings) */
   warnings: Warning[];
   notes: string[];
+  /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
+  aliases?: Record<string, string>;
   layout: LayoutStatus;
   validation: ValidationResult;
   importWarnings: string[];
@@ -91,6 +93,7 @@ export function mutationReport(result: MutationResult): MutationReport {
     removed: result.changes.removed,
     warnings: opWarnings(result),
     notes: result.changes.notes,
+    ...(result.aliases ? { aliases: result.aliases } : {}),
     layout: result.layout,
     validation: result.validation,
     importWarnings: result.importWarnings,
@@ -128,6 +131,7 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   // format ops change the drawing only: their lines follow in the layout block
   const formatOnly = changes.isEmpty && !!result.layout.format?.length && !changes.notes.length && !changes.warnings.length;
   if (text && !formatOnly) lines.push(text);
+  if (result.aliases && Object.keys(result.aliases).length) lines.push(`aliases: ${Object.entries(result.aliases).map(([a, id]) => `${a} = ${id}`).join(', ')}`);
   // errors only remain in a result written with --force
   for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
   for (const w of [...result.validation.warnings, ...layoutWarnings(result.layout)]) lines.push(warningLine(w));
