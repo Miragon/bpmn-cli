@@ -282,6 +282,18 @@ function checkDuplicateIds(ctx: Ctx): void {
       });
     }
   }
+  // a duplicate in the file's text: bpmn-moddle keeps the first element and drops the later one (an import warning), so the model shows one
+  const seen = new Set<string>();
+  for (const w of ctx.doc.importWarnings) {
+    const m = /duplicate ID <([^>]*)>/.exec(w.message);
+    if (!m || seen.has(m[1]!) || (counts.get(m[1]!) ?? 0) > 1) continue;
+    seen.add(m[1]!);
+    const dropped = /^unparsable content <([^>]+)>/.exec(w.message)?.[1];
+    const line = /\bline: (\d+)/.exec(w.message)?.[1];
+    pushFinding(ctx.errors, 'E_DUPLICATE_ID', `Id "${m[1]}" is used by more than one element of the file${dropped ? ` (the later <${dropped}>${line ? ` at line ${line}` : ''} cannot be read)` : ''}; the engines refuse the file`, m[1], {
+      hint: 'Ids must be unique: give one of the elements another id in the XML (the model holds only the first, so a write would drop the other).',
+    });
+  }
 }
 
 function checkReferences(ctx: Ctx): void {

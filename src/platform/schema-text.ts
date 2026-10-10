@@ -52,13 +52,16 @@ const IDREF_CHILDREN: Array<[string, string[]]> = [
   ['bpmn:OutputSet', ['dataOutputRefs', 'optionalOutputRefs', 'whileExecutingOutputRefs', 'inputSetRefs']],
 ];
 
+/** xsd:boolean: true, false, 1 or 0, white space around it collapsed (not TRUE, yes, maybe). */
+const XSD_BOOLEAN = /^[ \t\r\n]*(?:true|false|1|0)[ \t\r\n]*$/;
+
 /** XML NCName (XML 1.0 fifth edition: no colon, no leading digit, . or -): what the schema's xsd:ID allows. */
 const NCNAME_START = 'A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD\\u{10000}-\\u{EFFFF}';
 export const NCNAME = new RegExp(`^[${NCNAME_START}][${NCNAME_START}\\-.0-9\\u00B7\\u0300-\\u036F\\u203F-\\u2040]*$`, 'u');
 
 export interface SchemaTextIssue {
-  /** order: child order; idref: a reference to no id; id: an id that is no NCName (owner and value: the id) */
-  kind: 'order' | 'idref' | 'id';
+  /** order: child order; idref: a reference to no id; id: an id that is no NCName (owner and value: the id); boolean: an xsd:boolean attribute of another value (ref: the attribute) */
+  kind: 'order' | 'idref' | 'id' | 'boolean';
   /** id of the element the issue is in (the nearest one with an id), as written */
   owner: string | undefined;
   /** local name of the element whose children / attribute it is (`serviceTask`, `lane`) */
@@ -89,6 +92,7 @@ class Schema {
   private readonly bpmnTypes: string[];
   private readonly slots = new Map<string, Map<string, number>>();
   private readonly descriptors = new Map<string, Descriptor | undefined>();
+  private readonly booleans = new Map<string, Set<string>>();
 
   constructor(moddle: BpmnModdle) {
     this.registry = (moddle as unknown as { registry: Registry }).registry;
@@ -120,6 +124,16 @@ class Schema {
     if (this.descriptor(own)) return own;
     const p = parentType ? this.descriptor(parentType)?.properties.find((x) => x.name === local) : undefined;
     return p && !p.isReference && this.descriptor(p.type) ? p.type : undefined;
+  }
+
+  /** The attributes without prefix the type declares as xsd:boolean. */
+  booleanAttrs(type: string): Set<string> {
+    let out = this.booleans.get(type);
+    if (!out) {
+      out = new Set((this.descriptor(type)?.properties ?? []).filter((p) => p.isAttr && p.type === 'Boolean' && !p.name.includes(':')).map((p) => p.name));
+      this.booleans.set(type, out);
+    }
+    return out;
   }
 
   /** child local name -> place in the type's sequence (-1: the name fits two places, not checked) */
@@ -169,18 +183,29 @@ export function schemaTextIssues(xml: string, moddle: BpmnModdle): SchemaTextIss
   const schema = new Schema(moddle);
   const ids = new Set<string>();
   const out: SchemaTextIssue[] = [];
-  const collect = (el: XElement): void => {
+  const collect = (el: XElement, owner: string | undefined): void => {
+    let here = owner;
     if (el.uri.startsWith('http://www.omg.org/spec/')) {
       const id = attr(el, 'id');
       if (id !== undefined) {
         ids.add(id.trim());
         // xsd:ID collapses white space around the value
         if (!NCNAME.test(id.trim())) out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
+        here = id.trim();
+      }
+      // xsd:boolean attributes (cancelActivity, isInterrupting, isExecutable, isExpanded, ...): bpmn-moddle reads any other value as false
+      const type = schema.typeOf(el.local, el.uri, undefined);
+      const booleans = type ? schema.booleanAttrs(type) : undefined;
+      for (const a of booleans?.size ? el.attrs : []) {
+        if (!booleans!.has(a.name)) continue;
+        const v = decodeXml(a.raw);
+        // a diagram element's issue is its BPMN element's
+        if (!XSD_BOOLEAN.test(v)) out.push({ kind: 'boolean', owner: el.uri === BPMN_NS ? here : (attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: a.name, value: v, attribute: true });
       }
     }
-    for (const c of elementChildren(el)) collect(c);
+    for (const c of elementChildren(el)) collect(c, here);
   };
-  collect(root);
+  collect(root, undefined);
 
   const visit = (el: XElement, type: string, owner: string | undefined): void => {
     const here = attr(el, 'id') ?? owner;

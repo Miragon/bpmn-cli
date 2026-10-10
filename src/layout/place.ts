@@ -852,6 +852,40 @@ export function placeAnnotations(layout: ScopeLayout): void {
   layout.height = Math.max(layout.height, ...layout.artifacts.map((a) => a.box.y + a.box.height));
 }
 
+/**
+ * The external labels the engine draws for a scope's nodes (events,
+ * gateways, boundary events: engine.ts emitNode) and flows, relative to the
+ * scope origin.
+ */
+export function nodeLabels(layout: ScopeLayout): Box[] {
+  const out: Box[] = [];
+  for (const n of layout.nodes) {
+    const kind = n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' ? undefined : n.kind === 'gateway' ? 'gateway' : is(n.el, 'bpmn:Event') ? 'event' : undefined;
+    const label = kind ? elementLabel(n, kind) : undefined;
+    if (label) out.push(label);
+    for (const b of n.boundary) {
+      const bl = elementLabel(b, 'boundary');
+      if (bl) out.push(bl);
+    }
+  }
+  for (const e of layout.edges) if (e.label) out.push(e.label);
+  return out;
+}
+
+/**
+ * The width a frame around a scope (pool, lane, expanded sub-process) needs
+ * for its content and the labels that reach past it (an end event at the
+ * right edge has a label wider than the event: labelOutsideFrame otherwise),
+ * and `left`, how far labels reach left of the content (a sub-process moves
+ * its content right by that much; a pool's lane padding holds it). Only the
+ * frames use it; the content is placed with the scope's own size.
+ */
+export function framedSize(layout: ScopeLayout): { width: number; left: number } {
+  const labels = nodeLabels(layout);
+  const left = Math.max(0, ...labels.map((l) => -l.x));
+  return { width: Math.max(layout.width, ...labels.map((l) => l.x + l.width)) + left, left };
+}
+
 /** Extends the content size of a scope so association routes drawn around the content still fit. */
 export function growToFit(layout: ScopeLayout): void {
   for (const a of layout.artifacts) {

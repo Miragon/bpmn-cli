@@ -26,7 +26,7 @@ import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kind
 import { assertKindToken } from './kinds.js';
 import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
-import type { AddOp, AlignOp, ColorOp, CompactOp, ConnectOp, ExtOp, LabelOp, MoveOp, Op, OrderOp, PlaceOp, RemoveOp, RetypeOp, RouteOp, SetOp, SpaceOp, TidyOp, TriggerOptions } from './ops/types.js';
+import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
 import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
@@ -817,10 +817,9 @@ withMutationOptions(
     .description('diagram only: insert space right of / below an element (the modeler\'s space tool)')
     .option('--after <id>', 'horizontal space right of this element')
     .option('--below <id>', 'vertical space below this element')
-    .option('--by <amount>', 'column (default for --after), row (default for --below) or pixels; -column, -row or -<px> closes that much empty space instead', (v: string) => {
-      if (v === 'column' || v === 'row' || v === '-column' || v === '-row') return v;
-      if (/^-?\d+$/.test(v) && Number(v) !== 0) return Number(v);
-      throw new InvalidArgumentError('expected column, row or a number of pixels (negative: -column, -row, -<px> to close space)');
+    .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (v: string) => {
+      if (!parseSpaceAmount(v)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
+      return /^\s*-?\d+\s*$/.test(v) ? Number(v) : v;
     }),
 ).action(async (file: string, o: RawOpts) => {
   await run(async () => {
@@ -970,13 +969,85 @@ program
     });
   });
 
+/** A word for the shell: as it is, or in double quotes. */
+const shellWord = (s: string): string => (/^[A-Za-z0-9_.:\/=@$-]+$/.test(s) ? s : JSON.stringify(s));
+
+/**
+ * The command rewritten when an unknown option is one of its positional
+ * arguments (`add --kind userTask --name X`: `add <file> userTask X`) or,
+ * for a command that takes key=value pairs, a key (`set <id> --name X`:
+ * `set <file> <id> name=X`); undefined for any other unknown option.
+ */
+export function positionalHint(root: CommandType, args: string[]): string | undefined {
+  let cmd: CommandType | undefined = root;
+  const path: string[] = [];
+  let i = 0;
+  // the (sub)command: ext add, ...
+  while (i < args.length && !args[i]!.startsWith('-')) {
+    const sub: CommandType | undefined = cmd.commands.find((c) => c.name() === args[i] || c.aliases().includes(args[i]!));
+    if (!sub) break;
+    cmd = sub;
+    path.push(args[i]!);
+    i++;
+  }
+  if (cmd === root || !cmd.registeredArguments.length) return undefined;
+  const positional: string[] = [];
+  const known: string[] = [];
+  const unknown = new Map<string, string | undefined>();
+  for (; i < args.length; i++) {
+    const a = args[i]!;
+    if (!a.startsWith('-') || a === '-') {
+      positional.push(a);
+      continue;
+    }
+    const [flag, inline] = a.split(/=(.*)/s, 2) as [string, string | undefined];
+    const opt = cmd.options.find((o) => o.long === flag || o.short === flag);
+    if (opt) {
+      known.push(a);
+      if (inline === undefined && (opt.required || opt.optional) && args[i + 1] !== undefined && !args[i + 1]!.startsWith('-')) known.push(args[++i]!);
+      continue;
+    }
+    const value = inline ?? (args[i + 1] !== undefined && !args[i + 1]!.startsWith('-') ? args[++i] : undefined);
+    unknown.set(flag.replace(/^-+/, ''), value);
+  }
+  // shell words of the rewritten command
+  const out: string[] = [];
+  const used: string[] = [];
+  let pairs = 0;
+  for (const arg of cmd.registeredArguments) {
+    const name = arg.name();
+    if (arg.variadic) {
+      out.push(...positional.splice(0).map(shellWord));
+      // key=value pairs (set, add): an unknown option with a value is a key
+      for (const [k, v] of unknown) {
+        if (used.includes(k) || v === undefined || !/keyValues/i.test(name)) continue;
+        out.push(`${k}=${shellWord(v)}`);
+        used.push(k);
+        pairs++;
+      }
+      continue;
+    }
+    if (positional.length) out.push(shellWord(positional.shift()!));
+    else if (unknown.has(name)) {
+      out.push(shellWord(unknown.get(name) ?? `<${name}>`));
+      used.push(name);
+    } else if (arg.required) out.push(`<${name}>`);
+  }
+  if (!used.length) return undefined;
+  const usage = cmd.registeredArguments.map((a) => (a.required ? `<${a.name()}>` : `[${a.name()}${a.variadic ? '...' : ''}]`)).join(' ');
+  const flags = used.map((u) => `--${u}`);
+  const listed = flags.length > 1 ? `${flags.slice(0, -1).join(', ')} and ${flags[flags.length - 1]}` : flags[0]!;
+  return `${listed} ${flags.length > 1 ? 'are not options' : 'is not an option'} of \`bpmn ${path.join(' ')}\` (${usage}): write ${flags.length > 1 ? 'them' : 'it'} as ${!pairs ? (flags.length > 1 ? 'arguments' : 'an argument') : pairs === flags.length ? (flags.length > 1 ? 'key=value pairs' : 'a key=value pair') : 'arguments and key=value pairs'}: \`bpmn ${[...path.map(shellWord), ...out, ...known.map(shellWord)].join(' ')}\`.`;
+}
+
 program.parseAsync(process.argv).catch((err: unknown) => {
   const json = process.argv.includes('--json');
   if (err instanceof CommanderError) {
     // --help / --version / bare `bpmn`: commander printed what it wanted to
     if (['commander.helpDisplayed', 'commander.help', 'commander.version'].includes(err.code)) process.exit(err.exitCode);
     const message = err.message.replace(/^error:\s*/, '').replace(/\s*\n\s*/g, ' ').trim();
-    printError(usageError(message, { hint: 'Run `bpmn <command> --help` for the options, or `bpmn guide` for the agent cheat sheet.' }), json);
+    const positional = err.code === 'commander.unknownOption' ? positionalHint(program, process.argv.slice(2)) : undefined;
+    printError(usageError(message, { hint: positional ?? 'Run `bpmn <command> --help` for the options, or `bpmn guide` for the agent cheat sheet.' }), json);
   }
   printError(err, json);
 });

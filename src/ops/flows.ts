@@ -17,6 +17,7 @@
  * `Edge_<id>`). Every other id stays.
  */
 import type { Doc } from '../document.js';
+import { edgeStyleOf, styledId } from '../diagram/write.js';
 import { modelError } from '../errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
@@ -404,7 +405,8 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
     for (const di of plane ? many(plane, 'planeElement') : []) {
       if (di.get<El | undefined>('bpmnElement') !== flow) continue;
       const diId = di.get<string | undefined>('id');
-      const next = diId === `${old}_di` ? `${id}_di` : diId === `BPMNEdge_${old}` ? `BPMNEdge_${id}` : diId === `Edge_${old}` ? `Edge_${id}` : undefined;
+      const style = diId ? edgeStyleOf(diId, old) : undefined;
+      const next = style ? styledId(style, 'Edge', id) : undefined;
       if (!diId || !next || doc.ids.has(next)) continue;
       doc.ids.release(diId);
       doc.ids.claim(next);
