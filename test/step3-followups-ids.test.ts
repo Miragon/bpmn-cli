@@ -104,9 +104,8 @@ describe('a data reference and the element it stands for get distinct speaking i
     const r = await applyToXml(xml, [{ op: 'add', kind: 'dataObjectReference', name: 'Invoice', in: 'process_import', as: '$d' }], { layout: false });
     const ref = r.result.aliases!.$d!;
     const object = /<bpmn:dataObjectReference id="[^"]+" name="Invoice" dataObjectRef="([^"]+)"/.exec(r.xml)![1]!;
-    expect(ref).toMatch(/invoice/i);
-    expect(object).toMatch(/invoice/i);
-    expect(object).not.toBe(ref);
+    expect(ref).toBe('data_invoice');
+    expect(object).toBe('data_invoiceObject');
     expect(object).not.toMatch(/_\d+$/);
     expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_ID_SUFFIXED');
   });
