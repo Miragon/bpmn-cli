@@ -38,6 +38,7 @@
  *    back (the swatch name, or 'custom').
  */
 import type { BpmnModdle } from 'bpmn-moddle';
+import { cutAt, MAX_ID } from '../ids.js';
 import { addTo, is, removeFrom, type El } from '../model.js';
 import { roundPoints, sameBox, samePoints, type Box, type Point } from './geom.js';
 import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
@@ -46,7 +47,7 @@ import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, t
 /* id style                                                             */
 /* ------------------------------------------------------------------ */
 
-type Style = 'suffix' | 'bpmn' | 'short';
+export type Style = 'suffix' | 'bpmn' | 'short';
 
 export interface DiIds {
   shape(id: string): string;
@@ -114,8 +115,24 @@ function diStyles(defs: El): { shape?: Style; edge?: Style } {
   return { shape, edge: pick(votes.Edge, shape) };
 }
 
-function styledId(style: Style, kind: 'Shape' | 'Edge', id: string): string {
-  return style === 'suffix' ? `${id}_di` : style === 'bpmn' ? `BPMN${kind}_${id}` : `${kind}_${id}`;
+/** The longest DI id before a collision suffix (`_99`). */
+const MAX_DI = MAX_ID - 3;
+
+/**
+ * The DI id of an element in a style (`<id>_di`, `BPMNShape_<id>`,
+ * `Edge_<id>`), at most MAX_ID characters less room for a collision suffix:
+ * a long element id is cut at a word boundary (src/ids.ts cutAt), like the
+ * element ids themselves.
+ */
+export function styledId(style: Style, kind: 'Shape' | 'Edge', id: string): string {
+  const [head, tail] = style === 'suffix' ? ['', '_di'] : style === 'bpmn' ? [`BPMN${kind}_`, ''] : [`${kind}_`, ''];
+  const room = MAX_DI - head.length - tail.length;
+  return `${head}${id.length > room ? cutAt(id, room) : id}${tail}`;
+}
+
+/** The DI style of an edge's id (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`, also cut by styledId); undefined for any other id. */
+export function edgeStyleOf(diId: string, elId: string): Style | undefined {
+  return styleOf(diId, elId, 'Edge') ?? (['suffix', 'bpmn', 'short'] as Style[]).find((s) => styledId(s, 'Edge', elId) === diId);
 }
 
 /** `base`, else `base_2`, `base_3`, ... whichever is not taken; claims it. */
@@ -133,8 +150,8 @@ export function diIds(defs: El): DiIds {
   return {
     shape: (id) => claimUnique(taken, styledId(styles.shape ?? 'suffix', 'Shape', id)),
     edge: (id) => claimUnique(taken, styledId(styles.edge ?? 'suffix', 'Edge', id)),
-    plane: (id) => claimUnique(taken, `BPMNPlane_${id}`),
-    diagram: (id) => claimUnique(taken, `BPMNDiagram_${id}`),
+    plane: (id) => claimUnique(taken, `BPMNPlane_${cutAt(id, MAX_DI - 'BPMNPlane_'.length)}`),
+    diagram: (id) => claimUnique(taken, `BPMNDiagram_${cutAt(id, MAX_DI - 'BPMNDiagram_'.length)}`),
   };
 }
 

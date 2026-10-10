@@ -135,9 +135,16 @@ const lcfirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 const ucfirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const localName = (type: string): string => type.slice(type.indexOf(':') + 1);
 
-/** Names a type-named prefix of the kind could use: the kind and its BPMN type (`dataObject`, `dataObjectReference`). */
+/**
+ * Names a type-named prefix of the kind could use: the kind and its BPMN
+ * type (`userTask`; `eventSubProcess`, `subProcess`). A data reference's
+ * kind is the type of the element it stands for (`dataObject`, whose
+ * bpmn:DataObject a file names `dataObject_`), so its own type comes first
+ * (`dataObjectReference_invoice` next to `dataObject_invoice`).
+ */
 function kindTypeNames(def: KindDef): string[] {
-  return [...new Set([def.kind, lcfirst(localName(def.type))])];
+  const type = lcfirst(localName(def.type));
+  return [...new Set(type === `${def.kind}Reference` ? [type, def.kind] : [def.kind, type])];
 }
 
 /** The request for an element of a kind of `bpmn kinds`. */
@@ -294,8 +301,17 @@ export function speakingStem(id: string): string | undefined {
   const s = stem(id);
   if (HASH.test(s) || /^\d+$/.test(s) || !/[A-Za-z]/.test(s)) return undefined;
   const digits = s.replace(/[^0-9]/g, '').length;
-  if (digits >= 3 && digits * 4 >= s.length) return undefined;
+  if (digits >= 3 && digits * 4 >= s.length && !hasWord(s)) return undefined;
   return s;
+}
+
+/**
+ * Whether a stem with many digits still has a word (`AfterCheck2024`,
+ * `Order01001`): a run of four or more letters with one that is no hex digit.
+ * Machine ids have none (`sid-6F1C3A2B-...`, UUIDs, `a3f2c1de`).
+ */
+function hasWord(s: string): boolean {
+  return (s.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
 }
 
 /** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_StartInPayment). */

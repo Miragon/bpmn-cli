@@ -72,11 +72,26 @@ export function isDataReference(el: El): boolean {
 /* data                                                                 */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The id request of the element a data reference stands for (bpmn:DataObject,
+ * bpmn:DataStore): the reference's name, else its context. The two need
+ * distinct speaking ids: where the file's prefix for both is the same (the
+ * id would be the reference's own and take `_2`), the element's id also
+ * says what it is (`data_invoiceObject`, `Data_InvoiceStore`).
+ */
+function backingRequest(doc: Doc, type: 'bpmn:DataObject' | 'bpmn:DataStore', refId: string, name: string | undefined): IdRequest {
+  const context = speakingStem(refId) ?? '';
+  const req = typeRequest(type, { ...(name ? { name } : {}), context });
+  if (doc.idStyle.derivedBase(req) !== refId) return req;
+  const word = type === 'bpmn:DataObject' ? 'Object' : 'Store';
+  return typeRequest(type, name ? { name: `${name} ${word}` } : { context: `${context} ${word}` });
+}
+
 /** Creates a data object (reference + backing bpmn:DataObject) in `scope`; returns the reference. */
 export function createDataObject(doc: Doc, scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
   assertFlowScope(scope, 'data objects');
   const id = allocateId(doc, artifactRequest('dataObject', scope, opts), opts.id);
-  const dataObject = doc.create('bpmn:DataObject', { id: doc.allocateId(typeRequest('bpmn:DataObject', { ...(opts.name ? { name: opts.name } : {}), context: speakingStem(id) ?? '' })).id });
+  const dataObject = doc.create('bpmn:DataObject', { id: doc.allocateId(backingRequest(doc, 'bpmn:DataObject', id, opts.name)).id });
   const ref = doc.create('bpmn:DataObjectReference', { id, ...(opts.name ? { name: opts.name } : {}), dataObjectRef: dataObject });
   addTo(scope, 'flowElements', dataObject, ref);
   cs.create({ id, kind: 'dataObject', ...(opts.name ? { name: opts.name } : {}), detail: `in ${idOf(scope)}` });
@@ -89,7 +104,7 @@ export function createDataObject(doc: Doc, scope: El, opts: { id?: string; name?
 export function createDataStore(doc: Doc, scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
   assertFlowScope(scope, 'data stores');
   const id = allocateId(doc, artifactRequest('dataStore', scope, opts), opts.id);
-  const store = doc.create('bpmn:DataStore', { id: doc.allocateId(typeRequest('bpmn:DataStore', { ...(opts.name ? { name: opts.name } : {}), context: speakingStem(id) ?? '' })).id, ...(opts.name ? { name: opts.name } : {}) });
+  const store = doc.create('bpmn:DataStore', { id: doc.allocateId(backingRequest(doc, 'bpmn:DataStore', id, opts.name)).id, ...(opts.name ? { name: opts.name } : {}) });
   addTo(doc.definitions, 'rootElements', store);
   const ref = doc.create('bpmn:DataStoreReference', { id, ...(opts.name ? { name: opts.name } : {}), dataStoreRef: store });
   addTo(scope, 'flowElements', ref);
