@@ -170,8 +170,8 @@ printf '%s' '[
   { "op": "ext", "id": "Activity_CreateShippingLabel", "action": "add", "type": "zeebe:input", "attrs": { "source": "=order.address", "target": "address" } },
   { "op": "ext", "id": "Activity_CreateShippingLabel", "action": "add", "type": "zeebe:output", "attrs": { "source": "=labelId", "target": "shippingLabelId" } },
   { "op": "ext", "id": "Activity_CreateShippingLabel", "action": "add", "type": "zeebe:header", "attrs": { "key": "carrier", "value": "dhl" } },
-  { "op": "add", "kind": "receiveTask", "name": "Wait for pickup", "id": "Activity_WaitForPickup", "message": "ParcelPickedUp", "after": "Activity_CreateShippingLabel" },
-  { "op": "ext", "id": "Message_ParcelPickedUp", "action": "add", "type": "zeebe:subscription", "attrs": { "correlationKey": "=orderId" } },
+  { "op": "add", "kind": "receiveTask", "name": "Wait for pickup", "id": "Activity_WaitForPickup", "message": "ParcelPickedUp", "refAs": "$parcelPickedUp", "after": "Activity_CreateShippingLabel" },
+  { "op": "ext", "id": "$parcelPickedUp", "action": "add", "type": "zeebe:subscription", "attrs": { "correlationKey": "=orderId" } },
   { "op": "add", "kind": "endEvent", "name": "Order shipped", "id": "Event_OrderShipped", "after": "Activity_WaitForPickup" },
   { "op": "add", "kind": "boundaryEvent:error", "name": "Address invalid", "id": "Event_AddressInvalid", "on": "Activity_CreateShippingLabel", "error": "Address invalid", "errorCode": "ADDRESS_INVALID" },
   { "op": "add", "kind": "userTask", "name": "Correct address", "id": "Activity_CorrectAddress", "after": "Event_AddressInvalid" },
@@ -184,7 +184,8 @@ bpmn show shipping.bpmn --around Activity_CreateShippingLabel --depth 1
 
 - `zeebe:input` / `zeebe:output` go into `zeebe:ioMapping`, `zeebe:header` into
   `zeebe:taskHeaders`; an item with the same target / key replaces the old one.
-- The receive task creates `Message_ParcelPickedUp` from the message name; the
-  subscription's correlation key goes on that message.
+- The receive task creates the message from its name (its id follows the
+  file's id style); `refAs` names it in the batch, so the subscription's
+  correlation key goes on that message without guessing its id.
 - New user tasks of a Camunda 8 file are Camunda user tasks (`zeebe:userTask`).
 - Details and more Camunda 8 settings: reference/camunda8.md.

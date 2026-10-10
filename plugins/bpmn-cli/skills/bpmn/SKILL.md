@@ -61,7 +61,8 @@ installed version. Ask it instead of guessing:
 4. **Back references inside a batch:** an id you set explicitly can be used by
    every later op. For what you do not name yourself, set an alias and use it:
    `"as": "$x"` (add, connect, split), `"flowAs": "$f"` (the flow into a new
-   node), `"joinAs": "$j"` (the join of a split). The result lists alias -> id.
+   node), `"joinAs": "$j"` (the join of a split), `"refAs": "$m"` (the message,
+   error, signal or escalation an element references). The result lists alias -> id.
 5. **One change, one transaction:** more than two related edits go into one
    `bpmn apply` batch (one validation, one layout, all or nothing). Paths that
    are invalid halfway (a new boundary event and its handling path) must be in
@@ -229,7 +230,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_VALIDATION` | The change would add a structural error: do the whole change in one batch, or read `bpmn validate`. `--force` only when the user agrees. |
 | `E_LEAVES_CONTAINER` | `place` / `align` would leave the lane / pool: `move <id> --lane <laneId>` first (in a batch: a move op before it). |
 | `E_NO_ROOM` | Make room with `space --after <id>` / `--below <id>`, then place again. |
-| `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs`) in an earlier op of the batch. |
+| `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
 | `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. |
 

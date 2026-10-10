@@ -155,4 +155,6 @@ Tasks: `task`, `userTask`, `serviceTask`, `sendTask`, `receiveTask`,
 fits which event: `bpmn kinds --section kinds,triggers`. Timers are ISO 8601:
 `PT2H` / `P3D` (duration), `R/PT1H` (cycle), a date-time (date). Messages,
 errors, signals and escalations are root elements found by name or created
-(`Message_<Name>`, `Error_<Name>`); the result names them.
+(ids in the file's style, e.g. `Message_<Name>`); never guess those ids: name
+them in a batch with `"refAs": "$name"` on add / connect / set / retype, and the
+result lists them.

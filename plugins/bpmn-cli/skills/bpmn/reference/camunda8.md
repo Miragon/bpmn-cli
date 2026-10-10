@@ -27,7 +27,7 @@ creates them) and new event definitions an id.
 | DMN decision | `set <file> <id> calledDecision=<decisionId>`, then `ext add <file> <id> zeebe:calledDecision resultVariable=<variable>` |
 | call activity | `ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false` (the BPMN `calledElement` is not read) |
 | FEEL script task | `ext add <file> <id> zeebe:script expression==<FEEL> resultVariable=<variable>` |
-| message correlation | the message name on the event / receive task (`message=<Name>`), then `ext add <file> Message_<Name> zeebe:subscription correlationKey==<FEEL>` |
+| message correlation | in a batch: `"message": "<Name>", "refAs": "$msg"` on the event / receive task, then an `ext` op on `"$msg"` adding `zeebe:subscription` with `correlationKey` `=<FEEL>`; on the command line `ext add <file> <eventId> zeebe:subscription correlationKey==<FEEL>` writes it on the message the event references (the result notes it) |
 | multi-instance | `ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<FEEL> inputElement=<variable>` (creates the parallel loop) |
 | condition | `add ... --condition '= amount > 1000'`, `set <file> <flowId> 'condition== amount > 1000'` |
 
