@@ -158,6 +158,25 @@ describe('#12 a node is not placed beside its own sub-process', () => {
   });
 });
 
+describe('#39 removing the only lane keeps its pool', () => {
+  it('the pool keeps its height instead of collapsing to 1 px', async () => {
+    const r0 = await mutateDoc(
+      Doc.create({ processId: 'P' }),
+      [
+        { op: 'add', kind: 'startEvent', id: 'Go', name: 'Go' },
+        { op: 'add', kind: 'endEvent', id: 'Stop', name: 'Stop', after: 'Go' },
+        { op: 'add', kind: 'participant', id: 'Main', name: 'Main' },
+        { op: 'add', kind: 'participant', id: 'Partner', name: 'Partner' },
+      ],
+      { dryRun: true },
+    );
+    const height = shapes(await Doc.fromXml(r0.xml)).get('Partner')!.bounds.height;
+    const withLane = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'add', kind: 'lane', id: 'Lane_Desk', name: 'Desk', in: 'Partner' }], { dryRun: true, layout: 'incremental' });
+    const r = await mutateDoc(await Doc.fromXml(withLane.xml), [{ op: 'remove', ids: ['Lane_Desk'] }], { dryRun: true, layout: 'incremental' });
+    expect(shapes(await Doc.fromXml(r.xml)).get('Partner')!.bounds.height).toBe(height);
+  });
+});
+
 describe('#62 route refuses a side that points into a boundary event host', () => {
   it('--exit top from a bottom boundary event is E_INVALID_VALUE; --exit bottom routes', async () => {
     const r0 = await mutateDoc(

@@ -13,7 +13,8 @@
  *    parent lanes grow and everything below moves down.
  *  - removedLane(plane, box, poolId): an empty band closes (lanes below move
  *    up, the pool shrinks); a band that still holds shapes is taken over by
- *    the sibling lane above (or below).
+ *    the sibling lane above (or below); the only lane of a pool / parent lane
+ *    leaves its frame as it is (the band is the whole frame).
  *  - removedPool(plane, box): pools below move up into the freed band.
  *  - collapse(plane, sub, childPlane) / expand(plane, sub, childPlane?): turn
  *    an expanded sub-process into a collapsed one (content moves to its own
@@ -133,6 +134,8 @@ export function removedLane(plane: Plane, box: Box, poolId: string | undefined, 
   const pool = poolId ? plane.shapes.get(poolId) : undefined;
   const occupied = [...plane.shapes.values()].some((s) => isLeaf(s) && s.kind !== 'boundary' && cy(s.bounds) > box.y && cy(s.bounds) < bottom(box) && (!pool || (s.bounds.x >= pool.bounds.x && s.bounds.x <= right(pool.bounds))));
   const siblings = siblingLanes(plane, poolId, parentId, '');
+  // the only lane of its pool / parent lane: the band is the whole frame, which keeps its size (audit #39)
+  if (!siblings.length) return;
   if (!occupied) {
     merge(touched, makeSpace(plane, { axis: 'y', line: bottom(box) - 0.5, delta: -box.height, ...(pool ? { within: { ...pool.bounds } } : {}) }));
     return;
