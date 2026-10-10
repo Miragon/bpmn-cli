@@ -449,10 +449,19 @@ each: `implementation:` (vendor values and extension elements, compact),
 is in the sub-process's lane: `via`; nested lanes: `within`), `host:` (a
 boundary event), `from:` / `to:` (the neighbours with their names and the
 connecting flows), `boundary:` (its own boundary events), `caught by:` (the
-error and escalation boundary events of the sub-processes around it), `event
-sub-processes:` (those of every scope around it, with their start event),
-`annotations:`, `message flows:` (with the partner and its pool) and
-`reads:` / `writes:`. Lines without content are left out:
+boundary events of every kind on the sub-processes around it, inner first:
+an interrupting one cancels the element with its sub-process, a
+non-interrupting one is marked, an error / escalation one catches what it
+throws), `event sub-processes:` (those of every scope around it, with their
+start event), `annotations:`, `message flows:` (with the partner and its
+pool) and `reads:` / `writes:`. A message event or send / receive task also
+gets `message:` (the message's id, name and Camunda 8 correlation key) and,
+among its message flows, those of its message drawn to its pool instead of
+to the element (`(at pool <id>)`; a flow without `messageRef` counts when it
+has the message's name); a message flow gets `message:`, `in:
+collaboration <id>` and `from:` / `to:` with the pool of each end; a
+message, signal, error or escalation gets `used by:` (the events, tasks and
+message flows that name it). Lines without content are left out:
 
 ```
 $ bpmn show claims.bpmn Activity_RateDamage --context
@@ -472,8 +481,8 @@ writes: DataObjectReference_ClaimFile "Claim file"
 `scope`, `distance`, `lane`, `impl`, `outgoing`, `from`, then `messageFlows`,
 `annotations`, `data`, `shown`, `omitted`; `ElementContext`: `ancestors`,
 `pool`, `lane`, `host`, `from`, `to`, `boundary`, `caughtBy`,
-`eventSubProcesses`, `annotations`, `messageFlows`, `data`,
-`implementation`). On 278 real models (private corpora, centred on the
+`eventSubProcesses`, `annotations`, `messageFlows` (`at`: drawn to the
+pool), `message`, `usedBy`, `data`, `implementation`). On 278 real models (private corpora, centred on the
 middle activity) the neighbourhood (depth 2) is 1.2 KB in the median (p90
 2.1 KB) against 2.3 KB (7.6 KB) for the whole model and 1.4 KB (2.4 KB) for
 PR #218's `outline --around`; on the 30 models with 30 flow nodes or more it
