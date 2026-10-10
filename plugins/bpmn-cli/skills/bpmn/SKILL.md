@@ -111,6 +111,15 @@ installed version. Ask it instead of guessing:
      with `placed:` / `moved:` / `rerouted:`, or `full` for a new / engine-drawn
      diagram; `layout quality: score a -> b; added: <problem> [ids]` - fix added
      problems with the format commands, never by redrawing a hand-made diagram
+   - a hand-made diagram where one batch splices several nodes in a row into the
+     same flow (a task, then a gateway after it) can come out with the new nodes
+     below the line (`added: backwardFlow`, `crossings` in the dry run): splice
+     the main-line nodes with one command each instead - `bpmn add <file>
+     userTask "Approve order" --id Activity_ApproveOrder --flow <flowId>`, then
+     `bpmn add <file> exclusiveGateway "Order approved?" --id
+     Gateway_OrderApproved --after Activity_ApproveOrder` (each lands in the row
+     and shifts the rest right) - then add branches and boundary paths in one
+     batch, with the flow ids the results printed
    - `--summary` shortens all of this to a few lines
    - example: a full redraw moved the customer pool below and added a crossing
      with a message flow - `bpmn order <file> <collaborationId> <poolIds...>`
@@ -145,6 +154,9 @@ Exit codes: 0 ok, 1 usage, 2 model/validation error, 3 layout, 4 file/parse,
   `to` T also connects the new node to T. `lane` sets the lane.
 - Flow options on add describe the flow **into** the new node: `flowName`,
   `condition`, `default`, `flowId`, `flowAs`.
+- `set` takes its changes in `values` (and `unset`):
+  `{ "op": "set", "id": "Flow_OrderOkYes", "values": { "name": "yes", "condition": "${orderOk}" } }`;
+  a `default` flow has no condition.
 - Pools: the first `participant` wraps the existing process; add further pools
   after it, `"blackBox": true` for a party without process (a customer).
   `connect` between pools makes a message flow (`"message": "Order"` names it).
@@ -167,13 +179,15 @@ Details, every op key and worked batches: [reference/ops.md](reference/ops.md).
 
 Diagram-only commands name elements, never coordinates: `place` (to the row /
 column of another element), `align`, `color` (blue, orange, green, red, purple,
-default), `label` (side of an external label), `route` (exit / entry side),
-`space` (insert or close a column / row), `tidy` (remove overlaps), `compact`
-(close empty rows / columns, shrink frames), `order` (lanes, pools, branch
-order). Selectors `--path <fromId> <toId>`, `--branch <flowId>`, `--kind <kind>`
-name many elements at once. Read the drawing with `show --layout` first,
-`--dry-run` the format op, check `bpmn metrics <file>` after. In a batch they
-are ops too and run after the semantic ops and the layout.
+default), `label` (side of an external label: above, below, left, right),
+`route` (exit / entry side), `space` (insert or close a column / row; `--by`
+takes `column`, `row` or pixels: `--by 2` is 2 px, repeat `--by column` for two
+columns), `tidy` (remove overlaps), `compact` (close empty rows / columns,
+shrink frames), `order` (lanes, pools, branch order). Selectors
+`--path <fromId> <toId>`, `--branch <flowId>`, `--kind <kind>` name many
+elements at once. Read the drawing with `show --layout` first, `--dry-run` the
+format op, check `bpmn metrics <file>` after. In a batch they are ops too and
+run after the semantic ops and the layout.
 
 ```bash
 bpmn show order-to-cash.bpmn --layout
