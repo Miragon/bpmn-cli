@@ -5,7 +5,8 @@
  *  - runProfile(doc, choice) detects the platform (platform/detect.ts; an
  *    explicit choice wins) and runs its rules: Camunda 7 (platform/c7.ts;
  *    a file that uses the operaton namespace is read the way Operaton reads
- *    it, `operaton: true`); Camunda 8 and plain BPMN have no rules yet.
+ *    it, `operaton: true`), Camunda 8 (platform/c8.ts); plain BPMN has no
+ *    engine rules.
  *  - `bpmn validate` reports every finding as a warning (`--strict` exits 5)
  *    and the platform it checked against (`--platform` overrides).
  *  - Mutations report only the findings the change introduced (profileDelta,
@@ -19,6 +20,7 @@
 import type { Doc } from '../document.js';
 import type { El } from '../model.js';
 import { c7Findings } from './c7.js';
+import { c8Findings } from './c8.js';
 import { resolvePlatform, type Platform, type PlatformChoice, type PlatformInfo } from './detect.js';
 import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from './finding.js';
 
@@ -43,7 +45,7 @@ export interface PlatformSummary extends PlatformInfo {
 /** Runs the profile of the document's platform (or of `choice`). */
 export function runProfile(doc: Doc, choice: PlatformChoice = 'auto'): ProfileReport {
   const info = resolvePlatform(doc, choice);
-  const findings = info.platform === 'c7' ? c7Findings(doc, { operaton: info.operaton === true }) : [];
+  const findings = info.platform === 'c7' ? c7Findings(doc, { operaton: info.operaton === true }) : info.platform === 'c8' ? c8Findings(doc) : [];
   return { ...info, findings };
 }
 

@@ -32,6 +32,7 @@ import { typeRequest } from '../idstyle.js';
 import { kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { addTo, is, many, walk, type El } from '../model.js';
 import { isC7Uri } from '../platform/descriptor.js';
+import { definitionIdDefault } from './platform.js';
 import type { TriggerOptions } from './types.js';
 
 export interface TriggerDetails {
@@ -425,7 +426,10 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   }
   const fresh = trigger !== 'none' ? buildDefinition(doc, event, trigger, opts) : undefined;
   const warnings = dropDefinitions(doc, event, trigger);
-  if (fresh) addTo(event, 'eventDefinitions', fresh);
+  if (fresh) {
+    addTo(event, 'eventDefinitions', fresh);
+    definitionIdDefault(doc, event, fresh);
+  }
   doc.invalidate();
   return warnings;
 }

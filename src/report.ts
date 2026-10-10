@@ -165,13 +165,8 @@ export function renderValidation(report: ValidationReport): string {
   if (errors.length) lines.push(renderProblems(errors).trimEnd());
   if (warnings.length) lines.push(renderProblems(warnings).trimEnd());
   if (platform) {
-    // only Camunda 7 has engine rules so far: a count of 0 would read as "checked and fine" for Camunda 8
-    const counts =
-      platform.platform === 'c7'
-        ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)`
-        : platform.platform === 'c8'
-          ? ' - no Camunda 8 engine rules yet (structure and lint only)'
-          : '';
+    // plain BPMN has no engine rules: a count of 0 would read as "checked and fine"
+    const counts = platform.platform === 'c7' || platform.platform === 'c8' ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)` : '';
     lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
   }
   lines.push(...validatorLines(report.validators, 'file'));

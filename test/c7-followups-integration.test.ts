@@ -373,12 +373,12 @@ describe('W_C7_DEPLOY_SCHEMA: `set <id> <attr>=` removes the attribute', () => {
 /* ------------------------------------------------------------------ */
 
 describe('CLI output', () => {
-  it('validate: a Camunda 8 file has no engine rules to count', () => {
+  it('validate: a Camunda 8 file counts the findings of the Camunda 8 profile (step 3; before: "no Camunda 8 engine rules yet")', () => {
     const file = join(dir, 'c8.bpmn');
     writeFileSync(file, xml(chain([['T', '<bpmn:serviceTask id="T"><bpmn:extensionElements><zeebe:taskDefinition type="t" /></bpmn:extensionElements></bpmn:serviceTask>']]), { ns: 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"', attrs: '' }));
     const r = cli('validate', file);
-    expect(r.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - no Camunda 8 engine rules yet (structure and lint only)');
-    expect(r.out).not.toContain('refused at deploy');
+    expect(r.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - 0 refused at deploy, 0 runtime, 0 practice finding(s)');
+    expect(r.out).not.toContain('no Camunda 8 engine rules yet');
   });
 
   it('validate: import warnings are counted, and --strict fails on them', () => {
