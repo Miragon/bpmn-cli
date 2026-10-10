@@ -198,7 +198,8 @@ A flow whose id names its ends (exactly the id the file's style gives a flow
 between them, also with a suffix) is renamed after its new ends when an edit
 changes them: a splice (`add --after`, `--flow`, `split`), a bridge
 (`remove`, `move`) or `set <flow> target=`. The change says so (`renamed
-from Flow_CheckInvoiceToDone: its id named its old ends`), its DI edge id
+from Flow_CheckInvoiceToDone: its id named its old ends`; `--summary` and
+`--json`: `renamed`, old id -> new id), its DI edge id
 follows when it was derived from the flow id, and every other id stays (a
 hashed `Flow_0k3x9qa` or a numbered `Flow_12` keeps its id). In an `apply`
 batch a later op refers to an element an earlier op created by an alias
@@ -274,7 +275,7 @@ always redraws, so it has no layout mode options):
 | option | effect |
 | --- | --- |
 | `--json` | machine-readable result on stdout (compact; `--pretty` indents it), errors as JSON on stderr |
-| `--summary` | a short result: created ids by kind, changed / removed ids, the added warnings, one layout line (see [Output](#output-errors-and-exit-codes)) |
+| `--summary` | a short result: created ids by kind, batch aliases, changed / renamed / removed ids, one line per format op, the added warnings, one layout line (see [Output](#output-errors-and-exit-codes)) |
 | `-o, --out <file>` | write to another file instead of in place; `-o -` writes the result to stdout (the report goes to stderr) |
 | `--dry-run` | run everything (including layout) but write nothing |
 | `--layout <auto\|incremental\|full>` | how the diagram is updated, see [Layout modes](#layout-modes); default `auto` |
@@ -914,13 +915,14 @@ problems it added and resolved.
 and the error catalogue; `kinds --json` adds the JSON Schema of the ops
 format (`ops`), the example (`opsExample`), the validation profiles
 (`profiles`) and the exit codes. `kinds --section <name,...>` prints only the
-named parts (`kinds`, `triggers`, `setKeys`, `nestedKeys`, `placement`,
-`ops`, `layoutModes`, `ids`, `profiles`, `colors`, `errors`, `exitCodes`;
+named parts (`kinds`, `triggers`, `setKeys`, `nestedKeys`, `zeebeElements`,
+`placement`, `ops`, `layoutModes`, `ids`, `profiles`, `colors`, `errors`,
+`exitCodes`;
 case and dashes do not matter, `set-keys` works), with `--json` only those
 keys (`ops` brings `opsExample`, `triggers` `nonInterrupting`, `nestedKeys`
 `nestedSelectors`); an unknown name is `E_USAGE` with the list.
 
-`guide` is the cheat sheet for agents (about 43 KB). `guide --short` is its
+`guide` is the cheat sheet for agents (about 57 KB). `guide --short` is its
 core in at most 5 KB: the contract, the reading views, the commands that
 change a model, every op with its keys, the placement grammar and the most
 common errors. `guide <topic>` prints the sections of one topic: `contract`,
@@ -1356,7 +1358,9 @@ file a new user task (`add`, or `retype` to `userTask`) gets
 Without it Camunda 8 runs a job worker user task (a job of type
 `io.camunda.zeebe:userTask`, which the v2 user task API and Tasklist in V2
 mode do not list; `W_C8_JOB_WORKER_USER_TASK`). A new event definition gets
-an id derived from its event (`ConditionalEventDefinition_StockReady`):
+a speaking id after its event, in the file's id style
+(`ConditionalEventDefinition_StockReady`; never the hash of a Modeler event
+id: the event's name then; a taken id gets `_2` and `W_ID_SUFFIXED`):
 Camunda 8.9 refuses conditional, compensation and link catch event
 definitions without one.
 
@@ -1402,7 +1406,10 @@ cannot use (`W_PROPERTY_INAPPLICABLE`, in a Camunda 8 file one
 `W_C8_MISPLACED_EXTENSION` per item). `show` prints what a node does
 (`job=check-invoice`, `calledElement=...`, `script=...`, `form=...`,
 `assignee=...` / `candidateGroups=...`, `inputCollection=...`) and a message
-its correlation key; `show <id>` and `ext list` print the whole tree.
+its correlation key; `show --around` and `show <id> --context` print each
+zeebe element once, with its attributes (`zeebe:taskDefinition
+type=check-invoice retries=3, io: in amount`); `show <id>` and `ext list`
+print the whole tree.
 
 **Validate before deploying.** `bpmn validate` runs the Camunda 8 profile in
 Camunda 8 files (`modeler:executionPlatform` "Camunda Cloud", or zeebe
@@ -1434,13 +1441,13 @@ incident, Camunda 7 content (`camunda:*`) is ignored, unknown and misplaced
 zeebe content (input mappings on start, boundary, none throw and none end
 events included) has no effect, `zeebe:publishMessage` is accepted but not
 run. Every finding names the command that fixes it (the worked example
-below after `set Flow_1p3kapg 'condition=${invoice.amount > 1000}'` and
+below after `set Flow_AmountOver1000ToApproveInvoice 'condition=${invoice.amount > 1000}'` and
 `ext remove Message_PaymentReceived zeebe:subscription`):
 
 ```
 $ bpmn validate invoice.bpmn
 W_C8_DEPLOY_MESSAGE Activity_WaitForPayment [Message_PaymentReceived]: Message Message_PaymentReceived ("Payment received") of receiveTask Activity_WaitForPayment has no zeebe:subscription: Camunda 8 needs one with the correlation key that matches a message to an instance and refuses the file  (`bpmn ext add <file> Message_PaymentReceived zeebe:subscription correlationKey==<expression>` (e.g. correlationKey==orderId).)
-W_C8_DEPLOY_EXPRESSION Flow_1p3kapg: The condition "${invoice.amount > 1000}" of sequence flow Flow_1p3kapg is no FEEL expression; Camunda 8 needs one starting with = and refuses the file  (`bpmn set <file> Flow_1p3kapg 'condition== invoice.amount > 1000'` (check the FEEL syntax: and / or, = for equality).)
+W_C8_DEPLOY_EXPRESSION Flow_AmountOver1000ToApproveInvoice: The condition "${invoice.amount > 1000}" of sequence flow Flow_AmountOver1000ToApproveInvoice is no FEEL expression; Camunda 8 needs one starting with = and refuses the file  (`bpmn set <file> Flow_AmountOver1000ToApproveInvoice 'condition== invoice.amount > 1000'` (check the FEEL syntax: and / or, = for equality).)
 platform: c8 (modeler:executionPlatform "Camunda Cloud") - 2 refused at deploy, 0 runtime, 0 practice finding(s)
 layout: ok
 valid, 2 warning(s)
@@ -1507,14 +1514,14 @@ correlation key):
 $ bpmn show invoice.bpmn
 namespaces: zeebe, modeler
 process Process_InvoiceApproval "Invoice approval" executable
-  startEvent Event_InvoiceReceived "Invoice received" -> Activity_CheckInvoice (Flow_1d9iq3c)
-  serviceTask Activity_CheckInvoice "Check invoice" [job=check-invoice, ext: zeebe:taskDefinition, zeebe:ioMapping, zeebe:taskHeaders] -> Gateway_AmountOver1000 (Flow_1j5bfq9)
-  exclusiveGateway Gateway_AmountOver1000 "Amount over 1000?" -> Activity_ApproveInvoice (Flow_1p3kapg "yes" if = invoice.amount > 1000), Gateway_Approved (Flow_0rx34hq "no" default)
-  userTask Activity_ApproveInvoice "Approve invoice" [form=https://forms.example.com/approve-invoice, candidateGroups=finance, ext: zeebe:userTask, zeebe:assignmentDefinition, zeebe:formDefinition] -> Gateway_Approved (Flow_02hoari)
-  exclusiveGateway Gateway_Approved -> Activity_WaitForPayment (Flow_040g1ya)
-  receiveTask Activity_WaitForPayment "Wait for payment" [message=Payment received] -> Activity_BookPayment (Flow_1ju8oiv)
-  callActivity Activity_BookPayment "Book payment" [calledElement=Process_BookPayment, ext: zeebe:calledElement, zeebe:ioMapping] -> Activity_NotifyParty (Flow_06d0vcw)
-  serviceTask Activity_NotifyParty "Notify party" [loop=parallel, job=notify-party, inputCollection==parties, inputElement=party, ext: zeebe:taskDefinition] -> Event_InvoiceSettled (Flow_0ys0mpu)
+  startEvent Event_InvoiceReceived "Invoice received" -> Activity_CheckInvoice (Flow_InvoiceReceivedToCheckInvoice)
+  serviceTask Activity_CheckInvoice "Check invoice" [job=check-invoice, ext: zeebe:taskDefinition, zeebe:ioMapping, zeebe:taskHeaders] -> Gateway_AmountOver1000 (Flow_CheckInvoiceToAmountOver1000)
+  exclusiveGateway Gateway_AmountOver1000 "Amount over 1000?" -> Activity_ApproveInvoice (Flow_AmountOver1000ToApproveInvoice "yes" if = invoice.amount > 1000), Gateway_Approved (Flow_AmountOver1000ToApproved "no" default)
+  userTask Activity_ApproveInvoice "Approve invoice" [form=https://forms.example.com/approve-invoice, candidateGroups=finance, ext: zeebe:userTask, zeebe:assignmentDefinition, zeebe:formDefinition] -> Gateway_Approved (Flow_ApproveInvoiceToApproved)
+  exclusiveGateway Gateway_Approved -> Activity_WaitForPayment (Flow_ApprovedToWaitForPayment)
+  receiveTask Activity_WaitForPayment "Wait for payment" [message=Payment received] -> Activity_BookPayment (Flow_WaitForPaymentToBookPayment)
+  callActivity Activity_BookPayment "Book payment" [calledElement=Process_BookPayment, ext: zeebe:calledElement, zeebe:ioMapping] -> Activity_NotifyParty (Flow_BookPaymentToNotifyParty)
+  serviceTask Activity_NotifyParty "Notify party" [loop=parallel, job=notify-party, inputCollection==parties, inputElement=party, ext: zeebe:taskDefinition] -> Event_InvoiceSettled (Flow_NotifyPartyToInvoiceSettled)
   endEvent Event_InvoiceSettled "Invoice settled"
 root: message Message_PaymentReceived "Payment received" [correlationKey==invoiceId]
 problems: none
@@ -1522,12 +1529,21 @@ problems: none
 $ bpmn show invoice.bpmn Activity_CheckInvoice
 ...
 job: check-invoice
+incoming: Flow_InvoiceReceivedToCheckInvoice from Event_InvoiceReceived
+outgoing: Flow_CheckInvoiceToAmountOver1000 to Gateway_AmountOver1000
 extensions:
   zeebe:taskDefinition type="check-invoice" retries="3"
   zeebe:ioMapping
     zeebe:input source="=invoice.amount" target="amount"
   zeebe:taskHeaders
     zeebe:header key="channel" value="mail"
+
+$ bpmn show invoice.bpmn --around Activity_ApproveInvoice --depth 1
+around Activity_ApproveInvoice (depth 1): 3 of 9 nodes, 3 of 9 flows; 6 nodes, 6 flows omitted
+process Process_InvoiceApproval "Invoice approval"
+  exclusiveGateway Gateway_AmountOver1000 "Amount over 1000?" <- Activity_CheckInvoice (Flow_CheckInvoiceToAmountOver1000) -> Activity_ApproveInvoice (Flow_AmountOver1000ToApproveInvoice "yes" if = invoice.amount > 1000), Gateway_Approved (Flow_AmountOver1000ToApproved "no" default)
+  userTask Activity_ApproveInvoice "Approve invoice" [zeebe:userTask, zeebe:assignmentDefinition candidateGroups=finance, zeebe:formDefinition externalReference="https://forms.example.com/approve-inv..."] -> Gateway_Approved (Flow_ApproveInvoiceToApproved)
+  exclusiveGateway Gateway_Approved -> Activity_WaitForPayment (Flow_ApprovedToWaitForPayment)
 
 $ bpmn validate invoice.bpmn
 platform: c8 (modeler:executionPlatform "Camunda Cloud") - 0 refused at deploy, 0 runtime, 0 practice finding(s)
@@ -1748,9 +1764,12 @@ describe; a prepend before a join or an unconnected node: the flow out of
 it) and `split` takes `"joinAs"` (its join gateway). Later ops of the batch
 use the alias wherever an element id goes: `after`, `before`, `flow`, `in`,
 `on`, `to`, `lane`, `process`, `members`, `source`, `target`, the `id` /
-`ids` of `set`, `remove`, `retype`, `move`, `order`, `ext` and the format
-ops, and the `default`, `source`, `target`, `lane` values of `set`. So a
-batch never guesses a generated id:
+`ids` of `set`, `remove`, `retype`, `move`, `order` (and its `flows`,
+`lanes`, `pools`), `ext` and the format ops (their selectors `path`, `via`,
+`branch` and the `ids` of `compact` included), and the `default`, `source`,
+`target`, `lane` values of `set`. An alias follows its element through a
+rename later in the batch (a flow renamed after its new ends). So a batch
+never guesses a generated id:
 
 ```json
 [
@@ -1850,10 +1869,10 @@ warnings of its own yet: its result lists them all. The layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
-  placed: Activity_Review, Flow_9
+  placed: Activity_Review, Flow_ReviewToDone
   moved: Event_Done
   rerouted: Flow_4
-  format place #1: moved Activity_Review; rerouted Flow_9
+  format place #1: moved Activity_Review; rerouted Flow_ReviewToDone
 layout quality: score 12 -> 10; resolved: crossings [Flow_3, Flow_7]
 ```
 
@@ -1865,18 +1884,34 @@ and `layout quality` compares the layout problems before and after (`added:`
 and `resolved:` name them with ids).
 
 `--summary` prints a short result instead: `created <kind>: <ids>` per kind,
-`changed:` and `removed:` with the ids, forced errors, the added warnings
+the batch aliases (`aliases: $archive = Activity_Archive`), `changed:`,
+`renamed: <old> -> <new>` (a flow whose id named its old ends, renamed after
+its new ones: use the new id from now on) and `removed:` with the ids, one
+`format <op> #<index>: ...` line per format op (what it moved, rerouted or
+coloured, or why it changed nothing), forced errors, the added warnings
 (floods as one line), `warnings: n added, n resolved, n already in the
 file`, one layout line (`layout: incremental, score 12 -> 14; added:
 crossings [Flow_1, Flow_3]`; without a drawing before, the number of layout
-problems instead of the list) and the file line:
+problems instead of the list) and the file line (the worked session's file
+after its last step):
 
 ```
 $ bpmn add order.bpmn userTask "Archive" --after Activity_CheckInvoice --summary
 created userTask: Activity_Archive
-created sequenceFlow: Flow_0jurqec
-changed: Flow_024yl5b
-layout: full, score 0 -> 0
+created sequenceFlow: Flow_ArchiveToInvoiceOk
+changed: Flow_CheckInvoiceToArchive
+renamed: Flow_CheckInvoiceToInvoiceOk -> Flow_CheckInvoiceToArchive
+layout: incremental, score 0 -> 0
+written: order.bpmn
+
+$ bpmn apply order.bpmn ops.json --summary      # the same add with "as": "$archive", then color "$archive"
+created userTask: Activity_Archive
+created sequenceFlow: Flow_ArchiveToInvoiceOk
+aliases: $archive = Activity_Archive
+changed: Flow_CheckInvoiceToArchive
+renamed: Flow_CheckInvoiceToInvoiceOk -> Flow_CheckInvoiceToArchive
+format color #1: colored Activity_Archive
+layout: incremental, score 0 -> 0
 written: order.bpmn
 ```
 
@@ -1895,10 +1930,11 @@ indented here):
   },
   "notes": ["..."],
   "aliases": { "$check": "Activity_X" },
+  "renamed": { "Flow_CheckInvoiceToDone": "Flow_CheckInvoiceToX" },
   "layout": {
     "status": "ok", "mode": "incremental", "reason": "hand-made diagram: kept, changes placed locally",
     "warnings": [], "expanded": [],
-    "placed": ["Activity_X", "Flow_9"], "moved": [], "rerouted": ["Flow_4"], "pruned": [], "notes": [],
+    "placed": ["Activity_X", "Flow_XToY"], "moved": [], "rerouted": ["Flow_4"], "pruned": [], "notes": [],
     "format": [{ "op": "color", "index": 1, "moved": [], "rerouted": [], "colored": ["Activity_X"] }],
     "metrics": {
       "before": { "counts": { "crossings": 1, "...": 0 }, "score": 5 },
@@ -1924,10 +1960,14 @@ bpmn-moddle reported while reading the input file (informational, first line
 of each warning; a design model's `calledDecision` is not one).
 `validation.validators` is there when a validator ran (the design profile,
 library validators); their findings in `validation.errors` /
-`warnings.added` carry `"validator"` and `"severity"`. With `--summary
---json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed,
-removed, forced?, warnings: {added, resolvedCount, preexistingCount},
-layout: {status, mode?, score?: {before?, after}, added?, problems?}}`.
+`warnings.added` carry `"validator"` and `"severity"`. `aliases` (batch
+aliases -> final ids) and `renamed` (old id -> new id of what the change
+renamed) are there when the change has any. With `--summary --json`: `{ok,
+file, written, unchanged, created: {<kind>: [ids]}, aliases?, changed,
+renamed?, removed, forced?, warnings: {added, resolvedCount,
+preexistingCount}, layout: {status, mode?, score?: {before?, after},
+added?, problems?}, format?: [{op, index, moved, rerouted, reshaped?,
+colored?, labels?, notes?}]}`.
 `--strict` still exits 5 when the result has any warning (also one the file
 already had).
 
@@ -2183,6 +2223,13 @@ touched, in the file's own style:
   refuse such a file before and after the edit; `bpmn layout` does not
   reorder either. A new element goes after the sibling bpmn-moddle writes
   before it (in a file in XSD order, its place in that order).
+- New ids come from names and places, so two branches of a file (git, two
+  agents) that each add an element of the same name, or an unnamed element
+  next to anchors of the same name, produce the same id; merging both gives
+  a duplicate id, which the next read refuses (`E_IMPORT_LOSSY`: rename one
+  of them while resolving the merge). A flow whose id names its ends is renamed when an edit changes
+  its ends (the one exception to "existing ids never change"); the library
+  keeps every id with `Doc.followFlowEnds = false`, the CLI has no switch.
 - The Camunda 8 profile does not parse FEEL: it reports a static value
   where FEEL is required and the common slips (`&&`, `||`, `==`, `!`,
   `${...}`, single quotes, unbalanced brackets, a dangling operator); other
@@ -2213,7 +2260,7 @@ $ bpmn add order.bpmn start "Order received" --message OrderReceived
 created startEvent:message Event_OrderReceived "Order received" - in Process_OrderHandling
 created message Message_OrderReceived "OrderReceived" - root element
 warning W_DEAD_END Event_OrderReceived: startEvent:message Event_OrderReceived "Order received" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Event_OrderReceived`) or end it (`bpmn add <file> endEvent "<Name>" --after Event_OrderReceived`).)
-resolved: W_NO_START Process_OrderHandling
+resolved: W_C8_DEPLOY_START_EVENT Process_OrderHandling
 1 warning already in the file (not repeated: `bpmn validate <file>` lists them)
 layout: ok - full (no diagram before: drawn from scratch)
 layout quality: score 0
@@ -2224,7 +2271,6 @@ created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceiv
 created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
 note: appended after Event_OrderReceived
 note: Activity_CheckInvoice is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them
-warning W_NO_END Process_OrderHandling: Process Process_OrderHandling has no end event  (Add one after the last node: `bpmn add <file> endEvent "<Name>" --after <nodeId>`.)
 warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
 resolved: W_DEAD_END Event_OrderReceived
 1 warning already in the file (not repeated: `bpmn validate <file>` lists them)
@@ -2289,14 +2335,14 @@ $ bpmn show order.bpmn
 namespaces: zeebe, modeler
 process Process_OrderHandling "Order handling" executable
   startEvent:message Event_OrderReceived "Order received" [message OrderReceived] -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
-  userTask Activity_CheckInvoice "Check invoice" -> Gateway_InvoiceOk (Flow_CheckInvoiceToInvoiceOk)
-  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_InvoiceOkToBookInvoice "yes" if =ok), Activity_ClarifyInvoice (Flow_InvoiceOkToClarifyInvoice "no" default)
-  serviceTask Activity_BookInvoice "Book invoice" [ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_BookInvoiceToInvoiceOkJoin)
+  userTask Activity_CheckInvoice "Check invoice" [ext: zeebe:userTask] -> Gateway_InvoiceOk (Flow_CheckInvoiceToInvoiceOk)
+  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_InvoiceOkToBookInvoice "yes" if = ok), Activity_ClarifyInvoice (Flow_InvoiceOkToClarifyInvoice "no" default)
+  serviceTask Activity_BookInvoice "Book invoice" [job=book-invoice, ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_BookInvoiceToInvoiceOkJoin)
   exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_InvoiceOkJoinToInvoiceHandled)
   endEvent Event_InvoiceHandled "Invoice handled"
-  userTask Activity_ClarifyInvoice "Clarify invoice" -> Gateway_InvoiceOk_join (Flow_ClarifyInvoiceToInvoiceOkJoin)
-    boundaryEvent:timer Event_Reminder "Reminder" [PT2D, non-interrupting] -> Activity_RemindCustomer (Flow_ReminderToRemindCustomer)
-  sendTask Activity_RemindCustomer "Remind customer" -> Event_ReminderSent (Flow_RemindCustomerToReminderSent)
+  userTask Activity_ClarifyInvoice "Clarify invoice" [ext: zeebe:userTask] -> Gateway_InvoiceOk_join (Flow_ClarifyInvoiceToInvoiceOkJoin)
+    boundaryEvent:timer Event_Reminder "Reminder" [P2D, non-interrupting] -> Activity_RemindCustomer (Flow_ReminderToRemindCustomer)
+  sendTask Activity_RemindCustomer "Remind customer" [job=remind-customer, ext: zeebe:taskDefinition] -> Event_ReminderSent (Flow_RemindCustomerToReminderSent)
   endEvent Event_ReminderSent "Reminder sent"
 root: message Message_OrderReceived "OrderReceived"
 problems: none
@@ -2331,10 +2377,11 @@ written: order.bpmn
 
 $ bpmn show order.bpmn --layout
 diagram BPMNPlane_Collaboration_OrderHandling (Collaboration_OrderHandling)
+  columns: c0..c5
   participant Participant_OrderHandling "Order handling"
-    row 1: Event_OrderReceived, Activity_CheckInvoice, Gateway_InvoiceOk, Activity_BookInvoice, Gateway_InvoiceOk_join, Event_InvoiceHandled
-    row 2: Activity_ClarifyInvoice
-    row 3: Activity_RemindCustomer, Event_ReminderSent
+    row 1: c0 Event_OrderReceived, c1 Activity_CheckInvoice, c2 Gateway_InvoiceOk, c3 Activity_BookInvoice, c4 Gateway_InvoiceOk_join, c5 Event_InvoiceHandled
+    row 2: c3 Activity_ClarifyInvoice
+    row 3: c4 Activity_RemindCustomer, c5 Event_ReminderSent
   participant Participant_Customer "Customer"
 layout quality: score 0: no layout problems
 
@@ -2373,8 +2420,16 @@ $ bpmn metrics order.bpmn
 score 0: no layout problems
 
 $ bpmn validate order.bpmn
+W_C8_DEPLOY_IMPLEMENTATION Activity_ArchiveInvoice: serviceTask Activity_ArchiveInvoice has no zeebe:taskDefinition: Camunda 8 needs the job type a worker subscribes to and refuses the file  (Give it a job type: `bpmn ext add <file> Activity_ArchiveInvoice zeebe:taskDefinition type=<jobType>`.)
+platform: c8 (modeler:executionPlatform "Camunda Cloud") - 1 refused at deploy, 0 runtime, 0 practice finding(s)
 layout: ok
-valid, 0 warning(s)
+valid, 1 warning(s)
+
+$ bpmn ext add order.bpmn Activity_ArchiveInvoice zeebe:taskDefinition type=archive-invoice --summary
+changed: Activity_ArchiveInvoice
+warnings: 0 added, 1 resolved, 0 already in the file
+layout: incremental, score 0 -> 0
+written: order.bpmn
 ```
 
 The first participant must be a normal pool: it wraps the existing process
@@ -2386,10 +2441,12 @@ The last steps format the drawing without XML: `show --layout` reads it,
 `color` / `label` / `place` change it (the drawing is now hand-made), and the
 following `add` therefore keeps it and places "Archive invoice" locally
 between "Book invoice" and the join (`layout: ok - incremental`) instead of
-redrawing; `metrics` confirms that no layout problem was introduced. The
-file targets Camunda 8, so `validate` (and already the `add`) reports that
-the new service task has no job type; the `ext add` from the hint fixes it,
-and the result deploys to Camunda 8.9.
+redrawing; the flow it was spliced into named its old ends and is renamed
+after its new ones. `metrics` confirms that no layout problem was
+introduced. The file targets Camunda 8, so `validate` (and already the
+`add`) reports that the new service task has no job type; the `ext add`
+from the hint fixes it (`--summary`: one line per change, the warning it
+resolved counted), and the result deploys to Camunda 8.9.
 
 (The result lines and the `show` views above are copied from the real output
 of this version; wording may change between versions, ids and structure are
@@ -2586,8 +2643,8 @@ Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 716 KB | 224 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
-| `applyToXml` only (tree-shaken) | 594 KB | 186 KB | the same |
+| everything `@miragon/bpmn-cli` exports | 897 KB | 275 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 710 KB | 219 KB | the same |
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import.
@@ -2605,13 +2662,8 @@ bundler drops what a host does not import.
 - A write keeps the file's text outside what it changed, and a result equal
   to the file is not written (`MutationResult.unchanged`, `written: false`;
   [What a write changes](#what-a-write-changes)).
-- New ids follow the file's id style and speak ([Ids](#ids)): names, a kind
-  and a place for unnamed elements (`Gateway_AfterCheckInvoice`), the ends
-  for flows (`Flow_CheckInvoiceToBookInvoice`), never a hash or `<Prefix>_<n>`;
-  a flow whose id names its ends is renamed when an edit changes them. A
-  batch refers to an element it creates by an alias (`"as": "$check"`,
-  `MutationResult.aliases` / `result.aliases`: alias -> final id) or by an
-  explicit `id`.
+- New ids follow the file's id style ([Ids](#ids)); since 0.3 they also
+  speak (see below).
 - `checkFile` / `checkDoc` return the validation profile that ran
   (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
   `profile`, `contentRepo`, `validators` and `file`; in a design-iq content
@@ -2636,3 +2688,36 @@ bundler drops what a host does not import.
 - `show` prints each node's lane (`lane=<id>`) instead of member lists in
   the `lanes:` section, and message flows as `messageFlow <id> ["name"]:
   <source> "name" -> <target> "name"`.
+- New ids speak ([Ids](#ids)): names, a kind and a place for unnamed
+  elements (`Gateway_AfterCheckInvoice`), the ends for flows
+  (`Flow_CheckInvoiceToBookInvoice`); 0.3 gave flows and unnamed elements a
+  hash (`Flow_0k3x9qa`). A flow whose id names its ends is renamed when an
+  edit changes them (0.3: every existing id stayed); the result says so on
+  the changed line and in `renamed` (old id -> new id). A taken id gets
+  `_2` and `W_ID_SUFFIXED` for every generated id, also flows and the event
+  definitions of a Camunda 8 file.
+- An `apply` batch refers to an element it creates by an alias (`"as":
+  "$check"`, `flowAs`, `joinAs`; `MutationResult.aliases` /
+  `result.aliases`: alias -> final id) or by an explicit `id`; new errors
+  `E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`.
+- `--summary` (`mutationSummary` / `renderSummary`) is new; the summary and
+  the JSON of a mutation carry `aliases` and `renamed`, the summary one line
+  per format op (`format`).
+- `remove --with-branch` / `--bridge-all` (`E_AMBIGUOUS_BRANCH`,
+  `E_AMBIGUOUS_BRIDGE`); a node added into a flow between two lanes takes
+  the lane of its row (`W_LANE_INHERITED`).
+- Format commands: `compact`, pool order (`order <collaborationId>
+  <participantId...>`, ops JSON `pools`), the selectors `--path` /
+  `--via`, `--kind`, `--branch` of place, align, color and tidy (`E_NO_MATCH`,
+  `E_NOT_PARTICIPANT`), negative `space --by`; `show --layout` prints
+  columns (`c0 Event_Start, c1 ...`, JSON `columns`, `gaps`); four soft
+  metric kinds (`backwardFlow`, `segmentOverlap`, `labelOutsideFrame`,
+  `messageLabelFar`); `layout.reshaped` / `format[].reshaped`.
+- Camunda 8: `validate` and every write run the Camunda 8 profile (34
+  `W_C8_*` codes; 0.3 said "no Camunda 8 engine rules yet"); `new --target
+  camunda8` writes the platform version; new user tasks of a Camunda 8 file
+  get `zeebe:userTask`, new event definitions an id; `set <id>
+  zeebe:<attr>` for an attribute of a zeebe element is `E_WRONG_HOST`;
+  `show` prints `job=`, `form=`, `assignee=` ... and a message's
+  correlation key. The core grew by about 180 KB minified / 50 KB gzip
+  ([Browser bundles](#browser-bundles)).

@@ -18,17 +18,21 @@ host validators and a copy of design-iq's save gate inside the transaction.
 Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
 engines. Elements are addressed by id only; new ids speak (names, kind +
 place, the ends of a flow) in the file's id style, and an `apply` batch
-names what it creates with aliases (`"as": "$name"`). A hand-made diagram is kept (new elements
+names what it creates with aliases (`"as": "$name"`). An agent reads a
+large model through `show --around <id>` and `show <id> --context`, and a
+write reports the warnings it added, not the file's old ones (`--summary`
+for a few lines). A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
-`label`, `route`, `space`, `tidy`, lane `order`). The format-command idea
+`label`, `route`, `space`, `tidy`, `compact`, `order` of lanes and pools;
+selectors `--path`, `--kind`, `--branch`). The format-command idea
 comes from Miragon/design-iq PR #218 (`@bpmiq/bpmn-edit`, ADR 0008); no code
 was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, TESTCOUNT, isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1615 tests (+159 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -39,7 +43,23 @@ bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
 
-## What step 3's views package changed (2026-10-10): reading and output for large models
+## What step 3 round 1 changed (2026-10-10)
+
+Four packages were built in parallel on `step3/views`, `step3/ids`,
+`step3/layout` and `step3/camunda8` (each on 0.3.0) and merged on
+`step3/round1`. Two decisions of the user hold for all of them: elements
+are addressed **by id only** (names may repeat; there is no name-based
+addressing anywhere, `--around "<name>"` is `E_NOT_FOUND`), and **new ids
+speak** (`Activity_CheckInvoice`, `Gateway_InvoiceOk`,
+`Flow_CheckInvoiceToBookInvoice`; never a random, modeler-hash or hash id)
+while following the file's prefix, separator and case; an explicit `--id` /
+`"id"` always wins. 18 audit bugs are fixed and 3 partly (#12, #14, #21,
+#22, #28, #39, #41, #42, #48, #58, #60, #61, #62, #69, #71, #72, #73, #77;
+#40, #53, #74 partly): 48 fixed, 6 partly fixed, 23 open of 77. Tables and
+evidence:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-round-1-2026-10-10-the-packages-together).
+
+### Views and output (`step3/views`)
 
 Goal: token-efficient reading for agents on large models and output that
 does not grow with the file's old problems. Elements are addressed by id
@@ -95,8 +115,8 @@ Tests: `test/views.test.ts` (views, #21, #22, the byte budget per node),
 (the CLI: flags, compact JSON, `--summary`, stdin / stdout, `guide --short` /
 topics, `kinds --section`, the CAMUNDA 8 recipe run), the isomorphism test
 runs `--around` / `--context` in the browser bundle; synthetic fixture
-`test/fixtures/views/claims.bpmn`. Gate: 1,354 tests + 1 opt-in, layout
-score 444, isomorphism and fuzz unchanged.
+`test/fixtures/views/claims.bpmn`. Gate on the branch: 1,354 tests + 1
+opt-in, layout score 444, isomorphism and fuzz unchanged.
 
 Evidence (private corpora, local only): `--around` (depth 2) on 278 real
 files 1.2 KB median / 2.1 KB p90 vs `show` 2.3 / 7.6 KB vs PR #218's
@@ -105,14 +125,14 @@ files 1.2 KB median / 2.1 KB p90 vs `show` 2.3 / 7.6 KB vs PR #218's
 files. A rename's text result on the 97 real files with old warnings: 523
 -> 245 bytes median, JSON 2,597 -> 1,276.
 
-Still open from this package: `find --attr` / `list --fields` projections
-and a `vars` view (where is variable X used) were not built; `show --layout`
-still has no column information; `render` is not a command; the full `show`
+Still open from this package (after the integration): `find --attr` / `list --fields` projections
+and a `vars` view (where is variable X used) were not built; `render` is
+not a command; the full `show`
 keeps vendor values but not the extension summary of `--around` (to keep
 its size); JSON is compact but not slimmer (the model view still repeats
 `type` / `extensions` / `extensionElements`).
 
-## What step 3 (ids & batches) changed (2026-10-10)
+### Speaking ids and batches (`step3/ids`)
 
 User decisions: no name-based addressing (elements are addressed by id,
 names may repeat), and every new id must speak. Branch `step3/ids`; table
@@ -167,7 +187,7 @@ Evidence (291 real files, counts only): new ids that speak 1,745 / 1,745
 independent edits at two places share a new id in 0 / 225 file pairs (0.3.0:
 9), with unnamed elements 3 / 225 (0.3.0: 9), with the same name 225 / 225
 (0.3.0: 219: a name gives the id); 380 flows renamed after their ends; an
-insert changes 70 lines (median; 0.3.0: 66). Gate: 1,353 tests, layout
+insert changes 70 lines (median; 0.3.0: 66). Gate on the branch: 1,353 tests, layout
 regression 444, fuzz 0 errors; 80 x 25 fuzz walks as 0.3.0. The README's
 Camunda 7 example with speaking ids deploys on the three Camunda 7 engines.
 
@@ -181,7 +201,7 @@ output (#53, `--bridge-all` / `--with-branch` are opt-in); `Process_1` /
 `Definitions_1` of `bpmn new` without `--name` are tool defaults, not
 speaking.
 
-## What step 3's layout package changed (2026-10-10)
+### Layout ergonomics (`step3/layout`)
 
 Formatting a kept drawing without XML, the operations the dogfooding agents
 missed (branch `step3/layout`; elements are addressed by id only, names can
@@ -222,7 +242,7 @@ repeat). Details, measurements and the bug statuses:
   Gate on the branch: 1357 tests (+39), layout regression 444, fuzz 0 errors
   and 0 warnings (before: 2), browser bundle 746 / 234 KB minified / gzip.
 
-## What step 3 changed (2026-10-10): the Camunda 8 profile
+### The Camunda 8 profile (`step3/camunda8`)
 
 Goal: mirror the Camunda 7 work for Camunda 8 (Zeebe), every rule checked
 against Camunda 8.9.22 (REST v2). Fixes #28 (no Camunda 8 rules). Table with
@@ -253,8 +273,9 @@ the findings, the rules and the evidence:
 - **Operations**: `new --target camunda8` writes
   `modeler:executionPlatformVersion="8.9.0"`; `add` / `retype` give a user
   task of a Camunda 8 file `zeebe:userTask` and a new event definition an id
-  derived from its event (`src/ops/platform.ts`: Camunda 8.9 refuses
-  conditional, compensation and link catch definitions without one); `ext
+  after its event (`src/ops/platform.ts`; since the integration through the
+  id style: Camunda 8.9 refuses conditional, compensation and link catch
+  definitions without one); `ext
   add <id> loop.zeebe:loopCharacteristics` creates the multi-instance loop;
   a zeebe element where the descriptor says it is not read is
   `W_MISPLACED_EXTENSION`; `zeebe:adHoc`, `conditionalFilter` and
@@ -292,13 +313,127 @@ profile agrees with the engine on every result, 1,689 / 1,689 extension
 blocks outside the edited elements byte for byte unchanged; the Camunda 7
 live-engine suites unchanged (804 / 804).
 
-Still open from step 3: FEEL is not parsed (only the common slips); the
+Still open from this package: FEEL is not parsed (only the common slips); the
 profile does not follow variables (an input mapping's local variable read
 by a later gateway); `zeebe:publishMessage` is reported as not run by 8.9
 (drop the rule when Camunda runs it); a file without `<bpmn:outgoing>`
 lists cannot get them for an event-based gateway (reported, no command);
 linked forms, called processes and decisions are not checked against a
 deployment; the core grew by about 90 KB minified / 23 KB gzip.
+
+### Integration (`step3/round1`)
+
+Merged in the order views, ids, layout, camunda8 (merge commits with the
+conflict resolutions), then integration commits with their tests in
+`test/step3-integration.test.ts`:
+
+- **Aliases reach every op key that names an element** (`ops/aliases.ts
+  REF_KEYS`): the selectors `path`, `via`, `branch` of place / align /
+  color / tidy, the `ids` of `compact`, the `pools` of `order`. A format
+  op runs after the layout, outside the batch; its ids are now checked at
+  the end of `runBatch` while the batch context is set, so an id an earlier
+  op renamed or removed is `E_NOT_FOUND` naming the new id (a flow renamed
+  after its ends) and the op, as for the semantic ops.
+- **`--summary` and the JSON** (`src/report.ts`): the batch aliases, the ids
+  the change renamed (`renamed`, old -> new: a flow whose id named its old
+  ends; chains collapsed, elements the change created left out; text
+  `renamed: <old> -> <new>`), one line per format op (`format <op> #<i>:
+  ...`, JSON `format`), so a place / compact / color result is no longer
+  "no changes".
+- **Warnings delta and the Camunda profiles** (`validate.ts lintCoveredBy`,
+  used by `withProfile` and `pipeline.ts validationDelta`): a resolved
+  missing start is listed once, as the platform finding (it was listed as
+  `W_NO_START` and `W_C8_DEPLOY_START_EVENT`).
+- **Reading views and Camunda 8**: `show --around` / `show <id> --context`
+  print a zeebe setting once, in the extension summary (`view.ts nodeProps(el,
+  { zeebe: false })`: no `job=` next to `zeebe:taskDefinition type=...`);
+  the full `show` keeps the short facts.
+- **Camunda 8 event definition ids** (`ops/platform.ts
+  definitionIdDefault`): through `Doc.allocateId` (`typeRequest` of the
+  definition type, the speaking part of the event's id, else its name or a
+  kind word): the file's prefix and case, never a Modeler hash
+  (`ConditionalEventDefinition_StockReady` for `Event_1q2w3e4` "Stock
+  ready"), a taken id `_2` with `W_ID_SUFFIXED`.
+- **A layout defect the gate's fuzz campaign hit on the integrated build**
+  (walk `controlflow__s04`, seed 1491033354, step 10; every package build
+  gave the same defect on that walk, the walk only came up with the new
+  ids): removing a node closed the strip on its row and pulled an expanded
+  sub-process over a gateway of the row below (`di:frameIntrusion`).
+  `diagram/incremental.ts closeRow` now undoes the close when a moved
+  expanded sub-process comes within 10 px of a shape that stays.
+- **Docs**: one CAMUNDA 8 guide section (the recipe of both packages; every
+  `ext add` / `set` line of it runs in `test/cli-views.test.ts`), `kinds
+  --section zeebeElements`, the short guide names speaking ids, aliases and
+  renamed flows; guide examples with speaking ids; the README's worked
+  session, `--summary` examples and Camunda 7 / 8 worked examples re-run
+  with the integrated build.
+
+### Evidence on the integrated build
+
+Private corpora used locally, outside the repository; counts only.
+
+- **Gate**: 1,615 tests + 159 opt-in (engine tests), isomorphism check (85
+  modules), layout regression 115 files score 444 (budget 444), fuzz 12 x
+  15: 0 errors, 0 warnings.
+- **Engines**: the Camunda 7 live-engine suites 804 / 804 (Camunda 7.24.0,
+  CIB seven 2.2.0, Operaton 2.1.5); the Camunda 8 suites 332 / 332
+  (Camunda 8.9.22).
+- **Roundtrip** (`tools/roundtrip.mjs`, the 291 real files, 278 with a
+  rename target; 0.3.0 on the same files in brackets): a no-op is
+  byte-identical in 262 / 278 in layout auto (262 / 278; 262 / 265 of the
+  files with a diagram, 98.9 %: the 13 without one are drawn) and 278 / 278
+  with `--no-layout` (278 / 278); a rename changes 2 lines (median, p90 and
+  max with `--no-layout`; 2); an insert changes 56 lines in the median
+  (54) and a region of 83.2 % (80.3 %): the flow renamed after its new
+  ends.
+- **Camunda 7 real-file battery** (218 files, 8 edit types, 1,512 edits):
+  every edit succeeds, 0 regressions on any of the three engines, 0
+  unexpected camunda changes (one file deploys after a remove, as in step 2).
+- **Camunda 8**: the 66 corpus files 0 false deploy findings, 32 / 32
+  refused files found; the edit battery 459 edits, 0 regressions, the
+  profile agrees with the engine on 459 / 459 results, 1,689 / 1,689
+  extension blocks outside the edited elements unchanged; following the
+  hints (306 commands, none refused) makes 32 / 32 refused files deployable.
+- **README examples**: the worked session's result deploys on Camunda 8.9;
+  the Camunda 8 worked example deploys and runs both paths; the Camunda 7
+  worked example deploys on the three engines.
+- **Browser bundle**: whole entry 897 / 275 KB minified / gzip, `applyToXml`
+  710 / 219 KB (+82 KB bpmn-auto-layout on demand); 0.3.0: 716 / 224 and
+  594 / 186 KB.
+
+### Still open after round 1
+
+- **Breaking for hosts** (design-iq): the mutation JSON / `EditReport` has
+  `warnings: {added, resolved, preexistingCount}` and no
+  `validation.warnings`; `--json` is compact; `show` puts `lane=` on each
+  node and writes message flows differently; new ids speak and a flow whose
+  id named its ends is renamed (`renamed` in the result).
+- Ids: two branches adding an element of the same name (or an unnamed one
+  at anchors of the same name) get the same id, a merge of both a
+  duplicate; a flow renamed after its ends is the one exception to "ids
+  never change" (`Doc.followFlowEnds = false` in the library, no CLI
+  switch); `move --flow` / `move --after` into a cross-lane flow keep their
+  old lane rule; a plain `remove` of a join still disconnects (#53 partly);
+  `bpmn new` without `--name` writes `Process_1` / `Definitions_1`.
+- Views: no `find --attr` / `list --fields` projections, no `vars` view,
+  no `render` command; the full `show` keeps vendor values but not the
+  extension summary; JSON is compact but not slimmer; `--strict` still
+  counts every warning, also the file's own.
+- Layout: compaction closes strips only, pools side by side are not
+  compacted against each other, a full redraw orders pools by its own rule;
+  open bugs #13, #15, #16, #19, #25, #63–#68, #70, #76 (#40, #74 partly);
+  the fuzzer still finds `place` / `align` pushing a flow through a shape
+  and a boundary event added on a host inside a sub-process intruding into
+  another frame (the build before step 3 does the same).
+- Camunda 8: FEEL is not parsed, variables are not followed,
+  `zeebe:publishMessage` is reported as not run, event-based gateways of a
+  file without `<bpmn:outgoing>` lists have no repairing command, forms /
+  called processes / decisions are not checked against a deployment; the
+  Camunda 7 profile does not check timer values (`PT2D` deploys there and
+  fails at run time).
+- The core grew by about 180 KB minified / 51 KB gzip since 0.3.0 (most of
+  it the Camunda 8 profile and descriptor): a lazily loaded profile per
+  platform would be the lever.
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
@@ -369,7 +504,8 @@ skipping a write of an unchanged result over its own file.
   restoreDiIds inside `layoutModel`, both engines). design-iq stickies
   (`bpmiq:sticky`) follow their nearest flow node (`src/diagram/stickies.ts`,
   `layout.stickies`). Generated ids are not guessable: `apply` batches pass
-  explicit ids for back references.
+  explicit ids for back references. (Step 3 replaced the hashes with
+  speaking ids and added batch aliases, see above.)
 - **Validator hook, design profile, decision link** (validation package,
   #27, #29). `src/validators.ts`: `validators` (functions `(xml, ctx) =>
   findings` or `{ name, validate }`, design-iq's `Finding` accepted) run on

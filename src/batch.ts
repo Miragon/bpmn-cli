@@ -667,7 +667,7 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
     case 'order': {
       const given = ['flows', 'lanes', 'pools'].filter((k) => out[k] !== undefined);
       if (given.length !== 1) {
-        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_yes","Flow_no"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_1","pools":["Participant_Customer","Participant_X"]}.');
+        throw fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_OkToFix","Flow_OkToBook"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_X","pools":["Participant_Customer","Participant_X"]}.');
       }
       break;
     }

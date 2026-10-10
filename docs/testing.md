@@ -128,6 +128,16 @@ followed, floods as one line, `--summary`); `test/cli-views.test.ts` the
 same on the command line, plus compact JSON, stdin / stdout, `guide --short`
 (<= 5 KB), every `guide <topic>`, `kinds --section` and the guide's CAMUNDA 8
 recipe run command by command.
+`test/step3-integration.test.ts` checks the step 3 packages together: an
+`apply` batch that names everything by alias, with the selectors, the pool
+order and `compact` taking aliases; an alias of a flow renamed after its new
+ends followed into a format op, and `E_NOT_FOUND` naming the new id when a
+later op uses the old one; `--summary` with aliases, renamed ids and one line
+per format op; the event definition ids of a Camunda 8 file in the id style;
+`show --around` / `--context` printing each zeebe setting once; the Camunda 8
+profile in the warnings delta; and the strip of a removed node that must not
+pull an expanded sub-process over a shape of another row (found by the gate's
+fuzz campaign on the integrated build).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile
