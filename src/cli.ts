@@ -22,7 +22,7 @@ import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
-import { guideShort, guideText, guideTopic, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
+import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
 import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
 import { listAllExtensions } from './ops/ext.js';
@@ -950,7 +950,7 @@ withJsonOptions(
   program
     .command('kinds')
     .description('element kinds, triggers, settable keys, ops schema and error codes')
-    .option('--section <names>', 'only these parts (comma-separated): kinds, triggers, setKeys, nestedKeys, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes'),
+    .option('--section <names>', `only these parts (comma-separated): ${KINDS_SECTION_NAMES}`),
 ).action(async (o: RawOpts) => {
   await run(async () => {
     const sections = o['section'] !== undefined ? kindsSections(String(o['section'])) : undefined;
