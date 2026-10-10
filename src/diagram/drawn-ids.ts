@@ -98,8 +98,10 @@ function contextOf(defs: El, el: El): string {
     const pool = [...walk(defs, { bpmnOnly: true })].find((p) => is(p, 'bpmn:Participant') && p.get<El | undefined>('processRef') === el);
     return pool && (idOf(pool) || pool.get<string | undefined>('name')) ? labelOf(pool) : '';
   }
-  const parent = el.$parent as El | undefined;
-  return parent && idOf(parent) && !is(parent, 'bpmn:Definitions') ? `In ${labelOf(parent)}` : '';
+  // the nearest container that names something (a lane set or an id-less parent says nothing)
+  let parent = el.$parent as El | undefined;
+  while (parent && (!idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) parent = parent.$parent as El | undefined;
+  return parent && !is(parent, 'bpmn:Definitions') ? `In ${labelOf(parent)}` : '';
 }
 
 /** Gives the id-less elements a full redraw draws an id in the file's style (see the module contract). */
