@@ -72,11 +72,11 @@ describe('batch aliases', () => {
       $ask: 'Activity_Nachfordern',
       $join: 'Gateway_Vollstaendig_join',
       $late: 'Event_TimerOnNachfordern',
-      $lateFlow: 'Flow_TimerToErinnert',
+      $lateFlow: 'Flow_TimerOnNachfordernToErinnert',
     });
     expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Vollstaendig" name="Vollständig?" default="Flow_VollstaendigToNachfordern">');
     expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_VollstaendigToBuchen" name="ja" sourceRef="Gateway_Vollstaendig" targetRef="Activity_Buchen">\s*<bpmn:conditionExpression[^>]*>\$\{vollstaendig\}<\/bpmn:conditionExpression>/);
-    expect(r.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_VollstaendigkeitPruefen', 'Flow_VollstaendigToBuchen', 'Flow_TimerToErinnert'] });
+    expect(r.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_VollstaendigkeitPruefen', 'Flow_VollstaendigToBuchen', 'Flow_TimerOnNachfordernToErinnert'] });
     expect(renderMutation(r.result)).toContain('aliases: $start = Event_RechnungEingegangen, $check = Activity_VollstaendigkeitPruefen, $ok = Gateway_Vollstaendig');
     // without aliases the result has none
     expect((await applyToXml(r.xml, [{ op: 'set', id: 'Activity_Buchen', values: { name: 'Buchen!' } }])).result.aliases).toBeUndefined();
@@ -200,7 +200,7 @@ describe('batch aliases on the command line (`bpmn apply`)', () => {
     writeFileSync(file, (await newXml({ processName: 'Rechnungsprüfung' })).xml);
     writeFileSync(join(dir, 'ops.json'), JSON.stringify({ ops: INVOICE }));
     const text = execFileSync('node', [bin, 'apply', file, join(dir, 'ops.json')], { encoding: 'utf8' });
-    expect(text).toMatch(/^aliases: \$start = Event_RechnungEingegangen, .*\$lateFlow = Flow_TimerToErinnert$/m);
+    expect(text).toMatch(/^aliases: \$start = Event_RechnungEingegangen, .*\$lateFlow = Flow_TimerOnNachfordernToErinnert$/m);
     const json = JSON.parse(execFileSync('node', [bin, 'apply', file, '-', '--json'], { encoding: 'utf8', input: JSON.stringify([{ op: 'add', kind: 'task', name: 'Archivieren', after: 'Activity_Buchen', as: '$archive' }]) }));
     expect(json.aliases).toEqual({ $archive: 'Activity_Archivieren' });
     expect(readFileSync(file, 'utf8')).toContain('id="Activity_Archivieren"');

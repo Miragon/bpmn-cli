@@ -21,7 +21,7 @@ import { modelError, usageError } from '../errors.js';
 import { parseKind, KindError } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { labelOf } from '../idstyle.js';
+import { contextOf } from '../idstyle.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
@@ -113,7 +113,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const laneOpt = lane ? { lane: idOf(lane) } : {};
 
   // 1. split gateway
-  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, `After ${labelOf(anchor)}`);
+  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, contextOf('After', anchor));
   cs.merge(gwCs);
   const gatewayId = createdId(gwCs);
   const gateway = doc.require(gatewayId);

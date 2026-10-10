@@ -11,8 +11,8 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
 import type { ChangeSet } from './result.js';
-import { editDistance, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
-import { IdStyle, typeRequest, type IdRequest } from './idstyle.js';
+import { editDistance, hasIdWords, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
+import { IdStyle, speakingStem, typeRequest, type IdRequest } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
@@ -168,13 +168,21 @@ export class Doc {
     const ids = new IdRegistry();
     const processId = opts.processId ?? (opts.processName ? IdStyle.DEFAULT.next(typeRequest('bpmn:Process', { name: opts.processName }), ids).id : 'Process_1');
     if (!isValidId(processId)) throw modelError('E_INVALID_ID', `"${processId}" is not a valid id (XML NCName)`);
+    ids.claim(processId);
+    // the definitions speak like the process (Definitions_OrderToCash); a process without name or speaking id: the tool defaults
+    const stem = speakingStem(processId);
+    const definitionsId = hasIdWords(opts.processName)
+      ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { name: opts.processName }), ids).id
+      : stem
+        ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { context: stem }), ids).id
+        : 'Definitions_1';
     const definitions = createDefinitions(moddle, {
+      definitionsId,
       processId,
       processName: opts.processName,
       executable: opts.executable ?? true,
     });
-    ids.claim('Definitions_1');
-    ids.claim(processId);
+    ids.claim(definitionsId);
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
     if (opts.target === 'camunda8') {
       doc.declareNamespace('zeebe');

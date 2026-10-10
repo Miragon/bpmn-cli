@@ -251,7 +251,8 @@ describe('add: ids and options', () => {
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_ID_SUFFIXED']);
     expect(add(doc, { kind: 'task', in: 'Process_1' }).created[0]!.id).toBe('Activity_Task');
     expect(add(doc, { kind: 'parallelGateway', after: 'Activity_CheckInvoice' }).created[0]!.id).toBe('Gateway_AfterCheckInvoice');
-    expect(add(doc, { kind: 'endEvent', after: 'Gateway_AfterCheckInvoice' }).created[0]!.id).toBe('Event_EndAfterGateway');
+    // after an unnamed anchor placed after a named one: the nearest named anchor, once (never EndAfterAfterCheckInvoice)
+    expect(add(doc, { kind: 'endEvent', after: 'Gateway_AfterCheckInvoice' }).created[0]!.id).toBe('Event_EndAfterCheckInvoice');
     expect(add(doc, { kind: 'xor', name: 'Invoice ok?', in: 'Process_1' }).created[0]!.id).toBe('Gateway_InvoiceOk');
     expect(add(doc, { kind: 'bpmn:StartEvent', name: 'Order received', in: 'Process_1' }).created[0]!.id).toBe('Event_OrderReceived');
     await roundTrip(doc);

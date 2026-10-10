@@ -114,7 +114,8 @@ describe('id style inference (edits follow the file)', () => {
       { op: 'add', kind: 'endEvent', after: 'Event_TimerOnCheckOrder' },
       { op: 'add', kind: 'parallelGateway', after: 'Activity_1m2n3b4' },
     ]);
-    expect(b.ids).toEqual(['Event_TimerOnCheckOrder', 'Event_EndAfterTimer', 'Flow_TimerToEnd', 'Gateway_AfterShipOrder', 'Flow_GatewayToOrderShipped']);
+    // a flow names an unnamed end by its own id's speaking part (its kind and place), never by a bare kind word
+    expect(b.ids).toEqual(['Event_TimerOnCheckOrder', 'Event_EndAfterTimerOnCheckOrder', 'Flow_TimerOnCheckOrderToEndAfterTimerOnCheckOrder', 'Gateway_AfterShipOrder', 'Flow_AfterShipOrderToOrderShipped']);
     for (const id of [...a.ids, ...b.ids]) expect(id).not.toMatch(NOT_SPEAKING);
   });
 
@@ -235,7 +236,8 @@ describe('id style inference (edits follow the file)', () => {
     // an unnamed split gateway: After <anchor>
     const unnamed = await created(MODELER, [{ ...split, name: undefined, after: 'Activity_0k3x9qa' } as Op]);
     expect(unnamed.ids.filter((id) => id.startsWith('Gateway_'))).toEqual(['Gateway_AfterCheckOrder', 'Gateway_AfterCheckOrder_join']);
-    expect(unnamed.ids).toEqual(expect.arrayContaining(['Flow_GatewayToLeft', 'Flow_LeftToJoin', 'Flow_JoinToOrderOk']));
+    // the gateways' flows name them by their ids' speaking parts: the split AfterCheckOrder, its join CheckOrderJoin
+    expect(unnamed.ids).toEqual(expect.arrayContaining(['Flow_AfterCheckOrderToLeft', 'Flow_LeftToCheckOrderJoin', 'Flow_CheckOrderJoinToOrderOk']));
   });
 });
 
@@ -266,7 +268,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
 
   it('an unnamed element in such a file still gets a prefix (its kind and context need one)', async () => {
     const { ids } = await created(BARE, [{ op: 'add', kind: 'exclusiveGateway', after: 'packGoods' }]);
-    expect(ids).toEqual(['Gateway_AfterPackGoods', 'flowGatewayToShipOrder']);
+    expect(ids).toEqual(['Gateway_AfterPackGoods', 'flowAfterPackGoodsToShipOrder']);
   });
 
   it('single lower-case words read as camelCase (not snake_case, which would read as a prefix); a PascalCase file stays PascalCase', async () => {
@@ -360,8 +362,8 @@ describe('speaking ids on two branches of a file (independent edits)', () => {
     for (const id of right.ids) expect(left.doc.ids.has(id)).toBe(false);
     // the flow that CheckAddress -> B got when it was created names its new ends once the gateway is spliced in;
     // the result lists every id as it is at the end of the batch
-    expect(left.ids).toEqual(['Activity_CheckAddress', 'Flow_CheckAddressToGateway', 'Gateway_AfterCheckAddress', 'Flow_GatewayToB']);
-    expect(flowBetween(left.doc, 'Activity_CheckAddress', 'Gateway_AfterCheckAddress')).toBe('Flow_CheckAddressToGateway');
+    expect(left.ids).toEqual(['Activity_CheckAddress', 'Flow_CheckAddressToAfterCheckAddress', 'Gateway_AfterCheckAddress', 'Flow_AfterCheckAddressToB']);
+    expect(flowBetween(left.doc, 'Activity_CheckAddress', 'Gateway_AfterCheckAddress')).toBe('Flow_CheckAddressToAfterCheckAddress');
   });
 
   it('new files name their flows after their ends', async () => {
