@@ -114,7 +114,7 @@ export const NODE_FIELDS: FieldsOf<SplitNode> = {
   id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
   as: alias('Batch alias of the new element: "$" + a name, e.g. "$check".'),
   flowAs: alias('Batch alias of the flow into the new node (the flow the flow options describe; with "before" on a join or an unconnected node: the flow out of it).'),
-  lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host).'),
+  lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host; into a flow between two lanes: the target\'s after a branching source, else the anchor\'s, with W_LANE_INHERITED).'),
   ...FLOW_FIELDS,
   ...TRIGGER_FIELDS,
   collapsed: bool('Sub-processes: draw collapsed instead of expanded.'),

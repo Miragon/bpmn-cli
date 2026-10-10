@@ -364,9 +364,13 @@ layout quality: score 0: no layout problems
 (see [Kinds](#kinds), [Triggers](#triggers) and the
 [placement grammar](#placement-grammar)). Trailing `key=value` pairs are
 applied like `set` (`camunda:assignee=kermit`). `--doc` sets the
-documentation, `--lane` the lane (default: the lane of the anchor or host),
-`--collapsed` draws a sub-process collapsed, `--if-absent` together with
-`--id` makes the command idempotent. `--message <name>` also works for
+documentation, `--lane` the lane (default: the lane of the anchor or host;
+`--flow`: of the flow's source), `--collapsed` draws a sub-process
+collapsed, `--if-absent` together with `--id` makes the command idempotent.
+A node added into a flow between two lanes without `--lane` gets the lane of
+the row the layout puts it on: after a branching node (a gateway) the
+target's row and lane, else the anchor's; `W_LANE_INHERITED` names both
+lanes and the `move --lane` that switches. `--message <name>` also works for
 `sendTask` and `receiveTask` (the root `bpmn:Message` is found by name or
 created), like `set <id> message=<name>`.
 
