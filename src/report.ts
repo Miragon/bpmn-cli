@@ -311,7 +311,8 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     unchanged: report.unchanged,
     created,
     ...(report.aliases && Object.keys(report.aliases).length ? { aliases: report.aliases } : {}),
-    changed: uniqueIds(report.changed),
+    // an element the change created is listed once, as created (a lane it got, a property an op of the batch set: its full report says)
+    changed: uniqueIds(report.changed).filter((id) => !report.created.some((c) => c.id === id)),
     ...(report.renamed ? { renamed: report.renamed } : {}),
     removed: uniqueIds(report.removed),
     ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
