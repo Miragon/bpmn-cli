@@ -174,25 +174,38 @@ What the body says:
 | element | body | examples |
 | --- | --- | --- |
 | named | the name | `Activity_CheckInvoice`, `Gateway_InvoiceOk` |
-| unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes) | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimer`, `Event_ErrorStartInHandleErrors` |
-| flow | its ends: `<Source>To<Target>` (in the file's case: `checkStockToShip`, `check_stock_to_ship`) | `Flow_CheckInvoiceToBookInvoice`, `Flow_CheckInvoiceToGateway` |
+| unnamed | a word for its kind (events: `Start`, `End`, `MessageStart`, `ErrorEnd`, the trigger of a catch or boundary event, `MessageThrow`; other kinds only when there is no context: `Gateway_Parallel`, `Activity_Task`) and its context: `After <anchor>`, `Before <anchor>`, `On <host>`, `In <sub-process>` (or pool, in a file with several processes); after or before an unnamed anchor placed the same way, the nearest named anchor, once | `Gateway_AfterCheckInvoice`, `Event_TimerOnCheckInvoice`, `Event_EndAfterTimerOnCheckInvoice`, `Event_ErrorStartInHandleErrors`; after `Gateway_AfterCheckInvoice`: `Event_EndAfterCheckInvoice` (never `EndAfterAfterCheckInvoice`) |
+| flow | its ends: `<Source>To<Target>` (in the file's case: `checkStockToShip`, `check_stock_to_ship`) | `Flow_CheckInvoiceToBookInvoice`, `Flow_CheckInvoiceToAfterCheckInvoice` (to the unnamed gateway after it), `Flow_BookInvoiceToCheckInvoiceJoin` (to that split's join) |
 | join of a split | the split gateway's id + `_join` (camelCase files: `Join`) | `Gateway_InvoiceOk_join`, `gateway_fanOutJoin` |
 | other | what it belongs to | `Collaboration_OrderHandling` (its process), `LaneSet_OrderHandling`, `Process_Customer` (its pool), `TextAnnotation_CheckWithinTwoDays` (its text), `Association_CheckInvoiceToCheckWithinTwoDays`, `DataInputAssociation_OrderToCheckInvoice` |
 
 An end or anchor is named by the speaking part of its id (ids are built
 from ids: `Activity_CheckInvoice` is `CheckInvoice`, also after its name
-changed), by its name when its id says too little (a hash, a number, one or
-two letters), else by a word for its kind (`Gateway`, `End`, `Timer`,
-`Join`): an unnamed element is never named after its own context again
-(`Flow_CheckInvoiceToGateway`, not `Flow_CheckInvoiceToAfterCheckInvoice`).
-Ids that say nothing (Camunda Modeler hashes, numbers, `StartEvent_1`) are
-never copied into new ids.
+changed; an unnamed element by its own kind and place, `Gateway_AfterCheckInvoice`
+is `AfterCheckInvoice`, the join of the split after it `CheckInvoiceJoin`,
+so the flows at two unnamed gateways differ without a suffix), by its name
+when its id says too little (a hash, a number, one or two letters), else by
+a word for its kind (`Gateway`, `End`, `Timer`). Ids that say nothing
+(Camunda Modeler hashes, numbers, `StartEvent_1`) are never copied into new
+ids. A name without a letter (`123`, `✓✓✓`) names nothing: the element gets
+the id of an unnamed one.
 
-The same edit on the same file always gives the same ids. A taken id gets
-`_2`, `_3` (the file-learned `stemTo` / `scopedTo` flows: `2`, `3`) and a
-`W_ID_SUFFIXED` warning. Edits made independently on two branches of a file
-(git, two agents) produce the same new id only when they add the same thing
-in the same place.
+A generated id has at most 64 characters, cut at word boundaries the same
+way every time: a name gives at most 40 characters of words
+(`Activity_PruefenObDieEingereichtenUnterlagen` for "Prüfen ob die
+eingereichten Unterlagen vollständig und fristgerecht vorliegen"), a flow's
+two ends share the room, a join's `Join` and a collision suffix are kept. A
+flow a file got before the cap still counts as named after its ends.
+
+The same edit on the same file always gives the same ids. An unnamed
+gateway or activity whose id is taken, or whose body the id of another
+element already has (the unnamed gateway it follows), first spells out its
+kind where the prefix does not say it (`Gateway_ParallelAfterCheckInvoice`
+after `Gateway_AfterCheckInvoice`, `Activity_ServiceTaskAfterCheckInvoice`
+after it). A taken id gets `_2`, `_3` (the file-learned `stemTo` /
+`scopedTo` flows: `2`, `3`) and a `W_ID_SUFFIXED` warning. Edits made
+independently on two branches of a file (git, two agents) produce the same
+new id only when they add the same thing in the same place.
 
 A flow whose id names its ends (exactly the id the file's style gives a flow
 between them, also with a suffix) is renamed after its new ends when an edit
@@ -206,8 +219,10 @@ batch a later op refers to an element an earlier op created by an alias
 ([Ops JSON](#ops-json-bpmn-apply)) or by an explicit `id`.
 
 Names become ASCII words: German umlauts are transliterated (`ä` -> `ae`,
-`ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`),
-other accents dropped (`Café` -> `Cafe`). An id that is not found
+`ö` -> `oe`, `ü` -> `ue`, `ß` -> `ss`; `Prüfung` -> `Activity_Pruefung`), so
+are the letters an accent cannot be dropped from (`ø` -> `oe`, `å` -> `aa`,
+`æ` -> `ae`, `œ` -> `oe`, `ł` -> `l`, `þ` -> `th`; `Øre` -> `Oere`), other
+accents dropped (`Café` -> `Cafe`). An id that is not found
 (`E_NOT_FOUND`) comes with the ids that were probably meant, best first: the
 new id of a flow an earlier op of the batch renamed; the same id in another
 case, umlaut spelling or with another or no prefix (`Activity_Prufung`,
@@ -291,10 +306,13 @@ always redraws, so it has no layout mode options):
 ### `new`
 
 Creates a file with one empty process. `--name` gives the process a name and
-drives its id (`Process_OrderHandling`); `--id` sets it explicitly; the process
-is executable unless `--no-executable`. `--target camunda8` declares the
-`zeebe:` and `modeler:` namespaces with `modeler:executionPlatform="Camunda
-Cloud"` and `modeler:executionPlatformVersion="8.9.0"` (in such a file new
+drives its id and the definitions' id (`Process_OrderHandling`,
+`Definitions_OrderHandling`); `--id` sets the process id explicitly (a
+speaking one names the definitions too: `--id Process_Billing` ->
+`Definitions_Billing`); without either they are `Process_1` and
+`Definitions_1`. The process is executable unless `--no-executable`.
+`--target camunda8` declares the `zeebe:` and `modeler:` namespaces with
+`modeler:executionPlatform="Camunda Cloud"` and `modeler:executionPlatformVersion="8.9.0"` (in such a file new
 user tasks get `zeebe:userTask` and new event definitions an id, like the
 Modeler; see [Camunda 8](#camunda-8)),
 `--target camunda7` the `camunda:` and `modeler:` namespaces with
@@ -1858,14 +1876,25 @@ one's message>  (<its hint>)`), `resolved: W_DEAD_END Activity_A, ...` for
 the findings it fixed, and one line counting the warnings the file already
 had (``12 warnings already in the file (not repeated: `bpmn validate <file>`
 lists them)``; a pre-existing error, `W_PREEXISTING_ERROR`, counts among
-them). A warning keeps its identity through a rename (same code, element and
-related elements). One `validator <name>
-(<why it ran>): n error(s), m warning(s) in the result` line per validator
-that ran (the design profile), then the layout block, then `written: <file>`
+them, and so do the findings of the platform profile, `W_C7_*` / `W_C8_*`,
+the file had: the count is what `bpmn validate` lists). A warning keeps its
+identity through a rename (same code, element and related elements); a
+warning about a group (`W_DUPLICATE_NAME`: every element of one name) is
+the same warning while the group only shrinks (one of three equally named
+tasks removed), and is added when it takes in another element. The warnings
+of an `apply` batch are those of its final state: lanes added before the
+pool that wraps their process give no `W_LANES_WITHOUT_POOL`, a second
+incoming flow a later op moves to a join gateway no `W_IMPLICIT_JOIN`.
+One `validator <name> (<why it ran>): n error(s), m warning(s) in the
+result` line per validator that ran (the design profile), then the layout
+block, then `written: <file>`
 (`dry run: <file> not written` with `--dry-run`; `unchanged: <file> (the
 result equals the file; nothing written)` when the change left the file as
 it was). With `--show` the model view follows. A new file (`new`) has no
-warnings of its own yet: its result lists them all. The layout block:
+warnings of its own yet: its result lists them all, the platform profile's
+findings as an edit reports them (`new --target camunda8` lists
+`W_C8_DEPLOY_START_EVENT`, which the edit that adds the start then
+resolves). The layout block:
 
 ```
 layout: ok - incremental (hand-made diagram: kept, changes placed locally)
@@ -1886,7 +1915,10 @@ and `resolved:` name them with ids).
 `--summary` prints a short result instead: `created <kind>: <ids>` per kind,
 the batch aliases (`aliases: $archive = Activity_Archive`), `changed:`,
 `renamed: <old> -> <new>` (a flow whose id named its old ends, renamed after
-its new ones: use the new id from now on) and `removed:` with the ids, one
+its new ones: use the new id from now on) and `removed:` with the ids (every
+id once: when a bridge takes over the id of the flow the change removed,
+the bridged flow's old id is removed and the taken id changed, not
+renamed), one
 `format <op> #<index>: ...` line per format op (what it moved, rerouted or
 coloured, or why it changed nothing), forced errors, the added warnings
 (floods as one line), `warnings: n added, n resolved, n already in the
@@ -1952,7 +1984,8 @@ indented here):
 introduced (lint, the platform profile, validators) and the layout warnings
 (`W_LAYOUT_<code>`); `warnings.resolved` the findings it fixed;
 `warnings.preexistingCount` how many warnings the file already had and still
-has (they are not repeated; `bpmn validate --json` lists every finding).
+has, the platform profile's findings included (they are not repeated; `bpmn
+validate --json` lists every finding).
 `written` is `false` with `--dry-run`, and when `unchanged` is `true`: the
 result equals the input file byte for byte, so nothing is written over it
 (`--out <other file>` still writes the copy). `importWarnings` lists what
@@ -2682,8 +2715,9 @@ bundler drops what a host does not import.
   and `validation` has no `warnings` (0.3: every warning of the result,
   repeated on every write); the text lists the added warnings (three or more
   of one code as one line), the resolved findings and one line counting the
-  file's own. `MutationResult.validation.warnings` (`mutateDoc`) is
-  unchanged; `MutationResult.delta` has the comparison.
+  file's own (the platform profile's findings included).
+  `MutationResult.validation.warnings` (`mutateDoc`) is unchanged;
+  `MutationResult.delta` has the comparison.
 - `--json` prints compact JSON on one line; `--pretty` indents it.
 - `show` prints each node's lane (`lane=<id>`) instead of member lists in
   the `lanes:` section, and message flows as `messageFlow <id> ["name"]:
@@ -2695,7 +2729,9 @@ bundler drops what a host does not import.
   edit changes them (0.3: every existing id stayed); the result says so on
   the changed line and in `renamed` (old id -> new id). A taken id gets
   `_2` and `W_ID_SUFFIXED` for every generated id, also flows and the event
-  definitions of a Camunda 8 file.
+  definitions of a Camunda 8 file. A generated id has at most 64
+  characters; `new --name` (or a speaking `--id`) names the definitions too
+  (`Definitions_OrderHandling`; 0.3: `Definitions_1`).
 - An `apply` batch refers to an element it creates by an alias (`"as":
   "$check"`, `flowAs`, `joinAs`; `MutationResult.aliases` /
   `result.aliases`: alias -> final id) or by an explicit `id`; new errors
