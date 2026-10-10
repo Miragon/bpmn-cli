@@ -260,7 +260,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       { op: 'add', kind: 'userTask', name: 'Review order', after: 'checkOrder' },
       { op: 'add', kind: 'userTask', name: 'Review order', after: 'packGoods' },
     ]);
-    expect(more.ids).toEqual(['reviewOrder', 'flowReviewOrderToPackGoods', 'reviewOrder_2', 'flowReviewOrderToShipOrder']);
+    expect(more.ids).toEqual(['reviewOrder', 'flowReviewOrderToPackGoods', 'reviewOrder_2', 'flowReviewOrder2ToShipOrder']);
     expect(more.warnings).toEqual(['W_ID_SUFFIXED']);
   });
 

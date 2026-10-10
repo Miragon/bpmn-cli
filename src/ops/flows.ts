@@ -18,7 +18,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError } from '../errors.js';
-import { flowRequest } from '../idstyle.js';
+import { connectionRequest, flowRequest, labelOf, speakingStem } from '../idstyle.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import type { ChangeSet } from '../result.js';
@@ -387,8 +387,12 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   const target = flow.get<El | undefined>('targetRef');
   if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
   const old = idOf(flow);
-  const was = doc.idStyle.derivedBase(flowRequest('bpmn:SequenceFlow', oldSource, oldTarget));
-  if (old !== was && !(old.startsWith(was) && /^_?\d+$/.test(old.slice(was.length)))) return undefined;
+  // the id a flow between the old ends gets, named by their names or (an end renamed since) by their ids
+  const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el))].filter((l): l is string => !!l))];
+  const derived = (base: string): boolean => old === base || (old.startsWith(base) && /^_?\d+$/.test(old.slice(base.length)));
+  const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
+  const named = labels(oldSource).some((s) => labels(oldTarget).some((t) => derived(doc.idStyle.derivedBase(connectionRequest('bpmn:SequenceFlow', oldIds[0], oldIds[1], { sourceLabel: s, targetLabel: t })))));
+  if (!named) return undefined;
   doc.ids.release(old);
   const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
   if (id === old) return undefined;

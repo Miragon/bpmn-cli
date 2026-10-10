@@ -282,8 +282,10 @@ function contextStem(stem: string): boolean {
 
 /**
  * How another id names an element (the ends of a flow, the context of an
- * unnamed element): its name; a text annotation the speaking part of its
- * id, else its text; an unnamed element the speaking part of its id, else a
+ * unnamed element), so that ids are built from ids: the speaking part of
+ * its id (Activity_CheckInvoice -> CheckInvoice, also after a rename of the
+ * element); else, for an id that says too little (a hash, a number, one or
+ * two letters such as Part_B), its name; a text annotation its text; else a
  * word for its kind (Gateway, End, Timer, UserTask, Flow, ...). An unnamed
  * element whose id tells its kind and context (Gateway_AfterCheckInvoice) is
  * named by its kind (Gateway), so ids do not repeat the contexts of their
@@ -293,11 +295,13 @@ export function labelOf(el: El): string {
   const id = el.get<string | undefined>('id');
   const name = el.get<string | undefined>('name');
   const own = id ? speakingStem(id) : undefined;
+  const named = nameWords(name).length > 0;
   if (is(el, 'bpmn:TextAnnotation')) {
     const text = el.get<string | undefined>('text');
     return own ?? (nameWords(text).length ? text! : 'TextAnnotation');
   }
-  if (nameWords(name).length) return name!;
+  if (own && (named ? own.replace(/[^A-Za-z]/g, '').length >= 3 : !contextStem(own))) return own;
+  if (named) return name!;
   if (own && !contextStem(own)) return own;
   if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) return 'Flow';
   const def = kindOf(el);

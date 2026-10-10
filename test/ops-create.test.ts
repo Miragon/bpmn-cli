@@ -648,7 +648,7 @@ describe('data objects, stores and annotations', () => {
     const cs2 = add(doc, { kind: 'note', name: 'Note via name', to: 'End' });
     const assoc2 = cs2.created[1]!.id;
     expect(cs2.created.map((c) => c.id)).toEqual(['TextAnnotation_NoteViaName', assoc2]);
-    expect(assoc2).toBe('Association_DoneToNoteViaName');
+    expect(assoc2).toBe('Association_EndToNoteViaName');
     expect(doc.require('TextAnnotation_NoteViaName').get('text')).toBe('Note via name');
     expect(edge(doc, assoc2)).toBe('End->TextAnnotation_NoteViaName');
     const two = add(doc, { kind: 'textAnnotation', text: 'Two' }).created[0]!.id;
