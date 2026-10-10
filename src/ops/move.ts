@@ -22,16 +22,23 @@
  *    (X -> a -> b -> ...); with --in they are appended together and flows
  *    between them survive (re-declared in the new scope).
  *  - lane membership is dropped when the node leaves its process or enters
- *    a sub-process; after --after/--before/--flow into another process the
- *    node inherits the anchor's lane. --on re-attaches a boundary event.
+ *    a sub-process; a node in a lane keeps it when it moves within its
+ *    process (a note when the flow it went into runs between two other
+ *    lanes). A node without a lane at its new place in a process (it came
+ *    from a sub-process or another pool, or had none) inherits one with
+ *    add's rule (lanes.ts inheritedLane: the anchor's; in a flow between two
+ *    lanes the lane of the row the layout draws it on, W_LANE_INHERITED),
+ *    unless op.lane names one. --on re-attaches a boundary event (it takes
+ *    its host's lane).
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { kindLabel } from '../kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { assignLane } from './containers.js';
+import { assignLane, laneOf } from './containers.js';
 import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type PlacementOptions } from './flows.js';
+import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { changeOf, idOf } from './set.js';
 import type { MoveOp } from './types.js';
@@ -54,7 +61,7 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   } else if (mode !== 'none') {
     let prev: El | undefined;
     for (const node of nodes) {
-      moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs);
+      moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane);
       prev = node;
     }
   }
@@ -236,8 +243,8 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
 
-/** --after / --before / --flow: detach, then place like a new node. */
-function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void {
+/** --after / --before / --flow: detach, then place like a new node (`explicitLane`: op.lane assigns the lane afterwards). */
+function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean): void {
   if (is(node, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_PLACEMENT', `Boundary event ${idOf(node)} is moved with --on <activityId>`, { element: idOf(node) });
   }
@@ -249,13 +256,26 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void 
   const flowIds = [...doc.incoming(node), ...doc.outgoing(node)].map(idOf);
   detachWithBridge(doc, node, true, cs, undefined, 'move');
   reserveIds(doc, flowIds);
+  const laneBefore = laneOf(doc, node);
   leaveScope(doc, [node, ...boundaries], oldScope, targetScope, cs);
+  doc.invalidate();
+  // the lane, decided before the placement (a splice may rename the flow): a node in a lane keeps it, one without inherits add's
+  const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
+  const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? inheritedLane(doc, p) : {};
   placeNode(doc, node, p, cs);
   // the new place may give an event-based gateway a target BPMN 2.0 does not allow (like add / connect)
   for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) warnEventGatewayFlow(doc, f, cs);
   if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
   fixFlows(doc, boundaries, targetScope, cs);
-  if (oldScope !== targetScope) inheritLane(doc, node, boundaries, anchors[0], targetScope);
+  if (own) {
+    const note = explicitLane ? undefined : crossLaneNote(idOf(node), own, inherited);
+    if (note) cs.note(note);
+  } else if (inherited.lane) {
+    addTo(inherited.lane, 'flowNodeRef', node);
+    for (const b of boundaries) if (!doc.lanesOf(b).length) addTo(inherited.lane, 'flowNodeRef', b);
+    const warning = laneInheritedWarning(idOf(node), inherited);
+    if (warning) cs.warn(warning);
+  }
   cs.change(changeOf(node, `moved ${describePlacement(p)}`));
   doc.invalidate();
 }

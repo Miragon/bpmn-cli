@@ -684,7 +684,13 @@ supported) can be retyped to a supported gateway.
 `move` detaches the nodes (bridging their old place), then places them again
 with the placement grammar; `--in` moves into another scope without
 connecting (flows that would cross scopes are removed and reported);
-`--lane` assigns a lane and may be combined with a placement. Boundary events
+`--lane` assigns a lane and may be combined with a placement. Without
+`--lane`, a node in a lane keeps it when it moves within its process (a note
+says so when the flow it went into runs between two other lanes); a node
+without a lane at its new place (out of a sub-process, from another pool, or
+one that had none) gets one like `add` gives it: the anchor's, and in a flow
+between two lanes the lane of the row the layout draws it on (the target's
+after a branching node), with `W_LANE_INHERITED`. Boundary events
 travel with their host; `move --on` (like `add --on`) refuses a compensation
 handler (`isForCompensation=true`) as host (`E_INVALID_HOST`). The bridge left
 behind follows the event-based gateway rule of [`remove`](#remove)

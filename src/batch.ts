@@ -186,7 +186,7 @@ export const MOVE_FIELDS: FieldsOf<MoveOp> = {
   ids: list('Node ids to move (boundary events follow their host).', { required: true, minItems: 1 }),
   ...PLACEMENT_FIELDS,
   ...FLOW_FIELDS,
-  lane: str('Assign the nodes to this lane; an empty string removes lane membership.'),
+  lane: str('Assign the nodes to this lane; an empty string removes lane membership. Without it a node keeps its lane; one without a lane at its new place inherits like add (into a flow between two lanes: the target\'s after a branching source, else the anchor\'s, with W_LANE_INHERITED).'),
 };
 
 export const ORDER_FIELDS: FieldsOf<OrderOp> = {
