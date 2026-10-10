@@ -85,6 +85,7 @@ import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
+import { setCorrelationKey } from './ext.js';
 import { assertCondition, flowChange, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
@@ -484,6 +485,8 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       break;
     default:
       if (key.includes(':')) {
+        // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ext.ts)
+        if (value && setCorrelationKey(doc, el, key, value, cs)) return;
         if (value) assertVendorHost(doc, el, key, value);
         if (value) assertZeebeHost(doc, el, key, value);
         setVendorAttribute(doc, el, key, value);
@@ -1057,13 +1060,14 @@ function assertZeebeHost(doc: Doc, el: El, key: string, value: string): void {
   if (!here.length && !loop && !message) return;
   const target = here[0] ?? (loop ? 'zeebe:loopCharacteristics' : 'zeebe:subscription');
   const type = `${prefix}:${target.slice('zeebe:'.length)}`;
-  const msg = message ? (el.get<El | undefined>('messageRef') ?? definitionsOf(el)[0]?.get<El | undefined>('messageRef')) : undefined;
-  const msgId = msg ? idOf(msg) : undefined;
+  // (an element that waits for a message never gets here: set writes the key into the message's subscription, ext.ts setCorrelationKey)
   const command = here.length
     ? `\`bpmn ext add <file> ${id} ${type} ${pair}\``
     : loop
       ? `\`bpmn ext add <file> ${id} loop.${type} ${pair}\` (creates a parallel multi-instance loop when there is none)`
-      : `\`bpmn ext add <file> ${msgId || '<messageId>'} ${type} ${pair}\` (on the message the event waits for)`;
+      : is(el, 'bpmn:ReceiveTask') || definitionsOf(el).some((d) => is(d, 'bpmn:MessageEventDefinition'))
+        ? `\`bpmn set <file> ${id} message=<MessageName>\` first (the correlation key belongs to the message the element waits for), then \`bpmn set <file> ${id} ${shellPair(key, value)}\``
+        : `\`bpmn ext add <file> <messageId> ${type} ${pair}\` on a bpmn:Message (${kindLabel(el)} ${id} waits for no message)`;
   throw modelError('E_WRONG_HOST', `${key} is not an attribute of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on the ${type} extension element`, {
     element: id,
     hint: `Use ${command}.`,
