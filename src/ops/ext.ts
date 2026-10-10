@@ -132,6 +132,10 @@ export const SINGLE_TOP: ReadonlySet<string> = new Set([
   'zeebe:executionListeners',
   'zeebe:taskListeners',
   'zeebe:linkedResources',
+  // Camunda 8.9 refuses a second one (engine-checked, test/c8-profile.test.ts)
+  'zeebe:adHoc',
+  'zeebe:conditionalFilter',
+  'zeebe:publishMessage',
 ]);
 
 /** Children that occur at most once inside their vendor parent. */

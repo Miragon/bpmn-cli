@@ -792,7 +792,9 @@ export const OPS_SCHEMA: Record<string, unknown> = buildSchema();
 /**
  * A small but complete example. It assumes a file made with
  * `bpmn new order.bpmn --name "Order handling" --target camunda8` and a
- * start event -> "Check invoice" user task -> end event.
+ * start event -> "Check invoice" user task -> end event; the result is a
+ * valid Camunda 8 file (FEEL condition, ISO duration, a job type for every
+ * service and send task; test/c8-ops.test.ts deploys nothing but checks it).
  */
 export function opsExample(): { ops: Op[] } {
   return {
@@ -804,16 +806,17 @@ export function opsExample(): { ops: Op[] } {
         name: 'Invoice ok?',
         id: 'Gateway_InvoiceOk',
         branches: [
-          { flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'serviceTask', name: 'Book invoice' }] },
+          { flowName: 'yes', condition: '= ok', nodes: [{ kind: 'serviceTask', name: 'Book invoice' }] },
           { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify invoice', set: { doc: 'Call the customer and clarify the open positions.' } }] },
         ],
       },
-      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: 'Activity_ClarifyInvoice', timer: 'PT2D', nonInterrupting: true },
+      { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: 'Activity_ClarifyInvoice', timer: 'P2D', nonInterrupting: true },
       { op: 'add', kind: 'sendTask', name: 'Remind customer', after: 'Event_Reminder' },
       { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling' },
       { op: 'connect', source: 'Activity_RemindCustomer', target: 'Event_ReminderSent' },
       { op: 'set', id: 'Activity_BookInvoice', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
       { op: 'ext', id: 'Activity_BookInvoice', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },
+      { op: 'ext', id: 'Activity_RemindCustomer', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'remind-customer' } },
     ],
   };
 }

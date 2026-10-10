@@ -522,3 +522,196 @@ describe.skipIf(!ENGINE)('live engine: the deploy rules flag exactly what Camund
     expect(result.error === undefined, result.error).toBe(c.engine === 'accept');
   });
 });
+
+/* runtime: start the processes and check what the runtime findings (and the features) say */
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+type Item = Record<string, unknown>;
+
+async function until<T>(fn: () => Promise<T>, done: (v: T) => boolean, ms = 8000): Promise<T> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const v = await fn();
+    if (done(v) || Date.now() > end) return v;
+    await sleep(250);
+  }
+}
+const search = async (path: string, filter: Item): Promise<Item[]> => ((await c8('POST', path, { filter })).json['items'] as Item[] | undefined) ?? [];
+const stateOf = async (key: string): Promise<string> => String((await c8('GET', `/process-instances/${key}`)).json['state']);
+const finished = (key: string, ms?: number): Promise<string> => until(() => stateOf(key), (s) => s === 'COMPLETED', ms);
+async function startInstance(pid: string, variables: Item = {}): Promise<string> {
+  const r = await c8('POST', '/process-instances', { processDefinitionId: pid, variables });
+  expect(r.ok, JSON.stringify(r.json)).toBe(true);
+  return String(r.json['processInstanceKey']);
+}
+async function jobs(type: string, ms = 4000): Promise<Item[]> {
+  return until(async () => ((await c8('POST', '/jobs/activation', { type, maxJobsToActivate: 10, timeout: 30000, worker: 'bpmn-cli-test', requestTimeout: 500 })).json['jobs'] as Item[] | undefined) ?? [], (j) => j.length > 0, ms);
+}
+const complete = (job: Item, variables: Item = {}): Promise<unknown> => c8('POST', `/jobs/${String(job['jobKey'])}/completion`, { variables });
+const incidentsOf = (key: string, ms = 4000): Promise<Item[]> => until(() => search('/incidents/search', { processInstanceKey: key }), (i) => i.length > 0, ms);
+const completedIds = async (key: string): Promise<string[]> => [...new Set((await search('/element-instances/search', { processInstanceKey: key })).filter((e) => e['state'] === 'COMPLETED').map((e) => String(e['elementId'])))].sort();
+const cancel = (key: string): Promise<unknown> => c8('POST', `/process-instances/${key}/cancellation`, {});
+const userTasksOf = (key: string): Promise<Item[]> => until(() => search('/user-tasks/search', { processInstanceKey: key, state: 'CREATED' }), (t) => t.length > 0);
+
+/** Deploys a process (P_Test renamed to a unique id, {pid} filled in) with extra resources, runs `fn`, deletes the deployment. */
+async function withProcess(name: string, model: string, fn: (pid: string) => Promise<void>, extra: Array<{ name: string; text: string }> = []): Promise<void> {
+  const pid = `P_bpmn_cli_c8_run_${name}_${Date.now().toString(36)}`;
+  const fill = (text: string): string => text.replace(/id="P_Test"/g, `id="${pid}"`).replace(/\{pid\}/g, pid);
+  const result = await deploy([{ name: `${pid}.bpmn`, text: fill(model) }, ...extra.map((e) => ({ name: e.name, text: fill(e.text) }))]);
+  expect(result.error, result.error).toBeUndefined();
+  try {
+    await fn(pid);
+  } finally {
+    await undeploy(result.keys);
+  }
+}
+
+describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime rules, by running the processes', () => {
+  it('a job worker gets its type, input mapping and header (one without key is dropped); the output mapping writes back', async () => {
+    const model = xml(chain(ST(ext('<zeebe:taskDefinition type="{pid}-check" retries="2" /><zeebe:ioMapping><zeebe:input source="=amount * 2" target="doubled" /><zeebe:output source="=result" target="checked" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="channel" value="mail" /><zeebe:header value="dropped" /></zeebe:taskHeaders>'))));
+    expect(runProfile(await Doc.fromXml(model)).findings.map((f) => f.code)).toEqual(['W_C8_BAD_VALUE']);
+    await withProcess('job', model, async (pid) => {
+      const key = await startInstance(pid, { amount: 21 });
+      const [job] = await jobs(`${pid}-check`);
+      expect(job).toMatchObject({ retries: 2, customHeaders: { channel: 'mail' } });
+      expect((job!['variables'] as Item)['doubled']).toBe(42);
+      await complete(job!, { result: 'ok' });
+      expect(await finished(key)).toBe('COMPLETED');
+    });
+  }, 60000);
+
+  it('a message is correlated by its correlation key; FEEL conditions route; a flow without condition is never taken', async () => {
+    const model = xml(`    <bpmn:startEvent id="Start" /><bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:receiveTask id="X" messageRef="M1" /><bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="G" />
+    <bpmn:exclusiveGateway id="G" />
+    <bpmn:sequenceFlow id="Big" sourceRef="G" targetRef="EndBig"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= amount &gt; 100</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Other" sourceRef="G" targetRef="EndOther" />
+    <bpmn:endEvent id="EndBig" /><bpmn:endEvent id="EndOther" />`, { roots: `  <bpmn:message id="M1" name="{pid}-paid">${ext('<zeebe:subscription correlationKey="=orderId" />')}</bpmn:message>\n` });
+    expect(runProfile(await Doc.fromXml(model)).findings.map((f) => [f.code, f.related?.[0]])).toEqual([['W_C8_EXCLUSIVE_GATEWAY', 'Other']]);
+    await withProcess('route', model, async (pid) => {
+      const big = await startInstance(pid, { orderId: 'o-1', amount: 500 });
+      const small = await startInstance(pid, { orderId: 'o-2', amount: 5 });
+      await sleep(1000);
+      await c8('POST', '/messages/publication', { name: `${pid}-paid`, correlationKey: 'o-3', timeToLive: 0 });
+      await sleep(500);
+      expect(await stateOf(big)).toBe('ACTIVE');
+      for (const k of ['o-1', 'o-2']) await c8('POST', '/messages/publication', { name: `${pid}-paid`, correlationKey: k, timeToLive: 10000 });
+      expect(await finished(big)).toBe('COMPLETED');
+      expect(await completedIds(big)).toContain('EndBig');
+      // no condition holds: the flow without condition is not taken, the instance gets an incident
+      expect((await incidentsOf(small)).map((i) => i['errorMessage'])).toEqual(['Expected at least one condition to evaluate to true, or to have a default flow']);
+      await cancel(small);
+    });
+  }, 60000);
+
+  it('a business rule task calls a deployed decision; a call activity runs the child and maps its result', async () => {
+    const dmn = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="D_{pid}" name="Risk" namespace="http://camunda.org/schema/1.0/dmn">
+  <decision id="{pid}_risk" name="Risk"><decisionTable id="DT" hitPolicy="FIRST">
+    <input id="I1"><inputExpression id="IE1" typeRef="number"><text>amount</text></inputExpression></input>
+    <output id="O1" name="risk" typeRef="string" />
+    <rule id="R1"><inputEntry id="E1"><text>&gt; 100</text></inputEntry><outputEntry id="OE1"><text>"high"</text></outputEntry></rule>
+    <rule id="R2"><inputEntry id="E2"><text>-</text></inputEntry><outputEntry id="OE2"><text>"low"</text></outputEntry></rule>
+  </decisionTable></decision>
+</definitions>`;
+    const child = xml(`    <bpmn:startEvent id="CS" /><bpmn:sequenceFlow id="CF1" sourceRef="CS" targetRef="CT" />
+    <bpmn:scriptTask id="CT">${ext('<zeebe:script expression="=risk + &quot;!&quot;" resultVariable="childResult" />')}</bpmn:scriptTask>
+    <bpmn:sequenceFlow id="CF2" sourceRef="CT" targetRef="CE" /><bpmn:endEvent id="CE" />`, { pid: '{pid}_child' });
+    const model = xml(`    <bpmn:startEvent id="Start" /><bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:businessRuleTask id="X">${ext('<zeebe:calledDecision decisionId="{pid}_risk" resultVariable="risk" />')}</bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="C" />
+    <bpmn:callActivity id="C">${ext('<zeebe:calledElement processId="{pid}_child" propagateAllChildVariables="false" /><zeebe:ioMapping><zeebe:output source="=childResult" target="fromChild" /></zeebe:ioMapping>')}</bpmn:callActivity>
+    <bpmn:sequenceFlow id="F3" sourceRef="C" targetRef="End" /><bpmn:endEvent id="End" />`);
+    expect(runProfile(await Doc.fromXml(model)).findings).toEqual([]);
+    await withProcess(
+      'decision',
+      model,
+      async (pid) => {
+        const key = await startInstance(pid, { amount: 500 });
+        expect(await finished(key)).toBe('COMPLETED');
+        const vars = Object.fromEntries((await search('/variables/search', { processInstanceKey: key })).filter((v) => String(v['scopeKey']) === key).map((v) => [v['name'], v['value']]));
+        expect(vars).toMatchObject({ risk: '"high"', fromChild: '"high!"' });
+        expect(vars['childResult']).toBeUndefined();
+      },
+      [
+        { name: 'risk.dmn', text: dmn },
+        { name: 'child.bpmn', text: child },
+      ],
+    );
+  }, 60000);
+
+  it('a Camunda user task is assigned and completed through the v2 user task API; a job worker user task is not listed there', async () => {
+    const model = xml(chain(UT(ext('<zeebe:userTask /><zeebe:formDefinition externalReference="https://example.com/form" /><zeebe:assignmentDefinition assignee="=reviewer" candidateGroups="sales, finance" /><zeebe:priorityDefinition priority="80" />')), '<bpmn:userTask id="J" /><bpmn:sequenceFlow id="FJ" sourceRef="Start" targetRef="J" /><bpmn:sequenceFlow id="FJ2" sourceRef="J" targetRef="End" />'));
+    expect(runProfile(await Doc.fromXml(model)).findings.map((f) => [f.code, f.element])).toEqual([['W_C8_JOB_WORKER_USER_TASK', 'J']]);
+    await withProcess('usertask', model, async (pid) => {
+      const key = await startInstance(pid, { reviewer: 'demo' });
+      const tasks = await userTasksOf(key);
+      expect(tasks.map((t) => t['elementId'])).toEqual(['X']);
+      expect(tasks[0]).toMatchObject({ assignee: 'demo', priority: 80, externalFormReference: 'https://example.com/form' });
+      expect((tasks[0]!['candidateGroups'] as string[]).sort()).toEqual(['finance', 'sales']);
+      expect((await c8('POST', `/user-tasks/${String(tasks[0]!['userTaskKey'])}/completion`, { variables: { approved: true } })).status).toBe(204);
+      const job = (await jobs('io.camunda.zeebe:userTask')).find((j) => String(j['processInstanceKey']) === key);
+      expect(job).toMatchObject({ elementId: 'J' });
+      await complete(job!);
+      expect(await finished(key)).toBe('COMPLETED');
+    });
+  }, 60000);
+
+  it('a multi-instance activity runs per item and collects the results; a standard loop runs once', async () => {
+    const model = xml(chain(ST(ext('<zeebe:taskDefinition type="{pid}-item" />') + MI(ZLOOP('inputCollection="=items" inputElement="item" outputCollection="results" outputElement="=done"'))), `<bpmn:serviceTask id="L">${ext('<zeebe:taskDefinition type="{pid}-loop" />')}<bpmn:standardLoopCharacteristics><bpmn:loopCondition xsi:type="bpmn:tFormalExpression">= true</bpmn:loopCondition></bpmn:standardLoopCharacteristics></bpmn:serviceTask><bpmn:sequenceFlow id="FL" sourceRef="Start" targetRef="L" /><bpmn:sequenceFlow id="FL2" sourceRef="L" targetRef="End" />`));
+    expect(runProfile(await Doc.fromXml(model)).findings.map((f) => [f.code, f.element])).toEqual([['W_C8_STANDARD_LOOP', 'L']]);
+    await withProcess('mi', model, async (pid) => {
+      const key = await startInstance(pid, { items: [1, 2, 3] });
+      const items = await until(() => jobs(`${pid}-item`), (j) => j.length >= 3);
+      for (const j of items) await complete(j, { done: ((j['variables'] as Item)['item'] as number) * 10 });
+      for (const j of await jobs(`${pid}-loop`)) await complete(j);
+      expect(await jobs(`${pid}-loop`, 1500)).toEqual([]);
+      expect(await finished(key)).toBe('COMPLETED');
+      const results = (await search('/variables/search', { processInstanceKey: key, name: 'results' }))[0];
+      expect(results?.['value']).toBe('[10,20,30]');
+    });
+  }, 60000);
+
+  it('what deploys but fails or is ignored: a condition out of a task, camunda:* content, an input mapping on a start event, a JUEL completion condition, retries "abc"', async () => {
+    const model = xml(`    <bpmn:startEvent id="Start">${ext('<zeebe:ioMapping><zeebe:input source="=1" target="startIn" /></zeebe:ioMapping>')}</bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="T" />
+    <bpmn:manualTask id="T" />
+    <bpmn:sequenceFlow id="A" sourceRef="T" targetRef="EndA"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= false</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="B" sourceRef="T" targetRef="U" />
+    <bpmn:userTask id="U" camunda:assignee="demo">${ext('<zeebe:userTask />')}</bpmn:userTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="U" targetRef="X" />
+    ${ST(ext('<zeebe:taskDefinition type="{pid}-w" />') + MI(ZLOOP(), '', '<bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${done}</bpmn:completionCondition>'))}
+    <bpmn:sequenceFlow id="F3" sourceRef="X" targetRef="R" />
+    <bpmn:serviceTask id="R">${ext('<zeebe:taskDefinition type="{pid}-r" retries="abc" />')}</bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F4" sourceRef="R" targetRef="EndB" />
+    <bpmn:endEvent id="EndA" /><bpmn:endEvent id="EndB" />`, { ns: `${C8} ${CAMUNDA}` });
+    expect(sorted(runProfile(await Doc.fromXml(model)).findings.map((f) => `${f.code} ${f.element}`))).toEqual(sorted(['W_C8_MISPLACED_EXTENSION Start', 'W_C8_CONDITION_IGNORED A', 'W_C8_FOREIGN_CONTENT U', 'W_C8_EXPRESSION X', 'W_C8_BAD_VALUE R']));
+    await withProcess('ignored', model, async (pid) => {
+      const key = await startInstance(pid, { items: [1] });
+      // the condition out of the task is ignored: both branches run; camunda:assignee is ignored; the input mapping too
+      const task = (await userTasksOf(key))[0]!;
+      expect(await completedIds(key)).toContain('EndA');
+      expect(task['assignee'] ?? undefined).toBeUndefined();
+      expect((await search('/variables/search', { processInstanceKey: key })).map((v) => v['name'])).not.toContain('startIn');
+      await c8('POST', `/user-tasks/${String(task['userTaskKey'])}/completion`, {});
+      for (const j of await jobs(`${pid}-w`)) await complete(j, { done: true });
+      expect((await incidentsOf(key)).map((i) => i['errorMessage'])).toEqual(["Expected result of the expression '${done}' to be 'BOOLEAN', but was 'STRING'."]);
+      await cancel(key);
+      // an empty collection skips the multi-instance: then the job with retries "abc" fails
+      const other = await startInstance(pid, { items: [] });
+      await c8('POST', `/user-tasks/${String((await userTasksOf(other))[0]!['userTaskKey'])}/completion`, {});
+      expect((await incidentsOf(other)).map((i) => i['errorMessage'])).toEqual(["Expected result of the expression 'abc' to be 'NUMBER', but was 'STRING'."]);
+      await cancel(other);
+    });
+  }, 90000);
+
+  it('zeebe:publishMessage on a send task deploys, but the instance gets an incident', async () => {
+    const model = xml(chain(`<bpmn:sendTask id="X" messageRef="M1">${ext('<zeebe:publishMessage correlationKey="=orderId" />')}</bpmn:sendTask>`), { roots: MSG() });
+    expect(runProfile(await Doc.fromXml(model)).findings.map((f) => f.code)).toEqual(['W_C8_UNSUPPORTED_IMPLEMENTATION']);
+    await withProcess('publish', model, async (pid) => {
+      const key = await startInstance(pid, { orderId: 'o' });
+      expect((await incidentsOf(key)).map((i) => String(i['errorMessage']))[0]).toMatch(/only job worker-based implementation is supported for 'sendTask'/);
+      await cancel(key);
+    });
+  }, 60000);
+});

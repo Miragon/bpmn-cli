@@ -362,6 +362,7 @@ export function feelProblem(expression: string): string | undefined {
   if (/!(?!=)/.test(t)) return '! (FEEL: not(...))';
   if (t.includes("'")) return "single quotes (FEEL strings use double quotes)";
   if (t.includes('?')) return '?: (FEEL: if ... then ... else ...)';
+  if (t.includes('\\')) return 'a backslash outside a string';
   const open: string[] = [];
   const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
   for (const ch of t) {
@@ -874,7 +875,9 @@ function checkMultiInstance(ctx: Ctx, activity: El): void {
 function feelOf(juel: string): string {
   const m = /^\s*[$#]\{([\s\S]*)\}\s*$/.exec(juel);
   const inner = (m ? m[1]! : juel).trim();
-  return ` ${inner.replace(/&&/g, 'and').replace(/\|\|/g, 'or').replace(/==/g, '=').replace(/!=/g, '!=')}`;
+  // JUEL strings may be single-quoted, FEEL strings are double-quoted
+  const quoted = inner.replace(/'((?:[^'\\]|\\.)*)'/g, (_m, text: string) => `"${text.replace(/"/g, '\\"')}"`);
+  return ` ${quoted.replace(/&&/g, 'and').replace(/\|\|/g, 'or').replace(/==/g, '=').replace(/!\s*\((?!=)/g, 'not(').replace(/!(?!=)\s*([\w.]+)/g, 'not($1)')}`;
 }
 
 function checkFlow(ctx: Ctx, flow: El): void {

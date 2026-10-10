@@ -357,7 +357,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
         throw modelError('E_TRIGGER_REQUIRED', `Boundary event ${id} needs a trigger`, {
           element: id,
           candidates: def.triggers ?? [],
-          hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer PT2D or boundaryEvent:error --error PaymentFailed.`,
+          hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer P2D or boundaryEvent:error --error PaymentFailed.`,
         });
       }
       if (is(el, 'bpmn:StartEvent') && isEventSubProcess(scope)) {
