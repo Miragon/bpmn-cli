@@ -9,15 +9,16 @@
  *   mutationReport(result)    the JSON of a mutation (no XML): warnings as a delta
  *                             (added / resolved / preexistingCount), not every warning of the file
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
- *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / removed ids,
+ *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / removed ids, the format ops,
  *                             the added warnings, the layout score and added problems
  *   renderSummary(summary, { dryRun })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
  *   renderValidation(report)  its text
  */
 import type { LayoutProblem } from './diagram/metrics.js';
+import type { FormatResult } from './diagram/ops.js';
 import type { Warning } from './errors.js';
-import { renderChanges, renderLayout, renderProblems, renderView } from './format.js';
+import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './format.js';
 import type { CheckResult, LayoutStatus, MutationResult } from './pipeline.js';
 import type { PlatformSummary } from './platform/profile.js';
 import type { ProfileInfo } from './platform/repo.js';
@@ -254,6 +255,8 @@ export interface MutationSummary {
    * result has (`bpmn metrics` lists them)
    */
   layout: { status: 'ok' | 'skipped'; mode?: 'full' | 'incremental'; score?: { before?: number; after: number }; added?: LayoutProblem[]; problems?: number };
+  /** what each format op (place, align, color, compact, lane / pool order, ...) did to the drawing, in batch order */
+  format?: FormatResult[];
 }
 
 function uniqueIds(changes: readonly Change[]): string[] {
@@ -286,12 +289,14 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
       ...(m?.before && m.added.length ? { added: m.added } : {}),
       ...(m && !m.before && m.added.length ? { problems: m.added.length } : {}),
     },
+    ...(report.layout.format?.length ? { format: report.layout.format } : {}),
   };
 }
 
 /**
  * The text of `--summary`: `created <kind>: ids` per kind, `changed:` and
- * `removed:` ids, forced errors, the added warnings (floods as one line),
+ * `removed:` ids, one `format <op> #<i>: ...` line per format op, forced
+ * errors, the added warnings (floods as one line),
  * `warnings: n added, n resolved, n already in the file`, one layout line
  * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`)
  * and the file line.
@@ -302,6 +307,8 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
   if (summary.aliases) lines.push(aliasLine(summary.aliases));
   if (summary.changed.length) lines.push(`changed: ${summary.changed.join(', ')}`);
   if (summary.removed.length) lines.push(`removed: ${summary.removed.join(', ')}`);
+  // a format op changes the drawing only: its line says what it moved (or why it did not)
+  for (const f of summary.format ?? []) lines.push(formatLine(f).trimStart());
   if (!lines.length) lines.push('no changes');
   for (const e of summary.forced ?? []) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
   lines.push(...warningLines(summary.warnings.added));

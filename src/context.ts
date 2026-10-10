@@ -401,7 +401,8 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
       nonInterrupting: nonInterruptingOf(n),
       expanded: sub ? expansion.get(idOf(n)) !== false : undefined,
       content: sub && children.length && !children.some((c) => inWindow(c)) ? children.length : undefined,
-      props: nodeProps(n),
+      // the zeebe settings are in impl, complete (no job= next to zeebe:taskDefinition type=...)
+      props: nodeProps(n, { zeebe: false }),
       impl: implementationOf(n),
       documentation: documentationOf(n),
       outgoing: doc.outgoing(n).map(flowView),
@@ -662,7 +663,7 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     name: nameOf(el),
     trigger: is(el, 'bpmn:Event') ? triggerText(el) : undefined,
     nonInterrupting: nonInterruptingOf(el),
-    props: nodeProps(el),
+    props: nodeProps(el, { zeebe: false }),
     documentation: documentationOf(el),
     implementation: implementationOf(el),
     ancestors,

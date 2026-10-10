@@ -5,7 +5,7 @@ import type { BatchContext, Doc } from '../document.js';
 import { usageError } from '../errors.js';
 import { ChangeSet } from '../result.js';
 import { addElement } from './add.js';
-import { AliasTable, referencesOf, resolveOp } from './aliases.js';
+import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
 import { moveElements } from './move.js';
@@ -105,7 +105,14 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
         }
       }),
     );
-    for (const i of deferred) atOp(i, () => (resolved[i] = resolveOp(ops[i]!, table, i)));
+    for (const i of deferred) {
+      atOp(i, () => {
+        const ready = (resolved[i] = resolveOp(ops[i]!, table, i));
+        // an id an op of the batch renamed or removed is reported now, while E_NOT_FOUND can say what happened to it
+        // (the format phase runs after the layout, outside the batch); its kind is checked there
+        for (const id of referencedIds(ready)) if (!doc.get(id)) doc.require(id);
+      });
+    }
   } finally {
     doc.batch = outer;
   }

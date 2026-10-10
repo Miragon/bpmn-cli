@@ -362,8 +362,8 @@ function zeebeProps(el: El, props: Record<string, unknown>): void {
   }
 }
 
-/** Extra semantic facts of a node worth showing in one line. */
-export function nodeProps(el: El): Record<string, unknown> | undefined {
+/** Extra semantic facts of a node worth showing in one line (`zeebe: false`: without the Camunda 8 settings, which the reading views print in full). */
+export function nodeProps(el: El, opts: { zeebe?: boolean } = {}): Record<string, unknown> | undefined {
   const props: Record<string, unknown> = {};
   const loop = peek<El>(el, 'loopCharacteristics');
   if (loop) {
@@ -385,7 +385,8 @@ export function nodeProps(el: El): Record<string, unknown> | undefined {
   // several event definitions on one event (the label shows the first one's trigger): name them all
   const defs = definitionsOf(el);
   if (defs.length > 1) props['definitions'] = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0] ?? d.$type).join('+');
-  zeebeProps(el, props);
+  // the reading views (show --around, show <id> --context) print the zeebe elements in full (context.ts implementationOf)
+  if (opts.zeebe !== false) zeebeProps(el, props);
   return Object.keys(props).length ? props : undefined;
 }
 

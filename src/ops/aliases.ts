@@ -109,6 +109,17 @@ function slots(op: Op): Array<{ key: string; get: () => unknown; put: (v: unknow
   return out;
 }
 
+/** Every element id an op names in its id keys (REF_KEYS; after resolveOp: no aliases left). */
+export function referencedIds(op: Op): string[] {
+  const out: string[] = [];
+  for (const s of slots(op)) {
+    const v = s.get();
+    if (typeof v === 'string') out.push(v);
+    else if (Array.isArray(v)) for (const x of v) if (typeof x === 'string') out.push(x);
+  }
+  return out;
+}
+
 /** Every alias an op refers to, with the key it stands in (`ids[1]`, `values.default`). */
 export function referencesOf(op: Op): Array<{ key: string; alias: string }> {
   const out: Array<{ key: string; alias: string }> = [];

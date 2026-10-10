@@ -560,7 +560,8 @@ function problemList(list: readonly LayoutProblem[], max = 6): string {
 }
 
 /** `format <op> #<index>: moved ...; rerouted ...; colored ...` (or `no change`), notes appended. */
-function formatLine(f: FormatResult): string {
+/** `  format place #0: moved A, B; rerouted F; note: ...` (one line per format op of a result; `--summary` prints it unindented). */
+export function formatLine(f: FormatResult): string {
   const parts: string[] = [];
   if (f.colored?.length) parts.push(`colored ${idList(f.colored)}`);
   if (f.labels?.length) parts.push(`label placed ${idList(f.labels)}`);
