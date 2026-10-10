@@ -168,8 +168,8 @@ function lowerFirst(s: string): string {
 function describe(el: El, owner?: El): string {
   const id = idOf(el);
   const kind = isBpmnElement(el) ? lowerFirst(kindLabel(el).replace(/^bpmn:/, '')) : el.$type;
-  if (id && (!owner || owner === el)) return `${kind} ${id}`;
-  return owner ? `the ${lowerFirst(localName(el.$type))} of ${describe(owner)}` : `${kind}${id ? ` ${id}` : ''}`;
+  if (id) return `${kind} ${id}`;
+  return owner ? `the ${lowerFirst(localName(el.$type))} of ${describe(owner)}` : kind;
 }
 
 /** The `set` / `ext` key prefix that addresses `el` through `owner` (`definition.`, `loop.`, `condition.`). */
@@ -457,8 +457,20 @@ function checkAttributes(ctx: Ctx, el: El, owner: El | undefined): void {
     if (uri !== ZEEBE_URI) continue;
     const def = zeebeAttr(local);
     if (!def) {
-      const guess = didYouMean(local, zeebeAttrs().map((a) => localName(a.name)));
-      push(ctx, 'runtime', 'W_C8_UNKNOWN_ATTRIBUTE', el, owner, `attr:${key}`, `${where} has the unknown attribute ${key}${guess ? ` (did you mean ${ctx.p}:${guess}?)` : ''}; Camunda 8 ignores it (most zeebe settings are extension elements: \`bpmn kinds\`, \`bpmn guide\`)`, `Remove it: ${unset}.`);
+      // an attribute of a zeebe extension element written on the BPMN element (zeebe:assignee): name the element
+      const home = zeebeTypeNames().find((t) => zeebeAllowedOn(t, el) === true && zeebeType(t)!.attributes.some((a) => a.name === local));
+      const guess = home ? undefined : didYouMean(local, zeebeAttrs().map((a) => localName(a.name)));
+      const value = String(el.$attrs[key] ?? '');
+      push(
+        ctx,
+        'runtime',
+        'W_C8_UNKNOWN_ATTRIBUTE',
+        el,
+        owner,
+        `attr:${key}`,
+        `${where} has the unknown attribute ${key}${guess ? ` (did you mean ${ctx.p}:${guess}?)` : ''}; Camunda 8 ignores it${home ? ` (it reads ${local} on the ${z(ctx, localName(home))} extension element)` : ' (most zeebe settings are extension elements: `bpmn kinds`, `bpmn guide`)'}`,
+        home ? `Move it: ${unset}, then ${extAdd(ctx, el, owner, `${z(ctx, localName(home))} ${sh(`${local}=${value}`)}`)}.` : `Remove it: ${unset}.`,
+      );
       continue;
     }
     if (!def.owners.some((o) => is(el, o))) {
@@ -570,7 +582,16 @@ function checkZeebeElement(ctx: Ctx, host: El, owner: El | undefined, v: El, pat
     push(ctx, 'runtime', 'W_C8_UNKNOWN_ATTRIBUTE', host, owner, `ext:${path}/${local}@${k}`, `${where} has the unknown attribute ${k}${guess ? ` (did you mean ${guess}?)` : ''}; Camunda 8 ignores it`, rebuildHint(ctx, host, owner, z(ctx, path ? path.split(' > ')[0]!.replace(/^[^:]+:/, '') : local)));
   }
   for (const a of FEEL_ATTRS[local] ?? []) {
-    checkFeel(ctx, host, owner, `${path}/${local}@${a}`, `${a} of ${where}`, attr(v, a), path ? rebuildHint(ctx, host, owner, z(ctx, localName(path.split(' > ')[0]!))) : fixHint(ctx, host, owner, v, { [a]: '=<FEEL expression>' }));
+    const value = attr(v, a);
+    const target = attr(v, 'target');
+    // a mapping is replaced by its target: give the corrected one
+    const fix =
+      (local === 'input' || local === 'output') && target && isFeel(value)
+        ? `${extAdd(ctx, host, owner, `${z(ctx, local)} ${sh(`source==${feelOf(value!.trim().slice(1)).trim()}`)} target=${sh(target)}`)} (replaces the mapping of that target; check the FEEL syntax).`
+        : path
+          ? rebuildHint(ctx, host, owner, z(ctx, localName(path.split(' > ')[0]!)))
+          : fixHint(ctx, host, owner, v, { [a]: '=<FEEL expression>' });
+    checkFeel(ctx, host, owner, `${path}/${local}@${a}`, `${a} of ${where}`, value, fix);
   }
   for (const c of kids(ctx, v)) {
     const cl = localName(c.$type);
@@ -692,7 +713,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
     for (const a of ['dueDate', 'followUpDate']) {
       const d = attr(v, a);
       if (d !== undefined && !isFeel(d) && d.trim() !== '' && !validDateTime(d)) {
-        push(ctx, 'deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, `taskSchedule:${a}`, `${z(ctx, 'taskSchedule')} of ${where} has ${a}="${d}", which is no ISO 8601 date-time with offset (2030-03-02T15:35+02:00); Camunda 8 refuses the file`, `Rebuild it with a date-time or an expression: ${rebuild()}`);
+        push(ctx, 'deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, `taskSchedule:${a}`, `${z(ctx, 'taskSchedule')} of ${where} has ${a}="${d}", which is no ISO 8601 date-time with offset (2030-03-02T15:35+02:00); Camunda 8 refuses the file`, fixHint(ctx, host, owner, v, { [a]: '2030-03-02T15:35+02:00' }).replace(/\.$/, ' (or an expression: =<FEEL>).'));
       }
     }
   }
@@ -1202,7 +1223,7 @@ function checkErrorCodes(ctx: Ctx, events: El[], where: string): void {
     const key = blank(code) ? '' : code!;
     const first = seen.get(key);
     if (first) {
-      push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, `errorCode:${key}`, key ? `${describe(el)} catches the error code "${key}" like ${describe(first)} (${where}); Camunda 8 refuses one code twice in a scope` : `${describe(el)} and ${describe(first)} both catch every error (no error code) (${where}); Camunda 8 allows one catch-all per scope`, `\`bpmn set <file> ${idOf(el)} errorCode=<OTHER_CODE>\` (or remove one of them).`, [idOf(first)!]);
+      push(ctx, 'deploy', 'W_C8_DEPLOY_ERROR', el, undefined, `errorCode:${key}`, key ? `${describe(el)} catches the error code "${key}" like ${describe(first)} (${where}); Camunda 8 refuses one code twice in a scope` : `${describe(el)} and ${describe(first)} both catch every error (no error code) (${where}); Camunda 8 allows one catch-all per scope`, `Catch another error: \`bpmn set <file> ${idOf(el)} error=<OtherError> errorCode=<OTHER_CODE>\` (the events share no bpmn:Error then), or remove one of them.`, [idOf(first)!]);
     } else {
       seen.set(key, el);
     }
@@ -1355,7 +1376,8 @@ export function c8Findings(doc: Doc): ProfileFinding[] {
   const executable = processes.filter((p) => peek<boolean>(p, 'isExecutable') === true);
   if (processes.length && !executable.length) {
     const first = processes[0]!;
-    push(ctx, 'deploy', 'W_C8_DEPLOY_EXECUTABLE', first, undefined, 'executable', `None of the ${processes.length} process${processes.length === 1 ? '' : 'es'} is executable (isExecutable="true"); Camunda 8 refuses to deploy a file without an executable process`, `\`bpmn set <file> ${idOf(first)} isExecutable=true\`.`);
+    const what = processes.length === 1 ? `Process ${idOf(first)} is not executable` : `None of the ${processes.length} processes is executable`;
+    push(ctx, 'deploy', 'W_C8_DEPLOY_EXECUTABLE', first, undefined, 'executable', `${what} (no isExecutable="true"); Camunda 8 refuses to deploy a file without an executable process`, `\`bpmn set <file> ${idOf(first)} isExecutable=true\`.`);
   }
   // root elements the executable processes use are checked through their events; the process content here
   for (const proc of executable) visit(ctx, proc, undefined);

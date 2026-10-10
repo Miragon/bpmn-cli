@@ -351,6 +351,11 @@ describe('Camunda 8 profile: one model per rule', () => {
     expect(key.hint).toBe('`bpmn ext add <file> M1 zeebe:subscription correlationKey==orderId --replace`.');
     const cond = runProfile(await Doc.fromXml(xml(gateway(['${amount &gt; 100 &amp;&amp; ok}', null], 'S1')))).findings[0]!;
     expect(cond.hint).toContain("`bpmn set <file> S0 'condition== amount > 100 and ok'`");
+    // a hand-written attribute of a zeebe element on the BPMN element: the element that reads it
+    const attr = runProfile(await Doc.fromXml(xml(chain(UT(ext('<zeebe:userTask />'), ' zeebe:assignee="demo"'))))).findings[0]!;
+    expect(attr).toMatchObject({ code: 'W_C8_UNKNOWN_ATTRIBUTE', severity: 'runtime', element: 'X' });
+    expect(attr.message).toBe('userTask X has the unknown attribute zeebe:assignee; Camunda 8 ignores it (it reads assignee on the zeebe:assignmentDefinition extension element)');
+    expect(attr.hint).toBe('Move it: `bpmn set <file> X zeebe:assignee=`, then `bpmn ext add <file> X zeebe:assignmentDefinition assignee=demo`.');
     // another prefix for the zeebe namespace
     const z = runProfile(await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: 'xmlns:z="http://camunda.org/schema/zeebe/1.0"' }))).findings[0]!;
     expect(z.hint).toBe('Give it a job type: `bpmn ext add <file> X z:taskDefinition type=<jobType>`.');
