@@ -35,6 +35,45 @@ bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
 
+## What step 3's layout package changed (2026-10-10)
+
+Formatting a kept drawing without XML, the operations the dogfooding agents
+missed (branch `step3/layout`; elements are addressed by id only, names can
+repeat). Details, measurements and the bug statuses:
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-2026-10-10-layout-ergonomics).
+
+- **`compact [<pool|lane|subProcess>...]`** (`src/diagram/compact.ts`,
+  op `compact`): closes empty columns / rows and shrinks expanded
+  sub-processes, pools and lanes to their content, inside out, keeping order
+  and relative positions. Each strip is closed with `space.ts closeStrip`
+  inside a guard (`ops.ts guard`: reroute what broke, measure, undo a strip
+  that adds a hard problem or raises the score, note it). Message flows do
+  not hold a strip open (their bends and labels are squeezed). Negative
+  `space --by -column|-row|-<px>` closes empty space at one place.
+  Real corpus: 0 hard problems added, score never raised; total area -9 %
+  (hand / broader corpus), -14 % on models edited in agent sessions, up to
+  -47 %; 8-31 ms median.
+- **Pool order**: `order <collaborationId> <participantId...>` (ops JSON
+  `pools`, black boxes included): participants and pool bands restacked,
+  message flows routed again (`E_NOT_PARTICIPANT`).
+- **Selectors** for place / align / color / tidy (`src/diagram/select.ts`):
+  `--path <fromId> <toId> [--via <flowId...>]`, `--kind <kind>`,
+  `--branch <flowId>` (`place --branch F --below X` moves a branch up to the
+  join); `E_NO_MATCH` when they name nothing.
+- **`show --layout`**: column indices (c0..cN) per node across the diagram,
+  wide empty gaps between columns, ` … ` where a wide gap splits a row (JSON
+  `columns`, `gaps`).
+- **Metrics**: soft kinds `backwardFlow`, `segmentOverlap` (flows merging on
+  one line before their target), `labelOutsideFrame`, `messageLabelFar`
+  (`QUALITY_KEYS`, weights < 6).
+- **Audit bugs fixed**: #12, #39, #41, #42, #61 (`layout.reshaped`,
+  `format[].reshaped`), #62, #69, #71, #72 / #73 (reported by the new kinds),
+  #77 (a splice pushes only by the missing room); #40 and #74 partly.
+- **Fuzzer**: generators for compact, closing space, pool order, selectors.
+- Tests: `test/step3-compact.test.ts`, `test/step3-order.test.ts`,
+  `test/step3-select.test.ts`, `test/step3-view.test.ts`,
+  `test/step3-audit.test.ts`, new cases in `test/diagram-metrics.test.ts`.
+
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
 Goal: bpmn-cli as the editing engine inside Miragon's design-iq (PR #218 of
@@ -488,9 +527,10 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
 
 1. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
-   events colliding with annotations or new nodes (#42, #63), `route` and
-   expand / collapse through shapes, `place` stretching a nested sub-process
-   (#12), associations on the wrong plane after a collapse (#15), data
+   events colliding with new nodes (#63) or, added on a host inside a
+   sub-process, intruding into another frame, `place` / `align` pushing a
+   flow through a shape, `route` and expand / collapse through shapes,
+   associations on the wrong plane after a collapse (#15), data
    associations not rerouted after `split` / `move --lane`, flows left
    detached from gateways (#16).
 2. **CI**: run `npm run gate` on every change; run the bench and a longer fuzz
@@ -538,9 +578,14 @@ profile, the `activiti:` fallback namespace of Camunda 7 / CIB seven. See the
   harness alike).
 - A drawing of the previous engine version with event sub-processes outside
   their lanes stays as it is in incremental edits; `bpmn layout` moves them.
-- `tidy` considers shapes, not labels; frames never shrink after `place` /
-  `space` (only a full redraw does that).
+- `tidy` considers shapes, not labels. Frames grow on demand and shrink only
+  with `compact` / `space --by -<amount>`, which close strips (rows / columns
+  empty across a pool or lane band): content spread over many rows shrinks
+  less than with a full redraw; pools side by side are not compacted
+  against each other.
 - Known residuals of the clean engine: complexGateway, choreographies and
   groups unsupported (a full redraw drops group boxes); cross-scope
   associations are straight lines; boundary-handler paths can run through
-  nested expanded sub-processes (#19); no manual pool-order op.
+  nested expanded sub-processes (#19); `order <collaboration> <pools...>` sets
+  the pool order of a kept drawing, a full redraw orders pools by its own
+  rule (message-flow cost, declared order on ties).

@@ -301,7 +301,7 @@ program
   .description('print the model (or one element) as the AI sees it: no coordinates')
   .option('--json', 'machine-readable output')
   .option('--scope <id>', 'only this process / sub-process / participant')
-  .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane, colours, label sides, layout problems')
+  .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems')
   .action(async (file: string, id: string | undefined, o: RawOpts) => {
     await run(async () => {
       const doc = await readDoc(file);

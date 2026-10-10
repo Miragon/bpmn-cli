@@ -321,7 +321,7 @@ describe('guide', () => {
 
   it('guideText mentions every command with usage and an example', () => {
     const text = guideText();
-    const names = ['new', 'show', 'find', 'add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'apply', 'place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'validate', 'layout', 'metrics', 'kinds', 'guide'];
+    const names = ['new', 'show', 'find', 'add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'apply', 'place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact', 'validate', 'layout', 'metrics', 'kinds', 'guide'];
     expect(COMMANDS.map((c) => c.name)).toEqual(names);
     for (const name of names) {
       expect(text).toContain(`bpmn ${name}`);
