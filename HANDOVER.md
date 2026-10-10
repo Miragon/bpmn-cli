@@ -73,6 +73,8 @@ repeat). Details, measurements and the bug statuses:
 - Tests: `test/step3-compact.test.ts`, `test/step3-order.test.ts`,
   `test/step3-select.test.ts`, `test/step3-view.test.ts`,
   `test/step3-audit.test.ts`, new cases in `test/diagram-metrics.test.ts`.
+  Gate on the branch: 1357 tests (+39), layout regression 444, fuzz 0 errors
+  and 0 warnings (before: 2), browser bundle 746 / 234 KB minified / gzip.
 
 ## What step 2 changed (2026-10-09): bpmn-cli as design-iq's editing engine
 
