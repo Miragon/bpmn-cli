@@ -467,10 +467,19 @@ each: `implementation:` (vendor values and extension elements, compact),
 is in the sub-process's lane: `via`; nested lanes: `within`), `host:` (a
 boundary event), `from:` / `to:` (the neighbours with their names and the
 connecting flows), `boundary:` (its own boundary events), `caught by:` (the
-error and escalation boundary events of the sub-processes around it), `event
-sub-processes:` (those of every scope around it, with their start event),
-`annotations:`, `message flows:` (with the partner and its pool) and
-`reads:` / `writes:`. Lines without content are left out:
+boundary events of every kind on the sub-processes around it, inner first:
+an interrupting one cancels the element with its sub-process, a
+non-interrupting one is marked, an error / escalation one catches what it
+throws), `event sub-processes:` (those of every scope around it, with their
+start event), `annotations:`, `message flows:` (with the partner and its
+pool) and `reads:` / `writes:`. A message event or send / receive task also
+gets `message:` (the message's id, name and Camunda 8 correlation key) and,
+among its message flows, those of its message drawn to its pool instead of
+to the element (`(at pool <id>)`; a flow without `messageRef` counts when it
+has the message's name); a message flow gets `message:`, `in:
+collaboration <id>` and `from:` / `to:` with the pool of each end; a
+message, signal, error or escalation gets `used by:` (the events, tasks and
+message flows that name it). Lines without content are left out:
 
 ```
 $ bpmn show claims.bpmn Activity_RateDamage --context
@@ -490,8 +499,8 @@ writes: DataObjectReference_ClaimFile "Claim file"
 `scope`, `distance`, `lane`, `impl`, `outgoing`, `from`, then `messageFlows`,
 `annotations`, `data`, `shown`, `omitted`; `ElementContext`: `ancestors`,
 `pool`, `lane`, `host`, `from`, `to`, `boundary`, `caughtBy`,
-`eventSubProcesses`, `annotations`, `messageFlows`, `data`,
-`implementation`). On 278 real models (private corpora, centred on the
+`eventSubProcesses`, `annotations`, `messageFlows` (`at`: drawn to the
+pool), `message`, `usedBy`, `data`, `implementation`). On 278 real models (private corpora, centred on the
 middle activity) the neighbourhood (depth 2) is 1.2 KB in the median (p90
 2.1 KB) against 2.3 KB (7.6 KB) for the whole model and 1.4 KB (2.4 KB) for
 PR #218's `outline --around`; on the 30 models with 30 flow nodes or more it
@@ -509,7 +518,10 @@ collapsed, `--if-absent` together with `--id` makes the command idempotent.
 A node added into a flow between two lanes without `--lane` gets the lane of
 the row the layout puts it on: after a branching node (a gateway) the
 target's row and lane, else the anchor's; `W_LANE_INHERITED` names both
-lanes and the `move --lane` that switches. `--message <name>` also works for
+lanes and the `move --lane` that switches. With `--lane` the row follows
+the lane: a node whose lane is not the target's goes on a free row of its
+own lane (a new one when none is free), never on the target's row with its
+lane stretched over to it. `--message <name>` also works for
 `sendTask` and `receiveTask` (the root `bpmn:Message` is found by name or
 created), like `set <id> message=<name>`.
 
@@ -620,7 +632,14 @@ Cascades: a flow node loses its flows, boundary events (recursively), data
 associations, associations, message flows, lane membership and default-flow
 references; sub-process children go with it. A node with exactly one incoming
 and one outgoing flow is **bridged** (predecessor -> successor, carrying the
-label/condition over) unless `--no-bridge`. A lane un-assigns its members; a
+label/condition over) unless `--no-bridge`. A merge (several incoming flows,
+one outgoing) that does not synchronise, such as an exclusive gateway or a
+task two paths flow into, is bridged from every predecessor like
+`--bridge-all` (each path already ran on alone; note `bridged all: ...`). A
+synchronising join (parallel, inclusive, complex gateway) is refused with
+`E_AMBIGUOUS_BRIDGE`, because bridging ends the synchronisation and not
+bridging cuts off its successor: the hint names both commands
+(`bpmn remove <file> <id> --bridge-all`, `--no-bridge`). A lane un-assigns its members; a
 participant takes its process and message flows along (the collaboration is
 dropped when no pool remains); a data object reference also removes its
 `bpmn:DataObject` when unused. Associations on a flow that bridging replaces
@@ -697,7 +716,14 @@ supported) can be retyped to a supported gateway.
 `move` detaches the nodes (bridging their old place), then places them again
 with the placement grammar; `--in` moves into another scope without
 connecting (flows that would cross scopes are removed and reported);
-`--lane` assigns a lane and may be combined with a placement. Boundary events
+`--lane` assigns a lane and may be combined with a placement. Without
+`--lane`, a node in a lane keeps it when it moves within its process (a note
+says so when the flow it went into runs between two other lanes); a node
+without a lane at its new place (out of a sub-process, from another pool, or
+one that had none) gets one like `add` gives it: the anchor's, and in a flow
+between two lanes the lane of the row the layout draws it on (the target's
+after a branching node), with `W_LANE_INHERITED`. A node that keeps its
+lane is drawn on a row of that lane, like `add --lane`. Boundary events
 travel with their host; `move --on` (like `add --on`) refuses a compensation
 handler (`isForCompensation=true`) as host (`E_INVALID_HOST`). The bridge left
 behind follows the event-based gateway rule of [`remove`](#remove)
@@ -1018,8 +1044,14 @@ kind, nothing on the branch); in ops JSON the keys are `path` (two ids),
 Refusals: a node never leaves its lane, pool or expanded sub-process
 (`E_LEAVES_CONTAINER`; up to 10 px into the header of a lane or pool are
 fine, a sub-process's border is the limit; a node is not placed beside the
-sub-process it lives in; the hint names the lane at the target position:
-`move <id> --lane <laneId>` first, or `space --below <laneId>` to make room).
+sub-process it lives in; a sub-process grows towards a reference inside it,
+never out to a reference outside it; the hint names the lane at the target
+position: `move <id> --lane <laneId>` first, or `space --below <laneId>` to
+make room). `align` leaves out a member that only a selector named and that
+would leave its frame on the requested line, with a note (`left out
+Event_Packed (sub-process Activity_Prepare): on the column of Event_Shipped
+it would leave its frame`); named by id, the member refuses the op. `place`
+moves the selected set as one group, so such a member refuses it.
 `route --exit` / `--entry` on a boundary event refuses the side that points
 into its host (`E_INVALID_VALUE`).
 When the shapes in the way cannot give way without moving the reference off
@@ -1027,7 +1059,8 @@ the requested row / column, a sub-process would have to grow over a
 reference outside it, or the reference's own pool, lane or sub-process would
 be pushed away (a reference in another pool), the command fails with
 `E_NO_ROOM` and writes nothing. Making room never leaves two shapes on each
-other: a reference the neighbours would be pushed onto moves along with them
+other and never takes a shape out of a sub-process, lane or pool that held
+it: a reference the neighbours would be pushed onto moves along with them
 when its row / column still holds, otherwise the command fails with
 `E_NO_ROOM`. Elements without a
 shape fail with `E_NO_SHAPE` (for a pool use the participant id, not the

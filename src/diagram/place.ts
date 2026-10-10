@@ -10,7 +10,9 @@
  *  clamped 40..100, fallback 60; row = median row spacing, clamped 80..150):
  *   - splice (the flow P->S was split by N): x = P.right + gap, centred on
  *     S's row when S is in P's row band (or P is a branching node), else on
- *     P's row; only when that spot is taken: space tool at P.right + 1 by
+ *     P's row; S's row in another lane than N's own is replaced by a free
+ *     row of N's lane (rowInLane: N's lane never stretches over to S's row);
+ *     only when that spot is taken: space tool at P.right + 1 by
  *     N.width + gap within P's pool (inside an expanded sub-process: in
  *     frame mode, so the sub-process never grows over foreign shapes, see
  *     space.ts; the same for every space-tool run placement makes there)
@@ -805,8 +807,12 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
   if (S || !succShapes.length) {
     // splice / continuation on the anchor's row
     const sameRow = S && Math.abs(cy(S.bounds) - cy(main.bounds)) <= sp.rowTol;
-    let c = S && (sameRow || succShapes.length) ? cy(S.bounds) : cy(main.bounds);
-    c = intoOwnLane(ctx, plane, probe, maxRight + sp.gap, c, size, S ? [Math.round(cy(S.bounds))] : [], main);
+    const onS = !!S && (sameRow || succShapes.length > 0);
+    let c = onS ? cy(S.bounds) : cy(main.bounds);
+    // S's row in another lane than the node's own (a node keeping or given the anchor's lane after a branching
+    // anchor): the row follows the node's lane, which never stretches over to S's row (audit #14)
+    const ownRow = !!S && onS && !!probe.laneId && S.laneId !== probe.laneId;
+    c = intoOwnLane(ctx, plane, probe, maxRight + sp.gap, c, size, S ? [Math.round(cy(S.bounds))] : [], ownRow ? undefined : main);
     const x = maxRight + sp.gap;
     const box = { x, y: c - size.height / 2, ...size };
     const blockers = obstacles(plane, frame, exclude);

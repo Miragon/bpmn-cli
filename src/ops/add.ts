@@ -62,6 +62,7 @@ import { ChangeSet } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
+import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { zeebeUserTaskDefault } from './platform.js';
 import { setProperties, setTaskMessage } from './set.js';
@@ -314,62 +315,6 @@ function placementDetail(doc: Doc, op: AddOp): string {
   }
 }
 
-/** The node whose lane a new node inherits (anchor / host / flow source). */
-function laneAnchor(doc: Doc, op: AddOp): El | undefined {
-  if (op.on) return doc.get(op.on);
-  if (op.after) return doc.get(op.after);
-  if (op.before) return doc.get(op.before);
-  if (op.flow) return doc.get(op.flow)?.get<El | undefined>('sourceRef');
-  return undefined;
-}
-
-/** The flow a placement will splice the new node into (looked up before it is placed), if any (flows.ts placeNode). */
-function splicedFlow(doc: Doc, op: AddOp): El | undefined {
-  const get = (id: string | undefined): El | undefined => (id ? doc.get(id) : undefined);
-  switch (placementMode(op)) {
-    case 'flow':
-      return get(op.flow);
-    case 'between': {
-      const a = get(op.after);
-      const b = get(op.before);
-      return a && b ? doc.outgoing(a).find((f) => f.get<El | undefined>('targetRef') === b) : undefined;
-    }
-    case 'after': {
-      const a = get(op.after);
-      const out = a && !is(a, 'bpmn:Gateway') ? doc.outgoing(a) : [];
-      return out.length === 1 ? out[0] : undefined;
-    }
-    case 'before': {
-      const b = get(op.before);
-      const inc = b ? doc.incoming(b) : [];
-      return inc.length === 1 ? inc[0] : undefined;
-    }
-    default:
-      return undefined;
-  }
-}
-
-/**
- * The lane a new node without --lane inherits (see the module contract),
- * decided before it is placed; `cross` names both lanes of a cross-lane
- * splice (W_LANE_INHERITED).
- */
-function inheritedLane(doc: Doc, op: AddOp): { lane?: El; cross?: { source: El; target: El; from?: El; to?: El; branching: boolean } } {
-  const anchor = laneAnchor(doc, op);
-  const lane = anchor ? laneOf(doc, anchor) : undefined;
-  const flow = splicedFlow(doc, op);
-  if (!flow) return lane ? { lane } : {};
-  const source = flow.get<El>('sourceRef');
-  const target = flow.get<El>('targetRef');
-  const from = laneOf(doc, source);
-  const to = laneOf(doc, target);
-  if (from === to) return lane ? { lane } : {};
-  // after a branching source the node goes on the target's row (diagram/place.ts splice rule): the target's lane
-  const branching = doc.outgoing(source).length > 1 && !!to;
-  const chosen = branching ? to : lane;
-  return { ...(chosen ? { lane: chosen } : {}), cross: { source, target, ...(from ? { from } : {}), ...(to ? { to } : {}), branching } };
-}
-
 /* ------------------------------------------------------------------ */
 /* flow nodes                                                           */
 /* ------------------------------------------------------------------ */
@@ -415,7 +360,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   const entry = { id, kind: def.kind, ...(op.name ? { name: op.name } : {}), detail: placementDetail(doc, op) };
   cs.create(entry);
   // before the placement: a splice may rename the flow op.flow names
-  const inherited = explicitLane ? {} : inheritedLane(doc, op);
+  const inherited: InheritedLane = explicitLane ? {} : inheritedLane(doc, op);
   const entryFlow = placeNode(doc, el, op, cs);
   warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
   if (op.flowAs) {
@@ -469,20 +414,8 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     const scope = doc.scopeOf(el);
     if (inherited.lane && scope && is(scope, 'bpmn:Process')) {
       assignLane(doc, el, inherited.lane, cs);
-      const cross = inherited.cross;
-      const other = cross ? (inherited.lane === cross.from ? cross.to : cross.from) : undefined;
-      if (cross && other) {
-        const side = cross.branching
-          ? `the lane of ${idOf(cross.target)}, on whose row the layout puts it after the branching ${idOf(cross.source)}`
-          : `the lane of ${idOf(inherited.lane === cross.to ? cross.target : cross.source)}`;
-        cs.warn({
-          code: 'W_LANE_INHERITED',
-          message: `${id} is in ${idOf(inherited.lane)} (${side}); the flow it went into runs from ${idOf(cross.source)} in ${cross.from ? idOf(cross.from) : 'no lane'} to ${idOf(cross.target)} in ${cross.to ? idOf(cross.to) : 'no lane'}`,
-          element: id,
-          related: [idOf(inherited.lane), idOf(other)],
-          hint: `If ${idOf(other)} does it: \`bpmn move <file> ${id} --lane ${idOf(other)}\` (or --lane ${idOf(other)} when adding).`,
-        });
-      }
+      const warning = laneInheritedWarning(id, inherited);
+      if (warning) cs.warn(warning);
     }
   }
   if (startTrigger) {

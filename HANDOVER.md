@@ -79,10 +79,11 @@ only (names may repeat; no name-based addressing). Fixed audit bugs #21,
   from outside, the omitted counts, and the window's message flows,
   annotations and data. The context lists pool > process > sub-processes,
   the effective lane (`via` a sub-process or a boundary event's host,
-  `within` parent lanes), from / to with names, own boundary events, the
-  error / escalation boundary events of the sub-processes around it
-  (`caught by`), the event sub-processes of every scope around it (not the
-  one it is in), annotations, message flows with partner and pool, data.
+  `within` parent lanes), from / to with names, own boundary events, every
+  boundary event of the sub-processes around it (`caught by`; error /
+  escalation only until the verifier fixes below), the event sub-processes
+  of every scope around it (not the one it is in), annotations, message
+  flows with partner and pool, data.
 - **`show`**: `lane=<id>` per node, the lanes section is a tree of names;
   message-flow lines with endpoint names; collaboration annotations
   (`ModelView.collaboration.annotations`). **`show <id>`**: `messageFlows`,
@@ -197,12 +198,11 @@ Still open from this package: two branches that add an element of the same
 name produce the same id (git merges both: a duplicate id), the same for
 unnamed elements at anchors of the same name; renaming a flow after its ends
 changes a few more lines of an insert (the flow, its ends' mirror lists, its
-DI edge); `move --flow` / `move --after` into a cross-lane flow keep their
-old lane rule; a plain `remove` of a join still disconnects and floods the
-output (#53, `--bridge-all` / `--with-branch` are opt-in); `Process_1` /
-`Definitions_1` of `bpmn new` without `--name` are tool defaults, not
-speaking (round 1 wrote `Definitions_1` with `--name` too; since the ids &
-report fixes `--name` or a speaking `--id` names the definitions).
+DI edge); `Process_1` / `Definitions_1` of `bpmn new` without `--name` are
+tool defaults, not speaking (round 1 wrote `Definitions_1` with `--name` too;
+since the round 1 fixes `--name` or a speaking `--id` names the
+definitions). (`move` into a cross-lane flow and a plain `remove` of a join,
+open here, are fixed by the round 1 fixes below.)
 
 ### Layout ergonomics (`step3/layout`)
 
@@ -371,6 +371,68 @@ conflict resolutions), then integration commits with their tests in
   session, `--summary` examples and Camunda 7 / 8 worked examples re-run
   with the integrated build.
 
+### Verifier fixes: views and layout (`step3/fix-views`)
+
+The independent verifier's findings on the reading views and the format
+ops, and two items the ids package left open; table and evidence in
+[docs/audit-2026-10.md](docs/audit-2026-10.md#step-3-round-1-verifier-fixes-views-and-layout-2026-10-10).
+
+- **`show <id> --context`** (`src/context.ts elementContext`, `format.ts
+  renderContext`): `caught by:` lists every boundary event of every
+  sub-process around the element (message, timer, signal, conditional,
+  error, escalation, compensation; inner first, non-interrupting marked;
+  the element's own boundary events stay `boundary:`, the event
+  sub-processes that catch it `event sub-processes:`, both of every kind);
+  `message:` (id, name, Camunda 8 correlation key; `ElementContext.message`)
+  on message events and send / receive tasks, which also list the message
+  flows of their message drawn to their pool (`DetailMessageFlow.at`,
+  `(at pool P)`); a message flow: `message:`, `in: collaboration`, `from:` /
+  `to:` with their pools (`ContextLink.pool`); a message, signal, error or
+  escalation: `used by:` (`usedBy`). `view.ts`: `correlationKeyOf`,
+  `messageFlowEntry`. On 394 files the median stays 430 bytes (middle
+  activity, p90 916; every node 441, before 424; message nodes 501).
+- **Format ops never take a shape out of its sub-process**
+  (`diagram/ops.ts`): `checkFrames` takes the references: a sub-process
+  grows towards a reference inside it, never out to one outside it
+  (`E_LEAVES_CONTAINER`); `alignOp` leaves out (note `left out <id>
+  (sub-process <id>): ...`) a member only a selector named
+  (`resolveSelection` returns `picked`); `makeRoom` refuses (`E_NO_ROOM`)
+  when making room would take a shape out of a sub-process, lane or pool
+  that held it. On 396 files: 0 runs adding `outside*` (19 before), more ops
+  succeed (6,412 / 7,467, before 6,057); with `--path` / `--branch` sets
+  (align, tidy, place; 6,295 runs) 0 add `outside*` (1 before).
+- **`move` into a cross-lane flow** (#14 for move; `src/ops/lanes.ts`
+  `inheritedLane` / `laneInheritedWarning` / `crossLaneNote`, shared with
+  `add`): a node without a lane at its new place gets add's lane
+  (`W_LANE_INHERITED`); a node in a lane keeps it, with a note when the flow
+  runs between two other lanes, and is drawn on a row of that lane
+  (`diagram/place.ts placeAfter`: after a branching anchor, the target's row
+  in another lane than the node's own is replaced by a free row of its lane,
+  `rowInLane`; before, the anchor's lane stretched over to the target's row,
+  +125 px for the next lane, +265 px two lanes away; `add --lane` the same).
+- **A plain `remove` of a join** (#53, `ops/remove.ts isMerge` /
+  `refuseSynchronisingJoin`): a merge that does not synchronise is bridged
+  from every predecessor like `--bridge-all`; a parallel / inclusive /
+  complex join is `E_AMBIGUOUS_BRIDGE` with the two exact commands. The
+  verifier's one Camunda 7 deploy regression (a plain remove in its
+  battery) deploys now; on the battery's 66 merges: 62 bridged, all deploy
+  on the three engines, 4 joins refused, 0 `W_UNREACHABLE` (before: 43
+  refused by the engines, 379 `W_UNREACHABLE`). With #53 fixed the audit
+  stands at 49 fixed, 5 partly fixed, 23 open of 77.
+
+Tests: `test/views-context.test.ts`, `test/format-frames.test.ts`,
+`test/move-lanes.test.ts`, `test/remove-join.test.ts` (each fails on
+`step3/round1`); `test/diagram-format.test.ts` expects `E_LEAVES_CONTAINER`
+for the column outside a sub-process (was `E_NO_ROOM`), the sub-process test
+of `test/ops-mutate.test.ts` removes without bridging.
+
+Evidence (private corpora local, counts only): `npm run gate` passes with
+1,635 tests + 159 opt-in, the isomorphism check (86 modules, 904 / 277 KB
+minified / gzip), layout regression 115 files score 444 (budget 444) and
+fuzz 12 x 15 (0 errors, 0 warnings); the layout bench (175 models, 935
+edits, 525 global runs) against `step3/round1`: no regression, every
+figure equal (2 semantic failures in both, 0 runs adding hard defects).
+
 ### Evidence on the integrated build
 
 Private corpora used locally, outside the repository; counts only.
@@ -481,10 +543,9 @@ misplaced subscriptions; the C8 engine suites 460 / 460. Tests:
   at anchors of the same name) get the same id, a merge of both a
   duplicate; a flow renamed after its ends is the one exception to "ids
   never change" (`Doc.followFlowEnds = false` in the library, no CLI
-  switch); `move --flow` / `move --after` into a cross-lane flow keep their
-  old lane rule; a plain `remove` of a join still disconnects (#53 partly);
-  `bpmn new` without `--name` (and without a speaking `--id`) writes
-  `Process_1` / `Definitions_1`.
+  switch); `bpmn new` without `--name` (and without a speaking `--id`)
+  writes `Process_1` / `Definitions_1`; `move` of a node with several
+  incoming flows still disconnects them (only `remove` bridges a merge).
 - Views: no `find --attr` / `list --fields` projections, no `vars` view,
   no `render` command; the full `show` keeps vendor values but not the
   extension summary; JSON is compact but not slimmer; `--strict` still
@@ -494,7 +555,9 @@ misplaced subscriptions; the C8 engine suites 460 / 460. Tests:
   open bugs #13, #15, #16, #19, #25, #63–#68, #70, #76 (#40, #74 partly);
   the fuzzer still finds `place` / `align` pushing a flow through a shape
   and a boundary event added on a host inside a sub-process intruding into
-  another frame (the build before step 3 does the same).
+  another frame (the build before step 3 does the same); format ops with
+  selector sets still add overlaps or a flow through a shape on some real
+  files (as many as before the round 1 fixes, which removed `outsideSub`).
 - Camunda 8: FEEL syntax is checked but not its meaning (types, functions),
   variables are not followed, `zeebe:publishMessage` is reported as not run, event-based gateways of a
   file without `<bpmn:outgoing>` lists have no repairing command, forms /

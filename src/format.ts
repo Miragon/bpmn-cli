@@ -52,7 +52,7 @@
  *    with its `lanes:` / `data:` / `annotations:` sections, then `root:` and
  *    `problems:`.
  */
-import type { AroundNode, AroundView, ContextCatch, ContextLink, ContextRef, ElementContext, Implementation } from './context.js';
+import type { AroundNode, AroundView, ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext, Implementation } from './context.js';
 import { KEYS, type LayoutMetrics, type LayoutProblem } from './diagram/metrics.js';
 import type { FormatResult } from './diagram/ops.js';
 import type { LayoutView } from './diagram/view.js';
@@ -320,7 +320,11 @@ function linkText(l: ContextLink): string {
   if (l.flowName) flow.push(q(l.flowName));
   if (l.condition) flow.push(`if ${truncate(l.condition, 120)}`);
   if (l.default) flow.push('default');
-  return `${refText(l)} (${flow.join(' ')})`;
+  return `${refText(l)} (${flow.join(' ')})${l.pool ? ` in ${named(l.pool, l.poolName)}` : ''}`;
+}
+
+function messageText(m: ContextMessage): string {
+  return `${named(m.id, m.name)}${m.correlationKey !== undefined ? ` [correlationKey=${flagValue(m.correlationKey)}]` : ''}`;
 }
 
 function catchText(c: ContextCatch): string {
@@ -331,10 +335,15 @@ function catchText(c: ContextCatch): string {
 /**
  * `bpmn show <file> <id> --context`: the element's line (kind, id, name, its
  * own facts), `implementation:` (vendor values, extension elements compact),
- * then one line per context: `in:` (pool > process > sub-processes), `lane:`,
- * `host:`, `from:` / `to:` (neighbours with names and the connecting flow),
- * `boundary:`, `caught by:`, `event sub-processes:`, `annotations:`,
- * `message flows:`, `reads:` / `writes:`; lines without content are left out.
+ * `message:` (a message element's message: id, name, correlation key), then
+ * one line per context: `in:` (pool > process > sub-processes; a message
+ * flow: its collaboration), `lane:`, `host:`, `from:` / `to:` (neighbours
+ * with names and the connecting flow; a message flow's ends with their
+ * pools), `boundary:` (its own), `caught by:` (every boundary event of the
+ * sub-processes around it), `event sub-processes:`, `annotations:`,
+ * `message flows:` (`(at pool P)`: a flow of its message drawn to its pool),
+ * `used by:` (a message, signal, error, escalation), `reads:` / `writes:`;
+ * lines without content are left out.
  */
 export function renderContext(c: ElementContext): string {
   const out: string[] = [];
@@ -346,6 +355,7 @@ export function renderContext(c: ElementContext): string {
   out.push(`${c.kind} ${named(c.id, c.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
   const impl = implementationFlags(c.implementation);
   if (impl.length) out.push(`implementation: ${impl.join(', ')}`);
+  if (c.message) out.push(`message: ${messageText(c.message)}`);
   const where = [...(c.pool ? [`participant ${named(c.pool.id, c.pool.name)}`] : []), ...c.ancestors.map(refText)];
   if (where.length) out.push(`in: ${where.join(' > ')}`);
   if (c.lane) {
@@ -362,6 +372,7 @@ export function renderContext(c: ElementContext): string {
   }
   if (c.annotations.length) out.push(`annotations: ${c.annotations.map((a) => `${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}`).join('; ')}`);
   if (c.messageFlows.length) out.push(`message flows: ${c.messageFlows.map(detailMessageFlowText).join('; ')}`);
+  if (c.usedBy?.length) out.push(`used by: ${c.usedBy.map(refText).join('; ')}`);
   if (c.data?.reads?.length) out.push(`reads: ${c.data.reads.map((d) => named(d.id, d.name)).join(', ')}`);
   if (c.data?.writes?.length) out.push(`writes: ${c.data.writes.map((d) => named(d.id, d.name)).join(', ')}`);
   if (c.data?.readBy?.length) out.push(`read by: ${c.data.readBy.join(', ')}`);
@@ -433,7 +444,7 @@ export function renderExtensionList(items: ReadonlyArray<{ index: number; slot?:
 /** `out Flow_9 "Order" -> Activity_Receive "Receive order" in Participant_Bank "Bank" [message Order]` (`in ... <-` for incoming). */
 export function detailMessageFlowText(mf: DetailMessageFlow): string {
   const pool = mf.pool ? ` in ${named(mf.pool, mf.poolName)}` : '';
-  return `${mf.direction} ${mf.id}${mf.name ? ` ${q(mf.name)}` : ''} ${mf.direction === 'out' ? '->' : '<-'} ${named(mf.partner, mf.partnerName)}${pool}${mf.message ? ` [message ${mf.message}]` : ''}`;
+  return `${mf.direction} ${mf.id}${mf.name ? ` ${q(mf.name)}` : ''} ${mf.direction === 'out' ? '->' : '<-'} ${named(mf.partner, mf.partnerName)}${pool}${mf.message ? ` [message ${mf.message}]` : ''}${mf.at ? ` (at pool ${mf.at})` : ''}`;
 }
 
 /** Renders `bpmn show <id>` as `key: value` lines (property keys are `set` keys). */

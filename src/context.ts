@@ -22,27 +22,34 @@
  * The context of an element: where it is (process, pool, sub-processes),
  * its effective lane (a node inside a sub-process is in the sub-process's
  * lane), what comes before and after it (with names), its own boundary
- * events, the error / escalation boundary events of the sub-processes around
- * it, the event sub-processes of every scope around it, associated
- * annotations, message flows with the partner at the other end, data it reads
- * and writes, and its implementation in one line.
+ * events, the boundary events of every kind on the sub-processes around it
+ * (interrupting ones cancel it, non-interrupting ones are marked), the event
+ * sub-processes of every scope around it, associated annotations, message
+ * flows with the partner at the other end, data it reads and writes, and its
+ * implementation in one line. A message element (message event, send /
+ * receive task) names its message (id, name, Camunda 8 correlation key) and
+ * also the message flows of that message which end at its pool rather than
+ * at the element; a message flow names its ends with their pools and its
+ * message; a message, signal, error or escalation names what uses it.
  */
 import type { Doc } from './document.js';
 import { usageError } from './errors.js';
 import { kindLabel, triggerOf } from './kinds.js';
 import { diExpansionState } from './layout.js';
-import { is, type El } from './model.js';
+import { is, walk, type El } from './model.js';
 import { laneOf } from './ops/containers.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import { flowOrder } from './validate.js';
 import {
   annotationsOf,
   associationsOf,
+  correlationKeyOf,
   dataLinksOf,
   documentationOf,
   flowView,
   isEventSubProcess,
   labelOf,
+  messageFlowEntry,
   messageFlowsOf,
   nodeProps,
   nonInterruptingOf,
@@ -90,6 +97,12 @@ function compact<T extends object>(obj: T): T {
 
 function nonEmpty<T>(items: T[]): T[] | undefined {
   return items.length ? items : undefined;
+}
+
+function withoutKey(obj: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
+  if (!obj || !(key in obj)) return obj;
+  const { [key]: _, ...rest } = obj;
+  return Object.keys(rest).length ? rest : undefined;
 }
 
 function short(value: string, max: number): string {
@@ -522,12 +535,23 @@ export interface ContextRef {
   name?: string;
 }
 
-/** A neighbour along a sequence flow: the node and the flow that connects it. */
+/** A neighbour along a sequence flow (or an end of a message flow): the node and the flow that connects it. */
 export interface ContextLink extends ContextRef {
   flow: string;
   flowName?: string;
   condition?: string;
   default?: boolean;
+  /** an end of a message flow inside a pool: that pool */
+  pool?: string;
+  poolName?: string;
+}
+
+/** The message an element sends or receives (a message event, a send / receive task, a message flow). */
+export interface ContextMessage {
+  id: string;
+  name?: string;
+  /** Camunda 8: the correlation key of its zeebe:subscription */
+  correlationKey?: string;
 }
 
 /** A catching event: a boundary event (with its host) or the start event of an event sub-process. */
@@ -569,14 +593,24 @@ export interface ElementContext {
   from: ContextLink[];
   /** what comes after it (targets of its outgoing flows; a sequence flow's target) */
   to: ContextLink[];
-  /** its own boundary events */
+  /** its own boundary events (every kind) */
   boundary: ContextCatch[];
-  /** error and escalation boundary events of the sub-processes around it (they catch what it throws) */
+  /**
+   * boundary events of every kind on the sub-processes around it, inner
+   * first: an interrupting one cancels the element with its sub-process, a
+   * non-interrupting one (marked) runs beside it; error / escalation ones
+   * catch what it throws
+   */
   caughtBy: ContextCatch[];
   /** event sub-processes of every scope around it */
   eventSubProcesses: ContextEventSubProcess[];
   annotations: Array<{ id: string; text?: string }>;
+  /** message flows into / out of it; for a message element also the flows of its message that end at its pool (`at`) */
   messageFlows: DetailMessageFlow[];
+  /** a message event, send / receive task or message flow: its message */
+  message?: ContextMessage;
+  /** a message, signal, error or escalation: the elements that use it (events, send / receive tasks, message flows) */
+  usedBy?: ContextRef[];
   data?: DetailData;
 }
 
@@ -606,6 +640,71 @@ function catchOf(doc: Doc, ev: El): ContextCatch {
   return compact<ContextCatch>({ ...refOf(ev), trigger: triggerText(ev), nonInterrupting: nonInterruptingOf(ev), on: host ? idOf(host) : undefined, to: nonEmpty(to) });
 }
 
+/** An end of a message flow, with its pool when it is inside one. */
+function messageEndOf(doc: Doc, node: El, flow: El): ContextLink {
+  const pool = poolOf(doc, node);
+  const inPool = pool && pool !== node ? pool : undefined;
+  return compact<ContextLink>({ ...refOf(node), flow: idOf(flow), pool: inPool ? idOf(inPool) : undefined, poolName: nameOf(inPool) });
+}
+
+/** The message of a message event (its message definition), a send / receive task or a message flow. */
+function messageOf(el: El): El | undefined {
+  if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) return peek<El>(el, 'messageRef');
+  const def = list(el, 'eventDefinitions').find((d) => is(d, 'bpmn:MessageEventDefinition'));
+  return def ? peek<El>(def, 'messageRef') : undefined;
+}
+
+/** Whether a message element receives (`in`) or sends (`out`) its message; undefined for any other element. */
+function messageDirection(el: El): 'in' | 'out' | undefined {
+  if (is(el, 'bpmn:ReceiveTask')) return 'in';
+  if (is(el, 'bpmn:SendTask')) return 'out';
+  if (!list(el, 'eventDefinitions').some((d) => is(d, 'bpmn:MessageEventDefinition'))) return undefined;
+  return is(el, 'bpmn:CatchEvent') ? 'in' : is(el, 'bpmn:ThrowEvent') ? 'out' : undefined;
+}
+
+/**
+ * The message flows of a message element's message that end at its pool
+ * instead of at the element (drawn pool to pool): into the pool for a
+ * receiving element, out of it for a sending one; a flow names the message
+ * by its messageRef, or (without one) by having the message's name.
+ */
+function poolMessageFlows(doc: Doc, el: El): DetailMessageFlow[] {
+  const direction = messageDirection(el);
+  const message = messageOf(el);
+  const pool = poolOf(doc, el);
+  if (!direction || !message || !pool || pool === el) return [];
+  const name = nameOf(message);
+  const out: DetailMessageFlow[] = [];
+  for (const mf of doc.messageFlows()) {
+    if (peek<El>(mf, direction === 'in' ? 'targetRef' : 'sourceRef') !== pool) continue;
+    const ref = peek<El>(mf, 'messageRef');
+    if (ref ? ref !== message : !name || nameOf(mf) !== name) continue;
+    out.push({ ...messageFlowEntry(doc, mf, direction), at: idOf(pool) });
+  }
+  return out;
+}
+
+/** The reference property that points at a root element of this kind. */
+const USER_PROPS: Array<[string, string]> = [
+  ['bpmn:Message', 'messageRef'],
+  ['bpmn:Signal', 'signalRef'],
+  ['bpmn:Error', 'errorRef'],
+  ['bpmn:Escalation', 'escalationRef'],
+];
+
+/** The elements that use a message, signal, error or escalation (an event definition stands for its event), in document order. */
+function usersOf(doc: Doc, root: El): ContextRef[] | undefined {
+  const prop = USER_PROPS.find(([type]) => is(root, type))?.[1];
+  if (!prop) return undefined;
+  const users: El[] = [];
+  for (const e of walk(doc.definitions, { bpmnOnly: true })) {
+    if (peek<El>(e, prop) !== root) continue;
+    const user = is(e, 'bpmn:EventDefinition') ? (e.$parent as El | undefined) : e;
+    if (user && !users.includes(user)) users.push(user);
+  }
+  return users.map(refOf);
+}
+
 /** `show <id> --context`: the element in its context (see the module header). */
 export function elementContext(doc: Doc, id: string): ElementContext {
   const el = doc.require(id);
@@ -620,6 +719,10 @@ export function elementContext(doc: Doc, id: string): ElementContext {
   const process = doc.processOf(el);
   if (process && !chain.includes(process) && process !== el) chain.push(process);
   const ancestors = [...chain].reverse().map((s) => (is(s, 'bpmn:Process') ? compact<ContextRef>({ id: idOf(s), kind: 'process', name: nameOf(s) }) : refOf(s)));
+  const isMessageFlow = is(el, 'bpmn:MessageFlow');
+  // a message flow lives in the collaboration
+  const collaboration = isMessageFlow ? (el.$parent as El | undefined) : undefined;
+  if (collaboration && is(collaboration, 'bpmn:Collaboration')) ancestors.push(refOf(collaboration));
   const pool = poolOf(doc, el);
   const lane = is(el, 'bpmn:FlowNode') ? effectiveLane(doc, el) : undefined;
   const host = is(el, 'bpmn:BoundaryEvent') ? peek<El>(el, 'attachedToRef') : undefined;
@@ -631,20 +734,21 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     const t = peek<El>(el, 'targetRef');
     if (s) from = [linkOf(s, el)];
     if (t) to = [linkOf(t, el)];
+  } else if (isMessageFlow) {
+    const s = peek<El>(el, 'sourceRef');
+    const t = peek<El>(el, 'targetRef');
+    if (s) from = [messageEndOf(doc, s, el)];
+    if (t) to = [messageEndOf(doc, t, el)];
   } else if (is(el, 'bpmn:FlowNode')) {
     from = doc.incoming(el).flatMap((f) => (peek<El>(f, 'sourceRef') ? [linkOf(peek<El>(f, 'sourceRef')!, f)] : []));
     to = doc.outgoing(el).flatMap((f) => (peek<El>(f, 'targetRef') ? [linkOf(peek<El>(f, 'targetRef')!, f)] : []));
   }
 
   const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((b) => catchOf(doc, b)) : [];
+  // every boundary event of the sub-processes around it: interrupting ones cancel it, error / escalation ones catch what it throws
   const caughtBy: ContextCatch[] = [];
-  for (const s of chain) {
-    if (!isSubProcess(s)) continue;
-    for (const b of doc.boundaryEventsOf(s)) {
-      const t = triggerOf(b);
-      if (t === 'error' || t === 'escalation') caughtBy.push(catchOf(doc, b));
-    }
-  }
+  for (const s of chain) if (isSubProcess(s)) for (const b of doc.boundaryEventsOf(s)) caughtBy.push(catchOf(doc, b));
+  const message = messageOf(el);
   const eventSubProcesses: ContextEventSubProcess[] = [];
   for (const s of chain) {
     for (const n of doc.flowNodes(s)) {
@@ -663,7 +767,8 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     name: nameOf(el),
     trigger: is(el, 'bpmn:Event') ? triggerText(el) : undefined,
     nonInterrupting: nonInterruptingOf(el),
-    props: nodeProps(el, { zeebe: false }),
+    // a send / receive task's message is the `message` line (with its id), not a prop
+    props: message ? withoutKey(nodeProps(el, { zeebe: false }), 'message') : nodeProps(el, { zeebe: false }),
     documentation: documentationOf(el),
     implementation: implementationOf(el),
     ancestors,
@@ -676,7 +781,9 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     caughtBy,
     eventSubProcesses,
     annotations: annotationsOf(doc, el),
-    messageFlows: is(el, 'bpmn:MessageFlow') ? [] : messageFlowsOf(doc, el),
+    messageFlows: isMessageFlow ? [] : [...messageFlowsOf(doc, el), ...poolMessageFlows(doc, el)],
+    message: message ? compact<ContextMessage>({ id: idOf(message), name: nameOf(message), correlationKey: correlationKeyOf(message) }) : undefined,
+    usedBy: nonEmpty(usersOf(doc, el) ?? []),
     data: dataLinksOf(doc, el),
   });
 }

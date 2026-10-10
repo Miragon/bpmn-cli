@@ -213,6 +213,8 @@ export interface DetailMessageFlow {
   /** the pool of the partner when the partner is inside one (absent when the partner is a pool) */
   pool?: string;
   poolName?: string;
+  /** `show <id> --context` of a message element: the flow ends at this pool (the element's), not at the element itself */
+  at?: string;
 }
 
 /** Data associations of `show <id>`. */
@@ -332,6 +334,12 @@ export function nonInterruptingOf(el: El): boolean | undefined {
 function zeebeExt(el: El | undefined, local: string): El | undefined {
   const container = el ? peek<El>(el, 'extensionElements') : undefined;
   return container ? list(container, 'values').find((v) => (v.$descriptor as { ns?: { uri?: string } }).ns?.uri === ZEEBE_URI && v.$type.endsWith(`:${local}`)) : undefined;
+}
+
+/** The correlation key Camunda 8 matches a bpmn:Message by (its zeebe:subscription), if any. */
+export function correlationKeyOf(message: El | undefined): string | undefined {
+  const subscription = zeebeExt(message, 'subscription');
+  return subscription ? peek<string>(subscription, 'correlationKey') : undefined;
 }
 
 /**
@@ -583,27 +591,27 @@ export function poolOf(doc: Doc, el: El): El | undefined {
 export function messageFlowsOf(doc: Doc, el: El): DetailMessageFlow[] {
   const out: DetailMessageFlow[] = [];
   for (const mf of doc.messageFlows()) {
-    const source = peek<El>(mf, 'sourceRef');
-    const target = peek<El>(mf, 'targetRef');
-    const direction = source === el ? 'out' : target === el ? 'in' : undefined;
-    if (!direction) continue;
-    const partner = direction === 'out' ? target : source;
-    const pool = partner ? poolOf(doc, partner) : undefined;
-    const message = peek<El>(mf, 'messageRef');
-    out.push(
-      compact<DetailMessageFlow>({
-        direction,
-        id: idOf(mf),
-        name: nameOf(mf),
-        message: message ? refLabel(message) : undefined,
-        partner: idOf(partner),
-        partnerName: partner ? nameOf(partner) : undefined,
-        pool: pool && pool !== partner ? idOf(pool) : undefined,
-        poolName: pool && pool !== partner ? nameOf(pool) : undefined,
-      }),
-    );
+    const direction = peek<El>(mf, 'sourceRef') === el ? 'out' : peek<El>(mf, 'targetRef') === el ? 'in' : undefined;
+    if (direction) out.push(messageFlowEntry(doc, mf, direction));
   }
   return out;
+}
+
+/** One message flow as seen from the end `direction` names (`out`: from its source), with the partner at the other end and its pool. */
+export function messageFlowEntry(doc: Doc, mf: El, direction: 'in' | 'out'): DetailMessageFlow {
+  const partner = peek<El>(mf, direction === 'out' ? 'targetRef' : 'sourceRef');
+  const pool = partner ? poolOf(doc, partner) : undefined;
+  const message = peek<El>(mf, 'messageRef');
+  return compact<DetailMessageFlow>({
+    direction,
+    id: idOf(mf),
+    name: nameOf(mf),
+    message: message ? refLabel(message) : undefined,
+    partner: idOf(partner),
+    partnerName: partner ? nameOf(partner) : undefined,
+    pool: pool && pool !== partner ? idOf(pool) : undefined,
+    poolName: pool && pool !== partner ? nameOf(pool) : undefined,
+  });
 }
 
 /** Data associations of a node (what it reads and writes) or of a data object / store (who reads and writes it). */
@@ -656,9 +664,7 @@ function buildRootElements(doc: Doc): ModelView['rootElements'] {
     const match = ROOT_KINDS.find(([type]) => is(el, type));
     if (!match) continue;
     const code = peek<string>(el, 'errorCode') ?? peek<string>(el, 'escalationCode');
-    // the correlation key Camunda 8 matches a message by
-    const subscription = zeebeExt(el, 'subscription');
-    out.push(compact({ id: idOf(el), kind: match[1], name: nameOf(el), code: code || undefined, correlationKey: subscription ? peek<string>(subscription, 'correlationKey') : undefined }));
+    out.push(compact({ id: idOf(el), kind: match[1], name: nameOf(el), code: code || undefined, correlationKey: correlationKeyOf(el) }));
   }
   return out;
 }

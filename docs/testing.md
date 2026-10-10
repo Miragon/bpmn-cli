@@ -138,14 +138,26 @@ per format op; the event definition ids of a Camunda 8 file in the id style;
 profile in the warnings delta; and the strip of a removed node that must not
 pull an expanded sub-process over a shape of another row (found by the gate's
 fuzz campaign on the integrated build).
-`test/step3-ids-report.test.ts` checks the round 1 verifier's id and report
-findings: flows at unnamed gateways named by their speaking ids (no
-`_2`), unnamed elements in a row (the nearest named anchor once, the kind
-spelled out before a suffix), the 64-character cap, transliteration beyond
-German, the definitions id of `new`, and the warnings delta (platform
-findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge that takes over
-a removed flow's id, warnings of a batch's final state, `new` with the
-platform's findings).
+The round 1 verifier's findings, each with a test that fails on round 1:
+`test/step3-ids-report.test.ts` (ids and the report: flows at unnamed
+gateways named by their speaking ids (no `_2`), unnamed elements in a row
+(the nearest named anchor once, each element named from its own
+predecessor), the 64-character cap, transliteration beyond German, the
+definitions id of `new`, and the warnings delta: platform findings counted,
+a shrinking `W_DUPLICATE_NAME`, a bridge that takes over a removed flow's
+id, warnings of a batch's final state, `new` with the platform's findings),
+`test/step3-c8-fixes.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
+`test/views-context.test.ts` (`show <id> --context` on a synthetic shop
+model: every boundary event of the sub-processes around an element, the
+message of a message element with the flows of that message drawn to its
+pool, a message flow's ends, what uses a message / signal / error /
+escalation), `test/format-frames.test.ts` (align / place with selector sets
+and explicit ids never take a shape out of its sub-process, also on the two
+scenarios the fuzzer hit), `test/move-lanes.test.ts` (a node moved into a
+flow between two lanes gets add's lane when it has none, keeps its own
+otherwise and is drawn on a row of it, like `add --lane`) and
+`test/remove-join.test.ts` (a plain remove bridges a merge, refuses a
+parallel / inclusive join).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, `test/node-files.test.ts` the encodings (a file is
 read as it declares, a write is UTF-8 and says so), and the design profile

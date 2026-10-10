@@ -33,6 +33,14 @@
  *    flow); a parallel / inclusive join loses its synchronisation
  *    (W_IMPLICIT_JOIN says so). Several outgoing flows are refused
  *    (E_AMBIGUOUS_BRIDGE: which predecessor to which successor?).
+ *  - a plain remove (bridging on) of such a node (several incoming flows,
+ *    one outgoing; audit #53): a merge that does not synchronise (an
+ *    exclusive or event-based gateway, any other node) is bridged like
+ *    --bridge-all, since every path ran on alone before as well; a
+ *    synchronising join (parallel, inclusive, complex gateway) is refused
+ *    (E_AMBIGUOUS_BRIDGE): bridging ends the synchronisation, not bridging
+ *    disconnects the successor; the hint names `--bridge-all` and
+ *    `--no-bridge` with the node's id.
  *  - every removed element -> cs.remove({id, kind, name}); released ids.
  *  - bridging policy (detachWithBridge, shared with `move`): no bridge when
  *    predecessor and successor are the same non-activity (a self-loop
@@ -113,7 +121,10 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
     }
     if (is(el, 'bpmn:FlowNode')) {
       if (op.bridgeAll) bridgeAll(doc, el, cs, removing);
-      else detachWithBridge(doc, el, bridge, cs, removing);
+      else if (bridge && isMerge(doc, el)) {
+        refuseSynchronisingJoin(doc, el);
+        bridgeAll(doc, el, cs, removing);
+      } else detachWithBridge(doc, el, bridge, cs, removing);
     }
     cascadeRemove(doc, el, cs);
     for (const r of cs.removed) gone.add(r.id);
@@ -178,6 +189,34 @@ function compensationHandlers(doc: Doc, n: El): El[] {
 /** The boundary events whose compensation associations point to a handler. */
 function compensationSources(doc: Doc, handler: El): El[] {
   return [...doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('targetRef') === handler).map((a) => a.get<El>('sourceRef')).filter((s): s is El => !!s && is(s, 'bpmn:BoundaryEvent'));
+}
+
+/** A join or merge: several incoming flows, one outgoing (what --bridge-all bridges). */
+function isMerge(doc: Doc, node: El): boolean {
+  return doc.incoming(node).length > 1 && doc.outgoing(node).length === 1;
+}
+
+/** Gateways that wait for their incoming paths (a plain remove cannot bridge them without changing what runs). */
+function synchronises(node: El): boolean {
+  return is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
+}
+
+/** A plain remove of a synchronising join: E_AMBIGUOUS_BRIDGE (see the module contract). */
+function refuseSynchronisingJoin(doc: Doc, node: El): void {
+  if (!synchronises(node)) return;
+  const incoming = doc.incoming(node);
+  const successor = doc.outgoing(node)[0]!.get<El>('targetRef');
+  const kind = is(node, 'bpmn:ParallelGateway') ? 'parallel' : is(node, 'bpmn:InclusiveGateway') ? 'inclusive' : 'complex';
+  const preds = [...new Set(incoming.map((f) => idOf(f.get<El>('sourceRef'))))];
+  throw modelError(
+    'E_AMBIGUOUS_BRIDGE',
+    `${idOf(node)} is a ${kind} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
+    {
+      element: idOf(node),
+      candidates: incoming.map(idOf),
+      hint: `Say which: \`bpmn remove <file> ${idOf(node)} --bridge-all\` (each path runs on to ${idOf(successor)} on its own), or \`bpmn remove <file> ${idOf(node)} --no-bridge\` and connect what should stay with \`bpmn connect\`.`,
+    },
+  );
 }
 
 /**
