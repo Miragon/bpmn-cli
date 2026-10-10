@@ -108,6 +108,7 @@ export const TRIGGER_FIELDS: FieldsOf<TriggerOptions> = {
   nonInterrupting: bool('Boundary events: cancelActivity=false; start events of an event sub-process: isInterrupting=false.'),
 };
 
+const REF_AS = 'Batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the op (the one `message` / `error` / `signal` / `escalation` created or found; E_USAGE when it references none), e.g. "$msg"; then `{"op": "ext", "id": "$msg", "action": "add", "type": "zeebe:subscription", ...}`.';
 const KIND_FIELD = ref('Element kind with optional trigger suffix, e.g. "userTask", "startEvent:message", "boundaryEvent:timer" (see `bpmn kinds`).', { required: true });
 
 export const NODE_FIELDS: FieldsOf<SplitNode> = {
@@ -116,6 +117,7 @@ export const NODE_FIELDS: FieldsOf<SplitNode> = {
   id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
   as: alias('Batch alias of the new element: "$" + a name, e.g. "$check".'),
   flowAs: alias('Batch alias of the flow into the new node (the flow the flow options describe; with "before" on a join or an unconnected node: the flow out of it).'),
+  refAs: alias(REF_AS),
   lane: ref('Lane id the node is assigned to (default: the lane of the anchor / host; into a flow between two lanes: the target\'s after a branching source, else the anchor\'s, with W_LANE_INHERITED).'),
   ...FLOW_FIELDS,
   ...TRIGGER_FIELDS,
@@ -134,6 +136,7 @@ export const ADD_FIELDS: FieldsOf<AddOp> = {
   id: NODE_FIELDS.id,
   as: NODE_FIELDS.as,
   flowAs: NODE_FIELDS.flowAs,
+  refAs: NODE_FIELDS.refAs,
   ...PLACEMENT_FIELDS,
   to: ref('Also connect the new node to this target (a branch that re-joins).'),
   lane: NODE_FIELDS.lane,
@@ -155,6 +158,7 @@ export const CONNECT_FIELDS: FieldsOf<ConnectOp> = {
   name: str('Label of the connection (sequence flows only).'),
   id: ref('Explicit id of the connection.'),
   as: alias('Batch alias of the new connection (with ifAbsent and an existing one: that one).'),
+  refAs: alias('Message flows: batch alias of the bpmn:Message it carries (created or found by `message`).'),
   condition: str('Condition expression (sequence flows only).'),
   language: str('Expression language of `condition`.'),
   default: bool('Make it the default flow of the source (sequence flows only).'),
@@ -166,6 +170,7 @@ export const SET_FIELDS: FieldsOf<SetOp> = {
   id: ref('Element id.', { required: true }),
   values: map('Properties to set (`bpmn kinds` lists the keys per element family); an empty string removes the property.'),
   unset: list('Keys to remove.', { minItems: 1 }),
+  refAs: alias(REF_AS),
 };
 
 export const REMOVE_FIELDS: FieldsOf<RemoveOp> = {
@@ -180,6 +185,7 @@ export const RETYPE_FIELDS: FieldsOf<RetypeOp> = {
   id: ref('Element id.', { required: true }),
   kind: KIND_FIELD,
   ...TRIGGER_FIELDS,
+  refAs: alias(REF_AS),
 };
 
 export const MOVE_FIELDS: FieldsOf<MoveOp> = {

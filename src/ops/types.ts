@@ -56,6 +56,8 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   as?: string;
   /** batch alias of the flow into the new node (the flow the flow options describe) */
   flowAs?: string;
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the new element references (created or found by name) */
+  refAs?: string;
   /** also connect the new node to this target (branch that re-joins) */
   to?: string;
   lane?: string;
@@ -84,6 +86,8 @@ export interface ConnectOp {
   id?: string;
   /** batch alias of the new connection */
   as?: string;
+  /** message flows: batch alias of the bpmn:Message it carries */
+  refAs?: string;
   condition?: string;
   language?: string;
   default?: boolean;
@@ -97,6 +101,8 @@ export interface SetOp {
   id: string;
   values: Record<string, string>;
   unset?: string[];
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  refAs?: string;
 }
 
 export interface RemoveOp {
@@ -115,6 +121,8 @@ export interface RetypeOp extends TriggerOptions {
   op: 'retype';
   id: string;
   kind: string;
+  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  refAs?: string;
 }
 
 export interface MoveOp extends Placement, FlowOptions {

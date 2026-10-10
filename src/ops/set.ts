@@ -84,7 +84,7 @@ import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platfor
 import { ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
-import { applyTrigger, ensureRootElement, vendorContent } from './events.js';
+import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { assertCondition, flowChange, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
@@ -421,6 +421,7 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
   if (eventKeys.size) applyEventKeys(doc, el, eventKeys, cs);
   for (const n of nested) if (!flowCondition.includes(n) && !resourceRemoval.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   doc.invalidate();
+  bindRefAs(cs, op.refAs, el);
   return cs;
 }
 
