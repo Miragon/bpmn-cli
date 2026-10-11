@@ -232,7 +232,11 @@ describe('crops', () => {
     const gallery = readFileSync(GALLERY, 'utf8');
     const sub = await renderSvg(gallery, { scope: 'Activity_ExpandedSubProcess' });
     expect(sub.nodes).toEqual(expect.arrayContaining(['Event_InnerStart', 'Activity_InnerTask', 'Event_InnerEnd']));
-    expect((await renderSvg(gallery, { scope: 'Activity_CollapsedSubProcess' })).plane).toBe('Activity_CollapsedSubProcess');
+    const collapsed = await renderSvg(readFileSync(join(SCENARIOS, 'subproc__s03-collapsed.bpmn'), 'utf8'), { scope: 'Activity_Ship' });
+    expect(collapsed.plane).toBe('Activity_Ship');
+    expect(collapsed.nodes).toContain('Activity_Pack');
+    // the gallery's collapsed sub-process has an empty plane: nothing of the scope is drawn
+    await expect(renderSvg(gallery, { scope: 'Activity_CollapsedSubProcess' })).rejects.toMatchObject({ code: 'E_NO_MATCH' });
   });
 
   it('picks the plane of the crop and names crop elements on other planes', async () => {

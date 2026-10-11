@@ -182,7 +182,7 @@ renders to SVG and PNG within the default 2000 px, with the same bytes twice
 font only; a rasteriser failure (a 488-byte SVG that makes resvg trap, and
 malformed SVG) is `E_RENDER` and the next render still works; external
 labels sit where bpmn-js puts them (DI label bounds, below the shape, above
-the middle of a flow; 90 px at 11 px); colours are drawn and unsafe colour
+the middle of a flow; 11 px, laid out twice like bpmn-js 18); colours are drawn and unsafe colour
 values are not; the planes and the elements without a shape are named; the
 budget note; a file without a diagram is laid out in memory; the renderer is
 not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
@@ -204,6 +204,19 @@ mutating commands (text, JSON, the region of a large drawing, a failed render
 that leaves the change standing); and the fuzz walk's render oracle. The
 synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
 wide, built with the CLI) is the tiles and focus model.
+`test/render-fixes.test.ts` checks the fixes after the verification of
+issue #12 on synthetic models: broken or far-flung coordinates (NaN,
+1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
+note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;
+`--tiles` keeps only tiles with a shape or label (2 tiles for two shapes
+50,000 px apart, not 676), stays one image beyond `MAX_TILES` (40) and
+finishes quickly on shapes spread over ±1,000,000 px at `--max-size 50`,
+numbers the bands it keeps; a scale in a note is rounded down; external
+labels break like bpmn-js 18 (max(90, label width), then the widest line);
+a message flow's envelope and message name; a file without a diagram lists
+the `metrics` problems of the file; `-o x.jpg` is `E_USAGE` (with
+`--format png` it is written); a `--scope` on an empty plane is
+`E_NO_MATCH`.
 `test/plugin.test.ts` checks the Claude Code plugin; for the look step
 (stage 3) the render example of `SKILL.md` runs on the recipes' model and
 writes a real PNG within 2000 px into `.bpmn-render/`, every render the

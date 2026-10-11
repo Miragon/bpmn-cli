@@ -1,4 +1,4 @@
-# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 to 3 of `bpmn render`)
+# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 to 3 of `bpmn render` with the fixes after its verification)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -35,7 +35,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1854 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1865 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -45,6 +45,107 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## `bpmn render`, fixes after the verification (2026-10-11, `feat/render`, issue #12)
+
+The verification of stages 1 to 3 (a fresh clone, every acceptance
+criterion, hostile inputs, a side-by-side review against `tools/render.sh`)
+passed eight criteria and found one high, three medium and five low
+findings. All are fixed, each with a test that fails before
+(`test/render-fixes.test.ts`, 11 tests); two existing tests changed with the
+behaviour (the gallery's empty collapsed sub-process plane is now
+`E_NO_MATCH` for `--scope`; the label test names the lines of the two-pass
+rule). Where the issue left a question open, the decision taken is named.
+
+- **`--tiles` is bounded (high).** A drawing spanning 1e9 px aborted the
+  process with a V8 out-of-memory error (exit 134): the tile grid had no
+  cap. Now coordinates beyond ±1,000,000 px never reach it (broken geometry,
+  below), each axis is cut only over the stretches that hold something
+  (gaps of half a tile and more are skipped), and the cutting stops as soon
+  as either axis needs more than `MAX_TILES` (40) pieces. Decision for "too
+  many tiles": the drawing is written as one image with a note
+  (`--tiles: the drawing needs more than 40 tiles ...`, and the labels note
+  names `--around`, `--path`, `--scope`), not an error, so `--tiles` never
+  fails where the plain render works. 400 shapes spread over ±1,000,000 px
+  at `--max-size 50 --scale 10` finish well under a second.
+- **No blank tiles (medium).** A tile is kept only when it holds a shape, a
+  label (a flow's, a message's, a pool's or lane's name where it is drawn)
+  or a numbered problem; a connection passing through no longer keeps one
+  (the old test was the connection's bounding box). A start event and a
+  task 50,000 px apart with one flow: 676 tiles (625 blank, ~3.2 M image
+  tokens, 27 s) before, 2 tiles now (3 when the flow has a label), and a
+  note says empty parts are left out. Bands are numbered among the tiles
+  kept, so the note counts them (`3 tiles (2500 bands)` was the highest band
+  number).
+- **Broken geometry (medium).** A shape or connection with a coordinate
+  that is not a number or lies beyond ±1,000,000 px, or with a negative
+  size, is not drawn, nor are such label bounds; notes name them with the
+  repair (`bpmn layout <file>` draws them again; a label:
+  `bpmn label <file> <id> --side below`). A NaN waypoint gave
+  `width="NaN"` and a blank PNG with exit 0; now the start event and the
+  task are drawn and the flow is named. A plane on which nothing can be
+  drawn is `E_RENDER`. Non-finite shape bounds stay "no shape" as before
+  (`plane.ts`). Decision for the limit: 1,000,000 px (500 screens of 2000
+  px); none of the 155 repository and 394 corpus files comes near it (no
+  such note on any of them). Every hostile file of the verification (34,
+  plus the two sparse 50,000 px files) renders with `--tiles --problems`,
+  exit 0.
+- **External labels like bpmn-js 18 (medium).** bpmn-js lays an external
+  label out at max(90, the DI label width) in 11 px, then renders it in a
+  box as wide as the widest line of that (rounded up), which can break it
+  once more; the renderer did one pass at 90 px. It now does both. The
+  verification's reference renders now match: gallery
+  `Event_CompensationEnd` and lanes__complaint-t1 `Gateway_Kulanz` on one line,
+  artifacts__09 `Event_Rollback` as `Roll` / `back` / `bookings`,
+  controlflow__s19 `Gateway_Long` / `Flow_3` / `Flow_6` with 7 / 5 / 6
+  lines. Lines that differ from before: 16 of 1,313 external labels in 8
+  of the 155 repository files, 332 of 3,769 in 141 of the 394 corpus
+  files. **Metrics unchanged**, by decision: `metrics.ts` does not use
+  `text.ts`; `labelClash` judges a label by its DI label bounds and a coarse
+  text estimate of its own (`glyph`: 6 px a character, at most 90 px wide,
+  14 px a line), which neither the old nor the new renderer rule enters, and
+  `text.ts` otherwise serves the incremental engine's activity sizing
+  (embedded labels, which bpmn-js lays out once). The regression budget
+  stays 444 of 444. Bringing `glyph` to the renderer's rule would change
+  `labelClash` counts and needs its own regression measurement: a possible
+  follow-up.
+- **Message flows show their message (low).** With a `messageRef`: the 21 x
+  14 envelope halfway along the flow, outlined (`messageVisibleKind`
+  defaults to "initiating" in the DI schema), filled for "non_initiating",
+  and the message's name in 12 px wrapped at 150 px. A probe of bpmn-js
+  18.31 in Chrome showed where it puts the name on import: its left edge at
+  the middle, its top 10 px below (it measures the envelope and the text as
+  0 x 0 then; only a redraw after an edit centres the name below the
+  envelope). The renderer draws the import placement, which is what a viewer
+  or modeler shows when it opens the file and what `tools/render.sh` shows.
+  8 of 155 repository and 6 of 394 corpus files have such flows.
+- **`render -o x.jpg` (low)** is `E_USAGE` (a name not ending in `.png` /
+  `.svg`), unless `--format` says what to write, like `--render`.
+- **A file without a diagram (low).** Decision: `--problems` lists what
+  `bpmn metrics` reports for the file, consistent with "every metrics
+  problem, in metrics order": `test/fixtures/views/claims.bpmn` lists its 37
+  `missing` problems (none in the image) instead of 9 problems of the
+  in-memory drawing, and a note says the problems are the file's. The
+  in-memory drawing's problems are not the file's to fix; after `bpmn layout
+  <file>` saves a drawing, `--problems` lists that drawing's.
+- **`--scope` on an empty plane (low)** is `E_NO_MATCH` like the other
+  empty crops; a `--scope` that is a plane (a collapsed sub-process, a
+  process without a pool) now names that plane's flow nodes in `crop: ...:
+  N nodes` (it said 0 nodes).
+- **Notes (low).** A scale in a note and in the `wrote` line is rounded
+  down to two decimals (`scaleText`): 0.7458 reads `0.74 ... (below 0.75)`,
+  not `0.75 ... (below 0.75)`; the band count, see above.
+- **The stage-3 eval** stays as run; `plugins/bpmn-cli/evals/README.md`
+  now states its limitation: `tidy-after-edit` cannot separate the skill's
+  look step from the CLI's own guide (the baseline has the same `bpmn` and
+  `guide --short` names `render`).
+
+| | before | after |
+| --- | --- | --- |
+| repository, 155 files, `--tiles --problems` at 2000 px | 4 files tiled, at most 2 tiles | the same; 0 errors |
+| private corpus, 394 files (counts only) | 22 files tiled, at most 3 tiles | the same; 0 errors |
+| core bundle, entry plus shared chunk | 985.7 KB minified, 305.8 KB gzip | 992.0 KB (+6.3), 307.9 KB gzip; since before stage 1 945.9 -> 992.0 KB (+46.1 KB of the issue's 50); the `applyToXml`-only bundle unchanged |
+| gate | 1854 tests | 1865 tests (+247 opt-in), iso check, budget 444 of 444, fuzz 0 errors |
 
 ## `bpmn render`, stage 3 (2026-10-11, `feat/render`, issue #12)
 

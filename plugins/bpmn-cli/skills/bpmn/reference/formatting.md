@@ -51,7 +51,8 @@ problems: none
   / 784. The long edge stays within `--max-size` (2000 px); a larger drawing
   is scaled down, and below `scale 0.75` the labels are too small - a note
   says so: render `--around <id>`, `--path <from> <to>` or `--tiles`
-  (readable tiles `<name>-1.png`, `-2.png`, ... cut at the diagram columns).
+  (readable tiles `<name>-1.png`, `-2.png`, ... cut at the diagram columns;
+  only those with something in them, at most 40).
 - `--problems` lists the problems under the line, `<n> <kind> [<ids>]
   <detail>` in `metrics` order (a crop: those of its elements), each number
   drawn on the defect: `1 labelClash [Gateway_OrderOk, Activity_SendRejection]

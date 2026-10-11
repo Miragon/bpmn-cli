@@ -1083,7 +1083,8 @@ problems (numbered in the image):
 ```
 
 - Output: `-o <file>` (the format from `--format png|svg`, else the
-  extension, else PNG; a contradicting `--format` is `E_USAGE`; missing
+  extension; a contradicting `--format` is `E_USAGE`, and so is a name not
+  ending in `.png` / `.svg` without `--format`, e.g. `-o x.jpg`; missing
   directories are created). Without `-o` the image goes to
   `bpmn-cli/<name>.png` in the system temp directory (the path is printed).
   `-o -` writes the image to stdout and the report to stderr (a PNG only
@@ -1113,8 +1114,9 @@ problems (numbered in the image):
   it costs far less than the whole drawing: on `tools/scenarios` the median
   `--around` crop at depth 2 is 368 image tokens (p90 1,518). Without
   `--plane` the crop's plane is drawn; its elements on other planes are
-  named in a note; a crop with nothing drawn is `E_NO_MATCH`; `crop: ...: N
-  nodes` (JSON `nodes`) names what was drawn.
+  named in a note; a crop with nothing drawn is `E_NO_MATCH` (also a
+  `--scope` on an empty plane); `crop: ...: N nodes` (JSON `nodes`) names
+  what was drawn (a `--scope` that is a plane: its flow nodes).
 - `--highlight <id,...>` (repeatable) puts an orange halo under elements;
   an unknown id is `E_NOT_FOUND`.
 - `--problems` numbers the layout problems of [`metrics`](#metrics): every
@@ -1130,13 +1132,21 @@ problems (numbered in the image):
   Claude Code displays); `--scale <n>` zooms (default 1) within that limit.
   When fitting draws the labels below 0.75 of their size (about 8 px, hard to
   read), the image is still written and a note says so and names the crops
-  and `--tiles`. `--tiles` splits such an image into tiles at full size,
-  cut between the diagram's columns (`show --layout`'s `c<n>`; a drawing
-  too tall also between rows of shapes), written as `<name>-1.png`,
-  `<name>-2.png`, ... with one `wrote` line each (`tile 2/3 c9-c17`) and the
-  total image tokens; a readable image stays one (a note says so). A
-  synthetic process of 28 nodes in a row (`test/fixtures/render/long.bpmn`,
-  3,940 px wide) gives 2 tiles of about 700 image tokens each.
+  and `--tiles` (a scale in a note is rounded down: 0.7458 reads 0.74).
+  `--tiles` splits such an image into tiles at full size, cut between the
+  diagram's columns (`show --layout`'s `c<n>`; a drawing too tall also
+  between rows of shapes, the bands numbered 1.. among the tiles written),
+  written as `<name>-1.png`, `<name>-2.png`, ... with one `wrote` line each
+  (`tile 2/3 c9-c17 band 1`) and the total image tokens. Only tiles that
+  hold a shape, a label (or a pool's or lane's name) or a numbered problem
+  are written: stretches of half a tile and more with nothing but empty
+  space or connections passing through are left out (a note says so; a
+  start event and a task 50,000 px apart with one flow between them give 2
+  tiles, not 676). At most 40 tiles: a drawing that needs more is written
+  as one image, with a note to render a part instead. A readable image
+  stays one (a note says so). A synthetic process of 28 nodes in a row
+  (`test/fixtures/render/long.bpmn`, 3,940 px wide) gives 2 tiles of about
+  700 image tokens each.
 - `--render <file.png>` on any mutating command (`add`, `apply`, the format
   commands, ...; also with `--dry-run`) draws the result: created elements
   with a green halo, changed ones (model or colour) orange, moved ones
@@ -1147,8 +1157,16 @@ problems (numbered in the image):
   touched elements and their neighbours) and a note says so. A failed render
   is reported in that block; the change stands.
 - A file without any diagram is laid out in memory by the clean engine and
-  drawn (a note says so; nothing is written; `bpmn layout` saves a drawing);
-  elements of the plane without a shape are named in a note.
+  drawn (a note says so; nothing is written; `bpmn layout` saves a drawing).
+  `--problems` still lists what `bpmn metrics` reports for the file (its
+  elements are `missing`), none in the image, and a note says the problems
+  are the file's, not the in-memory drawing's: those are not the file's to
+  fix. Elements of the plane without a shape are named in a note.
+- Broken geometry: a shape or connection with a coordinate that is not a
+  number or lies beyond ±1,000,000 px, or with a negative size, is not
+  drawn, nor are such label bounds; a note names them (`bpmn layout <file>`
+  draws the model again). A plane on which nothing can be drawn is
+  `E_RENDER`.
 - What is drawn: events with their triggers (catching outlined, throwing
   filled; non-interrupting ones dashed; multiple, parallel multiple),
   gateways with their markers (the exclusive X when the DI says
@@ -1157,11 +1175,17 @@ problems (numbered in the image):
   collapsed sub-processes, event sub-processes, transactions, pools (black
   boxes, vertical pools), lanes, data objects (collections, inputs /
   outputs), data stores, text annotations, groups, sequence flows (default
-  slash, conditional diamond), message flows, associations, data
+  slash, conditional diamond), message flows (with a `messageRef`: the
+  envelope halfway along them, filled for `messageVisibleKind
+  ="non_initiating"`, and the message's name where bpmn-js 18 puts it when
+  it opens a file: its left edge at the middle, 10 px below), associations, data
   associations, and the bpmn-js colours (`bioc:` / `color:`). External labels
-  follow bpmn-js: centred on the DI label bounds, wrapped at 90 px in 11 px
-  Arial (without label bounds below the shape, or above the middle of a
-  flow); the glyphs are drawn from the BPMN notation (no bpmn-js code).
+  follow bpmn-js 18: centred on the DI label bounds, in 11 px Arial, laid
+  out at the larger of 90 px and the label bounds' width and then again at
+  the width of their widest line, which can break them once more ("Roll
+  back bookings": `Roll` / `back` / `bookings`); without label bounds below
+  the shape, or above the middle of a flow. The glyphs are drawn from the
+  BPMN notation (no bpmn-js code).
 - A failure of the rasteriser is `E_RENDER` (exit 4), never a process abort;
   the SVG (`--format svg`) still works then. The fuzzer renders every result
   it writes ([testing](docs/testing.md)). `tools/render.sh` (real bpmn-js in

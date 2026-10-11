@@ -17,7 +17,14 @@ report shows what the skill adds.
 
 `skill-used` graders (`tool_used: Skill`) are plugin-fired indicators: they show whether the skill
 triggered and do not count toward the score of a two-arm run. `render-read` (a Read of a `.png`)
-is one too: it shows that the skill's look step ran.
+is one too: it shows that a rendered drawing was read.
+
+A limitation of `tidy-after-edit`: it cannot separate the skill's look step from the CLI's own
+guide. The baseline arm has the same `bpmn` on `PATH`, `bpmn guide --short` names `bpmn render`,
+and in the first run both baseline runs rendered and read PNGs too, so `render-read` fired in both
+arms. The case measures the look affordance of the CLI and the skill together; a case that tells
+them apart would need a baseline without the CLI's guide (or without `render`), which the eval
+setup does not offer.
 
 Graders cannot run a command, so `tidy-after-edit` checks the layout problems as DI conditions on
 the file: the label's bounds, and the rejection branch in a row below the reminder path (with

@@ -20,7 +20,7 @@ import { Command, CommanderError, type Command as CommandType, InvalidArgumentEr
 import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
 import { setLayoutDebug } from './debug.js';
 import { layoutProblems } from './diagram/metrics.js';
-import { changeHighlight, RENDER_MAX_SIZE, renderSvg, type RenderHighlight, type RenderOptions, type RenderProblem } from './diagram/render.js';
+import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './diagram/render.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './context.js';
 import { assertTarget, Doc } from './document.js';
@@ -888,12 +888,15 @@ function boundedNumber(what: string, min: number, max: number, integer: boolean)
   };
 }
 
-/** --format, else the -o extension (.png / .svg), else png; a --format the extension contradicts is E_USAGE. */
+/** --format, else the -o extension (.png / .svg), else png; a --format the extension contradicts is E_USAGE, and so is an -o name without .png / .svg unless --format says what to write. */
 function renderFormat(format: string | undefined, out: string | undefined): RenderFormat {
   const ext = out && out !== '-' ? extname(out).slice(1).toLowerCase() : '';
   const fromExt = (RENDER_FORMATS as readonly string[]).includes(ext) ? (ext as RenderFormat) : undefined;
   if (format !== undefined && fromExt && format !== fromExt) {
     throw usageError(`--format ${format} does not match the file name ${out}`, { hint: `Drop --format (the extension decides) or name the file .${format}.` });
+  }
+  if (format === undefined && out && out !== '-' && !fromExt) {
+    throw usageError(`-o ${out}: expected a file name ending in .png or .svg (the image formats render writes)`, { hint: `Name the file .png or .svg, or pass --format png|svg to write that format under this name.` });
   }
   return (format as RenderFormat | undefined) ?? fromExt ?? 'png';
 }
@@ -996,7 +999,7 @@ function renderShotLines(shot: Shot, extra: { crop?: string; halos?: string; pro
   const images = shot.images ?? [{ out: shot.out, width: shot.width, height: shot.height, tokens: shot.tokens }];
   const lines = images.map((im, i) => {
     const tile = images.length > 1 ? `  tile ${i + 1}/${images.length}${im.columns ? ` c${im.columns[0]}-c${im.columns[1]}` : ''}${im.band ? ` band ${im.band}` : ''}` : '';
-    return `wrote ${im.out === '-' ? '<stdout>' : im.out}  ${im.width}x${im.height} px  ~${thousands(im.tokens)} image tokens  scale ${shot.scale.toFixed(2)}  plane ${shot.plane}${tile}`;
+    return `wrote ${im.out === '-' ? '<stdout>' : im.out}  ${im.width}x${im.height} px  ~${thousands(im.tokens)} image tokens  scale ${scaleText(shot.scale)}  plane ${shot.plane}${tile}`;
   });
   if (images.length > 1) lines.push(`${images.length} tiles, ~${thousands(images.reduce((s, im) => s + im.tokens, 0))} image tokens in all`);
   if (extra.crop) lines.push(`crop: ${extra.crop}: ${shot.nodes?.length ?? 0} node${shot.nodes?.length === 1 ? '' : 's'}`);
@@ -1043,7 +1046,7 @@ withJsonOptions(
   program
     .command('render <file> [ids...]')
     .description('draw the diagram as an image to look at (PNG, or SVG; no browser): the whole plane or a crop (ids, --around, --path, --scope), with halos and numbered layout problems; prints the size, the image tokens and the other planes (file - = stdin)')
-    .option('-o, --out <file>', 'the image file (- = stdout); default: bpmn-cli/<name>.png in the temp directory; tiles: <name>-1.png, <name>-2.png, ...')
+    .option('-o, --out <file>', 'the image file, .png or .svg (another name needs --format; - = stdout); default: bpmn-cli/<name>.png in the temp directory; tiles: <name>-1.png, <name>-2.png, ...')
     .option('--format <format>', 'png (default) or svg; default: the -o extension', (v: string) => {
       if (!(RENDER_FORMATS as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${RENDER_FORMATS.join(' or ')}`);
       return v;

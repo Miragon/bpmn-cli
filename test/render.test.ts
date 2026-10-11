@@ -148,12 +148,11 @@ describe('the PNG rasteriser', () => {
 });
 
 describe('renderSvg', () => {
-  it('lays out external labels like bpmn-js: label bounds, 90 px at 11 px, 13.2 px lines', async () => {
+  it('lays out external labels like bpmn-js 18: label bounds, max(90, their width) in 11 px then the widest line, 13.2 px lines', async () => {
     const { svg } = await renderSvg(LABELS);
     // the start event: centred on its label bounds (x 73, width 90), top at y 143, first baseline 3/4 line lower
-    const name = 'A rather long start event name that wraps';
-    const expected = wrapLines(name, 90, 11).map((l) => l.trim());
-    expect(expected.length).toBeGreaterThan(1);
+    // (more cases of the two passes: test/render-fixes.test.ts)
+    const expected = ['A rather long', 'start event name', 'that wraps'];
     const start = labelOf(svg, 'Event_Start');
     expect(start.map((l) => l.text)).toEqual(expected);
     expect(start.map((l) => l.x)).toEqual(expected.map(() => 118));

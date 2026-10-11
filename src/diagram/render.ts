@@ -12,7 +12,12 @@
  *    E_NOT_FOUND, an element without a plane of its own E_WRONG_KIND; both
  *    list the planes as candidates. A document without any diagram is laid
  *    out in memory first (the clean engine; nothing is written) and a note
- *    says so.
+ *    says so; its `problems` are still the file's (what `bpmn metrics`
+ *    reports for it: its elements are `missing`), none with a badge.
+ *  - Broken geometry: a shape or connection with a coordinate that is not a
+ *    finite number within ±COORD_LIMIT (1,000,000 px), or a negative size,
+ *    is not drawn, nor are such label bounds; a note names them. A plane
+ *    on which everything is broken is E_RENDER.
  *  - renderDocSvg(doc, opts) draws a parsed document (no layout).
  *  - The image: the drawn elements' bounding box (shapes, waypoints, the
  *    labels as drawn) plus a 20 px margin, on white. `scale` (default 1)
@@ -40,9 +45,10 @@
  *    expanded sub-processes around drawn elements are context (`<g
  *    data-context>`), clipped by the view. The view is the crop's content
  *    plus the margin. Elements of the crop on other planes are named in a
- *    note; a crop with nothing drawn on the plane is E_NO_MATCH. `nodes` of
- *    the result: the crop's flow nodes drawn, in its order (around: the
- *    order of show --around).
+ *    note; a crop with nothing drawn on the plane is E_NO_MATCH (a scope
+ *    that is a plane: an empty plane). `nodes` of the result: the crop's
+ *    flow nodes drawn, in its order (around: the order of show --around; a
+ *    scope that is a plane: its flow nodes).
  *  - focus (what `--render` of a mutating command uses): the plane of the
  *    first focus element that is drawn; when the whole plane would be drawn
  *    below MIN_LABEL_SCALE, the image shows only the region around them
@@ -64,17 +70,22 @@
  *  - tiles: when the image would draw its labels below MIN_LABEL_SCALE, it is
  *    split into tiles at `scale` (default 1) within maxSize: cut between the
  *    plane's columns (view.ts planeColumns, `show --layout`'s c<n>) and,
- *    when too tall, between rows of shapes; empty tiles are left out.
- *    `tiles` lists them left to right, band by band (svg / width / height /
- *    tokens of the result are the first tile's); each problem's badge is in
- *    one tile (`tile`). When the image is readable, it stays one image and a
- *    note says so.
+ *    when too tall, between rows of shapes. Only tiles holding a shape, a
+ *    label (or a frame's name) or a numbered problem are kept: stretches of
+ *    half a tile and more with nothing but empty space or connections
+ *    passing through are left out (a note says so). `tiles` lists them left
+ *    to right, band by band (bands numbered 1.. among the kept ones; svg /
+ *    width / height / tokens of the result are the first tile's); each
+ *    problem's badge is in one tile (`tile`). More than MAX_TILES (40)
+ *    tiles: one image instead, with a note (render a part). When the image
+ *    is readable, it stays one image and a note says so.
  *  - The result lists the plane drawn (`plane`, its element id), the other
  *    planes (`planes`: collapsed sub-processes and other diagrams, document
  *    order) and `notes`: labels drawn below MIN_LABEL_SCALE (hard to read;
- *    names the crop options), elements of the plane without a shape, the
- *    in-memory layout, crop elements on other planes, the focus region,
- *    the tiles.
+ *    names the crop options), elements of the plane without a shape or with
+ *    broken geometry, the in-memory layout, crop elements on other planes,
+ *    the focus region, the tiles. A scale in a note has two decimals,
+ *    rounded down (scaleText: 0.7458 is 0.74, below 0.75).
  *  - Deterministic: the same input and options give the same bytes;
  *    coordinates are rounded to 2 decimals.
  *  - What is drawn: events with their triggers (catching outlined,
@@ -92,14 +103,22 @@
  *    annotations, groups, sequence flows (default slash, conditional
  *    diamond from an activity), message flows (circle at the source, open
  *    arrow at the target), associations (directed ones with arrows), data
- *    associations, bpmn-js colours (color:background-color / bioc:fill,
+ *    associations, a message flow's message (messageRef: an envelope
+ *    halfway along it, outlined, filled when the DI says
+ *    messageVisibleKind="non_initiating"; its name in 12 px wrapped at 150
+ *    px, its left edge at the middle, 10 px below it: where bpmn-js 18 puts
+ *    it when it opens a file),
+ *    bpmn-js colours (color:background-color / bioc:fill,
  *    color:border-color / bioc:stroke, color:color of the label). Anything
  *    else with a shape is a plain box.
- *  - Labels like bpmn-js: external labels (events, gateways, data, flows,
- *    groups) centred on the DI label bounds with their top at its y, wrapped
- *    at 90 px in 11 px Arial (text.ts wrapLines), 13.2 px a line; without
- *    label bounds below the shape (a group: at its top), a flow's at the
- *    middle of its middle segment, 15 px above it (right of a vertical one).
+ *  - Labels like bpmn-js 18: external labels (events, gateways, data, flows,
+ *    groups) centred on the DI label bounds with their top at its y, in 11
+ *    px Arial (text.ts wrapLines), 13.2 px a line, laid out twice like
+ *    bpmn-js: wrapped at max(90, the label bounds' width), then again at the
+ *    width of the widest line of that (rounded up), which may break it
+ *    differently; without label bounds (90 px) below the shape (a group: at
+ *    its top), a flow's at the middle of its middle segment, 15 px above it
+ *    (right of a vertical one).
  *    Embedded labels: 12 px, padding 7, centred in tasks and collapsed
  *    sub-processes, at the top of expanded ones, left-top in annotations;
  *    pool and lane names in their 30 px header band.
@@ -114,7 +133,7 @@
  */
 import { aroundView } from '../context.js';
 import { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
+import { ioError, modelError, usageError } from '../errors.js';
 import { layoutModel } from '../layout.js';
 import { is, type El } from '../model.js';
 import type { MutationReport } from '../report.js';
@@ -216,6 +235,10 @@ export const RENDER_MAX_SIZE = 2000;
 export const MIN_LABEL_SCALE = 0.75;
 /** The halo colours: a plain highlight list uses `changed`. */
 export const HALO_COLORS = { created: '#2f9e44', changed: '#f76707', moved: '#1c7ed6' } as const;
+/** --tiles makes at most this many tiles: a drawing that needs more stays one image, with a note (render a part instead). */
+export const MAX_TILES = 40;
+/** Coordinates beyond ±COORD_LIMIT px (or not a number) are broken DI: such a shape, connection or label is not drawn, a note names it. */
+export const COORD_LIMIT = 1_000_000;
 
 const MARGIN = 20;
 /** the margin of the region drawn around focus elements and their neighbours */
@@ -242,34 +265,52 @@ const SIZE = 12;
 /** `bpmn render --format svg`: one plane of the document as SVG (see the module contract). */
 export async function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> {
   let doc = await Doc.fromXml(xml);
-  const notes: string[] = [];
-  if (!readPlanes(doc.definitions).length) {
-    // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth)
-    const { xml: drawn } = await layoutModel(doc.model);
-    doc = await Doc.fromXml(drawn);
-    notes.push('the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)');
-  }
-  const result = renderDocSvg(doc, opts);
+  if (readPlanes(doc.definitions).length) return renderDocSvg(doc, opts);
+  // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth); the problems stay the file's
+  const fileProblems = opts.problems ? layoutProblems(doc.definitions).problems : [];
+  const { xml: drawn } = await layoutModel(doc.model);
+  doc = await Doc.fromXml(drawn);
+  const result = drawDoc(doc, opts, fileProblems);
+  const notes = ['the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)'];
+  if (opts.problems) notes.push("the problems are the file's (`bpmn metrics <file>`), not the in-memory drawing's: none is in the image");
   return { ...result, notes: [...notes, ...result.notes] };
 }
 
 /** One plane of a parsed document as SVG (no layout; see the module contract). */
 export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult {
+  return drawDoc(doc, opts);
+}
+
+/** renderDocSvg; `fileProblems`: the layout problems of a file drawn in memory (listed instead of the drawing's). */
+function drawDoc(doc: Doc, opts: RenderOptions, fileProblems?: LayoutProblem[]): RenderResult {
   const defs = doc.definitions;
   const sem = semantics(defs);
-  const planes = readPlanes(defs, sem);
+  const read = readPlanes(defs, sem);
+  const checked = read.map(saneOf);
+  const planes = checked.map((c) => c.plane);
   const want = cropOf(doc, sem, planes, opts);
   const plane = pickPlane(planes, sem, opts.plane ?? want.plane ?? focusPlane(planes, opts.focus));
   const others = planes.filter((p) => p !== plane).map((p) => p.rootId);
   const highlight = halosOf(doc, opts.highlight);
   if (!plane) return compose({ items: [] }, { plane: 'none', planes: others, notes: ['the document has no diagram plane'] }, opts);
   const notes: string[] = [];
-  const undrawn = undrawnOn(planes, plane, sem);
-  if (undrawn.length) {
-    const shown = undrawn.slice(0, 5).join(', ') + (undrawn.length > 5 ? `, ... (${undrawn.length - 5} more)` : '');
-    notes.push(`${undrawn.length} element${undrawn.length > 1 ? 's have' : ' has'} no shape and ${undrawn.length > 1 ? 'are' : 'is'} not drawn: ${shown} (\`bpmn layout <file>\` draws ${undrawn.length > 1 ? 'them' : 'it'})`);
+  const index = planes.indexOf(plane);
+  const unchecked = read[index]!;
+  const undrawn = undrawnOn(read, unchecked, sem);
+  if (undrawn.length) notes.push(`${undrawn.length} element${undrawn.length > 1 ? 's have' : ' has'} no shape and ${undrawn.length > 1 ? 'are' : 'is'} not drawn: ${idList(undrawn)} (\`bpmn layout <file>\` draws ${undrawn.length > 1 ? 'them' : 'it'})`);
+  const { broken, labels } = checked[index]!;
+  if (broken.length) notes.push(`${broken.length} element${broken.length > 1 ? 's have' : ' has'} broken coordinates (not a number, beyond ±${thousands(COORD_LIMIT)} px, or a negative size) and ${broken.length > 1 ? 'are' : 'is'} not drawn: ${idList(broken)} (\`bpmn layout <file>\` draws ${broken.length > 1 ? 'them' : 'it'} again)`);
+  if (labels.length) notes.push(`${labels.length} label${labels.length > 1 ? 's have' : ' has'} broken bounds and ${labels.length > 1 ? 'are' : 'is'} not drawn: ${idList(labels)} (\`bpmn label <file> <id> --side below\` places ${labels.length > 1 ? 'each' : 'it'} again)`);
+  if (!plane.shapes.size && !plane.edges.size) {
+    if (unchecked.shapes.size || unchecked.edges.size) {
+      throw ioError('E_RENDER', `Nothing on the plane of ${plane.rootId} can be drawn: every shape and connection has broken coordinates`, {
+        element: plane.rootId,
+        hint: `Broken: ${idList(broken)}. \`bpmn show <file> --layout\` lists the drawing; \`bpmn layout <file>\` draws it again.`,
+      });
+    }
+    if (want.scope) throw modelError('E_NO_MATCH', `Nothing of --scope ${want.scope} is drawn: the plane of ${plane.rootId} is empty`, { element: want.scope, hint: '`bpmn layout <file>` draws the elements without a shape; `bpmn render <file>` lists the planes.' });
+    notes.push(`the plane of ${plane.rootId} is empty`);
   }
-  if (!plane.shapes.size && !plane.edges.size) notes.push(`the plane of ${plane.rootId} is empty`);
   const drawn = want.crop ? drawnOf(plane, planes, want.crop, notes) : undefined;
   const scene = drawPlane(plane, drawn, highlight);
   if (Array.isArray(opts.highlight)) {
@@ -278,11 +319,59 @@ export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult {
     const missing = opts.highlight.filter((id) => !inImage.has(id));
     if (missing.length) notes.push(`highlighted but not in the image (${drawn ? 'outside the crop or ' : ''}not drawn on this plane): ${missing.join(', ')}`);
   }
-  // a crop's flow nodes drawn (a scope: those inside it, in drawing order)
+  // a crop's flow nodes drawn (a scope: those inside it, in drawing order; a scope that is a plane: its flow nodes)
   const nodes = want.crop?.frame
     ? [...plane.shapes.values()].filter((s) => s.id !== want.crop!.frame && drawn!.has(s.id) && is(s.el, 'bpmn:FlowNode')).map((s) => s.id)
-    : want.crop?.nodes.filter((id) => drawn!.has(id));
-  return compose(scene, { plane: plane.rootId, planes: others, notes, located: plane, defs, ...(drawn ? { drawn } : {}), ...(nodes ? { nodes } : {}) }, opts);
+    : want.crop
+      ? want.crop.nodes.filter((id) => drawn!.has(id))
+      : want.scope
+        ? [...plane.shapes.values()].filter((s) => is(s.el, 'bpmn:FlowNode')).map((s) => s.id)
+        : undefined;
+  return compose(scene, { plane: plane.rootId, planes: others, notes, located: plane, defs, ...(fileProblems ? { fileProblems } : {}), ...(drawn ? { drawn } : {}), ...(nodes ? { nodes } : {}) }, opts);
+}
+
+/** At most five ids, then how many more. */
+const idList = (ids: string[]): string => ids.slice(0, 5).join(', ') + (ids.length > 5 ? `, ... (${ids.length - 5} more)` : '');
+
+/** Thousands with commas (1,000,000). */
+const thousands = (v: number): string => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** A coordinate the renderer draws: a finite number within ±COORD_LIMIT. */
+const saneNumber = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= COORD_LIMIT;
+
+const saneBox = (b: Box): boolean => [b.x, b.y, b.width, b.height, b.x + b.width, b.y + b.height].every(saneNumber) && b.width >= 0 && b.height >= 0;
+
+/**
+ * The plane without broken geometry (see contract): shapes and connections
+ * with a coordinate that is not a finite number within ±COORD_LIMIT (or a
+ * negative size) are left out, broken label bounds dropped; the plane itself
+ * when nothing is broken, else a copy.
+ */
+function saneOf(plane: Plane): { plane: Plane; broken: string[]; labels: string[] } {
+  const broken: string[] = [];
+  const labels: string[] = [];
+  const shapes = new Map<string, DShape>();
+  for (const [id, s] of plane.shapes) {
+    if (!saneBox(s.bounds)) broken.push(id);
+    else if (s.label && !saneBox(s.label)) {
+      labels.push(id);
+      const copy = { ...s };
+      delete copy.label;
+      shapes.set(id, copy);
+    } else shapes.set(id, s);
+  }
+  const edges = new Map<string, DEdge>();
+  for (const [id, e] of plane.edges) {
+    if (!e.points.every((p) => saneNumber(p.x) && saneNumber(p.y))) broken.push(id);
+    else if (e.label && !saneBox(e.label)) {
+      labels.push(id);
+      const copy = { ...e };
+      delete copy.label;
+      edges.set(id, copy);
+    } else edges.set(id, e);
+  }
+  if (!broken.length && !labels.length) return { plane, broken, labels };
+  return { plane: { ...plane, shapes, edges }, broken, labels };
 }
 
 function pickPlane(planes: Plane[], sem: Semantics, id: string | undefined): Plane | undefined {
@@ -342,8 +431,8 @@ interface Crop {
   artifacts: boolean;
 }
 
-/** The crop the options ask for, and the plane it implies (a scope on a collapsed sub-process / a process without pool: that plane). */
-function cropOf(doc: Doc, sem: Semantics, planes: Plane[], opts: RenderOptions): { crop?: Crop; plane?: string } {
+/** The crop the options ask for, and the plane it implies (a scope on a collapsed sub-process / a process without pool: that plane, `scope` names it). */
+function cropOf(doc: Doc, sem: Semantics, planes: Plane[], opts: RenderOptions): { crop?: Crop; plane?: string; scope?: string } {
   const asked = (['around', 'path', 'scope', 'ids'] as const).filter((k) => (k === 'ids' ? !!opts.ids?.length : opts[k] !== undefined));
   if (asked.length > 1) {
     throw usageError(`${asked.map((k) => (k === 'ids' ? 'element ids' : `--${k}`)).join(' and ')} crop the image in different ways; use one`, { hint: 'Render one part per call: `bpmn render <file> --around <id>`, `--path <from> <to>`, `--scope <id>` or ids.' });
@@ -384,13 +473,13 @@ function cropOf(doc: Doc, sem: Semantics, planes: Plane[], opts: RenderOptions):
   if (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane')) return frameCrop(id);
   if (is(el, 'bpmn:SubProcess')) {
     if (expandedOn) return frameCrop(id);
-    if (planes.some((p) => p.rootId === id)) return { plane: id };
+    if (planes.some((p) => p.rootId === id)) return { plane: id, scope: id };
     throw modelError('E_NO_MATCH', `${id} is not drawn (no shape, no plane of its own)`, { element: id, hint: '`bpmn layout <file>` draws it; `bpmn render <file>` lists the planes.' });
   }
   if (is(el, 'bpmn:Process')) {
     const pool = sem.poolOfProcess.get(id);
     if (pool && planeOfId(planes, pool)) return frameCrop(pool);
-    if (planes.some((p) => p.rootId === id)) return { plane: id };
+    if (planes.some((p) => p.rootId === id)) return { plane: id, scope: id };
   }
   throw modelError('E_WRONG_KIND', `--scope takes a pool, lane, sub-process or process; "${id}" is a ${el.$type.replace(/^bpmn:/, '')}`, {
     element: id,
@@ -509,6 +598,8 @@ interface Item {
   fit?: Box;
   /** a badge: only in this tile */
   tile?: number;
+  /** what makes a tile worth keeping: a shape's box, a label's, a frame's name; absent for connections, context and overlays */
+  content?: Box;
 }
 
 interface Scene {
@@ -559,10 +650,11 @@ function drawPlane(plane: Plane, drawn: Set<string> | undefined, halo: (id: stri
     // a frame that only moved or grew gets no halo (its content says what moved)
     const color = s.container && halo(s.id) === HALO_COLORS.moved ? undefined : halo(s.id);
     if (color) items.push({ box: grow(s.bounds, 9), layer, svg: shapeHalo(s, color), id: s.id, extra: true });
-    items.push({ box: s.bounds, layer, svg: `<g ${full ? 'data-id' : 'data-context'}="${attr(s.id)}">${shapeSvg(s, style)}</g>`, id: s.id, ...(full ? {} : { extra: true }) });
+    const content = !full ? undefined : s.container || s.kind === 'group' ? frameNameBox(s) : s.bounds;
+    items.push({ box: s.bounds, layer, svg: `<g ${full ? 'data-id' : 'data-context'}="${attr(s.id)}">${shapeSvg(s, style)}</g>`, id: s.id, ...(full ? {} : { extra: true }), ...(content ? { content } : {}) });
     if (label) {
       if (color) items.push(labelTint(label, color, s.id));
-      items.push({ ...label, id: s.id, ...(full ? {} : { extra: true }) });
+      items.push({ ...label, id: s.id, ...(full ? { content: label.box } : { extra: true }) });
     }
   }
   for (const e of plane.edges.values()) {
@@ -574,9 +666,8 @@ function drawPlane(plane: Plane, drawn: Set<string> | undefined, halo: (id: stri
       if (from === to) continue;
       // faded: the connection goes on to something the crop leaves out (the view fits its first 40 px)
       const stub = from ? cut(e.points, STUB) : cut([...e.points].reverse(), STUB).reverse();
-      items.push({ box: pointsBox(e.points), fit: pointsBox(stub), layer: LAYER.edge, svg: `<g data-faded="${attr(e.id)}" opacity="${FADED}">${edgeSvg(e, style)}</g>`, id: e.id });
-      const label = edgeLabel(e, style);
-      if (label) items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: e.id, extra: true });
+      items.push({ box: edgeBox(e), fit: pointsBox(stub), layer: LAYER.edge, svg: `<g data-faded="${attr(e.id)}" opacity="${FADED}">${edgeSvg(e, style)}</g>`, id: e.id });
+      for (const label of [edgeLabel(e, style), messageLabel(e, style)]) if (label) items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: e.id, extra: true });
       continue;
     }
     const color = halo(e.id);
@@ -584,12 +675,14 @@ function drawPlane(plane: Plane, drawn: Set<string> | undefined, halo: (id: stri
       const light = color === HALO_COLORS.moved;
       items.push({ box: grow(pointsBox(e.points), 5), layer: LAYER.edge, svg: `<path d="${roundedPath(e.points)}" fill="none" stroke="${color}" stroke-opacity="${light ? 0.3 : 0.45}" stroke-width="${light ? 7 : 9}" stroke-linejoin="round" stroke-linecap="round"/>`, id: e.id, extra: true });
     }
-    items.push({ box: pointsBox(e.points), layer: LAYER.edge, svg: `<g data-id="${attr(e.id)}">${edgeSvg(e, style)}</g>`, id: e.id });
+    items.push({ box: edgeBox(e), layer: LAYER.edge, svg: `<g data-id="${attr(e.id)}">${edgeSvg(e, style)}</g>`, id: e.id });
     const label = edgeLabel(e, style);
     if (label) {
       if (color) items.push(labelTint(label, color, e.id));
-      items.push({ ...label, id: e.id });
+      items.push({ ...label, id: e.id, content: label.box });
     }
+    const message = messageLabel(e, style);
+    if (message) items.push({ ...message, id: e.id, content: message.box });
   }
   return { items };
 }
@@ -654,9 +747,17 @@ interface Frame {
   /** the plane drawn (badges are placed on it) */
   located?: Plane;
   defs?: El;
+  /** a file drawn in memory: its own layout problems (listed instead of the drawing's; no badges) */
+  fileProblems?: LayoutProblem[];
   /** a crop's ids drawn in full */
   drawn?: Set<string>;
   nodes?: string[];
+}
+
+/** A scale as the notes and the `wrote` line print it: two decimals rounded down (0.7458: 0.74, never above the scale), two significant digits below 0.01. */
+export function scaleText(scale: number): string {
+  if (scale >= 0.01) return (Math.floor(scale * 100 + 1e-9) / 100).toFixed(2);
+  return scale > 0 ? String(Number(scale.toPrecision(2))) : '0';
 }
 
 function compose(scene: Scene, frame: Frame, opts: RenderOptions): RenderResult {
@@ -676,21 +777,26 @@ function compose(scene: Scene, frame: Frame, opts: RenderOptions): RenderResult 
     const near = nearFocus(frame.located, focus);
     const region = unionOf(items.filter((i) => i.id !== undefined && (focus.has(i.id) || (near.has(i.id) && !frame.located!.edges.has(i.id)))).map((i) => i.box));
     if (region) {
-      notes.push(`the whole plane would be drawn at ${fitted(view).toFixed(2)} of its size: the image shows the region around the ${focus.size} element${focus.size > 1 ? 's' : ''} in focus (\`bpmn render <file>\` draws all of it)`);
+      notes.push(`the whole plane would be drawn at ${scaleText(fitted(view))} of its size: the image shows the region around the ${focus.size} element${focus.size > 1 ? 's' : ''} in focus (\`bpmn render <file>\` draws all of it)`);
       view = grow(region, FOCUS_MARGIN);
     }
   }
   scale = fitted(view);
-  const tiled = opts.tiles && scale < MIN_LABEL_SCALE ? tileViews(items, view, frame, base, max!) : undefined;
-  if (opts.tiles && !tiled) notes.push(`--tiles: the image is readable as one (scale ${scale.toFixed(2)}); no tiles`);
+  const listed = opts.problems ? problemList(frame, opts.problems) : [];
+  const cut = opts.tiles && scale < MIN_LABEL_SCALE && max ? tileViews(items, view, frame, base, max, listed) : undefined;
+  const tiled = cut && 'views' in cut ? cut.views : undefined;
+  if (opts.tiles && scale >= MIN_LABEL_SCALE) notes.push(`--tiles: the image is readable as one (scale ${scaleText(scale)}); no tiles`);
   if (tiled) {
     scale = base;
-    notes.push(`split into ${tiled.length} tiles${tiled.some((t) => t.band) ? ` (${Math.max(...tiled.map((t) => t.band ?? 1))} bands)` : ''} at the diagram's columns (show --layout c<n>), each at scale ${base.toFixed(2)}`);
+    const bands = Math.max(...tiled.map((t) => t.band ?? 1));
+    const parts = tiled.length > 1 ? `split into ${tiled.length} tiles${bands > 1 ? ` (${bands} bands)` : ''} at the diagram's columns (show --layout c<n>)` : 'one tile holds every shape and label';
+    notes.push(`${parts}, each at scale ${scaleText(base)}${cut && 'views' in cut && cut.skipped ? '; parts with no shape or label (empty, or only connections passing through) are left out' : ''}`);
   } else if (scale < MIN_LABEL_SCALE) {
-    notes.push(`the labels are drawn at ${scale.toFixed(2)} of their size (below ${MIN_LABEL_SCALE}: hard to read); render a part instead: --around <id> [--depth n], --path <from> <to> or --tiles`);
+    if (cut && 'over' in cut) notes.push(`--tiles: the drawing needs more than ${MAX_TILES} tiles at scale ${scaleText(base)}: it is drawn as one image instead`);
+    notes.push(`the labels are drawn at ${scaleText(scale)} of their size (below ${MIN_LABEL_SCALE}: hard to read); render a part instead: --around <id> [--depth n], --path <from> <to> or ${opts.tiles ? '--scope <id>' : '--tiles'}`);
   }
   const views = tiled ?? [{ view }];
-  const problems = opts.problems ? badges(items, frame, opts.problems, views, scale) : [];
+  const problems = opts.problems ? badges(items, frame, listed, views, scale) : [];
   const images = views.map((t, i) => {
     const s = tiled ? Math.min(base, max ? max / Math.max(t.view.width, t.view.height) : base) : scale;
     return { ...emit(items, t.view, s, tiled ? i + 1 : undefined), ...(t.columns ? { columns: t.columns } : {}), ...(t.band ? { band: t.band } : {}) };
@@ -753,27 +859,30 @@ function problemBox(plane: Plane, ids: string[]): Box | undefined {
   return unionOf(boxes);
 }
 
-/** The problems listed (see contract), their badges added to `items`. */
-function badges(items: Item[], frame: Frame, asked: true | readonly LayoutProblem[], views: Array<{ view: Box }>, scale: number): RenderProblem[] {
-  if (!frame.defs || !frame.located) return [];
-  const plane = frame.located;
-  const located = locateProblems(frame.defs, layoutProblems(frame.defs).problems);
-  let listed: LayoutProblem[];
+/** The problems listed (see contract), located (metrics.ts locateProblems). */
+function problemList(frame: Frame, asked: true | readonly LayoutProblem[]): LayoutProblem[] {
+  const defs = frame.defs;
+  if (!defs || !frame.located) return [];
+  const located = frame.fileProblems ?? locateProblems(defs, layoutProblems(defs).problems);
   if (asked === true) {
     const shown = frame.drawn;
-    listed = shown ? located.filter((p) => p.ids.some((id) => shown.has(id))) : located;
-  } else {
-    // the given problems in their order, each matched to a located one (one to one)
-    const pool = new Map<string, LayoutProblem[]>();
-    for (const p of located) pool.set(problemKey(p), [...(pool.get(problemKey(p)) ?? []), p]);
-    listed = asked.map((p) => pool.get(problemKey(p))?.shift() ?? p);
+    return shown ? located.filter((p) => p.ids.some((id) => shown.has(id))) : located;
   }
+  // the given problems in their order, each matched to a located one (one to one)
+  const pool = new Map<string, LayoutProblem[]>();
+  for (const p of located) pool.set(problemKey(p), [...(pool.get(problemKey(p)) ?? []), p]);
+  return asked.map((p) => pool.get(problemKey(p))?.shift() ?? p);
+}
+
+/** The problems listed, numbered; their badges added to `items` (a problem of the file drawn in memory has none). */
+function badges(items: Item[], frame: Frame, listed: LayoutProblem[], views: Array<{ view: Box }>, scale: number): RenderProblem[] {
+  const plane = frame.located;
   const r = BADGE_R / scale;
   const placed: Point[] = [];
   return listed.map((p, i) => {
     const out: RenderProblem = { n: i + 1, kind: p.kind, ids: p.ids, ...(p.detail !== undefined ? { detail: p.detail } : {}), drawn: false };
     const at = p.at;
-    if (!at || at.plane !== plane.rootId) return out;
+    if (!plane || frame.fileProblems || !at || at.plane !== plane.rootId) return out;
     const tile = views.findIndex((v) => contains(v.view, at));
     if (tile < 0) return out;
     const box = problemBox(plane, p.ids) ?? { x: at.x, y: at.y, width: 0, height: 0 };
@@ -819,60 +928,132 @@ interface Span {
   b: number;
 }
 
-/**
- * Pieces of [lo, hi] of at most `budget`, cut in the middle of the gaps
- * between `spans` where one is in reach, as even as the gaps allow.
- */
-function cutAxis(lo: number, hi: number, spans: Span[], budget: number): Span[] {
-  const sorted = [...spans].sort((x, y) => x.a - y.a);
+/** Spans sorted and merged where they overlap or lie less than `gap` apart. */
+function mergeSpans(spans: Span[], gap: number): Span[] {
   const merged: Span[] = [];
-  for (const s of sorted) {
+  for (const s of [...spans].sort((x, y) => x.a - y.a)) {
     const last = merged[merged.length - 1];
-    if (last && s.a <= last.b) last.b = Math.max(last.b, s.b);
+    if (last && s.a - last.b < gap) last.b = Math.max(last.b, s.b);
     else merged.push({ ...s });
   }
+  return merged;
+}
+
+/**
+ * Pieces of [lo, hi] of at most `budget`, cut in the middle of the gaps
+ * between `spans` where one is in reach, as even as the gaps allow;
+ * undefined when it takes more than `room` pieces.
+ */
+function cutAxis(lo: number, hi: number, spans: Span[], budget: number, room: number): Span[] | undefined {
+  const merged = mergeSpans(spans, 0);
   const cuts: number[] = [];
   for (let i = 0; i + 1 < merged.length; i++) cuts.push((merged[i]!.b + merged[i + 1]!.a) / 2);
   const out: Span[] = [];
   let start = lo;
+  let k = 0;
   while (hi - start > budget) {
+    if (out.length >= room) return undefined;
     const target = start + (hi - start) / Math.ceil((hi - start) / budget);
-    const reach = cuts.filter((c) => c > start + 1 && c - start <= budget);
-    const at = reach.length ? reach.reduce((best, c) => (Math.abs(c - target) < Math.abs(best - target) ? c : best)) : start + budget;
+    while (k < cuts.length && cuts[k]! <= start + 1) k++;
+    let at = start + budget;
+    let best = Infinity;
+    for (let j = k; j < cuts.length && cuts[j]! - start <= budget; j++) {
+      const d = Math.abs(cuts[j]! - target);
+      if (d < best) {
+        best = d;
+        at = cuts[j]!;
+      }
+    }
     out.push({ a: start, b: at });
     start = at;
   }
   out.push({ a: start, b: hi });
-  return out;
+  return out.length > room ? undefined : out;
 }
 
-/** The tiles of an unreadable image (see contract): cut between the plane's columns, and between rows when too tall. */
-function tileViews(items: Item[], view: Box, frame: Frame, base: number, max: number): TileView[] | undefined {
+/**
+ * The pieces of one axis: the content's stretches (gaps of half a tile and
+ * more between them are left out), each cut by cutAxis; undefined when it
+ * takes more than `room` pieces.
+ */
+function axisPieces(lo: number, hi: number, content: Span[], cuts: Span[], budget: number, room: number): { pieces: Span[]; skipped: boolean } | undefined {
+  const stretches = mergeSpans(
+    content.map((c) => ({ a: Math.max(lo, c.a - MARGIN), b: Math.min(hi, c.b + MARGIN) })),
+    budget / 2,
+  );
+  if (stretches.length > room) return undefined;
+  const pieces: Span[] = [];
+  for (const s of stretches) {
+    const part = cutAxis(s.a, s.b, cuts, budget, room - pieces.length);
+    if (!part) return undefined;
+    pieces.push(...part);
+  }
+  const skipped = stretches.length > 1 || (stretches[0] !== undefined && (stretches[0].a > lo + 0.5 || stretches[0].b < hi - 0.5));
+  return { pieces, skipped };
+}
+
+/** The index range of the pieces a span meets. */
+function piecesMet(pieces: Span[], a: number, b: number): [number, number] {
+  let first = 0;
+  while (first < pieces.length && pieces[first]!.b < a) first++;
+  let last = first - 1;
+  while (last + 1 < pieces.length && pieces[last + 1]!.a <= b) last++;
+  return [first, last];
+}
+
+/**
+ * The tiles of an unreadable image (see contract): cut between the plane's
+ * columns, and between rows when too tall; only tiles with a shape, a label
+ * or a numbered problem in them. `over` when that takes more than MAX_TILES
+ * tiles; undefined when nothing is to be tiled.
+ */
+function tileViews(items: Item[], view: Box, frame: Frame, base: number, max: number, problems: LayoutProblem[]): { views: TileView[]; skipped: boolean } | { over: true } | undefined {
   const plane = frame.located;
   if (!plane) return undefined;
   const budget = max / base;
+  // what a tile must hold to be kept
+  const marks: Box[] = items.filter((i) => !i.extra && i.content && meets(i.content, view)).map((i) => i.content!);
+  for (const p of problems) if (p.at && p.at.plane === plane.rootId && !frame.fileProblems && contains(view, p.at)) marks.push({ x: p.at.x, y: p.at.y, width: 0, height: 0 });
+  if (!marks.length) return undefined;
   const drawnShape = (s: DShape): boolean => (!frame.drawn || frame.drawn.has(s.id)) && !s.container && s.kind !== 'group' && meets(s.bounds, view);
   const leaves = [...plane.shapes.values()].filter(drawnShape);
+  const leafIds = new Set(leaves.map((s) => s.id));
   const columns = planeColumns(plane)
     .map((c) => {
-      const ids = c.ids.filter((id) => leaves.some((s) => s.id === id));
-      const boxes = ids.map((id) => plane.shapes.get(id)!.bounds);
-      return { index: c.index, a: Math.min(...boxes.map((b) => b.x)), b: Math.max(...boxes.map((b) => b.x + b.width)), n: ids.length };
+      const boxes = c.ids.filter((id) => leafIds.has(id)).map((id) => plane.shapes.get(id)!.bounds);
+      return { index: c.index, a: Math.min(...boxes.map((b) => b.x)), b: Math.max(...boxes.map((b) => b.x + b.width)), n: boxes.length };
     })
     .filter((c) => c.n > 0);
   const others = leaves.filter((s) => !is(s.el, 'bpmn:FlowNode') || s.kind === 'boundary').map((s) => ({ a: s.bounds.x, b: s.bounds.x + s.bounds.width }));
-  const xs = cutAxis(view.x, view.x + view.width, [...columns, ...others], budget);
-  const ys = cutAxis(view.y, view.y + view.height, leaves.map((s) => ({ a: s.bounds.y, b: s.bounds.y + s.bounds.height })), budget);
-  const out: TileView[] = [];
-  ys.forEach((y, band) => {
-    for (const x of xs) {
-      const v = { x: x.a, y: y.a, width: x.b - x.a, height: y.b - y.a };
-      if (!items.some((i) => !i.extra && meets(i.fit ?? i.box, v))) continue;
-      const inside = columns.filter((c) => (c.a + c.b) / 2 >= x.a && (c.a + c.b) / 2 < x.b).map((c) => c.index);
-      out.push({ view: v, ...(inside.length ? { columns: [Math.min(...inside), Math.max(...inside)] as [number, number] } : {}), ...(ys.length > 1 ? { band: band + 1 } : {}) });
+  const xs = axisPieces(view.x, view.x + view.width, marks.map((b) => ({ a: b.x, b: b.x + b.width })), [...columns, ...others], budget, MAX_TILES);
+  const ys = xs && axisPieces(view.y, view.y + view.height, marks.map((b) => ({ a: b.y, b: b.y + b.height })), leaves.map((s) => ({ a: s.bounds.y, b: s.bounds.y + s.bounds.height })), budget, MAX_TILES);
+  if (!xs || !ys) return { over: true };
+  // the cells holding a mark (every piece holds one: the tiles are at least as many as the pieces of either axis)
+  const kept = new Set<number>();
+  for (const m of marks) {
+    const [x0, x1] = piecesMet(xs.pieces, m.x, m.x + m.width);
+    const [y0, y1] = piecesMet(ys.pieces, m.y, m.y + m.height);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        kept.add(y * xs.pieces.length + x);
+        if (kept.size > MAX_TILES) return { over: true };
+      }
     }
+  }
+  const bands = ys.pieces.map((_, y) => xs.pieces.some((_, x) => kept.has(y * xs.pieces.length + x)));
+  const bandCount = bands.filter(Boolean).length;
+  const out: TileView[] = [];
+  let band = 0;
+  ys.pieces.forEach((y, yi) => {
+    if (!bands[yi]) return;
+    band++;
+    xs.pieces.forEach((x, xi) => {
+      if (!kept.has(yi * xs.pieces.length + xi)) return;
+      const inside = columns.filter((c) => (c.a + c.b) / 2 >= x.a && (c.a + c.b) / 2 < x.b).map((c) => c.index);
+      out.push({ view: { x: x.a, y: y.a, width: x.b - x.a, height: y.b - y.a }, ...(inside.length ? { columns: [Math.min(...inside), Math.max(...inside)] as [number, number] } : {}), ...(bandCount > 1 ? { band } : {}) });
+    });
   });
-  return out.length > 1 ? out : undefined;
+  return { views: out, skipped: xs.skipped || ys.skipped || kept.size < xs.pieces.length * ys.pieces.length };
 }
 
 /* ------------------------------------------------------------------ */
@@ -978,10 +1159,20 @@ function boxText(value: string, box: Box, h: 'center' | 'left', v: 'top' | 'midd
   return lines(ls, x, box.y + top + step * 0.75, SIZE, color, h === 'left' ? 'start' : 'middle', transform);
 }
 
-/** An external label like bpmn-js: centred on `cx`, its top at `top`, wrapped at 90 px in 11 px (data-label: the element's id). */
-function externalLabel(id: string, value: string, cx: number, top: number, color: string): Item {
-  const ls = wrapLines(value, (EXT_WIDTH * SIZE) / EXT_SIZE);
-  const width = Math.max(...ls.map((l) => (textWidth(l) * EXT_SIZE) / SIZE), 1);
+/**
+ * An external label like bpmn-js 18 (BpmnImporter.addLabel, then
+ * renderExternalLabel): the text laid out at max(90, the DI label width) in
+ * 11 px, then again at the width of its widest line (rounded up), which can
+ * break it differently; centred on `cx`, its top at `top` (data-label: the
+ * element's id).
+ */
+function externalLabel(id: string, value: string, cx: number, top: number, color: string, labelWidth = EXT_WIDTH): Item {
+  const k = SIZE / EXT_SIZE;
+  const first = wrapLines(value, Math.max(EXT_WIDTH, labelWidth) * k);
+  const widest = Math.ceil(Math.max(...first.map((l) => textWidth(l) / k)) - 1e-9);
+  // (a hair of slack: the widest line fits its own width despite rounding)
+  const ls = wrapLines(value, widest * k + 1e-6);
+  const width = Math.max(...ls.map((l) => textWidth(l) / k), 1);
   return {
     box: { x: cx - width / 2, y: top, width, height: ls.length * EXT_LINE },
     layer: LAYER.label,
@@ -995,7 +1186,7 @@ function shapeLabel(s: DShape, style: Style): Item | undefined {
   if (!external) return undefined;
   const value = s.kind === 'group' ? raw<string>(raw(s.el, 'categoryValueRef'), 'value') : raw<string>(s.el, 'name');
   if (!value || !value.trim()) return undefined;
-  if (s.label) return externalLabel(s.id, value, s.label.x + s.label.width / 2, Math.round(s.label.y), style.label);
+  if (s.label) return externalLabel(s.id, value, s.label.x + s.label.width / 2, Math.round(s.label.y), style.label, s.label.width);
   const b = s.bounds;
   // no label bounds: bpmn-js puts a 90 x 20 label below the shape (a group's at its top)
   return externalLabel(s.id, value, b.x + b.width / 2, Math.round(s.kind === 'group' ? b.y : b.y + b.height), style.label);
@@ -1005,9 +1196,86 @@ function edgeLabel(e: DEdge, style: Style): Item | undefined {
   if (e.kind !== 'sequenceFlow' && e.kind !== 'messageFlow') return undefined;
   const value = raw<string>(e.el, 'name');
   if (!value || !value.trim()) return undefined;
-  if (e.label) return externalLabel(e.id, value, e.label.x + e.label.width / 2, Math.round(e.label.y), style.label);
+  if (e.label) return externalLabel(e.id, value, e.label.x + e.label.width / 2, Math.round(e.label.y), style.label, e.label.width);
   const mid = flowLabelMid(e.points);
   return externalLabel(e.id, value, mid.x, Math.round(mid.y - 10), style.label);
+}
+
+/** The point halfway along a polyline. */
+function halfway(points: readonly Point[]): Point {
+  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i]!.x, p.y - points[i]!.y));
+  let rest = lengths.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < lengths.length; i++) {
+    const d = lengths[i]!;
+    if (rest <= d && d > 0) {
+      const a = points[i]!;
+      const b = points[i + 1]!;
+      return { x: a.x + ((b.x - a.x) * rest) / d, y: a.y + ((b.y - a.y) * rest) / d };
+    }
+    rest -= d;
+  }
+  return points[points.length - 1]!;
+}
+
+/** The message a message flow carries (messageRef): bpmn-js draws an envelope halfway along it, its name below. */
+const carriesMessage = (e: DEdge): boolean => e.kind === 'messageFlow' && !!raw(e.el, 'messageRef') && e.points.length >= 2;
+
+/** The envelope of a message flow's message, 21 x 14 centred halfway (bpmn-js MESSAGE_FLOW_MARKER): outlined for messageVisibleKind "initiating" (the DI default), filled for "non_initiating". */
+function envelopeSvg(e: DEdge, st: Style): string {
+  const m = halfway(e.points);
+  const initiating = raw(e.di, 'messageVisibleKind') === 'initiating';
+  const x = m.x - 10.5;
+  const y = m.y - 7;
+  return `<path data-message="${attr(e.id)}" d="M${n(x)} ${n(y)}v14h21v-14ZL${n(m.x)} ${n(y + 6)}L${n(x + 21)} ${n(y)}" fill="${initiating ? st.fill : st.stroke}" stroke="${initiating ? st.stroke : st.fill}" stroke-width="1" stroke-linejoin="round"/>`;
+}
+
+/**
+ * The name of a message flow's message: 12 px, wrapped at 150 px, in the
+ * flow's colour (data-message: the flow's id), where bpmn-js 18 puts it when
+ * it opens a file: its left edge at the middle of the flow, its top 10 px
+ * below it, the lines centred on the widest (on import bpmn-js measures the
+ * envelope and the text as 0 x 0; it centres the name below the envelope
+ * only when it redraws the flow after an edit).
+ */
+function messageLabel(e: DEdge, st: Style): Item | undefined {
+  if (!carriesMessage(e)) return undefined;
+  const value = raw<string>(raw(e.el, 'messageRef'), 'name');
+  if (!value || !value.trim()) return undefined;
+  const m = halfway(e.points);
+  const ls = wrapLines(value, 150);
+  const width = Math.max(...ls.map((l) => textWidth(l)), 1);
+  const top = m.y + 10;
+  return {
+    box: { x: m.x, y: top, width, height: ls.length * SIZE * 1.2 },
+    layer: LAYER.label,
+    svg: lines(ls, m.x + width / 2, top + SIZE * 1.2 * 0.75, SIZE, st.stroke, 'middle', ` data-message="${attr(e.id)}"`),
+  };
+}
+
+/** What a connection covers: its waypoints, and the envelope of a message flow's message. */
+function edgeBox(e: DEdge): Box {
+  const box = pointsBox(e.points);
+  if (!carriesMessage(e)) return box;
+  const m = halfway(e.points);
+  return unionOf([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
+}
+
+/** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's or expanded sub-process's name); undefined without one. */
+function frameNameBox(s: DShape): Box | undefined {
+  const name = s.kind === 'group' ? undefined : raw<string>(s.el, 'name');
+  if (!name || !name.trim()) return undefined;
+  const b = s.bounds;
+  const blackBox = s.kind === 'participant' && !raw(s.el, 'processRef');
+  if ((s.kind === 'participant' || s.kind === 'lane') && !blackBox) {
+    if (horizontal(s)) {
+      const h = Math.min(b.height, textWidth(name));
+      return { x: b.x, y: b.y + (b.height - h) / 2, width: Math.min(30, b.width), height: h };
+    }
+    const w = Math.min(b.width, textWidth(name));
+    return { x: b.x + (b.width - w) / 2, y: b.y, width: w, height: Math.min(30, b.height) };
+  }
+  const w = Math.min(b.width, textWidth(name) + 14);
+  return { x: b.x + (b.width - w) / 2, y: b.y, width: w, height: blackBox ? b.height : Math.min(30, b.height) };
 }
 
 /** bpmn-js's default flow label position: the middle of the middle segment, 15 px above it (right of a vertical one). */
@@ -1380,6 +1648,7 @@ function edgeSvg(e: DEdge, st: Style): string {
     let out = path(' stroke-dasharray="10 6"');
     if (start) out += `<circle cx="${n(start.p.x)}" cy="${n(start.p.y)}" r="4" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
     if (end) out += arrow(end, 'white', ink);
+    if (carriesMessage(e)) out += envelopeSvg(e, st);
     return out;
   }
   const dotted = path(' stroke-dasharray="0.5 4.5" stroke-linecap="round"');
