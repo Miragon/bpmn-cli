@@ -11,11 +11,20 @@ report shows what the skill adds.
 | `edit-hand-drawn-model` | insert a manager approval and a 3-day non-interrupting reminder into a model drawn in Camunda Modeler (scaffold) | the approval (a user task, found by its name, whatever its id) sits on the "yes" flow before "Order goods", directly or after its decision gateway; the timer boundary event on it and its path; start, check and gateway did not move, "Order goods" kept its row; new ids speak; no task with two incoming flows (implicit join); validated with the CLI; no hand-written XML; a judge on the reply |
 | `camunda7-external-task` | Camunda 7: external task, input mapping, error mapping, error boundary path; must pass `bpmn validate --strict` (scaffold) | `camunda:type` / `topic`; `camunda:inputParameter`; `camunda:errorEventDefinition` + `bpmn:error` code; boundary path; `validate --strict` ran and printed `valid, 0 warning(s)`; no hand-written XML |
 | `format-happy-path` | colour the happy path green and move the rejection branch below the main line (scaffold) | the path's shapes and flows are green (the bpmn-js green the CLI writes, or another common green); the rejection branch is not and lies below; the main line did not move; flows and nodes unchanged; validated with the CLI; no hand-written XML |
+| `tidy-after-edit` | add a step to a hand-drawn model whose drawing has a gateway label on a task and the rejection branch crossing a reminder path, and clean up the drawing (scaffold) | the new task sits between "Return invoice to supplier" and "Invoice returned"; the gateway label is off the tasks and lines and the rejection branch no longer crosses the reminder path (the two problems `bpmn metrics` reports on the fixture); the main line did not move; nodes and flows otherwise unchanged; validated with the CLI; no hand-written XML; a rendered PNG was read (the look step; an indicator like `skill-used`) |
 | `camunda8-retoure-german` | a German request: a deployable Camunda 8 returns process | Camunda 8 file; both job types; the `lager` candidate group; a gateway with FEEL conditions; speaking ASCII ids; validated, 0 deploy findings; no hand-written XML |
 | `ignores-python-question` | an unrelated Python question | the skill is not invoked (scored in both arms); a judge on the answer |
 
 `skill-used` graders (`tool_used: Skill`) are plugin-fired indicators: they show whether the skill
-triggered and do not count toward the score of a two-arm run.
+triggered and do not count toward the score of a two-arm run. `render-read` (a Read of a `.png`)
+is one too: it shows that the skill's look step ran.
+
+Graders cannot run a command, so `tidy-after-edit` checks the layout problems as DI conditions on
+the file: the label's bounds, and the rejection branch in a row below the reminder path (with
+rows at least 100 px apart, as the CLI draws them). `test/plugin.test.ts` keeps them in line with
+`bpmn metrics --json` on the fixture, the solution and seven other states of the file. For the
+layout problems a run left, run `bpmn metrics <file> --json` on the workspaces that `--keep-temp`
+keeps.
 
 What happened during a run is checked deterministically (`tool_used` on the commands, `regex` on
 the trace or the file); the judges (`llm`) read only the final reply (`focus: last_message`). A
@@ -33,7 +42,8 @@ the eval sandbox). The evaluator therefore puts a `bpmn` on `PATH` before the ru
 
 Shell commands of an eval run execute in Claude Code's sandbox, which hides the home directory
 and the temporary directories (`/tmp` and `$TMPDIR`): `bpmn`, the CLI's files and `node` itself
-must be readable from outside them. A global install under `/usr/local` or `/opt` works; a Node
+must be readable from outside them (for `bpmn render` also `assets/` and
+`node_modules/@resvg/resvg-wasm`). A global install under `/usr/local` or `/opt` works; a Node
 from volta / nvm or a checkout below `$HOME` does not, and neither does a shim in `/tmp`. On macOS
 the per-user cache directory works for a copy of node, the built CLI and the shim:
 `$(getconf DARWIN_USER_CACHE_DIR)bpmn-cli-eval/`. Check it with the cheap case first, then the
@@ -55,7 +65,8 @@ claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit --j
   ignores.
 - The baseline arm sees the same `bpmn` on `PATH`. An agent without the skill sometimes finds it
   (`which bpmn`) and learns it from `bpmn guide`, so the delta is smaller than for a user who has
-  neither the plugin nor the CLI.
+  neither the plugin nor the CLI. `bpmn guide --short` names `bpmn render` too: in the first
+  `tidy-after-edit` run both baseline runs found the CLI, rendered and read the PNGs as well.
 
 `test/plugin.test.ts` checks the suite without a model: every case is well-formed, every regex
 compiles, a reference solution made with the CLI passes every file grader, the untouched fixture

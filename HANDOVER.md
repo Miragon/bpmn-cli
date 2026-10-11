@@ -1,4 +1,4 @@
-# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 and 2 of `bpmn render`)
+# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 to 3 of `bpmn render`)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -35,7 +35,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1850 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1854 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -45,6 +45,88 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## `bpmn render`, stage 3 (2026-10-11, `feat/render`, issue #12)
+
+Adoption in the Claude Code plugin; no change to the CLI or the library.
+Lead decisions that apply: the skill passes an explicit `-o` into a
+`.bpmn-render/` folder of the working directory (scratch, may be deleted
+or ignored; the CLI's own default, the temp directory, lies outside the
+working directory, where Claude Code may ask before a Read).
+
+- **The look step** (`plugins/bpmn-cli/skills/bpmn/SKILL.md`, core loop
+  step 4 of 6): after a change that drew something, `bpmn render <file>
+  --problems -o .bpmn-render/<name>.png` or `--render .bpmn-render/<name>.png`
+  on the change, Read the PNG, fix the numbered problems by their ids with
+  the format commands, render again at most twice, `--around` / `--path` on a
+  large model. The description says "render" too (for "show me the diagram").
+  `reference/formatting.md` has a new section 2 "Look at it": the crops,
+  `--highlight`, the `wrote` line and the token budget, `--max-size`, the
+  0.75 note and `--tiles`, `--problems`, planes, `--render`; its batch
+  example renders. `.bpmn-render/` is in this repository's `.gitignore`.
+- **Size**: `claude --plugin-dir plugins/bpmn-cli plugin details bpmn-cli`
+  before / after: always-on ~482 / ~484 tokens, on invoke ~6k / ~6.4k
+  (SKILL.md 16,080 -> 16,966 bytes). `claude plugin validate --strict`
+  passes for the plugin and the marketplace.
+- **Tests** (`test/plugin.test.ts`, 4 new, each fails before; the gate
+  passes with 1854 tests): the render block of
+  SKILL.md runs on the recipes' model and writes a real PNG of the size the
+  `wrote` line names, within 2000 px, into `.bpmn-render/`; every `bpmn
+  render` and `--render` the skill shows writes into `.bpmn-render/`; the
+  formatting examples (with their renders) run as before. The test's
+  esbuild bundle of the CLI now sits at `<tmp>/pkg/cli/cli.mjs` with links
+  `<tmp>/assets` and `<tmp>/node_modules`, so it finds the font
+  (`../../assets` from the bundle) and `@resvg/resvg-wasm`.
+- **Eval case `tidy-after-edit`** (`plugins/bpmn-cli/evals/`): a
+  hand-drawn invoice approval (synthetic, speaking ids) whose gateway label
+  sits on "Approve invoice" and whose rejection branch crosses the reminder
+  path of a timer (`bpmn metrics`: `labelClash`, `crossings`); the user asks
+  for an email step "Inform requester" in the rejection branch and to clean
+  up the drawing, keeping the main line. Graders: the new task between the
+  right two nodes; the label clear and no crossing (DI conditions, since
+  graders cannot run commands; `test/plugin.test.ts` asserts that they
+  agree with `bpmn metrics --json` on the fixture, the CLI solution and
+  seven other states: only the edit, only one of the two fixes, the label
+  below / left / right, the solution followed by `compact`); the main line
+  in place; 12 nodes, 10 flows; validated; no hand-written XML;
+  `render-read` (a Read of a `.png`) and `skill-used` as with-only
+  indicators.
+
+The eval, run once (`claude plugin eval plugins/bpmn-cli --case
+tidy-after-edit --runs 2 --scaffold --allow-tools Bash Write Edit`, the
+CLI of this branch on `PATH` from a copy in the user cache directory as
+`evals/README.md` describes; 111 s, $1.41 in all):
+
+| | with the plugin | without (baseline) |
+| --- | --- | --- |
+| score as run (2 runs) | 0.95 (1.0, 0.9) | 0.95 (1.0, 0.9) |
+| score with the corrected `no-crossing` grader | 1.0 (1.0, 1.0) | 0.95 (1.0, 0.9) |
+| failed graders | `no-crossing` once: a false negative, see below | `no-xml-in-shell` once (`sed -n '/<bpmn:process/,...'` to diff the process before / after) |
+| layout problems left (`bpmn metrics --json` on each kept workspace) | 0, 0 | 0, 0 |
+| look step: renders read | 2 / 2 runs (2 and 6 PNG reads, about 440-530 image tokens each) | 2 / 2 runs (2 reads each) |
+| turns, cost, time per run | 15 / 21, $0.32 / $0.45, 39 / 63 s | 11 / 13, $0.31 / $0.33, 48 / 49 s |
+
+- All four runs ended with the same drawing idea, made with the CLI: the
+  task with `bpmn add`, the rejection branch in a row below the reminder
+  path (`place`, three of them then `compact`), the gateway label above the
+  gateway. One run with the plugin iterated with dry runs and six renders.
+  The baseline found `bpmn` on `PATH` (`which bpmn`), read `bpmn guide
+  --short`, which names `bpmn render` since stage 2, and rendered to
+  `$TMPDIR` and read the PNGs too. So this case measures the CLI's look
+  affordance in both arms; it cannot separate the skill's look step from
+  the CLI's own guide.
+- The first `no-crossing` grader wanted the rejection branch at y >= 420
+  once the reminder task had moved up to 241-340; one run left them at 300
+  and 400 (metrics: no crossing). The grader now takes the reminder's row
+  in steps of 100 px (rows at least 100 px apart, as the CLI draws them),
+  and the agreement test has the solution plus `compact` as a variant;
+  applied to the four kept results it passes all four. Not re-run (one
+  eval run per stage).
+- One run with the plugin prefixed its first render with `mkdir -p
+  .bpmn-render;`, which the render does itself and which is not
+  pre-approved (a user would be asked); the look step now says the
+  directory is created. Both runs with the plugin also chained `bpmn`
+  commands with `;` against the skill's "one command per line" rule.
 
 ## `bpmn render`, stage 2 (2026-10-11, `feat/render`, issue #12)
 
@@ -152,10 +234,10 @@ Measured on this build:
 | `test/fixtures/render/long.bpmn` | whole at 2000 px: scale 0.51 (unreadable); `--tiles`: 2 tiles c0-c12 / c13-c25, 1,413 image tokens in all |
 | private corpus (394 files, counts only) | 1,116 problems, 1,111 located (the 5 `missing` have no place), 0 outside their elements' box, 1,099 badges on the first plane; 5,698 `--around` depth-2 crops, 0 errors, median 257 image tokens (p90 1,069, max 3,622; 652 over 1,000); the 22 files below the 0.75 label scale all tile into 2-3 tiles (median 2), each at most 1,743 px, 3,593 image tokens per file median (max 5,997) |
 
-Still open for stage 3 (and the issue's acceptance list): the plugin
-skill's look step with `test/plugin.test.ts` running its example, the eval
-case (layout problems left over and tokens spent with and without the look
-step), and the reviewer's 20-scenario side-by-side with `tools/render.sh`.
+Still open after stage 2 (and the issue's acceptance list): the plugin
+skill's look step with `test/plugin.test.ts` running its example and the
+eval case (both done in stage 3, above), and the reviewer's 20-scenario
+side-by-side with `tools/render.sh`.
 
 ## `bpmn render`, stage 1 (2026-10-11, `feat/render`, issue #12)
 
@@ -1504,9 +1586,12 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    (step 3 added about 90 KB minified for the Camunda 8 profile: a lazily
    loaded profile per platform would be the lever).
 5. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
-   `bpmn render`) and 2 (crops, halos, numbered problems, tiles,
-   `--render`) are done, see "`bpmn render`, stage 2" and "stage 1"; stage
-   3 (the plugin skill's look step and its eval) is next.
+   `bpmn render`), 2 (crops, halos, numbered problems, tiles, `--render`)
+   and 3 (the plugin skill's look step and its eval case) are done, see
+   "`bpmn render`, stage 3", "stage 2" and "stage 1". Open: the reviewer's
+   20-scenario side-by-side with `tools/render.sh` (acceptance list), the
+   whole eval suite on the new skill, and offering `renderSvg` to design-iq
+   (out of scope here).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 

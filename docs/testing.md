@@ -204,6 +204,16 @@ mutating commands (text, JSON, the region of a large drawing, a failed render
 that leaves the change standing); and the fuzz walk's render oracle. The
 synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
 wide, built with the CLI) is the tiles and focus model.
+`test/plugin.test.ts` checks the Claude Code plugin; for the look step
+(stage 3) the render example of `SKILL.md` runs on the recipes' model and
+writes a real PNG within 2000 px into `.bpmn-render/`, every render the
+skill shows writes there (not to the CLI's default in the temporary
+directory, outside the working directory), and the layout graders of the
+eval case `tidy-after-edit` agree with `bpmn metrics --json` on its
+fixture, the reference solution and seven other states of the file (one of
+them the layout the agents of the first eval run ended with). The test bundles the CLI into a temporary
+directory, with links to `assets/` and `node_modules/` beside it, so the
+bundle finds the font and `@resvg/resvg-wasm`.
 
 ## Isomorphism check
 

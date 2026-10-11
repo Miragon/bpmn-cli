@@ -4,17 +4,19 @@
  *  - the metadata agrees with package.json (name, version) and release-please keeps it so;
  *  - the skill stays within Claude Code's limits and every link in it resolves;
  *  - every command the skill teaches is right for this CLI: the bash blocks of the recipes run in
- *    order, the blocks of the other reference files run on the models the recipes leave, and every
- *    `bpmn <command> --option` mentioned anywhere in the skill exists;
+ *    order, the blocks of the other reference files and the look step of SKILL.md (`bpmn render`)
+ *    run on the models the recipes leave, and every `bpmn <command> --option` mentioned anywhere in
+ *    the skill exists;
  *  - the eval suite is well-formed, and its graders are satisfiable: each scaffold writes a valid
  *    model, a reference solution made with the CLI passes every file grader, the untouched fixture
- *    fails the graders that check the change, and the transcript graders match what the CLI prints.
+ *    fails the graders that check the change, the transcript graders match what the CLI prints, and
+ *    the layout graders of tidy-after-edit say what `bpmn metrics --json` says.
  *
  * The CLI is bundled from src/ with esbuild into a temporary directory (not dist/, which
  * cli.test.ts rebuilds concurrently), and `bpmn` on PATH runs that bundle.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
@@ -35,10 +37,13 @@ let cliFile: string;
 
 beforeAll(async () => {
   tmp = mkdtempSync(join(tmpdir(), 'bpmn-plugin-'));
-  // the CLI reads ../package.json relative to its own file
-  mkdirSync(join(tmp, 'cli'));
-  copyFileSync(join(ROOT, 'package.json'), join(tmp, 'package.json'));
-  cliFile = join(tmp, 'cli', 'cli.mjs');
+  // relative to its own file the bundle reads ../package.json (src/cli.ts), the font from
+  // ../../assets (src/node/render.ts) and @resvg/resvg-wasm from node_modules above it
+  mkdirSync(join(tmp, 'pkg', 'cli'), { recursive: true });
+  copyFileSync(join(ROOT, 'package.json'), join(tmp, 'pkg', 'package.json'));
+  symlinkSync(join(ROOT, 'assets'), join(tmp, 'assets'));
+  symlinkSync(join(ROOT, 'node_modules'), join(tmp, 'node_modules'));
+  cliFile = join(tmp, 'pkg', 'cli', 'cli.mjs');
   await build({
     entryPoints: [join(ROOT, 'src', 'cli.ts')],
     bundle: true,
@@ -246,6 +251,45 @@ describe('the skill', () => {
     }, SLOW);
   }
 
+  it('the look step of SKILL.md runs: its render example draws the recipes\' model into .bpmn-render/', () => {
+    const base = join(tmp, 'recipes');
+    if (!existsSync(join(base, 'order-to-cash.bpmn'))) runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
+    const dir = workDir('skill-look');
+    cpSync(base, dir, { recursive: true });
+    const blocks = bashBlocks(join(SKILL, 'SKILL.md')).filter((b) => /\bbpmn render\b/.test(b));
+    expect(blocks).toHaveLength(1);
+    const r = sh(blocks[0]!, dir);
+    expect(r.code, `${r.out}${r.err}`).toBe(0);
+    const wrote = /^wrote (\S+) {2}(\d+)x(\d+) px {2}~[\d,]+ image tokens {2}scale [\d.]+ {2}plane \S+$/m.exec(r.out);
+    expect(wrote, r.out).not.toBeNull();
+    expect(wrote![1]).toMatch(/^\.bpmn-render\/[\w-]+\.png$/);
+    expect(r.out).toMatch(/^problems: none$|^problems \(numbered in the image\):$/m);
+    // a real PNG of the size the line names, within the default --max-size
+    const png = readFileSync(join(dir, wrote![1]!));
+    expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([Number(wrote![2]), Number(wrote![3])]);
+    expect(Math.max(png.readUInt32BE(16), png.readUInt32BE(20))).toBeLessThanOrEqual(2000);
+  }, SLOW);
+
+  it('every render the skill shows writes into .bpmn-render/ of the working directory, never the temp default', () => {
+    let renders = 0;
+    for (const file of skillFiles()) {
+      for (const line of md(file).split('\n')) {
+        // command lines only (code blocks and the pipe of a batch), not prose such as `--render <file.png>`
+        if (!/^\s*(?:\]' \| )?bpmn [a-z]/.test(line)) continue;
+        if (/^\s*bpmn render\b/.test(line)) {
+          renders++;
+          expect(line, file).toMatch(/ -o \.bpmn-render\/[\w-]+\.png\b/);
+        }
+        for (const [, out] of line.matchAll(/--render (\S+)/g)) {
+          renders++;
+          expect(out, `${file}: ${line}`).toMatch(/^\.bpmn-render\/[\w-]+\.png$/);
+        }
+      }
+    }
+    expect(renders).toBeGreaterThan(5);
+  });
+
   it('every ops JSON block in the skill is a valid batch (checked before anything runs)', () => {
     const dir = workDir('ops-shape');
     expect(bpmn(['new', 'empty.bpmn'], dir).code).toBe(0);
@@ -368,6 +412,18 @@ EOF`,
 ]
 EOF`,
   },
+  'tidy-after-edit': {
+    file: 'invoice-approval.bpmn',
+    changeGraders: ['inform-requester', 'gateway-label-clear', 'no-crossing'],
+    script: `bpmn add invoice-approval.bpmn sendTask "Inform requester" --id Activity_InformRequester --flow Flow_ReturnInvoiceToInvoiceReturned --render .bpmn-render/invoice-approval.png
+bpmn apply invoice-approval.bpmn - --render .bpmn-render/invoice-approval.png <<'EOF'
+[
+  { "op": "label", "id": "Gateway_InvoiceCorrect", "side": "above" },
+  { "op": "place", "branch": "Flow_InvoiceCorrectNo", "below": "Activity_RemindApprover" }
+]
+EOF
+bpmn render invoice-approval.bpmn --problems -o .bpmn-render/invoice-approval.png`,
+  },
   'camunda8-retoure-german': {
     file: 'retoure.bpmn',
     changeGraders: ['camunda8-file', 'job-workers', 'user-task-group', 'feel-gateway'],
@@ -399,7 +455,7 @@ describe('the eval suite', () => {
     .map((d) => d.name);
 
   it('has the cases the plugin is measured on, each with a prompt and graders', () => {
-    expect(cases.sort()).toEqual(['build-order-to-cash', 'camunda7-external-task', 'camunda8-retoure-german', 'edit-hand-drawn-model', 'format-happy-path', 'ignores-python-question']);
+    expect(cases.sort()).toEqual(['build-order-to-cash', 'camunda7-external-task', 'camunda8-retoure-german', 'edit-hand-drawn-model', 'format-happy-path', 'ignores-python-question', 'tidy-after-edit']);
     for (const c of cases) {
       const { data, body } = frontmatter(md(join(EVALS, c, 'prompt.md')));
       for (const key of Object.keys(data)) expect(PROMPT_KEYS.has(key), `${c}: prompt.md key ${key}`).toBe(true);
@@ -455,6 +511,10 @@ describe('the eval suite', () => {
     expect(matches(validated, { command: 'bpmn validate order-to-cash.bpmn --strict' })).toBe(true);
     expect(matches(validated, { command: 'npx -y @miragon/bpmn-cli@1.2.3 validate order-to-cash.bpmn' })).toBe(true);
     expect(matches(validated, { command: 'bpmn show order-to-cash.bpmn' })).toBe(false);
+    const look = g('tidy-after-edit', 'render-read');
+    expect(look.data.arm).toBe('with-only');
+    expect(matches(look, { file_path: '/w/.bpmn-render/invoice-approval.png' })).toBe(true);
+    expect(matches(look, { file_path: '/w/invoice-approval.bpmn' })).toBe(false);
     const strict = g('camunda7-external-task', 'strict-validate-ran');
     expect(matches(strict, { command: 'bpmn validate payment.bpmn --strict' })).toBe(true);
     expect(matches(strict, { command: 'bpmn validate payment.bpmn' })).toBe(false);
@@ -512,6 +572,50 @@ describe('the eval suite', () => {
     expect(regexPasses(grader('format-happy-path', 'happy-path-green'), otherGreen)).toBe(true);
     const rejectionGreen = otherGreen.replace(/(bpmnElement="Activity_SendRejectionLetter")/, '$1 bioc:stroke="#43a047"');
     expect(regexPasses(grader('format-happy-path', 'rejection-not-green'), rejectionGreen)).toBe(false);
+  }, SLOW);
+
+  it('tidy-after-edit: the layout graders say what `bpmn metrics --json` says', () => {
+    const caseDir = join(EVALS, 'tidy-after-edit');
+    const file = 'invoice-approval.bpmn';
+    const grader = (name: string) => graders(caseDir).find((x) => x.name === name)!;
+    const edit = `bpmn add ${file} sendTask "Inform requester" --id Activity_InformRequester --flow Flow_ReturnInvoiceToInvoiceReturned`;
+    const branchBelow = `bpmn place ${file} --branch Flow_InvoiceCorrectNo --below Activity_RemindApprover`;
+    const label = (side: string) => `bpmn label ${file} Gateway_InvoiceCorrect --side ${side}`;
+    const variants: Record<string, string> = {
+      'the fixture': 'true',
+      'the edit only': edit,
+      'the label fixed, the crossing left': `${edit}\n${label('above')}`,
+      'the crossing fixed, the label left': `${edit}\n${branchBelow}`,
+      'the solution (label above)': `${edit}\n${label('above')}\n${branchBelow}`,
+      // what the agents did in the first eval run: the branch below, then the empty row closed
+      'the solution, then compact': `${edit}\n${label('above')}\n${branchBelow}\nbpmn compact ${file}`,
+      'label below': `${edit}\n${branchBelow}\n${label('below')}`,
+      'label left (on "Check invoice" and its flow)': `${edit}\n${branchBelow}\n${label('left')}`,
+      'label right (on "Approve invoice" and the "yes" flow)': `${edit}\n${branchBelow}\n${label('right')}`,
+    };
+    for (const [name, script] of Object.entries(variants)) {
+      const dir = workDir('eval-tidy-metrics');
+      expect(spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
+      const r = sh(script, dir);
+      expect(r.code, `${name}: ${r.out}${r.err}`).toBe(0);
+      const m = bpmn(['metrics', file, '--json'], dir);
+      const problems = (JSON.parse(m.out) as { problems: { kind: string; ids: string[] }[] }).problems;
+      if (name === 'the fixture') {
+        expect(problems.map((p) => `${p.kind} ${p.ids.join(' ')}`).sort()).toEqual([
+          'crossings Flow_ReturnInvoiceToInvoiceReturned Flow_ApprovalOverdueToRemindApprover',
+          'labelClash Gateway_InvoiceCorrect Activity_ApproveInvoice',
+        ]);
+      }
+      if (name.startsWith('the solution')) expect(problems, name).toEqual([]);
+      const labelProblem = problems.some((p) => /^label/.test(p.kind) && p.ids.includes('Gateway_InvoiceCorrect'));
+      const crossing = problems.some((p) => p.kind === 'crossings');
+      const xml = readFileSync(join(dir, file), 'utf8');
+      // compact moved the reminder path up: the rows are no longer the solution's
+      if (name === 'the solution, then compact') expect(xml).toMatch(/bpmnElement="Activity_RemindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
+      expect(regexPasses(grader('gateway-label-clear'), xml), `${name}: gateway-label-clear`).toBe(!labelProblem);
+      expect(regexPasses(grader('no-crossing'), xml), `${name}: no-crossing`).toBe(name !== 'the fixture' && !crossing);
+      expect(regexPasses(grader('main-line-kept'), xml), `${name}: main-line-kept`).toBe(true);
+    }
   }, SLOW);
 
   it('edit-hand-drawn-model: a "no" path that joins a task without a gateway fails no-implicit-join', () => {

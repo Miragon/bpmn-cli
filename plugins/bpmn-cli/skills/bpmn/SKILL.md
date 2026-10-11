@@ -1,6 +1,6 @@
 ---
 name: bpmn
-description: Create, read, change, lay out and validate BPMN 2.0 process models (.bpmn files) with the bpmn CLI (@miragon/bpmn-cli) instead of editing BPMN XML by hand. Use it whenever the user wants to model, build or create a process or BPMN diagram; add, remove, rename, move or reconnect tasks, gateways, events, sub-processes, lanes, pools, message flows, data objects or annotations; format, lay out or tidy a diagram, colour or align elements; set Camunda 7 or Camunda 8 implementation details (external tasks, job workers, input/output mappings, error handling, forms, multi-instance); or validate a .bpmn file before deploying it.
+description: Create, read, change, lay out and validate BPMN 2.0 process models (.bpmn files) with the bpmn CLI (@miragon/bpmn-cli) instead of editing BPMN XML by hand. Use it whenever the user wants to model, build or create a process or BPMN diagram; add, remove, rename, move or reconnect tasks, gateways, events, sub-processes, lanes, pools, message flows, data objects or annotations; format, lay out, tidy or render a diagram, colour or align elements; set Camunda 7 or Camunda 8 implementation details (external tasks, job workers, input/output mappings, error handling, forms, multi-instance); or validate a .bpmn file before deploying it.
 when_to_use: Any request that creates or touches a .bpmn file, even when it does not say BPMN. Typical phrases are "model the order process", "draw a BPMN diagram", "add an approval step", "add a reminder timer", "add a lane for accounting", "add the customer as a pool with message flows", "the rejection branch should go below", "colour the happy path", "tidy up the layout", "make it deployable on Camunda 8", "external task with input mapping", "Prozess modellieren", "BPMN anpassen", "BPMN-Diagramm erstellen", "Schritt einfügen", "Lane hinzufügen", "Diagramm aufräumen", "Camunda-8-Prozess bauen".
 allowed-tools:
   - Bash(bpmn *)
@@ -125,13 +125,29 @@ installed version. Ask it instead of guessing:
    - example: a full redraw moved the customer pool below and added a crossing
      with a message flow - `bpmn order <file> <collaborationId> <poolIds...>`
      puts the pools back in order (top to bottom)
-4. **Validate**: `bpmn validate <file>` (structure, lint, the engine profile of
+4. **Look** after a change that drew something (new, moved or formatted
+   elements): render it and Read the PNG. Always pass `-o` into
+   `.bpmn-render/` in the working directory (created by the render; scratch:
+   delete it or add it to `.gitignore`), or add
+   `--render .bpmn-render/<name>.png` to the change itself (created green,
+   changed orange, moved blue).
+
+   ```bash
+   bpmn render order-to-cash.bpmn --problems -o .bpmn-render/order-to-cash.png
+   ```
+
+   Each red number is a layout problem listed under the `wrote` line with its
+   ids. Fix what you see (labels on shapes or lines, crossings, a branch on
+   the wrong side) with the format commands by those ids, then render again -
+   at most twice. On a large model (the result notes small labels) render
+   `--around <id>` or `--path <from> <to>` instead of the whole diagram.
+5. **Validate**: `bpmn validate <file>` (structure, lint, the engine profile of
    the file's platform, a layout dry run); `--strict` exits 5 on any warning -
    use it when the user wants a clean or deployable model. Fix findings with the
    command in their hint, then validate again. Inside a design-iq content
    repository (a `bpmiq.yml` above the file) every write also passes design-iq's
    save gate (`E_DESIGN_*`, see `bpmn guide design`).
-5. **Confirm** with `bpmn show` (or `--around`) and report to the user what
+6. **Confirm** with `bpmn show` (or `--around`) and report to the user what
    changed, naming the ids.
 
 Exit codes: 0 ok, 1 usage, 2 model/validation error, 3 layout, 4 file/parse,
@@ -187,7 +203,7 @@ columns, `--by 2` only 2 px), `tidy` (remove overlaps), `compact` (close empty r
 shrink frames), `order` (lanes, pools, branch order). Selectors
 `--path <fromId> <toId>`, `--branch <flowId>`, `--kind <kind>` name many
 elements at once. Read the drawing with `show --layout` first, `--dry-run` the
-format op, check `bpmn metrics <file>` after. In a batch they are ops too and
+format op, check `bpmn metrics <file>` and look (step 4) after. In a batch they are ops too and
 run after the semantic ops and the layout.
 
 ```bash
@@ -239,7 +255,7 @@ Every code with its fix: `bpmn kinds --section errors`.
 ## Reference files
 
 - [reference/ops.md](reference/ops.md) - batch format, placement, kinds and triggers, set keys, split, aliases
-- [reference/formatting.md](reference/formatting.md) - reading the drawing, format commands, selectors
+- [reference/formatting.md](reference/formatting.md) - reading and rendering the drawing, format commands, selectors
 - [reference/camunda7.md](reference/camunda7.md) - Camunda 7 / CIB seven / Operaton recipes and the C7 profile
 - [reference/camunda8.md](reference/camunda8.md) - Camunda 8 (Zeebe) recipes and the C8 profile
 - [reference/recipes.md](reference/recipes.md) - complete sessions: order-to-cash from scratch in one batch, a safe change to a drawn model, review feedback, a C7 external task, a C8 job worker

@@ -142,20 +142,24 @@ What the skill does:
   (`--relayout` only on request).
 - **The loop** - orient with `show`, `show --around`, `show <id> --context`, `find`; change in one
   batch; read the result (layout mode, placed / moved, added layout problems, the warnings the
-  change added); `validate` (`--strict` for deployable models); format with `show --layout`,
-  dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the common errors and
-  their fixes.
+  change added); look at a change that drew something (`bpmn render <file> --problems -o
+  .bpmn-render/<name>.png`, or `--render` on the change, then Read the PNG and fix the numbered
+  problems by their ids with the format commands, at most two more renders; `--around` /
+  `--path` on large models); `validate` (`--strict` for deployable models); format with
+  `show --layout`, dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the
+  common errors and their fixes. `.bpmn-render/` in the working directory is scratch: delete it
+  or add it to `.gitignore`.
 - **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
-  5k when it fires); `reference/` has the batch format, formatting, Camunda 7, Camunda 8 and
-  complete recipes; for everything else the skill sends Claude to `bpmn guide <topic>` and
-  `bpmn kinds`, so the CLI's own documentation stays the single source.
+  6.4k when it fires); `reference/` has the batch format, formatting and rendering, Camunda 7,
+  Camunda 8 and complete recipes; for everything else the skill sends Claude to
+  `bpmn guide <topic>` and `bpmn kinds`, so the CLI's own documentation stays the single source.
 
 The plugin's version is the package version: release-please bumps
 `plugins/bpmn-cli/.claude-plugin/plugin.json` and the pinned `npx` version of the skill in each
 release PR ([docs/releasing.md](docs/releasing.md)). `test/plugin.test.ts` (part of `npm test`)
-keeps the skill honest: it runs every recipe and reference example against the CLI built from
-`src/`, checks that every `bpmn <command> --option` the skill mentions exists, and that the
-versions agree. To work on the plugin:
+keeps the skill honest: it runs every recipe and reference example and the look step's render
+against the CLI built from `src/`, checks that every `bpmn <command> --option` the skill mentions
+exists, and that the versions agree. To work on the plugin:
 
 ```
 claude plugin validate --strict plugins/bpmn-cli   # the plugin (CI runs both)
@@ -164,9 +168,10 @@ claude --plugin-dir plugins/bpmn-cli               # a session with the local pl
 claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit
 ```
 
-The eval suite (six cases: an order-to-cash model from scratch, a change to a hand-drawn model,
-a Camunda 7 external task, a formatting request, a German Camunda 8 request, and an unrelated
-question the skill must ignore) and how to run it are described in
+The eval suite (seven cases: an order-to-cash model from scratch, a change to a hand-drawn model,
+a Camunda 7 external task, a formatting request, a change plus a clean-up of a messy drawing
+where the look step matters, a German Camunda 8 request, and an unrelated question the skill
+must ignore) and how to run it are described in
 [plugins/bpmn-cli/evals/README.md](plugins/bpmn-cli/evals/README.md).
 
 ## The contract
@@ -3107,3 +3112,8 @@ bundler drops what a host does not import.
   (`--problems`; `locateProblems` in the library), `--tiles`, and
   `--render <file>` on every mutating command (the result with created /
   changed / moved elements and the added problems).
+- The Claude Code plugin's skill looks at what it drew: after a change to
+  the drawing it renders into `.bpmn-render/` of the working directory,
+  reads the PNG and fixes the numbered problems with the format commands
+  ([Claude Code plugin](#claude-code-plugin)); a new eval case,
+  `tidy-after-edit`, measures it.
