@@ -6,11 +6,12 @@
  * platform=browser and resolves to
  *   { code, bytes, gzip, chunks, inputs, violations }
  * where `code` is the entry chunk, `bytes` / `gzip` the size of all chunks,
- * `chunks` [{ path, bytes, gzip, entry, imports, inputs }] one per output
- * file, `imports` the chunks it loads statically (one
- * without `splitting`), `inputs` the bundled source files
- * (repository-relative) and `violations` lists what would break in a
- * browser, each
+ * `chunks` [{ path, bytes, gzip, entry, imports, inputs, text }] one per
+ * output file (one without `splitting`), `imports` the chunks it loads
+ * statically (what it loads with `import()` comes on demand), `inputs` the
+ * bundled source files of the chunk, `text` its code; `inputs` the bundled
+ * source files (repository-relative) and `violations` lists what would
+ * break in a browser, each
  *   { kind: 'builtin', what, file, line }   an import of a Node builtin (node:fs, path, ...)
  *   { kind: 'global', what, file }          a free reference to a Node-only global
  * The bundle is not written. Two mechanisms:
@@ -109,7 +110,7 @@ export async function bundleCore(opts = {}) {
     code: entry.text,
     bytes: chunks.reduce((n, c) => n + c.bytes, 0),
     gzip: chunks.reduce((n, c) => n + c.gzip, 0),
-    chunks: chunks.map(({ text: _text, ...c }) => c),
+    chunks,
     inputs: Object.keys(result.metafile.inputs),
     violations: plain.flatMap(globalViolations),
   };

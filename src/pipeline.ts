@@ -116,7 +116,7 @@ import { requestedExpansion } from './ops/set.js';
 import { isFormatOp, type Op } from './ops/types.js';
 import { ChangeSet } from './result.js';
 import { resolvePlatform } from './platform/detect.js';
-import { profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
+import { ensureProfile, profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from './platform/profile.js';
 import { plainText, preserveText } from './preserve.js';
 import { profileValidators, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from './validate.js';
@@ -730,6 +730,8 @@ export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {})
 
 async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
   assertLossless(doc, opts);
+  // the engine rules of the file's platform (a chunk of its own in a browser bundle): loaded before anything runs
+  await ensureProfile(doc, opts.platform);
   // the document as read (entries a caller's validateDoc added in memory left out): unchanged parts keep their text
   const asRead = doc.source ? await serializeWithout(doc.model, unkeptEntries(doc.definitions, doc.source.mirror)) : undefined;
   const requested = requestedMode(opts.layout);
@@ -763,7 +765,9 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
 
   const raw = validateDoc(doc);
   const structural = separatePreexisting(doc, raw, baseline);
-  // the profile after the ops: its added findings are reported, the others counted (validationDelta)
+  // the profile after the ops: its added findings are reported, the others counted (validationDelta);
+  // the ops can change the platform (the first camunda: / zeebe: content of a plain file), so its rules may load now
+  if (baseline.profile) await ensureProfile(doc, opts.platform);
   const profileAfter = baseline.profile ? runProfile(doc, opts.platform) : undefined;
   let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform, profileAfter) : structural;
   // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
@@ -916,6 +920,7 @@ export interface CheckResult {
  */
 export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
   return withLayoutDebug(opts.debug, async () => {
+    await ensureProfile(doc, opts.platform ?? 'auto');
     let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
     const structuralErrors = validation.errors.length;
     const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);

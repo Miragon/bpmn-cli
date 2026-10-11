@@ -7,6 +7,16 @@
  *    a file that uses the operaton namespace is read the way Operaton reads
  *    it, `operaton: true`), Camunda 8 (platform/c8.ts); plain BPMN has no
  *    engine rules.
+ *  - The rules of a platform are loaded on demand (loadProfile: one
+ *    `import()` per platform, cached), so a host's bundler puts each rule
+ *    set into a chunk of its own that a plain or design model never
+ *    fetches. runProfile stays synchronous and throws E_PROFILE_NOT_LOADED
+ *    when the rules of the platform it resolves are not loaded; the async
+ *    pipeline (mutateDoc, checkDoc and the in-memory API) loads them first
+ *    (ensureProfile), a direct caller awaits loadProfile / loadProfiles. A
+ *    chunk that fails to load rejects with E_PROFILE_LOAD (category io).
+ *    Only this module imports c7.ts / c8.ts (tools/iso/check.mjs fails when
+ *    a rule module is in a browser bundle's initial chunks).
  *  - `bpmn validate` reports every finding as a warning (`--strict` exits 5)
  *    and the platform it checked against (`--platform` overrides).
  *  - Mutations report only the findings the change introduced (profileDelta,
@@ -18,9 +28,8 @@
  * keeps its findings) and subject (e.g. the attribute name).
  */
 import type { Doc } from '../document.js';
+import { CliError, ioError, usageError } from '../errors.js';
 import type { El } from '../model.js';
-import { c7Findings } from './c7.js';
-import { c8Findings } from './c8.js';
 import { resolvePlatform, type Platform, type PlatformChoice, type PlatformInfo } from './detect.js';
 import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from './finding.js';
 
@@ -42,11 +51,92 @@ export interface PlatformSummary extends PlatformInfo {
   resolved?: ProfileFinding[];
 }
 
-/** Runs the profile of the document's platform (or of `choice`). */
+/** A platform with engine rules. */
+type EnginePlatform = Exclude<Platform, 'none'>;
+type Rules = (doc: Doc, opts: { operaton: boolean }) => ProfileFinding[];
+
+const ENGINE_NAMES: Record<EnginePlatform, string> = { c7: 'Camunda 7', c8: 'Camunda 8' };
+
+/**
+ * The engine rules of each platform, loaded the first time a document of
+ * that platform is validated: a bundler makes each `import()` a chunk of its
+ * own (an IIFE bundle inlines it).
+ */
+const LOADERS: Record<EnginePlatform, () => Promise<Rules>> = {
+  c7: async () => {
+    const { c7Findings } = await import('./c7.js');
+    return (doc, opts) => c7Findings(doc, opts);
+  },
+  c8: async () => {
+    const { c8Findings } = await import('./c8.js');
+    return (doc) => c8Findings(doc);
+  },
+};
+
+/** the rules loaded so far */
+const RULES: Partial<Record<EnginePlatform, Rules>> = {};
+/** one load per platform (a failed one is forgotten, so a later call retries) */
+const LOADING: Partial<Record<EnginePlatform, Promise<void>>> = {};
+
+function isEnginePlatform(platform: string): platform is EnginePlatform {
+  return Object.hasOwn(LOADERS, platform);
+}
+
+/**
+ * Loads the engine rules of `platform` (cached; `'none'` resolves at once).
+ * The async API loads them itself; call it before the synchronous building
+ * blocks (runProfile, validateDoc(doc, { platform })), or to prefetch the
+ * chunk when a host opens a Camunda 7 / 8 file. Rejects with E_PROFILE_LOAD
+ * (category io) when the module cannot be loaded.
+ */
+export function loadProfile(platform: Platform): Promise<void> {
+  if (platform === 'none') return Promise.resolve();
+  if (!isEnginePlatform(platform)) return Promise.reject(usageError(`Unknown platform "${String(platform)}": loadProfile takes 'c7', 'c8' or 'none'`, { hint: 'Pass the platform of a document (detectPlatform(doc).platform) or one of c7, c8.' }));
+  const loaded = LOADING[platform];
+  if (loaded) return loaded;
+  const load = LOADERS[platform]().then(
+    (rules) => {
+      RULES[platform] = rules;
+    },
+    (err: unknown) => {
+      delete LOADING[platform];
+      throw ioError('E_PROFILE_LOAD', `The ${ENGINE_NAMES[platform]} profile rules could not be loaded: ${err instanceof Error ? err.message : String(err)}`, {
+        platform,
+        hint: 'They are a chunk of their own in a browser bundle: check that it is served next to the entry chunk (base URL, network, content security policy), then retry; nothing was written.',
+      });
+    },
+  );
+  LOADING[platform] = load;
+  return load;
+}
+
+/** Loads the engine rules of several platforms (default: all), e.g. once before synchronous runProfile / validateDoc calls. */
+export async function loadProfiles(platforms: readonly EnginePlatform[] = ['c7', 'c8']): Promise<void> {
+  await Promise.all(platforms.map((p) => loadProfile(p)));
+}
+
+/** Loads the rules runProfile(doc, choice) needs (the pipeline, before every profile run). */
+export async function ensureProfile(doc: Doc, choice: PlatformChoice = 'auto'): Promise<void> {
+  if (RULES.c7 && RULES.c8) return;
+  await loadProfile(resolvePlatform(doc, choice).platform);
+}
+
+/**
+ * Runs the profile of the document's platform (or of `choice`). Throws
+ * E_PROFILE_NOT_LOADED when that platform's rules are not loaded
+ * (loadProfile; the async API loads them itself).
+ */
 export function runProfile(doc: Doc, choice: PlatformChoice = 'auto'): ProfileReport {
   const info = resolvePlatform(doc, choice);
-  const findings = info.platform === 'c7' ? c7Findings(doc, { operaton: info.operaton === true }) : info.platform === 'c8' ? c8Findings(doc) : [];
-  return { ...info, findings };
+  if (info.platform === 'none') return { ...info, findings: [] };
+  const rules = RULES[info.platform];
+  if (!rules) {
+    throw new CliError('E_PROFILE_NOT_LOADED', `The ${ENGINE_NAMES[info.platform]} profile rules are not loaded (they load on demand)`, 'usage', {
+      platform: info.platform,
+      hint: `await loadProfile('${info.platform}') (or loadProfiles()) before runProfile / validateDoc(doc, { platform }); applyToXml, validateXml, mutateDoc and checkDoc load them themselves.`,
+    });
+  }
+  return { ...info, findings: rules(doc, { operaton: info.operaton === true }) };
 }
 
 export function summarize(report: ProfileReport): PlatformSummary {

@@ -46,9 +46,11 @@
  *
  * Platform profile (src/platform/): with `validateDoc(doc, { platform })` the
  * engine-specific rules of the detected (or given) platform run too and their
- * findings (W_C7_*, each with a severity: deploy / runtime / practice) follow
- * the lint warnings; `result.platform` says which platform was checked and how
- * it was detected. A lint warning that a shown platform finding repeats with
+ * findings (W_C7_* / W_C8_*, each with a severity: deploy / runtime /
+ * practice) follow the lint warnings; `result.platform` says which platform
+ * was checked and how it was detected. The rules load on demand: the caller
+ * loads them first (loadProfile; the async pipeline does), else this throws
+ * E_PROFILE_NOT_LOADED. A lint warning that a shown platform finding repeats with
  * the engine's verdict is dropped (W_EVENT_GATEWAY_TARGET, W_NO_START,
  * W_EMPTY_SUBPROCESS).
  * Without the option nothing changes (show, library callers).
@@ -74,7 +76,7 @@ export interface ValidationResult {
 }
 
 export interface ValidateOptions {
-  /** run the platform profile: 'auto' detects the platform, 'c7' / 'c8' / 'none' force one; omitted = no profile */
+  /** run the platform profile: 'auto' detects the platform, 'c7' / 'c8' / 'none' force one; omitted = no profile (its rules must be loaded: loadProfile) */
   platform?: PlatformChoice;
 }
 
