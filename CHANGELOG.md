@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/Miragon/bpmn-cli/compare/v0.4.0...v0.5.0) (2026-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* runProfile(doc) and validateDoc(doc, { platform }) throw E_PROFILE_NOT_LOADED on a Camunda 7 / 8 document unless its rules were loaded: call `await loadProfiles()` (or loadProfile('c7' | 'c8')) once before them. applyToXml, newXml, layoutXml, validateXml, mutateDoc, checkDoc and the file helpers load the rules themselves.
+* runProfile(doc) and validateDoc(doc, { platform }) throw E_PROFILE_NOT_LOADED on a Camunda 7 / 8 document unless its rules were loaded: call `await loadProfiles()` (or loadProfile('c7' | 'c8')) once before them. applyToXml, newXml, layoutXml, validateXml, mutateDoc, checkDoc and the file helpers load the rules themselves.
+
+### Features
+
+* bpmn render — SVG/PNG for agents with crops, halos and numbered layout problems ([#12](https://github.com/Miragon/bpmn-cli/issues/12)) ([#15](https://github.com/Miragon/bpmn-cli/issues/15)) ([bc28c5c](https://github.com/Miragon/bpmn-cli/commit/bc28c5c61396a6e2e406a4c6f3f6f59c23fa0d44))
+* load the Camunda 7 / 8 profile rules on demand ([#13](https://github.com/Miragon/bpmn-cli/issues/13)) ([#14](https://github.com/Miragon/bpmn-cli/issues/14)) ([ac56dc3](https://github.com/Miragon/bpmn-cli/commit/ac56dc3a4ba732ca933c3ffa0304eae226269bf0))
+
 ## [0.4.0](https://github.com/Miragon/bpmn-cli/compare/v0.3.0...v0.4.0) (2026-10-10)
 
 
