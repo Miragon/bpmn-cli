@@ -4,14 +4,18 @@
  *
  * Contract: `bundleCore(opts)` bundles one entry with esbuild for
  * platform=browser and resolves to
- *   { code, bytes, gzip, chunks, inputs, violations }
+ *   { code, bytes, gzip, chunks, entry, inputs, graph, violations }
  * where `code` is the entry chunk, `bytes` / `gzip` the size of all chunks,
- * `chunks` [{ path, bytes, gzip, entry, imports, inputs, text }] one per
- * output file (one without `splitting`), `imports` the chunks it loads
- * statically (what it loads with `import()` comes on demand), `inputs` the
- * bundled source files of the chunk, `text` its code; `inputs` the bundled
- * source files (repository-relative) and `violations` lists what would
- * break in a browser, each
+ * `chunks` [{ path, bytes, gzip, entry, entryPoint, imports, inputs, text }]
+ * one per output file (one without `splitting`), `entry` true only for the
+ * chunk of the requested entry (esbuild gives every `import()` target an
+ * `entryPoint` of its own, so that alone does not tell), `imports` the
+ * chunks it loads statically (what it loads with `import()` comes on
+ * demand), `inputs` the bundled source files of the chunk, `text` its code;
+ * `entry` (top level) that chunk; `inputs` the bundled source files
+ * (repository-relative), `graph` each one's static imports
+ * ({ [file]: file[] }: `import` / `export ... from`, not `import()`), and
+ * `violations` lists what would break in a browser, each
  *   { kind: 'builtin', what, file, line }   an import of a Node builtin (node:fs, path, ...)
  *   { kind: 'global', what, file }          a free reference to a Node-only global
  * The bundle is not written. Two mechanisms:
@@ -95,15 +99,20 @@ export async function bundleCore(opts = {}) {
       line: e.location?.line,
       text: e.text,
     }));
-    return { code: '', bytes: 0, gzip: 0, chunks: [], inputs: [], violations };
+    return { code: '', bytes: 0, gzip: 0, chunks: [], entry: undefined, inputs: [], graph: {}, violations };
   }
+  // the requested entry as the metafile names it (an `import()` target is an entryPoint too)
+  const requested = opts.stdin ? (opts.stdin.sourcefile ?? '<stdin>') : relative(ROOT, join(ROOT, opts.entry ?? join('src', 'index.ts')));
   const chunks = result.outputFiles.map((f) => {
     const meta = result.metafile.outputs[relative(ROOT, f.path)] ?? Object.values(result.metafile.outputs)[0];
     // static imports load with the chunk, dynamic ones on demand
     const imports = (meta?.imports ?? []).filter((i) => i.kind === 'import-statement').map((i) => i.path);
-    return { path: relative(ROOT, f.path), bytes: f.contents.length, gzip: gzipSync(f.contents).length, entry: !!meta?.entryPoint, imports, inputs: Object.keys(meta?.inputs ?? {}), text: f.text };
+    return { path: relative(ROOT, f.path), bytes: f.contents.length, gzip: gzipSync(f.contents).length, entry: meta?.entryPoint === requested, entryPoint: meta?.entryPoint, imports, inputs: Object.keys(meta?.inputs ?? {}), text: f.text };
   });
-  const entry = chunks.find((c) => c.entry) ?? chunks[0];
+  const entries = chunks.filter((c) => c.entry);
+  if (entries.length !== 1) throw new Error(`bundleCore: ${entries.length} output chunks have the entry point ${requested} (${chunks.map((c) => `${c.path}: ${c.entryPoint ?? '-'}`).join(', ')})`);
+  const entry = entries[0];
+  const graph = Object.fromEntries(Object.entries(result.metafile.inputs).map(([file, i]) => [file, i.imports.filter((x) => x.kind === 'import-statement').map((x) => x.path)]));
   // the sentinels are located in an unminified build (minified output has no module comments)
   const plain = minify ? (await build(esbuildOptions(opts, false))).outputFiles.map((f) => f.text) : chunks.map((c) => c.text);
   return {
@@ -111,7 +120,9 @@ export async function bundleCore(opts = {}) {
     bytes: chunks.reduce((n, c) => n + c.bytes, 0),
     gzip: chunks.reduce((n, c) => n + c.gzip, 0),
     chunks,
+    entry,
     inputs: Object.keys(result.metafile.inputs),
+    graph,
     violations: plain.flatMap(globalViolations),
   };
 }

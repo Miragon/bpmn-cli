@@ -16,7 +16,10 @@
  *    (ensureProfile), a direct caller awaits loadProfile / loadProfiles. A
  *    chunk that fails to load rejects with E_PROFILE_LOAD (category io).
  *    Only this module imports c7.ts / c8.ts (tools/iso/check.mjs fails when
- *    a rule module is in a browser bundle's initial chunks).
+ *    a rule module is in a browser bundle's initial chunks), and they import
+ *    nothing of the core: it hands them RULE_KIT (platform/rule-kit.ts), so
+ *    a host whose entry module awaits a call at top level does not wait for
+ *    itself (Rollup / Vite would make a rule chunk import the entry chunk).
  *  - `bpmn validate` reports every finding as a warning (`--strict` exits 5)
  *    and the platform it checked against (`--platform` overrides).
  *  - Mutations report only the findings the change introduced (profileDelta,
@@ -32,6 +35,7 @@ import { CliError, ioError, usageError } from '../errors.js';
 import type { El } from '../model.js';
 import { resolvePlatform, type Platform, type PlatformChoice, type PlatformInfo } from './detect.js';
 import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from './finding.js';
+import { RULE_KIT } from './rule-kit.js';
 
 export type { Platform, PlatformChoice, PlatformInfo } from './detect.js';
 export { PLATFORM_CHOICES } from './detect.js';
@@ -60,22 +64,31 @@ const ENGINE_NAMES: Record<EnginePlatform, string> = { c7: 'Camunda 7', c8: 'Cam
 /**
  * The engine rules of each platform, loaded the first time a document of
  * that platform is validated: a bundler makes each `import()` a chunk of its
- * own (an IIFE bundle inlines it).
+ * own (an IIFE bundle inlines it). The rules get what they use of the core
+ * from here (RULE_KIT, platform/rule-kit.ts) instead of importing it, so
+ * their chunk imports nothing, also not the host's entry chunk.
  */
 const LOADERS: Record<EnginePlatform, () => Promise<Rules>> = {
   c7: async () => {
-    const { c7Findings } = await import('./c7.js');
+    const { c7Findings, useKit } = await import('./c7.js');
+    useKit(RULE_KIT);
     return (doc, opts) => c7Findings(doc, opts);
   },
   c8: async () => {
-    const { c8Findings } = await import('./c8.js');
+    const { c8Findings, useKit } = await import('./c8.js');
+    useKit(RULE_KIT);
     return (doc) => c8Findings(doc);
   },
 };
 
 /** the rules loaded so far */
 const RULES: Partial<Record<EnginePlatform, Rules>> = {};
-/** one load per platform (a failed one is forgotten, so a later call retries) */
+/**
+ * one load per platform; a failed one is forgotten, so a later call imports
+ * the chunk again (in Node that loads it; a browser may keep the failed
+ * module fetch for the same URL until the page reloads, Chrome does, and
+ * the specifier is a static string a bundler rewrites, so it cannot vary)
+ */
 const LOADING: Partial<Record<EnginePlatform, Promise<void>>> = {};
 
 function isEnginePlatform(platform: string): platform is EnginePlatform {
@@ -87,7 +100,8 @@ function isEnginePlatform(platform: string): platform is EnginePlatform {
  * The async API loads them itself; call it before the synchronous building
  * blocks (runProfile, validateDoc(doc, { platform })), or to prefetch the
  * chunk when a host opens a Camunda 7 / 8 file. Rejects with E_PROFILE_LOAD
- * (category io) when the module cannot be loaded.
+ * (category io) when the module cannot be loaded; the failure is not
+ * cached here (see LOADING).
  */
 export function loadProfile(platform: Platform): Promise<void> {
   if (platform === 'none') return Promise.resolve();
@@ -102,7 +116,7 @@ export function loadProfile(platform: Platform): Promise<void> {
       delete LOADING[platform];
       throw ioError('E_PROFILE_LOAD', `The ${ENGINE_NAMES[platform]} profile rules could not be loaded: ${err instanceof Error ? err.message : String(err)}`, {
         platform,
-        hint: 'They are a chunk of their own in a browser bundle: check that it is served next to the entry chunk (base URL, network, content security policy), then retry; nothing was written.',
+        hint: 'They are a chunk of their own in a browser bundle: check that it is served next to the entry chunk (base URL, network, content security policy); nothing was written. A later call imports the chunk again (in Node that loads it), but a browser may keep the failed fetch until the page reloads (Chrome does): reload the page there.',
       });
     },
   );

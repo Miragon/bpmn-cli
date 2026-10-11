@@ -14,6 +14,12 @@
  *    Camunda 7 and Camunda 8 profile, src/platform/profile.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
  *    entry, naming the module, or is no chunk of its own;
+ *  - a module of those rules imports (statically, also through another
+ *    rule module) a module the entry loads, naming both: Rollup / Vite put
+ *    such a module into the host's entry chunk and make the rule chunk
+ *    import the entry chunk back, so a host whose entry module awaits a
+ *    Camunda 7 / 8 call at top level would wait forever (the rules get
+ *    what they use of the core from src/platform/rule-kit.ts instead);
  *  - a size is over its budget in tools/iso/budget.json (KB = 1024 bytes,
  *    minified and gzip: the initial chunks of both entries, the on-demand
  *    rule chunks of both); raising a budget is an explicit diff of that file;
@@ -122,6 +128,7 @@ try {
  * the rest named by its packages).
  */
 function sizeOf(b) {
+  if (!b.entry) throw new Error('isomorphism check: the bundle has no entry chunk');
   const byPath = new Map(b.chunks.map((c) => [c.path, c]));
   const closure = (start, skip = new Set()) => {
     const seen = new Set();
@@ -133,7 +140,20 @@ function sizeOf(b) {
     visit(start);
     return seen;
   };
-  const initial = closure(b.chunks.find((c) => c.entry) ?? b.chunks[0]);
+  const initial = closure(b.entry);
+  // the modules the entry loads statically, and what a rule module imports of them
+  const reach = (start) => {
+    const seen = new Set();
+    const visit = (f) => {
+      if (seen.has(f) || !b.graph[f]) return;
+      seen.add(f);
+      for (const g of b.graph[f]) visit(g);
+    };
+    visit(start);
+    return seen;
+  };
+  const entryModules = reach(b.entry.entryPoint);
+  const importsOfEntry = (marker) => [...reach(marker)].filter((f) => !entryModules.has(f)).flatMap((f) => b.graph[f].filter((g) => entryModules.has(g)).map((g) => ({ from: f, to: g })));
   const sum = (chunks) => ({ bytes: [...chunks].reduce((n, c) => n + c.bytes, 0), gzip: [...chunks].reduce((n, c) => n + c.gzip, 0) });
   const lazy = b.chunks.filter((c) => !initial.has(c));
   const counted = new Set();
@@ -144,7 +164,7 @@ function sizeOf(b) {
     if (!root) continue;
     const chunks = closure(root, initial);
     for (const c of chunks) counted.add(c);
-    onDemand.push({ name: part.name, label: part.label, ...sum(chunks), modules: [...chunks].flatMap((c) => c.inputs) });
+    onDemand.push({ name: part.name, label: part.label, ...sum(chunks), modules: [...chunks].flatMap((c) => c.inputs), importsOfEntry: part.rules.length ? importsOfEntry(part.marker) : [] });
   }
   const rest = lazy.filter((c) => !counted.has(c));
   if (rest.length) {
@@ -173,6 +193,9 @@ for (const entry of ENTRIES) {
       if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profile.ts imports them, with import())`);
     }
     if (part.rules.length && !s.onDemand.some((d) => d.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
+    for (const { from, to } of s.onDemand.find((d) => d.name === part.name)?.importsOfEntry ?? []) {
+      problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the rules in src/platform/rule-kit.ts (RULE_KIT) instead of importing it`);
+    }
   }
   overBudget(entry.name, s, budget.entries?.[entry.label]);
   for (const d of s.onDemand) {
@@ -204,14 +227,14 @@ function sizeTable() {
   return rows.join('\n');
 }
 
-const publicSizes = Object.fromEntries(Object.entries(sizes).map(([k, { initialModules: _m, onDemand, ...s }]) => [k, { ...s, onDemand: onDemand.map(({ modules, ...d }) => ({ ...d, modules: modules.length })) }]));
+const publicSizes = Object.fromEntries(Object.entries(sizes).map(([k, { initialModules: _m, onDemand, ...s }]) => [k, { ...s, onDemand: onDemand.map(({ modules, importsOfEntry: _i, ...d }) => ({ ...d, modules: modules.length })) }]));
 if (json) {
   console.log(JSON.stringify({ ok: problems.length === 0, problems, sizes: publicSizes, budget }, null, 2));
 } else if (table && !problems.length) {
   console.log(sizeTable());
 } else {
   if (!problems.length) {
-    console.log(`isomorphic: dist/index.js bundles for the browser without Node builtins or globals (${full.inputs.length} modules); the exports and their types resolve for a strict consumer; the engine rules load on demand; every size is within ${BUDGET_FILE}`);
+    console.log(`isomorphic: dist/index.js bundles for the browser without Node builtins or globals (${full.inputs.length} modules); the exports and their types resolve for a strict consumer; the engine rules load on demand and import nothing the entry loads; every size is within ${BUDGET_FILE}`);
     for (const entry of ENTRIES) if (sizes[entry.key]) console.log(sizeLine(entry.label, sizes[entry.key]));
   }
   for (const p of problems) console.error(`isomorphism check: ${p}`);

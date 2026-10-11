@@ -31,6 +31,7 @@ interface Violation {
 interface Chunk {
   path: string;
   entry: boolean;
+  entryPoint?: string;
   imports: string[];
   inputs: string[];
   text: string;
@@ -40,7 +41,9 @@ interface Bundle {
   code: string;
   bytes: number;
   inputs: string[];
+  graph: Record<string, string[]>;
   chunks: Chunk[];
+  entry: Chunk;
   violations: Violation[];
 }
 
@@ -196,9 +199,12 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   const design = { profile: 'design' as const, contentRepo: { processIds: ['Proc_A', 'Proc_B'], decisionIds: [] } };
   let c7: string;
   let c8: string;
+  let bundle: Bundle;
+  /** the chunks the entry loads statically (with it) */
+  const initial = new Set<string>();
 
   beforeAll(async () => {
-    const bundle: Bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
+    bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
     const profileOf = (c: Chunk): 'c7' | 'c8' | undefined => (c.inputs.includes('src/platform/c7.ts') ? 'c7' : c.inputs.includes('src/platform/c8.ts') ? 'c8' : undefined);
     files = bundle.chunks.map((c) => {
@@ -206,13 +212,12 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       return { name: basename(c.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(c) };
     });
     // the rule modules are chunks of their own, apart from what the entry loads statically
-    const initial = new Set<string>();
     const visit = (c: Chunk | undefined): void => {
       if (!c || initial.has(c.path)) return;
       initial.add(c.path);
       for (const p of c.imports) visit(bundle.chunks.find((x) => x.path === p));
     };
-    visit(bundle.chunks.find((c) => c.entry));
+    visit(bundle.entry);
     const initialInputs = bundle.chunks.filter((c) => initial.has(c.path)).flatMap((c) => c.inputs);
     expect(initialInputs.filter((f) => /^src\/platform\/(c7|c8|feel|schema-text)\.ts$/.test(f))).toEqual([]);
     expect(files.filter((f) => f.profile).map((f) => f.profile).sort()).toEqual(['c7', 'c8']);
@@ -238,6 +243,38 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const profiles = (): string[] => loads().filter((u) => u.startsWith(base)).flatMap((u) => byName.get(u.slice(base.length)) ?? []);
     return { lib, at, profiles };
   }
+
+  it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
+    expect(bundle.chunks.filter((c) => c.entry).map((c) => c.entryPoint)).toEqual(['src/index.ts']);
+    expect(bundle.entry.entryPoint).toBe('src/index.ts');
+    expect(bundle.chunks.map((c) => c.entryPoint)).toEqual(expect.arrayContaining(['src/platform/c7.ts', 'src/platform/c8.ts']));
+  });
+
+  it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
+    // Rollup / Vite put a module the entry and a rule chunk share into the
+    // entry chunk, and the rule chunk would import the entry chunk back:
+    // with a top-level await in the host's entry module that never settles.
+    const reach = (start: string): Set<string> => {
+      const seen = new Set<string>();
+      const visit = (f: string): void => {
+        if (seen.has(f) || !bundle.graph[f]) return;
+        seen.add(f);
+        for (const g of bundle.graph[f]) visit(g);
+      };
+      visit(start);
+      return seen;
+    };
+    const core = reach('src/index.ts');
+    expect(core.has('src/model.ts') && core.has('src/platform/profile.ts')).toBe(true);
+    for (const rules of ['src/platform/c7.ts', 'src/platform/c8.ts']) {
+      const own = [...reach(rules)];
+      expect(own.filter((f) => core.has(f)), rules).toEqual([]);
+      expect(own.flatMap((f) => bundle.graph[f] ?? []).filter((g) => core.has(g)), rules).toEqual([]);
+      const chunk = bundle.chunks.find((c) => c.inputs.includes(rules))!;
+      expect(chunk.imports.filter((p) => initial.has(p)), rules).toEqual([]);
+    }
+    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/c8.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/feel.ts', 'src/platform/schema-text.ts']));
+  });
 
   it('the instances load natively and record what they evaluate', async () => {
     const { lib, at } = await fresh();
@@ -343,11 +380,12 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     await expect(lib.loadProfile('camunda7' as never)).rejects.toMatchObject({ code: 'E_USAGE' });
   });
 
-  it('a profile chunk that fails to load rejects with E_PROFILE_LOAD before a result exists; a later call loads it', async () => {
+  it('a profile chunk that fails to load rejects with E_PROFILE_LOAD before a result exists; a later call imports it again (Node loads it)', async () => {
     const { lib, at, profiles } = await fresh();
     const chunk = join(at, files.find((f) => f.profile === 'c8')!.name);
     renameSync(chunk, `${chunk}.gone`);
-    await expect(lib.validateXml(c8)).rejects.toMatchObject({ code: 'E_PROFILE_LOAD', category: 'io', details: { platform: 'c8' } });
+    // a browser may keep the failed module fetch until the page reloads: the hint says so
+    await expect(lib.validateXml(c8)).rejects.toMatchObject({ code: 'E_PROFILE_LOAD', category: 'io', details: { platform: 'c8', hint: expect.stringContaining('until the page reloads') } });
     await expect(lib.applyToXml(c8, rename)).rejects.toMatchObject({ code: 'E_PROFILE_LOAD', name: 'CliError' });
     await expect(lib.applyToXml(plain, toC8)).rejects.toMatchObject({ code: 'E_PROFILE_LOAD' });
     expect((await lib.applyToXml(c7, rename)).result.validation.platform?.platform).toBe('c7');

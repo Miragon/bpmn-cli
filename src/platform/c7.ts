@@ -114,12 +114,18 @@
  * would delete its siblings (extHint).
  */
 import type { Doc } from '../document.js';
-import { kindLabel } from '../kinds.js';
-import { createModdle, is, isBpmnElement, isDiElement, walk, type El } from '../model.js';
-import { camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, ZEEBE_URI, CAMUNDA_URI, OPERATON_URI, type CamundaElementType } from './descriptor.js';
-import { namespaceMap, namespaceUsage, uriOfElement, uriOfName } from './detect.js';
-import { decisionLinkOf } from '../ops/decision.js';
-import { makeFinding, type ProfileFinding, type Severity } from './finding.js';
+import type { El } from '../model.js';
+import type { CamundaElementType } from './descriptor.js';
+import type { ProfileFinding, Severity } from './finding.js';
+import type { RuleKit } from './rule-kit.js';
+
+/* What the rules use of the core: handed over by the loader (useKit), never imported (platform/rule-kit.ts). */
+let { kindLabel, createModdle, is, isBpmnElement, isDiElement, walk, camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, ZEEBE_URI, CAMUNDA_URI, OPERATON_URI, namespaceMap, namespaceUsage, uriOfElement, uriOfName, decisionLinkOf, makeFinding } = {} as RuleKit;
+
+/** Binds the core helpers the rules use (platform/profile.ts, right after the import). */
+export function useKit(kit: RuleKit): void {
+  ({ kindLabel, createModdle, is, isBpmnElement, isDiElement, walk, camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, ZEEBE_URI, CAMUNDA_URI, OPERATON_URI, namespaceMap, namespaceUsage, uriOfElement, uriOfName, decisionLinkOf, makeFinding } = kit);
+}
 
 interface Ctx {
   doc: Doc;

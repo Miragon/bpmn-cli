@@ -2749,9 +2749,19 @@ Every function runs the code of the CLI command it names, without a file:
   signatures stay the same. A host that wants the chunk before the first
   edit prefetches it when it opens a file: `await
   loadProfile(detectPlatform(doc).platform)` (or `loadProfile('c7')` /
-  `loadProfile('c8')`; `'none'` resolves at once). A chunk that cannot be
-  loaded rejects the call with `E_PROFILE_LOAD` (category `io`) before a
-  result exists; a later call tries again.
+  `loadProfile('c8')`; `'none'` resolves at once). The rule chunks import
+  nothing, so a host's entry module may await these calls (and
+  `loadProfile`) at top level. A chunk that cannot be loaded rejects the
+  call with `E_PROFILE_LOAD` (category `io`) before a result exists. The
+  library does not keep the failure: a later call imports the chunk again,
+  which loads it in Node, but a browser may keep the failed module fetch
+  until the page reloads (Chrome does).
+- A call with `engine: 'auto'` (`layoutXml`, a full redraw of
+  `applyToXml`) loads bpmn-auto-layout on demand. Its chunk imports
+  `bpmn-moddle`, which Rollup / Vite put into the host's entry chunk, so a
+  host built with them must not await such a call in the top-level await
+  of its entry module (it hangs there, as in 0.4): call it from a function
+  or an event handler.
 
 ```ts
 import { applyToXml, CliError, newXml, renderMutation, showXml } from '@miragon/bpmn-cli';
@@ -2884,9 +2894,13 @@ BPMN file or a design model loads neither, a Camunda 7 file only the
 Camunda 7 rules, a Camunda 8 file only the Camunda 8 rules, and
 `platform: 'none'` nothing. A bundler that inlines dynamic imports (an IIFE
 bundle, `vite-plugin-singlefile`) keeps them in the one file, as in 0.4.
-The check fails when a rule module is in the initial chunks, naming it, and
-when a size is over its budget in `tools/iso/budget.json` (raising a budget
-is an explicit change of that file).
+The rule modules import nothing of the core (the loader hands them what
+they use), so their chunks import nothing, not even the host's entry chunk:
+a host whose entry module awaits a Camunda 7 / 8 call at top level does not
+wait for itself. The check fails when a rule module is in the initial
+chunks or imports a module the entry loads, naming it, and when a size is
+over its budget in `tools/iso/budget.json` (raising a budget is an explicit
+change of that file).
 
 Sizes (esbuild, `platform=browser`, minified / gzip, KB = 1024 bytes, split
 like a host's bundler would; `node tools/iso/check.mjs --table` prints this
@@ -2894,10 +2908,10 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 815.1 KB | 256.4 KB | 830 / 261 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 618.8 KB | 197.2 KB | 630 / 201 KB | with the entry |
-| Camunda 7 rules (`platform/c7`) | 55.9 KB | 16.9 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
-| Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.3 KB | 23.0 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
+| everything `@miragon/bpmn-cli` exports | 814.7 KB | 255.1 KB | 830 / 261 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 618.2 KB | 195.8 KB | 630 / 201 KB | with the entry |
+| Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
+| Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
 
 `package.json` declares only the CLI files as having side effects, so a
@@ -2989,10 +3003,11 @@ to `applyToXml`.
 ### Changes from 0.4
 
 - The Camunda 7 and Camunda 8 profile rules load on demand
-  ([Browser bundles](#browser-bundles)): `applyToXml` alone is 618.8 KB
-  minified / 197.2 KB gzip in a host's bundle (0.4: 750.7 / 232.9), the
-  whole entry 815.1 / 256.4 KB (0.4: 945.9 / 291.7). The CLI's output is
-  unchanged.
+  ([Browser bundles](#browser-bundles)): `applyToXml` alone is 618.2 KB
+  minified / 195.8 KB gzip in a host's bundle (0.4: 750.7 / 232.9), the
+  whole entry 814.7 / 255.1 KB (0.4: 945.9 / 291.7). The CLI's output is
+  unchanged. Their chunks import nothing, so a host's entry module can
+  still await a call at top level.
 - Unchanged: `applyToXml`, `newXml`, `layoutXml`, `validateXml`,
   `mutateDoc`, `checkDoc` and the file helpers (they load the rules
   themselves).
@@ -3006,6 +3021,7 @@ to `applyToXml`.
 - New: `loadProfile(platform)` and `loadProfiles(platforms?)`; a host
   prefetches the chunk when it opens a Camunda 7 / 8 file. A chunk that
   cannot be loaded rejects the call with `E_PROFILE_LOAD` (category `io`,
-  exit 4) before a result exists.
+  exit 4) before a result exists; a later call imports it again, but a
+  browser may keep the failed fetch until the page reloads.
 - `tools/iso/check.mjs` enforces size budgets (`tools/iso/budget.json`) and
   prints the on-demand chunks (`--table`: the table above).
