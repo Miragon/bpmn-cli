@@ -24,7 +24,49 @@ problem: crossings, overlaps, flows through shapes (`through`), labels on lines,
 nodes outside their lane or pool, frames covering foreign shapes, flows running
 backwards, and more.
 
-## 2. Selectors
+## 2. Look at it
+
+`bpmn render` draws the diagram as a PNG (no browser); Read the PNG. Pass `-o`
+into `.bpmn-render/` in the working directory (created when missing; scratch:
+delete it or add it to `.gitignore`).
+
+```bash
+# the whole diagram; every `metrics` problem numbered on the defect
+bpmn render order-to-cash.bpmn --problems -o .bpmn-render/order-to-cash.png
+# crops: the nodes of `show --around`, a sequence-flow path, a lane / pool / sub-process, these ids
+bpmn render order-to-cash.bpmn --around Gateway_OrderOk --depth 2 --problems -o .bpmn-render/around.png
+bpmn render order-to-cash.bpmn --path Event_OrderReceived Event_OrderCompleted -o .bpmn-render/path.png
+bpmn render order-to-cash.bpmn --scope Lane_Accounting -o .bpmn-render/accounting.png
+bpmn render order-to-cash.bpmn Activity_ReceivePayment Activity_SendPaymentReminder -o .bpmn-render/ids.png
+# an orange halo around elements
+bpmn render order-to-cash.bpmn --highlight Activity_SendInvoice,Activity_ReceivePayment -o .bpmn-render/halo.png
+```
+
+```text
+wrote .bpmn-render/order-to-cash.png  1382x865 px  ~1,525 image tokens  scale 1.00  plane Collaboration_OrderToCash
+problems: none
+```
+
+- The `wrote` line gives the size and the cost: image tokens = width x height
+  / 784. The long edge stays within `--max-size` (2000 px); a larger drawing
+  is scaled down, and below `scale 0.75` the labels are too small - a note
+  says so: render `--around <id>`, `--path <from> <to>` or `--tiles`
+  (readable tiles `<name>-1.png`, `-2.png`, ... cut at the diagram columns;
+  only those with something in them, at most 40).
+- `--problems` lists the problems under the line, `<n> <kind> [<ids>]
+  <detail>` in `metrics` order (a crop: those of its elements), each number
+  drawn on the defect: `1 labelClash [Gateway_OrderOk, Activity_SendRejection]
+  label on shape`. Fix them by those ids with the commands below.
+- A crop draws flows to elements it leaves out faded, pools and lanes as
+  context. A collapsed sub-process is its own plane: the result lists it
+  under `other planes`, `--plane <id>` draws it.
+- `--render <file.png>` on any mutating command (`add`, `apply`, the format
+  commands, ...) draws its result: created elements in a green halo, changed
+  orange, moved blue, the problems the change added numbered; a drawing too
+  large to read shows the region of the change. A failed render is reported,
+  the change stands.
+
+## 3. Selectors
 
 `place`, `align`, `color` and `tidy` take ids and / or selectors; selectors add
 to the ids:
@@ -39,7 +81,7 @@ In ops JSON: `"path": ["Event_A", "Event_B"]`, `"via": [...]`, `"branch": "Flow_
 `"kind": "endEvent"`. Shape commands leave boundary events out of a selection
 (they follow their host).
 
-## 3. The commands
+## 4. The commands
 
 ```bash
 # colours (bpmn-js palette: blue, orange, green, red, purple; default removes)
@@ -84,7 +126,7 @@ bpmn compact order-to-cash.bpmn
 - `compact [ids]` closes empty rows and columns and shrinks pools, lanes and
   expanded sub-processes to their content; it never adds a layout problem.
 
-## 4. Place a branch
+## 5. Place a branch
 
 A typical request is "put the rejection branch below the main line". Read the
 rows first, then place the branch relative to a node of the main line (a
@@ -107,7 +149,7 @@ error E_LEAVES_CONTAINER: Placing Activity_SendInvoice in the row of Activity_Re
 ```
 
 Fixes: `move <id> --lane <laneId>` when the node really belongs to the other
-lane (in a batch: a `move` op before the `place` op, as in section 5), or a
+lane (in a batch: a `move` op before the `place` op, as in section 6), or a
 reference inside the same lane. `E_NO_ROOM` means the target row / column
 cannot hold the shapes, or closing space would add a layout problem:
 `space --after <id>` / `--below <id>` first and place again, or close less.
@@ -117,7 +159,7 @@ lanes can pull shapes across the drawing (`align --kind endEvent --axis column`
 lines up the end events of every lane); dry-run it first and keep it only when
 `layout quality` did not get worse.
 
-## 5. Format ops in a batch
+## 6. Format ops in a batch
 
 Format ops run after the semantic ops and the layout, in batch order, all or
 nothing; they see the final ids (aliases work):
@@ -129,11 +171,12 @@ printf '%s' '[
   { "op": "color", "ids": ["Activity_SendPaymentReminder", "Event_ReminderSent"], "color": "orange" },
   { "op": "label", "id": "Gateway_OrderOk", "side": "above" },
   { "op": "compact" }
-]' | bpmn apply order-to-cash.bpmn - --summary
+]' | bpmn apply order-to-cash.bpmn - --summary --render .bpmn-render/order-to-cash.png
 bpmn metrics order-to-cash.bpmn
 ```
 
 The result has one `format <op> #<index>: moved ...; rerouted ...; colored ...`
-line per format op and the quality line `layout quality: a -> b; added: ...`.
+line per format op, the quality line `layout quality: a -> b; added: ...` and
+the `render:` block of `--render`: Read that PNG.
 If a format op adds a problem, undo it with the opposite op or choose another
 reference; `--relayout` is not a formatting tool (it discards the user's drawing).

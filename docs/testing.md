@@ -54,7 +54,12 @@ The fuzzer and the property test check after every step
   must give the same bytes;
 - **failures stay clean**: no crash (internal error, signal, timeout), no
   usage error (that would be a malformed generated op), nothing written by a
-  failed command.
+  failed command;
+- **the result renders** (the fuzzer, not the property test; `--no-render`
+  skips it): every written step is drawn like `bpmn render --problems
+  --tiles` as PNG (`renderPng` of `dist/node`); a throw (`E_RENDER`, a wasm
+  trap, a crash), an image over 2000 px or another number of listed problems
+  than the metrics have is a `render` error.
 
 Warnings (`group:*`, `unreportedReroute`, `bboxJump`, `drift`, and `hard:*`
 with `--hard warn`) are reported but only fail with `--strict`.
@@ -170,6 +175,58 @@ read as it declares, a write is UTF-8 and says so), and the design profile
 test the cases design-iq's validator decides differently from a plain BPMN
 reading (its namespace check on the raw text, flows counted per id, every
 collaboration, an attribute written twice).
+`test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
+of `tools/scenarios` and `test/fixtures` (and each of its other planes)
+renders to SVG and PNG within the default 2000 px, with the same bytes twice
+(the PNG of every tenth file twice); the PNG has text pixels with the bundled
+font only; a rasteriser failure (a 488-byte SVG that makes resvg trap, and
+malformed SVG) is `E_RENDER` and the next render still works; external
+labels sit where bpmn-js puts them (DI label bounds, below the shape, above
+the middle of a flow; 11 px, laid out twice like bpmn-js 18); colours are drawn and unsafe colour
+values are not; the planes and the elements without a shape are named; the
+budget note; a file without a diagram is laid out in memory; the renderer is
+not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
+`-o -`, `--json`, `--plane`, the usage errors). The synthetic
+`test/fixtures/render/gallery.bpmn` has every element kind the renderer
+draws (built with the CLI, then a group and multiple events added by hand).
+`test/render-agent.test.ts` checks the agent features (stage 2): every layout
+problem of every scenario and fixture located inside the bounding box of its
+elements on its plane (`locateProblems`; `layoutProblems` unchanged);
+`--problems` listing every metrics problem in its order with the same ids,
+every badge inside its elements and badges apart; `--around` drawing exactly
+the nodes of `show --around` for every 4th node of every scenario, and the
+median depth-2 crop of every node within 1,000 image tokens; `--path`,
+`--scope`, ids, the crop's plane and the notes for other planes, the usage
+and lookup errors; halos and `changeHighlight`; tiles cut between the
+columns (every column in one tile, bands for a tall drawing, PNG per tile);
+the focus region; the command flags, `--tiles` file names, `--render` on
+mutating commands (text, JSON, the region of a large drawing, a failed render
+that leaves the change standing); and the fuzz walk's render oracle. The
+synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
+wide, built with the CLI) is the tiles and focus model.
+`test/render-fixes.test.ts` checks the fixes after the verification of
+issue #12 on synthetic models: broken or far-flung coordinates (NaN,
+1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
+note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;
+`--tiles` keeps only tiles with a shape or label (2 tiles for two shapes
+50,000 px apart with an unnamed flow, not 676), stays one image beyond `MAX_TILES` (40) and
+finishes quickly on shapes spread over ±1,000,000 px at `--max-size 50`,
+numbers the bands it keeps; a scale in a note is rounded down; external
+labels break like bpmn-js 18 (max(90, label width), then the widest line);
+a message flow's envelope and message name; a file without a diagram lists
+the `metrics` problems of the file; `-o x.jpg` is `E_USAGE` (with
+`--format png` it is written); a `--scope` on an empty plane is
+`E_NO_MATCH`.
+`test/plugin.test.ts` checks the Claude Code plugin; for the look step
+(stage 3) the render example of `SKILL.md` runs on the recipes' model and
+writes a real PNG within 2000 px into `.bpmn-render/`, every render the
+skill shows writes there (not to the CLI's default in the temporary
+directory, outside the working directory), and the layout graders of the
+eval case `tidy-after-edit` agree with `bpmn metrics --json` on its
+fixture, the reference solution and seven other states of the file (one of
+them the layout the agents of the first eval run ended with). The test bundles the CLI into a temporary
+directory, with links to `assets/` and `node_modules/` beside it, so the
+bundle finds the font and `@resvg/resvg-wasm`.
 
 ## Isomorphism check
 
@@ -219,7 +276,7 @@ npx vitest run test/isomorphic.test.ts
   `newXml`, `validateXml` with the Camunda 7, the Camunda 8 and the design
   profile,
   `showXml`, `findXml` and `metricsXml` must give there exactly what they
-  give in Node. It also checks that the inlined
+  give in Node, and `renderSvg` the same SVG. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
@@ -288,6 +345,10 @@ node tools/fuzz/minimize.mjs tools/fuzz/out/latest/walks/<walk> [--kind 'hard:ov
   `apply` for multi-op steps (`--via apply` always uses apply). `--exec lib`
   runs the built library in-process, several times faster; both give
   byte-identical files. The oracles always use this repository's `dist/`.
+- **Rendering**: every written step is rendered (see *Invariants*; the
+  gate's campaign included); `--no-render` skips it. A minimised `render`
+  violation replays with the render oracle and its `run.sh` ends with the
+  render command.
 - **Output** (git-ignored): `tools/fuzz/out/latest/report.json` and one
   directory per walk with `summary.json`, `steps.json` (replayable with
   `walk.mjs --replay`), `log.jsonl` and, with `--save-steps`, every written
@@ -589,8 +650,17 @@ node tools/fuzz/run.mjs --walks 300 --steps 50 --jobs 8 --minimize
 
 ## Looking at the result
 
-The metrics do not see everything (labels, aesthetics, groups). Render what
-you touched with real bpmn-js:
+The metrics do not see everything (labels, aesthetics, groups). Look at what
+you touched:
+
+```
+node bin/bpmn.js render file.bpmn --problems -o /tmp/png/file.png      # no browser; the problems numbered; --plane <id> for a collapsed sub-process
+node bin/bpmn.js render file.bpmn --around <id> -o /tmp/png/near.png   # the neighbourhood only (--path, --scope, ids; --tiles for a large drawing)
+node bin/bpmn.js add file.bpmn task "X" --after <id> --render /tmp/png/after.png   # any mutating command: its result, what changed with a halo
+```
+
+`bpmn render` draws close to bpmn-js, not identically (its own glyphs). For
+reviews and blind judging, render with real bpmn-js:
 
 ```
 tools/render.sh /tmp/png file1.bpmn file2.bpmn            # any files

@@ -72,6 +72,29 @@
  *  - `failed` only comes from import warnings, which layoutProblemsOfXml (or a
  *    caller passing `importWarnings`) reports; the harness additionally uses it
  *    for a crashed layout command.
+ *  - locateProblems(defs, problems) adds where each problem shows (`at`;
+ *    `bpmn render --problems` puts a numbered badge there): a point on the
+ *    plane of the element `at.plane` names (the plane's bpmnElement),
+ *    rounded to 2 decimals, found from the problem's kind, ids and detail
+ *    with the same tests the checks use. It lies inside the bounding box of
+ *    the problem's elements (shapes, waypoints, DI label bounds), on the
+ *    defect itself:
+ *      crossings      the crossing point          overlaps, frameOverlap  the centre of the overlap
+ *      through, msgThroughPool  the middle of the segment's part inside the shape / pool
+ *      diagonal       the middle of the first diagonal segment
+ *      degenerateEdge its first waypoint (none without waypoints)
+ *      labelClash     the centre of the label's overlap with the shape / other label
+ *      labelOnLine    the middle of the segment's part in the label text
+ *      inOut, parallelRun, segmentOverlap  the middle of the first shared run
+ *      frameIntrusion, outsideLane, outsidePool, outsideSub  the shape's centre
+ *      edgeLeavesLane, edgeOutside  the first waypoint outside the frame
+ *      laneGap        the middle of the gap between the lane and the pool border
+ *      backwardFlow   half-way along the flow
+ *      labelOutsideFrame, messageLabelFar  the centre of the label
+ *    `missing` and `failed` (and a problem whose elements are not drawn)
+ *    get no `at`. It is a separate pass, so layoutProblems (every mutation
+ *    runs it) and its output are unchanged: results and `metrics` never
+ *    carry coordinates.
  *  - Read-only: model properties are read directly, never through `get()`,
  *    which would materialise empty collections on the model.
  *  - diffProblems(before, after) matches problems by problemKey: the kind, the
@@ -146,10 +169,20 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   failed: 50,
 };
 
+/** Where a problem shows in the drawing (locateProblems). */
+export interface ProblemLocation {
+  /** the element whose plane it is on: process, collaboration or collapsed sub-process */
+  plane: string;
+  x: number;
+  y: number;
+}
+
 export interface LayoutProblem {
   kind: MetricKey;
   ids: string[];
   detail?: string;
+  /** only from locateProblems: where it shows (see contract) */
+  at?: ProblemLocation;
 }
 
 export interface LayoutMetrics {
@@ -905,6 +938,177 @@ export function layoutProblems(defs: El, opts: { importWarnings?: number } = {})
   const counts = perKey(() => 0);
   for (const k of KEYS) counts[k] = found[k].length;
   return { counts, problems: KEYS.flatMap((k) => found[k]), score: scoreOf(counts) };
+}
+
+/* ------------------------------------------------------------------ */
+/* where a problem shows (locateProblems)                               */
+/* ------------------------------------------------------------------ */
+
+const midpoint = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+const centreOf = (b: Box): Point => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+
+/** the centre of the common part of two boxes (of the first box when they do not meet) */
+function meetCentre(a: Box, b: Box): Point {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const w = Math.min(a.x + a.width, b.x + b.width) - x;
+  const h = Math.min(a.y + a.height, b.y + b.height) - y;
+  return w >= 0 && h >= 0 ? { x: x + w / 2, y: y + h / 2 } : centreOf(a);
+}
+
+/** the crossing point of two properly crossing segments */
+function crossPoint([a, b]: Seg, [c, d]: Seg): Point {
+  const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+  const t = den ? ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den : 0.5;
+  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+}
+
+/** the middle of the part of a segment inside the box shrunk by `shrink` (a bounding-box hit: the centre of the segment's box inside it) */
+function clipMiddle(seg: Seg, b: Box, shrink: number): Point {
+  const [p, q] = seg;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  let lo = 0;
+  let hi = 1;
+  for (const [d, start, min, max] of [
+    [dx, p.x, b.x + shrink, b.x + b.width - shrink],
+    [dy, p.y, b.y + shrink, b.y + b.height - shrink],
+  ] as const) {
+    if (d === 0) {
+      if (start < min || start > max) hi = -1;
+      continue;
+    }
+    const t0 = (min - start) / d;
+    const t1 = (max - start) / d;
+    lo = Math.max(lo, Math.min(t0, t1));
+    hi = Math.min(hi, Math.max(t0, t1));
+  }
+  if (lo <= hi) return { x: p.x + ((lo + hi) / 2) * dx, y: p.y + ((lo + hi) / 2) * dy };
+  return meetCentre({ x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), width: Math.abs(dx), height: Math.abs(dy) }, b);
+}
+
+/** the middle of the first run two edges share on one line */
+function sharedAt(a: Edge, b: Edge): Point | undefined {
+  for (const [p, q] of a.segs) {
+    for (const [r, t] of b.segs) {
+      if (collinear([p, q], [r, t]) <= 0) continue;
+      if (p.x === q.x) return { x: p.x, y: (Math.max(Math.min(p.y, q.y), Math.min(r.y, t.y)) + Math.min(Math.max(p.y, q.y), Math.max(r.y, t.y))) / 2 };
+      return { x: (Math.max(Math.min(p.x, q.x), Math.min(r.x, t.x)) + Math.min(Math.max(p.x, q.x), Math.max(r.x, t.x))) / 2, y: p.y };
+    }
+  }
+  return undefined;
+}
+
+/** the point half-way along a polyline */
+function halfway(pts: Point[]): Point | undefined {
+  const parts = segs(pts);
+  let rest = parts.reduce((sum, [p, q]) => sum + Math.hypot(q.x - p.x, q.y - p.y), 0) / 2;
+  for (const [p, q] of parts) {
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+    if (len >= rest && len > 0) return { x: p.x + ((q.x - p.x) * rest) / len, y: p.y + ((q.y - p.y) * rest) / len };
+    rest -= len;
+  }
+  return pts[0];
+}
+
+interface LocPlane {
+  root: string;
+  shapes: Map<string, Shape>;
+  edges: Map<string, Edge>;
+}
+
+/** Where one problem shows on its plane (see contract). */
+function locate(p: LayoutProblem, pl: LocPlane): Point | undefined {
+  const [a, b] = p.ids;
+  const sa = a === undefined ? undefined : pl.shapes.get(a);
+  const sb = b === undefined ? undefined : pl.shapes.get(b);
+  const ea = a === undefined ? undefined : pl.edges.get(a);
+  const eb = b === undefined ? undefined : pl.edges.get(b);
+  const labelOf = (id: string | undefined): Box | undefined => (id === undefined ? undefined : (pl.shapes.get(id)?.label ?? pl.edges.get(id)?.label));
+  switch (p.kind) {
+    case 'crossings':
+      for (const x of ea?.segs ?? []) for (const y of eb?.segs ?? []) if (cross(x, y)) return crossPoint(x, y);
+      return undefined;
+    case 'overlaps':
+    case 'frameOverlap':
+      return sa && sb ? meetCentre(sa.b, sb.b) : undefined;
+    case 'frameIntrusion':
+    case 'outsideLane':
+    case 'outsidePool':
+    case 'outsideSub':
+      return sa ? centreOf(sa.b) : undefined;
+    case 'through': {
+      const seg = sb ? ea?.segs.find((s) => cuts(s, sb.b)) : undefined;
+      return seg && sb ? clipMiddle(seg, sb.b, 2) : undefined;
+    }
+    case 'msgThroughPool': {
+      const seg = sb ? ea?.segs.find((s) => hits(s, sb.b)) : undefined;
+      return seg && sb ? clipMiddle(seg, sb.b, 2) : undefined;
+    }
+    case 'diagonal': {
+      const seg = ea?.segs.find(([q, r]) => q.x !== r.x && q.y !== r.y);
+      return seg ? midpoint(seg[0], seg[1]) : undefined;
+    }
+    case 'degenerateEdge':
+      return ea?.pts[0];
+    case 'labelClash': {
+      const own = labelOf(a);
+      const other = p.detail === 'label on label' ? labelOf(b) : sb?.b;
+      return own && other ? meetCentre(own, other) : undefined;
+    }
+    case 'labelOnLine': {
+      const own = labelOf(a);
+      const owner = sa ?? ea;
+      if (!own || !owner) return undefined;
+      const text = glyph(own, raw<string>(owner.el, 'name') || '');
+      const seg = eb?.segs.find((s) => hits(s, text, 0));
+      return seg ? clipMiddle(seg, text, 0) : undefined;
+    }
+    case 'inOut':
+    case 'parallelRun':
+    case 'segmentOverlap':
+      return ea && eb ? sharedAt(ea, eb) : undefined;
+    case 'edgeLeavesLane':
+    case 'edgeOutside':
+      return sb ? ea?.pts.find((q) => !ptIn(q, sb.b)) : undefined;
+    case 'laneGap':
+      if (!sa || !sb) return undefined;
+      return p.detail === 'bottom' ? { x: sa.b.x + sa.b.width / 2, y: (sa.b.y + sa.b.height + sb.b.y + sb.b.height) / 2 } : { x: sa.b.x + sa.b.width / 2, y: (sa.b.y + sb.b.y) / 2 };
+    case 'backwardFlow':
+      return ea ? halfway(ea.pts) : undefined;
+    case 'labelOutsideFrame':
+    case 'messageLabelFar': {
+      const own = labelOf(a);
+      return own ? centreOf(own) : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** The element a BPMNPlane shows (bpmn-js: a plane without bpmnElement shows the first process or collaboration). */
+function planeRoot(defs: El, plane: unknown): string | undefined {
+  return idOf(raw(plane, 'bpmnElement')) ?? idOf(elsOf(defs, 'rootElements').find((r) => is(r, 'bpmn:Process') || is(r, 'bpmn:Collaboration')));
+}
+
+/** The problems with where each shows (`at`; see contract); the problems themselves are not changed. */
+export function locateProblems(defs: El, problems: readonly LayoutProblem[]): LayoutProblem[] {
+  const planes: LocPlane[] = [];
+  for (const diagram of elsOf(defs, 'diagrams')) {
+    const plane = raw(diagram, 'plane');
+    const root = planeRoot(defs, plane);
+    if (!root) continue;
+    const { shapes, edges } = readPlane(plane, new Set());
+    planes.push({ root, shapes: new Map(shapes.map((x) => [x.id, x])), edges: new Map(edges.map((x) => [x.id, x])) });
+  }
+  return problems.map((p) => {
+    const first = p.ids[0];
+    const pl = first === undefined ? undefined : planes.find((x) => x.shapes.has(first) || x.edges.has(first));
+    const at = pl ? locate(p, pl) : undefined;
+    const round = (v: number): number => Math.round(v * 100) / 100 || 0;
+    return at && Number.isFinite(at.x) && Number.isFinite(at.y) ? { ...p, at: { plane: pl!.root, x: round(at.x), y: round(at.y) } } : { ...p };
+  });
 }
 
 /** Parses `xml` with bpmn-moddle and measures it (import warnings count as `failed`). */

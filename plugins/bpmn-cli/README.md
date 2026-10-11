@@ -3,8 +3,9 @@
 One skill, `bpmn` (invoked as `bpmn-cli:bpmn`), that makes Claude create, read, change, format
 and validate BPMN 2.0 models with [@miragon/bpmn-cli](https://github.com/Miragon/bpmn-cli)
 instead of writing BPMN XML: elements by id, explicit speaking ids, one `apply` batch per change,
-hand-made drawings kept, formatting by naming elements, Camunda 7 / Camunda 8 settings, and
-`bpmn validate` before a model is called done.
+hand-made drawings kept, formatting by naming elements, a look at the drawing after a change
+(`bpmn render` to a PNG in `.bpmn-render/`, read and fixed by the ids of its numbered problems),
+Camunda 7 / Camunda 8 settings, and `bpmn validate` before a model is called done.
 
 Install it from the marketplace in this repository:
 

@@ -30,6 +30,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "assets",
     "bin",
     "dist",
     "README.md"
@@ -60,6 +61,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2",
     "bpmn-auto-layout": "2.0.0-alpha.2",
     "bpmn-moddle": "^10.2.0",
     "commander": "^15.0.0",

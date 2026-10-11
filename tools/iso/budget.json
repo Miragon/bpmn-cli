@@ -1,6 +1,6 @@
 {
   "entries": {
-    "whole entry": { "minified": 830, "gzip": 261 },
+    "whole entry": { "minified": 878, "gzip": 277 },
     "applyToXml only": { "minified": 630, "gzip": 201 }
   },
   "onDemand": {

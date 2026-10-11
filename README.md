@@ -17,8 +17,9 @@ redraws.
 To change the picture itself the agent uses diagram-only commands that name
 elements instead of coordinates (`place`, `align`, `color`, `label`, `route`,
 `space`, `tidy`, `compact`, `order` of lanes and pools; selectors such as
-`--path <fromId> <toId>` name a whole path at once) and reads the drawing
-back with `show --layout` and `metrics`: formatting without XML.
+`--path <fromId> <toId>` name a whole path at once), reads the drawing back
+with `show --layout` and `metrics` and looks at it with `render` (a PNG of
+the diagram, no browser): formatting without XML.
 
 ```
 $ bpmn new order.bpmn --name "Order handling"
@@ -141,20 +142,24 @@ What the skill does:
   (`--relayout` only on request).
 - **The loop** - orient with `show`, `show --around`, `show <id> --context`, `find`; change in one
   batch; read the result (layout mode, placed / moved, added layout problems, the warnings the
-  change added); `validate` (`--strict` for deployable models); format with `show --layout`,
-  dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the common errors and
-  their fixes.
+  change added); look at a change that drew something (`bpmn render <file> --problems -o
+  .bpmn-render/<name>.png`, or `--render` on the change, then Read the PNG and fix the numbered
+  problems by their ids with the format commands, at most two more renders; `--around` /
+  `--path` on large models); `validate` (`--strict` for deployable models); format with
+  `show --layout`, dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the
+  common errors and their fixes. `.bpmn-render/` in the working directory is scratch: delete it
+  or add it to `.gitignore`.
 - **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
-  5k when it fires); `reference/` has the batch format, formatting, Camunda 7, Camunda 8 and
-  complete recipes; for everything else the skill sends Claude to `bpmn guide <topic>` and
-  `bpmn kinds`, so the CLI's own documentation stays the single source.
+  6.4k when it fires); `reference/` has the batch format, formatting and rendering, Camunda 7,
+  Camunda 8 and complete recipes; for everything else the skill sends Claude to
+  `bpmn guide <topic>` and `bpmn kinds`, so the CLI's own documentation stays the single source.
 
 The plugin's version is the package version: release-please bumps
 `plugins/bpmn-cli/.claude-plugin/plugin.json` and the pinned `npx` version of the skill in each
 release PR ([docs/releasing.md](docs/releasing.md)). `test/plugin.test.ts` (part of `npm test`)
-keeps the skill honest: it runs every recipe and reference example against the CLI built from
-`src/`, checks that every `bpmn <command> --option` the skill mentions exists, and that the
-versions agree. To work on the plugin:
+keeps the skill honest: it runs every recipe and reference example and the look step's render
+against the CLI built from `src/`, checks that every `bpmn <command> --option` the skill mentions
+exists, and that the versions agree. To work on the plugin:
 
 ```
 claude plugin validate --strict plugins/bpmn-cli   # the plugin (CI runs both)
@@ -163,9 +168,10 @@ claude --plugin-dir plugins/bpmn-cli               # a session with the local pl
 claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit
 ```
 
-The eval suite (six cases: an order-to-cash model from scratch, a change to a hand-drawn model,
-a Camunda 7 external task, a formatting request, a German Camunda 8 request, and an unrelated
-question the skill must ignore) and how to run it are described in
+The eval suite (seven cases: an order-to-cash model from scratch, a change to a hand-drawn model,
+a Camunda 7 external task, a formatting request, a change plus a clean-up of a messy drawing
+where the look step matters, a German Camunda 8 request, and an unrelated question the skill
+must ignore) and how to run it are described in
 [plugins/bpmn-cli/evals/README.md](plugins/bpmn-cli/evals/README.md).
 
 ## The contract
@@ -355,12 +361,15 @@ bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
+bpmn render <file> [<id>...] [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--around <id> [--depth n] [--inner]]
+            [--path <fromId> <toId> [--via <flowId...>]] [--scope <id>] [--highlight <id,...>] [--problems] [--tiles]
+            [--max-size <px>] [--scale <n>] [--json]
 bpmn kinds [--section <name,...>] [--json]
 bpmn guide [--short | <topic>]
 ```
 
 `-` as the file reads the model from stdin (`show -`, `find -`, `validate -`,
-`metrics -`, `ext list -`, and every mutating command, whose result then goes
+`metrics -`, `render -`, `ext list -`, and every mutating command, whose result then goes
 to stdout); see [stdin and stdout](#stdin-and-stdout). Every `--json` output
 is compact JSON on one line; `--pretty` indents it.
 
@@ -375,6 +384,7 @@ always redraws, so it has no layout mode options):
 | `--summary` | a short result: created ids by kind, batch aliases, changed / renamed / removed ids, one line per format op, the added warnings, one layout line (see [Output](#output-errors-and-exit-codes)) |
 | `-o, --out <file>` | write to another file instead of in place; `-o -` writes the result to stdout (the report goes to stderr) |
 | `--dry-run` | run everything (including layout) but write nothing |
+| `--render <file.png\|file.svg>` | also draw the result: created elements with a green halo, changed ones orange, moved ones blue, the layout problems the change added numbered; a drawing too large to read shows the region of the change (see [`render`](#render)) |
 | `--layout <auto\|incremental\|full>` | how the diagram is updated, see [Layout modes](#layout-modes); default `auto` |
 | `--relayout` | redraw the whole diagram (= `--layout full`) |
 | `--no-layout` | write without updating the diagram (stale DI of removed elements is pruned; format commands still apply to the existing drawing) |
@@ -1045,6 +1055,141 @@ pool) and `messageLabelFar [messageFlow]` (a message flow label more than
 problems: [{kind, ids, detail?}]}`. Every mutation reports the same
 measurement before and after in its `layout.metrics` block, with the
 problems it added and resolved.
+
+### `render`
+
+`render <file>` draws the diagram as an image, so an agent (or you) can look
+at it: labels running into each other, flows crossing, what the metrics do
+not measure. No browser is involved: the core draws one diagram plane as SVG
+from its DI (`renderSvg`), close to how bpmn-js draws it but not identical,
+and the node layer rasterises it to PNG with resvg compiled to WebAssembly
+(`@resvg/resvg-wasm`, loaded on the first render) and the bundled Arimo font
+(SIL Open Font License 1.1, metric-compatible with Arial; no system font is
+read, so an image looks the same on every machine).
+
+```
+$ bpmn render order.bpmn --problems -o order.png
+wrote order.png  1982x734 px  ~1,856 image tokens  scale 1.00  plane Process_OrderToCash
+problems (numbered in the image):
+  1 crossings [Flow_6, Flow_21]
+  2 labelClash [Event_NoPaymentAfter14d, Activity_SendInvoice] label on shape
+  ...
+$ bpmn render order.bpmn --around Gateway_OrderValid --problems -o valid.png
+wrote valid.png  994x440 px  ~558 image tokens  scale 1.00  plane Process_OrderToCash
+crop: around Gateway_OrderValid (depth 2): 7 nodes
+problems (numbered in the image):
+  1 crossings [Flow_6, Flow_21]
+  2 labelClash [Flow_17, Activity_WaitForPrepayment] label on shape
+```
+
+- Output: `-o <file>` (the format from `--format png|svg`, else the
+  extension; a contradicting `--format` is `E_USAGE`, and so is a name not
+  ending in `.png` / `.svg` without `--format`, e.g. `-o x.jpg`; missing
+  directories are created). Without `-o` the image goes to
+  `bpmn-cli/<name>.png` in the system temp directory (the path is printed).
+  `-o -` writes the image to stdout and the report to stderr (a PNG only
+  when stdout is no terminal; not with `--tiles`).
+- The result line: the path, the size in px, the image-token estimate
+  (width × height / 784, what an image costs a Claude model), the scale and
+  the plane drawn. `--json`: `{file, out, format, width, height, tokens,
+  scale, plane, planes, notes, problems, nodes?, images?}`.
+- Planes: the first diagram is drawn (the collaboration or process). A
+  collapsed sub-process has its own plane; the result lists the other planes
+  (`other planes (--plane <id>): ...`) and `--plane <id>` draws one (an
+  unknown id is `E_NOT_FOUND`, an element without a plane of its own, e.g.
+  an expanded sub-process, `E_WRONG_KIND`; both list the planes).
+- Crops, one per call (two are `E_USAGE`), elements by id only:
+  `--around <id> [--depth n] [--inner]` draws exactly the nodes of
+  `show --around` (the same window: `--depth` flow steps both ways, default
+  2), `--path <fromId> <toId> [--via <flowId...>]` the nodes and flows of
+  the shortest sequence-flow path (the `--path` selector of the format
+  commands), `--scope <id>` a pool, lane or expanded sub-process and every
+  shape inside it (a collapsed sub-process: its plane; a process: its pool),
+  and ids after the file exactly these elements. A crop draws the
+  connections between its elements in full and, for `--around` / `--path`,
+  the data and annotations attached to them; a connection to an element it
+  leaves out is drawn faded (so a crossing with it stays visible; the image
+  fits only its first 40 px), pools, lanes, groups and the expanded
+  sub-processes around it as context, clipped. The image fits the crop, so
+  it costs far less than the whole drawing: on `tools/scenarios` the median
+  `--around` crop at depth 2 is 368 image tokens (p90 1,518). Without
+  `--plane` the crop's plane is drawn; its elements on other planes are
+  named in a note; a crop with nothing drawn is `E_NO_MATCH` (also a
+  `--scope` on an empty plane); `crop: ...: N nodes` (JSON `nodes`) names
+  what was drawn (a `--scope` that is a plane: its flow nodes).
+- `--highlight <id,...>` (repeatable) puts an orange halo under elements;
+  an unknown id is `E_NOT_FOUND`.
+- `--problems` numbers the layout problems of [`metrics`](#metrics): every
+  one, in its order with the same ids (with a crop: those naming an element
+  it draws), each as a red badge on the defect (the crossing point, the
+  overlap, the shared segment, the shape outside its lane, ...: always
+  inside the bounding box of its elements; a badge that would cover another
+  moves aside) and as a legend line `<n> <kind> [<ids>] <detail>`; a problem
+  without a place in the image (another plane, `missing`) is listed with
+  `(not in the image)`. Fix what they show with the format commands by the
+  ids of the legend.
+- Budget: the long edge stays within `--max-size` (default 2000 px, what
+  Claude Code displays); `--scale <n>` zooms (default 1) within that limit.
+  When fitting draws the labels below 0.75 of their size (about 8 px, hard to
+  read), the image is still written and a note says so and names the crops
+  and `--tiles` (a scale in a note is rounded down: 0.7458 reads 0.74).
+  `--tiles` splits such an image into tiles at full size, cut between the
+  diagram's columns (`show --layout`'s `c<n>`; a drawing too tall also
+  between rows of shapes, the bands numbered 1.. among the tiles written),
+  written as `<name>-1.png`, `<name>-2.png`, ... with one `wrote` line each
+  (`tile 2/3 c9-c17 band 1`) and the total image tokens. Only tiles that
+  hold a shape, a label (or a pool's or lane's name) or a numbered problem
+  are written: stretches of half a tile and more with nothing but empty
+  space or connections passing through are left out (a note says so; a
+  start event and a task 50,000 px apart with one unnamed flow between them
+  give 2 tiles, not 676; 3 when the flow has a label). At most 40 tiles: a drawing that needs more is written
+  as one image, with a note to render a part instead. A readable image
+  stays one (a note says so). A synthetic process of 28 nodes in a row
+  (`test/fixtures/render/long.bpmn`, 3,940 px wide) gives 2 tiles of about
+  700 image tokens each.
+- `--render <file.png>` on any mutating command (`add`, `apply`, the format
+  commands, ...; also with `--dry-run`) draws the result: created elements
+  with a green halo, changed ones (model or colour) orange, moved ones
+  (placed, moved, rerouted, a label placed) a lighter blue (a pool or lane
+  that only grew gets none), and the layout problems the change added
+  numbered (`render:` block of the report, JSON `render`). When the whole
+  plane would be unreadable, the image shows the region of the change (the
+  touched elements and their neighbours) and a note says so. A failed render
+  is reported in that block; the change stands.
+- A file without any diagram is laid out in memory by the clean engine and
+  drawn (a note says so; nothing is written; `bpmn layout` saves a drawing).
+  `--problems` still lists what `bpmn metrics` reports for the file (its
+  elements are `missing`), none in the image, and a note says the problems
+  are the file's, not the in-memory drawing's: those are not the file's to
+  fix. Elements of the plane without a shape are named in a note.
+- Broken geometry: a shape or connection with a coordinate that is not a
+  number or lies beyond ±1,000,000 px, or with a negative size, is not
+  drawn, nor are such label bounds; a note names them (`bpmn layout <file>`
+  draws the model again). A plane on which nothing can be drawn is
+  `E_RENDER`.
+- What is drawn: events with their triggers (catching outlined, throwing
+  filled; non-interrupting ones dashed; multiple, parallel multiple),
+  gateways with their markers (the exclusive X when the DI says
+  `isMarkerVisible`, as in bpmn-js), the task types, call activities, the
+  loop, multi-instance, compensation and ad-hoc markers, expanded and
+  collapsed sub-processes, event sub-processes, transactions, pools (black
+  boxes, vertical pools), lanes, data objects (collections, inputs /
+  outputs), data stores, text annotations, groups, sequence flows (default
+  slash, conditional diamond), message flows (with a `messageRef`: the
+  envelope halfway along them, filled for `messageVisibleKind
+  ="non_initiating"`, and the message's name where bpmn-js 18 puts it when
+  it opens a file: its left edge at the middle, 10 px below), associations, data
+  associations, and the bpmn-js colours (`bioc:` / `color:`). External labels
+  follow bpmn-js 18: centred on the DI label bounds, in 11 px Arial, laid
+  out at the larger of 90 px and the label bounds' width and then again at
+  the width of their widest line, which can break them once more ("Roll
+  back bookings": `Roll` / `back` / `bookings`); without label bounds below
+  the shape, or above the middle of a flow. The glyphs are drawn from the
+  BPMN notation (no bpmn-js code).
+- A failure of the rasteriser is `E_RENDER` (exit 4), never a process abort;
+  the SVG (`--format svg`) still works then. The fuzzer renders every result
+  it writes ([testing](docs/testing.md)). `tools/render.sh` (real bpmn-js in
+  a browser) stays the reference for reviews.
 
 ### `kinds` and `guide`
 
@@ -2193,7 +2338,8 @@ already had).
 ### stdin and stdout
 
 `-` as the file reads the model from stdin: `show -`, `find - <text>`,
-`validate -`, `metrics -`, `ext list - <id>`. A mutating command on `-`
+`validate -`, `metrics -`, `render -`, `ext list - <id>` (`render -o -`
+writes the image to stdout and its report to stderr). A mutating command on `-`
 (`add -`, `set -`, `apply - ops.json`, `layout -`, `new -`, ...) writes its
 result to stdout unless `-o <file>` names a file; `-o -` writes the result of
 any mutating command to stdout and leaves its input file as it was. When the
@@ -2215,7 +2361,7 @@ candidate ids when a reference could not be resolved; with `--json`:
 | 1 | usage error: unknown command / option, bad ops JSON (`E_USAGE`) |
 | 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...) |
 | 3 | layout error (`E_LAYOUT_*`) |
-| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`) |
+| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`), a failed rasteriser (`E_RENDER`) |
 | 5 | `--strict` and the result has warnings (`validate`: also import warnings) |
 | 70 | internal error (`E_INTERNAL`; `BPMN_DEBUG=1` prints the stack) |
 
@@ -2700,6 +2846,7 @@ Every function runs the code of the CLI command it names, without a file:
 | `metricsXml(xml)` | `bpmn metrics --json` | `{ score, counts, problems }` |
 | `findXml(xml, text, { kind? })` | `bpmn find --json` | `FindHit[]` |
 | `extensionsXml(xml, id)` | `bpmn ext list <file> <id> --json` | `ExtensionInfo[]` |
+| `renderSvg(xml, opts?)` | `bpmn render --format svg` | `RenderResult` |
 
 - `ops` is the [ops JSON](#ops-json-bpmn-apply) of `bpmn apply`: an array,
   `{ "ops": [...] }`, or the JSON text of either (schema: `OPS_SCHEMA`, also
@@ -2719,7 +2866,19 @@ Every function runs the code of the CLI command it names, without a file:
   `depth`, `inner`, `scope` and `layout` like `show` (`viewDoc(doc, opts)`
   and `renderShown(view)` do the same on a parsed `Doc`; `aroundView`,
   `elementContext` and `implementationOf` are the builders); `validateXml`
-  takes `platform`, `profile`, `contentRepo`, `validators` and `file`.
+  takes `platform`, `profile`, `contentRepo`, `validators` and `file`;
+  `renderSvg` takes `plane`, `scale` and `maxSize` (no limit by default;
+  `RENDER_MAX_SIZE` is the CLI's 2000), the crops `around: { id, depth?,
+  inner? }`, `path: { from, to, via? }`, `scope` and `ids`, `highlight` (a
+  list, or `{ created, changed, moved }`: the halo colours `HALO_COLORS`),
+  `problems` (`true`, or a list of `LayoutProblem`s to number), `focus`
+  (ids: their plane, and only their region when the whole would be
+  unreadable) and `tiles`, and returns `{ svg, width, height, scale, tokens,
+  plane, planes, notes, problems, nodes?, tiles? }` (`renderDocSvg(doc,
+  opts)` draws a parsed `Doc` without the in-memory layout;
+  `changeHighlight(result)` turns a mutation result into the `{ created,
+  changed, moved }` highlight `--render` uses; `locateProblems(definitions,
+  problems)` adds where each layout problem shows, `at: { plane, x, y }`).
 - `EditResult` is `{ xml, unchanged, result }`: the new document, which
   keeps the input's text wherever the ops changed nothing ([What a write
   changes](#what-a-write-changes)); `unchanged` is `true` when it is
@@ -2812,6 +2971,13 @@ its models folder) unless `contentRepo` is given or the profile is `none`,
 and tell the validators that file (`ctx.file`, the `out` target with
 `out`).
 
+`renderPng(xml, opts)` is `bpmn render` without the file: the options of
+`renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
+height, tokens, columns?, band? }], scale, plane, planes, notes, problems,
+nodes? }` (one image, or one per tile; `png` is a `Uint8Array`). It loads `@resvg/resvg-wasm` on the first call and draws text
+with the bundled Arimo font only; a rasteriser failure is a `CliError` with
+`E_RENDER`.
+
 ### Building blocks
 
 The in-memory API is made of exported parts. `Doc` (`Doc.fromXml(xml)`,
@@ -2884,7 +3050,7 @@ TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
 `test/isomorphic.test.ts` runs the browser bundle in a vm context without any
 Node global and compares `applyToXml` (also with the design profile and a
 host validator), `layoutXml` (both engines), `validateXml`, `showXml`,
-`findXml` and `metricsXml` with Node, byte for byte; it also loads an ESM
+`findXml`, `metricsXml` and `renderSvg` with Node, byte for byte; it also loads an ESM
 split bundle and checks which profile chunks a call loads.
 
 The Camunda 7 and Camunda 8 profile rules are chunks of their own: a host's
@@ -2908,11 +3074,18 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 814.7 KB | 255.1 KB | 830 / 261 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 860.7 KB | 271.3 KB | 878 / 277 KB | with the entry |
 | `applyToXml` only (tree-shaken) | 618.2 KB | 195.8 KB | 630 / 201 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
+
+The SVG renderer (`renderSvg` with its crops, halos, numbered problems and
+tiles) is about 31 KB minified of the whole entry, `locateProblems` 3.5 KB;
+a host that imports only `applyToXml` loads neither (that bundle is
+byte-identical with or without them). The PNG
+rasteriser (`@resvg/resvg-wasm`, 2.5 MB of WebAssembly, and the 21 KB font)
+is only in `@miragon/bpmn-cli/node`.
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import. The guide is the exception:
@@ -3002,10 +3175,27 @@ to `applyToXml`.
 
 ### Changes from 0.4
 
+- `bpmn render` and `renderSvg` (core) / `renderPng`
+  (`@miragon/bpmn-cli/node`) are new: the diagram as SVG or PNG without a
+  browser, with the image size, the image-token estimate and the other
+  planes ([`render`](#render)); new error `E_RENDER`. The package depends on
+  `@resvg/resvg-wasm` (MPL-2.0, loaded on the first PNG) and ships the
+  Arimo font (OFL-1.1, `assets/fonts`). For agents: crops (`--around` with
+  exactly the nodes of `show --around`, `--path`, `--scope`, ids), halos
+  (`--highlight`), the layout problems numbered in the image
+  (`--problems`; `locateProblems` in the library), `--tiles`, and
+  `--render <file>` on every mutating command (the result with created /
+  changed / moved elements and the added problems).
+- The Claude Code plugin's skill looks at what it drew: after a change to
+  the drawing it renders into `.bpmn-render/` of the working directory,
+  reads the PNG and fixes the numbered problems with the format commands
+  ([Claude Code plugin](#claude-code-plugin)); a new eval case,
+  `tidy-after-edit`, measures it.
 - The Camunda 7 and Camunda 8 profile rules load on demand
   ([Browser bundles](#browser-bundles)): `applyToXml` alone is 618.2 KB
   minified / 195.8 KB gzip in a host's bundle (0.4: 750.7 / 232.9), the
-  whole entry 814.7 / 255.1 KB (0.4: 945.9 / 291.7). The CLI's output is
+  whole entry 814.7 / 255.1 KB without the renderer, 860.7 / 271.3 KB
+  with it (0.4: 945.9 / 291.7). The CLI's output is
   unchanged. Their chunks import nothing, so a host's entry module can
   still await a call at top level.
 - Unchanged: `applyToXml`, `newXml`, `layoutXml`, `validateXml`,
