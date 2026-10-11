@@ -104,16 +104,20 @@
  * attributes, form ids and correlation keys of white space are refused.
  */
 import type { Doc } from '../document.js';
-import { kindLabel } from '../kinds.js';
-import { is, isBpmnElement, isDiElement, walk, type El } from '../model.js';
-import { unkeptEntries } from '../mirror.js';
-import { decisionLinkOf } from '../ops/decision.js';
-import { C7_URIS, ZEEBE_URI } from './descriptor.js';
-import { namespaceMap, uriOfElement, uriOfName } from './detect.js';
+import type { El } from '../model.js';
 import { feelSyntaxError } from './feel.js';
-import { NCNAME, schemaTextIssues, type SchemaTextIssue } from './schema-text.js';
-import { makeFinding, type ProfileFinding, type Severity } from './finding.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from './zeebe.js';
+import type { ProfileFinding, Severity } from './finding.js';
+import type { RuleKit } from './rule-kit.js';
+import { NCNAME, schemaTextIssues, useKit as useSchemaTextKit, type SchemaTextIssue } from './schema-text.js';
+
+/* What the rules use of the core: handed over by the loader (useKit), never imported (platform/rule-kit.ts). */
+let { kindLabel, is, isBpmnElement, isDiElement, walk, unkeptEntries, decisionLinkOf, C7_URIS, ZEEBE_URI, namespaceMap, uriOfElement, uriOfName, makeFinding, zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } = {} as RuleKit;
+
+/** Binds the core helpers the rules use, also those of schema-text.ts (platform/profile.ts, right after the import). */
+export function useKit(kit: RuleKit): void {
+  ({ kindLabel, is, isBpmnElement, isDiElement, walk, unkeptEntries, decisionLinkOf, C7_URIS, ZEEBE_URI, namespaceMap, uriOfElement, uriOfName, makeFinding, zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } = kit);
+  useSchemaTextKit(kit);
+}
 
 interface Ctx {
   doc: Doc;

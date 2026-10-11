@@ -19,8 +19,11 @@ import { Doc } from '../src/document.js';
 import { renderView } from '../src/format.js';
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline.js';
-import { runProfile } from '../src/platform/profile.js';
+import { loadProfiles, runProfile } from '../src/platform/profile.js';
 import { buildView, elementDetail } from '../src/view.js';
+
+// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
+await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..');
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud"';

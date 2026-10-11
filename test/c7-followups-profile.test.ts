@@ -24,8 +24,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
 import { platformOf } from '../src/platform/descriptor.js';
 import { detectPlatform } from '../src/platform/detect.js';
-import { runProfile } from '../src/platform/profile.js';
+import { loadProfiles, runProfile } from '../src/platform/profile.js';
 import { validateDoc } from '../src/validate.js';
+
+// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
+await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..');
 const BPMN = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"';

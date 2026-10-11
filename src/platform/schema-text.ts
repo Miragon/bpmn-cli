@@ -15,8 +15,16 @@
  * targetRef is left to the structural check (E_DANGLING_REF).
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import { BPMN_NS } from '../model.js';
-import { decodeXml, elementChildren, readXmlText, XmlTextError, type XElement } from '../xmltext.js';
+import type { XElement } from '../xmltext.js';
+import type { RuleKit } from './rule-kit.js';
+
+/* What the check uses of the core: handed over by the loader through c8.ts (useKit), never imported (platform/rule-kit.ts). */
+let { BPMN_NS, decodeXml, elementChildren, readXmlText, XmlTextError } = {} as RuleKit;
+
+/** Binds the core helpers the check uses (c8.ts useKit). */
+export function useKit(kit: RuleKit): void {
+  ({ BPMN_NS, decodeXml, elementChildren, readXmlText, XmlTextError } = kit);
+}
 
 const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
 

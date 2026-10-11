@@ -21,9 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/c8.js';
-import { runProfile } from '../src/platform/profile.js';
+import { loadProfiles, runProfile } from '../src/platform/profile.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeContainersOf, zeebeNestedOnly, zeebeType } from '../src/platform/zeebe.js';
 import { validateDoc } from '../src/validate.js';
+
+// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
+await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..');
 const ZEEBE = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"';
