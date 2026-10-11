@@ -209,7 +209,7 @@ issue #12 on synthetic models: broken or far-flung coordinates (NaN,
 1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
 note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;
 `--tiles` keeps only tiles with a shape or label (2 tiles for two shapes
-50,000 px apart, not 676), stays one image beyond `MAX_TILES` (40) and
+50,000 px apart with an unnamed flow, not 676), stays one image beyond `MAX_TILES` (40) and
 finishes quickly on shapes spread over ±1,000,000 px at `--max-size 50`,
 numbers the bands it keeps; a scale in a note is rounded down; external
 labels break like bpmn-js 18 (max(90, label width), then the widest line);

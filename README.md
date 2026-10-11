@@ -1141,8 +1141,8 @@ problems (numbered in the image):
   hold a shape, a label (or a pool's or lane's name) or a numbered problem
   are written: stretches of half a tile and more with nothing but empty
   space or connections passing through are left out (a note says so; a
-  start event and a task 50,000 px apart with one flow between them give 2
-  tiles, not 676). At most 40 tiles: a drawing that needs more is written
+  start event and a task 50,000 px apart with one unnamed flow between them
+  give 2 tiles, not 676; 3 when the flow has a label). At most 40 tiles: a drawing that needs more is written
   as one image, with a note to render a part instead. A readable image
   stays one (a note says so). A synthetic process of 28 nodes in a row
   (`test/fixtures/render/long.bpmn`, 3,940 px wide) gives 2 tiles of about
