@@ -54,8 +54,8 @@ export { resolveProfile, profileValidators, modelsFolderOf, PROFILE_CHOICES, CON
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './result.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';
-/* the platform profile (Camunda 7 rules; validate --platform) */
-export { runProfile, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profile.js';
+/* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
+export { runProfile, loadProfile, loadProfiles, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profile.js';
 export { detectPlatform } from './platform/detect.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './view.js';

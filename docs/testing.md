@@ -249,7 +249,25 @@ npx vitest run test/isomorphic.test.ts
   package `exports` do not resolve, or when a strict TypeScript consumer
   (`skipLibCheck: false`, no `@types/node`, lib ES2022) of both entries does
   not compile. It prints the minified and gzipped sizes, split like a host's
-  bundler would split them.
+  bundler would split them: the initial chunks of the whole entry and of an
+  `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
+  rules, the Camunda 8 rules with `feel` and `schema-text`,
+  bpmn-auto-layout). It fails when a rule module
+  (`dist/platform/{c7,c8,feel,schema-text}.js`) is in the initial chunks of
+  either entry, naming it; when a rule module imports a module the entry
+  loads, naming both (Rollup / Vite would put that module into the host's
+  entry chunk and make the rule chunk import the entry chunk back: a host
+  whose entry module awaits a Camunda 7 / 8 call at top level would hang;
+  the rules get the core helpers from `src/platform/rule-kit.ts`); and
+  when a size is over its budget in
+  `tools/iso/budget.json` (KB = 1024 bytes; set to the measured size plus
+  about 2 %: raise one only in the change that needs it, with the reason in
+  the commit). `--table` prints the README's "Browser bundles" table. The
+  entry chunk is the output whose metafile `entryPoint` is the requested
+  entry (esbuild gives every `import()` target an `entryPoint` too).
+  esbuild itself never shows the hang (it puts shared modules into chunks
+  of their own); the check models what Rollup does, and the Vite run in
+  HANDOVER.md ("Profile rules on demand") proved it in Chrome.
 - `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
   needed), checks that the check sees a planted `node:fs` import and
   `process` read, and runs the bundle in a `vm` context without any Node
@@ -262,6 +280,22 @@ npx vitest run test/isomorphic.test.ts
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
+- The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
+  esbuild make of the `import()` in `src/platform/profile.ts`), writes a
+  fresh copy per case, loads it with Node's own loader and records which
+  chunk is evaluated: a plain model, a design model and `platform: 'none'`
+  load no profile chunk, a Camunda 7 file only the Camunda 7 rules, a
+  Camunda 8 file only the Camunda 8 rules; a batch that turns a plain file
+  into a Camunda 7 / 8 file loads them after the ops and reports the added
+  findings of 0.4.0; `runProfile` without loaded rules throws
+  `E_PROFILE_NOT_LOADED`; a missing chunk rejects with `E_PROFILE_LOAD`
+  (its hint says a browser may keep the failed fetch until the page
+  reloads) and a later call imports it again, which in Node loads it. It
+  also checks that the bundle's entry chunk is the requested one and that
+  the rule modules (and so their chunks) import nothing the entry loads.
+- Test files that call `runProfile` or `validateDoc(doc, { platform })`
+  directly load the rules first (`await loadProfiles()` at the top); the
+  pipeline tests do not, so they run the on-demand path.
 - `test/api.test.ts` checks that the in-memory API gives what the CLI writes
   and prints for the same input.
 

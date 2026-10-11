@@ -33,7 +33,10 @@ import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/guide.js';
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/c8.js';
-import { runProfile } from '../src/platform/profile.js';
+import { loadProfiles, runProfile } from '../src/platform/profile.js';
+
+// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
+await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..');
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0"';

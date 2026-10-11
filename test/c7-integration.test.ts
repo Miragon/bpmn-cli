@@ -365,6 +365,8 @@ describe('find shows the matched vendor value; kinds documents the C7 keys (#8, 
 
   it('the library exports the platform profile', () => {
     expect(typeof lib.runProfile).toBe('function');
+    expect(typeof lib.loadProfile).toBe('function');
+    expect(typeof lib.loadProfiles).toBe('function');
     expect(typeof lib.detectPlatform).toBe('function');
     expect(lib.PLATFORM_CHOICES).toEqual(['auto', 'c7', 'c8', 'none']);
   });

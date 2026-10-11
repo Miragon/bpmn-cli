@@ -1,4 +1,4 @@
-# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 to 3 of `bpmn render` with the fixes after its verification)
+# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), and the profile rules loaded on demand (#13))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -16,7 +16,8 @@ same pipeline runs in the browser on strings (`@miragon/bpmn-cli`:
 host validators and a copy of design-iq's save gate inside the transaction.
 `validate` (and every write) runs the engine profile of the file's platform:
 Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
-engines. Elements are addressed by id only; new ids speak (names, kind +
+engines; the rules of each platform load on demand (a chunk of their own in
+a host's bundle). Elements are addressed by id only; new ids speak (names, kind +
 place, the ends of a flow) in the file's id style, and an `apply` batch
 names what it creates with aliases (`"as": "$name"`). An agent reads a
 large model through `show --around <id>` and `show <id> --context`, and a
@@ -35,7 +36,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1865 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1876 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -412,6 +413,138 @@ Measured on this build:
 
 Stage 2 (above) added crops, halos, numbered problems, tiles, `--render` and
 the fuzz step's rendering; stage 3 is open.
+
+## Profile rules on demand (2026-10-11, `feat/lazy-profiles`, issue #13)
+
+Between 0.3.0 and 0.4.0 the browser bundle grew by about a third, and every
+host loaded both rule sets for every document. Option (a) of issue #13 is
+implemented: the Camunda 7 and Camunda 8 rules load the first time a
+document of that platform is validated. Decisions taken for the issue's
+open questions: (1) the building blocks stay synchronous with a preload, as
+the issue suggests; (2) it is done now; (3) `loadProfile(platform)` is
+documented for hosts that prefetch when they open a C7 / C8 file; (4) a
+chunk that fails to load is the new `E_PROFILE_LOAD` (category io), the
+code the issue proposes.
+
+- **Loader** (`src/platform/profile.ts`): the only importer of `c7.ts` /
+  `c8.ts`, with `import()` (LOADERS); `feel.ts` and `schema-text.ts` come
+  with `c8.ts`. `loadProfile(platform)` loads one rule set (one promise per
+  platform; `'none'` resolves at once; a failed load is forgotten, so the
+  next call imports the chunk again: in Node that loads it, a browser may
+  keep the failed module fetch until the page reloads, Chrome does, and the
+  `import()` specifier is a static string the host's bundler rewrites, so it
+  cannot vary; the hint and the catalogue say so), `loadProfiles(platforms?)`
+  several (default both). `runProfile` and `validateDoc(doc, { platform })`
+  are still synchronous and throw `E_PROFILE_NOT_LOADED` (category usage,
+  `details.platform`) when the resolved platform's rules are not loaded.
+  Vendor descriptors, the zeebe lookups, detection and the design profile
+  stay in the core: the ops and design-iq's save gate need them on every
+  platform.
+- **Rule kit** (`src/platform/rule-kit.ts`): the rule modules import
+  nothing of the core at runtime (type imports only). They declare the
+  helpers they use as module variables and export `useKit(kit)`; the loader
+  calls it with `RULE_KIT` right after the import (`c8.ts` passes it on to
+  `schema-text.ts`). Why: a module the core and a rule module both import
+  is put by Rollup / Vite into the host's entry chunk, and the rule chunk
+  then imports the entry chunk back; a host whose entry module awaits a
+  C7 / C8 call or `loadProfile` at top level waited for itself forever (an
+  earlier version of this change did; 0.4.0, without the split, did not).
+  Now the C7 chunk imports nothing and the C8 chunk (with `feel` and
+  `schema-text`) neither. Nothing of the kit may be used while a rule
+  module is evaluated (only inside functions): the bindings are assigned
+  after the import. A helper a new rule needs goes into `RULE_KIT`.
+- **Pipeline** (`src/pipeline.ts`): `mutate()` awaits `ensureProfile`
+  before anything runs and again after the ops (they can turn a plain file
+  into a C7 / C8 file: the first `camunda:` / `zeebe:` content), `checkDoc()`
+  before it validates. A load failure rejects before a result exists. The
+  in-memory API, the file helpers and the CLI are unchanged.
+- **Check** (`tools/iso/check.mjs`): names the on-demand chunks (Camunda 7
+  rules, Camunda 8 rules, bpmn-auto-layout), fails when
+  `dist/platform/{c7,c8,feel,schema-text}.js` is in the initial chunks of
+  the whole entry or of the applyToXml-only entry (naming the module), fails
+  when a rule module imports (also through another rule module) a module
+  the entry loads (naming both: the hang above; esbuild alone never shows
+  it, it puts shared modules into chunks of their own, so the check reads
+  the module graph), and enforces `tools/iso/budget.json` (measured + about
+  2 %: whole entry 830 / 261 KB, applyToXml only 630 / 201, C7 chunk 58 /
+  18, C8 chunk 80 / 24; raising one is an explicit diff). Merged with
+  `bpmn render` (#12) the whole entry is 860.7 / 271.3 KB (`renderSvg` and
+  `locateProblems`, +46 KB; `applyToXml` only does not change), so its
+  budget is 878 / 277 KB. `--table` prints
+  the README table; `tools/iso/bundle.mjs` returns each chunk's text, the
+  module graph and the entry chunk: the output whose metafile `entryPoint`
+  is the requested entry (esbuild gives every `import()` target an
+  `entryPoint`, so the earlier `chunks.find((c) => c.entry)` was right
+  only because esbuild writes the entry first).
+- **Tests**: `test/isomorphic.test.ts` bundles `src/index.ts` as an ESM
+  split bundle, writes a fresh copy per case, loads it with Node's own
+  loader (a CommonJS helper; vitest's `import()` would transform the chunks
+  and cache a failed load) and records which chunk is evaluated: plain,
+  design and `platform: 'none'` load nothing, a C7 file only the C7 rules,
+  a C8 file only the C8 rules; a batch that turns a plain file into a C7 /
+  C8 file loads them after the ops and reports 0.4.0's added findings
+  (pinned); `E_PROFILE_NOT_LOADED`, the cache, and a missing chunk
+  (`E_PROFILE_LOAD` with the page-reload hint, then a later call that
+  imports it again). It also checks that exactly the requested entry is the
+  entry chunk and that the rule modules import nothing the entry loads
+  (both fail on the earlier version of this change). Without the load
+  after the ops two of them fail. The ten test files that call
+  `runProfile` / `validateDoc(doc, { platform })` directly start with `await
+  loadProfiles()`; there is no global vitest setup, so the pipeline tests
+  run the on-demand path.
+
+Evidence (private corpus local, counts only):
+- Sizes (`check.mjs`, KB = 1024 bytes, minified / gzip, initial chunks):
+  whole entry 945.9 / 291.7 -> 814.7 / 255.1 (-131.2 / -36.6);
+  `applyToXml` only 750.7 / 232.9 -> 618.2 / 195.8 (-132.5 / -37.1); on
+  demand: C7 rules 56.3 / 17.0, C8 rules 78.8 / 23.1, bpmn-auto-layout
+  82.1 / 28.0. The rule kit costs the rule chunks about 0.5 KB minified
+  and saves the entry about 1.3 KB gzip (fewer names exported across
+  chunks).
+- A Vite 7.3.6 host whose entry module awaits the calls at top level, run
+  in headless Chrome (scratch project, not in the repository): plain,
+  design and `platform: 'none'` fetch only the entry chunk; C7, a plain ->
+  C7 batch and `loadProfile('c7')` fetch only the C7 chunk; C8, a plain ->
+  C8 batch and `loadProfile('c8')` only the C8 chunk; all resolve, and the
+  added findings match 0.4.0. In Vite's chunk graph the C7 and C8 chunks
+  import nothing. The same page built against the earlier version of this
+  change stays pending for C7, C8 and the prefetch (the rule chunk imported
+  the entry chunk).
+- A blocked C8 chunk: `E_PROFILE_LOAD` in Chrome; after unblocking, a call
+  in the same page fails again without a request (the browser keeps the
+  failed fetch), as the hint now says.
+- The CLI's output is byte-identical to a 0.4.0 build (stdout, stderr, exit
+  code): `validate --json` on the 153 `.bpmn` files of `test/fixtures` and
+  `tools/scenarios` (112 plain, 7 C7, 34 C8); 52 steps of `new` / `apply` /
+  `set` / `ext` / `validate` sessions, text and `--json`, with the file
+  identical after every step (plain, plain -> C7 through `set
+  camunda:assignee`, plain -> C8 through `ext add zeebe:taskDefinition`,
+  C7, C8, `--platform` overrides); `validate --json` on the 394 private
+  corpus files (216 C7, 68 C8, 110 plain). After the rule kit, again
+  against 0.4.0 (stdout, stderr, exit code, written file): 1,224 of 1,224
+  commands on those 153 files (`validate --json` auto / c7 / c8 / none,
+  `set name`, `set camunda:assignee`, `ext add zeebe:taskDefinition`, a
+  mixed `apply`) and 396 of 396 on 50 private corpus files (20 C7, 20 C8,
+  10 plain).
+- gate: 1,820 tests + 247 opt-in, isomorphism check (89 modules, within
+  the budgets, the rule modules import nothing the entry loads), layout
+  regression 444 (budget 444), fuzz 12 x 15 0 / 0.
+
+Still open (follow-ups):
+- **bpmn-auto-layout under top-level await**: its on-demand chunk imports
+  `bpmn-moddle` (and `min-dash`), which Rollup / Vite put into the host's
+  entry chunk, so a host whose entry module awaits an `engine: 'auto'`
+  call at top level hangs, in 0.4.0 as on this branch (checked in Chrome).
+  A third-party module cannot take a kit; the README says to call it from
+  a function. The check does not cover it (`rules: []`).
+- **`guide.ts`**: it is tree-shaken from `applyToXml`, but importing any one
+  of `guideShort`, `ERROR_CATALOGUE`, `kindsJson`, `kindsText` or
+  `guideText` adds 118 to 141 KB minified / 35 to 42 KB gzip (constants
+  computed at module scope keep the whole module). Split it per section or
+  behind a `./guide` subpath (an issue of its own).
+- The descriptors (about 25 KB minified, 3 KB gzip) stay in the core: the
+  ops need them on every platform, and loading them on demand would put an
+  async step before every op batch (option c' of #13).
 
 ## Step 3 follow-ups (2026-10-10, `step3/followups`)
 
@@ -1636,7 +1769,7 @@ npm run gate                                   # before every hand-over
 npx vitest run test/<file>.test.ts             # one layer
 node tools/layout-regress.mjs --save /tmp/base.json; ...; node tools/layout-regress.mjs --compare /tmp/base.json
 BPMN_LAYOUT_DEBUG=1 node bin/bpmn.js add ...   # placement candidates, reroute reasons, [strip] lines (library: setLayoutDebug / debug option)
-npm run check:iso                              # after a build: the core still bundles for the browser; sizes
+npm run check:iso                              # after a build: the core still bundles for the browser; the profile rules load on demand and import nothing the entry loads; sizes within tools/iso/budget.json (--table: the README table)
 npm run roundtrip [<dir>]                      # after a build: how much of a file a no-op, a rename, an insert rewrite
 node bin/bpmn.js metrics <file>                # problems with ids
 node bin/bpmn.js render <file> --problems -o /tmp/png/x.png   # look at the result, the problems numbered (no browser; --around <id> / --path / --scope / ids crop, --tiles, --plane <id>)
@@ -1684,15 +1817,16 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    expect; today `set lane=` writes the child lane only and `E_LANE_CONFLICT`
    reports bpmn-js files that list both) and lane inheritance for nodes
    placed next to a node in no lane; the bundle size if design-iq needs it
-   (step 3 added about 90 KB minified for the Camunda 8 profile: a lazily
-   loaded profile per platform would be the lever).
+   (the profile rules load on demand since #13; the next lever is splitting
+   `guide.ts`, see "Profile rules on demand").
 5. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
    `bpmn render`), 2 (crops, halos, numbered problems, tiles, `--render`)
    and 3 (the plugin skill's look step and its eval case) are done, see
-   "`bpmn render`, stage 3", "stage 2" and "stage 1". Open: the reviewer's
-   20-scenario side-by-side with `tools/render.sh` (acceptance list), the
-   whole eval suite on the new skill, and offering `renderSvg` to design-iq
-   (out of scope here).
+   "`bpmn render`, stage 3", "stage 2" and "stage 1"; the verification's
+   side-by-side with `tools/render.sh` (35 files) and its fixes are in
+   "`bpmn render`, fixes after the verification". Open: the whole eval suite
+   on the new skill, and offering `renderSvg` to design-iq (out of scope
+   here).
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 

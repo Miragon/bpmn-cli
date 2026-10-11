@@ -1,0 +1,10 @@
+{
+  "entries": {
+    "whole entry": { "minified": 878, "gzip": 277 },
+    "applyToXml only": { "minified": 630, "gzip": 201 }
+  },
+  "onDemand": {
+    "c7": { "minified": 58, "gzip": 18 },
+    "c8": { "minified": 80, "gzip": 24 }
+  }
+}

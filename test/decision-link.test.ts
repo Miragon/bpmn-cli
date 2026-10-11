@@ -17,8 +17,11 @@ import { runOps } from '../src/ops/index.js';
 import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/files.js';
 import { mutateDoc } from '../src/pipeline.js';
-import { runProfile } from '../src/platform/profile.js';
+import { loadProfiles, runProfile } from '../src/platform/profile.js';
 import { buildView, elementDetail, findElements } from '../src/view.js';
+
+// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
+await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..');
 const BPMN = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
