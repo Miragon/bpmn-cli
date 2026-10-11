@@ -170,6 +170,20 @@ read as it declares, a write is UTF-8 and says so), and the design profile
 test the cases design-iq's validator decides differently from a plain BPMN
 reading (its namespace check on the raw text, flows counted per id, every
 collaboration, an attribute written twice).
+`test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
+of `tools/scenarios` and `test/fixtures` (and each of its other planes)
+renders to SVG and PNG within the default 2000 px, with the same bytes twice
+(the PNG of every tenth file twice); the PNG has text pixels with the bundled
+font only; a rasteriser failure (a 488-byte SVG that makes resvg trap, and
+malformed SVG) is `E_RENDER` and the next render still works; external
+labels sit where bpmn-js puts them (DI label bounds, below the shape, above
+the middle of a flow; 90 px at 11 px); colours are drawn and unsafe colour
+values are not; the planes and the elements without a shape are named; the
+budget note; a file without a diagram is laid out in memory; the renderer is
+not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
+`-o -`, `--json`, `--plane`, the usage errors). The synthetic
+`test/fixtures/render/gallery.bpmn` has every element kind the renderer
+draws (built with the CLI, then a group and multiple events added by hand).
 
 ## Isomorphism check
 
@@ -201,7 +215,7 @@ npx vitest run test/isomorphic.test.ts
   `newXml`, `validateXml` with the Camunda 7, the Camunda 8 and the design
   profile,
   `showXml`, `findXml` and `metricsXml` must give there exactly what they
-  give in Node. It also checks that the inlined
+  give in Node, and `renderSvg` the same SVG. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
@@ -555,8 +569,15 @@ node tools/fuzz/run.mjs --walks 300 --steps 50 --jobs 8 --minimize
 
 ## Looking at the result
 
-The metrics do not see everything (labels, aesthetics, groups). Render what
-you touched with real bpmn-js:
+The metrics do not see everything (labels, aesthetics, groups). Look at what
+you touched:
+
+```
+node bin/bpmn.js render file.bpmn -o /tmp/png/file.png     # no browser; --plane <id> for a collapsed sub-process
+```
+
+`bpmn render` draws close to bpmn-js, not identically (its own glyphs). For
+reviews and blind judging, render with real bpmn-js:
 
 ```
 tools/render.sh /tmp/png file1.bpmn file2.bpmn            # any files

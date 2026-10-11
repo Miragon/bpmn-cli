@@ -122,6 +122,17 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(await browser.metricsXml(edited.xml)).toEqual(await core.metricsXml(edited.xml));
   });
 
+  it('renders a diagram as SVG exactly like Node (renderSvg), also one it lays out in memory', async () => {
+    const xml = readFileSync(join(ROOT, 'test', 'fixtures', 'render', 'gallery.bpmn'), 'utf8');
+    for (const opts of [{}, { plane: 'Activity_CollapsedSubProcess' }, { maxSize: 600 }]) {
+      const there = await browser.renderSvg(xml, opts);
+      expect(there.svg, JSON.stringify(opts)).toMatch(/^<svg [^>]+>\n<rect /);
+      expect(JSON.stringify(there), JSON.stringify(opts)).toBe(JSON.stringify(await core.renderSvg(xml, opts)));
+    }
+    const undrawn = readFileSync(join(ROOT, 'tools', 'scenarios', 'collab__notes-on-collaboration.bpmn'), 'utf8');
+    expect(JSON.stringify(await browser.renderSvg(undrawn))).toBe(JSON.stringify(await core.renderSvg(undrawn)));
+  });
+
   it('creates and validates Camunda 8 files (zeebe descriptor, Camunda 8 profile) like Node', async () => {
     const ops = [
       { op: 'add', kind: 'start', name: 'Received' },

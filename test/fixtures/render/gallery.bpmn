@@ -1,0 +1,930 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Definitions_RenderGallery" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_RenderGallery">
+    <bpmn:participant id="Participant_RenderGallery" name="Render gallery" processRef="Process_RenderGallery" />
+    <bpmn:participant id="Participant_Partner" name="Partner" />
+    <bpmn:messageFlow id="Flow_SendTaskToPartner" name="Order" sourceRef="Activity_SendTask" targetRef="Participant_Partner" />
+    <bpmn:messageFlow id="Flow_PartnerToAnswer" name="Answer" sourceRef="Participant_Partner" targetRef="Event_Answer" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_RenderGallery" name="Render gallery" isExecutable="true">
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:outgoing>Flow_OrderReceivedToUserTask</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_UserTask" name="User task">
+      <bpmn:incoming>Flow_OrderReceivedToUserTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_UserTaskToServiceTask</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_UserTaskToOrder">
+        <bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_TwoDays" name="Two days" attachedToRef="Activity_UserTask">
+      <bpmn:outgoing>Flow_TwoDaysToTimedOut</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_TimedOut" name="Timed out">
+      <bpmn:incoming>Flow_TwoDaysToTimedOut</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_TwoDaysToTimedOut" sourceRef="Event_TwoDays" targetRef="Event_TimedOut" />
+    <bpmn:serviceTask id="Activity_ServiceTask" name="Service task">
+      <bpmn:incoming>Flow_UserTaskToServiceTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_ServiceTaskToScriptTask</bpmn:outgoing>
+      <bpmn:property id="Property_ServiceTask" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_CustomersToServiceTask">
+        <bpmn:sourceRef>DataStoreReference_Customers</bpmn:sourceRef>
+        <bpmn:targetRef>Property_ServiceTask</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="Event_Reminder" name="Reminder" cancelActivity="false" attachedToRef="Activity_ServiceTask">
+      <bpmn:outgoing>Flow_ReminderToReminded</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Reminder" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_Reminded" name="Reminded">
+      <bpmn:incoming>Flow_ReminderToReminded</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ReminderToReminded" sourceRef="Event_Reminder" targetRef="Event_Reminded" />
+    <bpmn:scriptTask id="Activity_ScriptTask" name="Script task">
+      <bpmn:incoming>Flow_ServiceTaskToScriptTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_ScriptTaskToSendTask</bpmn:outgoing>
+    </bpmn:scriptTask>
+    <bpmn:boundaryEvent id="Event_Failed" name="Failed" attachedToRef="Activity_ScriptTask">
+      <bpmn:outgoing>Flow_FailedToErrorEnd</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_Failure" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_ErrorEnd" name="Error end">
+      <bpmn:incoming>Flow_FailedToErrorEnd</bpmn:incoming>
+      <bpmn:errorEventDefinition errorRef="Error_Failure" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_FailedToErrorEnd" sourceRef="Event_Failed" targetRef="Event_ErrorEnd" />
+    <bpmn:sendTask id="Activity_SendTask" name="Send task">
+      <bpmn:incoming>Flow_ScriptTaskToSendTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_SendTaskToReceiveTask</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:boundaryEvent id="Event_Escalated" name="Escalated" cancelActivity="false" attachedToRef="Activity_SendTask">
+      <bpmn:outgoing>Flow_EscalatedToEscalationEnd</bpmn:outgoing>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_Late" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_EscalationEnd" name="Escalation end">
+      <bpmn:incoming>Flow_EscalatedToEscalationEnd</bpmn:incoming>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_Late" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_EscalatedToEscalationEnd" sourceRef="Event_Escalated" targetRef="Event_EscalationEnd" />
+    <bpmn:receiveTask id="Activity_ReceiveTask" name="Receive task">
+      <bpmn:incoming>Flow_SendTaskToReceiveTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReceiveTaskToManualTask</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:boundaryEvent id="Event_Stopped" name="Stopped" attachedToRef="Activity_ReceiveTask">
+      <bpmn:outgoing>Flow_StoppedToSignalEnd</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="Signal_Stop" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_SignalEnd" name="Signal end">
+      <bpmn:incoming>Flow_StoppedToSignalEnd</bpmn:incoming>
+      <bpmn:signalEventDefinition signalRef="Signal_Stop" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StoppedToSignalEnd" sourceRef="Event_Stopped" targetRef="Event_SignalEnd" />
+    <bpmn:manualTask id="Activity_ManualTask" name="Manual task">
+      <bpmn:incoming>Flow_ReceiveTaskToManualTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManualTaskToBusinessRuleTask</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:boundaryEvent id="Event_Changed" name="Changed" cancelActivity="false" attachedToRef="Activity_ManualTask">
+      <bpmn:outgoing>Flow_ChangedToMessageEnd</bpmn:outgoing>
+      <bpmn:conditionalEventDefinition>
+        <bpmn:condition xsi:type="bpmn:tFormalExpression">${changed}</bpmn:condition>
+      </bpmn:conditionalEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_MessageEnd" name="Message end">
+      <bpmn:incoming>Flow_ChangedToMessageEnd</bpmn:incoming>
+      <bpmn:messageEventDefinition messageRef="Message_Changed" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ChangedToMessageEnd" sourceRef="Event_Changed" targetRef="Event_MessageEnd" />
+    <bpmn:businessRuleTask id="Activity_BusinessRuleTask" name="Business rule task">
+      <bpmn:incoming>Flow_ManualTaskToBusinessRuleTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_BusinessRuleTaskToCallActivity</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:boundaryEvent id="Event_Undo" name="Undo" attachedToRef="Activity_BusinessRuleTask">
+      <bpmn:compensateEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:callActivity id="Activity_CallActivity" name="Call activity">
+      <bpmn:incoming>Flow_BusinessRuleTaskToCallActivity</bpmn:incoming>
+      <bpmn:outgoing>Flow_CallActivityToStandardLoop</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:task id="Activity_StandardLoop" name="Standard loop">
+      <bpmn:incoming>Flow_CallActivityToStandardLoop</bpmn:incoming>
+      <bpmn:outgoing>Flow_StandardLoopToParallelMultiInstance</bpmn:outgoing>
+      <bpmn:standardLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:task id="Activity_ParallelMultiInstance" name="Parallel multi-instance">
+      <bpmn:incoming>Flow_StandardLoopToParallelMultiInstance</bpmn:incoming>
+      <bpmn:outgoing>Flow_ParallelMultiInstanceToSequentialMultiInstance</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:task id="Activity_SequentialMultiInstance" name="Sequential multi-instance">
+      <bpmn:incoming>Flow_ParallelMultiInstanceToSequentialMultiInstance</bpmn:incoming>
+      <bpmn:outgoing>Flow_SequentialMultiInstanceToTerminated</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true" />
+    </bpmn:task>
+    <bpmn:endEvent id="Event_Terminated" name="Terminated">
+      <bpmn:incoming>Flow_SequentialMultiInstanceToTerminated</bpmn:incoming>
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_SequentialMultiInstanceToTerminated" sourceRef="Activity_SequentialMultiInstance" targetRef="Event_Terminated" />
+    <bpmn:sequenceFlow id="Flow_ParallelMultiInstanceToSequentialMultiInstance" sourceRef="Activity_ParallelMultiInstance" targetRef="Activity_SequentialMultiInstance" />
+    <bpmn:sequenceFlow id="Flow_StandardLoopToParallelMultiInstance" sourceRef="Activity_StandardLoop" targetRef="Activity_ParallelMultiInstance" />
+    <bpmn:sequenceFlow id="Flow_CallActivityToStandardLoop" sourceRef="Activity_CallActivity" targetRef="Activity_StandardLoop" />
+    <bpmn:sequenceFlow id="Flow_BusinessRuleTaskToCallActivity" sourceRef="Activity_BusinessRuleTask" targetRef="Activity_CallActivity" />
+    <bpmn:sequenceFlow id="Flow_ManualTaskToBusinessRuleTask" sourceRef="Activity_ManualTask" targetRef="Activity_BusinessRuleTask" />
+    <bpmn:sequenceFlow id="Flow_ReceiveTaskToManualTask" sourceRef="Activity_ReceiveTask" targetRef="Activity_ManualTask" />
+    <bpmn:sequenceFlow id="Flow_SendTaskToReceiveTask" sourceRef="Activity_SendTask" targetRef="Activity_ReceiveTask" />
+    <bpmn:sequenceFlow id="Flow_ScriptTaskToSendTask" sourceRef="Activity_ScriptTask" targetRef="Activity_SendTask" />
+    <bpmn:sequenceFlow id="Flow_ServiceTaskToScriptTask" sourceRef="Activity_ServiceTask" targetRef="Activity_ScriptTask" />
+    <bpmn:sequenceFlow id="Flow_UserTaskToServiceTask" sourceRef="Activity_UserTask" targetRef="Activity_ServiceTask" />
+    <bpmn:sequenceFlow id="Flow_OrderReceivedToUserTask" sourceRef="Event_OrderReceived" targetRef="Activity_UserTask" />
+    <bpmn:task id="Activity_Compensation" name="Compensation" isForCompensation="true" />
+    <bpmn:startEvent id="Event_EveryMorning" name="Every morning">
+      <bpmn:outgoing>Flow_EveryMorningToWhichPath</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeCycle xsi:type="bpmn:tFormalExpression">R/PT24H</bpmn:timeCycle>
+      </bpmn:timerEventDefinition>
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_WhichPath" name="Which path?" default="Flow_WhichPathToRejected">
+      <bpmn:incoming>Flow_EveryMorningToWhichPath</bpmn:incoming>
+      <bpmn:outgoing>Flow_WhichPathToAfterWhichPath</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WhichPathToRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:parallelGateway id="Gateway_AfterWhichPath">
+      <bpmn:incoming>Flow_WhichPathToAfterWhichPath</bpmn:incoming>
+      <bpmn:outgoing>Flow_AfterWhichPathToAnyOf</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:inclusiveGateway id="Gateway_AnyOf" name="Any of?">
+      <bpmn:incoming>Flow_AfterWhichPathToAnyOf</bpmn:incoming>
+      <bpmn:outgoing>Flow_AnyOfToWaitFor</bpmn:outgoing>
+    </bpmn:inclusiveGateway>
+    <bpmn:eventBasedGateway id="Gateway_WaitFor" name="Wait for">
+      <bpmn:incoming>Flow_AnyOfToWaitFor</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitForToAnswer</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WaitForToOneHour</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WaitForToGo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WaitForToReady</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_Answer" name="Answer">
+      <bpmn:incoming>Flow_WaitForToAnswer</bpmn:incoming>
+      <bpmn:outgoing>Flow_AnswerToNotify</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Answer" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="Event_Notify" name="Notify">
+      <bpmn:incoming>Flow_AnswerToNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyToBroadcast</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Note" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_Broadcast" name="Broadcast">
+      <bpmn:incoming>Flow_NotifyToBroadcast</bpmn:incoming>
+      <bpmn:outgoing>Flow_BroadcastToRaise</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="Signal_Go" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_Raise" name="Raise">
+      <bpmn:incoming>Flow_BroadcastToRaise</bpmn:incoming>
+      <bpmn:outgoing>Flow_RaiseToCompensate</bpmn:outgoing>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_Late" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_Compensate" name="Compensate">
+      <bpmn:incoming>Flow_RaiseToCompensate</bpmn:incoming>
+      <bpmn:outgoing>Flow_CompensateToMilestone</bpmn:outgoing>
+      <bpmn:compensateEventDefinition />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_Milestone" name="Milestone">
+      <bpmn:incoming>Flow_CompensateToMilestone</bpmn:incoming>
+      <bpmn:outgoing>Flow_MilestoneToToB</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_Milestone" />
+      <bpmn:signalEventDefinition id="SignalEventDefinition_Milestone" signalRef="Signal_Go" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_ToB" name="To B">
+      <bpmn:incoming>Flow_MilestoneToToB</bpmn:incoming>
+      <bpmn:linkEventDefinition name="B" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="Flow_MilestoneToToB" sourceRef="Event_Milestone" targetRef="Event_ToB" />
+    <bpmn:sequenceFlow id="Flow_CompensateToMilestone" sourceRef="Event_Compensate" targetRef="Event_Milestone" />
+    <bpmn:sequenceFlow id="Flow_RaiseToCompensate" sourceRef="Event_Raise" targetRef="Event_Compensate" />
+    <bpmn:sequenceFlow id="Flow_BroadcastToRaise" sourceRef="Event_Broadcast" targetRef="Event_Raise" />
+    <bpmn:sequenceFlow id="Flow_NotifyToBroadcast" sourceRef="Event_Notify" targetRef="Event_Broadcast" />
+    <bpmn:sequenceFlow id="Flow_AnswerToNotify" sourceRef="Event_Answer" targetRef="Event_Notify" />
+    <bpmn:sequenceFlow id="Flow_WaitForToAnswer" sourceRef="Gateway_WaitFor" targetRef="Event_Answer" />
+    <bpmn:intermediateCatchEvent id="Event_OneHour" name="One hour">
+      <bpmn:incoming>Flow_WaitForToOneHour</bpmn:incoming>
+      <bpmn:outgoing>Flow_OneHourToCompensationEnd</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_CompensationEnd" name="Compensation end">
+      <bpmn:incoming>Flow_OneHourToCompensationEnd</bpmn:incoming>
+      <bpmn:compensateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_OneHourToCompensationEnd" sourceRef="Event_OneHour" targetRef="Event_CompensationEnd" />
+    <bpmn:sequenceFlow id="Flow_WaitForToOneHour" sourceRef="Gateway_WaitFor" targetRef="Event_OneHour" />
+    <bpmn:intermediateCatchEvent id="Event_Go" name="Go" parallelMultiple="true">
+      <bpmn:incoming>Flow_WaitForToGo</bpmn:incoming>
+      <bpmn:outgoing>Flow_GoToSignalled</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="Signal_Go" />
+      <bpmn:messageEventDefinition id="MessageEventDefinition_Go" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_Signalled" name="Signalled">
+      <bpmn:incoming>Flow_GoToSignalled</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_GoToSignalled" sourceRef="Event_Go" targetRef="Event_Signalled" />
+    <bpmn:sequenceFlow id="Flow_WaitForToGo" sourceRef="Gateway_WaitFor" targetRef="Event_Go" />
+    <bpmn:intermediateCatchEvent id="Event_Ready" name="Ready">
+      <bpmn:incoming>Flow_WaitForToReady</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReadyToMerge</bpmn:outgoing>
+      <bpmn:conditionalEventDefinition>
+        <bpmn:condition xsi:type="bpmn:tFormalExpression">${ready}</bpmn:condition>
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_WasReady" name="Was ready">
+      <bpmn:incoming>Flow_MergeToWasReady</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ReadyToMerge" sourceRef="Event_Ready" targetRef="Gateway_Merge" />
+    <bpmn:inclusiveGateway id="Gateway_Merge" name="Merge">
+      <bpmn:incoming>Flow_ReadyToMerge</bpmn:incoming>
+      <bpmn:outgoing>Flow_MergeToWasReady</bpmn:outgoing>
+    </bpmn:inclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_MergeToWasReady" sourceRef="Gateway_Merge" targetRef="Event_WasReady" />
+    <bpmn:sequenceFlow id="Flow_WaitForToReady" sourceRef="Gateway_WaitFor" targetRef="Event_Ready" />
+    <bpmn:sequenceFlow id="Flow_AnyOfToWaitFor" sourceRef="Gateway_AnyOf" targetRef="Gateway_WaitFor" />
+    <bpmn:sequenceFlow id="Flow_AfterWhichPathToAnyOf" sourceRef="Gateway_AfterWhichPath" targetRef="Gateway_AnyOf" />
+    <bpmn:sequenceFlow id="Flow_WhichPathToAfterWhichPath" name="both" sourceRef="Gateway_WhichPath" targetRef="Gateway_AfterWhichPath" />
+    <bpmn:endEvent id="Event_Rejected" name="Rejected">
+      <bpmn:incoming>Flow_WhichPathToRejected</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_WhichPathToRejected" name="no" sourceRef="Gateway_WhichPath" targetRef="Event_Rejected" />
+    <bpmn:sequenceFlow id="Flow_EveryMorningToWhichPath" sourceRef="Event_EveryMorning" targetRef="Gateway_WhichPath" />
+    <bpmn:intermediateCatchEvent id="Event_FromB" name="From B">
+      <bpmn:outgoing>Flow_FromBToExpandedSubProcess</bpmn:outgoing>
+      <bpmn:linkEventDefinition name="B" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:subProcess id="Activity_ExpandedSubProcess" name="Expanded sub-process">
+      <bpmn:incoming>Flow_FromBToExpandedSubProcess</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpandedSubProcessToCollapsedSubProcess</bpmn:outgoing>
+      <bpmn:startEvent id="Event_InnerStart" name="Inner start">
+        <bpmn:outgoing>Flow_InnerStartToInnerTask</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:task id="Activity_InnerTask" name="Inner task">
+        <bpmn:incoming>Flow_InnerStartToInnerTask</bpmn:incoming>
+        <bpmn:outgoing>Flow_InnerTaskToInnerEnd</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="Event_InnerEnd" name="Inner end">
+        <bpmn:incoming>Flow_InnerTaskToInnerEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_InnerTaskToInnerEnd" sourceRef="Activity_InnerTask" targetRef="Event_InnerEnd" />
+      <bpmn:sequenceFlow id="Flow_InnerStartToInnerTask" sourceRef="Event_InnerStart" targetRef="Activity_InnerTask" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="Activity_CollapsedSubProcess" name="Collapsed sub-process">
+      <bpmn:incoming>Flow_ExpandedSubProcessToCollapsedSubProcess</bpmn:incoming>
+      <bpmn:outgoing>Flow_CollapsedSubProcessToAdHocSubProcess</bpmn:outgoing>
+    </bpmn:subProcess>
+    <bpmn:adHocSubProcess id="Activity_AdHocSubProcess" name="Ad-hoc sub-process">
+      <bpmn:incoming>Flow_CollapsedSubProcessToAdHocSubProcess</bpmn:incoming>
+      <bpmn:outgoing>Flow_AdHocSubProcessToTransaction</bpmn:outgoing>
+    </bpmn:adHocSubProcess>
+    <bpmn:transaction id="Activity_Transaction" name="Transaction">
+      <bpmn:incoming>Flow_AdHocSubProcessToTransaction</bpmn:incoming>
+      <bpmn:outgoing>Flow_TransactionToBooked</bpmn:outgoing>
+      <bpmn:startEvent id="Event_BookingStarted" name="Booking started">
+        <bpmn:outgoing>Flow_BookingStartedToCancelled</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:endEvent id="Event_Cancelled" name="Cancelled">
+        <bpmn:incoming>Flow_BookingStartedToCancelled</bpmn:incoming>
+        <bpmn:cancelEventDefinition />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_BookingStartedToCancelled" sourceRef="Event_BookingStarted" targetRef="Event_Cancelled" />
+    </bpmn:transaction>
+    <bpmn:endEvent id="Event_Booked" name="Booked">
+      <bpmn:incoming>Flow_TransactionToBooked</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_TransactionToBooked" sourceRef="Activity_Transaction" targetRef="Event_Booked" />
+    <bpmn:boundaryEvent id="Event_OnCancel" name="On cancel" attachedToRef="Activity_Transaction">
+      <bpmn:outgoing>Flow_OnCancelToBookingCancelled</bpmn:outgoing>
+      <bpmn:cancelEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_BookingCancelled" name="Booking cancelled">
+      <bpmn:incoming>Flow_OnCancelToBookingCancelled</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_OnCancelToBookingCancelled" sourceRef="Event_OnCancel" targetRef="Event_BookingCancelled" />
+    <bpmn:sequenceFlow id="Flow_AdHocSubProcessToTransaction" sourceRef="Activity_AdHocSubProcess" targetRef="Activity_Transaction" />
+    <bpmn:sequenceFlow id="Flow_CollapsedSubProcessToAdHocSubProcess" sourceRef="Activity_CollapsedSubProcess" targetRef="Activity_AdHocSubProcess" />
+    <bpmn:sequenceFlow id="Flow_ExpandedSubProcessToCollapsedSubProcess" sourceRef="Activity_ExpandedSubProcess" targetRef="Activity_CollapsedSubProcess" />
+    <bpmn:sequenceFlow id="Flow_FromBToExpandedSubProcess" sourceRef="Event_FromB" targetRef="Activity_ExpandedSubProcess" />
+    <bpmn:subProcess id="Activity_EventSubProcess" name="Event sub-process" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_MessageStartInEventSubProcess" isInterrupting="false">
+        <bpmn:messageEventDefinition messageRef="Message_Cancel" />
+      </bpmn:startEvent>
+    </bpmn:subProcess>
+    <bpmn:dataObject id="DataObject_Order" />
+    <bpmn:dataObjectReference id="DataObjectReference_Order" name="Order" dataObjectRef="DataObject_Order" />
+    <bpmn:dataStoreReference id="DataStoreReference_Customers" name="Customers" dataStoreRef="DataStore_Customers" />
+    <bpmn:association id="Association_UndoToCompensation" associationDirection="One" sourceRef="Event_Undo" targetRef="Activity_Compensation" />
+    <bpmn:textAnnotation id="TextAnnotation_ATextAnnotationThatWrapsOverSeveralLines">
+      <bpmn:text>A text annotation that wraps over several lines</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_ATextAnnotationThatWrapsOverSeveralLines" sourceRef="TextAnnotation_ATextAnnotationThatWrapsOverSeveralLines" targetRef="Activity_ScriptTask" />
+    <bpmn:group id="Group_FirstTasks" categoryValueRef="CategoryValue_FirstTasks" />
+  </bpmn:process>
+  <bpmn:category id="Category_Gallery">
+    <bpmn:categoryValue id="CategoryValue_FirstTasks" value="First tasks" />
+  </bpmn:category>
+  <bpmn:message id="Message_Reminder" name="Reminder" />
+  <bpmn:error id="Error_Failure" name="Failure" />
+  <bpmn:escalation id="Escalation_Late" name="Late" />
+  <bpmn:signal id="Signal_Stop" name="Stop" />
+  <bpmn:message id="Message_Changed" name="Changed" />
+  <bpmn:message id="Message_Answer" name="Answer" />
+  <bpmn:signal id="Signal_Go" name="Go" />
+  <bpmn:message id="Message_Note" name="Note" />
+  <bpmn:message id="Message_Cancel" name="Cancel" />
+  <bpmn:dataStore id="DataStore_Customers" name="Customers" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_RenderGallery">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_RenderGallery" bpmnElement="Collaboration_RenderGallery">
+      <bpmndi:BPMNShape id="BPMNShape_Group_FirstTasks" bpmnElement="Group_FirstTasks">
+        <dc:Bounds x="342" y="344" width="426" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_RenderGallery" bpmnElement="Participant_RenderGallery" isHorizontal="true">
+        <dc:Bounds x="80" y="220" width="2357" height="1737" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderReceived" bpmnElement="Event_OrderReceived">
+        <dc:Bounds x="140" y="391" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="124" y="433" width="68" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_UserTask" bpmnElement="Activity_UserTask">
+        <dc:Bounds x="362" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_TwoDays" bpmnElement="Event_TwoDays">
+        <dc:Bounds x="419" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="459" y="451" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_TimedOut" bpmnElement="Event_TimedOut">
+        <dc:Bounds x="680" y="1266" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="661" y="1308" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ServiceTask" bpmnElement="Activity_ServiceTask">
+        <dc:Bounds x="648" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reminder" bpmnElement="Event_Reminder">
+        <dc:Bounds x="705" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="771" y="473" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reminded" bpmnElement="Event_Reminded">
+        <dc:Bounds x="840" y="1170" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="824" y="1212" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ScriptTask" bpmnElement="Activity_ScriptTask">
+        <dc:Bounds x="808" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Failed" bpmnElement="Event_Failed">
+        <dc:Bounds x="865" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="856" y="473" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ErrorEnd" bpmnElement="Event_ErrorEnd">
+        <dc:Bounds x="1050" y="1074" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="986" y="1116" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendTask" bpmnElement="Activity_SendTask" bioc:stroke="#6b3c00" bioc:fill="#ffe0b2" color:background-color="#ffe0b2" color:border-color="#6b3c00">
+        <dc:Bounds x="1018" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Escalated" bpmnElement="Event_Escalated" bioc:stroke="#6b3c00" bioc:fill="#ffe0b2" color:background-color="#ffe0b2" color:border-color="#6b3c00">
+        <dc:Bounds x="1075" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel color:color="#6b3c00">
+          <dc:Bounds x="1115" y="451" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_EscalationEnd" bpmnElement="Event_EscalationEnd">
+        <dc:Bounds x="1260" y="978" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1237" y="944" width="82" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReceiveTask" bpmnElement="Activity_ReceiveTask">
+        <dc:Bounds x="1228" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Stopped" bpmnElement="Event_Stopped">
+        <dc:Bounds x="1285" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1325" y="451" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_SignalEnd" bpmnElement="Event_SignalEnd">
+        <dc:Bounds x="1420" y="882" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1397" y="924" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ManualTask" bpmnElement="Activity_ManualTask" bioc:stroke="#205022" bioc:fill="#c8e6c9" color:background-color="#c8e6c9" color:border-color="#205022">
+        <dc:Bounds x="1388" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Changed" bpmnElement="Event_Changed">
+        <dc:Bounds x="1445" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1485" y="451" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_MessageEnd" bpmnElement="Event_MessageEnd">
+        <dc:Bounds x="1580" y="786" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1554" y="828" width="89" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_BusinessRuleTask" bpmnElement="Activity_BusinessRuleTask">
+        <dc:Bounds x="1548" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Undo" bpmnElement="Event_Undo">
+        <dc:Bounds x="1605" y="431" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1645" y="451" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CallActivity" bpmnElement="Activity_CallActivity">
+        <dc:Bounds x="1708" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_StandardLoop" bpmnElement="Activity_StandardLoop">
+        <dc:Bounds x="1868" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ParallelMultiInstance" bpmnElement="Activity_ParallelMultiInstance">
+        <dc:Bounds x="2028" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SequentialMultiInstance" bpmnElement="Activity_SequentialMultiInstance">
+        <dc:Bounds x="2188" y="369" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Terminated" bpmnElement="Event_Terminated">
+        <dc:Bounds x="2348" y="391" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2325" y="433" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Compensation" bpmnElement="Activity_Compensation">
+        <dc:Bounds x="1573" y="607" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_EveryMorning" bpmnElement="Event_EveryMorning">
+        <dc:Bounds x="140" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="128" y="1411" width="61" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_WhichPath" bpmnElement="Gateway_WhichPath" isMarkerVisible="true" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+        <dc:Bounds x="387" y="1362" width="50" height="50" />
+        <bpmndi:BPMNLabel color:color="#0d4372">
+          <dc:Bounds x="314" y="1418" width="89" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_AfterWhichPath" bpmnElement="Gateway_AfterWhichPath">
+        <dc:Bounds x="673" y="1362" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_AnyOf" bpmnElement="Gateway_AnyOf">
+        <dc:Bounds x="833" y="1362" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="828" y="1342" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_WaitFor" bpmnElement="Gateway_WaitFor">
+        <dc:Bounds x="1043" y="1362" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="993" y="1418" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Answer" bpmnElement="Event_Answer">
+        <dc:Bounds x="1260" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1251" y="1411" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Notify" bpmnElement="Event_Notify">
+        <dc:Bounds x="1420" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1411" y="1411" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Broadcast" bpmnElement="Event_Broadcast">
+        <dc:Bounds x="1580" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1561" y="1411" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Raise" bpmnElement="Event_Raise" bioc:stroke="#831311" bioc:fill="#ffcdd2" color:background-color="#ffcdd2" color:border-color="#831311">
+        <dc:Bounds x="1740" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel color:color="#831311">
+          <dc:Bounds x="1735" y="1411" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Compensate" bpmnElement="Event_Compensate">
+        <dc:Bounds x="1900" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1877" y="1411" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Milestone" bpmnElement="Event_Milestone">
+        <dc:Bounds x="2060" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2041" y="1411" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ToB" bpmnElement="Event_ToB">
+        <dc:Bounds x="2220" y="1369" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2218" y="1411" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OneHour" bpmnElement="Event_OneHour">
+        <dc:Bounds x="1260" y="1472" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1244" y="1514" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CompensationEnd" bpmnElement="Event_CompensationEnd">
+        <dc:Bounds x="1420" y="1472" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1390" y="1514" width="96" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Go" bpmnElement="Event_Go">
+        <dc:Bounds x="1260" y="1568" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1265" y="1610" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Signalled" bpmnElement="Event_Signalled">
+        <dc:Bounds x="1420" y="1568" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1401" y="1610" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Ready" bpmnElement="Event_Ready">
+        <dc:Bounds x="1260" y="1671" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1255" y="1713" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_WasReady" bpmnElement="Event_WasReady">
+        <dc:Bounds x="1580" y="1671" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1561" y="1713" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Merge" bpmnElement="Gateway_Merge">
+        <dc:Bounds x="1413" y="1664" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1415" y="1644" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Rejected" bpmnElement="Event_Rejected">
+        <dc:Bounds x="680" y="1472" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="664" y="1514" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FromB" bpmnElement="Event_FromB">
+        <dc:Bounds x="140" y="629" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="131" y="671" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ExpandedSubProcess" bpmnElement="Activity_ExpandedSubProcess" isExpanded="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="236" y="570" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_InnerStart" bpmnElement="Event_InnerStart">
+        <dc:Bounds x="266" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="240" y="679" width="89" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_InnerTask" bpmnElement="Activity_InnerTask">
+        <dc:Bounds x="362" y="615" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_InnerEnd" bpmnElement="Event_InnerEnd">
+        <dc:Bounds x="522" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="503" y="679" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_InnerTaskToInnerEnd" bpmnElement="Flow_InnerTaskToInnerEnd">
+        <di:waypoint x="462" y="655" />
+        <di:waypoint x="522" y="655" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_InnerStartToInnerTask" bpmnElement="Flow_InnerStartToInnerTask">
+        <di:waypoint x="302" y="655" />
+        <di:waypoint x="362" y="655" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CollapsedSubProcess" bpmnElement="Activity_CollapsedSubProcess">
+        <dc:Bounds x="648" y="607" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_AdHocSubProcess" bpmnElement="Activity_AdHocSubProcess">
+        <dc:Bounds x="808" y="607" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Transaction" bpmnElement="Activity_Transaction" isExpanded="true">
+        <dc:Bounds x="968" y="587" width="200" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_BookingStarted" bpmnElement="Event_BookingStarted">
+        <dc:Bounds x="1002" y="632" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="990" y="674" width="61" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Cancelled" bpmnElement="Event_Cancelled">
+        <dc:Bounds x="1098" y="632" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="989" y="612" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_BookingStartedToCancelled" bpmnElement="Flow_BookingStartedToCancelled">
+        <di:waypoint x="1038" y="650" />
+        <di:waypoint x="1098" y="650" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OnCancel" bpmnElement="Event_OnCancel">
+        <dc:Bounds x="1125" y="689" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1165" y="709" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Booked" bpmnElement="Event_Booked">
+        <dc:Bounds x="1260" y="629" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1219" y="671" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_BookingCancelled" bpmnElement="Event_BookingCancelled">
+        <dc:Bounds x="1260" y="786" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1196" y="828" width="75" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_EventSubProcess" bpmnElement="Activity_EventSubProcess" isExpanded="true">
+        <dc:Bounds x="140" y="1807" width="200" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_MessageStartInEventSubProcess" bpmnElement="Event_MessageStartInEventSubProcess">
+        <dc:Bounds x="222" y="1852" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_TwoDaysToTimedOut" bpmnElement="Flow_TwoDaysToTimedOut">
+        <di:waypoint x="437" y="467" />
+        <di:waypoint x="437" y="1538" />
+        <di:waypoint x="660" y="1538" />
+        <di:waypoint x="660" y="1284" />
+        <di:waypoint x="680" y="1284" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ReminderToReminded" bpmnElement="Flow_ReminderToReminded">
+        <di:waypoint x="741" y="449" />
+        <di:waypoint x="771" y="449" />
+        <di:waypoint x="771" y="1188" />
+        <di:waypoint x="840" y="1188" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_FailedToErrorEnd" bpmnElement="Flow_FailedToErrorEnd">
+        <di:waypoint x="901" y="449" />
+        <di:waypoint x="931" y="449" />
+        <di:waypoint x="931" y="1092" />
+        <di:waypoint x="1050" y="1092" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_EscalatedToEscalationEnd" bpmnElement="Flow_EscalatedToEscalationEnd">
+        <di:waypoint x="1093" y="467" />
+        <di:waypoint x="1093" y="1737" />
+        <di:waypoint x="1240" y="1737" />
+        <di:waypoint x="1240" y="996" />
+        <di:waypoint x="1260" y="996" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_StoppedToSignalEnd" bpmnElement="Flow_StoppedToSignalEnd">
+        <di:waypoint x="1303" y="467" />
+        <di:waypoint x="1303" y="900" />
+        <di:waypoint x="1420" y="900" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ChangedToMessageEnd" bpmnElement="Flow_ChangedToMessageEnd">
+        <di:waypoint x="1463" y="467" />
+        <di:waypoint x="1463" y="804" />
+        <di:waypoint x="1580" y="804" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_SequentialMultiInstanceToTerminated" bpmnElement="Flow_SequentialMultiInstanceToTerminated">
+        <di:waypoint x="2288" y="409" />
+        <di:waypoint x="2348" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ParallelMultiInstanceToSequentialMultiInstance" bpmnElement="Flow_ParallelMultiInstanceToSequentialMultiInstance">
+        <di:waypoint x="2128" y="409" />
+        <di:waypoint x="2188" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_StandardLoopToParallelMultiInstance" bpmnElement="Flow_StandardLoopToParallelMultiInstance">
+        <di:waypoint x="1968" y="409" />
+        <di:waypoint x="2028" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CallActivityToStandardLoop" bpmnElement="Flow_CallActivityToStandardLoop">
+        <di:waypoint x="1808" y="409" />
+        <di:waypoint x="1868" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_BusinessRuleTaskToCallActivity" bpmnElement="Flow_BusinessRuleTaskToCallActivity">
+        <di:waypoint x="1648" y="409" />
+        <di:waypoint x="1708" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ManualTaskToBusinessRuleTask" bpmnElement="Flow_ManualTaskToBusinessRuleTask">
+        <di:waypoint x="1488" y="409" />
+        <di:waypoint x="1548" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ReceiveTaskToManualTask" bpmnElement="Flow_ReceiveTaskToManualTask">
+        <di:waypoint x="1328" y="409" />
+        <di:waypoint x="1388" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_SendTaskToReceiveTask" bpmnElement="Flow_SendTaskToReceiveTask">
+        <di:waypoint x="1118" y="409" />
+        <di:waypoint x="1228" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ScriptTaskToSendTask" bpmnElement="Flow_ScriptTaskToSendTask">
+        <di:waypoint x="908" y="409" />
+        <di:waypoint x="1018" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ServiceTaskToScriptTask" bpmnElement="Flow_ServiceTaskToScriptTask">
+        <di:waypoint x="748" y="409" />
+        <di:waypoint x="808" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_UserTaskToServiceTask" bpmnElement="Flow_UserTaskToServiceTask">
+        <di:waypoint x="462" y="409" />
+        <di:waypoint x="648" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_OrderReceivedToUserTask" bpmnElement="Flow_OrderReceivedToUserTask">
+        <di:waypoint x="176" y="409" />
+        <di:waypoint x="362" y="409" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_MilestoneToToB" bpmnElement="Flow_MilestoneToToB">
+        <di:waypoint x="2096" y="1387" />
+        <di:waypoint x="2220" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CompensateToMilestone" bpmnElement="Flow_CompensateToMilestone">
+        <di:waypoint x="1936" y="1387" />
+        <di:waypoint x="2060" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_RaiseToCompensate" bpmnElement="Flow_RaiseToCompensate">
+        <di:waypoint x="1776" y="1387" />
+        <di:waypoint x="1900" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_BroadcastToRaise" bpmnElement="Flow_BroadcastToRaise">
+        <di:waypoint x="1616" y="1387" />
+        <di:waypoint x="1740" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_NotifyToBroadcast" bpmnElement="Flow_NotifyToBroadcast">
+        <di:waypoint x="1456" y="1387" />
+        <di:waypoint x="1580" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_AnswerToNotify" bpmnElement="Flow_AnswerToNotify">
+        <di:waypoint x="1296" y="1387" />
+        <di:waypoint x="1420" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WaitForToAnswer" bpmnElement="Flow_WaitForToAnswer">
+        <di:waypoint x="1093" y="1387" />
+        <di:waypoint x="1260" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_OneHourToCompensationEnd" bpmnElement="Flow_OneHourToCompensationEnd">
+        <di:waypoint x="1296" y="1490" />
+        <di:waypoint x="1420" y="1490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WaitForToOneHour" bpmnElement="Flow_WaitForToOneHour">
+        <di:waypoint x="1068" y="1412" />
+        <di:waypoint x="1068" y="1490" />
+        <di:waypoint x="1260" y="1490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_GoToSignalled" bpmnElement="Flow_GoToSignalled">
+        <di:waypoint x="1296" y="1586" />
+        <di:waypoint x="1420" y="1586" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WaitForToGo" bpmnElement="Flow_WaitForToGo">
+        <di:waypoint x="1068" y="1412" />
+        <di:waypoint x="1068" y="1586" />
+        <di:waypoint x="1260" y="1586" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ReadyToMerge" bpmnElement="Flow_ReadyToMerge">
+        <di:waypoint x="1296" y="1689" />
+        <di:waypoint x="1413" y="1689" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_MergeToWasReady" bpmnElement="Flow_MergeToWasReady">
+        <di:waypoint x="1463" y="1689" />
+        <di:waypoint x="1580" y="1689" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WaitForToReady" bpmnElement="Flow_WaitForToReady">
+        <di:waypoint x="1068" y="1412" />
+        <di:waypoint x="1068" y="1689" />
+        <di:waypoint x="1260" y="1689" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_AnyOfToWaitFor" bpmnElement="Flow_AnyOfToWaitFor">
+        <di:waypoint x="883" y="1387" />
+        <di:waypoint x="1043" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_AfterWhichPathToAnyOf" bpmnElement="Flow_AfterWhichPathToAnyOf">
+        <di:waypoint x="723" y="1387" />
+        <di:waypoint x="833" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WhichPathToAfterWhichPath" bpmnElement="Flow_WhichPathToAfterWhichPath">
+        <di:waypoint x="437" y="1387" />
+        <di:waypoint x="673" y="1387" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="445" y="1369" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WhichPathToRejected" bpmnElement="Flow_WhichPathToRejected">
+        <di:waypoint x="412" y="1412" />
+        <di:waypoint x="412" y="1490" />
+        <di:waypoint x="680" y="1490" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="380" y="1444" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_EveryMorningToWhichPath" bpmnElement="Flow_EveryMorningToWhichPath">
+        <di:waypoint x="176" y="1387" />
+        <di:waypoint x="387" y="1387" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_TransactionToBooked" bpmnElement="Flow_TransactionToBooked">
+        <di:waypoint x="1168" y="647" />
+        <di:waypoint x="1260" y="647" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_OnCancelToBookingCancelled" bpmnElement="Flow_OnCancelToBookingCancelled">
+        <di:waypoint x="1143" y="725" />
+        <di:waypoint x="1143" y="804" />
+        <di:waypoint x="1260" y="804" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_AdHocSubProcessToTransaction" bpmnElement="Flow_AdHocSubProcessToTransaction">
+        <di:waypoint x="908" y="647" />
+        <di:waypoint x="968" y="647" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CollapsedSubProcessToAdHocSubProcess" bpmnElement="Flow_CollapsedSubProcessToAdHocSubProcess">
+        <di:waypoint x="748" y="647" />
+        <di:waypoint x="808" y="647" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ExpandedSubProcessToCollapsedSubProcess" bpmnElement="Flow_ExpandedSubProcessToCollapsedSubProcess">
+        <di:waypoint x="588" y="648" />
+        <di:waypoint x="648" y="647" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_FromBToExpandedSubProcess" bpmnElement="Flow_FromBToExpandedSubProcess">
+        <di:waypoint x="176" y="647" />
+        <di:waypoint x="236" y="648" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_UndoToCompensation" bpmnElement="Association_UndoToCompensation">
+        <di:waypoint x="1623" y="467" />
+        <di:waypoint x="1623" y="607" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Order" bpmnElement="DataObjectReference_Order">
+        <dc:Bounds x="364" y="473" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="359" y="529" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_UserTaskToOrder" bpmnElement="DataOutputAssociation_UserTaskToOrder">
+        <di:waypoint x="382" y="449" />
+        <di:waypoint x="382" y="473" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataStoreReference_Customers" bpmnElement="DataStoreReference_Customers">
+        <dc:Bounds x="643" y="473" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="631" y="529" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_CustomersToServiceTask" bpmnElement="DataInputAssociation_CustomersToServiceTask">
+        <di:waypoint x="668" y="473" />
+        <di:waypoint x="668" y="449" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_ATextAnnotationThatWrapsOverSeveralLines" bpmnElement="TextAnnotation_ATextAnnotationThatWrapsOverSeveralLines">
+        <dc:Bounds x="708" y="250" width="300" height="40" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_ATextAnnotationThatWrapsOverSeveralLines" bpmnElement="Association_ATextAnnotationThatWrapsOverSeveralLines">
+        <di:waypoint x="858" y="290" />
+        <di:waypoint x="858" y="369" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Partner" bpmnElement="Participant_Partner" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="2357" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_SendTaskToPartner" bpmnElement="Flow_SendTaskToPartner">
+        <di:waypoint x="1068" y="369" />
+        <di:waypoint x="1068" y="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1074" y="173" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_PartnerToAnswer" bpmnElement="Flow_PartnerToAnswer">
+        <di:waypoint x="1828" y="140" />
+        <di:waypoint x="1828" y="1354" />
+        <di:waypoint x="1278" y="1354" />
+        <di:waypoint x="1278" y="1369" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1286" y="1336" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_CollapsedSubProcess">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_CollapsedSubProcess" bpmnElement="Activity_CollapsedSubProcess" />
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_AdHocSubProcess">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_AdHocSubProcess" bpmnElement="Activity_AdHocSubProcess" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

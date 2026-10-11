@@ -64,16 +64,18 @@ for (const [sub, file] of Object.entries(expected)) {
 }
 
 /* 4. a strict consumer of the published types (outside the repository, the package linked by name) */
-const CONSUMER = `import { applyToXml, newXml, validateXml, viewXml, type EditResult } from '@miragon/bpmn-cli';
-import { mutateFile, type FileMutationOptions } from '@miragon/bpmn-cli/node';
+const CONSUMER = `import { applyToXml, newXml, renderSvg, validateXml, viewXml, type EditResult, type RenderResult } from '@miragon/bpmn-cli';
+import { mutateFile, renderPng, type FileMutationOptions, type PngRenderResult } from '@miragon/bpmn-cli/node';
 export async function demo(): Promise<string> {
   const created: EditResult = await newXml({ processName: 'Order' });
   const edited = await applyToXml(created.xml, [{ op: 'add', kind: 'start', name: 'Received' }], { layout: 'auto' });
   const report = await validateXml(edited.xml, { platform: 'auto' });
   const detail = await viewXml(edited.xml, { id: 'Event_Received' });
+  const image: RenderResult = await renderSvg(edited.xml, { maxSize: 800 });
+  const png: PngRenderResult = await renderPng(edited.xml, { plane: image.plane });
   const opts: FileMutationOptions = { dryRun: true };
   void mutateFile;
-  return [report.ok, detail.kind, edited.result.created.length, opts.dryRun].join();
+  return [report.ok, detail.kind, edited.result.created.length, opts.dryRun, image.tokens, png.images[0]?.png.byteLength].join();
 }
 `;
 const tmp = mkdtempSync(join(tmpdir(), 'bpmn-iso-consumer-'));

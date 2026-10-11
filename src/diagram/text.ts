@@ -6,11 +6,15 @@
  *  - textWidth(text) estimates the rendered width of one line in 12px Arial
  *    (Arial's advance widths; characters not in the table count as an average
  *    letter). Leading / trailing blanks do not count (SVG drops them).
- *  - innerLines(name, width) is the number of lines bpmn-js needs for `name`
- *    inside a shape `width` px wide: the line breaking of diagram-js Text
- *    (inner padding 7, so lines up to width - 14 px; a too long line is
+ *  - wrapLines(text, maxWidth) are the lines diagram-js Text breaks `text`
+ *    into for lines of at most `maxWidth` px in 12px Arial (widths scale with
+ *    the font size: for 11 px pass maxWidth * 12 / 11): a too long line is
  *    shortened in proportion to its overflow at blanks and hyphens, a word
- *    longer than the line is cut), explicit line breaks kept.
+ *    longer than the line is cut, explicit line breaks are kept. The lines
+ *    keep their blanks (the renderer trims them).
+ *  - innerLines(name, width) is the number of lines bpmn-js needs for `name`
+ *    inside a shape `width` px wide: wrapLines with the inner padding 7, so
+ *    lines up to width - 14 px.
  *  - fitsInside(name, size, bottomRoom?) says whether those lines (14.4 px
  *    each, centred vertically) fit into the height while keeping
  *    max(4, bottomRoom) px free at the bottom, and so (centred) as much at the
@@ -39,17 +43,15 @@ const ARIAL: Record<string, number> = {
   '„': 333, '“': 333, '”': 333, '‘': 222, '’': 222, '§': 556, '°': 400,
 };
 const DEFAULT_ADVANCE = 556;
-const FONT_SIZE = 12;
 /** bpmn-js: line height 1.2 em */
 export const LINE_HEIGHT = 14.4;
-/** bpmn-js: padding of the embedded label of an activity */
-const PADDING = 7;
 const SOFT_BREAK = '­';
 
 export function textWidth(text: string): number {
   let units = 0;
   for (const ch of text.trim()) units += ARIAL[ch] ?? DEFAULT_ADVANCE;
-  return (units * FONT_SIZE) / 1000;
+  // 12 px: units are 1/1000 em
+  return (units * 12) / 1000;
 }
 
 /** diagram-js semanticShorten: the leading parts (split at blanks / hyphens) shorter than `max` characters. */
@@ -69,7 +71,7 @@ function semanticShorten(line: string, max: number): string {
       }
     }
   }
-  if (out[out.length - 1] === SOFT_BREAK) out[out.length - 1] = '-';
+  if (out.at(-1) === SOFT_BREAK) out[out.length - 1] = '-';
   return out.join('');
 }
 
@@ -79,24 +81,26 @@ function shortenLine(line: string, width: number, maxWidth: number): string {
   return semanticShorten(line, length) || line.slice(0, Math.max(Math.round(length - 1), 1));
 }
 
-/** Number of lines bpmn-js breaks `name` into inside a shape `width` px wide. */
-export function innerLines(name: string, width: number): number {
-  const maxWidth = width - 2 * PADDING;
-  const lines = name.split(/­?\r?\n/);
-  let count = 0;
-  for (let guard = 0; lines.length && guard < 500; guard++) {
+/** The lines diagram-js breaks `text` into, each at most `maxWidth` px wide in 12px Arial (at most 500). */
+export function wrapLines(text: string, maxWidth: number): string[] {
+  const lines = text.split(/­?\r?\n/);
+  const out: string[] = [];
+  while (lines.length && out.length < 500) {
     const original = lines.shift()!;
     let fit = original;
     for (let k = 0; k < 200; k++) {
-      const w = fit ? textWidth(fit) : 0;
+      const w = textWidth(fit);
       if (fit === ' ' || fit === '' || w <= maxWidth || fit.length < 2) break;
       fit = shortenLine(fit, w, maxWidth);
     }
     if (fit.length < original.length) lines.unshift(original.slice(fit.length).trim());
-    count++;
+    out.push(fit);
   }
-  return count;
+  return out;
 }
+
+/** Number of lines bpmn-js breaks `name` into inside a shape `width` px wide (the embedded label's padding: 7 px on each side). */
+export const innerLines = (name: string, width: number): number => wrapLines(name, width - 14).length;
 
 /** room a marker or a boundary event on the bottom border needs below the text (glyphs end ~3 px above their line box) */
 export const BOTTOM_ROOM = 17;
@@ -117,7 +121,7 @@ export function activitySize(name: string, size: { width: number; height: number
     widths.push(w);
   }
   // higher it must be: as narrow as the widest step allows (no wider than that line count needs)
-  const fewest = innerLines(name, widths[widths.length - 1] ?? size.width);
+  const fewest = innerLines(name, widths.at(-1) ?? size.width);
   const width = [size.width, ...widths].find((w) => innerLines(name, w) <= fewest) ?? size.width;
   let height = size.height;
   for (let k = 1; k <= MAX_HEIGHT_STEPS; k++) {

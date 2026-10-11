@@ -20,3 +20,5 @@ export {
 } from './files.js';
 /* the design-iq content repository of a file on disk (bpmiq.yml; the auto validation profile) */
 export { findContentRepo, contentModelIds, contentRepoOf, resolveFileProfile, type ContentRepoOnDisk } from './repo.js';
+/* the drawing as a PNG image (`bpmn render`): renderSvg's SVG rasterised by resvg (WebAssembly, loaded on first use) with the bundled Arimo font */
+export { renderPng, type PngImage, type PngRenderResult } from './render.js';

@@ -17,8 +17,9 @@ redraws.
 To change the picture itself the agent uses diagram-only commands that name
 elements instead of coordinates (`place`, `align`, `color`, `label`, `route`,
 `space`, `tidy`, `compact`, `order` of lanes and pools; selectors such as
-`--path <fromId> <toId>` name a whole path at once) and reads the drawing
-back with `show --layout` and `metrics`: formatting without XML.
+`--path <fromId> <toId>` name a whole path at once), reads the drawing back
+with `show --layout` and `metrics` and looks at it with `render` (a PNG of
+the diagram, no browser): formatting without XML.
 
 ```
 $ bpmn new order.bpmn --name "Order handling"
@@ -355,12 +356,13 @@ bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
+bpmn render <file> [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--max-size <px>] [--scale <n>] [--json]
 bpmn kinds [--section <name,...>] [--json]
 bpmn guide [--short | <topic>]
 ```
 
 `-` as the file reads the model from stdin (`show -`, `find -`, `validate -`,
-`metrics -`, `ext list -`, and every mutating command, whose result then goes
+`metrics -`, `render -`, `ext list -`, and every mutating command, whose result then goes
 to stdout); see [stdin and stdout](#stdin-and-stdout). Every `--json` output
 is compact JSON on one line; `--pretty` indents it.
 
@@ -1045,6 +1047,63 @@ pool) and `messageLabelFar [messageFlow]` (a message flow label more than
 problems: [{kind, ids, detail?}]}`. Every mutation reports the same
 measurement before and after in its `layout.metrics` block, with the
 problems it added and resolved.
+
+### `render`
+
+`render <file>` draws the diagram as an image, so an agent (or you) can look
+at it: labels running into each other, flows crossing, what the metrics do
+not measure. No browser is involved: the core draws one diagram plane as SVG
+from its DI (`renderSvg`), close to how bpmn-js draws it but not identical,
+and the node layer rasterises it to PNG with resvg compiled to WebAssembly
+(`@resvg/resvg-wasm`, loaded on the first render) and the bundled Arimo font
+(SIL Open Font License 1.1, metric-compatible with Arial; no system font is
+read, so an image looks the same on every machine).
+
+```
+$ bpmn render order.bpmn -o order.png
+wrote order.png  1982x734 px  ~1,856 image tokens  scale 1.00  plane Process_OrderToCash
+```
+
+- Output: `-o <file>` (the format from `--format png|svg`, else the
+  extension, else PNG; a contradicting `--format` is `E_USAGE`; missing
+  directories are created). Without `-o` the image goes to
+  `bpmn-cli/<name>.png` in the system temp directory (the path is printed).
+  `-o -` writes the image to stdout and the report to stderr (a PNG only
+  when stdout is no terminal).
+- The result line: the path, the size in px, the image-token estimate
+  (width × height / 784, what an image costs a Claude model), the scale and
+  the plane drawn. `--json`: `{file, out, format, width, height, tokens,
+  scale, plane, planes, notes}`.
+- Planes: the first diagram is drawn (the collaboration or process). A
+  collapsed sub-process has its own plane; the result lists the other planes
+  (`other planes (--plane <id>): ...`) and `--plane <id>` draws one (an
+  unknown id is `E_NOT_FOUND`, an element without a plane of its own, e.g.
+  an expanded sub-process, `E_WRONG_KIND`; both list the planes).
+- Budget: the long edge stays within `--max-size` (default 2000 px, what
+  Claude Code displays); `--scale <n>` zooms (default 1) within that limit.
+  When fitting draws the labels below 0.75 of their size (about 8 px, hard to
+  read), the image is still written and a note says so and names the crop
+  options `--around`, `--path` and `--tiles` (coming with the next stage of
+  issue #12).
+- A file without any diagram is laid out in memory by the clean engine and
+  drawn (a note says so; nothing is written; `bpmn layout` saves a drawing);
+  elements of the plane without a shape are named in a note.
+- What is drawn: events with their triggers (catching outlined, throwing
+  filled; non-interrupting ones dashed; multiple, parallel multiple),
+  gateways with their markers (the exclusive X when the DI says
+  `isMarkerVisible`, as in bpmn-js), the task types, call activities, the
+  loop, multi-instance, compensation and ad-hoc markers, expanded and
+  collapsed sub-processes, event sub-processes, transactions, pools (black
+  boxes, vertical pools), lanes, data objects (collections, inputs /
+  outputs), data stores, text annotations, groups, sequence flows (default
+  slash, conditional diamond), message flows, associations, data
+  associations, and the bpmn-js colours (`bioc:` / `color:`). External labels
+  follow bpmn-js: centred on the DI label bounds, wrapped at 90 px in 11 px
+  Arial (without label bounds below the shape, or above the middle of a
+  flow); the glyphs are drawn from the BPMN notation (no bpmn-js code).
+- A failure of the rasteriser is `E_RENDER` (exit 4), never a process abort;
+  the SVG (`--format svg`) still works then. `tools/render.sh` (real bpmn-js
+  in a browser) stays the reference for reviews.
 
 ### `kinds` and `guide`
 
@@ -2193,7 +2252,8 @@ already had).
 ### stdin and stdout
 
 `-` as the file reads the model from stdin: `show -`, `find - <text>`,
-`validate -`, `metrics -`, `ext list - <id>`. A mutating command on `-`
+`validate -`, `metrics -`, `render -`, `ext list - <id>` (`render -o -`
+writes the image to stdout and its report to stderr). A mutating command on `-`
 (`add -`, `set -`, `apply - ops.json`, `layout -`, `new -`, ...) writes its
 result to stdout unless `-o <file>` names a file; `-o -` writes the result of
 any mutating command to stdout and leaves its input file as it was. When the
@@ -2215,7 +2275,7 @@ candidate ids when a reference could not be resolved; with `--json`:
 | 1 | usage error: unknown command / option, bad ops JSON (`E_USAGE`) |
 | 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...) |
 | 3 | layout error (`E_LAYOUT_*`) |
-| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`) |
+| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`), a failed rasteriser (`E_RENDER`) |
 | 5 | `--strict` and the result has warnings (`validate`: also import warnings) |
 | 70 | internal error (`E_INTERNAL`; `BPMN_DEBUG=1` prints the stack) |
 
@@ -2700,6 +2760,7 @@ Every function runs the code of the CLI command it names, without a file:
 | `metricsXml(xml)` | `bpmn metrics --json` | `{ score, counts, problems }` |
 | `findXml(xml, text, { kind? })` | `bpmn find --json` | `FindHit[]` |
 | `extensionsXml(xml, id)` | `bpmn ext list <file> <id> --json` | `ExtensionInfo[]` |
+| `renderSvg(xml, opts?)` | `bpmn render --format svg` | `RenderResult` |
 
 - `ops` is the [ops JSON](#ops-json-bpmn-apply) of `bpmn apply`: an array,
   `{ "ops": [...] }`, or the JSON text of either (schema: `OPS_SCHEMA`, also
@@ -2719,7 +2780,11 @@ Every function runs the code of the CLI command it names, without a file:
   `depth`, `inner`, `scope` and `layout` like `show` (`viewDoc(doc, opts)`
   and `renderShown(view)` do the same on a parsed `Doc`; `aroundView`,
   `elementContext` and `implementationOf` are the builders); `validateXml`
-  takes `platform`, `profile`, `contentRepo`, `validators` and `file`.
+  takes `platform`, `profile`, `contentRepo`, `validators` and `file`;
+  `renderSvg` takes `plane`, `scale` and `maxSize` (no limit by default;
+  `RENDER_MAX_SIZE` is the CLI's 2000) and returns `{ svg, width, height,
+  scale, tokens, plane, planes, notes }` (`renderPlaneSvg(definitions, opts)`
+  draws a parsed document without the in-memory layout).
 - `EditResult` is `{ xml, unchanged, result }`: the new document, which
   keeps the input's text wherever the ops changed nothing ([What a write
   changes](#what-a-write-changes)); `unchanged` is `true` when it is
@@ -2792,6 +2857,13 @@ its models folder) unless `contentRepo` is given or the profile is `none`,
 and tell the validators that file (`ctx.file`, the `out` target with
 `out`).
 
+`renderPng(xml, opts)` is `bpmn render` without the file: the options of
+`renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
+height, tokens }], scale, plane, planes, notes }` (one image; `png` is a
+`Uint8Array`). It loads `@resvg/resvg-wasm` on the first call and draws text
+with the bundled Arimo font only; a rasteriser failure is a `CliError` with
+`E_RENDER`.
+
 ### Building blocks
 
 The in-memory API is made of exported parts. `Doc` (`Doc.fromXml(xml)`,
@@ -2858,14 +2930,19 @@ TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
 `test/isomorphic.test.ts` runs the browser bundle in a vm context without any
 Node global and compares `applyToXml` (also with the design profile and a
 host validator), `layoutXml` (both engines), `validateXml`, `showXml`,
-`findXml` and `metricsXml` with Node, byte for byte.
+`findXml`, `metricsXml` and `renderSvg` with Node, byte for byte.
 
 Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 922 KB | 284 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
-| `applyToXml` only (tree-shaken) | 733 KB | 227 KB | the same |
+| everything `@miragon/bpmn-cli` exports | 966 KB | 299 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| `applyToXml` only (tree-shaken) | 751 KB | 233 KB | the same |
+
+The SVG renderer (`renderSvg`) is about 19 KB minified / 6.5 KB gzip of the
+whole entry; a host that imports only `applyToXml` does not load it. The PNG
+rasteriser (`@resvg/resvg-wasm`, 2.5 MB of WebAssembly, and the 21 KB font)
+is only in `@miragon/bpmn-cli/node`.
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import.
@@ -2949,3 +3026,12 @@ bundler drops what a host does not import.
   `assignee=` ... and a message's correlation key. The core grew by about
   200 KB minified / 57 KB gzip ([Browser bundles](#browser-bundles); the
   FEEL check and the schema-text rules about 23 KB / 7 KB of it).
+
+### Changes from 0.4
+
+- `bpmn render` and `renderSvg` (core) / `renderPng`
+  (`@miragon/bpmn-cli/node`) are new: the diagram as SVG or PNG without a
+  browser, with the image size, the image-token estimate and the other
+  planes ([`render`](#render)); new error `E_RENDER`. The package depends on
+  `@resvg/resvg-wasm` (MPL-2.0, loaded on the first PNG) and ships the
+  Arimo font (OFL-1.1, `assets/fonts`).

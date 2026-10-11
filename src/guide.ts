@@ -45,6 +45,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_NO_FILE', meaning: 'No output file: the document was not loaded from a file and no -o/--out was given.', fix: 'Pass -o <file>.' },
   { code: 'E_FILE_EXISTS', meaning: '`bpmn new` refuses to overwrite an existing file.', fix: 'Choose another name, or pass --force to overwrite.' },
   { code: 'E_INVALID_XML', meaning: 'The --xml snippet of `ext add` could not be parsed.', fix: 'Pass one well-formed element with declared prefixes, e.g. --xml \'<zeebe:taskDefinition type="x"/>\', or use <prefix:type> attr=value instead.' },
+  { code: 'E_RENDER', meaning: '`bpmn render` (renderPng) could not rasterise the image: the PNG rasteriser (@resvg/resvg-wasm) failed to load or failed on this drawing (exit 4; never a process abort).', fix: 'Write the SVG instead (`--format svg`), or render a smaller part; report the file if it keeps failing.' },
   // ids & lookup
   { code: 'E_NOT_FOUND', meaning: 'No element with the given id (elements are addressed by id, never by name). The candidates are the meant ids, best first: the new id of a flow an earlier op of the batch renamed, the same id in another case, umlaut spelling or with another / no prefix (Task_CheckInvoice, CheckInvoice -> Activity_CheckInvoice), ids containing it, typos (ChekInvoice), names containing it; within each, the ids the batch created first. In a batch the hint lists the ids it created so far (and an alias written without $). Ids of vendor extension elements (e.g. camunda:formField) are not element ids: the message then names the BPMN element they belong to.', fix: 'Use the candidates listed, or run `bpmn show <file>` / `bpmn find <file> <text>` to list ids; in `apply`, name what an op creates with "as": "$name". `remove --if-exists` / `add --if-absent` make the op idempotent.' },
   { code: 'E_WRONG_KIND', meaning: 'The element exists but is not of the expected kind (e.g. a flow where a node is required); also `ext add` on bpmn:definitions or a non-BPMN element (the BPMN 2.0 XSD has no extensionElements there; the engines refuse the file), or a definition. / loop. / condition. prefix the element has no slot for; `compact` with an id that is no pool, lane or expanded sub-process.', fix: 'Pass an id of the right kind; `bpmn show <file> <id>` prints the kind. Process-level extensions go on the process id.' },
@@ -259,7 +260,7 @@ export const EXIT_CODE_DOCS: Array<{ code: number; meaning: string }> = [
   { code: EXIT_CODES.usage, meaning: 'usage error: unknown command/option, bad ops JSON (E_USAGE)' },
   { code: EXIT_CODES.model, meaning: 'model or validation error (E_NOT_FOUND, E_CROSS_SCOPE, ...)' },
   { code: EXIT_CODES.layout, meaning: 'layout error (E_LAYOUT_*)' },
-  { code: EXIT_CODES.io, meaning: 'I/O or parse error (E_FILE_NOT_FOUND, E_PARSE, E_IMPORT_LOSSY, E_FILE_EXISTS)' },
+  { code: EXIT_CODES.io, meaning: 'I/O or parse error (E_FILE_NOT_FOUND, E_PARSE, E_IMPORT_LOSSY, E_FILE_EXISTS, E_RENDER)' },
   { code: 5, meaning: '--strict and the result has warnings' },
   { code: EXIT_CODES.internal, meaning: 'internal error' },
 ];
@@ -379,6 +380,7 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, flows running backwards, flows merging before their target, labels outside their pool, message labels far from their line, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
+  { name: 'render', usage: 'bpmn render <file> [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--max-size <px>] [--scale <n>] [--json]', summary: 'Draw the diagram as an image to look at it (no browser; close to bpmn-js, not identical): a PNG (resvg with the bundled Arimo font) or SVG of one diagram plane. Without -o it writes bpmn-cli/<name>.png in the temp directory; `-o -` writes the image to stdout (the report to stderr); the format comes from --format or the -o extension. Prints the path, the size, the image tokens (width * height / 784), the scale, the plane and the other planes (collapsed sub-processes: --plane <id> draws one). The long edge stays within --max-size (default 2000; --scale zooms); when labels shrink below 0.75 a note says so and names the crop options. A file without a diagram is drawn in memory (nothing written); elements without a shape are named. A rasteriser failure is E_RENDER.', examples: ['bpmn render order.bpmn -o order.png', 'bpmn render order.bpmn --plane Activity_ReviewClaim -o review.png', 'bpmn render order.bpmn --format svg -o -'] },
   { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, zeebeElements, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
   { name: 'guide', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
 ];
@@ -740,6 +742,7 @@ export function guideText(): string {
       '  2. place / align / space / route / label / color / order (lanes, pools) / tidy / compact: say where things',
       '     go by naming other elements; others give way, frames grow, flows are rerouted',
       '  3. bpmn metrics <file>             check that no overlaps / through / outsideLane / frameIntrusion were added',
+      '  4. bpmn render <file> -o <f.png>   look at it (read the PNG): labels, crossings, aesthetics the metrics miss',
       '  Selectors (place, align, color, tidy): --path <fromId> <toId> [--via <flowId...>], --kind <kind>,',
       '  --branch <flowId> name many elements at once; elements are always named by id.',
       '  Recipes:',
@@ -930,8 +933,9 @@ const OUTPUT = [
   '  --json is compact (one line; --pretty indents it): warnings: {added, resolved, preexistingCount}; with --summary the',
   '  summary as JSON. Errors go to stderr (`error E_CODE: message` + hint; with --json one JSON line).',
   '  stdin / stdout: `-` as the file reads the model from stdin: show -, find - <text>, validate -, metrics -,',
-  '  ext list - <id>; a mutating command on `-` (add -, apply - ops.json, layout -, ...) writes the result to stdout.',
-  '  `-o -` writes the result of any mutating command to stdout. With the XML on stdout the report goes to stderr.',
+  '  render -, ext list - <id>; a mutating command on `-` (add -, apply - ops.json, layout -, ...) writes the result to',
+  '  stdout. `-o -` writes the result of any mutating command (and the image of render) to stdout. With the XML or',
+  '  the image on stdout the report goes to stderr.',
 ];
 
 /** The errors the short guide lists, each with a one-line fix (the catalogue has the full text). */

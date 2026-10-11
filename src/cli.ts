@@ -13,18 +13,22 @@
  * --json prints compact JSON (--pretty indents it).
  */
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, extname, join } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
 import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
 import { setLayoutDebug } from './debug.js';
 import { layoutProblems } from './diagram/metrics.js';
+import { RENDER_MAX_SIZE, renderSvg, type RenderOptions } from './diagram/render.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
-import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, type FileMutationOptions } from './node/files.js';
+import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
+import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
@@ -858,6 +862,96 @@ withJsonOptions(program.command('metrics <file>').description('layout quality of
     }, !!o['json']);
   },
 );
+
+/* render ------------------------------------------------------------- */
+const RENDER_FORMATS = ['png', 'svg'] as const;
+type RenderFormat = (typeof RENDER_FORMATS)[number];
+
+function boundedNumber(what: string, min: number, max: number, integer: boolean) {
+  return (v: string): number => {
+    const x = Number(v);
+    if (!/^\d+(\.\d+)?$/.test(v.trim()) || !Number.isFinite(x) || x < min || x > max || (integer && !Number.isInteger(x))) {
+      throw new InvalidArgumentError(`expected ${integer ? 'a whole number' : 'a number'} from ${min} to ${max} (${what})`);
+    }
+    return x;
+  };
+}
+
+/** --format, else the -o extension (.png / .svg), else png; a --format the extension contradicts is E_USAGE. */
+function renderFormat(format: string | undefined, out: string | undefined): RenderFormat {
+  const ext = out && out !== '-' ? extname(out).slice(1).toLowerCase() : '';
+  const fromExt = (RENDER_FORMATS as readonly string[]).includes(ext) ? (ext as RenderFormat) : undefined;
+  if (format !== undefined && fromExt && format !== fromExt) {
+    throw usageError(`--format ${format} does not match the file name ${out}`, { hint: `Drop --format (the extension decides) or name the file .${format}.` });
+  }
+  return (format as RenderFormat | undefined) ?? fromExt ?? 'png';
+}
+
+/** Thousands with commas (1,856). */
+const thousands = (v: number): string => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+withJsonOptions(
+  program
+    .command('render <file>')
+    .description('draw the diagram as an image to look at (PNG, or SVG; no browser): prints the size, the image tokens and the other planes (file - = stdin)')
+    .option('-o, --out <file>', 'the image file (- = stdout); default: bpmn-cli/<name>.png in the temp directory')
+    .option('--format <format>', 'png (default) or svg; default: the -o extension', (v: string) => {
+      if (!(RENDER_FORMATS as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${RENDER_FORMATS.join(' or ')}`);
+      return v;
+    })
+    .option('--plane <id>', 'draw the plane of this collapsed sub-process (or process / collaboration); default: the first diagram')
+    .option('--max-size <px>', `the longest edge in px (default ${RENDER_MAX_SIZE}); a larger drawing is scaled down`, boundedNumber('px', 50, 20000, true))
+    .option('--scale <n>', 'zoom factor (default 1); the image still stays within --max-size', boundedNumber('zoom', 0.05, 10, false)),
+).action(async (file: string, o: RawOpts) => {
+  const json = !!o['json'];
+  await run(async () => {
+    const out = o['out'] as string | undefined;
+    const format = renderFormat(o['format'] as string | undefined, out);
+    if (out === '-' && format === 'png' && process.stdout.isTTY) {
+      throw usageError('a PNG is binary and does not go to a terminal', { hint: 'Redirect it (`bpmn render <file> -o - > out.png`), pass -o <file>, or use --format svg.' });
+    }
+    const xml = file === '-' ? decodeXmlBytes(readStdin('the model'), 'stdin') : await readXml(file);
+    const opts: RenderOptions = {
+      maxSize: (o['maxSize'] as number | undefined) ?? RENDER_MAX_SIZE,
+      ...(o['scale'] !== undefined ? { scale: o['scale'] as number } : {}),
+      ...(o['plane'] !== undefined ? { plane: String(o['plane']) } : {}),
+    };
+    let bytes: string | Uint8Array;
+    let info: { width: number; height: number; tokens: number; scale: number; plane: string; planes: string[]; notes: string[] };
+    if (format === 'svg') {
+      const r = await renderSvg(xml, opts);
+      bytes = r.svg;
+      info = { width: r.width, height: r.height, tokens: r.tokens, scale: r.scale, plane: r.plane, planes: r.planes, notes: r.notes };
+    } else {
+      const r = await renderPng(xml, opts);
+      const image = r.images[0]!;
+      bytes = image.png;
+      info = { width: image.width, height: image.height, tokens: image.tokens, scale: r.scale, plane: r.plane, planes: r.planes, notes: r.notes };
+    }
+    let target = '-';
+    if (out === '-') {
+      process.stdout.write(bytes);
+    } else {
+      const stem = file === '-' ? 'stdin' : basename(file).replace(/\.(bpmn|xml)$/i, '');
+      target = out ?? join(tmpdir(), 'bpmn-cli', `${stem}.${format}`);
+      try {
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, bytes);
+      } catch (err) {
+        throw ioError('E_IO', `Cannot write ${target}: ${(err as Error).message}`, { file: target, hint: 'Pass -o <file> in a writable directory.' });
+      }
+    }
+    const report = out === '-' ? process.stderr : process.stdout;
+    if (json) {
+      printJson({ file, out: target, format, ...info }, !!o['pretty'], report);
+      return;
+    }
+    const lines = [`wrote ${target === '-' ? '<stdout>' : target}  ${info.width}x${info.height} px  ~${thousands(info.tokens)} image tokens  scale ${info.scale.toFixed(2)}  plane ${info.plane}`];
+    if (info.planes.length) lines.push(`other planes (--plane <id>): ${info.planes.join(', ')}`);
+    for (const note of info.notes) lines.push(`note: ${note}`);
+    print(lines.join('\n'), report);
+  }, json);
+});
 
 /* apply -------------------------------------------------------------- */
 withMutationOptions(

@@ -65,3 +65,5 @@ export { layoutProblems, layoutProblemsOfXml, diffProblems, metricsDelta, KEYS a
 export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './diagram/view.js';
 export { runFormatOps, type FormatResult, type FormatEntry } from './diagram/ops.js';
 export { SWATCHES, type SwatchName } from './diagram/write.js';
+/* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
+export { renderSvg, renderPlaneSvg, RENDER_MAX_SIZE, MIN_LABEL_SCALE, type RenderOptions, type RenderResult } from './diagram/render.js';

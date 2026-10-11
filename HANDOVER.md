@@ -1,4 +1,4 @@
-# Handover, 2026-10-10 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, and step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8)
+# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stage 1 of `bpmn render`)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -26,13 +26,14 @@ are placed locally, like the modeler's space tool), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
 `label`, `route`, `space`, `tidy`, `compact`, `order` of lanes and pools;
-selectors `--path`, `--kind`, `--branch`). The format-command idea
+selectors `--path`, `--kind`, `--branch`), and looks at it with `bpmn
+render` (a PNG or SVG of the diagram, no browser). The format-command idea
 comes from Miragon/design-iq PR #218 (`@bpmiq/bpmn-edit`, ADR 0008); no code
 was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1786 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1828 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -42,6 +43,84 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## `bpmn render`, stage 1 (2026-10-11, `feat/render`, issue #12)
+
+The agent can look at the diagram now. Stage 1 of the issue's phased plan:
+the renderer, the command, the budget and the PNG rasteriser. Decisions of
+the lead on the issue's open questions: `@resvg/resvg-wasm` is a regular
+dependency loaded lazily in the node layer, with the Arimo Latin TTF
+(OFL-1.1) and its licence in the package; without `-o` the image goes to
+`<tmpdir>/bpmn-cli/<name>.png`; `--max-size` defaults to 2000 px;
+collapsed sub-process planes are listed, `--plane <id>` draws one;
+highlights (stage 2) as a halo; design-iq is out of scope.
+
+- **The renderer** (`src/diagram/render.ts`, core, browser-safe):
+  `renderSvg(xml, { plane, scale, maxSize })` draws one diagram plane from
+  its DI, close to bpmn-js: every element kind of the issue's acceptance
+  list (event triggers with interrupting / non-interrupting styles,
+  gateway markers, task types, loop / multi-instance / compensation /
+  ad-hoc markers, expanded / collapsed / event sub-processes,
+  transactions, call activities, pools (black box, vertical) and lanes with
+  their names, data objects / stores / inputs / outputs, annotations and
+  associations, groups, message flows, default / conditional markers,
+  `bioc:` / `color:` colours; colour values are checked before they go into
+  the SVG). The glyphs are our own, drawn from the notation (no bpmn-js
+  code or PathMap). External labels follow bpmn-js exactly: centred on the
+  DI label bounds, top at their y, 90 px wrap in 11 px Arial with the line
+  breaking of `src/diagram/text.ts` (which now returns the lines:
+  `wrapLines`; `innerLines` counts them), 13.2 px lines; without bounds
+  below the shape or 15 px above the middle of a flow's middle segment.
+  Arrow heads are paths, not SVG markers, and everything outside the view is
+  culled (a marker-carrying path outside the view made resvg trap in the
+  issue's prototype). A file without any diagram is laid out in memory (a
+  note says so); elements of the plane without a shape are named in a note;
+  the other planes are listed; the long edge is capped at `maxSize`, and a
+  scale below `MIN_LABEL_SCALE` (0.75) adds the note naming `--around`,
+  `--path` and `--tiles` (stage 2 adds them).
+- **PNG** (`src/node/render.ts`, `@miragon/bpmn-cli/node`):
+  `renderPng(xml, opts)` -> `{ images: [{ png, width, height, tokens }],
+  scale, plane, planes, notes }` (the issue's API shape; one image until
+  `--tiles`). resvg-wasm 2.6.2 is imported on the first call, the wasm read
+  from its package, the font from `assets/fonts` (no system font: the
+  image is the same everywhere). Every rasteriser failure, including a wasm
+  trap, is `E_RENDER` (exit 4) and the next render still works.
+- **The command**: `bpmn render <file> [-o <path|->] [--format png|svg]
+  [--plane <id>] [--max-size <px>] [--scale <n>] [--json]`; the result line
+  `wrote <path>  WxH px  ~N image tokens  scale S  plane <id>`, the other
+  planes and the notes; `-o -` writes the image to stdout (a PNG only when
+  stdout is no terminal) and the report to stderr.
+- **Tests** (`test/render.test.ts`, each fails before): every file of
+  `tools/scenarios` and `test/fixtures` (and each other plane) renders to SVG
+  and PNG within 2000 px with the same bytes twice (4.5 s for 153 files in
+  one worker); text pixels with the bundled font only; `E_RENDER` for a
+  488-byte SVG that makes resvg trap and for malformed SVG; the bpmn-js label
+  positions; colours and unsafe colour values; planes and notes; the budget
+  note; the in-memory layout; the renderer absent from an
+  `applyToXml`-only bundle; the command. `test/isomorphic.test.ts` compares
+  `renderSvg` in the browser bundle with Node; `tools/iso/check.mjs`'s
+  strict consumer uses `renderSvg` and `renderPng`. The synthetic
+  `test/fixtures/render/gallery.bpmn` has every element kind (for the
+  reviewer's side-by-side with `tools/render.sh`).
+
+Measured on this build:
+
+| | |
+| --- | --- |
+| core bundle, whole entry | 945.9 -> 966.4 KB minified (+20.4 KB: the renderer 18.9 KB, the guide text for `render` 1.5 KB), 291.7 -> 298.9 KB gzip (+7.2 KB) |
+| core bundle, `applyToXml` only | 768,736 -> 768,734 bytes minified (the `text.ts` change is 2 bytes smaller), gzip 238,454 -> 238,443 |
+| install | +2.53 MB (`@resvg/resvg-wasm`: 2.48 MB wasm), +27 KB font, licence and note in `assets/fonts`; no install scripts |
+| time | `bpmn render` of `agent__o2c` 0.27 s wall (CLI start, parse, SVG, wasm load, PNG); in-process 3 ms SVG + 16 ms PNG per scenario on average |
+| `tools/scenarios` (115 files) | all render; image tokens at the default 2000 px p50 820 / p90 2,291 / max 4,115; natural long edge p50 1,269 / p90 2,157 / max 2,852 px, 23 over 2000; 3 below the 0.75 label scale; 8 files with 10 other planes, all render; 2 without a diagram (laid out in memory) |
+| private corpus (396 files, counts only) | 394 render (2 files of the manifest are missing on disk), 0 errors; tokens p50 634 / p90 1,896 / max 4,801; natural long edge over 2000 px: 66, below the 0.75 label scale: 22; 22 files with 30 other planes, all render; 24 without a diagram, 2 with elements without a shape |
+
+Still open for stages 2 and 3 (the issue's acceptance list): crops
+(`--around` with exactly `show --around`'s node set, `--path`, `--scope`,
+ids), `--highlight`, `--problems` with a location per problem from
+`layoutProblems`, `--render` on mutating commands, `--tiles`, rendering the
+gate's fuzz outputs, the plugin skill's look step with `test/plugin.test.ts`
+running its example, and the reviewer's 20-scenario side-by-side with
+`tools/render.sh`.
 
 ## Step 3 follow-ups (2026-10-10, `step3/followups`)
 
@@ -1269,7 +1348,8 @@ BPMN_LAYOUT_DEBUG=1 node bin/bpmn.js add ...   # placement candidates, reroute r
 npm run check:iso                              # after a build: the core still bundles for the browser; sizes
 npm run roundtrip [<dir>]                      # after a build: how much of a file a no-op, a rename, an insert rewrite
 node bin/bpmn.js metrics <file>                # problems with ids
-tools/render.sh /tmp/png <files>               # look at the result with real bpmn-js
+node bin/bpmn.js render <file> -o /tmp/png/x.png # look at the result (no browser; --plane <id> for a collapsed sub-process)
+tools/render.sh /tmp/png <files>               # the same with real bpmn-js (the reference for reviews)
 BASELINE_BIN=<old>/bin/bpmn.js npm run bench   # benchmark against an older build
 npm run fuzz                                   # random walks; see docs/testing.md
 BPMN_C7_ENGINES=<rest>[,<rest>] npx vitest run --no-file-parallelism test/c7-*.test.ts   # Camunda 7 profile vs live engines
@@ -1314,8 +1394,11 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    placed next to a node in no lane; the bundle size if design-iq needs it
    (step 3 added about 90 KB minified for the Camunda 8 profile: a lazily
    loaded profile per platform would be the lever).
-5. **Let the agent see the result**: a `render` command (`tools/render.sh`
-   works).
+5. **Let the agent see the result**: issue #12. Stage 1 (the renderer,
+   `bpmn render`) is done, see "`bpmn render`, stage 1"; stage 2 (crops
+   `--around` / `--path` / `--scope` / ids, `--highlight`, `--problems`
+   with a location per problem, `--render` on mutating commands, `--tiles`)
+   and stage 3 (the plugin skill's look step and its eval) are next.
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 
