@@ -54,7 +54,12 @@ The fuzzer and the property test check after every step
   must give the same bytes;
 - **failures stay clean**: no crash (internal error, signal, timeout), no
   usage error (that would be a malformed generated op), nothing written by a
-  failed command.
+  failed command;
+- **the result renders** (the fuzzer, not the property test; `--no-render`
+  skips it): every written step is drawn like `bpmn render --problems
+  --tiles` as PNG (`renderPng` of `dist/node`); a throw (`E_RENDER`, a wasm
+  trap, a crash), an image over 2000 px or another number of listed problems
+  than the metrics have is a `render` error.
 
 Warnings (`group:*`, `unreportedReroute`, `bboxJump`, `drift`, and `hard:*`
 with `--hard warn`) are reported but only fail with `--strict`.
@@ -184,6 +189,21 @@ not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
 `-o -`, `--json`, `--plane`, the usage errors). The synthetic
 `test/fixtures/render/gallery.bpmn` has every element kind the renderer
 draws (built with the CLI, then a group and multiple events added by hand).
+`test/render-agent.test.ts` checks the agent features (stage 2): every layout
+problem of every scenario and fixture located inside the bounding box of its
+elements on its plane (`locateProblems`; `layoutProblems` unchanged);
+`--problems` listing every metrics problem in its order with the same ids,
+every badge inside its elements and badges apart; `--around` drawing exactly
+the nodes of `show --around` for every 4th node of every scenario, and the
+median depth-2 crop of every node within 1,000 image tokens; `--path`,
+`--scope`, ids, the crop's plane and the notes for other planes, the usage
+and lookup errors; halos and `changeHighlight`; tiles cut between the
+columns (every column in one tile, bands for a tall drawing, PNG per tile);
+the focus region; the command flags, `--tiles` file names, `--render` on
+mutating commands (text, JSON, the region of a large drawing, a failed render
+that leaves the change standing); and the fuzz walk's render oracle. The
+synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
+wide, built with the CLI) is the tiles and focus model.
 
 ## Isomorphism check
 
@@ -268,6 +288,10 @@ node tools/fuzz/minimize.mjs tools/fuzz/out/latest/walks/<walk> [--kind 'hard:ov
   `apply` for multi-op steps (`--via apply` always uses apply). `--exec lib`
   runs the built library in-process, several times faster; both give
   byte-identical files. The oracles always use this repository's `dist/`.
+- **Rendering**: every written step is rendered (see *Invariants*; the
+  gate's campaign included); `--no-render` skips it. A minimised `render`
+  violation replays with the render oracle and its `run.sh` ends with the
+  render command.
 - **Output** (git-ignored): `tools/fuzz/out/latest/report.json` and one
   directory per walk with `summary.json`, `steps.json` (replayable with
   `walk.mjs --replay`), `log.jsonl` and, with `--save-steps`, every written
@@ -573,7 +597,9 @@ The metrics do not see everything (labels, aesthetics, groups). Look at what
 you touched:
 
 ```
-node bin/bpmn.js render file.bpmn -o /tmp/png/file.png     # no browser; --plane <id> for a collapsed sub-process
+node bin/bpmn.js render file.bpmn --problems -o /tmp/png/file.png      # no browser; the problems numbered; --plane <id> for a collapsed sub-process
+node bin/bpmn.js render file.bpmn --around <id> -o /tmp/png/near.png   # the neighbourhood only (--path, --scope, ids; --tiles for a large drawing)
+node bin/bpmn.js add file.bpmn task "X" --after <id> --render /tmp/png/after.png   # any mutating command: its result, what changed with a halo
 ```
 
 `bpmn render` draws close to bpmn-js, not identically (its own glyphs). For

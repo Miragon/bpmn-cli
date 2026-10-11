@@ -48,7 +48,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_RENDER', meaning: '`bpmn render` (renderPng) could not rasterise the image: the PNG rasteriser (@resvg/resvg-wasm) failed to load or failed on this drawing (exit 4; never a process abort).', fix: 'Write the SVG instead (`--format svg`), or render a smaller part; report the file if it keeps failing.' },
   // ids & lookup
   { code: 'E_NOT_FOUND', meaning: 'No element with the given id (elements are addressed by id, never by name). The candidates are the meant ids, best first: the new id of a flow an earlier op of the batch renamed, the same id in another case, umlaut spelling or with another / no prefix (Task_CheckInvoice, CheckInvoice -> Activity_CheckInvoice), ids containing it, typos (ChekInvoice), names containing it; within each, the ids the batch created first. In a batch the hint lists the ids it created so far (and an alias written without $). Ids of vendor extension elements (e.g. camunda:formField) are not element ids: the message then names the BPMN element they belong to.', fix: 'Use the candidates listed, or run `bpmn show <file>` / `bpmn find <file> <text>` to list ids; in `apply`, name what an op creates with "as": "$name". `remove --if-exists` / `add --if-absent` make the op idempotent.' },
-  { code: 'E_WRONG_KIND', meaning: 'The element exists but is not of the expected kind (e.g. a flow where a node is required); also `ext add` on bpmn:definitions or a non-BPMN element (the BPMN 2.0 XSD has no extensionElements there; the engines refuse the file), or a definition. / loop. / condition. prefix the element has no slot for; `compact` with an id that is no pool, lane or expanded sub-process.', fix: 'Pass an id of the right kind; `bpmn show <file> <id>` prints the kind. Process-level extensions go on the process id.' },
+  { code: 'E_WRONG_KIND', meaning: 'The element exists but is not of the expected kind (e.g. a flow where a node is required); also `ext add` on bpmn:definitions or a non-BPMN element (the BPMN 2.0 XSD has no extensionElements there; the engines refuse the file), or a definition. / loop. / condition. prefix the element has no slot for; `compact` with an id that is no pool, lane or expanded sub-process; `render --plane` with an element without a plane of its own, `render --scope` with one that is no pool, lane, sub-process or process.', fix: 'Pass an id of the right kind; `bpmn show <file> <id>` prints the kind. Process-level extensions go on the process id.' },
   { code: 'E_INVALID_ID', meaning: 'The id is not an XML NCName ([A-Za-z_][A-Za-z0-9_.-]*).', fix: 'Use letters, digits, _ . - and start with a letter or _, e.g. Activity_CheckInvoice.' },
   { code: 'E_DUPLICATE_ID', meaning: 'An element with that id already exists (BPMN and diagram elements only: ids inside vendor extension elements, e.g. two camunda:formField with the same id in different forms, are not checked). In `validate`: two elements of the file have one id (bpmn-moddle keeps the first and drops the later one with an import warning; the engines refuse the file).', fix: 'Choose another --id, omit it (ids are generated from the name), or use --if-absent. In a file: give one of the elements another id in the XML.' },
   { code: 'E_UNKNOWN_KIND', meaning: 'The kind token is not a known kind, alias or bpmn type.', fix: 'Run `bpmn kinds`; the message suggests close matches.' },
@@ -81,7 +81,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_INVALID_LANE_MEMBERSHIP', meaning: 'Nodes inside sub-processes cannot be lane members; lanes only contain top-level nodes of their process.', fix: 'Assign the sub-process itself to the lane.' },
   { code: 'E_NOT_CHILD_LANE', meaning: '`order` with lanes: a listed lane is not a direct child lane of the given pool / process / parent lane.', fix: 'List lanes of one level (the candidates are listed); order nested lanes with their parent lane as id: `bpmn order <file> <parentLaneId> <laneIds...>`.' },
   // format operations (diagram only)
-  { code: 'E_NO_MATCH', meaning: 'A selector of a format operation names nothing: no sequence-flow path leads from --path <fromId> to <toId> (over the --via flows), no element of the --kind is drawn, or nothing lies on the --branch (its flow leads straight to the join).', fix: 'Check the direction and the --via order (`bpmn show <file>` lists the flows of every node), the kind name (`bpmn find <file> "" --kind <kind>`), or name a flow that starts a branch with its own nodes.' },
+  { code: 'E_NO_MATCH', meaning: 'A selector of a format operation names nothing: no sequence-flow path leads from --path <fromId> to <toId> (over the --via flows), no element of the --kind is drawn, or nothing lies on the --branch (its flow leads straight to the join). `bpmn render`: a crop (--around, --path, --scope, ids) of which nothing is drawn on the plane (no shape, or only on another plane).', fix: 'Check the direction and the --via order (`bpmn show <file>` lists the flows of every node), the kind name (`bpmn find <file> "" --kind <kind>`), or name a flow that starts a branch with its own nodes. render: drop --plane or pass the plane the message names; `bpmn layout <file>` draws elements without a shape.' },
   { code: 'E_NOT_PARTICIPANT', meaning: '`order` with pools: a listed id is a participant, but not one of the given collaboration.', fix: 'List the participants of that collaboration (the candidates are listed): `bpmn order <file> <collaborationId> <participantIds...>`.' },
   { code: 'E_NO_DIAGRAM', meaning: 'The file has no diagram (DI), so a format operation (place, align, color, label, route, space, tidy) has nothing to work on.', fix: 'Draw it first with `bpmn layout <file>`, or drop --no-layout (a file without diagram is then drawn in full before the format operation runs).' },
   { code: 'E_NO_SHAPE', meaning: 'The element exists but has no shape or connection in the diagram (added with --no-layout, a process that is drawn as its pool, an element outside the drawn root).', fix: 'For a pool use the participant id, not the process id. Otherwise draw it: `bpmn layout <file>` (or any write without --no-layout).' },
@@ -380,7 +380,7 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file) and the validation profile (design: design-iq\'s save gate, E_DESIGN_* errors fail the check; auto runs it for the models of a design-iq content repository), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --profile design'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, flows running backwards, flows merging before their target, labels outside their pool, message labels far from their line, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
-  { name: 'render', usage: 'bpmn render <file> [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--max-size <px>] [--scale <n>] [--json]', summary: 'Draw the diagram as an image to look at it (no browser; close to bpmn-js, not identical): a PNG (resvg with the bundled Arimo font) or SVG of one diagram plane. Without -o it writes bpmn-cli/<name>.png in the temp directory; `-o -` writes the image to stdout (the report to stderr); the format comes from --format or the -o extension. Prints the path, the size, the image tokens (width * height / 784), the scale, the plane and the other planes (collapsed sub-processes: --plane <id> draws one). The long edge stays within --max-size (default 2000; --scale zooms); when labels shrink below 0.75 a note says so and names the crop options. A file without a diagram is drawn in memory (nothing written); elements without a shape are named. A rasteriser failure is E_RENDER.', examples: ['bpmn render order.bpmn -o order.png', 'bpmn render order.bpmn --plane Activity_ReviewClaim -o review.png', 'bpmn render order.bpmn --format svg -o -'] },
+  { name: 'render', usage: 'bpmn render <file> [<id>...] [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--around <id> [--depth n] [--inner]] [--path <from> <to> [--via <flowId...>]] [--scope <id>] [--highlight <id,...>] [--problems] [--tiles] [--max-size <px>] [--scale <n>] [--json]', summary: 'Draw the diagram as an image to look at it (no browser; close to bpmn-js, not identical): a PNG (resvg with the bundled Arimo font) or SVG of one diagram plane. Without -o it writes bpmn-cli/<name>.png in the temp directory; `-o -` writes the image to stdout (the report to stderr); the format comes from --format or the -o extension. Prints the path, the size, the image tokens (width * height / 784), the scale, the plane and the other planes (collapsed sub-processes: --plane <id> draws one). Crops (one per call): --around <id> draws exactly the nodes of `show --around` with their flows, data and annotations, --path the nodes and flows of a sequence-flow path, --scope a pool, lane or sub-process, ids exactly these elements; flows to what is left out are drawn faded, pools and lanes as context. --highlight puts a halo around elements; --problems numbers the layout problems of `bpmn metrics` (with a crop: those of its elements) in the image at the defect and lists them with their ids. The long edge stays within --max-size (default 2000; --scale zooms); when labels shrink below 0.75 a note says so and names the crops, and --tiles splits such an image at the diagram columns (show --layout c<n>) into readable tiles <name>-1.png, <name>-2.png, ... A file without a diagram is drawn in memory (nothing written); elements without a shape are named. A rasteriser failure is E_RENDER. Every mutating command takes --render <file.png> to draw its result (see LOOKING AT THE DRAWING).', examples: ['bpmn render order.bpmn --problems -o order.png', 'bpmn render order.bpmn --around Gateway_Ok --depth 2 --problems -o ok.png', 'bpmn render order.bpmn --path Event_Start Event_Done --highlight Activity_Check -o path.png', 'bpmn render order.bpmn --scope Lane_Finance -o finance.png', 'bpmn render order.bpmn --tiles -o order.png', 'bpmn render order.bpmn --plane Activity_ReviewClaim -o review.png', 'bpmn render order.bpmn --format svg -o -'] },
   { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, zeebeElements, placement, ops, layoutModes, ids, profiles, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
   { name: 'guide', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
 ];
@@ -402,6 +402,7 @@ export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
   { option: '--summary', description: 'a short result: created ids by kind, changed / removed ids, the added warnings, one layout line (score, added problems)' },
   { option: '-o, --out <file>', description: 'write to another file instead of in place (also when the result equals the input); `-o -` writes the XML to stdout (the report goes to stderr)' },
   { option: '--dry-run', description: 'report what would change, write nothing' },
+  { option: '--render <file.png|file.svg>', description: 'also draw the result to this image: created elements with a green halo, changed ones orange, moved ones blue, the layout problems the change added numbered and listed; a drawing too large to read shows the region of the change (also with --dry-run; a failed render is reported, the change stands)' },
   { option: '--layout <mode>', description: `${LAYOUT_MODES.join(' | ')}: auto (default) keeps a hand-made or formatted drawing and places changes locally, and redraws a new file or a drawing the engine made and nobody changed; incremental always keeps; full always redraws (colours and DI ids survive)` },
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
   { option: '--no-layout', description: 'write without updating the diagram (stale DI of removed elements is pruned, new elements have no shape until `bpmn layout`; format operations still apply to the existing drawing)' },
@@ -742,7 +743,8 @@ export function guideText(): string {
       '  2. place / align / space / route / label / color / order (lanes, pools) / tidy / compact: say where things',
       '     go by naming other elements; others give way, frames grow, flows are rerouted',
       '  3. bpmn metrics <file>             check that no overlaps / through / outsideLane / frameIntrusion were added',
-      '  4. bpmn render <file> -o <f.png>   look at it (read the PNG): labels, crossings, aesthetics the metrics miss',
+      '  4. bpmn render <file> --problems -o <f.png>   look at it (read the PNG): the problems numbered, labels,',
+      '                                     crossings, aesthetics the metrics miss (see LOOKING AT THE DRAWING)',
       '  Selectors (place, align, color, tidy): --path <fromId> <toId> [--via <flowId...>], --kind <kind>,',
       '  --branch <flowId> name many elements at once; elements are always named by id.',
       '  Recipes:',
@@ -765,6 +767,8 @@ export function guideText(): string {
       '  (E_LEAVES_CONTAINER). No room next to the reference (E_NO_ROOM): `space --after/--below <id>` first.',
     ].join('\n'),
   );
+  out.push(heading('LOOKING AT THE DRAWING  (bpmn render; read the PNG it writes)'));
+  out.push(LOOKING.join('\n'));
   out.push(heading('QUOTING'));
   out.push(
     [
@@ -880,6 +884,27 @@ const READING = [
   '  For a local edit read --around first; "what happens if X fails" / "who does X" is one --context call.',
 ];
 
+/** LOOKING AT THE DRAWING: bpmn render for agents. */
+const LOOKING = [
+  '  bpmn render <file> --problems -o f.png        the whole plane; every layout problem of `bpmn metrics` as a numbered',
+  '                                                 badge on the defect, listed below the result line with its ids:',
+  '                                                   1 crossings [Flow_6, Flow_21]',
+  '  bpmn render <file> --around <id> [--depth 2] [--inner]   exactly the nodes of `show --around` (cheap: a few',
+  '                                                 hundred image tokens), their flows, data and annotations',
+  '  bpmn render <file> --path <from> <to> [--via <flowId>]   the nodes and flows of that sequence-flow path',
+  '  bpmn render <file> --scope <pool|lane|subProcess>       one pool, lane or sub-process with its content',
+  '  bpmn render <file> <id> <id> ...               exactly these elements',
+  '  A crop draws flows to what it leaves out faded, pools and lanes as context; with --problems it lists the',
+  '  problems of its elements. --highlight <id,...> puts an orange halo around elements. --tiles splits an image',
+  '  whose labels would be too small (scale below 0.75) at the diagram columns into readable tiles (-1.png, ...).',
+  '  Budget: the result line says the image tokens (width * height / 784); the long edge stays within --max-size',
+  '  (2000). On a large model render a crop, not the whole plane.',
+  '  After a change: add --render <f.png> to the mutating command (or `apply`): created elements green, changed',
+  '  orange, moved blue, the layout problems the change added numbered (a large drawing: the region of the change).',
+  '  Fix what you see with the format commands (label, place, route, space, tidy) by the ids of the legend, then',
+  '  look again; stop after two rounds.',
+];
+
 /** CAMUNDA 8: zeebe extension elements in practice. */
 const CAMUNDA8 = [
   '  bpmn new f.bpmn --name "Order" --target camunda8     zeebe + modeler namespaces, platform Camunda Cloud 8.9.0',
@@ -987,6 +1012,7 @@ export function guideShort(): string {
       '  bpmn show <f> <id> --context             where it is, lane, before / after, what catches it, message flows',
       '  bpmn find <f> <text> [--kind <kind>]     ids by name or vendor value',
       '  bpmn show <f> [--scope <id>]             the whole model (or one process / pool / sub-process)',
+      '  bpmn render <f> [--around <id>] --problems -o f.png   look at the drawing (read the PNG; guide render)',
     ].join('\n'),
   );
   out.push(heading('CHANGE'));
@@ -1023,6 +1049,7 @@ export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string 
   output: { sections: ['OUTPUT'], summary: 'results, warnings delta, --summary, JSON, stdin / stdout' },
   layout: { sections: ['LAYOUT MODES'], summary: 'auto / incremental / full' },
   format: { sections: ['FORMATTING WITHOUT XML'], summary: 'place, align, color, label, route, space, tidy' },
+  render: { sections: ['LOOKING AT THE DRAWING'], summary: 'bpmn render: crops, halos, numbered problems, tiles, --render' },
   ops: { sections: ['OPS JSON'], summary: 'apply and its ops' },
   placement: { sections: ['PLACEMENT'], summary: '--after / --before / --flow / --in / --on' },
   triggers: { sections: ['TRIGGERS'], summary: 'event triggers and their options' },

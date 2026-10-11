@@ -4,7 +4,7 @@
  *
  *   node tools/fuzz/walk.mjs <model.bpmn> [--seed 1] [--mode auto|incremental|full] [--steps 30]
  *        [--out dir] [--exec cli|lib] [--via commands|apply] [--det-every 10]
- *        [--no-semantic] [--no-format] [--hard error|warn] [--replay steps.json] [--save-steps] [--strict]
+ *        [--no-semantic] [--no-format] [--no-render] [--hard error|warn] [--replay steps.json] [--save-steps] [--strict]
  *
  * Contract: copies nothing into the repository; writes <out>/summary.json
  * (counts, violations, the model path, the configuration), <out>/steps.json
@@ -13,15 +13,16 @@
  * step. Prints a one-line JSON summary. Exit 0 = no error-severity violation
  * (with --strict: no violation at all), 1 = violations, 2 = bad arguments.
  * The CLI under test is bin/bpmn.js (env BPMN_BIN overrides); the oracles always
- * use this repository's dist/.
+ * use this repository's dist/ (every written step is also rendered, unless
+ * --no-render).
  */
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadMetrics, makeExecutor, parseArgs, ROOT } from './lib/setup.mjs';
+import { loadMetrics, loadRender, makeExecutor, parseArgs, ROOT } from './lib/setup.mjs';
 import { runWalk } from './lib/walk.mjs';
 
-const SPEC = { seed: 1, mode: 'auto', steps: 30, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, hard: 'error', replay: undefined, saveSteps: false, strict: false };
+const SPEC = { seed: 1, mode: 'auto', steps: 30, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, render: true, hard: 'error', replay: undefined, saveSteps: false, strict: false };
 
 export async function walkOnce(model, o) {
   const out = resolve(o.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'walks', `${basename(model, '.bpmn')}-s${o.seed}-${o.mode}`));
@@ -31,6 +32,7 @@ export async function walkOnce(model, o) {
   const summary = await runWalk({
     xml: readFileSync(model, 'utf8'), model: basename(model), seed: o.seed, mode: o.mode, steps: o.steps,
     exec: await makeExecutor({ exec: o.exec, via: o.via, workDir: join(out, 'work') }), metrics: await loadMetrics(),
+    render: o.render ? await loadRender() : undefined,
     semantic: o.semantic, format: o.format, detEvery: o.detEvery, hardSeverity: o.hard,
     replay: o.replay ? JSON.parse(readFileSync(o.replay, 'utf8')) : undefined,
     onStep: (entry, xml) => {
@@ -40,7 +42,7 @@ export async function walkOnce(model, o) {
   });
   const { ops, ...rest } = summary;
   writeFileSync(join(out, 'steps.json'), JSON.stringify(ops, null, 1));
-  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ...rest, modelPath: resolve(model), config: { exec: o.exec, via: o.via, semantic: o.semantic, format: o.format, detEvery: o.detEvery, hard: o.hard } }, null, 1));
+  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ...rest, modelPath: resolve(model), config: { exec: o.exec, via: o.via, semantic: o.semantic, format: o.format, render: o.render, detEvery: o.detEvery, hard: o.hard } }, null, 1));
   return { out, summary };
 }
 

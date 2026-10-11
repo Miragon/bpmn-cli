@@ -356,7 +356,9 @@ bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
-bpmn render <file> [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--max-size <px>] [--scale <n>] [--json]
+bpmn render <file> [<id>...] [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--around <id> [--depth n] [--inner]]
+            [--path <fromId> <toId> [--via <flowId...>]] [--scope <id>] [--highlight <id,...>] [--problems] [--tiles]
+            [--max-size <px>] [--scale <n>] [--json]
 bpmn kinds [--section <name,...>] [--json]
 bpmn guide [--short | <topic>]
 ```
@@ -377,6 +379,7 @@ always redraws, so it has no layout mode options):
 | `--summary` | a short result: created ids by kind, batch aliases, changed / renamed / removed ids, one line per format op, the added warnings, one layout line (see [Output](#output-errors-and-exit-codes)) |
 | `-o, --out <file>` | write to another file instead of in place; `-o -` writes the result to stdout (the report goes to stderr) |
 | `--dry-run` | run everything (including layout) but write nothing |
+| `--render <file.png\|file.svg>` | also draw the result: created elements with a green halo, changed ones orange, moved ones blue, the layout problems the change added numbered; a drawing too large to read shows the region of the change (see [`render`](#render)) |
 | `--layout <auto\|incremental\|full>` | how the diagram is updated, see [Layout modes](#layout-modes); default `auto` |
 | `--relayout` | redraw the whole diagram (= `--layout full`) |
 | `--no-layout` | write without updating the diagram (stale DI of removed elements is pruned; format commands still apply to the existing drawing) |
@@ -1060,8 +1063,18 @@ and the node layer rasterises it to PNG with resvg compiled to WebAssembly
 read, so an image looks the same on every machine).
 
 ```
-$ bpmn render order.bpmn -o order.png
+$ bpmn render order.bpmn --problems -o order.png
 wrote order.png  1982x734 px  ~1,856 image tokens  scale 1.00  plane Process_OrderToCash
+problems (numbered in the image):
+  1 crossings [Flow_6, Flow_21]
+  2 labelClash [Event_NoPaymentAfter14d, Activity_SendInvoice] label on shape
+  ...
+$ bpmn render order.bpmn --around Gateway_OrderValid --problems -o valid.png
+wrote valid.png  994x440 px  ~558 image tokens  scale 1.00  plane Process_OrderToCash
+crop: around Gateway_OrderValid (depth 2): 7 nodes
+problems (numbered in the image):
+  1 crossings [Flow_6, Flow_21]
+  2 labelClash [Flow_17, Activity_WaitForPrepayment] label on shape
 ```
 
 - Output: `-o <file>` (the format from `--format png|svg`, else the
@@ -1069,22 +1082,65 @@ wrote order.png  1982x734 px  ~1,856 image tokens  scale 1.00  plane Process_Ord
   directories are created). Without `-o` the image goes to
   `bpmn-cli/<name>.png` in the system temp directory (the path is printed).
   `-o -` writes the image to stdout and the report to stderr (a PNG only
-  when stdout is no terminal).
+  when stdout is no terminal; not with `--tiles`).
 - The result line: the path, the size in px, the image-token estimate
   (width × height / 784, what an image costs a Claude model), the scale and
   the plane drawn. `--json`: `{file, out, format, width, height, tokens,
-  scale, plane, planes, notes}`.
+  scale, plane, planes, notes, problems, nodes?, images?}`.
 - Planes: the first diagram is drawn (the collaboration or process). A
   collapsed sub-process has its own plane; the result lists the other planes
   (`other planes (--plane <id>): ...`) and `--plane <id>` draws one (an
   unknown id is `E_NOT_FOUND`, an element without a plane of its own, e.g.
   an expanded sub-process, `E_WRONG_KIND`; both list the planes).
+- Crops, one per call (two are `E_USAGE`), elements by id only:
+  `--around <id> [--depth n] [--inner]` draws exactly the nodes of
+  `show --around` (the same window: `--depth` flow steps both ways, default
+  2), `--path <fromId> <toId> [--via <flowId...>]` the nodes and flows of
+  the shortest sequence-flow path (the `--path` selector of the format
+  commands), `--scope <id>` a pool, lane or expanded sub-process and every
+  shape inside it (a collapsed sub-process: its plane; a process: its pool),
+  and ids after the file exactly these elements. A crop draws the
+  connections between its elements in full and, for `--around` / `--path`,
+  the data and annotations attached to them; a connection to an element it
+  leaves out is drawn faded (so a crossing with it stays visible; the image
+  fits only its first 40 px), pools, lanes, groups and the expanded
+  sub-processes around it as context, clipped. The image fits the crop, so
+  it costs far less than the whole drawing: on `tools/scenarios` the median
+  `--around` crop at depth 2 is 368 image tokens (p90 1,518). Without
+  `--plane` the crop's plane is drawn; its elements on other planes are
+  named in a note; a crop with nothing drawn is `E_NO_MATCH`; `crop: ...: N
+  nodes` (JSON `nodes`) names what was drawn.
+- `--highlight <id,...>` (repeatable) puts an orange halo under elements;
+  an unknown id is `E_NOT_FOUND`.
+- `--problems` numbers the layout problems of [`metrics`](#metrics): every
+  one, in its order with the same ids (with a crop: those naming an element
+  it draws), each as a red badge on the defect (the crossing point, the
+  overlap, the shared segment, the shape outside its lane, ...: always
+  inside the bounding box of its elements; a badge that would cover another
+  moves aside) and as a legend line `<n> <kind> [<ids>] <detail>`; a problem
+  without a place in the image (another plane, `missing`) is listed with
+  `(not in the image)`. Fix what they show with the format commands by the
+  ids of the legend.
 - Budget: the long edge stays within `--max-size` (default 2000 px, what
   Claude Code displays); `--scale <n>` zooms (default 1) within that limit.
   When fitting draws the labels below 0.75 of their size (about 8 px, hard to
-  read), the image is still written and a note says so and names the crop
-  options `--around`, `--path` and `--tiles` (coming with the next stage of
-  issue #12).
+  read), the image is still written and a note says so and names the crops
+  and `--tiles`. `--tiles` splits such an image into tiles at full size,
+  cut between the diagram's columns (`show --layout`'s `c<n>`; a drawing
+  too tall also between rows of shapes), written as `<name>-1.png`,
+  `<name>-2.png`, ... with one `wrote` line each (`tile 2/3 c9-c17`) and the
+  total image tokens; a readable image stays one (a note says so). A
+  synthetic process of 28 nodes in a row (`test/fixtures/render/long.bpmn`,
+  3,940 px wide) gives 2 tiles of about 700 image tokens each.
+- `--render <file.png>` on any mutating command (`add`, `apply`, the format
+  commands, ...; also with `--dry-run`) draws the result: created elements
+  with a green halo, changed ones (model or colour) orange, moved ones
+  (placed, moved, rerouted, a label placed) a lighter blue (a pool or lane
+  that only grew gets none), and the layout problems the change added
+  numbered (`render:` block of the report, JSON `render`). When the whole
+  plane would be unreadable, the image shows the region of the change (the
+  touched elements and their neighbours) and a note says so. A failed render
+  is reported in that block; the change stands.
 - A file without any diagram is laid out in memory by the clean engine and
   drawn (a note says so; nothing is written; `bpmn layout` saves a drawing);
   elements of the plane without a shape are named in a note.
@@ -1102,8 +1158,9 @@ wrote order.png  1982x734 px  ~1,856 image tokens  scale 1.00  plane Process_Ord
   Arial (without label bounds below the shape, or above the middle of a
   flow); the glyphs are drawn from the BPMN notation (no bpmn-js code).
 - A failure of the rasteriser is `E_RENDER` (exit 4), never a process abort;
-  the SVG (`--format svg`) still works then. `tools/render.sh` (real bpmn-js
-  in a browser) stays the reference for reviews.
+  the SVG (`--format svg`) still works then. The fuzzer renders every result
+  it writes ([testing](docs/testing.md)). `tools/render.sh` (real bpmn-js in
+  a browser) stays the reference for reviews.
 
 ### `kinds` and `guide`
 
@@ -2782,9 +2839,17 @@ Every function runs the code of the CLI command it names, without a file:
   `elementContext` and `implementationOf` are the builders); `validateXml`
   takes `platform`, `profile`, `contentRepo`, `validators` and `file`;
   `renderSvg` takes `plane`, `scale` and `maxSize` (no limit by default;
-  `RENDER_MAX_SIZE` is the CLI's 2000) and returns `{ svg, width, height,
-  scale, tokens, plane, planes, notes }` (`renderPlaneSvg(definitions, opts)`
-  draws a parsed document without the in-memory layout).
+  `RENDER_MAX_SIZE` is the CLI's 2000), the crops `around: { id, depth?,
+  inner? }`, `path: { from, to, via? }`, `scope` and `ids`, `highlight` (a
+  list, or `{ created, changed, moved }`: the halo colours `HALO_COLORS`),
+  `problems` (`true`, or a list of `LayoutProblem`s to number), `focus`
+  (ids: their plane, and only their region when the whole would be
+  unreadable) and `tiles`, and returns `{ svg, width, height, scale, tokens,
+  plane, planes, notes, problems, nodes?, tiles? }` (`renderDocSvg(doc,
+  opts)` draws a parsed `Doc` without the in-memory layout;
+  `changeHighlight(result)` turns a mutation result into the `{ created,
+  changed, moved }` highlight `--render` uses; `locateProblems(definitions,
+  problems)` adds where each layout problem shows, `at: { plane, x, y }`).
 - `EditResult` is `{ xml, unchanged, result }`: the new document, which
   keeps the input's text wherever the ops changed nothing ([What a write
   changes](#what-a-write-changes)); `unchanged` is `true` when it is
@@ -2859,8 +2924,8 @@ and tell the validators that file (`ctx.file`, the `out` target with
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
 `renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
-height, tokens }], scale, plane, planes, notes }` (one image; `png` is a
-`Uint8Array`). It loads `@resvg/resvg-wasm` on the first call and draws text
+height, tokens, columns?, band? }], scale, plane, planes, notes, problems,
+nodes? }` (one image, or one per tile; `png` is a `Uint8Array`). It loads `@resvg/resvg-wasm` on the first call and draws text
 with the bundled Arimo font only; a rasteriser failure is a `CliError` with
 `E_RENDER`.
 
@@ -2936,11 +3001,13 @@ Sizes (esbuild, minified, split like a host's bundler would):
 
 | entry | minified | gzip | loaded on demand |
 | --- | --- | --- | --- |
-| everything `@miragon/bpmn-cli` exports | 966 KB | 299 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
+| everything `@miragon/bpmn-cli` exports | 986 KB | 306 KB | bpmn-auto-layout, 82 KB (only for `engine: 'auto'`) |
 | `applyToXml` only (tree-shaken) | 751 KB | 233 KB | the same |
 
-The SVG renderer (`renderSvg`) is about 19 KB minified / 6.5 KB gzip of the
-whole entry; a host that imports only `applyToXml` does not load it. The PNG
+The SVG renderer (`renderSvg` with its crops, halos, numbered problems and
+tiles) is about 31 KB minified of the whole entry, `locateProblems` 3.5 KB;
+a host that imports only `applyToXml` loads neither (that bundle is
+byte-identical with or without them). The PNG
 rasteriser (`@resvg/resvg-wasm`, 2.5 MB of WebAssembly, and the 21 KB font)
 is only in `@miragon/bpmn-cli/node`.
 
@@ -3034,4 +3101,9 @@ bundler drops what a host does not import.
   browser, with the image size, the image-token estimate and the other
   planes ([`render`](#render)); new error `E_RENDER`. The package depends on
   `@resvg/resvg-wasm` (MPL-2.0, loaded on the first PNG) and ships the
-  Arimo font (OFL-1.1, `assets/fonts`).
+  Arimo font (OFL-1.1, `assets/fonts`). For agents: crops (`--around` with
+  exactly the nodes of `show --around`, `--path`, `--scope`, ids), halos
+  (`--highlight`), the layout problems numbered in the image
+  (`--problems`; `locateProblems` in the library), `--tiles`, and
+  `--render <file>` on every mutating command (the result with created /
+  changed / moved elements and the added problems).

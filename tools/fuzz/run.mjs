@@ -4,7 +4,7 @@
  *
  *   node tools/fuzz/run.mjs [--walks 24] [--steps 30] [--seed 1] [--modes auto,incremental]
  *        [--corpus dir[:dir...]] [--filter text] [--jobs 4] [--out dir] [--exec cli|lib]
- *        [--via commands|apply] [--det-every 10] [--no-semantic] [--no-format]
+ *        [--via commands|apply] [--det-every 10] [--no-semantic] [--no-format] [--no-render]
  *        [--hard error|warn] [--strict] [--minimize]
  *
  * Contract
@@ -22,6 +22,8 @@
  *    invariants stay errors): `npm run gate` uses it, because open layout bugs
  *    would make a random campaign fail; layout quality is gated by the property
  *    test, the regression budget and `bench --compare`.
+ *  - Every written step is rendered (`render` violations, lib/walk.mjs);
+ *    --no-render skips that.
  *  - --minimize: for every error kind, the first walk showing it is reduced
  *    with ddmin (minimize.mjs); the repro lands in <walk>/min-<kind>/run.sh.
  *  - Exit 0 = no error-severity violation (with --strict: none at all), 1 =
@@ -36,7 +38,7 @@ import { corpusFiles, defaultCorpus, loadMetrics, parseArgs, ROOT } from './lib/
 import { rng, seedOf } from './lib/rng.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
-const SPEC = { walks: 24, steps: 30, seed: 1, modes: 'auto,incremental', corpus: undefined, filter: undefined, jobs: 4, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, hard: 'error', strict: false, minimize: false };
+const SPEC = { walks: 24, steps: 30, seed: 1, modes: 'auto,incremental', corpus: undefined, filter: undefined, jobs: 4, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, render: true, hard: 'error', strict: false, minimize: false };
 
 export function planWalks(files, o) {
   const order = rng(o.seed).shuffle(files);
@@ -51,7 +53,7 @@ export function planWalks(files, o) {
 
 function walkArgs(w, o, dir) {
   return [join(HERE, 'walk.mjs'), w.model, '--seed', String(w.seed), '--mode', w.mode, '--steps', String(o.steps), '--out', dir,
-    '--exec', o.exec, '--via', o.via, '--det-every', String(o.detEvery), '--hard', o.hard, ...(o.semantic ? [] : ['--no-semantic']), ...(o.format ? [] : ['--no-format'])];
+    '--exec', o.exec, '--via', o.via, '--det-every', String(o.detEvery), '--hard', o.hard, ...(o.semantic ? [] : ['--no-semantic']), ...(o.format ? [] : ['--no-format']), ...(o.render ? [] : ['--no-render'])];
 }
 
 function runOne(w, o, dir) {

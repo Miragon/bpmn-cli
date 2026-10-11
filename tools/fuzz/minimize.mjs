@@ -26,7 +26,7 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toArgv } from './lib/generate.mjs';
-import { DEFAULT_BIN, loadMetrics, makeExecutor, parseArgs, ROOT } from './lib/setup.mjs';
+import { DEFAULT_BIN, loadMetrics, loadRender, makeExecutor, parseArgs, ROOT } from './lib/setup.mjs';
 import { runWalk } from './lib/walk.mjs';
 
 const SPEC = { kind: undefined, detail: undefined, out: undefined };
@@ -87,6 +87,7 @@ function writeRepro(dir, model, steps, mode) {
     }
   });
   lines.push('$BPMN metrics "$D/work.bpmn"');
+  lines.push('$BPMN render "$D/work.bpmn" --problems --tiles -o "$D/work.png"');
   writeFileSync(join(dir, 'run.sh'), `${lines.join('\n')}\n`, { mode: 0o755 });
   return join(dir, 'run.sh');
 }
@@ -101,10 +102,12 @@ export async function minimizeWalk(walkDir, o = {}) {
   mkdirSync(out, { recursive: true });
   const exec = await makeExecutor({ exec: summary.config.exec, via: summary.config.via, workDir: join(out, 'probe') });
   const metrics = await loadMetrics();
+  // a render violation needs the render oracle on the replay
+  const render = first.kind === 'render' ? await loadRender() : undefined;
   const xml = readFileSync(summary.modelPath, 'utf8');
   const detEvery = /nondeterministic/.test(first.kind) ? 1 : 0;
   const test = async (list) => {
-    const s = await runWalk({ xml, model: summary.model, seed: summary.seed, mode: summary.mode, steps: list.length, replay: list, exec, metrics, detEvery });
+    const s = await runWalk({ xml, model: summary.model, seed: summary.seed, mode: summary.mode, steps: list.length, replay: list, exec, metrics, render, detEvery });
     return s.violations.find(hit)?.step ?? -1;
   };
   const r = await ddmin(steps, test);

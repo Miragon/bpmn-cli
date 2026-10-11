@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_LongOrder" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_LongOrder" name="Long order" isExecutable="true">
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:outgoing>Flow_OrderReceivedToReceiveOrder</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_ReceiveOrder" name="Receive order">
+      <bpmn:incoming>Flow_OrderReceivedToReceiveOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReceiveOrderToCheckStock</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_CheckStock" name="Check stock">
+      <bpmn:incoming>Flow_ReceiveOrderToCheckStock</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckStockToReserveItems</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_ReserveItems" name="Reserve items">
+      <bpmn:incoming>Flow_CheckStockToReserveItems</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReserveItemsToCheckCustomer</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Activity_CheckCustomer" name="Check customer">
+      <bpmn:incoming>Flow_ReserveItemsToCheckCustomer</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckCustomerToVerifyAddress</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_VerifyAddress" name="Verify address">
+      <bpmn:incoming>Flow_CheckCustomerToVerifyAddress</bpmn:incoming>
+      <bpmn:outgoing>Flow_VerifyAddressToCalculateShipping</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_CalculateShipping" name="Calculate shipping">
+      <bpmn:incoming>Flow_VerifyAddressToCalculateShipping</bpmn:incoming>
+      <bpmn:outgoing>Flow_CalculateShippingToCalculateShippingOk</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_CalculateShippingOk" name="Calculate shipping ok?">
+      <bpmn:incoming>Flow_CalculateShippingToCalculateShippingOk</bpmn:incoming>
+      <bpmn:outgoing>Flow_CalculateShippingOkToCalculateShippingFailed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CalculateShippingOkToApplyDiscount</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="Event_CalculateShippingFailed" name="Calculate shipping failed">
+      <bpmn:incoming>Flow_CalculateShippingOkToCalculateShippingFailed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_CalculateShippingOkToCalculateShippingFailed" name="no" sourceRef="Gateway_CalculateShippingOk" targetRef="Event_CalculateShippingFailed" />
+    <bpmn:userTask id="Activity_ApplyDiscount" name="Apply discount">
+      <bpmn:incoming>Flow_CalculateShippingOkToApplyDiscount</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApplyDiscountToCreateInvoice</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_CreateInvoice" name="Create invoice">
+      <bpmn:incoming>Flow_ApplyDiscountToCreateInvoice</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreateInvoiceToSendInvoice</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_SendInvoice" name="Send invoice">
+      <bpmn:incoming>Flow_CreateInvoiceToSendInvoice</bpmn:incoming>
+      <bpmn:outgoing>Flow_SendInvoiceToWaitForPayment</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Activity_WaitForPayment" name="Wait for payment">
+      <bpmn:incoming>Flow_SendInvoiceToWaitForPayment</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitForPaymentToBookPayment</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_BookPayment" name="Book payment">
+      <bpmn:incoming>Flow_WaitForPaymentToBookPayment</bpmn:incoming>
+      <bpmn:outgoing>Flow_BookPaymentToNotifyWarehouse</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_NotifyWarehouse" name="Notify warehouse">
+      <bpmn:incoming>Flow_BookPaymentToNotifyWarehouse</bpmn:incoming>
+      <bpmn:outgoing>Flow_NotifyWarehouseToPickItems</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Activity_PickItems" name="Pick items">
+      <bpmn:incoming>Flow_NotifyWarehouseToPickItems</bpmn:incoming>
+      <bpmn:outgoing>Flow_PickItemsToPackItems</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_PackItems" name="Pack items">
+      <bpmn:incoming>Flow_PickItemsToPackItems</bpmn:incoming>
+      <bpmn:outgoing>Flow_PackItemsToWeighParcel</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_WeighParcel" name="Weigh parcel">
+      <bpmn:incoming>Flow_PackItemsToWeighParcel</bpmn:incoming>
+      <bpmn:outgoing>Flow_WeighParcelToWeighParcelOk</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_WeighParcelOk" name="Weigh parcel ok?">
+      <bpmn:incoming>Flow_WeighParcelToWeighParcelOk</bpmn:incoming>
+      <bpmn:outgoing>Flow_WeighParcelOkToWeighParcelFailed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WeighParcelOkToPrintLabel</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="Event_WeighParcelFailed" name="Weigh parcel failed">
+      <bpmn:incoming>Flow_WeighParcelOkToWeighParcelFailed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_WeighParcelOkToWeighParcelFailed" name="no" sourceRef="Gateway_WeighParcelOk" targetRef="Event_WeighParcelFailed" />
+    <bpmn:userTask id="Activity_PrintLabel" name="Print label">
+      <bpmn:incoming>Flow_WeighParcelOkToPrintLabel</bpmn:incoming>
+      <bpmn:outgoing>Flow_PrintLabelToHandOverToCarrier</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_HandOverToCarrier" name="Hand over to carrier">
+      <bpmn:incoming>Flow_PrintLabelToHandOverToCarrier</bpmn:incoming>
+      <bpmn:outgoing>Flow_HandOverToCarrierToTrackParcel</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_TrackParcel" name="Track parcel">
+      <bpmn:incoming>Flow_HandOverToCarrierToTrackParcel</bpmn:incoming>
+      <bpmn:outgoing>Flow_TrackParcelToConfirmDelivery</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Activity_ConfirmDelivery" name="Confirm delivery">
+      <bpmn:incoming>Flow_TrackParcelToConfirmDelivery</bpmn:incoming>
+      <bpmn:outgoing>Flow_ConfirmDeliveryToAskForFeedback</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="Activity_AskForFeedback" name="Ask for feedback">
+      <bpmn:incoming>Flow_ConfirmDeliveryToAskForFeedback</bpmn:incoming>
+      <bpmn:outgoing>Flow_AskForFeedbackToArchiveOrder</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_ArchiveOrder" name="Archive order">
+      <bpmn:incoming>Flow_AskForFeedbackToArchiveOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_ArchiveOrderToCloseCase</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Activity_CloseCase" name="Close case">
+      <bpmn:incoming>Flow_ArchiveOrderToCloseCase</bpmn:incoming>
+      <bpmn:outgoing>Flow_CloseCaseToOrderDone</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_OrderDone" name="Order done">
+      <bpmn:incoming>Flow_CloseCaseToOrderDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_CloseCaseToOrderDone" sourceRef="Activity_CloseCase" targetRef="Event_OrderDone" />
+    <bpmn:sequenceFlow id="Flow_ArchiveOrderToCloseCase" sourceRef="Activity_ArchiveOrder" targetRef="Activity_CloseCase" />
+    <bpmn:sequenceFlow id="Flow_AskForFeedbackToArchiveOrder" sourceRef="Activity_AskForFeedback" targetRef="Activity_ArchiveOrder" />
+    <bpmn:sequenceFlow id="Flow_ConfirmDeliveryToAskForFeedback" sourceRef="Activity_ConfirmDelivery" targetRef="Activity_AskForFeedback" />
+    <bpmn:sequenceFlow id="Flow_TrackParcelToConfirmDelivery" sourceRef="Activity_TrackParcel" targetRef="Activity_ConfirmDelivery" />
+    <bpmn:sequenceFlow id="Flow_HandOverToCarrierToTrackParcel" sourceRef="Activity_HandOverToCarrier" targetRef="Activity_TrackParcel" />
+    <bpmn:sequenceFlow id="Flow_PrintLabelToHandOverToCarrier" sourceRef="Activity_PrintLabel" targetRef="Activity_HandOverToCarrier" />
+    <bpmn:sequenceFlow id="Flow_WeighParcelOkToPrintLabel" sourceRef="Gateway_WeighParcelOk" targetRef="Activity_PrintLabel" />
+    <bpmn:sequenceFlow id="Flow_WeighParcelToWeighParcelOk" sourceRef="Activity_WeighParcel" targetRef="Gateway_WeighParcelOk" />
+    <bpmn:sequenceFlow id="Flow_PackItemsToWeighParcel" sourceRef="Activity_PackItems" targetRef="Activity_WeighParcel" />
+    <bpmn:sequenceFlow id="Flow_PickItemsToPackItems" sourceRef="Activity_PickItems" targetRef="Activity_PackItems" />
+    <bpmn:sequenceFlow id="Flow_NotifyWarehouseToPickItems" sourceRef="Activity_NotifyWarehouse" targetRef="Activity_PickItems" />
+    <bpmn:sequenceFlow id="Flow_BookPaymentToNotifyWarehouse" sourceRef="Activity_BookPayment" targetRef="Activity_NotifyWarehouse" />
+    <bpmn:sequenceFlow id="Flow_WaitForPaymentToBookPayment" sourceRef="Activity_WaitForPayment" targetRef="Activity_BookPayment" />
+    <bpmn:sequenceFlow id="Flow_SendInvoiceToWaitForPayment" sourceRef="Activity_SendInvoice" targetRef="Activity_WaitForPayment" />
+    <bpmn:sequenceFlow id="Flow_CreateInvoiceToSendInvoice" sourceRef="Activity_CreateInvoice" targetRef="Activity_SendInvoice" />
+    <bpmn:sequenceFlow id="Flow_ApplyDiscountToCreateInvoice" sourceRef="Activity_ApplyDiscount" targetRef="Activity_CreateInvoice" />
+    <bpmn:sequenceFlow id="Flow_CalculateShippingOkToApplyDiscount" sourceRef="Gateway_CalculateShippingOk" targetRef="Activity_ApplyDiscount" />
+    <bpmn:sequenceFlow id="Flow_CalculateShippingToCalculateShippingOk" sourceRef="Activity_CalculateShipping" targetRef="Gateway_CalculateShippingOk" />
+    <bpmn:sequenceFlow id="Flow_VerifyAddressToCalculateShipping" sourceRef="Activity_VerifyAddress" targetRef="Activity_CalculateShipping" />
+    <bpmn:sequenceFlow id="Flow_CheckCustomerToVerifyAddress" sourceRef="Activity_CheckCustomer" targetRef="Activity_VerifyAddress" />
+    <bpmn:sequenceFlow id="Flow_ReserveItemsToCheckCustomer" sourceRef="Activity_ReserveItems" targetRef="Activity_CheckCustomer" />
+    <bpmn:sequenceFlow id="Flow_CheckStockToReserveItems" sourceRef="Activity_CheckStock" targetRef="Activity_ReserveItems" />
+    <bpmn:sequenceFlow id="Flow_ReceiveOrderToCheckStock" sourceRef="Activity_ReceiveOrder" targetRef="Activity_CheckStock" />
+    <bpmn:sequenceFlow id="Flow_OrderReceivedToReceiveOrder" sourceRef="Event_OrderReceived" targetRef="Activity_ReceiveOrder" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_LongOrder">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_LongOrder" bpmnElement="Process_LongOrder">
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderReceived" bpmnElement="Event_OrderReceived">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="64" y="144" width="68" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReceiveOrder" bpmnElement="Activity_ReceiveOrder">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckStock" bpmnElement="Activity_CheckStock">
+        <dc:Bounds x="336" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReserveItems" bpmnElement="Activity_ReserveItems">
+        <dc:Bounds x="496" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckCustomer" bpmnElement="Activity_CheckCustomer">
+        <dc:Bounds x="656" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_VerifyAddress" bpmnElement="Activity_VerifyAddress">
+        <dc:Bounds x="816" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CalculateShipping" bpmnElement="Activity_CalculateShipping">
+        <dc:Bounds x="976" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_CalculateShippingOk" bpmnElement="Gateway_CalculateShippingOk" isMarkerVisible="true">
+        <dc:Bounds x="1136" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1124" y="47" width="75" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CalculateShippingFailed" bpmnElement="Event_CalculateShippingFailed">
+        <dc:Bounds x="1278" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1259" y="262" width="75" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ApplyDiscount" bpmnElement="Activity_ApplyDiscount">
+        <dc:Bounds x="1246" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CreateInvoice" bpmnElement="Activity_CreateInvoice">
+        <dc:Bounds x="1406" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendInvoice" bpmnElement="Activity_SendInvoice">
+        <dc:Bounds x="1566" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_WaitForPayment" bpmnElement="Activity_WaitForPayment">
+        <dc:Bounds x="1726" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_BookPayment" bpmnElement="Activity_BookPayment">
+        <dc:Bounds x="1886" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_NotifyWarehouse" bpmnElement="Activity_NotifyWarehouse">
+        <dc:Bounds x="2046" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PickItems" bpmnElement="Activity_PickItems">
+        <dc:Bounds x="2206" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PackItems" bpmnElement="Activity_PackItems">
+        <dc:Bounds x="2366" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_WeighParcel" bpmnElement="Activity_WeighParcel">
+        <dc:Bounds x="2526" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_WeighParcelOk" bpmnElement="Gateway_WeighParcelOk" isMarkerVisible="true">
+        <dc:Bounds x="2686" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2670" y="61" width="82" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_WeighParcelFailed" bpmnElement="Event_WeighParcelFailed">
+        <dc:Bounds x="2828" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2819" y="262" width="54" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PrintLabel" bpmnElement="Activity_PrintLabel">
+        <dc:Bounds x="2796" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_HandOverToCarrier" bpmnElement="Activity_HandOverToCarrier">
+        <dc:Bounds x="2956" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_TrackParcel" bpmnElement="Activity_TrackParcel">
+        <dc:Bounds x="3116" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ConfirmDelivery" bpmnElement="Activity_ConfirmDelivery">
+        <dc:Bounds x="3276" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_AskForFeedback" bpmnElement="Activity_AskForFeedback">
+        <dc:Bounds x="3436" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ArchiveOrder" bpmnElement="Activity_ArchiveOrder">
+        <dc:Bounds x="3596" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CloseCase" bpmnElement="Activity_CloseCase">
+        <dc:Bounds x="3756" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderDone" bpmnElement="Event_OrderDone">
+        <dc:Bounds x="3916" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3893" y="144" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CalculateShippingOkToCalculateShippingFailed" bpmnElement="Flow_CalculateShippingOkToCalculateShippingFailed">
+        <di:waypoint x="1161" y="145" />
+        <di:waypoint x="1161" y="238" />
+        <di:waypoint x="1278" y="238" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1169" y="220" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WeighParcelOkToWeighParcelFailed" bpmnElement="Flow_WeighParcelOkToWeighParcelFailed">
+        <di:waypoint x="2711" y="145" />
+        <di:waypoint x="2711" y="238" />
+        <di:waypoint x="2828" y="238" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2719" y="220" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CloseCaseToOrderDone" bpmnElement="Flow_CloseCaseToOrderDone">
+        <di:waypoint x="3856" y="120" />
+        <di:waypoint x="3916" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ArchiveOrderToCloseCase" bpmnElement="Flow_ArchiveOrderToCloseCase">
+        <di:waypoint x="3696" y="120" />
+        <di:waypoint x="3756" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_AskForFeedbackToArchiveOrder" bpmnElement="Flow_AskForFeedbackToArchiveOrder">
+        <di:waypoint x="3536" y="120" />
+        <di:waypoint x="3596" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ConfirmDeliveryToAskForFeedback" bpmnElement="Flow_ConfirmDeliveryToAskForFeedback">
+        <di:waypoint x="3376" y="120" />
+        <di:waypoint x="3436" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_TrackParcelToConfirmDelivery" bpmnElement="Flow_TrackParcelToConfirmDelivery">
+        <di:waypoint x="3216" y="120" />
+        <di:waypoint x="3276" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_HandOverToCarrierToTrackParcel" bpmnElement="Flow_HandOverToCarrierToTrackParcel">
+        <di:waypoint x="3056" y="120" />
+        <di:waypoint x="3116" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_PrintLabelToHandOverToCarrier" bpmnElement="Flow_PrintLabelToHandOverToCarrier">
+        <di:waypoint x="2896" y="120" />
+        <di:waypoint x="2956" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WeighParcelOkToPrintLabel" bpmnElement="Flow_WeighParcelOkToPrintLabel">
+        <di:waypoint x="2736" y="120" />
+        <di:waypoint x="2796" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WeighParcelToWeighParcelOk" bpmnElement="Flow_WeighParcelToWeighParcelOk">
+        <di:waypoint x="2626" y="120" />
+        <di:waypoint x="2686" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_PackItemsToWeighParcel" bpmnElement="Flow_PackItemsToWeighParcel">
+        <di:waypoint x="2466" y="120" />
+        <di:waypoint x="2526" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_PickItemsToPackItems" bpmnElement="Flow_PickItemsToPackItems">
+        <di:waypoint x="2306" y="120" />
+        <di:waypoint x="2366" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_NotifyWarehouseToPickItems" bpmnElement="Flow_NotifyWarehouseToPickItems">
+        <di:waypoint x="2146" y="120" />
+        <di:waypoint x="2206" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_BookPaymentToNotifyWarehouse" bpmnElement="Flow_BookPaymentToNotifyWarehouse">
+        <di:waypoint x="1986" y="120" />
+        <di:waypoint x="2046" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_WaitForPaymentToBookPayment" bpmnElement="Flow_WaitForPaymentToBookPayment">
+        <di:waypoint x="1826" y="120" />
+        <di:waypoint x="1886" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_SendInvoiceToWaitForPayment" bpmnElement="Flow_SendInvoiceToWaitForPayment">
+        <di:waypoint x="1666" y="120" />
+        <di:waypoint x="1726" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CreateInvoiceToSendInvoice" bpmnElement="Flow_CreateInvoiceToSendInvoice">
+        <di:waypoint x="1506" y="120" />
+        <di:waypoint x="1566" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ApplyDiscountToCreateInvoice" bpmnElement="Flow_ApplyDiscountToCreateInvoice">
+        <di:waypoint x="1346" y="120" />
+        <di:waypoint x="1406" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CalculateShippingOkToApplyDiscount" bpmnElement="Flow_CalculateShippingOkToApplyDiscount">
+        <di:waypoint x="1186" y="120" />
+        <di:waypoint x="1246" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CalculateShippingToCalculateShippingOk" bpmnElement="Flow_CalculateShippingToCalculateShippingOk">
+        <di:waypoint x="1076" y="120" />
+        <di:waypoint x="1136" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_VerifyAddressToCalculateShipping" bpmnElement="Flow_VerifyAddressToCalculateShipping">
+        <di:waypoint x="916" y="120" />
+        <di:waypoint x="976" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CheckCustomerToVerifyAddress" bpmnElement="Flow_CheckCustomerToVerifyAddress">
+        <di:waypoint x="756" y="120" />
+        <di:waypoint x="816" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ReserveItemsToCheckCustomer" bpmnElement="Flow_ReserveItemsToCheckCustomer">
+        <di:waypoint x="596" y="120" />
+        <di:waypoint x="656" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_CheckStockToReserveItems" bpmnElement="Flow_CheckStockToReserveItems">
+        <di:waypoint x="436" y="120" />
+        <di:waypoint x="496" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_ReceiveOrderToCheckStock" bpmnElement="Flow_ReceiveOrderToCheckStock">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_OrderReceivedToReceiveOrder" bpmnElement="Flow_OrderReceivedToReceiveOrder">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

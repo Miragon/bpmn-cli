@@ -142,6 +142,28 @@ function columnsOf(plane: Plane, nodes: DShape[]): Columns {
   return { of, count: cols.length, gaps, wide };
 }
 
+/** A column of a plane (`show --layout`'s c<index>): its flow nodes and their x extent. */
+export interface PlaneColumn {
+  index: number;
+  ids: string[];
+  x0: number;
+  x1: number;
+}
+
+/** The columns of a plane's flow nodes, left to right, as layoutView numbers them (`bpmn render --tiles` cuts between them). */
+export function planeColumns(plane: Plane): PlaneColumn[] {
+  const nodes = [...plane.shapes.values()].filter((s) => is(s.el, 'bpmn:FlowNode') && s.kind !== 'boundary');
+  const cols = columnsOf(plane, nodes);
+  const out: PlaneColumn[] = Array.from({ length: cols.count }, (_, index) => ({ index, ids: [], x0: Infinity, x1: -Infinity }));
+  for (const s of nodes) {
+    const c = out[cols.of.get(s.id)!]!;
+    c.ids.push(s.id);
+    c.x0 = Math.min(c.x0, s.bounds.x);
+    c.x1 = Math.max(c.x1, right(s.bounds));
+  }
+  return out;
+}
+
 function rootKind(root: El): LayoutGroup['kind'] {
   if (is(root, 'bpmn:Collaboration')) return 'collaboration';
   if (is(root, 'bpmn:Process')) return 'process';

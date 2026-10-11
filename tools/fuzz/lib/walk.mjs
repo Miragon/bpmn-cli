@@ -8,7 +8,9 @@
  *   xml, model (a name for reports), seed, mode ('auto' | 'incremental' | 'full'),
  *   steps, exec ({ label, run(xml, ops, { mode }) }: cliExecutor or
  *   libExecutor of exec.mjs), metrics ({ measure(xml) -> {counts, problems, score},
- *   diff(before, after) -> {added}, hard: kinds }), semantic / format (which
+ *   diff(before, after) -> {added}, hard: kinds }), render (optional:
+ *   { draw(xml) -> renderPng's result, maxSize }, setup.mjs loadRender),
+ *   semantic / format (which
  *   generators, default both), replay (a list of steps `{ name, ops }` to run
  *   instead of generating), detEvery (re-run every n-th step on the same input
  *   and compare the bytes; 0 = never), hardSeverity ('error' default, or
@@ -28,6 +30,10 @@
  *     and not a uniform shift are `unreportedReroute`
  *   - `nondeterministic` when the spot-check re-run gives other bytes
  *   - `bboxJump` (> 1500 x 1000 px growth in one step) and `drift`
+ *   - with `render`: the result renders (`bpmn render --problems --tiles`
+ *     as PNG): `render` when it throws (E_RENDER, a crash), an image exceeds
+ *     maxSize, or it lists another number of problems than the metrics
+ *     (import warnings aside)
  * After every failing step: `crash` (internal error, signal, timeout), `usage`
  * (the op itself is malformed: a generator bug) and `writtenOnFailure`.
  * Severity: SOFT kinds and `group:*` are warnings, `hard:*` follows hardSeverity,
@@ -97,6 +103,22 @@ function extentViolations(prev, next, start) {
   return v;
 }
 
+/** The result renders like `bpmn render --problems --tiles` (see contract). */
+async function renderViolations(render, xml, met) {
+  if (!render) return [];
+  try {
+    const r = await render.draw(xml);
+    const v = [];
+    const big = r.images.find((i) => Math.max(i.width, i.height) > render.maxSize);
+    if (big) v.push({ kind: 'render', detail: `an image of ${big.width}x${big.height} px exceeds ${render.maxSize}` });
+    const expected = met?.problems ? met.problems.filter((p) => p.kind !== 'failed').length : undefined;
+    if (expected !== undefined && r.problems.length !== expected) v.push({ kind: 'render', detail: `${r.problems.length} problems listed, the metrics have ${expected}` });
+    return v;
+  } catch (e) {
+    return [{ kind: 'render', detail: `${e?.code ?? 'exception'}: ${String(e?.message ?? e).split('\n')[0].slice(0, 300)}` }];
+  }
+}
+
 async function measureSafe(metrics, xml) {
   try {
     return await metrics.measure(xml);
@@ -120,6 +142,7 @@ async function checkSuccess(cfg, st, res) {
     v.push(...hardV, ...consistencyViolations(res.layout, now, added.filter((p) => cfg.metrics.hard.includes(p.kind)), cfg.metrics.hard));
   }
   if (!next.parseError) v.push(...stabilityViolations(st.a, next, res.layout), ...extentViolations(st.a, next, st.box0));
+  if (!next.parseError) v.push(...(await renderViolations(cfg.render, res.xml, now.error ? undefined : now)));
   return { v, state: { ...st, xml: res.xml, a: next, inv: new Set(inv), met: now.error ? st.met : now } };
 }
 

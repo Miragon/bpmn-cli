@@ -6,12 +6,14 @@
  * metric-compatible with Arial, so the SVG's line breaks hold). No system
  * font is read: an image looks the same on every machine.
  *
- *   renderPng(xml, opts) -> { images: [{ png, width, height, tokens }], scale, plane, planes, notes }
+ *   renderPng(xml, opts) -> { images: [{ png, width, height, tokens }], scale, plane, planes, notes, problems, nodes? }
  *
  * CONTRACT
- *  - The options are renderSvg's; `maxSize` defaults to RENDER_MAX_SIZE
- *    (2000 px on the long edge). One image per call (`images` has one
- *    entry); its size is the SVG's.
+ *  - The options are renderSvg's (crops, highlights, numbered problems,
+ *    tiles); `maxSize` defaults to RENDER_MAX_SIZE (2000 px on the long
+ *    edge). `images` holds one image, or with tiles one per tile (left to
+ *    right, band by band, with their `columns` / `band`); each image's size
+ *    is its SVG's. problems / nodes / notes are renderSvg's.
  *  - Any failure of the rasteriser (the wasm module missing or failing to
  *    load, a trap inside it) is E_RENDER (exit 4), never a process abort:
  *    the wasm build traps where the native one would abort. The SVG has no
@@ -21,7 +23,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { RENDER_MAX_SIZE, renderSvg, type RenderOptions } from '../diagram/render.js';
+import { RENDER_MAX_SIZE, renderSvg, type RenderOptions, type RenderProblem, type RenderTile } from '../diagram/render.js';
 import { CliError } from '../errors.js';
 
 export interface PngImage {
@@ -30,6 +32,10 @@ export interface PngImage {
   height: number;
   /** image-token estimate: width * height / 784, rounded */
   tokens: number;
+  /** a tile: the plane's columns it spans (`show --layout` c<first>..c<last>) */
+  columns?: [number, number];
+  /** a tile: its band (1..) when the drawing is also split top to bottom */
+  band?: number;
 }
 
 export interface PngRenderResult {
@@ -41,6 +47,10 @@ export interface PngRenderResult {
   /** the other planes (element ids) */
   planes: string[];
   notes: string[];
+  /** with `problems`: the problems listed, numbered like their badges */
+  problems: RenderProblem[];
+  /** with a crop: its flow nodes drawn */
+  nodes?: string[];
 }
 
 interface ResvgImage {
@@ -113,9 +123,14 @@ export async function rasterize(svg: string, opts: { pixels?: boolean } = {}): P
   }
 }
 
-/** `bpmn render` (PNG): one plane of the document as a PNG image (see the module contract and renderSvg). */
+/** `bpmn render` (PNG): one plane of the document (or a part, or its tiles) as PNG images (see the module contract and renderSvg). */
 export async function renderPng(xml: string, opts: RenderOptions = {}): Promise<PngRenderResult> {
   const drawn = await renderSvg(xml, { ...opts, maxSize: opts.maxSize ?? RENDER_MAX_SIZE });
-  const { png, width, height } = await rasterize(drawn.svg);
-  return { images: [{ png, width, height, tokens: Math.round((width * height) / 784) }], scale: drawn.scale, plane: drawn.plane, planes: drawn.planes, notes: drawn.notes };
+  const images: PngImage[] = [];
+  const parts: Array<Pick<RenderTile, 'svg' | 'columns' | 'band'>> = drawn.tiles ?? [{ svg: drawn.svg }];
+  for (const part of parts) {
+    const { png, width, height } = await rasterize(part.svg);
+    images.push({ png, width, height, tokens: Math.round((width * height) / 784), ...(part.columns ? { columns: part.columns } : {}), ...(part.band ? { band: part.band } : {}) });
+  }
+  return { images, scale: drawn.scale, plane: drawn.plane, planes: drawn.planes, notes: drawn.notes, problems: drawn.problems, ...(drawn.nodes ? { nodes: drawn.nodes } : {}) };
 }

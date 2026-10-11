@@ -1,4 +1,4 @@
-# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stage 1 of `bpmn render`)
+# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, and stages 1 and 2 of `bpmn render`)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -27,13 +27,15 @@ engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
 `label`, `route`, `space`, `tidy`, `compact`, `order` of lanes and pools;
 selectors `--path`, `--kind`, `--branch`), and looks at it with `bpmn
-render` (a PNG or SVG of the diagram, no browser). The format-command idea
+render` (a PNG or SVG of the diagram, no browser: crops such as `--around`,
+halos, the layout problems numbered in the image, tiles; `--render <png>` on
+any mutating command draws its result). The format-command idea
 comes from Miragon/design-iq PR #218 (`@bpmiq/bpmn-edit`, ADR 0008); no code
 was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1828 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1850 tests (+247 opt-in engine tests), isomorphism check, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -43,6 +45,117 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## `bpmn render`, stage 2 (2026-10-11, `feat/render`, issue #12)
+
+The agent features of the issue's phased plan, on top of stage 1 (below).
+Lead decisions that apply: highlights are a halo; collapsed sub-process
+planes stay separate images (`--plane`); elements are named by id only.
+
+- **Crops** (`src/diagram/render.ts`, `RenderOptions` `around` / `path` /
+  `scope` / `ids`; one per call, two are `E_USAGE`): `--around <id>
+  [--depth n] [--inner]` draws exactly the nodes of `show --around`
+  (`aroundView` itself, not a copy), `--path <from> <to> [--via ...]` the
+  nodes and flows of `pathOf` (the format selector), `--scope <id>` a pool,
+  lane or expanded sub-process and every shape whose centre lies inside it
+  (a collapsed sub-process: its plane; a process: its pool, else its plane;
+  anything else `E_WRONG_KIND`), ids exactly these. A crop draws the
+  connections between its elements in full, for around / path also the data
+  and annotations attached to them; a connection to an element it leaves
+  out is drawn faded in full with its label (`data-faded`; the view fits
+  only its first 40 px), because a 40 px stub hid crossings and label
+  clashes the badges pointed at; pools, lanes, groups and the expanded
+  sub-processes around drawn shapes are context (`data-context`), clipped.
+  Without `--plane` the plane of the crop's first element is drawn; crop
+  elements on other planes are named in a note; nothing drawn is
+  `E_NO_MATCH`. `nodes` lists the crop's flow nodes drawn.
+- **Halos** (`highlight`): a list (orange; unknown ids `E_NOT_FOUND`, ids
+  outside the image named in a note) or `{ created, changed, moved }`
+  (green, orange, a lighter blue; created wins over changed over moved; a
+  pool / lane / expanded sub-process that only moved or grew gets none:
+  after an incremental insert every lane "moved" and the image was all
+  blue). Drawn under the element; labels get a tint.
+- **Numbered problems** (`problems: true` or a list): `locateProblems(defs,
+  problems)` in `src/diagram/metrics.ts` adds `at: { plane, x, y }` per
+  problem from its kind, ids and detail with the checks' own tests (the
+  crossing point, the overlap's centre, the middle of the segment inside the
+  shape, the shared run, the node outside its lane, the first waypoint
+  outside the frame, ...). It is a separate pass on purpose: a first version
+  computed locations inside `layoutProblems` (opt-in thunks) and grew the
+  `applyToXml`-only bundle by 2.5 KB, because every mutation runs the
+  metrics; now that bundle is byte-identical and `metrics` / mutation
+  results carry no coordinates. The render lists every metrics problem in
+  metrics order with the same ids (with a crop: those naming an element it
+  draws; a given list: exactly those, numbered in its order), each as a red
+  badge (constant 18 px) on its location when that is on the plane and in
+  the image, moved aside within the problem's bounding box when it would
+  cover an earlier badge; the rest is listed `(not in the image)`.
+- **Tiles** (`tiles`): when the image would draw labels below 0.75, it is
+  cut into tiles at `scale` (default 1) within `--max-size`: between the
+  plane's columns (`planeColumns` in `src/diagram/view.ts`, the c<n> of
+  `show --layout`), in the middle of the gaps, as even as the gaps allow,
+  and into bands between rows of shapes when too tall; empty tiles are left
+  out; a readable image stays one (a note). `tiles` / PNG `images` carry
+  `columns` and `band`; a badge is in one tile (`tile`).
+- **`focus`** (what `--render` uses): the plane of the first focus element;
+  when the whole plane would be unreadable, the region around the focus
+  elements and their neighbours (plus 40 px), with a note.
+- **The command**: `bpmn render <file> [ids...] --around / --depth /
+  --inner / --path / --via / --scope / --highlight <id,...> (repeatable) /
+  --problems / --tiles`; extra result lines `crop: around X (depth 2): 7
+  nodes`, `halos: ...`, `problems (numbered in the image):` with
+  `<n> <kind> [<ids>] <detail>`, one `wrote` line per tile (`tile 2/3
+  c9-c17`, files `<name>-1.png`, ...) and the total; `--tiles` with `-o -`,
+  `--depth` / `--inner` without `--around`, `--via` without `--path` and a
+  `--path` without exactly two ids are `E_USAGE`. JSON adds `problems`,
+  `nodes`, `images`.
+- **`--render <file.png|.svg>` on every mutating command**
+  (`withMutationOptions`; validated before anything runs): after the write
+  (also with `--dry-run`) the result is drawn with `changeHighlight(report)`
+  (created, changed incl. colours, moved: placed / moved / rerouted /
+  reshaped / labels), the problems the change added (`layout.metrics.added`,
+  matched to their locations by `problemKey`) and `focus` on the touched
+  elements. Text: a `render:` block after the report; JSON: `render`. A
+  failed render (`E_RENDER`, `E_IO`) is reported in that block and the
+  command still exits 0: the change stands.
+- **Fuzz**: the walk renders every written step (`tools/fuzz/lib/walk.mjs`,
+  `loadRender` in `setup.mjs`: `renderPng(xml, { problems: true, tiles: true
+  })`); a throw, an image over 2000 px or another number of problems than the
+  metrics (import warnings aside) is a `render` error; `--no-render` skips
+  it; `minimize.mjs` replays with the render oracle and its `run.sh` ends
+  with the render command. The gate's campaign renders.
+- **Docs**: README (`render` section, synopsis, common options, library
+  API, sizes, changes), the guide (section LOOKING AT THE DRAWING, topic
+  `render`, a line in `guide --short`, the command entry, `--render` in
+  the common options), `E_NO_MATCH` / `E_WRONG_KIND` in the catalogue,
+  docs/testing.md.
+- **Tests** (`test/render-agent.test.ts`, 21 tests, about 5 s, each fails
+  before): locations inside the elements' box for every problem of every
+  scenario and fixture (`layoutProblems` unchanged), `--problems` in metrics
+  order with every badge inside its elements, `--around` against
+  `aroundView` for every 4th node of every scenario and the median of all
+  1,880 depth-2 crops, `--path` / `--scope` / ids, planes and notes, the
+  errors, halos and `changeHighlight`, tiles (every column in exactly one
+  tile, bands, PNG per tile), focus, the command flags and file names,
+  `--render` (text, JSON, the region of a large drawing, a failed render),
+  the fuzz oracle. New synthetic fixture `test/fixtures/render/long.bpmn`
+  (28 nodes in a row, 3,940 px wide; built with the CLI).
+
+Measured on this build:
+
+| | |
+| --- | --- |
+| core bundle, whole entry | 966.4 -> 985.7 KB minified (+19.3 KB: renderer +11.9, `locateProblems` +3.5, guide text +4.0, `planeColumns` +0.3); since before stage 1 945.9 -> 985.7 KB (+39.8 KB of the issue's 50); gzip 298.9 -> 305.8 KB |
+| core bundle, `applyToXml` only | 768,734 bytes, byte-identical to stage 1 |
+| time | `bpmn render agent__o2c --problems` 0.20 s wall (an `--around` crop the same); `add ... --render x.png` 0.28 s, without 0.12 s |
+| `tools/scenarios` | `--around` depth 2 for each of the 1,880 drawn flow nodes: median 368 image tokens (acceptance: at most 1,000), p90 1,518, max 3,515; every problem located inside its elements' box; the listed problems equal `metrics` for every file |
+| `test/fixtures/render/long.bpmn` | whole at 2000 px: scale 0.51 (unreadable); `--tiles`: 2 tiles c0-c12 / c13-c25, 1,413 image tokens in all |
+| private corpus (394 files, counts only) | 1,116 problems, 1,111 located (the 5 `missing` have no place), 0 outside their elements' box, 1,099 badges on the first plane; 5,698 `--around` depth-2 crops, 0 errors, median 257 image tokens (p90 1,069, max 3,622; 652 over 1,000); the 22 files below the 0.75 label scale all tile into 2-3 tiles (median 2), each at most 1,743 px, 3,593 image tokens per file median (max 5,997) |
+
+Still open for stage 3 (and the issue's acceptance list): the plugin
+skill's look step with `test/plugin.test.ts` running its example, the eval
+case (layout problems left over and tokens spent with and without the look
+step), and the reviewer's 20-scenario side-by-side with `tools/render.sh`.
 
 ## `bpmn render`, stage 1 (2026-10-11, `feat/render`, issue #12)
 
@@ -114,13 +227,8 @@ Measured on this build:
 | `tools/scenarios` (115 files) | all render; image tokens at the default 2000 px p50 820 / p90 2,291 / max 4,115; natural long edge p50 1,269 / p90 2,157 / max 2,852 px, 23 over 2000; 3 below the 0.75 label scale; 8 files with 10 other planes, all render; 2 without a diagram (laid out in memory) |
 | private corpus (396 files, counts only) | 394 render (2 files of the manifest are missing on disk), 0 errors; tokens p50 634 / p90 1,896 / max 4,801; natural long edge over 2000 px: 66, below the 0.75 label scale: 22; 22 files with 30 other planes, all render; 24 without a diagram, 2 with elements without a shape |
 
-Still open for stages 2 and 3 (the issue's acceptance list): crops
-(`--around` with exactly `show --around`'s node set, `--path`, `--scope`,
-ids), `--highlight`, `--problems` with a location per problem from
-`layoutProblems`, `--render` on mutating commands, `--tiles`, rendering the
-gate's fuzz outputs, the plugin skill's look step with `test/plugin.test.ts`
-running its example, and the reviewer's 20-scenario side-by-side with
-`tools/render.sh`.
+Stage 2 (above) added crops, halos, numbered problems, tiles, `--render` and
+the fuzz step's rendering; stage 3 is open.
 
 ## Step 3 follow-ups (2026-10-10, `step3/followups`)
 
@@ -1348,7 +1456,8 @@ BPMN_LAYOUT_DEBUG=1 node bin/bpmn.js add ...   # placement candidates, reroute r
 npm run check:iso                              # after a build: the core still bundles for the browser; sizes
 npm run roundtrip [<dir>]                      # after a build: how much of a file a no-op, a rename, an insert rewrite
 node bin/bpmn.js metrics <file>                # problems with ids
-node bin/bpmn.js render <file> -o /tmp/png/x.png # look at the result (no browser; --plane <id> for a collapsed sub-process)
+node bin/bpmn.js render <file> --problems -o /tmp/png/x.png   # look at the result, the problems numbered (no browser; --around <id> / --path / --scope / ids crop, --tiles, --plane <id>)
+node bin/bpmn.js add <file> ... --render /tmp/png/after.png    # any mutating command: its result with what changed in a halo
 tools/render.sh /tmp/png <files>               # the same with real bpmn-js (the reference for reviews)
 BASELINE_BIN=<old>/bin/bpmn.js npm run bench   # benchmark against an older build
 npm run fuzz                                   # random walks; see docs/testing.md
@@ -1394,11 +1503,10 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    placed next to a node in no lane; the bundle size if design-iq needs it
    (step 3 added about 90 KB minified for the Camunda 8 profile: a lazily
    loaded profile per platform would be the lever).
-5. **Let the agent see the result**: issue #12. Stage 1 (the renderer,
-   `bpmn render`) is done, see "`bpmn render`, stage 1"; stage 2 (crops
-   `--around` / `--path` / `--scope` / ids, `--highlight`, `--problems`
-   with a location per problem, `--render` on mutating commands, `--tiles`)
-   and stage 3 (the plugin skill's look step and its eval) are next.
+5. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
+   `bpmn render`) and 2 (crops, halos, numbered problems, tiles,
+   `--render`) are done, see "`bpmn render`, stage 2" and "stage 1"; stage
+   3 (the plugin skill's look step and its eval) is next.
 6. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 

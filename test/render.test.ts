@@ -1,10 +1,12 @@
 /**
- * `bpmn render` (stage 1, issue #12): the SVG renderer of the core
+ * `bpmn render` (issue #12): the SVG renderer of the core
  * (src/diagram/render.ts), the PNG rasteriser of the node layer
  * (src/node/render.ts: resvg-wasm with the bundled Arimo font) and the
  * command. Every scenario and fixture renders to SVG and PNG with the same
  * bytes twice; labels are laid out like bpmn-js; a rasteriser failure is
- * E_RENDER, never a process abort. Synthetic models only.
+ * E_RENDER, never a process abort. The agent features (crops, halos,
+ * numbered problems, tiles, `--render`) are tested in
+ * test/render-agent.test.ts. Synthetic models only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';

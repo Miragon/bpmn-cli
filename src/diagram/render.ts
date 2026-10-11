@@ -7,22 +7,74 @@
  * CONTRACT
  *  - renderSvg(xml, opts) parses the document (E_PARSE) and draws one plane:
  *    `plane` names the element the plane shows (a collapsed sub-process, the
- *    process or the collaboration); default the first BPMNDiagram. An
- *    unknown id is E_NOT_FOUND, an element without a plane of its own
- *    E_WRONG_KIND; both list the planes as candidates. A document without
- *    any diagram is laid out in memory first (the clean engine; nothing is
- *    written) and a note says so.
- *  - renderPlaneSvg(defs, opts) draws a parsed document (no layout).
+ *    process or the collaboration); default the first BPMNDiagram, or with a
+ *    crop or `focus` the plane of its first element. An unknown id is
+ *    E_NOT_FOUND, an element without a plane of its own E_WRONG_KIND; both
+ *    list the planes as candidates. A document without any diagram is laid
+ *    out in memory first (the clean engine; nothing is written) and a note
+ *    says so.
+ *  - renderDocSvg(doc, opts) draws a parsed document (no layout).
  *  - The image: the drawn elements' bounding box (shapes, waypoints, the
  *    labels as drawn) plus a 20 px margin, on white. `scale` (default 1)
  *    zooms; with `maxSize` the long edge is capped at that many px (the
  *    scale shrinks). width / height are the image size in px, `tokens` the
  *    image-token estimate width * height / 784.
+ *  - Crops (at most one of them, E_USAGE otherwise; elements by id only):
+ *      around {id, depth, inner}  exactly the flow nodes of `show --around`
+ *                                 (context.ts aroundView; a sequence flow:
+ *                                 both its ends)
+ *      path {from, to, via}       the nodes and flows of the shortest
+ *                                 sequence-flow path (select.ts pathOf, the
+ *                                 --path selector)
+ *      scope                      a pool, lane or expanded sub-process and
+ *                                 every shape whose centre lies inside it; a
+ *                                 collapsed sub-process: its own plane; a
+ *                                 process: its pool, else its plane
+ *      ids                        exactly these elements
+ *    A crop draws its elements in full (`<g data-id>`) with the connections
+ *    between them, and for around / path the data and annotations attached
+ *    to them; a connection to an element left out is drawn faded, with its
+ *    label (`<g data-faded>`; the view fits only its first 40 px from the
+ *    drawn end), so a crossing or label clash with it stays visible; the
+ *    pools, lanes, groups and the
+ *    expanded sub-processes around drawn elements are context (`<g
+ *    data-context>`), clipped by the view. The view is the crop's content
+ *    plus the margin. Elements of the crop on other planes are named in a
+ *    note; a crop with nothing drawn on the plane is E_NO_MATCH. `nodes` of
+ *    the result: the crop's flow nodes drawn, in its order (around: the
+ *    order of show --around).
+ *  - focus (what `--render` of a mutating command uses): the plane of the
+ *    first focus element that is drawn; when the whole plane would be drawn
+ *    below MIN_LABEL_SCALE, the image shows only the region around them
+ *    (their boxes and the shapes next to them, plus 40 px; everything in
+ *    it) and a note says so.
+ *  - highlight: a halo around each element (under it; labels get a tint): a
+ *    list (orange; an unknown id is E_NOT_FOUND, one not in the image (not
+ *    on the plane, outside the crop) is named in a note) or {created: green, changed: orange, moved: blue,
+ *    lighter} (created wins over changed, changed over moved; ids that are
+ *    not drawn are skipped; a pool, lane or expanded sub-process that only
+ *    moved or grew gets none).
+ *  - problems: `true` lists every problem of layoutProblems (with a crop:
+ *    those naming an element drawn in full) in metrics order with the same
+ *    ids, a list exactly these problems (matched by problemKey) in its order;
+ *    each numbered 1.. in that order. A problem whose location
+ *    (metrics.ts locateProblems) is on this plane and in the image gets a
+ *    numbered badge there (`drawn`); a badge that would cover an earlier one
+ *    moves aside within the bounding box of the problem's elements.
+ *  - tiles: when the image would draw its labels below MIN_LABEL_SCALE, it is
+ *    split into tiles at `scale` (default 1) within maxSize: cut between the
+ *    plane's columns (view.ts planeColumns, `show --layout`'s c<n>) and,
+ *    when too tall, between rows of shapes; empty tiles are left out.
+ *    `tiles` lists them left to right, band by band (svg / width / height /
+ *    tokens of the result are the first tile's); each problem's badge is in
+ *    one tile (`tile`). When the image is readable, it stays one image and a
+ *    note says so.
  *  - The result lists the plane drawn (`plane`, its element id), the other
  *    planes (`planes`: collapsed sub-processes and other diagrams, document
  *    order) and `notes`: labels drawn below MIN_LABEL_SCALE (hard to read;
  *    names the crop options), elements of the plane without a shape, the
- *    in-memory layout.
+ *    in-memory layout, crop elements on other planes, the focus region,
+ *    the tiles.
  *  - Deterministic: the same input and options give the same bytes;
  *    coordinates are rounded to 2 decimals.
  *  - What is drawn: events with their triggers (catching outlined,
@@ -60,50 +112,122 @@
  *  - Browser-safe and free of side effects at import (tree-shaken out of a
  *    host that does not render).
  */
+import { aroundView } from '../context.js';
 import { Doc } from '../document.js';
-import { modelError } from '../errors.js';
+import { modelError, usageError } from '../errors.js';
 import { layoutModel } from '../layout.js';
-import { is, parseXml, type El } from '../model.js';
+import { is, type El } from '../model.js';
+import type { MutationReport } from '../report.js';
 import type { Box, Point } from './geom.js';
+import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from './metrics.js';
 import { homePlane, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
+import { pathOf } from './select.js';
 import { textWidth, wrapLines } from './text.js';
+import { planeColumns } from './view.js';
 
-/** Options of renderSvg / renderPlaneSvg (renderPng adds nothing in this stage). */
+/** What a halo marks: the CLI's `--render` colours created, changed and moved elements apart. */
+export interface RenderHighlight {
+  /** elements the change created: green */
+  created?: string[];
+  /** elements whose model (or colour) changed: orange */
+  changed?: string[];
+  /** elements the layout placed, moved or rerouted: blue */
+  moved?: string[];
+}
+
+/** Options of renderSvg / renderDocSvg / renderPng (see the module contract). */
 export interface RenderOptions {
-  /** the element whose plane to draw: a collapsed sub-process, the process or the collaboration (default: the first diagram) */
+  /** the element whose plane to draw: a collapsed sub-process, the process or the collaboration (default: the first diagram, or the crop's) */
   plane?: string;
   /** zoom factor of the image (default 1) */
   scale?: number;
-  /** longest edge of the image in px: a larger image is scaled down to it (default: no limit) */
+  /** longest edge of the image in px: a larger image is scaled down to it (default: no limit; renderPng: RENDER_MAX_SIZE) */
   maxSize?: number;
+  /** crop: exactly the flow nodes of `show --around <id> --depth <n> [--inner]` */
+  around?: { id: string; depth?: number; inner?: boolean };
+  /** crop: the nodes and flows of the shortest sequence-flow path (`--path <from> <to> [--via <flow...>]`) */
+  path?: { from: string; to: string; via?: string[] };
+  /** crop: a pool, lane or sub-process with what is drawn inside it */
+  scope?: string;
+  /** crop: exactly these elements */
+  ids?: string[];
+  /** keep these readable: their plane, and only the region around them when the whole plane would be drawn below MIN_LABEL_SCALE */
+  focus?: string[];
+  /** a halo around these elements (a list: one colour) */
+  highlight?: string[] | RenderHighlight;
+  /** numbered badges: true = every layout problem (`bpmn metrics`), or exactly these problems */
+  problems?: boolean | readonly LayoutProblem[];
+  /** split an image that would be unreadable into tiles at the diagram's columns */
+  tiles?: boolean;
+}
+
+/** A layout problem as listed by a render: numbered like its badge. */
+export interface RenderProblem {
+  /** the number of its badge (1..) */
+  n: number;
+  kind: MetricKey;
+  ids: string[];
+  detail?: string;
+  /** its badge is in the image (false: on another plane, outside the crop, or nowhere to draw: missing, failed) */
+  drawn: boolean;
+  /** with tiles: the tile (1..) its badge is in */
+  tile?: number;
+}
+
+/** One image of a render split into tiles. */
+export interface RenderTile {
+  svg: string;
+  width: number;
+  height: number;
+  tokens: number;
+  /** the plane's columns the tile spans (`show --layout` c<first>..c<last>); absent when it holds no flow node */
+  columns?: [number, number];
+  /** the band (1..) when the drawing is also split top to bottom */
+  band?: number;
 }
 
 export interface RenderResult {
-  /** the SVG document */
+  /** the SVG document (with tiles: the first tile) */
   svg: string;
-  /** image size in px (after scale / maxSize) */
+  /** image size in px (after scale / maxSize; with tiles: the first tile's) */
   width: number;
   height: number;
   /** the zoom factor used (below `scale` when maxSize capped it) */
   scale: number;
-  /** image-token estimate of the image: width * height / 784, rounded */
+  /** image-token estimate of the image: width * height / 784, rounded (with tiles: the first tile's) */
   tokens: number;
   /** the element whose plane was drawn */
   plane: string;
   /** the other planes (their element ids, document order): what `plane` can name */
   planes: string[];
-  /** labels below MIN_LABEL_SCALE, elements without a shape, an in-memory layout */
+  /** labels below MIN_LABEL_SCALE, elements without a shape, an in-memory layout, crop elements on other planes, the focus region, tiles */
   notes: string[];
+  /** with `problems`: the problems listed, numbered like their badges */
+  problems: RenderProblem[];
+  /** with a crop: its flow nodes drawn (around: exactly show --around's nodes on this plane) */
+  nodes?: string[];
+  /** with `tiles`, when the image needed them: every tile */
+  tiles?: RenderTile[];
 }
 
 /** The long edge `bpmn render` and renderPng cap an image at by default (what Claude Code displays). */
 export const RENDER_MAX_SIZE = 2000;
 /** Below this scale the 11-12 px labels drop under ~8 px and are hard to read: the result says so. */
 export const MIN_LABEL_SCALE = 0.75;
+/** The halo colours: a plain highlight list uses `changed`. */
+export const HALO_COLORS = { created: '#2f9e44', changed: '#f76707', moved: '#1c7ed6' } as const;
 
 const MARGIN = 20;
+/** the margin of the region drawn around focus elements and their neighbours */
+const FOCUS_MARGIN = 40;
+/** a crop's connection to an element it leaves out: drawn faded, the view fits its first STUB px */
+const STUB = 40;
+const FADED = 0.4;
 const STROKE = '#22242a';
 const FILL = '#ffffff';
+const BADGE = '#e03131';
+/** badge radius in image px (a badge keeps its size when the drawing is scaled) */
+const BADGE_R = 9;
 const FONT = 'Arial, Arimo, sans-serif';
 /** external labels (bpmn-js: 11 px, 90 px wide, line height 1.2) */
 const EXT_SIZE = 11;
@@ -117,35 +241,48 @@ const SIZE = 12;
 
 /** `bpmn render --format svg`: one plane of the document as SVG (see the module contract). */
 export async function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> {
-  const doc = await Doc.fromXml(xml);
-  let defs = doc.definitions;
+  let doc = await Doc.fromXml(xml);
   const notes: string[] = [];
-  if (!readPlanes(defs).length) {
+  if (!readPlanes(doc.definitions).length) {
     // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth)
     const { xml: drawn } = await layoutModel(doc.model);
-    defs = (await parseXml(drawn)).definitions;
+    doc = await Doc.fromXml(drawn);
     notes.push('the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)');
   }
-  const result = renderPlaneSvg(defs, opts);
+  const result = renderDocSvg(doc, opts);
   return { ...result, notes: [...notes, ...result.notes] };
 }
 
 /** One plane of a parsed document as SVG (no layout; see the module contract). */
-export function renderPlaneSvg(defs: El, opts: RenderOptions = {}): RenderResult {
+export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult {
+  const defs = doc.definitions;
   const sem = semantics(defs);
   const planes = readPlanes(defs, sem);
-  const plane = pickPlane(planes, sem, opts.plane);
+  const want = cropOf(doc, sem, planes, opts);
+  const plane = pickPlane(planes, sem, opts.plane ?? want.plane ?? focusPlane(planes, opts.focus));
   const others = planes.filter((p) => p !== plane).map((p) => p.rootId);
+  const highlight = halosOf(doc, opts.highlight);
+  if (!plane) return compose({ items: [] }, { plane: 'none', planes: others, notes: ['the document has no diagram plane'] }, opts);
   const notes: string[] = [];
-  if (!plane) return finish(emptyScene(), 'none', others, ['the document has no diagram plane'], opts);
-  const scene = drawPlane(plane);
   const undrawn = undrawnOn(planes, plane, sem);
   if (undrawn.length) {
     const shown = undrawn.slice(0, 5).join(', ') + (undrawn.length > 5 ? `, ... (${undrawn.length - 5} more)` : '');
     notes.push(`${undrawn.length} element${undrawn.length > 1 ? 's have' : ' has'} no shape and ${undrawn.length > 1 ? 'are' : 'is'} not drawn: ${shown} (\`bpmn layout <file>\` draws ${undrawn.length > 1 ? 'them' : 'it'})`);
   }
   if (!plane.shapes.size && !plane.edges.size) notes.push(`the plane of ${plane.rootId} is empty`);
-  return finish(scene, plane.rootId, others, notes, opts);
+  const drawn = want.crop ? drawnOf(plane, planes, want.crop, notes) : undefined;
+  const scene = drawPlane(plane, drawn, highlight);
+  if (Array.isArray(opts.highlight)) {
+    // drawn in full or as context (a crop leaves the rest out)
+    const inImage = new Set(scene.items.filter((i) => i.id !== undefined && /^<g data-(id|context)=/.test(i.svg)).map((i) => i.id!));
+    const missing = opts.highlight.filter((id) => !inImage.has(id));
+    if (missing.length) notes.push(`highlighted but not in the image (${drawn ? 'outside the crop or ' : ''}not drawn on this plane): ${missing.join(', ')}`);
+  }
+  // a crop's flow nodes drawn (a scope: those inside it, in drawing order)
+  const nodes = want.crop?.frame
+    ? [...plane.shapes.values()].filter((s) => s.id !== want.crop!.frame && drawn!.has(s.id) && is(s.el, 'bpmn:FlowNode')).map((s) => s.id)
+    : want.crop?.nodes.filter((id) => drawn!.has(id));
+  return compose(scene, { plane: plane.rootId, planes: others, notes, located: plane, defs, ...(drawn ? { drawn } : {}), ...(nodes ? { nodes } : {}) }, opts);
 }
 
 function pickPlane(planes: Plane[], sem: Semantics, id: string | undefined): Plane | undefined {
@@ -156,6 +293,18 @@ function pickPlane(planes: Plane[], sem: Semantics, id: string | undefined): Pla
   const hint = candidates.length ? `The planes of this file: ${candidates.join(', ')}.` : 'The file has no diagram.';
   if (!sem.byId.has(id)) throw modelError('E_NOT_FOUND', `No element with id "${id}"`, { element: id, candidates, hint });
   throw modelError('E_WRONG_KIND', `${id} has no diagram plane of its own (only collapsed sub-processes, processes and collaborations have one)`, { element: id, candidates, hint: `${hint} An expanded sub-process is drawn on the plane of its parent.` });
+}
+
+/** The plane a shape or connection is drawn on. */
+const planeOfId = (planes: Plane[], id: string): Plane | undefined => planes.find((p) => p.shapes.has(id) || p.edges.has(id));
+
+/** The plane of the first focus element that is drawn. */
+function focusPlane(planes: Plane[], focus: string[] | undefined): string | undefined {
+  for (const id of focus ?? []) {
+    const p = planeOfId(planes, id);
+    if (p) return p.rootId;
+  }
+  return undefined;
 }
 
 /** Flow elements, artifacts, lanes, pools and message flows whose DI belongs on `plane` but which have none. */
@@ -179,6 +328,170 @@ function undrawnOn(planes: Plane[], plane: Plane, sem: Semantics): string[] {
 }
 
 /* ------------------------------------------------------------------ */
+/* crops                                                                */
+/* ------------------------------------------------------------------ */
+
+interface Crop {
+  /** the elements (shapes and connections), in the crop's order */
+  ids: string[];
+  /** the flow nodes among them (around: show --around's order) */
+  nodes: string[];
+  /** scope: the frame whose content is drawn */
+  frame?: string;
+  /** draw the data and annotations attached to the elements */
+  artifacts: boolean;
+}
+
+/** The crop the options ask for, and the plane it implies (a scope on a collapsed sub-process / a process without pool: that plane). */
+function cropOf(doc: Doc, sem: Semantics, planes: Plane[], opts: RenderOptions): { crop?: Crop; plane?: string } {
+  const asked = (['around', 'path', 'scope', 'ids'] as const).filter((k) => (k === 'ids' ? !!opts.ids?.length : opts[k] !== undefined));
+  if (asked.length > 1) {
+    throw usageError(`${asked.map((k) => (k === 'ids' ? 'element ids' : `--${k}`)).join(' and ')} crop the image in different ways; use one`, { hint: 'Render one part per call: `bpmn render <file> --around <id>`, `--path <from> <to>`, `--scope <id>` or ids.' });
+  }
+  if (asked.length && opts.focus?.length) throw usageError('focus does not go with a crop', { hint: 'Use one: a crop (around, path, scope, ids) or focus.' });
+  const kind = asked[0];
+  if (!kind) return {};
+  const first = (ids: string[]): string | undefined => ids.find((id) => planeOfId(planes, id));
+  let crop: Crop;
+  if (kind === 'around') {
+    const view = aroundView(doc, opts.around!.id, { ...(opts.around!.depth !== undefined ? { depth: opts.around!.depth } : {}), inner: !!opts.around!.inner });
+    const nodes = view.nodes.map((n) => n.id);
+    crop = { ids: nodes, nodes, artifacts: true };
+    const seed = planeOfId(planes, opts.around!.id) ? opts.around!.id : first(nodes);
+    return { crop, ...planeHint(planes, seed, nodes, `--around ${opts.around!.id}`) };
+  }
+  if (kind === 'path') {
+    const els = pathOf(doc, opts.path!.from, opts.path!.to, opts.path!.via ?? []);
+    const ids = els.map((el) => el.get<string>('id'));
+    crop = { ids, nodes: els.filter((el) => is(el, 'bpmn:FlowNode')).map((el) => el.get<string>('id')), artifacts: true };
+    return { crop, ...planeHint(planes, first(ids), ids, `--path ${opts.path!.from} ${opts.path!.to}`) };
+  }
+  if (kind === 'ids') {
+    const ids = opts.ids!.filter((id, i) => opts.ids!.indexOf(id) === i);
+    for (const id of ids) doc.require(id);
+    const isNode = (id: string): boolean => {
+      const el = sem.byId.get(id);
+      return !!el && is(el, 'bpmn:FlowNode');
+    };
+    crop = { ids, nodes: ids.filter(isNode), artifacts: false };
+    return { crop, ...planeHint(planes, first(ids), ids, ids.join(', ')) };
+  }
+  // scope
+  const id = opts.scope!;
+  const el = doc.require(id);
+  const expandedOn = planes.find((p) => p.shapes.get(id)?.container);
+  const frameCrop = (frame: string): { crop: Crop; plane?: string } => ({ crop: { ids: [frame], nodes: [], frame, artifacts: false }, ...planeHint(planes, frame, [frame], `--scope ${id}`) });
+  if (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane')) return frameCrop(id);
+  if (is(el, 'bpmn:SubProcess')) {
+    if (expandedOn) return frameCrop(id);
+    if (planes.some((p) => p.rootId === id)) return { plane: id };
+    throw modelError('E_NO_MATCH', `${id} is not drawn (no shape, no plane of its own)`, { element: id, hint: '`bpmn layout <file>` draws it; `bpmn render <file>` lists the planes.' });
+  }
+  if (is(el, 'bpmn:Process')) {
+    const pool = sem.poolOfProcess.get(id);
+    if (pool && planeOfId(planes, pool)) return frameCrop(pool);
+    if (planes.some((p) => p.rootId === id)) return { plane: id };
+  }
+  throw modelError('E_WRONG_KIND', `--scope takes a pool, lane, sub-process or process; "${id}" is a ${el.$type.replace(/^bpmn:/, '')}`, {
+    element: id,
+    hint: 'Use --around <id> for the neighbourhood of a node, or ids to crop to elements.',
+  });
+}
+
+/** The plane of the crop's seed (else of any of its elements); E_NO_MATCH when none of it is drawn. */
+function planeHint(planes: Plane[], seed: string | undefined, ids: string[], what: string): { plane?: string } {
+  const p = seed ? planeOfId(planes, seed) : undefined;
+  if (p) return { plane: p.rootId };
+  throw modelError('E_NO_MATCH', `Nothing of ${what} is drawn (no shape on any plane)`, {
+    ...(ids[0] ? { element: ids[0] } : {}),
+    hint: '`bpmn layout <file>` draws the elements without a shape; `bpmn show <file> --layout` lists what is drawn.',
+  });
+}
+
+/** The ids drawn in full on `plane` for a crop; elements on other planes go into a note, nothing on the plane is E_NO_MATCH. */
+function drawnOf(plane: Plane, planes: Plane[], crop: Crop, notes: string[]): Set<string> {
+  const drawn = new Set<string>();
+  if (crop.frame) {
+    const f = plane.shapes.get(crop.frame);
+    if (!f) throw modelError('E_NO_MATCH', `${crop.frame} is not drawn on the plane of ${plane.rootId}`, { element: crop.frame, hint: 'Drop --plane, or name the plane the scope is drawn on.' });
+    drawn.add(f.id);
+    const b = f.bounds;
+    for (const s of plane.shapes.values()) {
+      const x = s.bounds.x + s.bounds.width / 2;
+      const y = s.bounds.y + s.bounds.height / 2;
+      if (s !== f && x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) drawn.add(s.id);
+    }
+  } else {
+    const elsewhere = new Map<string, number>();
+    for (const id of crop.ids) {
+      if (plane.shapes.has(id) || plane.edges.has(id)) drawn.add(id);
+      else {
+        const other = planeOfId(planes, id);
+        if (other) elsewhere.set(other.rootId, (elsewhere.get(other.rootId) ?? 0) + 1);
+      }
+    }
+    if (!drawn.size) {
+      throw modelError('E_NO_MATCH', `Nothing of the crop is drawn on the plane of ${plane.rootId}`, {
+        hint: `${[...elsewhere.keys()].length ? `It is on the plane of ${[...elsewhere.keys()].join(', ')} (--plane <id>).` : 'It has no shape: `bpmn layout <file>` draws it.'}`,
+      });
+    }
+    for (const [p, count] of elsewhere) notes.push(`${count} element${count > 1 ? 's' : ''} of the crop ${count > 1 ? 'are' : 'is'} on the plane of ${p} (--plane ${p})`);
+    if (crop.artifacts) {
+      for (const e of plane.edges.values()) {
+        if (e.kind !== 'association' && e.kind !== 'dataAssociation') continue;
+        for (const [here, there] of [
+          [e.sourceId, e.targetId],
+          [e.targetId, e.sourceId],
+        ]) {
+          const s = there ? plane.shapes.get(there) : undefined;
+          if (here && drawn.has(here) && s && (s.kind === 'data' || s.kind === 'annotation')) drawn.add(s.id);
+        }
+      }
+    }
+  }
+  // connections between drawn shapes
+  for (const e of plane.edges.values()) if (e.sourceId && e.targetId && drawn.has(e.sourceId) && drawn.has(e.targetId)) drawn.add(e.id);
+  return drawn;
+}
+
+/* ------------------------------------------------------------------ */
+/* halos                                                                */
+/* ------------------------------------------------------------------ */
+
+/** The halo colour of each highlighted element (see contract); a list's unknown ids are E_NOT_FOUND. */
+function halosOf(doc: Doc, h: RenderOptions['highlight']): (id: string) => string | undefined {
+  const colors = new Map<string, string>();
+  if (Array.isArray(h)) {
+    for (const id of h) {
+      doc.require(id);
+      colors.set(id, HALO_COLORS.changed);
+    }
+  } else if (h) {
+    for (const k of ['created', 'changed', 'moved'] as const) for (const id of h[k] ?? []) if (!colors.has(id)) colors.set(id, HALO_COLORS[k]);
+  }
+  return (id) => colors.get(id);
+}
+
+/**
+ * What a mutation touched, as halos (`--render` of a mutating command):
+ * created, changed (the model or a colour) and moved (placed, moved,
+ * rerouted, reshaped, a label placed) elements; each id in its first
+ * category only.
+ */
+export function changeHighlight(report: Pick<MutationReport, 'created' | 'changed' | 'layout'>): Required<RenderHighlight> {
+  const created = unique(report.created.map((c) => c.id));
+  const format = report.layout.format ?? [];
+  const changed = unique([...report.changed.map((c) => c.id), ...format.flatMap((f) => f.colored ?? [])]).filter((id) => !created.includes(id));
+  const l = report.layout;
+  const moved = unique([...(l.placed ?? []), ...(l.moved ?? []), ...(l.rerouted ?? []), ...(l.reshaped ?? []), ...format.flatMap((f) => [...f.moved, ...f.rerouted, ...(f.reshaped ?? []), ...(f.labels ?? [])])]).filter(
+    (id) => !created.includes(id) && !changed.includes(id),
+  );
+  return { created, changed, moved };
+}
+
+const unique = (ids: string[]): string[] => ids.filter((id, i) => ids.indexOf(id) === i);
+
+/* ------------------------------------------------------------------ */
 /* the scene: drawable items with their boxes, then the view            */
 /* ------------------------------------------------------------------ */
 
@@ -188,48 +501,47 @@ interface Item {
   /** paint order: lower first */
   layer: number;
   svg: string;
+  /** the element it draws (shapes, connections, labels, halos) */
+  id?: string;
+  /** context (a crop's frames) and overlays: drawn when in view, but the view is not made to fit them */
+  extra?: boolean;
+  /** what the view fits instead of `box` (a faded connection: its first 40 px) */
+  fit?: Box;
+  /** a badge: only in this tile */
+  tile?: number;
 }
 
 interface Scene {
   items: Item[];
 }
 
-const emptyScene = (): Scene => ({ items: [] });
+/* layers: frames from outside in, then leaves, groups, boundary events, connections, labels, badges */
+const LAYER = { participant: 0, lane: 1, subProcess: 2, leaf: 3, group: 4, boundary: 5, edge: 6, label: 7, badge: 8 } as const;
 
-function finish(scene: Scene, planeId: string, planes: string[], notes: string[], opts: RenderOptions): RenderResult {
-  const content = unionOf(scene.items.map((i) => i.box)) ?? { x: 0, y: 0, width: 0, height: 0 };
-  const view = { x: content.x - MARGIN, y: content.y - MARGIN, width: content.width + 2 * MARGIN, height: content.height + 2 * MARGIN };
-  let scale = opts.scale ?? 1;
-  if (!(scale > 0) || !Number.isFinite(scale)) scale = 1;
-  const long = Math.max(view.width, view.height);
-  if (opts.maxSize && opts.maxSize > 0 && long * scale > opts.maxSize) scale = opts.maxSize / long;
-  const width = Math.max(1, Math.round(view.width * scale));
-  const height = Math.max(1, Math.round(view.height * scale));
-  if (scale < MIN_LABEL_SCALE) {
-    notes.push(
-      `the labels are drawn at ${scale.toFixed(2)} of their size (below ${MIN_LABEL_SCALE}: hard to read); render a part instead: --around <id> [--depth n], --path <from> <to> or --tiles`,
-    );
-  }
-  const visible = scene.items
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => meets(item.box, view))
-    .sort((a, b) => a.item.layer - b.item.layer || a.index - b.index)
-    .map(({ item }) => item.svg);
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}" font-family="${FONT}">\n` +
-    `<rect x="${n(view.x)}" y="${n(view.y)}" width="${n(view.width)}" height="${n(view.height)}" fill="${FILL}"/>\n` +
-    visible.join('\n') +
-    (visible.length ? '\n' : '') +
-    '</svg>\n';
-  return { svg, width, height, scale: Math.round(scale * 10000) / 10000, tokens: Math.round((width * height) / 784), plane: planeId, planes, notes };
-}
-
-/* layers: frames from outside in, then leaves, groups, boundary events, connections, labels */
-const LAYER = { participant: 0, lane: 1, subProcess: 2, leaf: 3, group: 4, boundary: 5, edge: 6, label: 7 } as const;
-
-function drawPlane(plane: Plane): Scene {
+/**
+ * The items of a plane. `drawn` (a crop): the ids drawn in full; frames and
+ * groups around them are context, connections with one drawn end stubs, the
+ * rest is left out.
+ */
+function drawPlane(plane: Plane, drawn: Set<string> | undefined, halo: (id: string) => string | undefined): Scene {
   const items: Item[] = [];
+  // a crop's context: the expanded sub-processes around drawn shapes
+  const around = new Set<string>();
+  if (drawn) {
+    for (const id of drawn) {
+      let s = plane.shapes.get(id);
+      for (let i = 0; s && i < 50; i++) {
+        const up = s.parentId ?? (s.hostId ? plane.shapes.get(s.hostId)?.parentId : undefined);
+        if (!up) break;
+        around.add(up);
+        s = plane.shapes.get(up);
+      }
+    }
+  }
   for (const s of plane.shapes.values()) {
+    const full = !drawn || drawn.has(s.id);
+    const context = !full && (s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group' || around.has(s.id));
+    if (!full && !context) continue;
     const style = stylesOf(s.di);
     const label = shapeLabel(s, style);
     const layer =
@@ -244,15 +556,40 @@ function drawPlane(plane: Plane): Scene {
               : s.kind === 'boundary'
                 ? LAYER.boundary
                 : LAYER.leaf;
-    items.push({ box: s.bounds, layer, svg: `<g data-id="${attr(s.id)}">${shapeSvg(s, style)}</g>` });
-    if (label) items.push(label);
+    // a frame that only moved or grew gets no halo (its content says what moved)
+    const color = s.container && halo(s.id) === HALO_COLORS.moved ? undefined : halo(s.id);
+    if (color) items.push({ box: grow(s.bounds, 9), layer, svg: shapeHalo(s, color), id: s.id, extra: true });
+    items.push({ box: s.bounds, layer, svg: `<g ${full ? 'data-id' : 'data-context'}="${attr(s.id)}">${shapeSvg(s, style)}</g>`, id: s.id, ...(full ? {} : { extra: true }) });
+    if (label) {
+      if (color) items.push(labelTint(label, color, s.id));
+      items.push({ ...label, id: s.id, ...(full ? {} : { extra: true }) });
+    }
   }
   for (const e of plane.edges.values()) {
     if (e.points.length < 2) continue;
     const style = stylesOf(e.di);
-    items.push({ box: pointsBox(e.points), layer: LAYER.edge, svg: `<g data-id="${attr(e.id)}">${edgeSvg(e, style)}</g>` });
+    if (drawn && !drawn.has(e.id)) {
+      const from = !!e.sourceId && drawn.has(e.sourceId);
+      const to = !!e.targetId && drawn.has(e.targetId);
+      if (from === to) continue;
+      // faded: the connection goes on to something the crop leaves out (the view fits its first 40 px)
+      const stub = from ? cut(e.points, STUB) : cut([...e.points].reverse(), STUB).reverse();
+      items.push({ box: pointsBox(e.points), fit: pointsBox(stub), layer: LAYER.edge, svg: `<g data-faded="${attr(e.id)}" opacity="${FADED}">${edgeSvg(e, style)}</g>`, id: e.id });
+      const label = edgeLabel(e, style);
+      if (label) items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: e.id, extra: true });
+      continue;
+    }
+    const color = halo(e.id);
+    if (color) {
+      const light = color === HALO_COLORS.moved;
+      items.push({ box: grow(pointsBox(e.points), 5), layer: LAYER.edge, svg: `<path d="${roundedPath(e.points)}" fill="none" stroke="${color}" stroke-opacity="${light ? 0.3 : 0.45}" stroke-width="${light ? 7 : 9}" stroke-linejoin="round" stroke-linecap="round"/>`, id: e.id, extra: true });
+    }
+    items.push({ box: pointsBox(e.points), layer: LAYER.edge, svg: `<g data-id="${attr(e.id)}">${edgeSvg(e, style)}</g>`, id: e.id });
     const label = edgeLabel(e, style);
-    if (label) items.push(label);
+    if (label) {
+      if (color) items.push(labelTint(label, color, e.id));
+      items.push({ ...label, id: e.id });
+    }
   }
   return { items };
 }
@@ -262,6 +599,280 @@ function depth(plane: Plane, s: DShape, parent: (s: DShape) => string | undefine
   let d = 0;
   for (let p = parent(s); p && d < 50; d++) p = plane.shapes.get(p) ? parent(plane.shapes.get(p)!) : undefined;
   return d;
+}
+
+/** The first `length` px of a polyline. */
+function cut(points: readonly Point[], length: number): Point[] {
+  const out: Point[] = [points[0]!];
+  let rest = length;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    if (d >= rest && d > 0) {
+      out.push({ x: a.x + ((b.x - a.x) * rest) / d, y: a.y + ((b.y - a.y) * rest) / d });
+      return out;
+    }
+    out.push(b);
+    rest -= d;
+  }
+  return out;
+}
+
+const grow = (b: Box, by: number): Box => ({ x: b.x - by, y: b.y - by, width: b.width + 2 * by, height: b.height + 2 * by });
+
+/** A halo under a shape: its outline 6 px out, thick and translucent. */
+function shapeHalo(s: DShape, color: string): string {
+  const b = s.bounds;
+  // moved elements: lighter than created / changed ones
+  const paint = `fill="none" stroke="${color}" stroke-opacity="${color === HALO_COLORS.moved ? 0.4 : 0.55}" stroke-width="${color === HALO_COLORS.moved ? 4 : 6}"`;
+  if (s.kind === 'event' || s.kind === 'boundary') return `<circle cx="${n(b.x + b.width / 2)}" cy="${n(b.y + b.height / 2)}" r="${n(Math.min(b.width, b.height) / 2 + 6)}" ${paint}/>`;
+  if (s.kind === 'gateway') {
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    const k = 8.5;
+    return `<path d="M${n(cx)} ${n(b.y - k)}L${n(b.x + b.width + k)} ${n(cy)}L${n(cx)} ${n(b.y + b.height + k)}L${n(b.x - k)} ${n(cy)}Z" ${paint} stroke-linejoin="round"/>`;
+  }
+  const g = grow(b, 6);
+  return `<rect x="${n(g.x)}" y="${n(g.y)}" width="${n(g.width)}" height="${n(g.height)}" rx="12" ${paint}/>`;
+}
+
+/** A tint behind a highlighted element's label. */
+function labelTint(label: Item, color: string, id: string): Item {
+  const g = grow(label.box, 2);
+  return { box: g, layer: LAYER.label, svg: `<rect x="${n(g.x)}" y="${n(g.y)}" width="${n(g.width)}" height="${n(g.height)}" rx="3" fill="${color}" fill-opacity="0.22"/>`, id, extra: true };
+}
+
+/* ------------------------------------------------------------------ */
+/* composing: view, scale, badges, tiles                                */
+/* ------------------------------------------------------------------ */
+
+interface Frame {
+  plane: string;
+  planes: string[];
+  notes: string[];
+  /** the plane drawn (badges are placed on it) */
+  located?: Plane;
+  defs?: El;
+  /** a crop's ids drawn in full */
+  drawn?: Set<string>;
+  nodes?: string[];
+}
+
+function compose(scene: Scene, frame: Frame, opts: RenderOptions): RenderResult {
+  const notes = frame.notes;
+  const items = scene.items;
+  const fit = items.filter((i) => !i.extra);
+  const content = unionOf((fit.length ? fit : items).map((i) => i.fit ?? i.box)) ?? { x: 0, y: 0, width: 0, height: 0 };
+  let view = grow(content, MARGIN);
+  let scale = opts.scale ?? 1;
+  if (!(scale > 0) || !Number.isFinite(scale)) scale = 1;
+  const base = scale;
+  const max = opts.maxSize && opts.maxSize > 0 ? opts.maxSize : undefined;
+  const fitted = (v: Box): number => (max && Math.max(v.width, v.height) * base > max ? max / Math.max(v.width, v.height) : base);
+  // focus: only the region around the focus elements when the whole would be unreadable
+  const focus = new Set(opts.focus ?? []);
+  if (focus.size && fitted(view) < MIN_LABEL_SCALE && frame.located) {
+    const near = nearFocus(frame.located, focus);
+    const region = unionOf(items.filter((i) => i.id !== undefined && (focus.has(i.id) || (near.has(i.id) && !frame.located!.edges.has(i.id)))).map((i) => i.box));
+    if (region) {
+      notes.push(`the whole plane would be drawn at ${fitted(view).toFixed(2)} of its size: the image shows the region around the ${focus.size} element${focus.size > 1 ? 's' : ''} in focus (\`bpmn render <file>\` draws all of it)`);
+      view = grow(region, FOCUS_MARGIN);
+    }
+  }
+  scale = fitted(view);
+  const tiled = opts.tiles && scale < MIN_LABEL_SCALE ? tileViews(items, view, frame, base, max!) : undefined;
+  if (opts.tiles && !tiled) notes.push(`--tiles: the image is readable as one (scale ${scale.toFixed(2)}); no tiles`);
+  if (tiled) {
+    scale = base;
+    notes.push(`split into ${tiled.length} tiles${tiled.some((t) => t.band) ? ` (${Math.max(...tiled.map((t) => t.band ?? 1))} bands)` : ''} at the diagram's columns (show --layout c<n>), each at scale ${base.toFixed(2)}`);
+  } else if (scale < MIN_LABEL_SCALE) {
+    notes.push(`the labels are drawn at ${scale.toFixed(2)} of their size (below ${MIN_LABEL_SCALE}: hard to read); render a part instead: --around <id> [--depth n], --path <from> <to> or --tiles`);
+  }
+  const views = tiled ?? [{ view }];
+  const problems = opts.problems ? badges(items, frame, opts.problems, views, scale) : [];
+  const images = views.map((t, i) => {
+    const s = tiled ? Math.min(base, max ? max / Math.max(t.view.width, t.view.height) : base) : scale;
+    return { ...emit(items, t.view, s, tiled ? i + 1 : undefined), ...(t.columns ? { columns: t.columns } : {}), ...(t.band ? { band: t.band } : {}) };
+  });
+  const first = images[0]!;
+  return {
+    svg: first.svg,
+    width: first.width,
+    height: first.height,
+    scale: Math.round(scale * 10000) / 10000,
+    tokens: first.tokens,
+    plane: frame.plane,
+    planes: frame.planes,
+    notes,
+    problems,
+    ...(frame.nodes ? { nodes: frame.nodes } : {}),
+    ...(tiled ? { tiles: images } : {}),
+  };
+}
+
+/** The shapes next to the focus: the ends of focus connections and the shapes connected to focus shapes (drawn whole in the focus region). */
+function nearFocus(plane: Plane, focus: Set<string>): Set<string> {
+  const near = new Set<string>();
+  for (const e of plane.edges.values()) {
+    const ends = [e.sourceId, e.targetId].filter((x): x is string => !!x);
+    if (focus.has(e.id) || ends.some((x) => focus.has(x))) for (const x of ends) near.add(x);
+  }
+  return near;
+}
+
+/** One image: the items meeting `view` (badges: of this tile), painted by layer. */
+function emit(items: Item[], view: Box, scale: number, tile: number | undefined): { svg: string; width: number; height: number; tokens: number } {
+  const width = Math.max(1, Math.round(view.width * scale));
+  const height = Math.max(1, Math.round(view.height * scale));
+  const visible = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => meets(item.box, view) && (item.tile === undefined || item.tile === (tile ?? 1)))
+    .sort((a, b) => a.item.layer - b.item.layer || a.index - b.index)
+    .map(({ item }) => item.svg);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}" font-family="${FONT}">\n` +
+    `<rect x="${n(view.x)}" y="${n(view.y)}" width="${n(view.width)}" height="${n(view.height)}" fill="${FILL}"/>\n` +
+    visible.join('\n') +
+    (visible.length ? '\n' : '') +
+    '</svg>\n';
+  return { svg, width, height, tokens: Math.round((width * height) / 784) };
+}
+
+/* --- numbered problems --- */
+
+/** The bounding box of a problem's elements on the plane: shapes, waypoints, labels. */
+function problemBox(plane: Plane, ids: string[]): Box | undefined {
+  const boxes: Box[] = [];
+  for (const id of ids) {
+    const s = plane.shapes.get(id);
+    if (s) boxes.push(s.bounds, ...(s.label ? [s.label] : []));
+    const e = plane.edges.get(id);
+    if (e?.points.length) boxes.push(pointsBox(e.points), ...(e.label ? [e.label] : []));
+  }
+  return unionOf(boxes);
+}
+
+/** The problems listed (see contract), their badges added to `items`. */
+function badges(items: Item[], frame: Frame, asked: true | readonly LayoutProblem[], views: Array<{ view: Box }>, scale: number): RenderProblem[] {
+  if (!frame.defs || !frame.located) return [];
+  const plane = frame.located;
+  const located = locateProblems(frame.defs, layoutProblems(frame.defs).problems);
+  let listed: LayoutProblem[];
+  if (asked === true) {
+    const shown = frame.drawn;
+    listed = shown ? located.filter((p) => p.ids.some((id) => shown.has(id))) : located;
+  } else {
+    // the given problems in their order, each matched to a located one (one to one)
+    const pool = new Map<string, LayoutProblem[]>();
+    for (const p of located) pool.set(problemKey(p), [...(pool.get(problemKey(p)) ?? []), p]);
+    listed = asked.map((p) => pool.get(problemKey(p))?.shift() ?? p);
+  }
+  const r = BADGE_R / scale;
+  const placed: Point[] = [];
+  return listed.map((p, i) => {
+    const out: RenderProblem = { n: i + 1, kind: p.kind, ids: p.ids, ...(p.detail !== undefined ? { detail: p.detail } : {}), drawn: false };
+    const at = p.at;
+    if (!at || at.plane !== plane.rootId) return out;
+    const tile = views.findIndex((v) => contains(v.view, at));
+    if (tile < 0) return out;
+    const box = problemBox(plane, p.ids) ?? { x: at.x, y: at.y, width: 0, height: 0 };
+    const spot = freeSpot(at, placed, r, box);
+    placed.push(spot);
+    const label = String(i + 1);
+    const size = (label.length > 2 ? 9 : 11) / scale;
+    items.push({
+      box: grow({ x: spot.x, y: spot.y, width: 0, height: 0 }, r),
+      layer: LAYER.badge,
+      extra: true,
+      ...(views.length > 1 ? { tile: tile + 1 } : {}),
+      svg: `<g data-problem="${i + 1}"><circle cx="${n(spot.x)}" cy="${n(spot.y)}" r="${n(r)}" fill="${BADGE}" stroke="${FILL}" stroke-width="${n(1.5 / scale)}"/><text x="${n(spot.x)}" y="${n(spot.y + size * 0.36)}" font-size="${n(size)}" fill="${FILL}" text-anchor="middle">${label}</text></g>`,
+    });
+    return { ...out, drawn: true, ...(views.length > 1 ? { tile: tile + 1 } : {}) };
+  });
+}
+
+/** Where a badge goes: its point, else the nearest spot around it (inside `box`) that no earlier badge covers. */
+function freeSpot(at: Point, placed: Point[], r: number, box: Box): Point {
+  const free = (p: Point): boolean => placed.every((q) => Math.hypot(p.x - q.x, p.y - q.y) >= 2 * r - 0.01);
+  if (free(at)) return at;
+  for (const ring of [2, 4, 6]) {
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const p = { x: at.x + Math.cos(a) * ring * r, y: at.y + Math.sin(a) * ring * r };
+      if (contains(box, p) && free(p)) return { x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 };
+    }
+  }
+  return at;
+}
+
+/* --- tiles --- */
+
+interface TileView {
+  view: Box;
+  columns?: [number, number];
+  band?: number;
+}
+
+interface Span {
+  a: number;
+  b: number;
+}
+
+/**
+ * Pieces of [lo, hi] of at most `budget`, cut in the middle of the gaps
+ * between `spans` where one is in reach, as even as the gaps allow.
+ */
+function cutAxis(lo: number, hi: number, spans: Span[], budget: number): Span[] {
+  const sorted = [...spans].sort((x, y) => x.a - y.a);
+  const merged: Span[] = [];
+  for (const s of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && s.a <= last.b) last.b = Math.max(last.b, s.b);
+    else merged.push({ ...s });
+  }
+  const cuts: number[] = [];
+  for (let i = 0; i + 1 < merged.length; i++) cuts.push((merged[i]!.b + merged[i + 1]!.a) / 2);
+  const out: Span[] = [];
+  let start = lo;
+  while (hi - start > budget) {
+    const target = start + (hi - start) / Math.ceil((hi - start) / budget);
+    const reach = cuts.filter((c) => c > start + 1 && c - start <= budget);
+    const at = reach.length ? reach.reduce((best, c) => (Math.abs(c - target) < Math.abs(best - target) ? c : best)) : start + budget;
+    out.push({ a: start, b: at });
+    start = at;
+  }
+  out.push({ a: start, b: hi });
+  return out;
+}
+
+/** The tiles of an unreadable image (see contract): cut between the plane's columns, and between rows when too tall. */
+function tileViews(items: Item[], view: Box, frame: Frame, base: number, max: number): TileView[] | undefined {
+  const plane = frame.located;
+  if (!plane) return undefined;
+  const budget = max / base;
+  const drawnShape = (s: DShape): boolean => (!frame.drawn || frame.drawn.has(s.id)) && !s.container && s.kind !== 'group' && meets(s.bounds, view);
+  const leaves = [...plane.shapes.values()].filter(drawnShape);
+  const columns = planeColumns(plane)
+    .map((c) => {
+      const ids = c.ids.filter((id) => leaves.some((s) => s.id === id));
+      const boxes = ids.map((id) => plane.shapes.get(id)!.bounds);
+      return { index: c.index, a: Math.min(...boxes.map((b) => b.x)), b: Math.max(...boxes.map((b) => b.x + b.width)), n: ids.length };
+    })
+    .filter((c) => c.n > 0);
+  const others = leaves.filter((s) => !is(s.el, 'bpmn:FlowNode') || s.kind === 'boundary').map((s) => ({ a: s.bounds.x, b: s.bounds.x + s.bounds.width }));
+  const xs = cutAxis(view.x, view.x + view.width, [...columns, ...others], budget);
+  const ys = cutAxis(view.y, view.y + view.height, leaves.map((s) => ({ a: s.bounds.y, b: s.bounds.y + s.bounds.height })), budget);
+  const out: TileView[] = [];
+  ys.forEach((y, band) => {
+    for (const x of xs) {
+      const v = { x: x.a, y: y.a, width: x.b - x.a, height: y.b - y.a };
+      if (!items.some((i) => !i.extra && meets(i.fit ?? i.box, v))) continue;
+      const inside = columns.filter((c) => (c.a + c.b) / 2 >= x.a && (c.a + c.b) / 2 < x.b).map((c) => c.index);
+      out.push({ view: v, ...(inside.length ? { columns: [Math.min(...inside), Math.max(...inside)] as [number, number] } : {}), ...(ys.length > 1 ? { band: band + 1 } : {}) });
+    }
+  });
+  return out.length > 1 ? out : undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -284,6 +895,10 @@ function attr(s: string): string {
 
 function meets(a: Box, b: Box): boolean {
   return a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
+}
+
+function contains(b: Box, p: Point): boolean {
+  return p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;
 }
 
 function unionOf(boxes: Box[]): Box | undefined {

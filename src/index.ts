@@ -61,9 +61,9 @@ export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './view.js';
 export { parseOps, OPS_SCHEMA } from './batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */
-export { layoutProblems, layoutProblemsOfXml, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
+export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
 export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './diagram/view.js';
 export { runFormatOps, type FormatResult, type FormatEntry } from './diagram/ops.js';
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
-export { renderSvg, renderPlaneSvg, RENDER_MAX_SIZE, MIN_LABEL_SCALE, type RenderOptions, type RenderResult } from './diagram/render.js';
+export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './diagram/render.js';
