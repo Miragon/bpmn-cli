@@ -346,9 +346,11 @@ describe('guide', () => {
   });
 });
 
-describe('guide and README: documented syntax matches the CLI', () => {
-  const README = readFileSync(join(__dirname, '..', 'README.md'), 'utf8');
-  const texts: Record<string, string> = { guide: guideText(), kinds: kindsText(), README };
+describe('guide, README and docs: documented syntax matches the CLI', () => {
+  const repoFile = (path: string) => readFileSync(join(__dirname, '..', path), 'utf8');
+  const README = repoFile('README.md');
+  const DOCS = ['commands', 'reference', 'ops', 'layout', 'contract', 'camunda', 'walkthrough'].map((name) => repoFile(`docs/${name}.md`)).join('\n');
+  const texts: Record<string, string> = { guide: guideText(), kinds: kindsText(), README, DOCS };
   const command = (name: string) => COMMANDS.find((c) => c.name === name)!;
   const catalogue = (code: string) => ERROR_CATALOGUE.find((e) => e.code === code)!;
 
@@ -373,7 +375,7 @@ describe('guide and README: documented syntax matches the CLI', () => {
     for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/drawn on top/);
     expect(PLACEMENT_NOTES.join(' ')).toMatch(/default flow .* continues straight/);
     expect(command('order').summary).toMatch(/default flow/);
-    expect(README).toMatch(/alternately below and above/);
+    expect(DOCS).toMatch(/alternately below and above/);
   });
 
   it('keeps usages, options and the result description in sync with the CLI', () => {
@@ -381,23 +383,23 @@ describe('guide and README: documented syntax matches the CLI', () => {
     expect(command('layout').summary).toMatch(/no --no-layout/);
     expect(COMMON_OPTIONS.find((o) => o.option === '--no-layout')!.description).toMatch(/pruned/);
     for (const key of ['written', 'importWarnings', 'written: <file>']) expect(guideText()).toContain(key);
-    for (const key of ['"written": true', '"importWarnings": []']) expect(README).toContain(key);
-    expect(README).toMatch(/`--target camunda7` the `camunda:` and `modeler:` namespaces/);
+    for (const key of ['"written": true', '"importWarnings": []']) expect(DOCS).toContain(key);
+    expect(DOCS).toMatch(/`--target camunda7` the `camunda:` and `modeler:` namespaces/);
   });
 
   it('documents retype, event sub-processes, participants and scopes the way the ops behave', () => {
     expect(command('retype').summary).toMatch(/<kind>:none/);
     expect(command('retype').examples).toContain('bpmn retype order.bpmn Event_Start startEvent:none');
-    expect(README).toMatch(/retype Event_X startEvent:none/);
+    expect(DOCS).toMatch(/retype Event_X startEvent:none/);
     expect(catalogue('E_EVENT_SUBPROCESS_NO_START').fix).toMatch(/one `bpmn apply`/);
-    expect(README).toMatch(/`eventSubProcess`.*one `bpmn apply`/);
+    expect(DOCS).toMatch(/`eventSubProcess`.*one `bpmn apply`/);
     expect(catalogue('E_INVALID_SCOPE').meaning).not.toMatch(/collaboration/);
     const wrap = command('add').examples.findIndex((e) => e.includes('participant "Order handling"'));
     const blackBox = command('add').examples.findIndex((e) => e.includes('--black-box'));
     expect(wrap).toBeGreaterThanOrEqual(0);
     expect(blackBox).toBeGreaterThan(wrap);
-    expect(README).toMatch(/\$ bpmn add order\.bpmn participant "Order handling"\n[\s\S]*\$ bpmn add order\.bpmn participant "Customer" --black-box/);
-    expect(README).toMatch(/\| flow nodes \| `lane`.*`default`/);
+    expect(DOCS).toMatch(/\$ bpmn add order\.bpmn participant "Order handling"\n[\s\S]*\$ bpmn add order\.bpmn participant "Customer" --black-box/);
+    expect(DOCS).toMatch(/\| flow nodes \| `lane`.*`default`/);
   });
 
   it('README quick start shows exactly what `bpmn show` prints', async () => {

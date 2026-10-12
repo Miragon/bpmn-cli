@@ -1,7 +1,7 @@
 /**
  * Error model shared by every layer.
  *
- * Exit codes (documented in README and `bpmn guide`):
+ * Exit codes (documented in docs/reference.md and `bpmn guide`):
  *   0  success (warnings allowed)
  *   1  usage error (unknown command/option, bad DSL or ops syntax)
  *   2  model error (unknown reference, invalid mutation, validation failure)

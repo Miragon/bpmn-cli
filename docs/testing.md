@@ -314,7 +314,7 @@ npx vitest run test/isomorphic.test.ts
   when a size is over its budget in
   `tools/iso/budget.json` (KB = 1024 bytes; set to the measured size plus
   about 2 %: raise one only in the change that needs it, with the reason in
-  the commit). `--table` prints the README's "Browser bundles" table. The
+  the commit). `--table` prints the "Browser bundles" table of [library.md](library.md#browser-bundles). The
   entry chunk is the output whose metafile `entryPoint` is the requested
   entry (esbuild gives every `import()` target an `entryPoint` too).
   esbuild itself never shows the hang (it puts shared modules into chunks
@@ -507,7 +507,7 @@ draw the engine corpus with the same CLI.
 ## Roundtrip fidelity
 
 A write changes the text of the elements it changed and nothing else
-(src/preserve.ts, src/mirror.ts; README "What a write changes"). Two checks
+(src/preserve.ts, src/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
 - `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic

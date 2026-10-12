@@ -77,10 +77,11 @@ async function rejected(p: Promise<unknown>): Promise<CliError> {
   throw new Error('expected a rejection');
 }
 
-describe('the README example (Library use)', () => {
+describe('the docs/library.md example (Library use)', () => {
   it('does what its comments say', async () => {
     const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
-    const example = /## Library use[\s\S]*?```ts\n([\s\S]*?)```/.exec(readme)?.[1] ?? '';
+    const library = readFileSync(join(ROOT, 'docs', 'library.md'), 'utf8');
+    const example = /# Library use[\s\S]*?```ts\n([\s\S]*?)```/.exec(library)?.[1] ?? '';
     expect(example).toContain("from '@miragon/bpmn-cli'");
     let { xml } = await newXml({ processName: 'Order handling' });
     const edit = await applyToXml(xml, [

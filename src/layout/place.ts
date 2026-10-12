@@ -3,7 +3,7 @@
  * rows (bands), positions nodes, boundary events, event sub-processes and
  * artifacts. Recurses into expanded sub-processes.
  *
- * Conventions (see HANDOVER.md and the README section "Layout conventions"):
+ * Conventions (see HANDOVER.md and docs/layout.md, "Layout conventions of the built-in engine"):
  *  - left to right; the happy path (the branch that reaches farthest) is a
  *    straight line on row 0
  *  - every other branch is a band below its split, in declaration order; a

@@ -33,7 +33,7 @@
  * it imports statically), and what is loaded on demand (the Camunda 7 /
  * Camunda 8 rules, the first time a document of that platform is
  * validated; bpmn-auto-layout, only for engine 'auto'). `--table` prints the
- * README's "Browser bundles" table instead, `--json` everything as JSON.
+ * "Browser bundles" table of docs/library.md instead, `--json` everything as JSON.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -210,7 +210,7 @@ function sizeLine(label, s) {
   return `  ${label}: minified ${kb(s.bytes)}, gzip ${kb(s.gzip)}${lazy}`;
 }
 
-/** The README's "Browser bundles" table (KB = 1024 bytes). */
+/** The "Browser bundles" table of docs/library.md (KB = 1024 bytes). */
 function sizeTable() {
   const fmt = (bytes) => `${(bytes / KB).toFixed(1)} KB`;
   const limit = (b) => (b ? `${b.minified} / ${b.gzip} KB` : 'none');
