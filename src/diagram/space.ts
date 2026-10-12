@@ -662,13 +662,6 @@ function growthScope(plane: Plane, frame: DShape, axis: Axis): { within?: Box; f
 }
 
 /**
- * Grows the frames around a shape (innermost first, then outwards) until it
- * sits inside each with `pad` on the right and at the bottom. Content beyond
- * the grown border makes room like with the space tool, except the shapes in
- * `keep` (e.g. the rest of a group moved together). Returns everything moved
- * or resized.
- */
-/**
  * The room a shape at `box` keeps from the far border of `frame` along
  * `axis` (the right border for 'x', the bottom for 'y') so that it stays 10 px
  * clear of the frame's own boundary events there that face it: half the
@@ -685,6 +678,14 @@ export function borderPad(plane: Plane, frame: DShape, box: Box, axis: Axis): nu
   return out;
 }
 
+/**
+ * Grows the frames around a shape (innermost first, then outwards) until it
+ * sits inside each with `pad` on the right and at the bottom, and clear of
+ * the frame's own boundary events on those borders (borderPad). Content
+ * beyond the grown border makes room like with the space tool, except the
+ * shapes in `keep` (e.g. the rest of a group moved together). Returns
+ * everything moved or resized.
+ */
 export function fitInFrame(plane: Plane, id: string, pad = 15, frameFn: (s: DShape) => DShape | undefined = (s) => frameOf(plane, s), keepAlso: Iterable<string> = []): SpaceResult {
   const out: SpaceResult = { moved: new Set(), resized: new Set() };
   const merge = (r: SpaceResult): void => {

@@ -214,7 +214,19 @@ crossed the "no" flow goes above the approval on its own; a branch row in a
 transaction keeps clear of the transaction's cancel event (audit #63); the
 local repair routes an existing line a new flow crosses again (reported in
 `rerouted` and a note), and starts a chain that still crosses at its next
-row candidate (`agent__o2c`), deterministically.
+row candidate (`agent__o2c`), deterministically. Its later blocks hold the
+findings of the stage B verification, each failing on the stage B build: a
+path added to a boundary event on its host's top border (`place --side
+top`, then the reminder; and a batch with a second path connected later)
+runs above the host and leaves the hand-drawn row where it is; a line
+through the top-border spot keeps the event below (the line unbroken, no
+crossing); a boundary event drawn by hand keeps its border, one a command
+placed goes to the top; a line a new end event would sit on is routed
+around it; a repair reroute that would trade a crossing with a new flow for
+one between two drawn lines is undone (`shared-reject-line.bpmn`); a
+reroute that still crosses is not measured (the `debug` sink); and an
+association a splice breaks is routed again before the next op of the
+batch (fails when `routeNow` skips associations again).
 `test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
 of `tools/scenarios` and `test/fixtures` (and each of its other planes)
 renders to SVG and PNG within the default 2000 px, with the same bytes twice

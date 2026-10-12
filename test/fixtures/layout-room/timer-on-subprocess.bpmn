@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Cases" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:process id="Process_Cases" name="Cases" isExecutable="false">
+    <bpmn:startEvent id="Event_CaseOpened" name="Case opened">
+      <bpmn:outgoing>Flow_CaseOpenedToExpress</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_Express" name="Express?">
+      <bpmn:incoming>Flow_CaseOpenedToExpress</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpressNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ExpressYes</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:subProcess id="Activity_HandleCase" name="Handle case">
+      <bpmn:incoming>Flow_ExpressNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_HandleCaseToCaseMerge</bpmn:outgoing>
+      <bpmn:startEvent id="Event_WorkStarted">
+        <bpmn:outgoing>Flow_WorkStartedToWorkCase</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_WorkCase" name="Work case">
+        <bpmn:incoming>Flow_WorkStartedToWorkCase</bpmn:incoming>
+        <bpmn:outgoing>Flow_WorkCaseToWorkDone</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_WorkDone">
+        <bpmn:incoming>Flow_WorkCaseToWorkDone</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_WorkStartedToWorkCase" sourceRef="Event_WorkStarted" targetRef="Activity_WorkCase" />
+      <bpmn:sequenceFlow id="Flow_WorkCaseToWorkDone" sourceRef="Activity_WorkCase" targetRef="Event_WorkDone" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_CaseOverdue" name="1 week" attachedToRef="Activity_HandleCase">
+      <bpmn:timerEventDefinition id="TimerEventDefinition_CaseOverdue" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="Gateway_CaseMerge">
+      <bpmn:incoming>Flow_HandleCaseToCaseMerge</bpmn:incoming>
+      <bpmn:incoming>Flow_ExpressYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_CaseMergeToCaseClosed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="Event_CaseClosed" name="Case closed">
+      <bpmn:incoming>Flow_CaseMergeToCaseClosed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_CaseOpenedToExpress" sourceRef="Event_CaseOpened" targetRef="Gateway_Express" />
+    <bpmn:sequenceFlow id="Flow_ExpressNo" name="no" sourceRef="Gateway_Express" targetRef="Activity_HandleCase" />
+    <bpmn:sequenceFlow id="Flow_HandleCaseToCaseMerge" sourceRef="Activity_HandleCase" targetRef="Gateway_CaseMerge" />
+    <bpmn:sequenceFlow id="Flow_CaseMergeToCaseClosed" sourceRef="Gateway_CaseMerge" targetRef="Event_CaseClosed" />
+    <bpmn:sequenceFlow id="Flow_ExpressYes" name="yes" sourceRef="Gateway_Express" targetRef="Gateway_CaseMerge" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Cases">
+      <bpmndi:BPMNShape id="Activity_HandleCase_di" bpmnElement="Activity_HandleCase" isExpanded="true">
+        <dc:Bounds x="330" y="120" width="340" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_CaseOpened_di" bpmnElement="Event_CaseOpened">
+        <dc:Bounds x="150" y="202" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="140" y="243" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Express_di" bpmnElement="Gateway_Express">
+        <dc:Bounds x="230" y="195" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="220" y="250" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_WorkStarted_di" bpmnElement="Event_WorkStarted">
+        <dc:Bounds x="360" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_WorkCase_di" bpmnElement="Activity_WorkCase">
+        <dc:Bounds x="440" y="180" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_WorkDone_di" bpmnElement="Event_WorkDone">
+        <dc:Bounds x="594" y="202" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_CaseMerge_di" bpmnElement="Gateway_CaseMerge">
+        <dc:Bounds x="720" y="195" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_CaseClosed_di" bpmnElement="Event_CaseClosed">
+        <dc:Bounds x="824" y="202" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="814" y="243" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_CaseOverdue_di" bpmnElement="Event_CaseOverdue">
+        <dc:Bounds x="602" y="302" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="592" y="343" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_CaseOpenedToExpress_di" bpmnElement="Flow_CaseOpenedToExpress">
+        <di:waypoint x="186" y="220" />
+        <di:waypoint x="230" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpressNo_di" bpmnElement="Flow_ExpressNo">
+        <di:waypoint x="280" y="220" />
+        <di:waypoint x="330" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_HandleCaseToCaseMerge_di" bpmnElement="Flow_HandleCaseToCaseMerge">
+        <di:waypoint x="670" y="220" />
+        <di:waypoint x="720" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CaseMergeToCaseClosed_di" bpmnElement="Flow_CaseMergeToCaseClosed">
+        <di:waypoint x="770" y="220" />
+        <di:waypoint x="824" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpressYes_di" bpmnElement="Flow_ExpressYes">
+        <di:waypoint x="255" y="245" />
+        <di:waypoint x="255" y="380" />
+        <di:waypoint x="745" y="380" />
+        <di:waypoint x="745" y="245" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WorkStartedToWorkCase_di" bpmnElement="Flow_WorkStartedToWorkCase">
+        <di:waypoint x="396" y="220" />
+        <di:waypoint x="440" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WorkCaseToWorkDone_di" bpmnElement="Flow_WorkCaseToWorkDone">
+        <di:waypoint x="540" y="220" />
+        <di:waypoint x="594" y="220" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

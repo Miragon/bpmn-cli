@@ -165,6 +165,8 @@ export interface PlaceCtx {
   heads?: Map<string, number>;
   /** the local repair's request: start this head at its n-th cheapest candidate (0 = the cheapest) */
   skip?: Map<string, number>;
+  /** nodes placed as the continuation of a chain (on their anchor's row, no row choice): a line touching them is routed again */
+  continued?: Set<string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -828,25 +830,35 @@ function placeBoundary(ctx: PlaceCtx, plane: Plane, id: string): boolean {
   const hostId = idOf(raw(el, 'attachedToRef'));
   const host = hostId ? plane.shapes.get(hostId) : undefined;
   if (!host) return false;
-  const size = sizeFor(ctx, plane, id);
+  const box = boundarySpot(plane, host, sizeFor(ctx, plane, id));
+  if (box.y > host.bounds.y) makeRoomBelow(ctx, plane, host, box);
+  commit(ctx, plane, newShape(ctx, plane, id, box));
+  return true;
+}
+
+/**
+ * The spot placeBoundary gives a new boundary event on its host: the bottom
+ * border right to left (the corner included), then the top border; first
+ * with a clear exit. `self`: an event already drawn there, left out (where
+ * a command would have put it).
+ */
+function boundarySpot(plane: Plane, host: DShape, size: { width: number; height: number }, self?: string): Box {
   const hb = host.bounds;
-  const others = boundariesOf(plane, host.id).map((b) => b.bounds);
+  const others = boundariesOf(plane, host.id).filter((b) => b.id !== self).map((b) => b.bounds);
   const offset = Math.min(SIZES.event.width / 2 + 7, hb.width / 2);
   // the flow leaves a bottom boundary event downwards: keep that lane clear of other labels
-  const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.label).map((o) => o.label!);
+  const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.id !== self && o.label).map((o) => o.label!);
   const exitClear = (b: Box): boolean => b.y < hb.y || !labels.some((l) => overlaps(l, { x: b.x + b.width / 2 - 2, y: bottom(b), width: 4, height: 40 }));
   // where connections already dock on the host's border (a boundary event there would force them around)
   const docks: Point[] = [];
   for (const e of plane.edges.values()) {
-    if (e.points.length < 2) continue;
+    if (e.points.length < 2 || (self && e.sourceId === self)) continue;
     if (e.sourceId === host.id) docks.push(e.points[0]!);
     if (e.targetId === host.id) docks.push(e.points[e.points.length - 1]!);
   }
   const onDock = (b: Box): boolean => docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4);
   let strict = true;
   const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !onDock(b) && (!strict || (exitClear(b) && !labels.some((l) => overlaps(l, b, 2))));
-  // bottom border right to left (the corner included), then the top border; first with a clear exit
-  let box: Box | undefined;
   for (const [y, clear] of [[bottom(hb) - size.height / 2, true], [bottom(hb) - size.height / 2, false], [hb.y - size.height / 2, false]] as const) {
     strict = clear;
     const centres: number[] = [];
@@ -854,17 +866,10 @@ function placeBoundary(ctx: PlaceCtx, plane: Plane, id: string): boolean {
     for (let c = right(hb) - offset + 4; c <= right(hb); c += 4) centres.push(c);
     for (const c of centres) {
       const cand = { x: Math.round(c - size.width / 2), y: Math.round(y), ...size };
-      if (free(cand)) {
-        box = cand;
-        break;
-      }
+      if (free(cand)) return cand;
     }
-    if (box) break;
   }
-  box ??= { x: Math.round(right(hb) - offset - size.width / 2), y: Math.round(bottom(hb) - size.height / 2), ...size };
-  if (box.y > hb.y) makeRoomBelow(ctx, plane, host, box);
-  commit(ctx, plane, newShape(ctx, plane, id, box));
-  return true;
+  return { x: Math.round(right(hb) - offset - size.width / 2), y: Math.round(bottom(hb) - size.height / 2), ...size };
 }
 
 /**
@@ -990,8 +995,13 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     const extent = chainExtent(ctx, plane, id, pending, sp.gap);
     const start = cy(anchor.bounds) + sp.row;
     const xs = [right(anchor.bounds) + sp.gap, Math.round(cx(main.bounds) - size.width / 2)];
-    const cands = xs.flatMap((x, xi) => rowCandidates(plane, probe, frame, x, size, extent, start, sp.row, bottom(main.bounds), exclude, 40 * xi, anchor, cx(main.bounds)));
-    if (host) cands.push(...topCandidates(ctx, plane, id, probe, main, host, frame, size, extent, exclude));
+    // an event on the top border: its path runs above the host (rows below cost TOP_ROW more), and what lies in the
+    // host's own row (its flows, the events on them) is never in the way of a row below it
+    const onTop = !!host && attachedSide(main.bounds, host.bounds) === 'top';
+    const floor = Math.max(bottom(main.bounds), host ? bottom(host.bounds) : -Infinity);
+    const cands = xs.flatMap((x, xi) => rowCandidates(plane, probe, frame, x, size, extent, start, sp.row, floor, exclude, 40 * xi + (onTop ? TOP_ROW : 0), anchor, cx(main.bounds)));
+    if (host && onTop) cands.push(...xs.flatMap((x, xi) => rowsAbove(plane, probe, frame, main, x, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, 40 * xi)));
+    else if (host) cands.push(...topCandidates(ctx, plane, id, probe, main, host, frame, size, extent, exclude));
     placeCand(ctx, plane, id, probe, cheapest(ctx, id, plane, main, kind, cands), main);
     return;
   }
@@ -1025,6 +1035,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     }
     if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
+    if (!S) (ctx.continued ??= new Set()).add(id);
     return;
   }
   // new branch: a free row below the anchor's existing branches (the first ones, cheapest connection)
@@ -1086,8 +1097,12 @@ function topSpot(plane: Plane, event: DShape, host: DShape): Box | undefined {
     if (e.sourceId === host.id) docks.push(e.points[0]!);
     if (e.targetId === host.id) docks.push(e.points[e.points.length - 1]!);
   }
-  const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.id !== event.id && o.label).map((o) => o.label!);
-  const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4) && !labels.some((l) => overlaps(l, b, 2));
+  const labels = [...plane.shapes.values(), ...plane.edges.values()].filter((o) => o.id !== host.id && o.id !== event.id && o.label).map((o) => o.label!);
+  // a line through the spot (a rework line right above the host): the event would sit on it, and the line would be
+  // routed again around the event (mostly with a crossing); the event's own flow does not count
+  const lines = [...plane.edges.values()].filter((e) => e.sourceId !== event.id).map((e) => e.points);
+  const onLine = (b: Box): boolean => lines.some((pts) => pathHits(pts, b, -4));
+  const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4) && !labels.some((l) => overlaps(l, b, 2)) && !onLine(b);
   const lo = hb.x + size.width / 2;
   const hi = right(hb) - size.width / 2;
   const start = Math.min(hi, Math.max(lo, cx(event.bounds)));
@@ -1103,14 +1118,22 @@ function topSpot(plane: Plane, event: DShape, host: DShape): Box | undefined {
 /**
  * Rows above the host for the first node of a boundary event's path (the
  * event moves to the host's top border when one wins, seatOnTop): only for
- * an event on the bottom border whose path starts with this node (no other
- * drawn successor) and a free spot on the top border (topSpot). They cost
- * TOP_ROW more than a row below (room at the top of the frame like an opened
- * row on top), so a clean row below wins and a row below that crosses a line
- * loses.
+ * an event on the bottom border placed by the CLI (in this run, or by an
+ * earlier command where placeBoundary puts it; one drawn by hand elsewhere
+ * keeps its border) whose path starts with this node (no other drawn
+ * successor) and a free spot on the top border (topSpot: no other event,
+ * docking connection, label or line there). They cost TOP_ROW more than a
+ * row below (room at the top of the frame like an opened row on top), so a
+ * clean row below wins and a row below that crosses a line loses.
  */
 function topCandidates(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, event: DShape, host: DShape, frame: DShape | undefined, size: { width: number; height: number }, extent: number, exclude: ReadonlySet<string>): Cand[] {
   if (attachedSide(event.bounds, host.bounds) !== 'bottom') return [];
+  // an event drawn by hand keeps the border it was drawn on (the drawing's convention): only one placed in this
+  // run, or by an earlier command (it sits where placeBoundary puts a new event), goes to the top border
+  if (!ctx.placed.has(event.id)) {
+    const spot = boundarySpot(plane, host, { width: event.bounds.width, height: event.bounds.height }, event.id);
+    if (Math.abs(spot.x - event.bounds.x) > 1 || Math.abs(spot.y - event.bounds.y) > 1) return [];
+  }
   if (successors(ctx.sem, event.id).some((n) => n !== id && plane.shapes.has(n))) return [];
   const spot = topSpot(plane, event, host);
   if (!spot) return [];

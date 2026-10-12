@@ -39,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1912 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1933 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -161,8 +161,12 @@ Evidence (private corpora local, counts only):
   -> 10 (E7 6 -> 7: one Modeler model where E4's timer path went above its
   host and E6's rename then widened the host, which slides the event right of
   the path's end); the median share of existing shapes moved > 5 px of E1 /
-  E2 / E4 unchanged (25 % / 0 % / 0 %), E8 / E9 61 % -> 63 % / 64 %; mean
-  harness delta of all edits 0.1 -> -0.8. No semantic failure, run adding a
+  E2 / E4 unchanged (25 % / 0 % / 0 %), E8 / E9 61 % -> 63 % / 64 %; the
+  tail grew (0.5.0 -> stage B): E2 mean 6.2 % -> 9.8 %, p90 23 % -> 39 %,
+  max 61 % -> 100 %; E4 runs moving any shape 34 -> 44, p75 0 % -> 11 %
+  (room made at the top of a pool moves its whole content down as one
+  block: in one Modeler model all 23 shapes move 125 px, relative to each
+  other none); mean harness delta of all edits 0.1 -> -0.8. No semantic failure, run adding a
   hard defect or global hard count more: `RESULT: no regression`. The soft
   budget is lowered to the new counts (E8 / E9 crossings 9 / 9 of 76, backward
   flows 1 / 1).
@@ -181,8 +185,9 @@ Evidence (private corpora local, counts only):
   on a small model).
 - Fuzz, 80 walks x 25 steps (incremental and auto, the default corpus and
   the 60 Modeler models): 0 errors, the same warnings as stage A.
-- `npm run gate`: 1,912 tests (+247 opt-in), isomorphism check, layout
-  regression 444 (budget 444), fuzz 12 x 15 0 errors. The bundle budgets
+- `npm run gate` (on the first stage A build, before the fixes below):
+  1,912 tests (+247 opt-in), isomorphism check, layout regression 444
+  (budget 444), fuzz 12 x 15 0 errors. The bundle budgets
   are raised for this code (`tools/iso/budget.json`, measured + about 2 %):
   `applyToXml` only 627.9 / 199.1 KB (stage A) -> 637.5 / 202.4 KB, budget
   630 / 201 -> 650 / 206; the whole entry 871.5 / 275.0 -> 881.6 / 278.5
@@ -208,8 +213,104 @@ Open after stage B:
 - Rerouting broken data associations during placement can add a crossing
   between two existing associations (seen on `artifacts__05-data-pool-lanes`);
   the repair looks at new-vs-existing crossings only.
-- The `edit-hand-drawn-model` eval was not re-run (2 runs per arm, no DI
-  edited by hand), as after stage A.
+
+### Stage B, fixes after the verification (2026-10-12)
+
+The verification of stage B passed ten criteria, rated two partial and
+failed one (the eval not re-run); it found one high, two medium and six low
+findings. Stage B is rebased onto the fixed stage A (`4966084`). Each fix has
+a test in `test/layout-room-making.test.ts` (the later blocks; synthetic
+fixtures `rework-line-over-host`, `timer-on-subprocess`, `claims-two-lanes`,
+`shared-reject-line` in `test/fixtures/layout-room/`) that fails on the
+stage B build:
+
+- **High: a path added to a boundary event on its host's top border tore
+  the hand-drawn row.** The plugin's own recovery (`place --side top`, then
+  `add ... --after <event>`) put the reminder below the host, and the room
+  making took the event's bottom (inside the host's row) as its floor: the
+  host row's flows and the events on them counted as lines under the
+  anchor, so the start and end events dropped about 218 px while the tasks
+  stayed (`place.ts placeAfter`). Now the floor is the host's bottom, and
+  the path of an event on the top border runs above its host (its rows
+  above are candidates, rows below cost `TOP_ROW` more). The eval model:
+  nothing moves, score 0 -> 0 (before 0 -> 5 with a crossing, also on stage
+  A); the verifier's 9-op batch (a second path connected later): 0 -> 0.
+- **Medium: the top-border spot ignored lines.** A rework line 10 px above
+  the host ran through the spot: the event sat on it, the line was routed
+  again below the row and crossed another one (synthetic, 1 -> 6). `topSpot`
+  now keeps clear of every line (but the event's own) and of connection
+  labels; that model: 1 -> 0, the event stays below.
+- **Medium: the repair traded a crossing with a new flow for one between
+  two drawn lines** (2 of 3,379 corpus runs; the score fell, so the guard
+  kept it). A trial now also may not add a crossing between two
+  connections drawn before the write (counted together, so a chain drawn
+  again may cross another pair of them, not more; hard problems still per
+  problem). The corpus run: 12 -> 17 with one crossing of the new flow
+  instead of 12 -> 11 with one between two drawn lines (stage A: 12 -> 4,
+  where the opened row moved the merge and its lines for nothing: the
+  "no" flow descends through the opened row).
+- **Low: an event drawn by hand moved to the top border** when its path was
+  added. Only an event the CLI placed moves now: placed in this write, or
+  sitting where `placeBoundary` puts a new event (`boundarySpot`, the spot
+  computation split out of it), so the same ops as single commands still
+  take the top border.
+- **Low: a rerouted line ran along a new end event's border** (no
+  `through`, also on stage A). A line touching a node placed as the
+  continuation of a chain (`PlaceCtx.continued`: on its anchor's row, no
+  row choice) is routed again, at the end and right when a batch places
+  the node (`incremental.ts grazes`). Not for every new node: a merge a
+  single command splices first and a later `connect` moves would otherwise
+  reroute a line in single commands that the batch never touches (the
+  stage A parity test of the merge batch in a pool with lanes).
+- **Low: the `routeNow` association change had no test** that fails without
+  it: an annotation above the eval's row on "Notify requester"; the splice
+  breaks the association, and the batch places the reminder path like
+  single commands only when it is routed at once.
+- **Low: writes that repair took longer on large models.** A reroute that
+  still crosses the line it is tried for, or (an existing connection) newly
+  crosses another drawn line, is not measured (each measurement writes and
+  measures the whole drawing; debug line `still crossing, not measured`).
+  The probe edits on the two 300-node models, single-threaded, one after
+  another: stage A 30.4 s, stage B before 34.8 s (+14 %), now 32.5 s (+7 %);
+  `splitBranch` 483 / 710 / 596 ms, `decisionBatch` 564 / 722 / 623 ms.
+- **Low: the locality claim** ("E1 / E2 / E4 unchanged") held for the
+  median only; the evidence above now gives the tail.
+- **Low: `fitInFrame`'s JSDoc** stood above `borderPad`'s: moved.
+
+Evidence on the fixed build: the issue's probe on the private corpus (3,403
+records, 3,362 incremental runs): runs adding a crossing exactly as before
+the fixes for every edit (boundary path 6 / 265 = 2.3 %, new branch at a
+split 9 / 169 = 5.3 %, decision spliced into a branch 12 / 161 = 7.5 %); a
+batch never adds a crossing in more runs than its single commands; hard
+defects without a group 0; reroutes kept 49 -> 37 and chains placed again
+38 -> 30 (the guard undoes the trades). `bench --compare` against stage A
+and against 0.5.0: no regression, crossings per edit as before the fixes
+(all edits 205 -> 120 against stage A, 302 -> 120 against 0.5.0), mean
+harness delta -0.8 -> -0.7. The `edit-hand-drawn-model` eval, 2 runs per
+arm on this build (`claude plugin eval plugins/bpmn-cli --case
+edit-hand-drawn-model --runs 2`, $1.03): WITH 1.00 / 1.00 (every grader
+passed, both drawings score 0 in `bpmn metrics`), WITHOUT 0.64 / 0.73 (mean
+0.68, delta +0.32). No WITH run edited DI by hand: both built the change
+with `bpmn apply` batches of `add` ops, read the rendered PNG and
+validated. Both WITHOUT runs rewrote the file with a Python script,
+`dc:Bounds` and waypoints included (`no-xml-in-shell`, `validated`,
+`speaking-new-ids` failed). Bundle: whole entry 887.2 /
+280.3 KB, `applyToXml` only 642.6 / 204.0 KB (budgets unchanged, 899 / 284
+and 650 / 206). `npm run gate`: 1,933 tests (+247 opt-in), isomorphism
+check, layout regression 444 (budget 444), fuzz 12 x 15 0 errors (4 group
+warnings in one walk on one of the new fixtures, which the campaign's
+seeded corpus now picks; the same campaign run against the stage B build
+before the fixes and against stage A gives the same 4).
+
+Open after the fixes, besides the list above:
+
+- An opened row whose chain still crosses a line (a line descending from the
+  anchor's row through it) moves the shapes below for nothing; its cost
+  counts the crossing, so it wins only when every other row crosses too.
+- With an annotation associated across the row (drawn above it, on a node
+  below it), a few batches on the eval's model place a node differently from
+  single commands: a synthetic sweep of 27 annotation spots x 5 op sets, 4
+  of 135 on this build, 4 others on stage A.
 
 ## Incremental layout of edits to hand-drawn models, stage A (2026-10-12, `feat/layout-batch-parity`, issue #18)
 
@@ -2187,11 +2288,13 @@ CIB seven, a FEEL parser for the Camunda 8 profile (today: the common slips
 only), checking linked forms / called processes / decisions against a
 deployment. See the "Still open" lists of the C7 audit and of step 3.)
 
-1. **Issue #18 after stage B**: the `edit-hand-drawn-model` eval again (2
-   runs per arm, no DI edited by hand), and what stage B left (see
-   "Incremental layout of edits to hand-drawn models, stage B"): a `connect`
-   to the sibling branch's node that crosses, the convention of exception
-   paths above their host, a grown host sliding its boundary events.
+1. **Issue #18 after stage B**: what stage B left (see "Incremental layout
+   of edits to hand-drawn models, stage B" and its fixes): a `connect` to
+   the sibling branch's node that crosses, the convention of exception
+   paths above their host, a grown host sliding its boundary events, an
+   opened row that cannot help (a line descending through it), room at the
+   top of a pool moving its whole content. The `edit-hand-drawn-model` eval
+   passed (WITH 1.00, no DI edited by hand).
 2. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
    events added on a host inside a sub-process intruding into another

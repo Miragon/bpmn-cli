@@ -117,12 +117,14 @@ installed version. Ask it instead of guessing:
      row (the rest shifts right), their branches go below, a boundary path is
      placed after the normal flow. A new branch or boundary path avoids the
      existing lines on its own: it opens a row right under its anchor (the
-     lines there move down), or goes above it (a boundary event then sits on
-     the top border; the result notes `moved to the top border`); a flow it
-     routed again to remove a crossing is listed in `rerouted:`. When a
-     crossing is still left (`added: crossings` naming both), move a boundary
-     event and its path to the other border: `bpmn place <file>
-     <boundaryEventId> --side top` (or `--side bottom`)
+     lines there move down), or goes above it (a boundary event the CLI
+     placed then sits on the top border; the result notes `moved to the top
+     border`; one drawn by hand keeps its border); a flow it routed again to
+     remove a crossing is listed in `rerouted:`. When a crossing is still
+     left (`added: crossings` naming both), move a boundary event and its
+     path to the other border: `bpmn place <file> <boundaryEventId> --side
+     top` (or `--side bottom`); a path added after that runs on the event's
+     side
    - `--summary` shortens all of this to a few lines
    - example: a full redraw moved the customer pool below and added a crossing
      with a message flow - `bpmn order <file> <collaborationId> <poolIds...>`

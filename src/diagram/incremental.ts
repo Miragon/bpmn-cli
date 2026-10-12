@@ -73,9 +73,9 @@
  *      left: the branch or exception path it belongs to starts at its next
  *      row candidate (steps 6 to 9 run again from a checkpoint taken before
  *      step 6, at most CHAIN_RETRIES times). A trial is kept only when it
- *      adds no hard layout problem and lowers the score (the guard `compact`
- *      uses; the drawing is written to the DI and measured after each
- *      trial). An existing connection kept rerouted is reported in
+ *      adds no hard layout problem and no crossing between two connections
+ *      drawn before the run, and lowers the score (the guard `compact` uses;
+ *      the drawing is written to the DI and measured after each trial). An existing connection kept rerouted is reported in
  *      `rerouted` and a note, a chain placed again in a note
  *  A further BPMNDiagram showing a root another diagram already shows (a
  *  second view of the same process) is left untouched, except that DI of
@@ -925,10 +925,9 @@ async function placeNodes(ctx: Ctx, blocks: () => Promise<{ planes: Plane[]; sem
  * and row spacing are measured again); connections the placement broke
  * (brokenEdge; sequence flows, associations and data associations, message
  * flows wait for the end) are routed again too, as at the end of a single
- * command. At
- * the end (step 8) such a flow is routed again only when it broke since
- * (brokenEdge against its state then), like a flow an earlier single command
- * drew.
+ * command. At the end (step 8) such a flow is routed again only when it
+ * broke since (brokenEdge against its state then), like a flow an earlier
+ * single command drew.
  */
 function routeNow(ctx: Ctx, plane: Plane, id: string): void {
   const s = plane.shapes.get(id);
@@ -959,7 +958,7 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
     // an end that changes later (a flow into a node still to be placed) is routed when that node is placed
     if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
     const was = ctx.routedNow.get(e.id) ?? ctx.edgesBefore.get(e);
-    if (!was || !brokenEdge(plane, e, was)) continue;
+    if (!was || (!brokenEdge(plane, e, was) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
     if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken when ${id} was placed`);
     routeKept(ctx, plane, e);
   }
@@ -1096,7 +1095,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
       const now = ctx.routedNow.get(e.id);
       if (now) {
         const ends = edgeEnds(e.el);
-        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now)) continue;
+        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now) && !grazes(plane, e, ctx.place.continued)) continue;
         ctx.reroute.add(e.id);
         if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken after it was routed`);
         continue;
@@ -1117,13 +1116,41 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
             ? 'end placed'
             : brokenEdge(plane, e, before.get(e))
               ? 'broken'
-              : undefined;
+              : grazes(plane, e, ctx.place.continued)
+                ? 'runs along a new shape'
+                : undefined;
       if (why) {
         ctx.reroute.add(e.id);
         if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: ${why}`);
       }
     }
   }
+}
+
+/**
+ * Whether a connection runs along the border of one of `ids` or touches it:
+ * no `through` (the line does not enter the box), but it reads as docking
+ * on the shape. Checked for the nodes that continue a chain (placed on their
+ * anchor's row without a row choice, PlaceCtx.continued: an end event placed
+ * on a line an earlier command routed down there). Its own ends, their
+ * boundary events and hosts do not count.
+ */
+function grazes(plane: Plane, e: DEdge, ids: Iterable<string> | undefined): boolean {
+  if (!ids || e.points.length < 2) return false;
+  const own = new Set<string>();
+  for (const end of [e.sourceId, e.targetId]) {
+    const s = end ? plane.shapes.get(end) : undefined;
+    if (!s) continue;
+    own.add(s.id);
+    if (s.hostId) own.add(s.hostId);
+    for (const b of boundariesOf(plane, s.id)) own.add(b.id);
+  }
+  for (const id of ids) {
+    const s = plane.shapes.get(id);
+    if (!s || own.has(id) || !isLeaf(s)) continue;
+    for (let i = 0; i + 1 < e.points.length; i++) if (segmentHits(e.points[i]!, e.points[i + 1]!, s.bounds, -1)) return true;
+  }
+  return false;
 }
 
 function routeAll(ctx: Ctx): string[] {
@@ -1230,7 +1257,7 @@ interface Checkpoint {
   members: Map<Plane, { shapes: DShape[]; edges: DEdge[] }>;
   shapes: Map<DShape, { bounds: Box; label?: Box }>;
   edges: Map<DEdge, { points: Point[]; label?: Box; sourceId?: string; targetId?: string }>;
-  place: Pick<PlaceCtx, 'placed' | 'moved' | 'spacing' | 'reuse' | 'blockSize' | 'spliced' | 'joins' | 'relabel' | 'heads' | 'skip'>;
+  place: Pick<PlaceCtx, 'placed' | 'moved' | 'spacing' | 'reuse' | 'blockSize' | 'spliced' | 'joins' | 'relabel' | 'heads' | 'skip' | 'continued'>;
   sets: Pick<Ctx, 'reroute' | 'newEdges' | 'fromEngine' | 'active' | 'relocated' | 'grown' | 'routedNow'>;
   notes: string[];
 }
@@ -1251,6 +1278,7 @@ function checkpoint(ctx: Ctx): Checkpoint {
       ...(ctx.place.spliced ? { spliced: new Map(ctx.place.spliced) } : {}),
       ...(ctx.place.joins ? { joins: new Map(ctx.place.joins) } : {}),
       ...(ctx.place.relabel ? { relabel: new Set(ctx.place.relabel) } : {}),
+      ...(ctx.place.continued ? { continued: new Set(ctx.place.continued) } : {}),
       ...(ctx.place.heads ? { heads: new Map(ctx.place.heads) } : {}),
       ...(ctx.place.skip ? { skip: new Map(ctx.place.skip) } : {}),
     },
@@ -1313,6 +1341,8 @@ function restore(ctx: Ctx, cp: Checkpoint): void {
   }
   if (p.relabel) ctx.place.relabel = new Set(p.relabel);
   else delete ctx.place.relabel;
+  if (p.continued) ctx.place.continued = new Set(p.continued);
+  else delete ctx.place.continued;
   const s = cp.sets;
   Object.assign(ctx, { reroute: new Set(s.reroute), newEdges: new Set(s.newEdges), fromEngine: new Set(s.fromEngine), active: new Set(s.active), relocated: new Set(s.relocated), grown: new Set(s.grown), routedNow: new Map(s.routedNow) });
   ctx.notes.splice(0, ctx.notes.length, ...cp.notes);
@@ -1383,7 +1413,8 @@ function chainHead(ctx: Ctx, from: readonly (string | undefined)[]): string | un
  *     instead: the new elements are drawn again from the checkpoint taken
  *     before them (`start`, by `redraw`), at most CHAIN_RETRIES times.
  * A trial is kept only under the guard `compact` uses: it adds no hard layout
- * problem and lowers the score (the drawing is measured after each trial, its
+ * problem (nor a crossing between two connections drawn before this run) and
+ * lowers the score (the drawing is measured after each trial, its
  * planes written to the DI first; a chain drawn again takes over the DI the
  * measurement created for the new elements). An existing connection kept
  * rerouted is reported in `rerouted` and in a note, a chain placed again in a
@@ -1399,9 +1430,16 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
     writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
     return layoutProblems(ctx.doc.definitions);
   };
+  // what a trial must never add: a hard problem (counted per problem), or a crossing between two connections drawn
+  // before this run (counted together: a reroute must not trade a crossing with a new connection for one among the
+  // hand-drawn lines; a chain drawn again may cross another pair of them, not more)
+  const DRAWN = 'crossings among drawn lines';
   const hardCounts = (m: LayoutMetrics): Map<string, number> => {
     const out = new Map<string, number>();
-    for (const p of m.problems.filter(isHardProblem)) out.set(problemKey(p), (out.get(problemKey(p)) ?? 0) + 1);
+    for (const p of m.problems) {
+      const key = isHardProblem(p) ? problemKey(p) : p.kind === 'crossings' && p.ids.every((id) => !ctx.newEdges.has(id)) ? DRAWN : undefined;
+      if (key) out.set(key, (out.get(key) ?? 0) + 1);
+    }
     return out;
   };
   const ensureBase = (): void => {
@@ -1409,13 +1447,13 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
     base = measure();
     hard = hardCounts(base);
   };
-  /** the guard: measures the drawing; true (and the new baseline) when it lowered the score and added no hard problem */
+  /** the guard: measures the drawing; true (and the new baseline) when it lowered the score and added nothing guarded */
   const judge = (what: string): boolean => {
     const m = measure();
     const now = hardCounts(m);
-    const worse = [...now].some(([k, c]) => c > (hard!.get(k) ?? 0));
-    const ok = !worse && m.score < base!.score;
-    if (layoutDebugOn()) layoutDebug(`[repair] ${what}: score ${base!.score} -> ${m.score}${worse ? ', hard problem added' : ''}: ${ok ? 'kept' : 'undone'}`);
+    const added = [...now].filter(([k, c]) => c > (hard!.get(k) ?? 0)).map(([k]) => k);
+    const ok = !added.length && m.score < base!.score;
+    if (layoutDebugOn()) layoutDebug(`[repair] ${what}: score ${base!.score} -> ${m.score}${added.length ? `, added ${added.join(' ')}` : ''}: ${ok ? 'kept' : 'undone'}`);
     if (ok) {
       base = m;
       hard = now;
@@ -1429,6 +1467,13 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
         if (trials >= REPAIR_TRIALS) return;
         const pts = routeEdge(plane, target, { lines: routingLines(plane, target.id) });
         if (!pts || pts.length < 2 || samePoints(pts, target.points)) continue;
+        // not measured: a route that still crosses the line it is tried for, or (an existing connection) that crosses
+        // another drawn line it did not cross before (the guard would undo it)
+        const other = target === n ? e : n;
+        if (polylinesCross(pts, other.points) || (target === e && crossesNewDrawnLine(plane, target, pts))) {
+          if (layoutDebugOn()) layoutDebug(`[repair] ${target.id} routed again (it crossed: ${n.id} x ${e.id}): still crossing, not measured`);
+          continue;
+        }
         trials++;
         ensureBase();
         const old = { points: target.points, label: target.label ? copyBox(target.label) : undefined };
@@ -1448,6 +1493,9 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
       }
     }
   };
+  /** an existing connection's new route crosses a connection drawn before this run that its old route did not cross */
+  const crossesNewDrawnLine = (plane: Plane, target: DEdge, pts: readonly Point[]): boolean =>
+    [...plane.edges.values()].some((o) => o !== target && !ctx.newEdges.has(o.id) && o.points.length >= 2 && polylinesCross(pts, o.points) && !polylinesCross(target.points, o.points));
   reroutes(rerouted);
   // the next row candidate of a chain that still crosses
   const tried = new Map<string, number>();

@@ -121,7 +121,8 @@ bpmn compact order-to-cash.bpmn
   when it was drawn on the old side in the host's lane (a reminder path below
   that crosses a branch goes above the task). A new boundary path whose rows
   below would all cross a line is placed above its host on its own, the event
-  on the top border; `--side bottom` takes it back below.
+  on the top border; `--side bottom` takes it back below. A path added to an
+  event on the top border runs above its host.
 - `align <ids...> --axis row|column [--to <ref>]`: same vertical centre (row)
   or same horizontal centre (column) as the reference (default: the first id).
 - `space --after <id>` / `--below <id>` `[--by column|row|<n>col|<n>row|<px>]`:
