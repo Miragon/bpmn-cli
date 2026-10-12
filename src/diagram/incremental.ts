@@ -39,7 +39,9 @@
  *   6. new flow nodes and artifacts are placed (place.ts) in op order
  *      (opts.created) where their neighbours allow; while more follow, the
  *      sequence flows of each placed node are routed right away, and so are
- *      the flows the placement broke, and the spacing is measured again
+ *      the connections the placement broke (sequence flows, associations and
+ *      data associations; message flows wait for step 8), and the spacing is
+ *      measured again
  *      (routeNow: what the next single command would see); a new expanded
  *      sub-process with content and a new pool with content are laid out by
  *      the clean engine as one block and placed like a node of that size;
@@ -62,7 +64,19 @@
  *      command drew); an existing one counts as rerouted
  *   9. labels of new / renamed elements and rerouted named flows are placed;
  *      a kept label a new line runs over or a grown activity covers steps
- *      aside
+ *      aside (and the label of a boundary event the placement moved to its
+ *      host's top border)
+ *  10. local repair (repairCrossings, issue #18 (3)): for every crossing
+ *      between a connection drawn in this run and an existing one, at most
+ *      REPAIR_TRIALS trials per write: the new connection is routed again,
+ *      else the existing one (with the new shapes as obstacles); a crossing
+ *      left: the branch or exception path it belongs to starts at its next
+ *      row candidate (steps 6 to 9 run again from a checkpoint taken before
+ *      step 6, at most CHAIN_RETRIES times). A trial is kept only when it
+ *      adds no hard layout problem and lowers the score (the guard `compact`
+ *      uses; the drawing is written to the DI and measured after each
+ *      trial). An existing connection kept rerouted is reported in
+ *      `rerouted` and a note, a chain placed again in a note
  *  A further BPMNDiagram showing a root another diagram already shows (a
  *  second view of the same process) is left untouched, except that DI of
  *  removed elements is pruned there too.
@@ -89,6 +103,7 @@ import { is, layoutRoot, parseXml, type El } from '../model.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from './containers.js';
 import { bottom, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
+import { layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
 import { boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
@@ -907,8 +922,10 @@ async function placeNodes(ctx: Ctx, blocks: () => Promise<{ planes: Plane[]; sem
  * are routed now and labelled, and so is its own external label, so that the
  * nodes the batch places next see them like the next single command would
  * (the row choice counts crossings, keeps off lines and labels, and the gap
- * and row spacing are measured again); sequence flows the placement broke
- * (brokenEdge) are routed again too, as at the end of a single command. At
+ * and row spacing are measured again); connections the placement broke
+ * (brokenEdge; sequence flows, associations and data associations, message
+ * flows wait for the end) are routed again too, as at the end of a single
+ * command. At
  * the end (step 8) such a flow is routed again only when it broke since
  * (brokenEdge against its state then), like a flow an earlier single command
  * drew.
@@ -937,7 +954,7 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
   }
   // what the placement broke (the space tool, a new shape on a line) is routed again now, like at the end of a single command
   for (const e of plane.edges.values()) {
-    if (e.kind !== 'sequenceFlow' || e.points.length < 2 || e.sourceId === id || e.targetId === id || !e.sourceId || !e.targetId) continue;
+    if (e.kind === 'messageFlow' || e.points.length < 2 || e.sourceId === id || e.targetId === id || !e.sourceId || !e.targetId) continue;
     const ends = edgeEnds(e.el);
     // an end that changes later (a flow into a node still to be placed) is routed when that node is placed
     if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
@@ -1142,7 +1159,7 @@ function labels(ctx: Ctx, routed: ReadonlySet<string>): void {
     const grown = [...ctx.grown].map((id) => plane.shapes.get(id)).filter((g): g is DShape => !!g);
     for (const s of plane.shapes.values()) {
       if (ctx.fromEngine.has(s.id)) continue;
-      if (ctx.place.placed.has(s.id) && !s.label) {
+      if ((ctx.place.placed.has(s.id) && !s.label) || (ctx.place.relabel?.has(s.id) && hasExternalLabel(s))) {
         placeShapeLabel(plane, s);
         continue;
       }
@@ -1167,6 +1184,319 @@ function labels(ctx: Ctx, routed: ReadonlySet<string>): void {
       if (now && now !== before) refitLabel(plane, e);
     }
   }
+}
+
+/** at most this many repair trials per write (a reroute or a chain placed again, each measured) */
+const REPAIR_TRIALS = 8;
+/** of them at most this many chains placed again (each draws the new elements again) */
+const CHAIN_RETRIES = 2;
+
+const isHardProblem = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
+
+/** Whether two polylines cross (a proper crossing of two segments, like the crossings metric). */
+function polylinesCross(a: readonly Point[], b: readonly Point[]): boolean {
+  const o = (p: Point, q: Point, r: Point): number => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  for (let i = 0; i + 1 < a.length; i++) {
+    for (let j = 0; j + 1 < b.length; j++) {
+      const [p, q, r, s] = [a[i]!, a[i + 1]!, b[j]!, b[j + 1]!];
+      const o1 = o(p, q, r);
+      const o2 = o(p, q, s);
+      const o3 = o(r, s, p);
+      const o4 = o(r, s, q);
+      if (o1 !== o2 && o3 !== o4 && o1 && o2 && o3 && o4) return true;
+    }
+  }
+  return false;
+}
+
+/** Every crossing between a connection drawn in this run and an existing one: [new, existing, plane]. */
+function newCrossings(ctx: Ctx): Array<[DEdge, DEdge, Plane]> {
+  const out: Array<[DEdge, DEdge, Plane]> = [];
+  for (const plane of ctx.planes) {
+    const fresh = [...plane.edges.values()].filter((e) => ctx.newEdges.has(e.id) && e.points.length >= 2);
+    if (!fresh.length) continue;
+    const kept = [...plane.edges.values()].filter((e) => !ctx.newEdges.has(e.id) && e.points.length >= 2);
+    for (const n of fresh) for (const e of kept) if (polylinesCross(n.points, e.points)) out.push([n, e, plane]);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* checkpoints of the drawing (the local repair places chains again)   */
+/* ------------------------------------------------------------------ */
+
+interface Checkpoint {
+  planes: Plane[];
+  members: Map<Plane, { shapes: DShape[]; edges: DEdge[] }>;
+  shapes: Map<DShape, { bounds: Box; label?: Box }>;
+  edges: Map<DEdge, { points: Point[]; label?: Box; sourceId?: string; targetId?: string }>;
+  place: Pick<PlaceCtx, 'placed' | 'moved' | 'spacing' | 'reuse' | 'blockSize' | 'spliced' | 'joins' | 'relabel' | 'heads' | 'skip'>;
+  sets: Pick<Ctx, 'reroute' | 'newEdges' | 'fromEngine' | 'active' | 'relocated' | 'grown' | 'routedNow'>;
+  notes: string[];
+}
+
+/** Everything the drawing of the new elements (incremental.ts steps 6 to 9) changes, to undo it. */
+function checkpoint(ctx: Ctx): Checkpoint {
+  const cp: Checkpoint = {
+    planes: [...ctx.planes],
+    members: new Map(),
+    shapes: new Map(),
+    edges: new Map(),
+    place: {
+      placed: new Set(ctx.place.placed),
+      moved: new Set(ctx.place.moved),
+      spacing: new Map(ctx.place.spacing),
+      reuse: new Map(ctx.place.reuse),
+      blockSize: new Map(ctx.place.blockSize),
+      ...(ctx.place.spliced ? { spliced: new Map(ctx.place.spliced) } : {}),
+      ...(ctx.place.joins ? { joins: new Map(ctx.place.joins) } : {}),
+      ...(ctx.place.relabel ? { relabel: new Set(ctx.place.relabel) } : {}),
+      ...(ctx.place.heads ? { heads: new Map(ctx.place.heads) } : {}),
+      ...(ctx.place.skip ? { skip: new Map(ctx.place.skip) } : {}),
+    },
+    sets: {
+      reroute: new Set(ctx.reroute),
+      newEdges: new Set(ctx.newEdges),
+      fromEngine: new Set(ctx.fromEngine),
+      active: new Set(ctx.active),
+      relocated: new Set(ctx.relocated),
+      grown: new Set(ctx.grown),
+      routedNow: new Map(ctx.routedNow),
+    },
+    notes: [...ctx.notes],
+  };
+  const keepShape = (s: DShape): void => {
+    if (!cp.shapes.has(s)) cp.shapes.set(s, { bounds: copyBox(s.bounds), ...(s.label ? { label: copyBox(s.label) } : {}) });
+  };
+  const keepEdge = (e: DEdge): void => {
+    if (!cp.edges.has(e)) cp.edges.set(e, { points: copyPoints(e.points), ...(e.label ? { label: copyBox(e.label) } : {}), ...(e.sourceId ? { sourceId: e.sourceId } : {}), ...(e.targetId ? { targetId: e.targetId } : {}) });
+  };
+  for (const plane of ctx.planes) {
+    cp.members.set(plane, { shapes: [...plane.shapes.values()], edges: [...plane.edges.values()] });
+    plane.shapes.forEach(keepShape);
+    plane.edges.forEach(keepEdge);
+  }
+  // shapes waiting to be placed again (their DI is reused): their boundary events and content move along
+  for (const r of ctx.place.reuse.values()) {
+    [r.shape, ...r.boundaries, ...(r.content?.shapes ?? [])].forEach(keepShape);
+    (r.content?.edges ?? []).forEach(keepEdge);
+  }
+  return cp;
+}
+
+function restore(ctx: Ctx, cp: Checkpoint): void {
+  ctx.planes.length = 0;
+  ctx.planes.push(...cp.planes);
+  for (const [plane, m] of cp.members) {
+    plane.shapes = new Map(m.shapes.map((s) => [s.id, s]));
+    plane.edges = new Map(m.edges.map((e) => [e.id, e]));
+  }
+  for (const [s, g] of cp.shapes) {
+    s.bounds = copyBox(g.bounds);
+    if (g.label) s.label = copyBox(g.label);
+    else delete s.label;
+  }
+  for (const [e, g] of cp.edges) {
+    e.points = copyPoints(g.points);
+    if (g.label) e.label = copyBox(g.label);
+    else delete e.label;
+    if (g.sourceId) e.sourceId = g.sourceId;
+    else delete e.sourceId;
+    if (g.targetId) e.targetId = g.targetId;
+    else delete e.targetId;
+  }
+  const p = cp.place;
+  Object.assign(ctx.place, { placed: new Set(p.placed), moved: new Set(p.moved), spacing: new Map(p.spacing), reuse: new Map(p.reuse), blockSize: new Map(p.blockSize) });
+  for (const key of ['spliced', 'joins', 'heads', 'skip'] as const) {
+    if (p[key]) ctx.place[key] = new Map(p[key] as Map<string, never>);
+    else delete ctx.place[key];
+  }
+  if (p.relabel) ctx.place.relabel = new Set(p.relabel);
+  else delete ctx.place.relabel;
+  const s = cp.sets;
+  Object.assign(ctx, { reroute: new Set(s.reroute), newEdges: new Set(s.newEdges), fromEngine: new Set(s.fromEngine), active: new Set(s.active), relocated: new Set(s.relocated), grown: new Set(s.grown), routedNow: new Map(s.routedNow) });
+  ctx.notes.splice(0, ctx.notes.length, ...cp.notes);
+}
+
+/** The ids of the shapes and connections of every plane (a chain placed again must draw the same elements). */
+function membersOf(ctx: Ctx): string {
+  return ctx.planes.map((p) => `${p.rootId}:${[...p.shapes.keys()].sort().join(',')}|${[...p.edges.keys()].sort().join(',')}`).join(';');
+}
+
+/**
+ * The DI the measurements created for the new elements of a drawing that is
+ * replaced (by element id per plane), handed to the elements of the drawing
+ * that replaces it: one DI element per element, never a second one.
+ */
+function takeDi(ctx: Ctx): Map<string, El> {
+  const out = new Map<string, El>();
+  for (const p of ctx.planes) {
+    for (const s of p.shapes.values()) if (s.di) out.set(`${p.rootId}|s|${s.id}`, s.di);
+    for (const e of p.edges.values()) if (e.di) out.set(`${p.rootId}|e|${e.id}`, e.di);
+  }
+  return out;
+}
+
+function giveDi(ctx: Ctx, di: ReadonlyMap<string, El>): void {
+  for (const p of ctx.planes) {
+    for (const x of [...p.shapes.values(), ...p.edges.values()]) {
+      if (x.di) continue;
+      const d = di.get(`${p.rootId}|${'points' in x ? 'e' : 's'}|${x.id}`);
+      if (!d) continue;
+      x.di = d;
+      // a label the replaced drawing gave it and this one does not
+      if (!x.label && raw(d, 'label')) d.set('label', undefined);
+    }
+  }
+}
+
+/**
+ * The head of the chain a new connection belongs to: a node placed in this
+ * run at the cheapest of several row candidates (a branch or exception path,
+ * PlaceCtx.heads), found back from the connection's ends through nodes
+ * placed in this run.
+ */
+function chainHead(ctx: Ctx, from: readonly (string | undefined)[]): string | undefined {
+  const heads = ctx.place.heads;
+  if (!heads?.size) return undefined;
+  const seen = new Set<string>();
+  const queue = from.filter((x): x is string => !!x && ctx.place.placed.has(x));
+  while (queue.length && seen.size < 30) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (heads.has(id)) return id;
+    for (const p of predecessors(ctx.sem, id)) if (ctx.place.placed.has(p)) queue.push(p);
+  }
+  return undefined;
+}
+
+/**
+ * Local repair after placement (issue #18 (3)), at most REPAIR_TRIALS trials
+ * per write, for every crossing between a connection drawn in this run and
+ * an existing one:
+ *  1. the new connection is routed again with the whole drawing in place
+ *     (the hand drawing stays as it is), else the existing one, with the new
+ *     shapes as obstacles;
+ *  2. a crossing left: the chain the new connection belongs to (a branch or
+ *     exception path, PlaceCtx.heads) starts at its next row candidate
+ *     instead: the new elements are drawn again from the checkpoint taken
+ *     before them (`start`, by `redraw`), at most CHAIN_RETRIES times.
+ * A trial is kept only under the guard `compact` uses: it adds no hard layout
+ * problem and lowers the score (the drawing is measured after each trial, its
+ * planes written to the DI first; a chain drawn again takes over the DI the
+ * measurement created for the new elements). An existing connection kept
+ * rerouted is reported in `rerouted` and in a note, a chain placed again in a
+ * note.
+ */
+async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, redraw: () => Promise<string[]>): Promise<string[]> {
+  if (!newCrossings(ctx).length) return rerouted;
+  let trials = 0;
+  let retries = 0;
+  let base: LayoutMetrics | undefined;
+  let hard: Map<string, number> | undefined;
+  const measure = (): LayoutMetrics => {
+    writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
+    return layoutProblems(ctx.doc.definitions);
+  };
+  const hardCounts = (m: LayoutMetrics): Map<string, number> => {
+    const out = new Map<string, number>();
+    for (const p of m.problems.filter(isHardProblem)) out.set(problemKey(p), (out.get(problemKey(p)) ?? 0) + 1);
+    return out;
+  };
+  const ensureBase = (): void => {
+    if (base) return;
+    base = measure();
+    hard = hardCounts(base);
+  };
+  /** the guard: measures the drawing; true (and the new baseline) when it lowered the score and added no hard problem */
+  const judge = (what: string): boolean => {
+    const m = measure();
+    const now = hardCounts(m);
+    const worse = [...now].some(([k, c]) => c > (hard!.get(k) ?? 0));
+    const ok = !worse && m.score < base!.score;
+    if (layoutDebugOn()) layoutDebug(`[repair] ${what}: score ${base!.score} -> ${m.score}${worse ? ', hard problem added' : ''}: ${ok ? 'kept' : 'undone'}`);
+    if (ok) {
+      base = m;
+      hard = now;
+    }
+    return ok;
+  };
+  const reroutes = (list: string[]): void => {
+    for (const [n, e, plane] of newCrossings(ctx)) {
+      if (!polylinesCross(n.points, e.points)) continue;
+      for (const target of [n, e]) {
+        if (trials >= REPAIR_TRIALS) return;
+        const pts = routeEdge(plane, target, { lines: routingLines(plane, target.id) });
+        if (!pts || pts.length < 2 || samePoints(pts, target.points)) continue;
+        trials++;
+        ensureBase();
+        const old = { points: target.points, label: target.label ? copyBox(target.label) : undefined };
+        target.points = pts;
+        if (target.label || raw<string>(target.el, 'name')) placeEdgeLabel(plane, target);
+        if (!judge(`${target.id} routed again (it crossed: ${n.id} x ${e.id})`)) {
+          target.points = old.points;
+          if (old.label) target.label = old.label;
+          else delete target.label;
+          continue;
+        }
+        if (target === e) {
+          if (!list.includes(e.id)) list.push(e.id);
+          ctx.notes.push(`${e.id} routed again: it crossed the new ${n.id}`);
+        }
+        break;
+      }
+    }
+  };
+  reroutes(rerouted);
+  // the next row candidate of a chain that still crosses
+  const tried = new Map<string, number>();
+  while (trials < REPAIR_TRIALS && retries < CHAIN_RETRIES && !ctx.fromEngine.size && ctx.planes.length === start.planes.length) {
+    let next: { head: string; rank: number } | undefined;
+    for (const [n] of newCrossings(ctx)) {
+      const head = chainHead(ctx, [n.targetId, n.sourceId]);
+      if (!head) continue;
+      const rank = Math.max(ctx.place.skip?.get(head) ?? 0, tried.get(head) ?? 0) + 1;
+      if (rank < (ctx.place.heads?.get(head) ?? 0)) {
+        next = { head, rank };
+        break;
+      }
+    }
+    if (!next) break;
+    trials++;
+    retries++;
+    tried.set(next.head, next.rank);
+    ensureBase();
+    const kept = checkpoint(ctx);
+    const keptRerouted = [...rerouted];
+    const members = membersOf(ctx);
+    const di = takeDi(ctx);
+    const skip = new Map(ctx.place.skip ?? []);
+    skip.set(next.head, next.rank);
+    restore(ctx, start);
+    ctx.place.skip = skip;
+    let again: string[] | undefined;
+    try {
+      again = await redraw();
+    } catch {
+      again = undefined;
+    }
+    if (!again || membersOf(ctx) !== members) {
+      restore(ctx, kept);
+      rerouted = keptRerouted;
+      continue;
+    }
+    giveDi(ctx, di);
+    if (!judge(`${next.head} at its row candidate ${next.rank + 1}`)) {
+      restore(ctx, kept);
+      rerouted = keptRerouted;
+      continue;
+    }
+    rerouted = again;
+    ctx.notes.push(`${next.head} placed at another row: at the first one its path crossed a line`);
+    reroutes(rerouted);
+  }
+  return rerouted;
 }
 
 function movedShapes(ctx: Ctx): string[] {
@@ -1289,16 +1619,21 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   await placeContainers(ctx, wrapped, blocks);
   laneChanges(ctx);
   pullJoins(ctx);
-  await placeNodes(ctx, blocks);
-  growForNames(ctx);
-  separateAll(ctx);
-  growGroups(ctx);
-  collectEdges(ctx, before);
-  const rerouted = routeAll(ctx);
-  // existing connections routed when an end was placed (routeNow) and kept since: routed again all the same
-  for (const id of ctx.routedNow.keys()) if (!ctx.newEdges.has(id) && !rerouted.includes(id) && ctx.planes.some((p) => p.edges.has(id))) rerouted.push(id);
-  labels(ctx, new Set([...rerouted, ...ctx.newEdges]));
-  assertHorizontal(ctx, rerouted);
+  const start = checkpoint(ctx);
+  const draw = async (): Promise<string[]> => {
+    await placeNodes(ctx, blocks);
+    growForNames(ctx);
+    separateAll(ctx);
+    growGroups(ctx);
+    collectEdges(ctx, before);
+    const r = routeAll(ctx);
+    // existing connections routed when an end was placed (routeNow) and kept since: routed again all the same
+    for (const id of ctx.routedNow.keys()) if (!ctx.newEdges.has(id) && !r.includes(id) && ctx.planes.some((p) => p.edges.has(id))) r.push(id);
+    labels(ctx, new Set([...r, ...ctx.newEdges]));
+    assertHorizontal(ctx, r);
+    return r;
+  };
+  const rerouted = await repairCrossings(ctx, await draw(), start, draw);
   writePlanes(doc.moddle, defs, ctx.planes);
   doc.invalidate();
   assertNoNewDuplicates(counts, defs);

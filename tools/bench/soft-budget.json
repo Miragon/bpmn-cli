@@ -1,9 +1,9 @@
 {
-  "note": "Soft budget of `node tools/bench/run.mjs --compare` (tools/bench/lib/compare.mjs): per corpus and edit, the largest number of runs of this repository's CLI that may add a crossing / a backward flow. E8 / E9 are the batches of issue #18 (a decision spliced into a branch of a split, with a new \"no\" branch; E9 plus a timer reminder path). Measured on the scenarios with the incremental layout of issue #18 stage A (76 runs each; on 0.5.0: crossings 58 / 58, backward flows 60 / 60). Lower it when the layout improves; raise it only with a reviewed reason.",
+  "note": "Soft budget of `node tools/bench/run.mjs --compare` (tools/bench/lib/compare.mjs): per corpus and edit, the largest number of runs of this repository's CLI that may add a crossing / a backward flow. E8 / E9 are the batches of issue #18 (a decision spliced into a branch of a split, with a new \"no\" branch; E9 plus a timer reminder path). Measured on the scenarios with the incremental layout of issue #18 stage B (76 runs each; on 0.5.0: crossings 58 / 58, backward flows 60 / 60; after stage A: crossings 16 / 17). Lower it when the layout improves; raise it only with a reviewed reason.",
   "corpora": {
     "scenarios": {
-      "E8": { "crossings": 16, "backwardFlow": 1 },
-      "E9": { "crossings": 17, "backwardFlow": 1 }
+      "E8": { "crossings": 9, "backwardFlow": 1 },
+      "E9": { "crossings": 9, "backwardFlow": 1 }
     }
   }
 }

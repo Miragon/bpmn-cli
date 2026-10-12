@@ -1,4 +1,4 @@
-# Handover, 2026-10-12 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), and stage A of the incremental layout of edits to hand-drawn models (#18))
+# Handover, 2026-10-12 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), and stages A and B of the incremental layout of edits to hand-drawn models (#18))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -24,7 +24,9 @@ large model through `show --around <id>` and `show <id> --context`, and a
 write reports the warnings it added, not the file's old ones (`--summary`
 for a few lines). A hand-made diagram is kept (new elements
 are placed locally, like the modeler's space tool; a batch like the same ops
-sent one by one), a new file or an
+sent one by one; a new branch or boundary path takes a row that crosses no
+line, opening one under its anchor or going above it, and a crossing left is
+repaired once more), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
 `label`, `route`, `space`, `tidy`, `compact`, `order` of lanes and pools;
@@ -37,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1909 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1912 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -47,6 +49,167 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Incremental layout of edits to hand-drawn models, stage B (2026-10-12, `feat/layout-room-making`, issue #18)
+
+Option B of issue #18 on top of stage A: the crossing-aware row choice with
+room-making (2) and the local repair after placement (3). Stage A had made a
+batch place like single commands; what was left was the single-command base
+rate: a new branch or boundary path crossed a bypass or loop-back line in
+about one run in five (boundary path 23 %, new branch at a split 20 %, a
+decision spliced into a branch 38 % on the private corpus). The user's
+decisions hold: elements by id only, new ids speak, a hand-made drawing is
+kept (no full redraw as a fix).
+
+- **Row choice** (`diagram/place.ts` `rowCandidates`, `cheapest`,
+  `chainCost`, `linesUnder`, `rowsAbove`, `topCandidates`):
+  - the cost of a candidate row now counts the rest of the chain on that row
+    (`chainCost`): the line the following new nodes take crosses an existing
+    line (a crossing, 300) or an existing line runs through the room they
+    take (`LINE_HIT`, 400: it would be routed around them, mostly with a
+    crossing). A node without any successor yet keeps room for one event
+    (`chainExtent`): the next command mostly ends the branch there, so a
+    batch and the same ops sent one by one choose the same row;
+  - the first row below is opened with the space tool not only when shapes
+    take it, but also when it lies on a line or a line runs between the
+    anchor and it: everything at or below the topmost thing in the way moves
+    down, the horizontal segments of the lines running under the anchor
+    (bypass and loop-back lines) and the shapes they dock on included
+    (`linesUnder`; the space tool shifts interior waypoints, so the line
+    stays orthogonal). An opened row costs 100 + 3 per moved shape (at most
+    40) + 0.2 per px: less than one crossing (before: 150 + 10 per shape, so
+    a crossing won over an opened row with 15 shapes below; the issue saw
+    220 against a crossing of 300 in the fixture's log, and the crossing was
+    not counted on the chain at all);
+  - rows above the anchor are candidates too: for a new branch when the
+    anchor has no branch above it, for the first node of a boundary path when
+    the event sits on the bottom border with no other drawn path: the event
+    moves to a free spot on the host's top border (`topSpot`, `seatOnTop`;
+    its label is placed again at the end, `PlaceCtx.relabel`). A row above
+    costs `TOP_ROW` (160) more, so a clean row below wins; when the first row
+    above sticks out of the lane, pool or sub-process, room is made at the
+    top of that frame first (like `place --side top`), costed like an opened
+    row. Open question 2 decided: automatic placement tries the top border
+    on its own;
+  - the trial route of a candidate starts from the anchor where the room
+    making puts it (`shiftedBox`), and from the top spot for a path above.
+- **Local repair** (`diagram/incremental.ts repairCrossings`, step 10 of
+  the contract): for every crossing between a connection drawn in this run
+  and an existing one, at most 8 trials per write:
+  - the new connection is routed again with the whole drawing in place (the
+    hand drawing stays), else the existing one with the new shapes as
+    obstacles;
+  - a crossing left: the branch or exception path the new connection belongs
+    to (`PlaceCtx.heads`, found back through the nodes placed in this run)
+    starts at its next row candidate (`PlaceCtx.skip`): steps 6 to 9 run
+    again from a checkpoint taken before step 6 (`checkpoint` / `restore`:
+    plane membership, every shape's bounds and label, every connection's
+    waypoints, label and ends, the placement state and the run's sets and
+    notes), at most twice (`CHAIN_RETRIES`); skipped when the run created a
+    plane or adopted an engine block. The DI the measurement created for the
+    new elements is handed to the redrawn ones (`takeDi` / `giveDi`), so no
+    element gets a second DI element;
+  - a trial is kept only under the guard of `compact`: it adds no hard
+    layout problem and lowers the score (the planes are written to the DI
+    and measured after each trial). An existing connection kept rerouted is
+    in `layout.rerouted` with a note (`Flow_X routed again: it crossed the
+    new Flow_Y`), a chain placed again in a note (`Activity_X placed at
+    another row: at the first one its path crossed a line`).
+- **Associations broken during placement** are routed again at once, like
+  sequence flows (`routeNow`; message flows still wait for the end): a batch
+  saw a data association its placement broke in its old place and chose
+  another row than single commands (one corpus run in each of two edits).
+- **Audit #63 fixed** (`diagram/space.ts borderPad`, `fitInFrame`): a frame
+  grows until a shape keeps 10 px from the frame's own boundary events on
+  that border (half the event + 10 px), and the row choice estimates that
+  growth: a new branch inside a transaction no longer lands on its cancel
+  event. #13 (a splice into a loop-back flow) and #74 (a task placed left of
+  its rejoin target) are the splice and prepend paths, not the row choice:
+  unchanged.
+
+Evidence (private corpora local, counts only):
+
+- The issue's probe on the private corpus (267 files with a diagram, 3,362
+  incremental runs; the stage A build measured again), runs adding a
+  crossing, batch / single commands:
+
+  | edit | runs | stage A | stage B |
+  | --- | ---: | --- | --- |
+  | decision after a task | 265 | 52 / 64 | 5 / 5 |
+  | the same + reminder path | 265 | 60 / 75 | 12 / 12 |
+  | decision into a branch of a split | 161 | 54 / 61 | 11 / 12 |
+  | the same + reminder path | 161 | 47 / 60 | 12 / 13 |
+  | "no" to the sibling branch's node | 161 | 37 / 39 | 30 / 32 |
+  | timer path on a task | 265 | 44 / 61 | 3 / 6 |
+  | `split` after a task (one op) | 265 | 53 | 5 |
+  | new branch at a split (one batch) | 169 | 33 | 9 |
+  | skip with a merge | 97 | 3 / 3 | 3 / 3 |
+
+  The acceptance targets of the issue (single commands): boundary path 2.3 %
+  (target <= 10 %, before 23 %), new branch at a split 5.3 % (<= 10 %, before
+  19.5 %), decision spliced into a branch 7.5 % (<= 20 %, before 38 %). A
+  batch adds crossings in no more runs than its single commands, for every
+  edit. Backward flows unchanged (15 / 15, 0, 8, ...). Hard defects without
+  a group: 0 of 3,362 runs. The repair kept a reroute in 49 runs and a chain
+  at its next row in 38; a boundary path went above its host in 383 of about
+  1,380 runs with one (stage A added a crossing there in 137 of them, another
+  problem in 28, none in 218: there the rows below were mostly farther
+  away or their chain ran through a line).
+- Bench on the scenarios and the 60 Modeler models (stage A -> stage B):
+  runs adding crossings E1 13 -> 9, E2 26 -> 11, E4 15 -> 2, E7 58 -> 39, E8
+  30 -> 13, E9 31 -> 14 (all edits 205 -> 120); runs adding backward flows 9
+  -> 10 (E7 6 -> 7: one Modeler model where E4's timer path went above its
+  host and E6's rename then widened the host, which slides the event right of
+  the path's end); the median share of existing shapes moved > 5 px of E1 /
+  E2 / E4 unchanged (25 % / 0 % / 0 %), E8 / E9 61 % -> 63 % / 64 %; mean
+  harness delta of all edits 0.1 -> -0.8. No semantic failure, run adding a
+  hard defect or global hard count more: `RESULT: no regression`. The soft
+  budget is lowered to the new counts (E8 / E9 crossings 9 / 9 of 76, backward
+  flows 1 / 1).
+- The eval fixture: the four batches plus the timer reminder path score 0
+  (stage A: 5, 0, 0, 5), batch and single commands give the same shapes for
+  all eleven op sets of stage A; the reminder path goes above the approval on
+  its own where below it crosses the "no" flow (`place --side bottom` takes
+  it back).
+- Write time: on two CLI-built models with 120 and 300 nodes (local, the
+  audit's generator) a write of each probe edit takes 100 to 120 ms and 230
+  to 330 ms before and after (these edits add no crossing there, so nothing
+  is repaired; the machine was loaded by parallel runs, the differences are
+  within its noise). On the corpus the 3,379 probe runs took 219 s before and
+  226 s after (+3 %; median 40 -> 42 ms, max 485 -> 510 ms); a write that
+  repairs (about 3 % of the runs) takes up to three times as long (10 -> 28 ms
+  on a small model).
+- Fuzz, 80 walks x 25 steps (incremental and auto, the default corpus and
+  the 60 Modeler models): 0 errors, the same warnings as stage A.
+- `npm run gate`: 1,912 tests (+247 opt-in), isomorphism check, layout
+  regression 444 (budget 444), fuzz 12 x 15 0 errors. The bundle budgets
+  are raised for this code (`tools/iso/budget.json`, measured + about 2 %):
+  `applyToXml` only 627.9 / 199.1 KB (stage A) -> 637.5 / 202.4 KB, budget
+  630 / 201 -> 650 / 206; the whole entry 871.5 / 275.0 -> 881.6 / 278.5
+  KB, budget 878 / 277 -> 899 / 284 (the README table is updated; it still
+  showed the sizes before stage A).
+  `test/layout-room-making.test.ts` (9 tests, 8 fail on stage A; synthetic
+  fixtures in `test/fixtures/layout-room/`).
+
+Open after stage B:
+
+- "no" to the sibling branch's existing node still crosses in about one run
+  in five (30 / 161): the crossing is the new flow into a drawn node, no row
+  is chosen for it, and rerouting it rarely lowers the score.
+- A boundary path goes above its host in about a quarter of the runs with
+  one (when every row below crosses a line or lies far below): the drawing's
+  convention changes there; `place --side bottom` takes one back.
+- An opened row moves everything below the line in the pool's band (like the
+  space tool); the penalty caps the moved shapes at 40, so a large pool moves
+  for one crossing avoided.
+- A host that grows to fit a new name slides its boundary events along the
+  border; an exception path placed right above / below the event can then
+  run backwards (bench E7, one run).
+- Rerouting broken data associations during placement can add a crossing
+  between two existing associations (seen on `artifacts__05-data-pool-lanes`);
+  the repair looks at new-vs-existing crossings only.
+- The `edit-hand-drawn-model` eval was not re-run (2 runs per arm, no DI
+  edited by hand), as after stage A.
 
 ## Incremental layout of edits to hand-drawn models, stage A (2026-10-12, `feat/layout-batch-parity`, issue #18)
 
@@ -2024,15 +2187,15 @@ CIB seven, a FEEL parser for the Camunda 8 profile (today: the common slips
 only), checking linked forms / called processes / decisions against a
 deployment. See the "Still open" lists of the C7 audit and of step 3.)
 
-1. **Issue #18 stage B**: the crossing-aware row choice with room-making
-   (also the host's top border for a boundary path) and the local repair
-   pass, measured with the issue's probe and bench E8 / E9 (see "Incremental
-   layout of edits to hand-drawn models, stage A"), then the
-   `edit-hand-drawn-model` eval again.
+1. **Issue #18 after stage B**: the `edit-hand-drawn-model` eval again (2
+   runs per arm, no DI edited by hand), and what stage B left (see
+   "Incremental layout of edits to hand-drawn models, stage B"): a `connect`
+   to the sibling branch's node that crosses, the convention of exception
+   paths above their host, a grown host sliding its boundary events.
 2. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
-   events colliding with new nodes (#63) or, added on a host inside a
-   sub-process, intruding into another frame, `place` / `align` pushing a
+   events added on a host inside a sub-process intruding into another
+   frame, `place` / `align` pushing a
    flow through a shape, `route` and expand / collapse through shapes,
    associations on the wrong plane after a collapse (#15), data
    associations not rerouted after `split` / `move --lane`, flows left

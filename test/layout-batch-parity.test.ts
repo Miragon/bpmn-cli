@@ -137,7 +137,8 @@ describe('a batch places like the same ops as single commands (issue #18 (1))', 
     // the normal flow keeps its row: the reminder path does not push the decision off it
     const row = (id: string): number => Math.round(boundsOf(first, id).y + boundsOf(first, id).height / 2);
     expect(row('Gateway_PurchaseApproved')).toBe(row('Gateway_1hd8x2m'));
-    expect(row('Activity_SendApprovalReminder')).toBeGreaterThan(row('Activity_ApprovePurchase'));
+    // the path leaves the approval's row (since stage B above it: below, it would cross the new "no" branch)
+    expect(row('Activity_SendApprovalReminder')).not.toBe(row('Activity_ApprovePurchase'));
   });
 });
 
@@ -163,22 +164,22 @@ describe('a connect into a merge that would enter it backwards (issue #18, open 
 
 describe('place --side: a boundary event on the other border of its host (issue #18 (4))', () => {
   for (const name of ['decision, "no" to the existing node', 'a merge gateway']) {
-    it(`${name} + reminder path: --side top puts the path above the approval, score 0`, async () => {
+    it(`${name} + reminder path: --side bottom takes the path below the approval, --side top back above it, score 0`, async () => {
+      // since stage B the placement itself puts this path above the approval (below, it crosses the "no" flow)
       for (const xml of [await batch([...BATCHES[name]!, ...reminder]), await singles([...BATCHES[name]!, ...reminder])]) {
-        const r = await applyToXml(xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'top' }]);
-        const host = boundsOf(r.xml, 'Activity_ApprovePurchase');
+        const host = boundsOf(xml, 'Activity_ApprovePurchase');
+        const down = await applyToXml(xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'bottom' }]);
+        const evb = boundsOf(down.xml, 'Event_ApprovalOverdue');
+        expect(Math.round(evb.y + evb.height / 2)).toBe(host.y + host.height);
+        expect(boundsOf(down.xml, 'Activity_SendApprovalReminder').y).toBeGreaterThanOrEqual(host.y + host.height);
+        expect(down.result.layout?.format?.[0]?.rerouted).toContain('Flow_ApprovalOverdueToSendApprovalReminder');
+        const r = await applyToXml(down.xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'top' }]);
         const ev = boundsOf(r.xml, 'Event_ApprovalOverdue');
         expect(Math.round(ev.y + ev.height / 2)).toBe(host.y);
         expect(boundsOf(r.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
         expect(boundsOf(r.xml, 'Event_ReminderSent').y + 36).toBeLessThanOrEqual(host.y);
         expect((await metricsXml(r.xml)).score).toBe(0);
-        const format = r.result.layout?.format?.[0];
-        expect(format?.rerouted).toContain('Flow_ApprovalOverdueToSendApprovalReminder');
-        // and back: --side bottom
-        const back = await applyToXml(r.xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'bottom' }]);
-        const evb = boundsOf(back.xml, 'Event_ApprovalOverdue');
-        expect(Math.round(evb.y + evb.height / 2)).toBe(host.y + host.height);
-        expect(boundsOf(back.xml, 'Activity_SendApprovalReminder').y).toBeGreaterThanOrEqual(host.y + host.height);
+        expect(r.result.layout?.format?.[0]?.rerouted).toContain('Flow_ApprovalOverdueToSendApprovalReminder');
       }
     });
   }

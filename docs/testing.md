@@ -183,9 +183,10 @@ path) give the same shapes as the same ops sent as single commands and add no
 backward flow (without the reminder path no problem at all); a task and a
 decision stay in the row, an exception path waits for the normal flow even when
 its ops come first; a `connect` into a merge that would enter it backwards
-moves the merge, a loop return does not; `place --side top|bottom` puts the
-reminder path above the approval with score 0 (and back), makes the room above
-a task in the top lane of a pool inside that lane, and its refusals;
+moves the merge, a loop return does not; `place --side top|bottom` takes the
+reminder path below the approval and back above it with score 0, makes the
+room above a task in the top lane of a pool inside that lane, and its
+refusals;
 `E_NO_ROOM` of both eval refusals (`test/fixtures/layout-batch/`: the drawings
 0.5.0 left after the agents' batches) carries a command that, run first, lets
 the place succeed (library and command line, the file filled in), and names
@@ -202,6 +203,18 @@ grows at its bottom), and next to an annotation on a flow the move
 reroutes (no `through`); `E_NO_ROOM` names the space-tool run with the
 fewest layout problems, and after other ops of a batch only the batch op
 (no command for the file).
+`test/layout-room-making.test.ts` checks issue #18, stage B, on synthetic
+hand-drawn models (`test/fixtures/layout-room/`), the eval's model and a
+public scenario: a boundary path above a line from an earlier boundary event
+opens the row below its host (the line and its end move down), a decision
+spliced into a branch with a bypass right under it puts its new "no" branch
+above the row, single commands and the batch alike and without a crossing;
+every eval batch plus the reminder path scores 0, the reminder path that
+crossed the "no" flow goes above the approval on its own; a branch row in a
+transaction keeps clear of the transaction's cancel event (audit #63); the
+local repair routes an existing line a new flow crosses again (reported in
+`rerouted` and a note), and starts a chain that still crosses at its next
+row candidate (`agent__o2c`), deterministically.
 `test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
 of `tools/scenarios` and `test/fixtures` (and each of its other planes)
 renders to SVG and PNG within the default 2000 px, with the same bytes twice

@@ -70,7 +70,10 @@
  *  events and their labels too.
  *
  *  fitInFrame(plane, id, pad?) grows the frames around a shape inside-out
- *  (sub-process frames with `frame`, so they never grow over foreign shapes).
+ *  (sub-process frames with `frame`, so they never grow over foreign shapes),
+ *  until the shape keeps `pad` from their right and bottom borders, and stays
+ *  10 px clear of the frame's own boundary events on those borders that face
+ *  it (borderPad: half the event plus 10 px; audit #63).
  *  Above the shape itself, an ancestor that does not hold the centre of the
  *  frame inside it (a drawing with an event sub-process in another lane than
  *  its member lane) is skipped, never grown around it.
@@ -665,6 +668,23 @@ function growthScope(plane: Plane, frame: DShape, axis: Axis): { within?: Box; f
  * `keep` (e.g. the rest of a group moved together). Returns everything moved
  * or resized.
  */
+/**
+ * The room a shape at `box` keeps from the far border of `frame` along
+ * `axis` (the right border for 'x', the bottom for 'y') so that it stays 10 px
+ * clear of the frame's own boundary events there that face it: half the
+ * event plus 10 px (0 when there is none).
+ */
+export function borderPad(plane: Plane, frame: DShape, box: Box, axis: Axis): number {
+  let out = 0;
+  for (const b of boundariesOf(plane, frame.id)) {
+    const e = b.bounds;
+    const onBorder = axis === 'y' ? Math.abs(e.y + e.height / 2 - bottom(frame.bounds)) <= 6 : Math.abs(e.x + e.width / 2 - right(frame.bounds)) <= 6;
+    const facing = axis === 'y' ? e.x < right(box) + 10 && right(e) > box.x - 10 : e.y < bottom(box) + 10 && bottom(e) > box.y - 10;
+    if (onBorder && facing) out = Math.max(out, (axis === 'y' ? e.height : e.width) / 2 + 10);
+  }
+  return out;
+}
+
 export function fitInFrame(plane: Plane, id: string, pad = 15, frameFn: (s: DShape) => DShape | undefined = (s) => frameOf(plane, s), keepAlso: Iterable<string> = []): SpaceResult {
   const out: SpaceResult = { moved: new Set(), resized: new Set() };
   const merge = (r: SpaceResult): void => {
@@ -683,11 +703,12 @@ export function fitInFrame(plane: Plane, id: string, pad = 15, frameFn: (s: DSha
     if (!frame) break;
     // pools and lanes by their bounds; anything else with its boundary events (also an expanded sub-process)
     const box = inner.kind === 'participant' || inner.kind === 'lane' ? inner.bounds : unitBox(plane, inner);
-    // lanes sit flush in their pool / parent lane; everything else keeps `pad`
+    // lanes sit flush in their pool / parent lane; everything else keeps `pad`, and clear of the boundary
+    // events on the frame's own border (they reach half their size into it, audit #63)
     const p = inner.kind === 'lane' ? 0 : pad;
-    const overRight = right(box) + p - right(frame.bounds);
+    const overRight = right(box) + Math.max(p, borderPad(plane, frame, box, 'x')) - right(frame.bounds);
     if (overRight > 0.5) merge(makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep, anchors: [id], ...growthScope(plane, frame, 'x') }));
-    const overBottom = bottom(box) + p - bottom(frame.bounds);
+    const overBottom = bottom(box) + Math.max(p, borderPad(plane, frame, box, 'y')) - bottom(frame.bounds);
     if (overBottom > 0.5) merge(makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(overBottom), keep, anchors: [id], ...growthScope(plane, frame, 'y') }));
     inner = frame;
   }
