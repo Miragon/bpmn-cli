@@ -323,7 +323,7 @@ export const PLACEMENT_DOCS: PlacementDoc[] = [
   { option: '--to <T>', key: 'to', rule: 'Additionally connect node -> T (a branch that re-joins the main path).' },
 ];
 
-/** How new ids are made (README "Ids", src/idstyle.ts); `bpmn kinds --json` -> `ids`. */
+/** How new ids are made (docs/reference.md "Ids", src/idstyle.ts); `bpmn kinds --json` -> `ids`. */
 export const ID_CONVENTIONS = {
   rule: 'Elements are addressed by id only (names may repeat). New ids speak (never a hash or a running number) and follow the id style of the file (prefix, case, flow form); explicit ids (--id, "id") are taken as given. A rule needs two ids that follow it (one id of a kind in a file whose ids are mostly prefixed).',
   default: { element: '<Prefix>_<NameSlug> (prefix: `prefix` of the kind)', unnamed: '<Prefix>_<KindWord><Context> (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_EndAfterTimerOnReview, Event_ErrorStartInHandleErrors, Gateway_Parallel)', flow: 'Flow_<Source>To<Target> (Flow_CheckInvoiceToBookInvoice)', di: '<id>_di in files with DI of that form; BPMNShape_<id> / BPMNEdge_<id> in a new drawing' },

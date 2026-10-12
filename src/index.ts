@@ -9,7 +9,7 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
-/* the in-memory API: strings in, strings / data out (README "Library use") */
+/* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, warningLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report.js';
 export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './format.js';
