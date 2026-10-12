@@ -15,6 +15,12 @@
  *  E3 remove a task with 1 in / 1 out (bridged); E4 boundary path on a task (bpmn-cli: timer boundary + end event,
  *     the PR tool: error boundary with end, it has no timer boundary op); E5 task to the neighbouring leaf lane
  *     (>= 2 leaf lanes); E6 rename a task to a long name; E7 all applicable edits of E1-E6 in sequence.
+ *  E8 (one batch) a decision spliced into a branch of an existing exclusive split: a userTask into the
+ *     gateway's outgoing flow to a non-gateway node X with one incoming flow, an exclusive gateway after it
+ *     before X, and a new "no" branch (sendTask + endEvent) at that gateway; E9 E8 plus a non-interrupting timer
+ *     boundary path (sendTask + endEvent) on the new task, in the same batch (the plugin eval's request).
+ *     E8 / E9 are bpmn-cli batches only (no PR tool ops), not part of E7, and picked independently of E1-E6;
+ *     bench --compare holds their runs adding crossings / backward flows to tools/bench/soft-budget.json.
  * New ids are fixed (Activity_BenchE1, ...). Same input, same output; no I/O in generate().
  */
 import { readFileSync } from 'node:fs';
@@ -25,7 +31,9 @@ import { longestPath, pickNearMedian, isTaskish, isGateway, successorOf, predece
 
 export const LONG_NAME = 'Check all submitted documents thoroughly and inform the responsible clerk about the outcome';
 export const EDITS = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6'];
-export const ALL_EDITS = [...EDITS, 'E7'];
+/** batch edits run on their own (not part of E7) */
+export const BATCH_EDITS = ['E8', 'E9'];
+export const ALL_EDITS = [...EDITS, 'E7', ...BATCH_EDITS];
 
 const na = (reason) => ({ applicable: false, reason });
 
@@ -129,6 +137,37 @@ function e6(m, path, avoid) {
   };
 }
 
+/** E8 / E9: a decision spliced into one branch of an existing exclusive split (E9: plus a timer reminder path). */
+function e8(m, path, timer) {
+  const branchOf = (g) => g.outgoing.map((f) => m.flows.get(f)).find((f) => {
+    const x = f && m.nodes.get(f.targetId);
+    return x && m.shapes.has(x.id) && x.scope === g.scope && !isGateway(x) && x.type !== 'BoundaryEvent' && x.incoming.length === 1;
+  });
+  const p = pickNearMedian(m, path, (n) => n.type === 'ExclusiveGateway' && n.outgoing.length >= 2 && m.shapes.has(n.id) && !!branchOf(n));
+  if (!p) return na('no exclusive split with a branch into a non-gateway node with one incoming flow');
+  const f = branchOf(m.nodes.get(p.id));
+  const task = 'Activity_BenchE8', gw = 'Gateway_BenchE8', no = 'Activity_BenchE8No', noEnd = 'Event_BenchE8NoEnd';
+  const ev = 'Event_BenchE9Timer', remind = 'Activity_BenchE9Remind', remindEnd = 'Event_BenchE9Reminded';
+  const cli = [
+    { op: 'add', kind: 'userTask', id: task, name: 'Bench approval', flow: f.id },
+    { op: 'add', kind: 'exclusiveGateway', id: gw, name: 'Bench approved?', after: task, before: f.targetId },
+    { op: 'add', kind: 'sendTask', id: no, name: 'Bench rejection', after: gw, flowName: 'no' },
+    { op: 'add', kind: 'endEvent', id: noEnd, name: 'Bench rejected', after: no },
+  ];
+  if (timer) {
+    cli.push(
+      { op: 'add', kind: 'boundaryEvent:timer', id: ev, name: 'Bench 3 days', on: task, timer: 'P3D', nonInterrupting: true },
+      { op: 'add', kind: 'sendTask', id: remind, name: 'Bench reminder', after: ev },
+      { op: 'add', kind: 'endEvent', id: remindEnd, name: 'Bench reminded', after: remind },
+    );
+  }
+  return {
+    applicable: true, target: p.id, onPath: p.onPath, cli, pr: null,
+    expect: { kind: 'decision', gateway: p.id, task, decision: gw, succ: f.targetId, no, noEnd, ...(timer ? { timer: { event: ev, task: remind, end: remindEnd } } : {}) },
+    touched: [], avoid: [],
+  };
+}
+
 export async function generate(xml) {
   const m = await readModel(xml);
   const path = longestPath(m);
@@ -145,6 +184,11 @@ export async function generate(xml) {
   }
   const edits = Object.fromEntries(EDITS.map((k) => [k, out[k]]));
   edits.E7 = { applicable: EDITS.filter((k) => out[k].applicable).length >= 2, steps: EDITS.filter((k) => out[k].applicable) };
+  for (const [key, timer] of [['E8', false], ['E9', true]]) {
+    const r = e8(m, path, timer);
+    delete r.avoid;
+    edits[key] = r;
+  }
   return { pathLength: path.length, flowNodes: m.nodes.size, leafLanes: [...m.lanes.values()].filter((l) => l.leaf).length, edits };
 }
 

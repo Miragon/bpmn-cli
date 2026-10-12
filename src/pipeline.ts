@@ -661,9 +661,9 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
-async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
+async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
-  const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated: relocatedIds(ops), ...expansion });
+  const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated: relocatedIds(ops), created, ...expansion });
   const xml = await doc.toXml();
   return {
     xml,
@@ -694,13 +694,13 @@ function firstLine(err: unknown): string {
  * INCREMENTAL_FAILED, shown as W_LAYOUT_*); a requested incremental layout
  * that fails is a layout error instead (LAYOUT_INCREMENTAL, shown as E_LAYOUT_*).
  */
-async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: Op[], opts: MutationOptions): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
+async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: Op[], opts: MutationOptions, created: readonly string[] = []): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
   const decision = await decideMode(requested, before, opts);
   let ran: { xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] };
   if (decision.mode === 'full') ran = await fullLayout(doc, opts);
   else {
     try {
-      ran = await incrementalLayout(doc, before, ops, opts);
+      ran = await incrementalLayout(doc, before, ops, opts, created);
     } catch (err) {
       if (err instanceof CliError) throw err;
       if (requested === 'incremental') {
@@ -794,7 +794,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else {
     let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ran, opts));
+      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ran, opts, changes.created.map((c) => c.id)));
     } catch (err) {
       throw toCliError(err);
     }

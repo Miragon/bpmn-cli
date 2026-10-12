@@ -18,10 +18,11 @@
  *  - Corpora (lib/corpus.mjs): tools/scenarios, every directory in env
  *    BPMN_BENCH_CORPUS, and with --engine the scenarios redrawn by the
  *    reference CLI (BASELINE_BIN when set, else this CLI).
- *  - Edits E1-E7 (gen-edits.mjs) through `apply` (bpmn-cli) or `edit` (PR
- *    tool); a bpmn-cli run refused with E_IMPORT_LOSSY / E_VALIDATION is
- *    repeated with --force as a separate record (variant `force`). E7 runs the
- *    applicable edits of a model one invocation after the other.
+ *  - Edits E1-E9 (gen-edits.mjs) through `apply` (bpmn-cli) or `edit` (PR
+ *    tool; E8 / E9 are bpmn-cli batches only); a bpmn-cli run refused with
+ *    E_IMPORT_LOSSY / E_VALIDATION is repeated with --force as a separate
+ *    record (variant `force`). E7 runs the applicable edits E1-E6 of a model
+ *    one invocation after the other.
  *  - Global: every global variant of the arm (layout, tidy, engine-auto / the
  *    PR's layout and tidy modes) on the unedited model.
  *  - Per record (JSONL, <out>/<track>-<arm key>.jsonl): exit, steps, ms,
@@ -29,7 +30,8 @@
  *    moved ones), before / after / delta of the metrics library's counts and
  *    score (every kind the library knows, so new kinds appear without changes
  *    here), the PR tool's score when BPMN_EDIT_MAIN is set, hard defects added
- *    (lib/measure.mjs hardDelta) and validity of the written file.
+ *    (lib/measure.mjs hardDelta), crossings and backward flows added
+ *    (softDelta) and validity of the written file.
  *  - Results go to --out (default tools/bench/results/latest, git-ignored),
  *    with meta.json (arms, corpora sizes, metric kinds, hard kinds) and work
  *    files under work/ for tools/bench/render.sh. Each run starts the result
@@ -37,7 +39,8 @@
  *    and skipped (for long runs that were interrupted).
  *  - --compare <dir>: after the run (or with --no-run on the existing --out),
  *    prints per-edit deltas against <dir> (lib/compare.mjs) and exits 1 when
- *    hard defects or semantic failures increased.
+ *    hard defects or semantic failures increased, or when the runs of E8 / E9
+ *    adding crossings or backward flows exceed tools/bench/soft-budget.json.
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -48,7 +51,7 @@ import { ALL_EDITS } from './gen-edits.mjs';
 import { defaultArmNames, FORCEABLE, resolveArms } from './lib/arms.mjs';
 import { compareResults, formatComparison } from './lib/compare.mjs';
 import { resolveCorpora, writeSpecs } from './lib/corpus.mjs';
-import { checkEdit, hardDelta, quality, readModel, stability, validity } from './lib/measure.mjs';
+import { checkEdit, hardDelta, quality, readModel, softDelta, stability, validity } from './lib/measure.mjs';
 import { loadMetrics, ROOT } from './lib/metrics.mjs';
 import { loadPrMetrics } from './lib/pr-metrics.mjs';
 
@@ -122,6 +125,7 @@ function measurer(ctx) {
       stabilityOthers: stability(base.model, model, exclude),
       before: strip(base.quality), after: strip(after), delta: deltaOf(base.quality, after),
       hard: hardDelta(base.quality, after, ctx, new Set([...base.model.groups, ...model.groups])),
+      soft: softDelta(base.quality, after, ctx, new Set([...base.model.groups, ...model.groups])),
       validity: validity(model),
     };
   };
@@ -173,7 +177,9 @@ async function editCase(env, spec, edit, force) {
 }
 
 function editJobs(env, spec, done) {
-  return ALL_EDITS.filter((edit) => spec.edits[edit]?.applicable && !done.has(`${spec.corpus}/${spec.model}/${edit}/primary`)).map((edit) => ({
+  // E8 / E9 have no PR tool ops: bpmn-cli arms only
+  const runs = (edit) => spec.edits[edit]?.applicable && (env.arm.kind !== 'pr' || !!spec.edits[edit].pr);
+  return ALL_EDITS.filter((edit) => runs(edit) && !done.has(`${spec.corpus}/${spec.model}/${edit}/primary`)).map((edit) => ({
     key: `${spec.corpus}/${spec.model}/${edit}/primary`,
     run: async () => {
       const primary = await editCase(env, spec, edit, false);

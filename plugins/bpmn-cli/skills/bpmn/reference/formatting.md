@@ -116,6 +116,10 @@ bpmn compact order-to-cash.bpmn
   `--column-of | --after | --before <ref>`: the ids move as one rigid group, the
   first id lands on the row / column of the reference. `--branch <flowId>`
   moves a whole branch up to its join.
+- `place <boundaryEventId> --side top|bottom`: the boundary event moves to that
+  border of its host, its flow is routed again, and its exception path follows
+  when it was drawn on the old side (a reminder path below that crosses a
+  branch goes above the task).
 - `align <ids...> --axis row|column [--to <ref>]`: same vertical centre (row)
   or same horizontal centre (column) as the reference (default: the first id).
 - `space --after <id>` / `--below <id>` `[--by column|row|<n>col|<n>row|<px>]`:
@@ -151,8 +155,11 @@ error E_LEAVES_CONTAINER: Placing Activity_SendInvoice in the row of Activity_Re
 Fixes: `move <id> --lane <laneId>` when the node really belongs to the other
 lane (in a batch: a `move` op before the `place` op, as in section 6), or a
 reference inside the same lane. `E_NO_ROOM` means the target row / column
-cannot hold the shapes, or closing space would add a layout problem:
-`space --after <id>` / `--below <id>` first and place again, or close less.
+cannot hold the shapes, or closing space would add a layout problem: the hint
+of a refused `place` / `align` names one `bpmn space ...` command that makes
+the room (a dry run checked that the place fits after it; in a batch put its op
+before the place op) - run it and place again; without such a command it names
+the shapes to move first. When closing space was refused, close less.
 
 Check the quality line after every format op. A selector over a model with
 lanes can pull shapes across the drawing (`align --kind endEvent --axis column`
