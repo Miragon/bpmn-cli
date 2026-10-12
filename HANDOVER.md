@@ -37,7 +37,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1900 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1909 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -114,16 +114,18 @@ new ids speak, a hand-made drawing is kept (no full redraw as a fix).
   reference by 1 to 3 columns (`before`: after the reference's drawn
   predecessors), `space --below` the row reference by 1 or 2 rows, and for a
   row request the space right of the shape left of the moved ones, each
-  followed by the op; the first that lets it succeed goes into
-  `details.command` (`bpmn space <file> --after Gateway_1hd8x2m --by 1col`,
-  the CLI fills in the file, quoted when needed) and `details.ops` (the
-  batch op), and the hint says both; without one the hint names the shapes
-  to move first. Both refusals of the eval (`place Activity_ApprovePurchase
+  followed by the op; of those that let it succeed, the one with the
+  fewest layout problems goes into `details.ops` (the batch op) and, when
+  the op saw the file's own drawing, `details.command` (`bpmn space <file>
+  --after Gateway_1hd8x2m --by 2col`, the CLI fills in the file, quoted
+  when needed), and the hint says what it carries (see "fixes after the
+  verification" below); without one the hint names the shapes to move
+  first. Both refusals of the eval (`place Activity_ApprovePurchase
   Gateway_PurchaseApproved --row-of Gateway_1hd8x2m --after
   Gateway_1hd8x2m` on the drawings 0.5.0 left after the merge batch and the
   "no"-to-the-existing-node batch with the reminder path,
-  `test/fixtures/layout-batch/`) succeed after the command (score 19 -> 8
-  and 11 -> 7).
+  `test/fixtures/layout-batch/`) succeed after the command (score 19 -> 7
+  and 11 -> 5).
 - **Bench E8 / E9** (`tools/bench/gen-edits.mjs`): E8 splices a decision
   into a branch of an existing split with a new "no" branch in one batch,
   E9 adds a non-interrupting timer reminder path on the new task; bpmn-cli
@@ -194,13 +196,84 @@ Open after stage A:
   `--side`), and a local repair pass. The single-command base rate stays (a
   new branch or boundary path crosses a bypass or loop-back flow in about
   one run in five); the fixture's two reminder-path batches keep their
-  crossing until then.
+  crossing until then (stage B: 0).
 - The `edit-hand-drawn-model` eval was not re-run (2 runs per arm); the
   skill now says that one batch places like single commands and names
   `place --side top` for a crossing reminder path.
 - A merge pulled right moves what lies right of its new column (the space
   tool, like a splice); a merge whose successor lies left of its sources is
   not pulled.
+
+### Stage A, fixes after the verification (2026-10-12)
+
+The verification of stage A passed six criteria and rated four partial.
+Each finding below has a test in `test/layout-batch-parity.test.ts` (last
+block) that fails on the stage A build:
+
+- **Splices into two branches of one gateway in one batch** (a task into
+  "yes" and a merge into "no", two tasks, the eval's merge batch in a pool
+  with lanes: 18 against 5 as single commands, before 8 on 0.5.0). The
+  first node's anchor counted as a branching node only when another branch
+  was drawn; in a batch that branch leads to a node a later op spliced, not
+  yet placed, so the node went to the anchor's row (in another lane: a new
+  row of its lane). Now a branch drawn before the ops counts too
+  (`place.ts placeAfter`). And a merge placed in this run that a later
+  node's flow would enter backwards is placed again right of its
+  predecessors (`place.ts pullPlacedJoins`, the batch form of `pullJoins`):
+  the merge batch with the merge added first gives the shapes of single
+  commands as well. On the eval model and the pool with lanes, all five
+  variants: same shapes and score as single commands, no backward flow.
+- **`place --side` back to the bottom in a pool with lanes** refused with
+  `E_LEAVES_CONTAINER` whose hint named the shape's own lane as the lane it
+  would land in (`lanes__complaint-t1`, `-t2`, `subproc__s15`): the way
+  back took a node of another lane above the host as part of the exception
+  path. The path is now the nodes in the host's own lane / pool /
+  sub-process (`ops.ts exceptionPath`); below a lane with a lane underneath
+  the lane grows at its bottom first (like the top); the hint of a shape
+  that would land below its lane in no lane says so. A third boundary event
+  drawn over a corner (`artifacts__10-three-boundaries`) found no spot on
+  the way back: a spot reaching over a corner of the border is the fallback
+  (its centre on the border's line). The verifier's runs, there and back:
+  of the 146 existing boundary events of the scenarios and the Modeler
+  models refusals 4 -> 0 and runs adding a hard problem 1 -> 0; of the 56
+  new boundary paths on a sub-process refusals 4 -> 0 (a crowded border
+  now takes a corner spot; the move is on request, its quality line says
+  what it costs).
+- **`place --side` and an annotation on a flow** (`artifacts__16`): the move
+  rerouted a loop flow, and the association to it ran straight through two
+  shapes (hard `through`). An association docked on a flow now ends at the
+  nearest point of the flow a straight line reaches without cutting a
+  shape, else it is routed around the shapes to the middle of the flow's
+  nearest segment (`reroute.ts flowDock`); it is rerouted when its end left
+  the flow, after the flows (`routeRank`). That run: 37 -> 0 instead of
+  37 -> 26 with two `through`.
+- **`E_NO_ROOM`** took the first space-tool run that fits (`1col`; the
+  eval's two refusals score 8 and 7 after it, `2col` 7 and 5): now the run
+  with the fewest layout problems (`2col` for both). After other ops of a
+  batch the command for the file was checked on another drawing and could
+  name ids only the refused batch has (`--after Activity_NewGate`): now
+  `details.command` only when the refused op saw the file's own drawing
+  (`runFormatOps(..., asFile)`, the first op of a batch of format ops only),
+  else the hint names only the batch op to put before the place op.
+
+Not changed: the timer reminder path of the fixture's "no to the existing
+node" and merge batches still crosses the "no" flow, in the batch and in
+single commands alike (score 5); `--side top` takes it above (score 0), and
+stage B (`feat/layout-room-making`) tries the host's top border on its own
+(both 0). The bench's one Modeler model whose E2 branch lands inside a group
+frame (harness 8 -> 40, group overlaps only) is unchanged.
+
+Evidence: the issue's probe on the private corpus gives the same records
+as stage A (3,403); the verifier's adversarial runs (657, scenarios and
+Modeler models, batch / single, `--side` there and back) add no hard
+problem; `bench --compare` against 0.5.0: no regression (E8 / E9 crossings
+78 -> 30 / 80 -> 31, backward flows 89 -> 1 each, harness 8.9 -> 2.3 / 10.2
+-> 2.3; E1 / E2 / E4 moved share unchanged); 311 batches twice in two
+processes give the same bytes. `npm run gate`: 1,909 tests (+247 opt-in),
+layout regression 444 (budget 444), fuzz 12 x 15 0 errors (the same hard-
+overlap warning of `gallery__04-subprocess` as 0.5.0). The
+`applyToXml`-only bundle grew by this code from 627.9 to 631.4 KB minified:
+its budget is 635 KB now (`tools/iso/budget.json`; gzip 200.2 of 201 KB).
 
 ## `bpmn render`, fixes after the verification (2026-10-11, `feat/render`, issue #12)
 

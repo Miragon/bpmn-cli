@@ -21,9 +21,11 @@
  *     moves to the top / bottom border of its host, to the spot nearest its
  *     centre that no other boundary event and no docking connection takes
  *     (E_NO_ROOM when none is left); its exception path drawn on the old
- *     side (the nodes only it leads to, beyond that border) is mirrored about
- *     the host's centre row and the others give way (makeRoom); its outgoing
- *     flows are routed again.
+ *     side (the nodes only it leads to, beyond that border, in the host's
+ *     own lane / pool / sub-process) is mirrored about the host's centre row
+ *     (room made at the top of that frame, or at the bottom of a lane with a
+ *     lane underneath, when the path would leave it) and the others give way
+ *     (makeRoom); its outgoing flows are routed again.
  *   - align: every id moves on its own onto the centre line (row) or centre
  *     column of `to` (default: the first id, which then stays).
  *   - color: a SWATCHES colour (write.ts setSwatch) on shapes and edges;
@@ -76,11 +78,13 @@
  *  E_INVALID_VALUE (label side the flow has no segment for),
  *  E_LEAVES_CONTAINER, E_NO_ROOM (after making room the requested row /
  *  column no longer holds, or a sub-process would grow over the reference).
- *  E_NO_ROOM of place / align carries one command that makes the room: a
- *  dry run on the drawing as the op found it tries space-tool runs
- *  (roomCandidates) each followed by the op, and the first that lets it
- *  succeed is details.command (`bpmn space <file> ...`) and details.ops (the
- *  batch op); without one the hint names the shapes to move first.
+ *  E_NO_ROOM of place / align carries one space-tool run that makes the
+ *  room: a dry run on the drawing as the op found it tries space-tool runs
+ *  (roomCandidates) each followed by the op, and of those that let it
+ *  succeed the one with the best score is details.ops (the batch op) and,
+ *  when the op found the file's own drawing (the first op of a batch of
+ *  format ops only), details.command (`bpmn space <file> ...`); without
+ *  one the hint names the shapes to move first.
  */
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError, type ErrorDetails } from '../errors.js';
@@ -93,7 +97,7 @@ import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, p
 import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { spacingOf } from './place.js';
 import { frameInterior, frameOf, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
+import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { attachedSide, type Side } from './router.js';
 import { separate, tidy } from './separate.js';
 import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
@@ -314,8 +318,8 @@ function settle(plane: Plane, snap: Snap): string[] {
     }
   }
   const rerouted: DEdge[] = [];
-  // sequence flows first, message flows last (they cross the pools and should see the final flows)
-  const edges = [...plane.edges.values()].sort((p, q) => Number(p.kind === 'messageFlow') - Number(q.kind === 'messageFlow'));
+  // sequence flows first, message flows next (they cross the pools and should see the final flows), connections docked on a connection last
+  const edges = [...plane.edges.values()].sort((p, q) => routeRank(plane, p) - routeRank(plane, q));
   for (const e of edges) {
     if (!brokenEdge(plane, e, snap.edges.get(e))) continue;
     if (reroute(plane, e)) rerouted.push(e);
@@ -388,9 +392,12 @@ function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: nu
     if (!there) continue;
     let hint: string;
     if (frame.kind === 'lane') {
-      hint = there.kind === 'lane'
-        ? `That position is in lane ${there.id}. Assign the lane first (\`bpmn move <file> ${s.id} --lane ${there.id}\`, in a batch a move op with "lane" before this op), or make room in ${frame.id} first (\`bpmn space <file> --below ${frame.id}\`).`
-        : `Pick a reference inside lane ${frame.id}, or assign another lane first (\`bpmn move <file> ${s.id} --lane <laneId>\`).`;
+      hint =
+        there.kind === 'lane' && there !== frame
+          ? `That position is in lane ${there.id}. Assign the lane first (\`bpmn move <file> ${s.id} --lane ${there.id}\`, in a batch a move op with "lane" before this op), or make room in ${frame.id} first (\`bpmn space <file> --below ${frame.id}\`).`
+          : there === frame && cy(box) >= bottom(frame.bounds)
+            ? `That position is below lane ${frame.id}, in no lane of its pool (another lane follows underneath ${frame.id}): pick a reference inside lane ${frame.id}, make room in it first (\`bpmn space <file> --below ${frame.id}\`), or assign another lane first (\`bpmn move <file> ${s.id} --lane <laneId>\`).`
+            : `Pick a reference inside lane ${frame.id}, or assign another lane first (\`bpmn move <file> ${s.id} --lane <laneId>\`).`;
     } else if (frame.kind === 'subProcess') {
       hint = farRef
         ? `The reference lies outside sub-process ${frame.id}, which would have to grow out to it: pick a reference inside ${frame.id}, or move the node out of the sub-process first (\`bpmn move <file> ${s.id} --in <scopeId>\`).`
@@ -694,9 +701,12 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
 /**
  * The exception path of a boundary event drawn on the `side` of its host:
  * the nodes only the event leads to (each predecessor is the event or such a
- * node), following its flows while they lie beyond that border.
+ * node), following its flows while they lie beyond that border in the
+ * host's own frame (a node in another lane keeps its place: mirrored, it
+ * would leave its lane, and the way back would not find it).
  */
 function exceptionPath(ctx: Ctx, plane: Plane, event: DShape, host: DShape, side: Side): DShape[] {
+  const home = frameOf(plane, host);
   const beyond = (b: Box): boolean => (side === 'bottom' ? b.y >= bottom(host.bounds) - 0.5 : side === 'top' ? bottom(b) <= host.bounds.y + 0.5 : false);
   const flowsOf = (id: string, prop: 'incoming' | 'outgoing'): El[] => rawList(ctx.sem.byId.get(id), prop).filter((f) => is(f, 'bpmn:SequenceFlow'));
   const path: DShape[] = [];
@@ -705,7 +715,8 @@ function exceptionPath(ctx: Ctx, plane: Plane, event: DShape, host: DShape, side
   while (queue.length) {
     for (const f of flowsOf(queue.shift()!, 'outgoing')) {
       const n = plane.shapes.get(idOf(raw(f, 'targetRef')) ?? '');
-      if (!n || inPath.has(n.id) || n.id === host.id || !isLeaf(n) || n.kind === 'boundary' || !beyond(n.bounds)) continue;
+      // drawn in the host's own frame (its lane, pool, sub-process): a node of another lane keeps its lane's place
+      if (!n || inPath.has(n.id) || n.id === host.id || !isLeaf(n) || n.kind === 'boundary' || !beyond(n.bounds) || frameOf(plane, n) !== home) continue;
       if (!flowsOf(n.id, 'incoming').every((g) => inPath.has(idOf(raw(g, 'sourceRef')) ?? ''))) continue;
       inPath.add(n.id);
       path.push(n);
@@ -718,10 +729,11 @@ function exceptionPath(ctx: Ctx, plane: Plane, event: DShape, host: DShape, side
 /**
  * place --side: a boundary event moves to the top / bottom border of its
  * host (the spot nearest its centre that no other boundary event and no
- * docking connection takes), its exception path drawn on the old side
- * follows, mirrored about the host's centre row (rows keep their distance;
- * above the interior of the host's lane, pool or sub-process the space tool
- * makes room at the top of that frame first), the others give way
+ * docking connection takes), its exception path drawn on the old side in the
+ * host's own frame follows, mirrored about the host's centre row (rows keep
+ * their distance; above the interior of the host's lane, pool or sub-process
+ * the space tool makes room at the top of that frame first, below a lane
+ * with a lane underneath at the bottom of that lane), the others give way
  * (makeRoom), and its flows are routed again.
  */
 function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, notes: string[]): string[] {
@@ -754,6 +766,17 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
       notes.push(`made ${deficit} px of room above ${host.id} in its ${frameWord(frame)} ${frame.id}`);
     }
   }
+  // below the interior of a lane with another lane underneath: the lane grows at its bottom first (like
+  // `space --below <lane>`; the lanes below move down); a pool, a sub-process and the last lane grow on their own
+  if (side === 'bottom' && path.length && frame?.kind === 'lane' && [...plane.shapes.values()].some((l) => l.kind === 'lane' && l !== frame && l.poolId === frame.poolId && l.bounds.y >= bottom(frame.bounds) - 1)) {
+    const same = path.filter((n) => frameOf(plane, n) === frame);
+    const low = Math.max(...same.map((n) => bottom(unitBox(plane, n)) + mirror(n)));
+    const deficit = Math.ceil(low - bottom(frameInterior(frame, 15)));
+    if (same.length && deficit > 0) {
+      makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: deficit, anchors: [frame.id] });
+      notes.push(`made ${deficit} px of room below ${host.id} in its lane ${frame.id}`);
+    }
+  }
   const hb = host.bounds;
   const size = { width: event.bounds.width, height: event.bounds.height };
   const y = Math.round((side === 'top' ? hb.y : bottom(hb)) - size.height / 2);
@@ -765,18 +788,24 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
     if (e.targetId === host.id) docks.push(e.points[e.points.length - 1]!);
   }
   const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4);
-  const lo = hb.x + size.width / 2;
-  const hi = right(hb) - size.width / 2;
-  const start = Math.min(hi, Math.max(lo, cx(event.bounds)));
+  // the spot nearest the event's column on the border, else one reaching over a corner of it (hand drawings put a
+  // third event there; its centre stays on the border's line, nearer to it than to the side border)
   let spot: Box | undefined;
-  for (let d = 0; !spot && d <= hb.width; d += 4) {
-    for (const c of d ? [start + d, start - d] : [start]) {
-      const b = { x: Math.round(c - size.width / 2), y, ...size };
-      if (c >= lo - 0.5 && c <= hi + 0.5 && free(b)) {
-        spot = b;
-        break;
+  for (const [lo, hi] of [
+    [hb.x + size.width / 2, right(hb) - size.width / 2],
+    [hb.x - size.width / 2 + 4, right(hb) + size.width / 2 - 4],
+  ] as const) {
+    const start = Math.min(hi, Math.max(lo, cx(event.bounds)));
+    for (let d = 0; !spot && d <= hb.width; d += 4) {
+      for (const c of d ? [start + d, start - d] : [start]) {
+        const b = { x: Math.round(c - size.width / 2), y, ...size };
+        if (c >= lo - 0.5 && c <= hi + 0.5 && free(b)) {
+          spot = b;
+          break;
+        }
       }
     }
+    if (spot) break;
   }
   if (!spot) {
     throw modelError('E_NO_ROOM', `There is no room for ${id} on the ${side} border of ${host.id}: other boundary events and docking connections take it`, {
@@ -975,7 +1004,7 @@ function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProb
       restoreState(st);
       return false;
     }
-    const edges = [...plane.edges.values()].sort((p, q) => Number(p.kind === 'messageFlow') - Number(q.kind === 'messageFlow'));
+    const edges = [...plane.edges.values()].sort((p, q) => routeRank(plane, p) - routeRank(plane, q));
     const fresh = edges.filter((e) => (force.includes(e.id) || brokenEdge(plane, e, before.get(e))) && reroute(plane, e));
     clearLabels(plane, fresh);
     const m = measure(ctx);
@@ -1351,36 +1380,48 @@ const spaceCommand = (c: SpaceOp): string => `bpmn space <file> ${c.after ? `--a
 /**
  * Runs a place / align op; when it is refused (E_NO_ROOM), a dry run on the
  * drawing as the op found it tries the space-tool runs of roomCandidates,
- * each followed by the same op: the first that lets the op succeed goes into
- * the refusal as one runnable command (details.command, `<file>` stands for
- * the file; the CLI fills it in) and its batch op (details.ops); without one,
- * the hint names the shapes in the way, to be moved first.
+ * each followed by the same op: of those that let the op succeed, the one
+ * whose drawing scores best (fewest layout problems; on a tie the first,
+ * the smallest) goes into the refusal as its batch op (details.ops). When
+ * the op found the file's own drawing (`asFile`: the first op of a batch of
+ * format ops only, e.g. one `bpmn place`), it is also one runnable command
+ * (details.command, `<file>` stands for the file; the CLI fills it in);
+ * after other ops of the batch (their changes are not in the file, their
+ * new ids not either) only the batch op is named, to put before this op.
+ * Without one, the hint names the shapes in the way, to be moved first.
  */
-function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[]): string[] {
+function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[], asFile: boolean): string[] {
   const states = ctx.planes.map(saveState);
   try {
     return run();
   } catch (err) {
     if (!(err instanceof CliError) || err.code !== 'E_NO_ROOM') throw err;
     let found: SpaceOp | undefined;
+    let best = Infinity;
     for (const c of roomCandidates(ctx, op)) {
       states.forEach(restoreState);
       try {
         spaceOp(ctx, c, snapshot(ctx.planes), []);
         if (op.op === 'place') placeOp(ctx, op, snapshot(ctx.planes), []);
         else alignOp(ctx, op, snapshot(ctx.planes), []);
-        found = c;
-        break;
       } catch {
-        /* the next candidate */
+        continue;
+      }
+      const score = measure(ctx).score;
+      if (score < best) {
+        best = score;
+        found = c;
       }
     }
     states.forEach(restoreState);
     const again = op.op === 'place' ? 'place' : 'align';
-    if (found) {
+    if (found && asFile) {
       err.details['command'] = spaceCommand(found);
       err.details['ops'] = [{ ...found }];
       err.details.hint = `Make room first: \`${spaceCommand(found)}\` (checked: the ${again} fits then), and ${again} again; in a batch, put ${JSON.stringify(found)} before this op.`;
+    } else if (found) {
+      err.details['ops'] = [{ ...found }];
+      err.details.hint = `Make room first: in this batch, put ${JSON.stringify(found)} before this op (checked on the drawing the batch's earlier ops leave: the ${again} fits then).`;
     } else {
       const inWay = (err.details.related ?? []).filter((id) => !(op.ids ?? []).includes(id));
       const tried = roomCandidates(ctx, op).map((c) => `--${c.after ? 'after' : 'below'} ${c.after ?? c.below} --by ${String(c.by)}`);
@@ -1390,7 +1431,7 @@ function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[]): str
   }
 }
 
-function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
+function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | undefined {
   const index = entry.index;
   const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : resolveSelection(ctx, entry.op);
   const op = resolved.op;
@@ -1401,10 +1442,10 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
   const extra: Partial<FormatResult> = {};
   switch (op.op) {
     case 'place':
-      rerouted = op.side ? placeOp(ctx, op, snap, notes) : withRoomHint(ctx, op, () => placeOp(ctx, op, snap, notes));
+      rerouted = op.side ? placeOp(ctx, op, snap, notes) : withRoomHint(ctx, op, () => placeOp(ctx, op, snap, notes), asFile);
       break;
     case 'align':
-      rerouted = withRoomHint(ctx, op, () => alignOp(ctx, op, snap, notes, resolved.picked));
+      rerouted = withRoomHint(ctx, op, () => alignOp(ctx, op, snap, notes, resolved.picked), asFile);
       break;
     case 'color':
       extra.colored = colorOp(ctx, op);
@@ -1433,14 +1474,18 @@ function runOne(ctx: Ctx, entry: FormatEntry): FormatResult | undefined {
   return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: routed, ...(reshaped.length ? { reshaped } : {}), ...extra, ...(notes.length ? { notes } : {}) };
 }
 
-/** Runs the format ops of a batch on the drawing of `doc` (see module contract). */
-export function runFormatOps(doc: Doc, entries: readonly FormatEntry[]): FormatResult[] {
+/**
+ * Runs the format ops of a batch on the drawing of `doc` (see module
+ * contract). `asFile`: the drawing of `doc` is the file's (a batch of format
+ * ops only): the first op's refusal may name a runnable command.
+ */
+export function runFormatOps(doc: Doc, entries: readonly FormatEntry[], asFile = false): FormatResult[] {
   const sem = semantics(doc.definitions);
   const ctx: Ctx = { doc, sem, planes: readPlanes(doc.definitions, sem) };
   const results: FormatResult[] = [];
-  for (const entry of entries) {
+  for (const [i, entry] of entries.entries()) {
     try {
-      const r = runOne(ctx, entry);
+      const r = runOne(ctx, entry, asFile && i === 0 && entry.index === 0);
       if (r) results.push(r);
     } catch (err) {
       if (err instanceof CliError) err.details['op'] = entry.index;

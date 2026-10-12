@@ -91,7 +91,7 @@ import { bottom, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, 
 import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
 import { boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
+import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { separate } from './separate.js';
 import { attachedSide } from './router.js';
 import { closeStrip, fitInFrame, makeSpace } from './space.js';
@@ -1112,8 +1112,8 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
 function routeAll(ctx: Ctx): string[] {
   const rerouted: string[] = [];
   for (const plane of ctx.planes) {
-    // message flows last: they cross the pools and should see the final sequence flows
-    const pending = [...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)).sort((a, b) => Number(a.kind === 'messageFlow') - Number(b.kind === 'messageFlow'));
+    // message flows after the sequence flows (they cross the pools and should see the final sequence flows), connections docked on a connection last
+    const pending = [...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)).sort((a, b) => routeRank(plane, a) - routeRank(plane, b));
     const waiting = new Set(pending.map((e) => e.id));
     for (const e of pending) {
       const lines = routingLines(plane, e.id).filter((l) => ![...waiting].some((id) => plane.edges.get(id)?.points === l));

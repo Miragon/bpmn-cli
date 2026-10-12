@@ -242,7 +242,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_DUPLICATE_EXTENSION` | `ext remove` the old one or `--replace`; check `bpmn ext list <file> <id>`. |
 | `E_VALIDATION` | The change would add a structural error: do the whole change in one batch, or read `bpmn validate`. `--force` only when the user agrees. |
 | `E_LEAVES_CONTAINER` | `place` / `align` would leave the lane / pool: `move <id> --lane <laneId>` first (in a batch: a move op before it). |
-| `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; without one, move the shapes it names first. |
+| `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
 | `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
 | `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. |

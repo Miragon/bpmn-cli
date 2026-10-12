@@ -118,8 +118,8 @@ bpmn compact order-to-cash.bpmn
   moves a whole branch up to its join.
 - `place <boundaryEventId> --side top|bottom`: the boundary event moves to that
   border of its host, its flow is routed again, and its exception path follows
-  when it was drawn on the old side (a reminder path below that crosses a
-  branch goes above the task).
+  when it was drawn on the old side in the host's lane (a reminder path below
+  that crosses a branch goes above the task; `--side bottom` takes it back).
 - `align <ids...> --axis row|column [--to <ref>]`: same vertical centre (row)
   or same horizontal centre (column) as the reference (default: the first id).
 - `space --after <id>` / `--below <id>` `[--by column|row|<n>col|<n>row|<px>]`:
@@ -158,8 +158,9 @@ reference inside the same lane. `E_NO_ROOM` means the target row / column
 cannot hold the shapes, or closing space would add a layout problem: the hint
 of a refused `place` / `align` names one `bpmn space ...` command that makes
 the room (a dry run checked that the place fits after it; in a batch put its op
-before the place op) - run it and place again; without such a command it names
-the shapes to move first. When closing space was refused, close less.
+before the place op) - run it and place again. After other ops of a batch it
+names only that space op (the file does not have their changes yet); without
+such a run it names the shapes to move first. When closing space was refused, close less.
 
 Check the quality line after every format op. A selector over a model with
 lanes can pull shapes across the drawing (`align --kind endEvent --axis column`

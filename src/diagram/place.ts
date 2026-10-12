@@ -11,7 +11,11 @@
  *  placed successor, then the rest (chains of new nodes are placed one after
  *  the other). When more nodes follow, ctx.afterNode gets the node just
  *  placed (incremental.ts routes its flows and measures the spacing again,
- *  as the next single command would see them). The rules
+ *  as the next single command would see them). A join placed in this run
+ *  that a flow from its last placed predecessor would enter backwards (no
+ *  loop return) is placed again right of its predecessors, before its one
+ *  successor, as the `connect` into it does as a single command
+ *  (pullPlacedJoins; incremental.ts pullJoins for joins drawn before). The rules
  *  (gap = median horizontal gap between connected neighbours of the plane,
  *  clamped 40..100, fallback 60; row = median row spacing, clamped 80..150):
  *   - splice (the flow P->S was split by N; also N in a chain of new nodes
@@ -19,9 +23,11 @@
  *     through new nodes, branches included: a decision with a new "no"
  *     branch or a `split` in the chain keeps the splice; a join re-placed by
  *     incremental.ts pullJoins, before its successor): x = P.right + gap, centred on
- *     S's row when S is in P's row band (or P is a branching node), else on
- *     P's row; S's row in another lane than N's own is replaced by a free
- *     row of N's lane (rowInLane: N's lane never stretches over to S's row);
+ *     S's row when S is in P's row band (or P is a branching node: another
+ *     branch of P is drawn, or was drawn before the ops and leads to a node
+ *     a later op of the batch spliced into it), else on P's row; S's row in
+ *     another lane than N's own is replaced by a free row of N's lane
+ *     (rowInLane: N's lane never stretches over to S's row);
  *     only when that spot is taken: space tool at P.right + 1 by
  *     N.width + gap within P's pool (inside an expanded sub-process: in
  *     frame mode, so the sub-process never grows over foreign shapes, see
@@ -869,7 +875,10 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
   if (S || !succShapes.length) {
     // splice / continuation on the anchor's row
     const sameRow = S && Math.abs(cy(S.bounds) - cy(main.bounds)) <= sp.rowTol;
-    const onS = !!S && (sameRow || succShapes.length > 0);
+    // a branching anchor: another branch is drawn, or was drawn before the ops and leads to a node a later op of
+    // the batch spliced into it (still to be placed; a single command for this node would see that branch drawn)
+    const branching = succShapes.length > 0 || flows(ctx.sem.byId.get(main.id), 'outgoing').some((f) => idOf(raw(f, 'targetRef')) !== id && ctx.oldTarget.has(idOf(f) ?? ''));
+    const onS = !!S && (sameRow || branching);
     let c = onS ? cy(S.bounds) : cy(main.bounds);
     // S's row in another lane than the node's own (a node keeping or given the anchor's lane after a branching
     // anchor): the row follows the node's lane, which never stretches over to S's row (audit #14)
@@ -884,6 +893,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
       const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, sp.gap) ?? full);
       recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
+    if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
     return;
   }
@@ -947,6 +957,49 @@ export function placeUnconnected(ctx: PlaceCtx, plane: Plane, id: string): DShap
     c = (Number.isFinite(box.y) ? box.y : 40) + 60 + size.height / 2;
   }
   return placeAt(ctx, plane, id, x, c, size);
+}
+
+/** Whether `to` follows `from` along sequence flows (at most 500 nodes visited). */
+function leadsTo(ctx: PlaceCtx, from: string, to: string): boolean {
+  const seen = new Set([from]);
+  const queue = [from];
+  while (queue.length && seen.size <= 500) {
+    for (const n of successors(ctx.sem, queue.shift()!)) {
+      if (n === to) return true;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      queue.push(n);
+    }
+  }
+  return false;
+}
+
+/**
+ * A join placed in this run (a merge an earlier op of the batch spliced)
+ * whose last predecessor `id` was just placed, and that a flow from one of
+ * its predecessors would now enter backwards (no loop return), is placed
+ * again right of its rightmost predecessor, before its one successor S: what
+ * the `connect` into it does as a single command (incremental.ts
+ * pullJoins). Same conditions: a gateway with two or more incoming flows and
+ * one outgoing flow to S, its predecessors and S in its pool / sub-process,
+ * S right of the predecessors.
+ */
+function pullPlacedJoins(ctx: PlaceCtx, plane: Plane, id: string, pending: ReadonlySet<string>): void {
+  for (const jid of successors(ctx.sem, id)) {
+    const join = plane.shapes.get(jid);
+    if (!join || !ctx.placed.has(jid) || pending.has(jid) || !is(join.el, 'bpmn:Gateway')) continue;
+    const preds = predecessors(ctx.sem, jid).map((p) => plane.shapes.get(p));
+    const outs = successors(ctx.sem, jid);
+    const S = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
+    if (preds.length < 2 || !S || !preds.every((p): p is DShape => !!p)) continue;
+    const sameFrame = (s: DShape): boolean => s.poolId === join.poolId && s.parentId === join.parentId;
+    if (!preds.every(sameFrame) || !sameFrame(S) || S.bounds.x <= Math.max(...preds.map((p) => right(p.bounds)))) continue;
+    if (!preds.some((p) => cx(join.bounds) < p.bounds.x && !leadsTo(ctx, jid, p.id))) continue;
+    plane.shapes.delete(jid);
+    (ctx.joins ??= new Map()).set(jid, S.id);
+    if (layoutDebugOn()) layoutDebug(`[join] ${jid}: a flow from ${preds.map((p) => p.id).join(', ')} would enter it backwards: placed again before ${S.id}`);
+    placeAfter(ctx, plane, jid, preds, pending);
+  }
 }
 
 /**
@@ -1013,6 +1066,7 @@ export function placeFlowNodes(ctx: PlaceCtx, ids: string[]): string[] {
     else if (is(ctx.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') && placeBoundary(ctx, chosen.plane, chosen.id)) {
       /* host placed meanwhile */
     } else placeUnconnected(ctx, chosen.plane, chosen.id);
+    pullPlacedJoins(ctx, chosen.plane, chosen.id, pending);
     last = { plane: chosen.plane, id: chosen.id };
   }
   return skipped;

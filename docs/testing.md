@@ -190,7 +190,18 @@ a task in the top lane of a pool inside that lane, and its refusals;
 0.5.0 left after the agents' batches) carries a command that, run first, lets
 the place succeed (library and command line, the file filled in), and names
 the shapes to move without one; the bench edits E8 / E9 and the soft budget of
-`bench --compare`.
+`bench --compare`. Its last block holds the findings of the stage A
+verification, each failing on the stage A build: splices into two branches
+of one gateway in one batch (a task and a merge, two tasks, the merge
+batch, the merge added first; on the eval model and in a pool with lanes)
+give the shapes and the score of single commands; `place --side` top and
+back to the bottom in pools with lanes (`tools/scenarios`: a node of
+another lane is no part of the path), back to a border two other boundary
+events take (over its corner), into a lane with a lane underneath (the lane
+grows at its bottom), and next to an annotation on a flow the move
+reroutes (no `through`); `E_NO_ROOM` names the space-tool run with the
+fewest layout problems, and after other ops of a batch only the batch op
+(no command for the file).
 `test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
 of `tools/scenarios` and `test/fixtures` (and each of its other planes)
 renders to SVG and PNG within the default 2000 px, with the same bytes twice

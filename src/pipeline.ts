@@ -592,9 +592,9 @@ function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
 }
 
 /** Runs the format ops on the laid-out XML; returns the new XML and their results. */
-async function runFormat(xml: string, file: string | undefined, entries: FormatEntry[]): Promise<{ xml: string; results: FormatResult[]; after: LayoutMetrics }> {
+async function runFormat(xml: string, file: string | undefined, entries: FormatEntry[], asFile: boolean): Promise<{ xml: string; results: FormatResult[]; after: LayoutMetrics }> {
   const laid = await Doc.fromXml(xml, file);
-  const results = runFormatOps(laid, entries);
+  const results = runFormatOps(laid, entries, asFile);
   return { xml: await laid.toXml(), results, after: layoutProblems(laid.definitions) };
 }
 
@@ -781,6 +781,8 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
 
   let xml: string;
   let layout: LayoutStatus;
+  // format ops only, on the drawing as the file has it: the first one's refusal may name a command to run on the file
+  let fileDrawing = false;
   if (requested === 'skip') {
     const pruned = pruneDanglingDi(doc);
     if (pruned) changes.note(`removed ${pruned} stale diagram element(s); run \`bpmn layout\` to redraw`);
@@ -790,6 +792,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else if (formatOnly && requested !== 'full' && before.snapshot.flowNodeShapes > 0) {
     // nothing semantic changed: the drawing is kept as it is and only formatted
     xml = await doc.toXml();
+    fileDrawing = true;
     layout = { status: 'ok', mode: 'incremental', reason: 'format operations only: drawing kept', warnings: [], expanded: [] };
   } else {
     let givenIds: GivenId[] | undefined;
@@ -806,7 +809,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
 
   const entries = formatEntries(doc, ran);
   if (entries.length) {
-    const formatted = await runFormat(xml, doc.file, entries);
+    const formatted = await runFormat(xml, doc.file, entries, fileDrawing);
     xml = formatted.xml;
     layout.format = formatted.results;
     layout.metrics = metricsDelta(before.metrics, formatted.after);

@@ -87,6 +87,7 @@ const boundsOf = (xml: string, id: string): { x: number; y: number; width: numbe
   const m = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([-\\d.]+)" y="([-\\d.]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml)!;
   return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
 };
+const bottomOf = (b: { y: number; height: number }): number => b.y + b.height;
 const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
 
 async function batch(ops: object[], xml = FIXTURE): Promise<string> {
@@ -237,9 +238,9 @@ describe('E_NO_ROOM carries one command that makes the room (issue #18 (5))', ()
       const err = (await applyToXml(xml, [place]).catch((e: unknown) => e)) as CliError;
       expect(err).toBeInstanceOf(CliError);
       expect(err.code).toBe('E_NO_ROOM');
-      expect(err.details['command']).toBe('bpmn space <file> --after Gateway_1hd8x2m --by 1col');
-      expect(err.details['ops']).toEqual([{ op: 'space', after: 'Gateway_1hd8x2m', by: '1col' }]);
-      expect(String(err.details.hint)).toContain('`bpmn space <file> --after Gateway_1hd8x2m --by 1col` (checked: the place fits then)');
+      expect(err.details['command']).toBe('bpmn space <file> --after Gateway_1hd8x2m --by 2col');
+      expect(err.details['ops']).toEqual([{ op: 'space', after: 'Gateway_1hd8x2m', by: '2col' }]);
+      expect(String(err.details.hint)).toContain('`bpmn space <file> --after Gateway_1hd8x2m --by 2col` (checked: the place fits then)');
       const roomy = (await applyToXml(xml, err.details['ops'] as object[])).xml;
       const r = await applyToXml(roomy, [place]);
       const row = (id: string): number => Math.round(boundsOf(r.xml, id).y + boundsOf(r.xml, id).height / 2);
@@ -264,9 +265,9 @@ describe('E_NO_ROOM carries one command that makes the room (issue #18 (5))', ()
     expect(refused.code).not.toBe(0);
     const error = JSON.parse(refused.err).error as { code: string; command: string; hint: string };
     expect(error.code).toBe('E_NO_ROOM');
-    expect(error.command).toBe(`bpmn space '${file}' --after Gateway_1hd8x2m --by 1col`);
+    expect(error.command).toBe(`bpmn space '${file}' --after Gateway_1hd8x2m --by 2col`);
     expect(error.hint).toContain(error.command);
-    const argv = ['space', file, '--after', 'Gateway_1hd8x2m', '--by', '1col'];
+    const argv = ['space', file, '--after', 'Gateway_1hd8x2m', '--by', '2col'];
     expect(error.command).toBe(`bpmn ${argv.map((a) => (a === file ? `'${a}'` : a)).join(' ')}`);
     expect(cli(...argv).code).toBe(0);
     expect(cli(...args).code).toBe(0);
@@ -321,5 +322,187 @@ describe('bench E8 / E9 and the soft budget (issue #18 (6))', () => {
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * The findings of the verification of stage A, each failing on the stage A
+ * build: a batch that splices into two branches of one gateway (also in a
+ * pool with lanes, also with the merge added first), `place --side` back to
+ * the bottom in a pool with lanes and next to an annotation on a flow, and
+ * E_NO_ROOM picking the best space-tool run and naming a command only when
+ * it runs on the file.
+ */
+describe('stage A verification findings (issue #18)', () => {
+  /** The eval's purchase flow in a pool with two lanes ("yes" leads into the lower lane), made hand-drawn by a space op. */
+  const lanes = async (): Promise<string> => {
+    const { newXml } = await import('../src/api.js');
+    const drawn = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
+      { op: 'add', kind: 'participant', name: 'Company', id: 'Participant_Company' },
+      { op: 'add', kind: 'lane', name: 'Requester', id: 'Lane_Requester', in: 'Participant_Company' },
+      { op: 'add', kind: 'lane', name: 'Purchasing', id: 'Lane_Purchasing', in: 'Participant_Company' },
+      { op: 'add', kind: 'startEvent', id: 'StartEvent_Request', name: 'Request', in: 'Participant_Company', lane: 'Lane_Requester' },
+      { op: 'add', kind: 'userTask', id: 'Activity_CheckBudget', name: 'Check budget', after: 'StartEvent_Request' },
+      { op: 'add', kind: 'exclusiveGateway', id: 'Gateway_Budget', name: 'Budget available?', after: 'Activity_CheckBudget' },
+      { op: 'add', kind: 'serviceTask', id: 'Activity_OrderGoods', name: 'Order goods', after: 'Gateway_Budget', flowName: 'yes', flowId: 'Flow_BudgetYes', condition: '${ok}', lane: 'Lane_Purchasing' },
+      { op: 'add', kind: 'endEvent', id: 'Event_GoodsOrdered', name: 'Goods ordered', after: 'Activity_OrderGoods' },
+      { op: 'add', kind: 'sendTask', id: 'Activity_NotifyRequester', name: 'Notify requester', after: 'Gateway_Budget', flowName: 'no', flowId: 'Flow_BudgetNo', default: true },
+      { op: 'add', kind: 'endEvent', id: 'Event_RequestRejected', name: 'Request rejected', after: 'Activity_NotifyRequester' },
+    ]);
+    return (await applyToXml(drawn.xml, [{ op: 'space', after: 'Activity_CheckBudget', by: 10 }])).xml;
+  };
+  const ids = (xml: string): { yes: string; no: string; order: string; notify: string } =>
+    xml.includes('Flow_BudgetYes') ? { yes: 'Flow_BudgetYes', no: 'Flow_BudgetNo', order: 'Activity_OrderGoods', notify: 'Activity_NotifyRequester' } : { yes: 'Flow_0yq6cfd', no: 'Flow_1r2x9bv', order: 'Activity_1v0w8zr', notify: 'Activity_0f3j5ny' };
+  const variants = (xml: string): Record<string, object[]> => {
+    const f = ids(xml);
+    const task = { op: 'add', kind: 'userTask', name: 'Approve purchase', id: 'Activity_ApprovePurchase', flow: f.yes };
+    const merge = { op: 'add', kind: 'exclusiveGateway', id: 'Gateway_MergeRejection', flow: f.no };
+    const dec = { op: 'add', kind: 'exclusiveGateway', name: 'Purchase approved?', id: 'Gateway_PurchaseApproved', after: 'Activity_ApprovePurchase', before: f.order };
+    const conn = { op: 'connect', source: 'Gateway_PurchaseApproved', target: 'Gateway_MergeRejection', id: 'Flow_PurchaseApprovedToMergeRejection', name: 'no', default: true };
+    return {
+      'a task into "yes", a merge into "no"': [task, merge],
+      'a merge into "no", a task into "yes"': [merge, task],
+      'a task into each branch': [task, { op: 'add', kind: 'userTask', name: 'Log rejection', id: 'Activity_LogRejection', flow: f.no }],
+      'the merge batch': [task, dec, merge, conn],
+      'the merge batch, the merge first': [merge, task, dec, conn],
+    };
+  };
+
+  for (const model of ['the eval fixture', 'a pool with lanes']) {
+    it(`${model}: splices into two branches of one gateway give the shapes and the score of single commands`, async () => {
+      const xml = model === 'the eval fixture' ? FIXTURE : await lanes();
+      for (const [name, ops] of Object.entries(variants(xml))) {
+        const b = await batch(ops, xml);
+        const s = await singles(ops, xml);
+        expect(shapes(b), name).toEqual(shapes(s));
+        expect((await metricsXml(b)).score, name).toBe((await metricsXml(s)).score);
+        expect(await added(xml, b), name).not.toContain('backwardFlow');
+      }
+    });
+  }
+
+  it('a pool with lanes: a node spliced before a successor in another row of a branching gateway keeps that row in a batch', async () => {
+    const xml = await lanes();
+    const b = await batch(variants(xml)['a task into each branch']!, xml);
+    const row = (id: string): number => Math.round(boundsOf(b, id).y + boundsOf(b, id).height / 2);
+    expect(row('Activity_ApprovePurchase')).toBe(row('Activity_OrderGoods'));
+    expect(row('Activity_LogRejection')).toBe(row('Activity_NotifyRequester'));
+    // the lane did not grow for a row of its own
+    expect(boundsOf(b, 'Lane_Purchasing').height).toBe(boundsOf(xml, 'Lane_Purchasing').height);
+  });
+
+  const scenario = (name: string): string => readFileSync(join(ROOT, 'tools', 'scenarios', `${name}.bpmn`), 'utf8');
+  const hard = ['overlaps', 'through', 'outsideLane', 'outsidePool', 'outsideSub', 'frameIntrusion', 'frameOverlap', 'degenerateEdge', 'missing'];
+
+  it('place --side: top and back to the bottom in a pool with lanes (a node of another lane is no part of the path)', async () => {
+    for (const [name, id] of [['lanes__complaint-t1', 'Event_VersandFehlgeschlagen'], ['subproc__s15-lanes-sub-eventsub', 'Event_Overdue']] as const) {
+      const xml = scenario(name);
+      const top = await applyToXml(xml, [{ op: 'place', ids: [id], side: 'top' }]);
+      const back = await applyToXml(top.xml, [{ op: 'place', ids: [id], side: 'bottom' }]);
+      expect(back.result.layout?.format?.[0]?.notes?.join(' '), name).toContain(`${id} moved to the bottom border`);
+      expect((await added(xml, back.xml)).filter((k) => hard.includes(k)), name).toEqual([]);
+      // and top again: the drawing of the first move
+      const again = await applyToXml(back.xml, [{ op: 'place', ids: [id], side: 'top' }]);
+      expect((await metricsXml(again.xml)).score, name).toBe((await metricsXml(top.xml)).score);
+    }
+  });
+
+  it('place --side: the way back to a border two other boundary events take reaches over its corner, as the drawing had it', async () => {
+    const xml = scenario('artifacts__10-three-boundaries');
+    const top = await applyToXml(xml, [{ op: 'place', ids: ['Event_Withdrawn'], side: 'top' }]);
+    const back = await applyToXml(top.xml, [{ op: 'place', ids: ['Event_Withdrawn'], side: 'bottom' }]);
+    const host = boundsOf(back.xml, 'Activity_Approve');
+    const ev = boundsOf(back.xml, 'Event_Withdrawn');
+    expect(ev.y + ev.height / 2).toBe(host.y + host.height);
+    for (const other of ['Event_SysErr', 'Event_Reminder']) {
+      const o = boundsOf(back.xml, other);
+      expect(ev.x + ev.width <= o.x || o.x + o.width <= ev.x, other).toBe(true);
+    }
+    expect((await added(xml, back.xml)).filter((k) => hard.includes(k))).toEqual([]);
+  });
+
+  it('place --side bottom in a lane with a lane underneath: the lane grows at its bottom first, the path stays in it', async () => {
+    const { newXml } = await import('../src/api.js');
+    const drawn = await applyToXml((await newXml({ processName: 'Orders' })).xml, [
+      { op: 'add', kind: 'participant', name: 'Company', id: 'Participant_Company' },
+      { op: 'add', kind: 'lane', name: 'Sales', id: 'Lane_Sales', in: 'Participant_Company' },
+      { op: 'add', kind: 'lane', name: 'Billing', id: 'Lane_Billing', in: 'Participant_Company' },
+      { op: 'add', kind: 'startEvent', name: 'Order received', in: 'Participant_Company', lane: 'Lane_Sales', as: '$s' },
+      { op: 'add', kind: 'userTask', name: 'Check order', after: '$s', lane: 'Lane_Sales', as: '$c' },
+      { op: 'add', kind: 'serviceTask', name: 'Send invoice', after: '$c', lane: 'Lane_Billing', as: '$i' },
+      { op: 'add', kind: 'endEvent', name: 'Invoiced', after: '$i', lane: 'Lane_Billing' },
+    ]);
+    const kept = (await applyToXml(drawn.xml, [{ op: 'space', after: 'Activity_CheckOrder', by: 10 }])).xml;
+    const below = await batch(
+      [
+        { op: 'add', kind: 'boundaryEvent:timer', name: '2 days', id: 'Event_CheckOverdue', on: 'Activity_CheckOrder', timer: 'P2D', nonInterrupting: true },
+        { op: 'add', kind: 'sendTask', name: 'Remind sales', id: 'Activity_RemindSales', after: 'Event_CheckOverdue' },
+        { op: 'add', kind: 'endEvent', name: 'Sales reminded', id: 'Event_SalesReminded', after: 'Activity_RemindSales' },
+      ],
+      kept,
+    );
+    // the path above the task, then the empty rows of the lane closed: no room below the task in its lane
+    const top = (await applyToXml(below, [{ op: 'place', ids: ['Event_CheckOverdue'], side: 'top' }])).xml;
+    const tight = (await applyToXml(top, [{ op: 'compact', ids: ['Lane_Sales'] }])).xml;
+    const host = boundsOf(tight, 'Activity_CheckOrder');
+    expect(bottomOf(boundsOf(tight, 'Lane_Sales')) - (host.y + host.height)).toBeLessThan(80);
+    const r = await applyToXml(tight, [{ op: 'place', ids: ['Event_CheckOverdue'], side: 'bottom' }]);
+    const lane = boundsOf(r.xml, 'Lane_Sales');
+    expect(boundsOf(r.xml, 'Activity_RemindSales').y).toBeGreaterThanOrEqual(host.y + host.height);
+    expect(bottomOf(boundsOf(r.xml, 'Activity_RemindSales'))).toBeLessThanOrEqual(bottomOf(lane));
+    expect(boundsOf(r.xml, 'Lane_Billing').y).toBeGreaterThanOrEqual(bottomOf(lane));
+    expect(r.result.layout?.format?.[0]?.notes?.join(' ')).toMatch(/made \d+ px of room below Activity_CheckOrder in its lane Lane_Sales/);
+    expect((await added(tight, r.xml)).filter((k) => hard.includes(k))).toEqual([]);
+    // a position below the lane, in no lane: the hint does not claim it lies in the shape's own lane
+    const err = (await applyToXml(kept, [{ op: 'place', ids: ['Activity_CheckOrder'], below: 'Event_Invoiced' }]).catch((e: unknown) => e)) as CliError;
+    expect(err.code).toBe('E_LEAVES_CONTAINER');
+    expect(String(err.details.hint)).not.toContain('That position is in lane Lane_Sales');
+    expect(String(err.details.hint)).toContain('below lane Lane_Sales, in no lane of its pool');
+  });
+
+  it('place --side next to an annotation on a flow the move reroutes: the association docks on the flow around the shapes', async () => {
+    const xml = scenario('artifacts__16-annotations-events-loop');
+    const r = await applyToXml(xml, [{ op: 'place', ids: ['Event_Overdue'], side: 'top' }]);
+    expect((await added(xml, r.xml)).filter((k) => hard.includes(k))).toEqual([]);
+    // the association ends on its flow's line
+    const pts = (id: string, x: string): Array<{ x: number; y: number }> =>
+      [...new RegExp(`bpmnElement="${id}">([\\s\\S]*?)</bpmndi:BPMNEdge>`).exec(x)![1]!.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    const end = pts('Association_3', r.xml).at(-1)!;
+    const flow = pts('Flow_6', r.xml);
+    const onFlow = flow.slice(1).some((q, i) => {
+      const p = flow[i]!;
+      return end.x >= Math.min(p.x, q.x) - 1 && end.x <= Math.max(p.x, q.x) + 1 && end.y >= Math.min(p.y, q.y) - 1 && end.y <= Math.max(p.y, q.y) + 1;
+    });
+    expect(onFlow).toBe(true);
+  });
+
+  it('E_NO_ROOM: of the space-tool runs that make the room, the one that leaves the fewest layout problems', async () => {
+    const place = { op: 'place', ids: ['Activity_ApprovePurchase', 'Gateway_PurchaseApproved'], rowOf: 'Gateway_1hd8x2m', after: 'Gateway_1hd8x2m' };
+    for (const name of ['no-room-merge.bpmn', 'no-room-no-branch.bpmn']) {
+      const xml = fixture(name);
+      const score = async (by: string): Promise<number> => (await metricsXml(await batch([{ op: 'space', after: 'Gateway_1hd8x2m', by }, place], xml))).score;
+      const err = (await applyToXml(xml, [place]).catch((e: unknown) => e)) as CliError;
+      const ops = err.details['ops'] as Array<{ by: string }>;
+      expect(await score(ops[0]!.by), name).toBeLessThan(await score('1col'));
+    }
+  });
+
+  it('E_NO_ROOM after other ops of a batch: the space op to put before this one, checked there, and no command for the file', async () => {
+    const place = { op: 'place', ids: ['Activity_ApprovePurchase', 'Gateway_PurchaseApproved'], rowOf: 'Gateway_1hd8x2m', after: 'Activity_NewGate' };
+    const addGate = { op: 'add', kind: 'userTask', id: 'Activity_NewGate', name: 'New gate', after: 'Gateway_1hd8x2m', flowName: 'maybe' };
+    const xml = fixture('no-room-merge.bpmn');
+    const err = (await applyToXml(xml, [addGate, place]).catch((e: unknown) => e)) as CliError;
+    expect(err.code).toBe('E_NO_ROOM');
+    // Activity_NewGate exists only in the refused batch: a command on the file could not run
+    expect(err.details['command']).toBeUndefined();
+    expect(String(err.details.hint)).not.toContain('bpmn space');
+    expect(String(err.details.hint)).toContain('in this batch, put {"op":"space","after":"Activity_NewGate"');
+    const ops = err.details['ops'] as object[];
+    await expect(applyToXml(xml, [addGate, ...ops, place])).resolves.toBeDefined();
+    // a format op after another format op does not see the file's drawing either
+    const second = (await applyToXml(fixture('no-room-merge.bpmn'), [{ op: 'color', ids: ['Activity_0k3x9qa'], color: 'blue' }, { ...place, after: 'Gateway_1hd8x2m' }]).catch((e: unknown) => e)) as CliError;
+    expect(second.code).toBe('E_NO_ROOM');
+    expect(second.details['command']).toBeUndefined();
+    expect(second.details['ops']).toBeDefined();
   });
 });

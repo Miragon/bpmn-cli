@@ -1245,7 +1245,7 @@ after the semantic ops and the layout, in batch order, all or nothing.
 | command / op | effect |
 | --- | --- |
 | `place <id...>` with `--row-of` / `--below` / `--above <id>` and/or `--column-of` / `--after` / `--before <id>` | Move the shapes as one rigid group so the first lands on the row (vertical centre) and/or column (horizontal centre) of another element; `below` / `above` keep one row of the drawing and clear the element, `after` / `before` one gap. Boundary events, labels and the content of an expanded sub-process follow; shapes in the way give way, frames grow (also for a label that reaches past their right or bottom border), flows are rerouted. `place --branch <flowId> --below <id>` moves a whole branch (see selectors below). |
-| `place <boundaryEventId> --side top\|bottom` | Move a boundary event to the top / bottom border of its host (the free spot nearest its column: other boundary events and docking connections are kept clear); its outgoing flows are routed again, and its exception path follows when it was drawn on the old side (the nodes only the event leads to, beyond that border), mirrored about the host's centre row (where that would leave the top of the host's lane, pool or sub-process, the space tool first makes the room at the top of that frame: its content moves down, it grows), the others give way. A reminder path below a task that crosses a branch goes above the task: `place Event_ApprovalOverdue --side top`. Only the boundary event, no row or column (op key `side`). |
+| `place <boundaryEventId> --side top\|bottom` | Move a boundary event to the top / bottom border of its host (the free spot nearest its column: other boundary events and docking connections are kept clear); its outgoing flows are routed again, and its exception path follows when it was drawn on the old side (the nodes only the event leads to, beyond that border, in the host's own lane, pool or sub-process: a node of another lane keeps its place), mirrored about the host's centre row (where that would leave the top of the host's lane, pool or sub-process, the space tool first makes the room at the top of that frame: its content moves down, it grows; below a lane with another lane underneath, that lane grows at its bottom first), the others give way. A reminder path below a task that crosses a branch goes above the task: `place Event_ApprovalOverdue --side top`. Only the boundary event, no row or column (op key `side`). |
 | `align <id...> --axis row\|column [--to <id>]` | Put the shapes on one horizontal / vertical centre line, the one of `--to` (default: the first id; with only `--kind` and `--axis column`: the rightmost one, so nothing moves left). Shapes that would land on each other give way along the free axis. |
 | `color <id...> --color blue\|orange\|green\|red\|purple\|default` | The bpmn-js colour picker colours on shapes and connections (`bioc:fill` / `bioc:stroke` / `color:background-color` / `color:border-color`, labels `color:color`); `default` removes them. `color --path <fromId> <toId> --color green` colours a whole path. |
 | `label <id> --side above\|below\|left\|right` | The external label of an event, gateway, data object / store or flow on that side (flows: of their longest horizontal / vertical segment), off lines and other labels where possible. |
@@ -1290,14 +1290,20 @@ be pushed away (a reference in another pool), the command fails with
 other and never takes a shape out of a sub-process, lane or pool that held
 it: a reference the neighbours would be pushed onto moves along with them
 when its row / column still holds, otherwise the command fails with
-`E_NO_ROOM`. The refusal of `place` / `align` carries one command that
-makes the room, checked by a dry run inside the op (`space --after` the
+`E_NO_ROOM`. The refusal of `place` / `align` carries one space-tool run
+that makes the room, checked by a dry run inside the op (`space --after` the
 column reference by one to three columns, `space --below` the row
 reference by one or two rows, or for a row request right of the shape left
-of the moved ones): `details.command` (`bpmn space <file> --after
-Gateway_1hd8x2m --by 1col`; the CLI fills in the file) and `details.ops`
-(the same as a batch op, to put before the place op), and the hint says
-both; without such a command the hint names the shapes to move first.
+of the moved ones; of the runs that let the request succeed, the one whose
+drawing has the fewest layout problems): `details.ops` (a batch op, to put
+before the place op) and, when the refused op saw the file's own drawing (a
+`place` / `align` command, or the first op of an `apply` batch of format ops
+only), `details.command` (`bpmn space <file> --after Gateway_1hd8x2m --by
+2col`; the CLI fills in the file); the hint says what it carries. After
+other ops of a batch (their changes and new ids are not in the file) the
+hint names only the op to put before the place op, checked on the drawing
+those ops leave. Without such a run the hint names the shapes to move
+first.
 `place --side` refuses with `E_NO_ROOM` when other boundary events and
 docking connections take the whole border. Elements without a
 shape fail with `E_NO_SHAPE` (for a pool use the participant id, not the
@@ -2364,8 +2370,9 @@ Errors go to stderr: `error E_CODE: message`, then `  hint: ...` and the
 candidate ids when a reference could not be resolved; with `--json`:
 `{"ok": false, "error": {"code", "message", "element?", "related?",
 "candidates?", "hint?", "op?", "command?", "ops?"}}` (`command` / `ops`:
-the checked command of an `E_NO_ROOM` that makes the room, as a command
-line with the file filled in and as batch ops).
+the checked space-tool run of an `E_NO_ROOM` that makes the room, as a
+command line with the file filled in, only when the refused op saw the
+file's own drawing, and as batch ops).
 
 | exit | meaning |
 | --- | --- |
@@ -2911,8 +2918,9 @@ Every function runs the code of the CLI command it names, without a file:
   ([Ids](#ids)) and the platform profile's new findings
   (`result.validation.platform`) work as on the command line.
 - A failure throws a `CliError`: `code`, `category`, `details` (`element`,
-  `related`, `candidates`, `hint`, `op`; `E_NO_ROOM` also `command` with
-  `<file>` for the file, and `ops`); `toJSON()` is the CLI's `--json`
+  `related`, `candidates`, `hint`, `op`; `E_NO_ROOM` also `ops` and, when
+  the refused op saw the document's own drawing, `command` with `<file>`
+  for the file); `toJSON()` is the CLI's `--json`
   error. Nothing is half done: the caller still has its input.
 - The Camunda 7 and Camunda 8 profile rules load on demand: the first call
   that validates a document of that platform loads them (`import()`, a
@@ -3243,8 +3251,12 @@ to `applyToXml`.
 - `place <boundaryEventId> --side top|bottom` (op key `side`) moves a
   boundary event to the other border of its host, with its exception path
   ([Formatting without XML](#formatting-without-xml)).
-- `E_NO_ROOM` from `place` / `align` carries one checked command that makes
-  the room (`details.command`, `details.ops`).
+- An annotation's association to a flow docks on the nearest point of the
+  flow it reaches in a straight line without cutting a shape, else it is
+  routed around the shapes; when the flow is rerouted, it follows.
+- `E_NO_ROOM` from `place` / `align` carries the checked space-tool run that
+  makes the room with the fewest layout problems (`details.ops`; as
+  `details.command` when the refused op saw the file's own drawing).
 - `bench` has two batch edits, E8 and E9, and `--compare` reports the runs
   adding crossings / backward flows per edit, with a budget for E8 / E9
   (`tools/bench/soft-budget.json`).
