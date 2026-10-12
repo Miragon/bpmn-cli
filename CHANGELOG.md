@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/Miragon/bpmn-cli/compare/v0.5.0...v0.6.0) (2026-10-12)
+
+
+### Features
+
+* a batch edits a hand-drawn model like single commands, place --side, E_NO_ROOM with a command ([#18](https://github.com/Miragon/bpmn-cli/issues/18), part 1) ([#22](https://github.com/Miragon/bpmn-cli/issues/22)) ([726d53e](https://github.com/Miragon/bpmn-cli/commit/726d53ea0f84aa1072fd958129d780b011d87dd0))
+* new branches and boundary paths in a hand-made drawing avoid crossing lines, with a local repair ([#18](https://github.com/Miragon/bpmn-cli/issues/18), part 2) ([#24](https://github.com/Miragon/bpmn-cli/issues/24)) ([5d92db2](https://github.com/Miragon/bpmn-cli/commit/5d92db2c652bbcffdbb972d9a1c7bbcb79233a2c))
+
 ## [0.5.0](https://github.com/Miragon/bpmn-cli/compare/v0.4.0...v0.5.0) (2026-10-11)
 
 
