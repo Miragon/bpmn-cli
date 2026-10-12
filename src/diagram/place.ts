@@ -2,16 +2,32 @@
  * Placement of elements that have no DI yet, into a drawing that is kept.
  *
  * CONTRACT
- *  placeFlowNodes(ctx, ids) gives every flow node in `ids` a shape, in
- *  dependency order: boundary events whose host has a shape first, then nodes
- *  with a placed predecessor, then nodes with a placed successor, then the
- *  rest (chains of new nodes are placed one after the other). The rules
+ *  placeFlowNodes(ctx, ids) gives every flow node in `ids` a shape, in the
+ *  order of `ids` (the order the ops created them) as far as their neighbours
+ *  allow, like single commands: first the nodes with a placed predecessor
+ *  (the normal flow), then boundary events whose host has a shape, then the
+ *  exception paths (new nodes after a new boundary event: they wait for the
+ *  normal flow's new nodes, so the two do not cross), then nodes with a
+ *  placed successor, then the rest (chains of new nodes are placed one after
+ *  the other). When more nodes follow, ctx.afterNode gets the node just
+ *  placed (incremental.ts routes its flows and measures the spacing again,
+ *  as the next single command would see them). A join placed in this run
+ *  that a flow from its last placed predecessor would enter backwards (no
+ *  loop return) is placed again right of its predecessors, before its one
+ *  successor, as the `connect` into it does as a single command
+ *  (pullPlacedJoins; incremental.ts pullJoins for joins drawn before). The rules
  *  (gap = median horizontal gap between connected neighbours of the plane,
  *  clamped 40..100, fallback 60; row = median row spacing, clamped 80..150):
- *   - splice (the flow P->S was split by N): x = P.right + gap, centred on
- *     S's row when S is in P's row band (or P is a branching node), else on
- *     P's row; S's row in another lane than N's own is replaced by a free
- *     row of N's lane (rowInLane: N's lane never stretches over to S's row);
+ *   - splice (the flow P->S was split by N; also N in a chain of new nodes
+ *     after a node spliced before S in this run, when S still follows N
+ *     through new nodes, branches included: a decision with a new "no"
+ *     branch or a `split` in the chain keeps the splice; a join re-placed by
+ *     incremental.ts pullJoins, before its successor): x = P.right + gap, centred on
+ *     S's row when S is in P's row band (or P is a branching node: another
+ *     branch of P is drawn, or was drawn before the ops and leads to a node
+ *     a later op of the batch spliced into it), else on P's row; S's row in
+ *     another lane than N's own is replaced by a free row of N's lane
+ *     (rowInLane: N's lane never stretches over to S's row);
  *     only when that spot is taken: space tool at P.right + 1 by
  *     N.width + gap within P's pool (inside an expanded sub-process: in
  *     frame mode, so the sub-process never grows over foreign shapes, see
@@ -33,7 +49,9 @@
  *   first row opened with the space tool when it is taken) by a trial route
  *   from the anchor (connectionCost: cut shapes, crossings, labels hit, bends,
  *   length) plus penalties for lower rows, rows on existing lines and the
- *   shapes a frame growth or opened row would move.
+ *   shapes a frame growth or opened row would move. A row also keeps room
+ *   free of shapes for the new nodes that follow in a simple chain (labels
+ *   and lines there are dealt with when they are placed).
  *   - unconnected: below the content of its frame (expanded sub-process, lane,
  *     pool or plane), left-aligned at the frame's first column; only the
  *     frame's own content counts (its members, what is drawn in it, the
@@ -106,6 +124,13 @@ export interface PlaceCtx {
   reuse: Map<string, Reuse>;
   /** called after a shape was placed (blocks add their content here) */
   afterPlace?: (plane: Plane, s: DShape) => void;
+  /**
+   * called after placeFlowNodes placed a node when more nodes follow: its
+   * sequence flows to drawn nodes are routed (and labelled) right away, so
+   * what a batch places next sees them like the next single command would
+   * (incremental.ts routeNow)
+   */
+  afterNode?: (plane: Plane, id: string) => void;
   /** fixed sizes for blocks laid out elsewhere (new expanded sub-processes, pools) */
   blockSize: Map<string, { width: number; height: number }>;
   /** new sub-processes drawn collapsed (all others are expanded) */
@@ -113,6 +138,10 @@ export interface PlaceCtx {
   /** resolves the plane an element belongs on (creating it when needed) */
   planeFor(id: string): Plane | undefined;
   notes: string[];
+  /** nodes placed in this run as a splice: the successor S they were spliced before (a chain of new nodes continues it) */
+  spliced?: Map<string, string>;
+  /** joins placed again right of their rightmost predecessor, before this successor (incremental.ts pullJoins) */
+  joins?: Map<string, string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -440,15 +469,21 @@ function edgeBoxes(plane: Plane): Box[] {
   return out;
 }
 
-/** Up to `count` free row centres at or below `startCy` (shape-free; rows on existing lines are flagged). */
-function freeRows(plane: Plane, frame: DShape | undefined, x: number, width: number, height: number, startCy: number, step: number, exclude: ReadonlySet<string>, count: number): Array<{ c: number; onLine: boolean }> {
+/**
+ * Up to `count` free row centres at or below `startCy` (shape-free; rows on
+ * existing lines are flagged). `extent`: room right of the box the new nodes
+ * that follow need, kept free of shapes only (a label or a line there is
+ * dealt with when the chain is drawn, like single commands would).
+ */
+function freeRows(plane: Plane, frame: DShape | undefined, x: number, width: number, height: number, startCy: number, step: number, exclude: ReadonlySet<string>, count: number, extent = 0): Array<{ c: number; onLine: boolean }> {
   const obs = obstacles(plane, frame, exclude);
+  const shapesOnly = { boxes: obs.boxes, labels: [] };
   const segs = edgeBoxes(plane);
   const out: Array<{ c: number; onLine: boolean }> = [];
   for (let k = 0; k < 40 && out.length < count; k++) {
     const c = startCy + k * step;
     const box = { x, y: c - height / 2, width, height };
-    if (!isFree(box, obs)) continue;
+    if (!isFree(box, obs) || (extent > 0 && !isFree({ ...box, x: x + width, width: extent }, shapesOnly))) continue;
     out.push({ c, onLine: segs.some((sg) => overlaps(sg, box, 4)) });
   }
   if (!out.length) out.push({ c: startCy, onLine: false });
@@ -533,7 +568,7 @@ function cheapest(plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): C
  * (when the first row is taken) that row opened with the space tool.
  */
 function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>, frame: DShape | undefined, x: number, size: { width: number; height: number }, extent: number, first: number, step: number, floor: number, exclude: ReadonlySet<string>, basePenalty = 0, anchor?: DShape): Cand[] {
-  const rows = freeRows(plane, frame, x, size.width + extent, size.height, first, step, exclude, 3);
+  const rows = freeRows(plane, frame, x, size.width, size.height, first, step, exclude, 3, extent);
   const band = spaceBand(plane, probe, anchor);
   const moving = (line: number): number => [...plane.shapes.values()].filter((s) => isLeaf(s) && s.bounds.y >= line && (!band.within || (s.bounds.x < right(band.within) && right(s.bounds) > band.within.x))).length;
   const cands: Cand[] = rows.map((r, k) => {
@@ -645,7 +680,7 @@ function probeOf(ctx: PlaceCtx, plane: Plane, id: string): Probe {
   return { id, kind: s.kind, ...(s.parentId ? { parentId: s.parentId } : {}), ...(s.laneId ? { laneId: s.laneId } : {}), ...(s.poolId ? { poolId: s.poolId } : {}) };
 }
 
-/** Number of new nodes that follow `id` in a simple chain (for the room a branch row needs). */
+/** Room the new nodes that follow `id` in a simple chain need on its row (a branch row is chosen for all of them). */
 function chainExtent(ctx: PlaceCtx, plane: Plane, id: string, pending: ReadonlySet<string>, gap: number): number {
   let extent = 0;
   let cur = id;
@@ -719,17 +754,19 @@ function makeRoomBelow(ctx: PlaceCtx, plane: Plane, host: DShape, event: Box): v
 
 /**
  * The successor S of a spliced node N (the flow into N ended at S before the
- * ops), also through a straight chain of new nodes (one batch that splices a
- * task and then a gateway after it into one flow: each is spliced before S
- * like with two commands, the task first).
+ * ops), also through a chain of new nodes (one batch that splices a task and
+ * then a gateway after it into one flow: each is spliced before S like with
+ * single commands, the task first). The chain may branch: a new gateway in
+ * it with a new "no" branch, or a `split`, keeps the splice of the nodes on
+ * the way to S; a new branch that never reaches S is no splice.
  */
-function spliceTarget(ctx: PlaceCtx, plane: Plane, id: string, pred: string, depth = 0): string | undefined {
+function spliceTarget(ctx: PlaceCtx, plane: Plane, id: string, pred: string): string | undefined {
   const el = ctx.sem.byId.get(id);
-  // inside the chain: the predecessor was placed in this run as a splice of the same flow
-  if (depth < 50 && ctx.placed.has(pred) && predecessors(ctx.sem, pred).length === 1 && successors(ctx.sem, pred).length === 1) {
-    const before = spliceTarget(ctx, plane, pred, predecessors(ctx.sem, pred)[0]!, depth + 1);
-    if (before && before !== id && chainReaches(ctx, plane, pred, before)) return before;
-  }
+  const join = ctx.joins?.get(id);
+  if (join) return join;
+  // inside the chain: the predecessor was spliced before S in this run, and S still follows this node
+  const before = ctx.placed.has(pred) ? ctx.spliced?.get(pred) : undefined;
+  if (before && before !== id && chainReaches(ctx, plane, id, before)) return before;
   const succ = new Set(successors(ctx.sem, id));
   for (const f of flows(el, 'incoming')) {
     const fid = idOf(f);
@@ -748,19 +785,21 @@ function spliceTarget(ctx: PlaceCtx, plane: Plane, id: string, pred: string, dep
 }
 
 /**
- * Whether `target` follows `id` through a straight chain of new nodes (each
- * with one incoming and one outgoing flow, not drawn before this run).
+ * Whether `target` follows `id` through new nodes (not drawn before this
+ * run): every successor is followed, so a split inside the chain (a new
+ * gateway with a second outgoing flow, the branches of a `split`) keeps the
+ * splice; a node drawn before the run ends a path. At most 50 nodes.
  */
 function chainReaches(ctx: PlaceCtx, plane: Plane, id: string, target: string): boolean {
-  let at = id;
-  for (let i = 0; i < 50; i++) {
-    const next = successors(ctx.sem, at);
-    if (next.length !== 1) return false;
-    const n = next[0]!;
-    if (n === target) return true;
-    const drawnBefore = plane.shapes.has(n) && !ctx.placed.has(n);
-    if (drawnBefore || predecessors(ctx.sem, n).length !== 1 || n === id) return false;
-    at = n;
+  const seen = new Set<string>([id]);
+  const queue = [id];
+  while (queue.length && seen.size <= 50) {
+    for (const n of successors(ctx.sem, queue.shift()!)) {
+      if (n === target) return true;
+      if (seen.has(n) || (plane.shapes.has(n) && !ctx.placed.has(n))) continue;
+      seen.add(n);
+      queue.push(n);
+    }
   }
   return false;
 }
@@ -831,11 +870,15 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     .map((n) => plane.shapes.get(n)!);
   const spliced = spliceTarget(ctx, plane, id, main.id);
   const S = spliced ? plane.shapes.get(spliced) : undefined;
+  if (S) (ctx.spliced ??= new Map()).set(id, S.id);
   const maxRight = Math.max(...preds.map((p) => right(p.bounds)));
   if (S || !succShapes.length) {
     // splice / continuation on the anchor's row
     const sameRow = S && Math.abs(cy(S.bounds) - cy(main.bounds)) <= sp.rowTol;
-    const onS = !!S && (sameRow || succShapes.length > 0);
+    // a branching anchor: another branch is drawn, or was drawn before the ops and leads to a node a later op of
+    // the batch spliced into it (still to be placed; a single command for this node would see that branch drawn)
+    const branching = succShapes.length > 0 || flows(ctx.sem.byId.get(main.id), 'outgoing').some((f) => idOf(raw(f, 'targetRef')) !== id && ctx.oldTarget.has(idOf(f) ?? ''));
+    const onS = !!S && (sameRow || branching);
     let c = onS ? cy(S.bounds) : cy(main.bounds);
     // S's row in another lane than the node's own (a node keeping or given the anchor's lane after a branching
     // anchor): the row follows the node's lane, which never stretches over to S's row (audit #14)
@@ -850,6 +893,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
       const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, sp.gap) ?? full);
       recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
+    if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
     return;
   }
@@ -915,6 +959,49 @@ export function placeUnconnected(ctx: PlaceCtx, plane: Plane, id: string): DShap
   return placeAt(ctx, plane, id, x, c, size);
 }
 
+/** Whether `to` follows `from` along sequence flows (at most 500 nodes visited). */
+function leadsTo(ctx: PlaceCtx, from: string, to: string): boolean {
+  const seen = new Set([from]);
+  const queue = [from];
+  while (queue.length && seen.size <= 500) {
+    for (const n of successors(ctx.sem, queue.shift()!)) {
+      if (n === to) return true;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      queue.push(n);
+    }
+  }
+  return false;
+}
+
+/**
+ * A join placed in this run (a merge an earlier op of the batch spliced)
+ * whose last predecessor `id` was just placed, and that a flow from one of
+ * its predecessors would now enter backwards (no loop return), is placed
+ * again right of its rightmost predecessor, before its one successor S: what
+ * the `connect` into it does as a single command (incremental.ts
+ * pullJoins). Same conditions: a gateway with two or more incoming flows and
+ * one outgoing flow to S, its predecessors and S in its pool / sub-process,
+ * S right of the predecessors.
+ */
+function pullPlacedJoins(ctx: PlaceCtx, plane: Plane, id: string, pending: ReadonlySet<string>): void {
+  for (const jid of successors(ctx.sem, id)) {
+    const join = plane.shapes.get(jid);
+    if (!join || !ctx.placed.has(jid) || pending.has(jid) || !is(join.el, 'bpmn:Gateway')) continue;
+    const preds = predecessors(ctx.sem, jid).map((p) => plane.shapes.get(p));
+    const outs = successors(ctx.sem, jid);
+    const S = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
+    if (preds.length < 2 || !S || !preds.every((p): p is DShape => !!p)) continue;
+    const sameFrame = (s: DShape): boolean => s.poolId === join.poolId && s.parentId === join.parentId;
+    if (!preds.every(sameFrame) || !sameFrame(S) || S.bounds.x <= Math.max(...preds.map((p) => right(p.bounds)))) continue;
+    if (!preds.some((p) => cx(join.bounds) < p.bounds.x && !leadsTo(ctx, jid, p.id))) continue;
+    plane.shapes.delete(jid);
+    (ctx.joins ??= new Map()).set(jid, S.id);
+    if (layoutDebugOn()) layoutDebug(`[join] ${jid}: a flow from ${preds.map((p) => p.id).join(', ')} would enter it backwards: placed again before ${S.id}`);
+    placeAfter(ctx, plane, jid, preds, pending);
+  }
+}
+
 /**
  * Gives every flow node in `ids` a shape, in dependency order (see module
  * contract). Ids whose plane does not exist are skipped and returned.
@@ -923,12 +1010,28 @@ export function placeFlowNodes(ctx: PlaceCtx, ids: string[]): string[] {
   const pending = new Set(ids);
   const skipped: string[] = [];
   const shapeOn = (plane: Plane, id: string): DShape | undefined => plane.shapes.get(id);
+  // exception paths: the new nodes after a new boundary event; they wait for the normal flow's new nodes
+  // (like single commands that add the normal flow first), so the two do not cross each other
+  const exception = new Set<string>();
+  const walk = ids.filter((id) => is(ctx.sem.byId.get(id), 'bpmn:BoundaryEvent'));
+  while (walk.length) {
+    for (const n of successors(ctx.sem, walk.shift()!)) {
+      if (!pending.has(n) || exception.has(n)) continue;
+      exception.add(n);
+      walk.push(n);
+    }
+  }
+  let last: { plane: Plane; id: string } | undefined;
   while (pending.size) {
     // a relocated node brings its boundary events and sub-process content back with it (commit): never place them twice
     for (const id of pending) if (ctx.planes.some((p) => p.shapes.has(id))) pending.delete(id);
     if (!pending.size) break;
-    let chosen: { id: string; plane: Plane; mode: 'boundary' | 'after' | 'before' | 'free'; preds?: DShape[]; succ?: DShape } | undefined;
-    for (const mode of ['boundary', 'after', 'before', 'free'] as const) {
+    // more nodes follow: the one placed last gets its flows now (afterNode), so the next placement sees them
+    if (last) ctx.afterNode?.(last.plane, last.id);
+    last = undefined;
+    let chosen: { id: string; plane: Plane; mode: 'boundary' | 'after' | 'exception' | 'before' | 'free'; preds?: DShape[]; succ?: DShape } | undefined;
+    // the normal flow first, then boundary events, then their exception paths
+    for (const mode of ['after', 'boundary', 'exception', 'before', 'free'] as const) {
       for (const id of pending) {
         const plane = ctx.planeFor(id);
         if (!plane) continue;
@@ -939,7 +1042,8 @@ export function placeFlowNodes(ctx: PlaceCtx, ids: string[]): string[] {
           if (host && shapeOn(plane, host)) chosen = { id, plane, mode };
         } else if (is(el, 'bpmn:BoundaryEvent') && idOf(raw(el, 'attachedToRef')) && pending.has(idOf(raw(el, 'attachedToRef'))!)) {
           continue;
-        } else if (mode === 'after') {
+        } else if (mode === 'after' || mode === 'exception') {
+          if (is(el, 'bpmn:BoundaryEvent') || exception.has(id) !== (mode === 'exception')) continue;
           const preds = predecessors(ctx.sem, id).map((p) => shapeOn(plane, p)).filter((p): p is DShape => !!p);
           if (preds.length) chosen = { id, plane, mode, preds };
         } else if (mode === 'before') {
@@ -957,11 +1061,13 @@ export function placeFlowNodes(ctx: PlaceCtx, ids: string[]): string[] {
     pending.delete(chosen.id);
     if (chosen.mode === 'boundary') {
       if (!placeBoundary(ctx, chosen.plane, chosen.id)) placeUnconnected(ctx, chosen.plane, chosen.id);
-    } else if (chosen.mode === 'after') placeAfter(ctx, chosen.plane, chosen.id, chosen.preds!, pending);
+    } else if (chosen.mode === 'after' || chosen.mode === 'exception') placeAfter(ctx, chosen.plane, chosen.id, chosen.preds!, pending);
     else if (chosen.mode === 'before') placeBefore(ctx, chosen.plane, chosen.id, chosen.succ!);
     else if (is(ctx.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') && placeBoundary(ctx, chosen.plane, chosen.id)) {
       /* host placed meanwhile */
     } else placeUnconnected(ctx, chosen.plane, chosen.id);
+    pullPlacedJoins(ctx, chosen.plane, chosen.id, pending);
+    last = { plane: chosen.plane, id: chosen.id };
   }
   return skipped;
 }

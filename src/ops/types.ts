@@ -228,6 +228,8 @@ export interface PlaceOp extends Selectors {
   after?: string;
   /** column: the column left of this element */
   before?: string;
+  /** a boundary event (the only id): the border of its host it moves to; its exception path follows */
+  side?: 'top' | 'bottom';
 }
 
 export interface AlignOp extends Selectors {

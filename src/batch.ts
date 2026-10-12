@@ -236,6 +236,7 @@ export const BRANCH_FIELDS: FieldsOf<SplitBranch> = {
 /* format ops (diagram only) */
 
 export const SIDE_VALUES = ['right', 'top', 'bottom', 'left'] as const;
+export const BOUNDARY_SIDE_VALUES = ['top', 'bottom'] as const;
 export const LABEL_SIDE_VALUES = ['above', 'below', 'left', 'right'] as const;
 export const COLOR_VALUES = ['blue', 'orange', 'green', 'red', 'purple', 'default'] as const;
 
@@ -255,6 +256,7 @@ export const PLACE_FIELDS: FieldsOf<PlaceOp> = {
   columnOf: ref('Column: centre the reference horizontally on this element.'),
   after: ref('Column: put the reference one gap right of this element.'),
   before: ref('Column: put the reference one gap left of this element.'),
+  side: str('A boundary event (the only id, no row or column): the border of its host it moves to; its outgoing flow is routed again, and its exception path follows when it was drawn on the old side.', { values: BOUNDARY_SIDE_VALUES }),
 };
 
 export const ALIGN_FIELDS: FieldsOf<AlignOp> = {
@@ -706,7 +708,13 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
     }
     case 'place':
       checkSelection(ctx, out, true);
-      checkGroups(ctx, out, PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before")');
+      if (out['side'] !== undefined) {
+        const with_ = PLACE_GROUPS.flat().filter((k) => out[k] !== undefined);
+        if (with_.length) throw fail(ctx, `"side" moves a boundary event to a border of its host; it cannot be combined with ${with_.map((k) => `"${k}"`).join(', ')}`, 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
+        if (hasSelector(out) || (out['ids'] as string[] | undefined)?.length !== 1) throw fail(ctx, '"side" takes exactly one id (the boundary event)', 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
+        break;
+      }
+      checkGroups(ctx, out, PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before"), or "side" for a boundary event');
       break;
     case 'align':
       checkSelection(ctx, out, true);

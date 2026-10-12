@@ -1,4 +1,4 @@
-# Handover, 2026-10-11 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), and the profile rules loaded on demand (#13))
+# Handover, 2026-10-12 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), and stage A of the incremental layout of edits to hand-drawn models (#18))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -23,7 +23,8 @@ names what it creates with aliases (`"as": "$name"`). An agent reads a
 large model through `show --around <id>` and `show <id> --context`, and a
 write reports the warnings it added, not the file's old ones (`--summary`
 for a few lines). A hand-made diagram is kept (new elements
-are placed locally, like the modeler's space tool), a new file or an
+are placed locally, like the modeler's space tool; a batch like the same ops
+sent one by one), a new file or an
 engine-owned drawing is redrawn by the built-in engine, and the agent formats
 the picture with commands that name elements (`place`, `align`, `color`,
 `label`, `route`, `space`, `tidy`, `compact`, `order` of lanes and pools;
@@ -36,7 +37,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1876 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1909 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -46,6 +47,233 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Incremental layout of edits to hand-drawn models, stage A (2026-10-12, `feat/layout-batch-parity`, issue #18)
+
+Issue #18 measured that an agent's change to a hand-drawn model sent as one
+`apply` batch came out far worse than the same ops sent as single commands
+(on the plugin eval's model 0 -> 9..19 against 0 -> 0..3), that agents had no
+command to put a boundary event on the top border, and that `E_NO_ROOM`
+named no command that works. Stage A is the issue's recommended first PR:
+batch parity (1), the boundary side control (4), `E_NO_ROOM` with a command
+(5) and the bench edits (6). The user's decisions hold: elements by id only,
+new ids speak, a hand-made drawing is kept (no full redraw as a fix).
+
+- **A batch places like single commands** (`diagram/place.ts`,
+  `diagram/incremental.ts`, `pipeline.ts`):
+  - the new nodes are placed in op order (the ids the ops created, passed as
+    `IncrementalOptions.created`; the model lists an inserted node next to
+    its anchor, so a merge spliced after the approval used to be placed
+    before it, on the main row);
+  - `chainReaches` follows every successor through new nodes and
+    `spliceTarget` continues the splice of a node placed before S in this
+    run (`PlaceCtx.spliced`): a decision with a new "no" branch, or a
+    `split`, inside the chain keeps the splice (before: the chain had to be
+    straight, so the task went to a new branch row below);
+  - exception paths (new nodes after a new boundary event) wait for the
+    normal flow's new nodes, and boundary events for the normal flow too,
+    whatever the op order;
+  - while more nodes follow, the sequence flows of each placed node are
+    routed right away, the flows the placement broke too, and the spacing is
+    measured again (`routeNow`, through `PlaceCtx.afterNode`): the next
+    placement sees them like the next single command would. At the end such
+    a flow is routed again only when it broke since (`ctx.routedNow`), and
+    an existing one counts as rerouted;
+  - a branch row still keeps room for the chain of new nodes after it, now
+    free of shapes only (labels and lines there are dealt with when the chain
+    is placed): with labels and lines counted, a "no" label made the
+    reminder path take another column than single commands; without the
+    room at all, a branch's end event landed on a line (bench E2, a
+    Modeler model with a group: 8 -> 49).
+- **A connect into a merge that would enter it backwards** (open question 4,
+  decided yes): a join drawn before the ops (a gateway with two or more
+  incoming flows and one outgoing flow to S) that a new flow would enter
+  backwards, from a node it does not lead back to (no loop return), is
+  placed again right of its rightmost source, before S, like a splice
+  (`incremental.ts pullJoins`, `PlaceCtx.joins`); its sources and S in its
+  pool / sub-process, S right of the sources. The eval's merge as single
+  commands: 0 -> 3 (backward flow) before, 0 -> 0 now, the same shapes as the
+  batch.
+- **`place <boundaryEventId> --side top|bottom`** (op key `side`;
+  `diagram/ops.ts boundarySide`): the event moves to that border of its
+  host (the spot nearest its column that no other boundary event and no
+  docking connection takes; `E_NO_ROOM` when none is left), its exception
+  path drawn on the old side (the nodes only it leads to, beyond that
+  border) is mirrored about the host's centre row (above the interior of
+  the host's lane, pool or sub-process the space tool first makes the room
+  at the top of that frame), the others give way (`makeRoom`), its flows
+  are routed again. On the 112 scenarios with a timer path on the median
+  task, `--side top` succeeds on all (26 with a lane, pool or sub-process
+  above that needed the room), adding no hard defect. Only the boundary event, no row
+  or column (`E_USAGE` otherwise); `place` of a boundary event with a row /
+  column is still `E_WRONG_KIND`, its hint names `--side`. Open question 3
+  decided for `place --side` (the issue's first option).
+- **`E_NO_ROOM` carries one command** (`diagram/ops.ts withRoomHint`,
+  `roomCandidates`; `cli.ts withFile`): when `place` / `align` refuse, a dry
+  run on the drawing as the op found it tries `space --after` the column
+  reference by 1 to 3 columns (`before`: after the reference's drawn
+  predecessors), `space --below` the row reference by 1 or 2 rows, and for a
+  row request the space right of the shape left of the moved ones, each
+  followed by the op; of those that let it succeed, the one with the
+  fewest layout problems goes into `details.ops` (the batch op) and, when
+  the op saw the file's own drawing, `details.command` (`bpmn space <file>
+  --after Gateway_1hd8x2m --by 2col`, the CLI fills in the file, quoted
+  when needed), and the hint says what it carries (see "fixes after the
+  verification" below); without one the hint names the shapes to move
+  first. Both refusals of the eval (`place Activity_ApprovePurchase
+  Gateway_PurchaseApproved --row-of Gateway_1hd8x2m --after
+  Gateway_1hd8x2m` on the drawings 0.5.0 left after the merge batch and the
+  "no"-to-the-existing-node batch with the reminder path,
+  `test/fixtures/layout-batch/`) succeed after the command (score 19 -> 7
+  and 11 -> 5).
+- **Bench E8 / E9** (`tools/bench/gen-edits.mjs`): E8 splices a decision
+  into a branch of an existing split with a new "no" branch in one batch,
+  E9 adds a non-interrupting timer reminder path on the new task; bpmn-cli
+  arms only, not part of E7. Every record carries `soft.addedKinds`
+  (crossings, backward flows; `lib/measure.mjs softDelta`), `bench
+  --compare` shows the runs adding them per edit and fails when the runs of
+  E8 / E9 on the scenarios exceed `tools/bench/soft-budget.json` (E8: 16
+  crossings / 1 backward flow of 76 runs, E9: 17 / 1; on 0.5.0 58 / 60 each).
+  Open question 5 decided: gated for E8 / E9, reported for the others.
+
+Evidence (private corpora local, counts only):
+
+- The eval fixture, score before -> after, batch / single commands:
+
+  | edit | 0.5.0 | now |
+  | --- | --- | --- |
+  | decision + "no" to the existing node | 0 -> 11 / 0 -> 0 | 0 -> 0 / 0 -> 0 |
+  | decision + new "no" branch | 0 -> 9 / 0 -> 0 | 0 -> 0 / 0 -> 0 |
+  | `split` | 0 -> 9 / 0 -> 0 | 0 -> 0 / 0 -> 0 |
+  | merge gateway | 0 -> 19 / 0 -> 3 | 0 -> 0 / 0 -> 0 |
+  | each + the timer reminder path | 11, 9, 8, 19 / 5, 0, 0, 8 | 5, 0, 0, 5 / 5, 0, 0, 5 |
+
+  Every batch gives the same shapes as its single commands (with the
+  reminder path too) and adds no backward flow. The 5 left with the
+  reminder path ("no" to the existing node, merge) is one crossing between
+  the reminder path and the "no" flow, in the batch and in single commands
+  alike; `place Event_ApprovalOverdue --side top` takes the path above the
+  approval: score 0 for all four, batch and single commands.
+- The issue's probe on the private corpus (267 files with a diagram, 3,362
+  incremental runs), runs adding a crossing / a backward flow:
+
+  | edit | runs | 0.5.0 batch | now batch | single commands |
+  | --- | ---: | --- | --- | --- |
+  | decision after a task | 265 | 70 / 33 | 52 / 15 | 64 / 15 |
+  | the same + reminder path | 265 | 223 / 33 | 60 / 15 | 75 / 15 |
+  | decision into a branch of a split | 161 | 116 / 129 | 54 / 0 | 61 / 0 |
+  | the same + reminder path | 161 | 117 / 129 | 47 / 0 | 60 / 0 |
+  | "no" to the sibling branch's node | 161 | 126 / 147 | 37 / 15 | 39 / 15 |
+  | timer path on a task | 265 | 53 / 0 | 44 / 0 | 61 / 0 |
+  | `split` after a task (one op) | 265 | 60 / 8 | 53 / 8 | |
+  | new branch at a split | 169 | 35 / 0 | 33 / 0 | |
+  | skip with a merge | 97 | 2 / 1 | 3 / 1 | 3 / 1 |
+
+  A batch adds crossings in no more runs than the same ops as single
+  commands, a branch splice in a batch adds no backward flow (before 129 of
+  161). Single commands are unchanged except the merge (backward flows into
+  a merge an earlier command spliced). Hard defects without a group: 0 of
+  3,362 runs (every hard problem added involves a group, as before).
+- Bench on the scenarios and the 60 Modeler models (0.5.0 -> now): E8 runs
+  adding crossings 78 -> 30, backward flows 89 -> 1, mean harness delta 8.9 ->
+  2.4; E9 80 -> 31, 89 -> 1, 10.2 -> 2.3; the median share of moved shapes of
+  E8 / E9 0 % -> 61 % (the splice shifts the rest of the row, as single
+  commands do; 0.5.0 put the new nodes on a new row below), of E1 / E2 / E4
+  unchanged (25 % / 0 % / 0 %); E2 mean harness delta 1.6 -> 2.0 (one Modeler
+  model, 8 -> 40: the new branch inside a group frame, group overlaps only),
+  E7 -1.1 -> -0.9. No semantic failure, run adding a hard defect or global
+  hard count more; `RESULT: no regression`. The one E8 / E9 backward flow
+  (a scenario with lanes) comes from single commands too.
+- `npm run gate`: 1,900 tests (+247 opt-in), isomorphism check, layout
+  regression 444 (budget 444), fuzz 12 x 15 0 errors (the one hard-overlap
+  warning of `gallery__04-subprocess` is the same on 0.5.0).
+
+Open after stage A:
+
+- Steps 2 and 3 of the issue (stage B): a crossing-aware row choice that
+  opens a row below the anchor and tries the host's top border for a
+  boundary path on its own (open question 2: today only on request,
+  `--side`), and a local repair pass. The single-command base rate stays (a
+  new branch or boundary path crosses a bypass or loop-back flow in about
+  one run in five); the fixture's two reminder-path batches keep their
+  crossing until then (stage B: 0).
+- The `edit-hand-drawn-model` eval was not re-run (2 runs per arm); the
+  skill now says that one batch places like single commands and names
+  `place --side top` for a crossing reminder path.
+- A merge pulled right moves what lies right of its new column (the space
+  tool, like a splice); a merge whose successor lies left of its sources is
+  not pulled.
+
+### Stage A, fixes after the verification (2026-10-12)
+
+The verification of stage A passed six criteria and rated four partial.
+Each finding below has a test in `test/layout-batch-parity.test.ts` (last
+block) that fails on the stage A build:
+
+- **Splices into two branches of one gateway in one batch** (a task into
+  "yes" and a merge into "no", two tasks, the eval's merge batch in a pool
+  with lanes: 18 against 5 as single commands, before 8 on 0.5.0). The
+  first node's anchor counted as a branching node only when another branch
+  was drawn; in a batch that branch leads to a node a later op spliced, not
+  yet placed, so the node went to the anchor's row (in another lane: a new
+  row of its lane). Now a branch drawn before the ops counts too
+  (`place.ts placeAfter`). And a merge placed in this run that a later
+  node's flow would enter backwards is placed again right of its
+  predecessors (`place.ts pullPlacedJoins`, the batch form of `pullJoins`):
+  the merge batch with the merge added first gives the shapes of single
+  commands as well. On the eval model and the pool with lanes, all five
+  variants: same shapes and score as single commands, no backward flow.
+- **`place --side` back to the bottom in a pool with lanes** refused with
+  `E_LEAVES_CONTAINER` whose hint named the shape's own lane as the lane it
+  would land in (`lanes__complaint-t1`, `-t2`, `subproc__s15`): the way
+  back took a node of another lane above the host as part of the exception
+  path. The path is now the nodes in the host's own lane / pool /
+  sub-process (`ops.ts exceptionPath`); below a lane with a lane underneath
+  the lane grows at its bottom first (like the top); the hint of a shape
+  that would land below its lane in no lane says so. A third boundary event
+  drawn over a corner (`artifacts__10-three-boundaries`) found no spot on
+  the way back: a spot reaching over a corner of the border is the fallback
+  (its centre on the border's line). The verifier's runs, there and back:
+  of the 146 existing boundary events of the scenarios and the Modeler
+  models refusals 4 -> 0 and runs adding a hard problem 1 -> 0; of the 56
+  new boundary paths on a sub-process refusals 4 -> 0 (a crowded border
+  now takes a corner spot; the move is on request, its quality line says
+  what it costs).
+- **`place --side` and an annotation on a flow** (`artifacts__16`): the move
+  rerouted a loop flow, and the association to it ran straight through two
+  shapes (hard `through`). An association docked on a flow now ends at the
+  nearest point of the flow a straight line reaches without cutting a
+  shape, else it is routed around the shapes to the middle of the flow's
+  nearest segment (`reroute.ts flowDock`); it is rerouted when its end left
+  the flow, after the flows (`routeRank`). That run: 37 -> 0 instead of
+  37 -> 26 with two `through`.
+- **`E_NO_ROOM`** took the first space-tool run that fits (`1col`; the
+  eval's two refusals score 8 and 7 after it, `2col` 7 and 5): now the run
+  with the fewest layout problems (`2col` for both). After other ops of a
+  batch the command for the file was checked on another drawing and could
+  name ids only the refused batch has (`--after Activity_NewGate`): now
+  `details.command` only when the refused op saw the file's own drawing
+  (`runFormatOps(..., asFile)`, the first op of a batch of format ops only),
+  else the hint names only the batch op to put before the place op.
+
+Not changed: the timer reminder path of the fixture's "no to the existing
+node" and merge batches still crosses the "no" flow, in the batch and in
+single commands alike (score 5); `--side top` takes it above (score 0), and
+stage B (`feat/layout-room-making`) tries the host's top border on its own
+(both 0). The bench's one Modeler model whose E2 branch lands inside a group
+frame (harness 8 -> 40, group overlaps only) is unchanged.
+
+Evidence: the issue's probe on the private corpus gives the same records
+as stage A (3,403); the verifier's adversarial runs (657, scenarios and
+Modeler models, batch / single, `--side` there and back) add no hard
+problem; `bench --compare` against 0.5.0: no regression (E8 / E9 crossings
+78 -> 30 / 80 -> 31, backward flows 89 -> 1 each, harness 8.9 -> 2.3 / 10.2
+-> 2.3; E1 / E2 / E4 moved share unchanged); 311 batches twice in two
+processes give the same bytes. `npm run gate`: 1,909 tests (+247 opt-in),
+layout regression 444 (budget 444), fuzz 12 x 15 0 errors (the same hard-
+overlap warning of `gallery__04-subprocess` as 0.5.0). The
+`applyToXml`-only bundle grew by this code from 627.9 to 631.4 KB minified:
+its budget is 635 KB now (`tools/iso/budget.json`; gzip 200.2 of 201 KB).
 
 ## `bpmn render`, fixes after the verification (2026-10-11, `feat/render`, issue #12)
 
@@ -1796,7 +2024,12 @@ CIB seven, a FEEL parser for the Camunda 8 profile (today: the common slips
 only), checking linked forms / called processes / decisions against a
 deployment. See the "Still open" lists of the C7 audit and of step 3.)
 
-1. **The remaining layout bugs the fuzzer still hits**: data objects and
+1. **Issue #18 stage B**: the crossing-aware row choice with room-making
+   (also the host's top border for a boundary path) and the local repair
+   pass, measured with the issue's probe and bench E8 / E9 (see "Incremental
+   layout of edits to hand-drawn models, stage A"), then the
+   `edit-hand-drawn-model` eval again.
+2. **The remaining layout bugs the fuzzer still hits**: data objects and
    annotations placed onto shapes or into a foreign sub-process, boundary
    events colliding with new nodes (#63) or, added on a host inside a
    sub-process, intruding into another frame, `place` / `align` pushing a
@@ -1804,12 +2037,12 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    associations on the wrong plane after a collapse (#15), data
    associations not rerouted after `split` / `move --lane`, flows left
    detached from gateways (#16).
-2. **CI**: run `npm run gate` on every change; run the bench and a longer fuzz
+3. **CI**: run `npm run gate` on every change; run the bench and a longer fuzz
    campaign on the private corpus on a schedule, outside the repository.
-3. **An MCP server.** Thin wrapper over show/find/add/connect/apply/validate
+4. **An MCP server.** Thin wrapper over show/find/add/connect/apply/validate
    plus `show --layout`, `metrics` and the format ops. Removes the shell
    quoting trap (`${...}` in conditions).
-4. **Embedding in design-iq, the rest** (audit P1 and the step 2 leftovers
+5. **Embedding in design-iq, the rest** (audit P1 and the step 2 leftovers
    above): skip the layout in `auto` mode when the model did not change (a
    no-op that completes missing DI is still written); hunks or several text
    regions per save for inserts; lane conventions for nested lanes (a node
@@ -1819,7 +2052,7 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    placed next to a node in no lane; the bundle size if design-iq needs it
    (the profile rules load on demand since #13; the next lever is splitting
    `guide.ts`, see "Profile rules on demand").
-5. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
+6. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
    `bpmn render`), 2 (crops, halos, numbered problems, tiles, `--render`)
    and 3 (the plugin skill's look step and its eval case) are done, see
    "`bpmn render`, stage 3", "stage 2" and "stage 1"; the verification's
@@ -1827,7 +2060,7 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    "`bpmn render`, fixes after the verification". Open: the whole eval suite
    on the new skill, and offering `renderSvg` to design-iq (out of scope
    here).
-6. **Persistent layout intent**: pins / "main path" hints in the DI that the
+7. **Persistent layout intent**: pins / "main path" hints in the DI that the
    clean engine honours, so formatting survives a full redraw.
 
 ## Known residuals

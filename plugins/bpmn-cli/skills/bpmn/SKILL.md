@@ -112,15 +112,12 @@ installed version. Ask it instead of guessing:
      with `placed:` / `moved:` / `rerouted:`, or `full` for a new / engine-drawn
      diagram; `layout quality: score a -> b; added: <problem> [ids]` - fix added
      problems with the format commands, never by redrawing a hand-made diagram
-   - a hand-made diagram where one batch splices several nodes in a row into the
-     same flow (a task, then a gateway after it) can come out with the new nodes
-     below the line (`added: backwardFlow`, `crossings` in the dry run): splice
-     the main-line nodes with one command each instead - `bpmn add <file>
-     userTask "Approve order" --id Activity_ApproveOrder --flow <flowId>`, then
-     `bpmn add <file> exclusiveGateway "Order approved?" --id
-     Gateway_OrderApproved --after Activity_ApproveOrder` (each lands in the row
-     and shifts the rest right) - then add branches and boundary paths in one
-     batch, with the flow ids the results printed
+   - in a hand-made diagram one batch places its new nodes like the same ops
+     sent one by one: a task and a decision spliced into a flow stay in the
+     row (the rest shifts right), their branches go below, a boundary path is
+     placed after the normal flow. When a boundary path below its host crosses
+     a branch (`added: crossings` naming both), move the event and its path to
+     the top border: `bpmn place <file> <boundaryEventId> --side top`
    - `--summary` shortens all of this to a few lines
    - example: a full redraw moved the customer pool below and added a crossing
      with a message flow - `bpmn order <file> <collaborationId> <poolIds...>`
@@ -245,7 +242,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_DUPLICATE_EXTENSION` | `ext remove` the old one or `--replace`; check `bpmn ext list <file> <id>`. |
 | `E_VALIDATION` | The change would add a structural error: do the whole change in one batch, or read `bpmn validate`. `--force` only when the user agrees. |
 | `E_LEAVES_CONTAINER` | `place` / `align` would leave the lane / pool: `move <id> --lane <laneId>` first (in a batch: a move op before it). |
-| `E_NO_ROOM` | Make room with `space --after <id>` / `--below <id>`, then place again. |
+| `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
 | `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
 | `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. |

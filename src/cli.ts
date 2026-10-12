@@ -17,7 +17,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
-import { COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
+import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
 import { setLayoutDebug } from './debug.js';
 import { layoutProblems } from './diagram/metrics.js';
 import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './diagram/render.js';
@@ -136,15 +136,28 @@ async function runMutation(
 
 /** A mutation of ops on `file` (`-`: stdin), see runMutation. */
 async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & OutputOptions): Promise<void> {
-  await runMutation(
-    file,
-    opts,
-    (o) => mutateFile(file, ops, o),
-    (doc, o) => {
-      assertLossless(doc, o);
-      return mutateDocToFile(doc, ops, o);
-    },
-  );
+  try {
+    await runMutation(
+      file,
+      opts,
+      (o) => mutateFile(file, ops, o),
+      (doc, o) => {
+        assertLossless(doc, o);
+        return mutateDocToFile(doc, ops, o);
+      },
+    );
+  } catch (err) {
+    throw withFile(err, file);
+  }
+}
+
+/** A refusal that carries a runnable command (E_NO_ROOM: details.command) names the file in it and in its hint. */
+function withFile(err: unknown, file: string): unknown {
+  if (!isCliError(err) || typeof err.details['command'] !== 'string' || file === '-') return err;
+  const quoted = /^[\w./@%+=:,-]+$/.test(file) ? file : `'${file.replace(/'/g, `'\\''`)}'`;
+  err.details['command'] = String(err.details['command']).replaceAll('<file>', quoted);
+  if (typeof err.details.hint === 'string') err.details.hint = err.details.hint.replaceAll('bpmn space <file>', `bpmn space ${quoted}`);
+  return err;
 }
 
 function printError(err: unknown, json: boolean | undefined): never {
@@ -760,12 +773,20 @@ withMutationOptions(
       .option('--above <id>', 'row: the row above this element')
       .option('--column-of <id>', 'column: centre on the column of this element')
       .option('--after <id>', 'column: right of this element')
-      .option('--before <id>', 'column: left of this element'),
+      .option('--before <id>', 'column: left of this element')
+      .addOption(new Option('--side <side>', 'a boundary event (the only id): move it to this border of its host; its outgoing flow is routed again and its exception path follows').choices([...BOUNDARY_SIDE_VALUES])),
     'move',
   ),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   await run(async () => {
-    checkFlagGroups(o, [['rowOf', 'below', 'above'], ['columnOf', 'after', 'before']], 'place needs a row (--row-of, --below, --above) and/or a column (--column-of, --after, --before)');
+    if (o['side'] !== undefined) {
+      const given = ['rowOf', 'below', 'above', 'columnOf', 'after', 'before', 'path', 'kind', 'branch'].filter((k) => o[k] !== undefined);
+      if (given.length) throw usageError(`--side cannot be combined with ${given.map(flag).join(', ')}`, { hint: '`bpmn place <file> <boundaryEventId> --side top` moves a boundary event to the top border of its host; place the host to move both.' });
+      if (ids.length !== 1) throw usageError('--side takes exactly one id: the boundary event', { hint: 'Example: `bpmn place order.bpmn Event_PaymentOverdue --side top`.' });
+      await runFormat(file, { op: 'place', ids, side: o['side'] as PlaceOp['side'] }, o);
+      return;
+    }
+    checkFlagGroups(o, [['rowOf', 'below', 'above'], ['columnOf', 'after', 'before']], 'place needs a row (--row-of, --below, --above) and/or a column (--column-of, --after, --before), or --side for a boundary event');
     const op: PlaceOp = { op: 'place', ...selectorsOf(ids, o, true), ...pick(o, ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'] as const) };
     await runFormat(file, op, o);
   }, !!o['json']);

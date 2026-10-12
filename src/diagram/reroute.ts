@@ -21,13 +21,20 @@
  *    message flows also avoid foreign pools. The frame is the common lane,
  *    else the common expanded sub-process, else the common pool. Associations
  *    and data associations are a straight line when that cuts nothing, else
- *    routed. Undefined when an end has no shape on the plane.
+ *    routed. An association docked on a flow ends at the nearest point of
+ *    the flow a straight line from its shape reaches without cutting a
+ *    shape, else it is routed around the shapes to the middle of the
+ *    flow's segment nearest to its shape, entering across it. Undefined
+ *    when an end has no shape on the plane.
  *  - brokenEdge(plane, edge, before) says whether a kept connection must be
  *    rerouted: it has fewer than two distinct waypoints (zero length, e.g.
  *    both ends were pushed onto one point), an end lost its shape's border,
  *    it became diagonal (it was orthogonal before), or it now cuts a shape it
  *    did not cut before (a leaf shape, an expanded sub-process holding
- *    neither end, for a message flow a pool other than its ends' pools).
+ *    neither end, for a message flow a pool other than its ends' pools). An
+ *    end docked on a connection lost it when it is off that connection's
+ *    line. routeRank orders the rerouting: sequence flows, message flows,
+ *    then connections docked on a connection (they follow its final line).
  */
 import { attachedSide, defaultSides, routeOrthogonal, type Side } from './router.js';
 import { borderDistance, borderPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './geom.js';
@@ -95,8 +102,8 @@ function messageSides(from: Box, to: Box): Side[] {
   return cy(to) >= cy(from) ? ['bottom', 'top'] : ['top', 'bottom'];
 }
 
-function obstaclesFor(plane: Plane, e: DEdge, s: DShape, t: DShape): Box[] {
-  const keepOut = new Set([s.id, t.id, ...ancestors(plane, s), ...ancestors(plane, t)]);
+function obstaclesFor(plane: Plane, e: DEdge, ...ends: DShape[]): Box[] {
+  const keepOut = new Set(ends.flatMap((x) => [x.id, ...ancestors(plane, x)]));
   const out: Box[] = [];
   for (const o of plane.shapes.values()) {
     if (keepOut.has(o.id)) continue;
@@ -139,6 +146,73 @@ function flowAnchor(e: DEdge): Box | undefined {
   return { x: Math.round((best[0].x + best[1].x) / 2), y: Math.round((best[0].y + best[1].y) / 2), width: 0, height: 0 };
 }
 
+/** The point of a polyline nearest to `p`. */
+function nearestOn(points: readonly Point[], p: Point): Point | undefined {
+  let best: Point | undefined;
+  let dist = Infinity;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    const len = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const k = len ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len)) : 0;
+    const q = { x: a.x + k * (b.x - a.x), y: a.y + k * (b.y - a.y) };
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d < dist) {
+      dist = d;
+      best = q;
+    }
+  }
+  return best;
+}
+
+/**
+ * Where an association docks on a flow, seen from the shape at its other
+ * end: the nearest point of the flow that a straight line from the shape
+ * reaches without cutting an obstacle (each segment's point nearest to the
+ * shape and its middle, nearest first; `clear`); else the middle of the
+ * segment nearest to the shape, entered across it (`sides`: the caller
+ * routes around the obstacles to it).
+ */
+function flowDock(flow: DEdge, from: Box, obstacles: readonly Box[]): { at: Box; clear: boolean; sides?: Side[] } | undefined {
+  const c = { x: cx(from), y: cy(from) };
+  const cands: Point[] = [];
+  for (let i = 0; i + 1 < flow.points.length; i++) {
+    const a = flow.points[i]!;
+    const b = flow.points[i + 1]!;
+    const q = nearestOn([a, b], c);
+    if (q) cands.push(q);
+    cands.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  const dist = (q: Point): number => Math.hypot(q.x - c.x, q.y - c.y);
+  const box = (q: Point): Box => ({ x: Math.round(q.x), y: Math.round(q.y), width: 0, height: 0 });
+  const sorted = cands.sort((p, r) => dist(p) - dist(r) || p.x - r.x || p.y - r.y);
+  for (const q of sorted) if (!obstacles.some((o) => pathHits(straight(from, box(q)), o))) return { at: box(q), clear: true };
+  let best: { at: Box; clear: boolean; sides?: Side[] } | undefined;
+  let bestD = Infinity;
+  for (let i = 0; i + 1 < flow.points.length; i++) {
+    const a = flow.points[i]!;
+    const b = flow.points[i + 1]!;
+    if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) < 20 && flow.points.length > 2) continue;
+    const d = dist(nearestOn([a, b], c)!);
+    if (d >= bestD) continue;
+    bestD = d;
+    const horizontal = Math.abs(a.x - b.x) >= Math.abs(a.y - b.y);
+    best = { at: box({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }), clear: false, sides: horizontal ? ['top', 'bottom'] : ['left', 'right'] };
+  }
+  return best;
+}
+
+/**
+ * Routing order of a plane's connections: sequence flows (and connections
+ * between shapes) first, message flows next (they cross the pools and should
+ * see the final sequence flows), connections that dock on a connection last
+ * (an annotation's association to a flow follows the flow's final line).
+ */
+export function routeRank(plane: Plane, e: DEdge): number {
+  if ((e.sourceId && plane.edges.has(e.sourceId)) || (e.targetId && plane.edges.has(e.targetId))) return 2;
+  return e.kind === 'messageFlow' ? 1 : 0;
+}
+
 /**
  * What a route should not run over: the other connections (polylines) and
  * every label as one diagonal (crossing it costs like crossing a flow, so the
@@ -170,6 +244,18 @@ export function routeEdge(plane: Plane, e: DEdge, opts: RouteOptions): Point[] |
     const sb = anchorOf(plane, e.sourceId);
     const tb = anchorOf(plane, e.targetId);
     if (!sb || !tb) return undefined;
+    // an association docked on a flow: the nearest point of the flow that a straight line reaches without cutting a shape
+    const shape = s ?? t;
+    const flow = !s ? plane.edges.get(e.sourceId ?? '') : !t ? plane.edges.get(e.targetId ?? '') : undefined;
+    if (shape && flow && flow.points.length >= 2) {
+      const obstacles = obstaclesFor(plane, e, shape);
+      const dock = flowDock(flow, shape.bounds, obstacles);
+      if (dock?.clear) return s ? straight(s.bounds, dock.at) : straight(dock.at, shape.bounds);
+      if (dock) {
+        const pts = roundPoints(routeOrthogonal({ source: shape.bounds, target: dock.at, obstacles, lines: opts.lines, ...(dock.sides ? { targetSides: dock.sides } : {}) }));
+        return s ? pts : pts.reverse();
+      }
+    }
     const line = straight(sb, tb);
     if (!s || !t) return line;
     const obstacles = obstaclesFor(plane, e, s, t);
@@ -241,6 +327,12 @@ export interface EdgeBefore {
 function endGaps(plane: Plane, e: DEdge): { sourceGap: number; targetGap: number } {
   const gapOf = (id: string | undefined, p: Point | undefined): number => {
     const s = id ? plane.shapes.get(id) : undefined;
+    // an end docked on a connection (an association to a flow): its distance from that connection's line
+    const on = !s && id ? plane.edges.get(id) : undefined;
+    if (on && p && on.points.length >= 2) {
+      const q = nearestOn(on.points, p);
+      return q ? Math.hypot(q.x - p.x, q.y - p.y) : 0;
+    }
     if (!s || !p) return 0;
     const d = borderDistance(s.bounds, p);
     const round = s.kind === 'event' || s.kind === 'boundary' || s.kind === 'gateway';

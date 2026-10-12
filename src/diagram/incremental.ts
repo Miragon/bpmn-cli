@@ -31,8 +31,16 @@
  *      expand: content moves in, room is made); a sub-process retyped to a
  *      task shrinks around its centre
  *   4. new pools / lanes are drawn, removed lanes / pools give their band back
- *   5. nodes whose lane changed move into the new lane band (same x)
- *   6. new flow nodes and artifacts are placed (place.ts); a new expanded
+ *   5. nodes whose lane changed move into the new lane band (same x); a
+ *      join drawn before the ops that a new flow would enter backwards (its
+ *      centre left of the flow's source, which it does not lead back to)
+ *      is placed again right of its rightmost source, before its one
+ *      successor (pullJoins; its DI is reused, it is reported as moved)
+ *   6. new flow nodes and artifacts are placed (place.ts) in op order
+ *      (opts.created) where their neighbours allow; while more follow, the
+ *      sequence flows of each placed node are routed right away, and so are
+ *      the flows the placement broke, and the spacing is measured again
+ *      (routeNow: what the next single command would see); a new expanded
  *      sub-process with content and a new pool with content are laid out by
  *      the clean engine as one block and placed like a node of that size;
  *      an activity (task, call activity, collapsed sub-process) whose new or
@@ -49,7 +57,9 @@
  *   8. connections: new ones are routed, kept ones are rerouted only when an
  *      end changed, was placed or moved away from it, or when they now cut a
  *      shape (reroute.ts); connections entirely inside a shifted region were
- *      translated by the space tool
+ *      translated by the space tool. A connection routed during step 6 is
+ *      routed again only when it broke since (like a flow an earlier single
+ *      command drew); an existing one counts as rerouted
  *   9. labels of new / renamed elements and rerouted named flows are placed;
  *      a kept label a new line runs over or a grown activity covers steps
  *      aside
@@ -77,11 +87,11 @@ import { layoutClean } from '../layout/engine.js';
 import { SIZES } from '../layout/types.js';
 import { is, layoutRoot, parseXml, type El } from '../model.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from './containers.js';
-import { bottom, copyBox, copyPoints, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
+import { bottom, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
 import { boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routingLines, type EdgeBefore } from './reroute.js';
+import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { separate } from './separate.js';
 import { attachedSide } from './router.js';
 import { closeStrip, fitInFrame, makeSpace } from './space.js';
@@ -272,6 +282,8 @@ export interface IncrementalReport {
 export interface IncrementalOptions {
   /** nodes the ops re-inserted elsewhere in the flow (move --after/--before/--flow/--in) */
   relocated?: Iterable<string>;
+  /** ids the ops created, in op order: new nodes are placed in that order where their neighbours allow (like single commands) */
+  created?: readonly string[];
   /** sub-processes to draw expanded / collapsed */
   expand?: Iterable<string>;
   collapse?: Iterable<string>;
@@ -452,6 +464,12 @@ interface Ctx {
   grown: Set<string>;
   /** shape bounds before anything moved */
   baseline: Map<string, Box>;
+  /** ids the ops created, in op order (IncrementalOptions.created) */
+  created: readonly string[];
+  /** flows routed when their second end was placed (routeNow): their state then, to tell whether they broke since */
+  routedNow: Map<string, EdgeBefore>;
+  /** every connection's state before anything moved (brokenEdge) */
+  edgesBefore: Map<DEdge, EdgeBefore>;
   notes: string[];
 }
 
@@ -761,10 +779,78 @@ function laneChanges(ctx: Ctx): void {
   }
 }
 
+/**
+ * A join drawn before the ops that a new sequence flow would enter backwards
+ * (its centre left of the flow's source, which it does not lead back to: no
+ * loop return) is placed again right of its rightmost predecessor, before its
+ * one successor S, like a node spliced there (the space tool pushes S and
+ * what follows when they are in the way): a `connect` into a merge an earlier
+ * command spliced gives the same drawing as the batch that adds the merge and
+ * the flow together. Only a gateway with two or more incoming flows and one
+ * outgoing flow to S, with its sources and S in its own pool / sub-process
+ * and S starting right of the sources; its DI and label are kept, it is
+ * reported as moved.
+ */
+function pullJoins(ctx: Ctx): void {
+  const before = new Set([...ctx.snap.flowEnds.keys()].map((id) => currentId(ctx.snap, id)));
+  let next: Map<string, string[]> | undefined;
+  const reaches = (from: string, to: string): boolean => {
+    if (!next) {
+      next = new Map();
+      for (const el of ctx.sem.byId.values()) {
+        const ends = is(el, 'bpmn:SequenceFlow') ? edgeEnds(el) : is(el, 'bpmn:BoundaryEvent') ? { sourceId: idOf(raw(el, 'attachedToRef')), targetId: idOf(el) } : undefined;
+        if (ends?.sourceId && ends.targetId) next.set(ends.sourceId, [...(next.get(ends.sourceId) ?? []), ends.targetId]);
+      }
+    }
+    const seen = new Set([from]);
+    const stack = [from];
+    while (stack.length) {
+      for (const n of next.get(stack.pop()!) ?? []) {
+        if (n === to) return true;
+        if (seen.has(n)) continue;
+        seen.add(n);
+        stack.push(n);
+      }
+    }
+    return false;
+  };
+  const seqFlows = (el: El | undefined, prop: 'incoming' | 'outgoing'): El[] => rawList(el, prop).filter((f) => is(f, 'bpmn:SequenceFlow'));
+  for (const el of ctx.sem.byId.values()) {
+    const fid = idOf(el);
+    if (!fid || !is(el, 'bpmn:SequenceFlow') || (before.has(fid) && !ctx.place.oldTarget.has(fid))) continue;
+    const { sourceId, targetId } = edgeEnds(el);
+    const plane = ctx.planes.find((p) => !!targetId && p.shapes.has(targetId));
+    const join = targetId ? plane?.shapes.get(targetId) : undefined;
+    const source = sourceId ? plane?.shapes.get(sourceId) : undefined;
+    if (!plane || !join || !source || !join.di || !ctx.snap.byDi.has(join.di) || ctx.relocated.has(join.id) || ctx.place.joins?.has(join.id)) continue;
+    if (!is(join.el, 'bpmn:Gateway') || cx(join.bounds) >= source.bounds.x) continue;
+    const ins = seqFlows(join.el, 'incoming');
+    const outs = seqFlows(join.el, 'outgoing');
+    const S = outs.length === 1 ? plane.shapes.get(idOf(raw(outs[0], 'targetRef')) ?? '') : undefined;
+    if (ins.length < 2 || !S || reaches(join.id, source.id)) continue;
+    const preds = ins.map((f) => plane.shapes.get(idOf(raw(f, 'sourceRef')) ?? ''));
+    const sameFrame = (s: DShape | undefined): boolean => !!s && s.poolId === join.poolId && s.parentId === join.parentId;
+    if (!preds.every(sameFrame) || !sameFrame(S) || S.bounds.x <= Math.max(...preds.map((p) => right(p!.bounds)))) continue;
+    plane.shapes.delete(join.id);
+    ctx.place.reuse.set(join.id, { shape: join, boundaries: [], from: plane });
+    (ctx.place.joins ??= new Map()).set(join.id, S.id);
+    ctx.relocated.add(join.id);
+    for (const e of plane.edges.values()) if (e.sourceId === join.id || e.targetId === join.id) ctx.reroute.add(e.id);
+    if (layoutDebugOn()) layoutDebug(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${S.id}`);
+  }
+}
+
 async function placeNodes(ctx: Ctx, blocks: () => Promise<{ planes: Plane[]; sem: Semantics }>): Promise<void> {
   const drawn = (id: string): boolean => ctx.planes.some((p) => p.shapes.has(id));
   const order = modelOrder(ctx.doc.definitions);
-  const pendingNodes = order.filter((el) => isFlowNode(el) && idOf(el) && !drawn(idOf(el)!)).map((el) => idOf(el)!);
+  // new nodes in op order (the model lists an inserted node next to its anchor), the others in model order after them
+  const rank = new Map(ctx.created.map((id, i) => [id, i]));
+  const pendingNodes = order
+    .filter((el) => isFlowNode(el) && idOf(el) && !drawn(idOf(el)!))
+    .map((el) => idOf(el)!)
+    .map((id, i) => ({ id, key: rank.get(id) ?? ctx.created.length + i }))
+    .sort((a, b) => a.key - b.key)
+    .map((x) => x.id);
   // new expanded sub-processes with content: one block from the engine
   const blockRoots = pendingNodes.filter((id) => {
     const el = ctx.sem.byId.get(id)!;
@@ -801,17 +887,77 @@ async function placeNodes(ctx: Ctx, blocks: () => Promise<{ planes: Plane[]; sem
     const block = blocksByRoot.get(s.id);
     if (block) adoptBlock(ctx, plane, block, s.bounds.x - block.box.x, s.bounds.y - block.box.y);
   };
+  ctx.place.afterNode = (plane: Plane, id: string): void => routeNow(ctx, plane, id);
   const skipped = placeFlowNodes(
     ctx.place,
     pendingNodes.filter((id) => !inBlock.has(id)),
   );
   delete ctx.place.afterPlace;
+  delete ctx.place.afterNode;
   for (const id of skipped) ctx.notes.push(`${id} not drawn: it belongs to no diagram`);
   for (const el of order) {
     const id = idOf(el);
     if (!id || !isArtifactShape(el) || drawn(id) || inBlock.has(id)) continue;
     if (!placeArtifact(ctx.place, id)) ctx.notes.push(`${id} not drawn: it belongs to no diagram`);
   }
+}
+
+/**
+ * A node a batch just placed: its sequence flows to nodes drawn on its plane
+ * are routed now and labelled, and so is its own external label, so that the
+ * nodes the batch places next see them like the next single command would
+ * (the row choice counts crossings, keeps off lines and labels, and the gap
+ * and row spacing are measured again); sequence flows the placement broke
+ * (brokenEdge) are routed again too, as at the end of a single command. At
+ * the end (step 8) such a flow is routed again only when it broke since
+ * (brokenEdge against its state then), like a flow an earlier single command
+ * drew.
+ */
+function routeNow(ctx: Ctx, plane: Plane, id: string): void {
+  const s = plane.shapes.get(id);
+  const el = ctx.sem.byId.get(id);
+  if (!s || !el) return;
+  for (const f of [...rawList(el, 'incoming'), ...rawList(el, 'outgoing')]) {
+    const fid = idOf(f);
+    if (!fid || !is(f, 'bpmn:SequenceFlow')) continue;
+    const ends = edgeEnds(f);
+    const other = ends.sourceId === id ? ends.targetId : ends.sourceId;
+    if (!other || !plane.shapes.has(other) || ctx.planes.some((p) => p !== plane && p.edges.has(fid))) continue;
+    let e = plane.edges.get(fid);
+    if (!e) {
+      e = { id: fid, el: f, kind: 'sequenceFlow', ...ends, points: [] };
+      plane.edges.set(fid, e);
+      ctx.newEdges.add(fid);
+    } else {
+      e.sourceId = ends.sourceId;
+      e.targetId = ends.targetId;
+    }
+    if (layoutDebugOn()) layoutDebug(`[route] ${fid}: ${ctx.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
+    routeKept(ctx, plane, e);
+  }
+  // what the placement broke (the space tool, a new shape on a line) is routed again now, like at the end of a single command
+  for (const e of plane.edges.values()) {
+    if (e.kind !== 'sequenceFlow' || e.points.length < 2 || e.sourceId === id || e.targetId === id || !e.sourceId || !e.targetId) continue;
+    const ends = edgeEnds(e.el);
+    // an end that changes later (a flow into a node still to be placed) is routed when that node is placed
+    if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
+    const was = ctx.routedNow.get(e.id) ?? ctx.edgesBefore.get(e);
+    if (!was || !brokenEdge(plane, e, was)) continue;
+    if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken when ${id} was placed`);
+    routeKept(ctx, plane, e);
+  }
+  if (!s.label && hasExternalLabel(s) && raw<string>(el, 'name')) placeShapeLabel(plane, s);
+  // the next command would measure the drawing's gap and row spacing again, with these flows
+  ctx.place.spacing.set(plane, spacingOf(plane));
+}
+
+/** Routes a connection during placement (routeNow) and records its state then. */
+function routeKept(ctx: Ctx, plane: Plane, e: DEdge): void {
+  const pts = routeEdge(plane, e, { lines: routingLines(plane, e.id) });
+  if (!pts || pts.length < 2) return;
+  e.points = pts;
+  if (e.label || raw<string>(e.el, 'name')) placeEdgeLabel(plane, e);
+  ctx.routedNow.set(e.id, edgeBefore(plane, e));
 }
 
 /** Room kept free below an activity's text for what sits on its bottom border: a marker, boundary events. */
@@ -929,6 +1075,15 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
   for (const plane of ctx.planes) {
     for (const e of plane.edges.values()) {
       if (ctx.fromEngine.has(e.id)) continue;
+      // routed when its second end was placed: kept unless it broke since
+      const now = ctx.routedNow.get(e.id);
+      if (now) {
+        const ends = edgeEnds(e.el);
+        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now)) continue;
+        ctx.reroute.add(e.id);
+        if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken after it was routed`);
+        continue;
+      }
       if (ctx.newEdges.has(e.id)) {
         ctx.reroute.add(e.id);
         continue;
@@ -957,8 +1112,8 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
 function routeAll(ctx: Ctx): string[] {
   const rerouted: string[] = [];
   for (const plane of ctx.planes) {
-    // message flows last: they cross the pools and should see the final sequence flows
-    const pending = [...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)).sort((a, b) => Number(a.kind === 'messageFlow') - Number(b.kind === 'messageFlow'));
+    // message flows after the sequence flows (they cross the pools and should see the final sequence flows), connections docked on a connection last
+    const pending = [...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)).sort((a, b) => routeRank(plane, a) - routeRank(plane, b));
     const waiting = new Set(pending.map((e) => e.id));
     for (const e of pending) {
       const lines = routingLines(plane, e.id).filter((l) => ![...waiting].some((id) => plane.edges.get(id)?.points === l));
@@ -1101,6 +1256,9 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
     relocated: new Set(),
     grown: new Set(),
     baseline: new Map(planes.flatMap((p) => [...p.shapes.values()].map((x) => [x.id, copyBox(x.bounds)] as [string, Box]))),
+    created: opts.created ?? [],
+    routedNow: new Map(),
+    edgesBefore: new Map(),
     notes,
     place: {
       planes,
@@ -1120,7 +1278,7 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   let engine: Promise<{ planes: Plane[]; sem: Semantics }> | undefined;
   const blocks = (): Promise<{ planes: Plane[]; sem: Semantics }> => (engine ??= enginePlanes(doc, opts));
 
-  const before = new Map<DEdge, EdgeBefore>();
+  const before = ctx.edgesBefore;
   for (const plane of planes) for (const e of plane.edges.values()) before.set(e, edgeBefore(plane, e));
 
   const wrapped = followRoot(ctx);
@@ -1130,12 +1288,15 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   applyExpansion(ctx, opts);
   await placeContainers(ctx, wrapped, blocks);
   laneChanges(ctx);
+  pullJoins(ctx);
   await placeNodes(ctx, blocks);
   growForNames(ctx);
   separateAll(ctx);
   growGroups(ctx);
   collectEdges(ctx, before);
   const rerouted = routeAll(ctx);
+  // existing connections routed when an end was placed (routeNow) and kept since: routed again all the same
+  for (const id of ctx.routedNow.keys()) if (!ctx.newEdges.has(id) && !rerouted.includes(id) && ctx.planes.some((p) => p.edges.has(id))) rerouted.push(id);
   labels(ctx, new Set([...rerouted, ...ctx.newEdges]));
   assertHorizontal(ctx, rerouted);
   writePlanes(doc.moddle, defs, ctx.planes);

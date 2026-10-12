@@ -56,6 +56,17 @@ export function hardDelta(before, after, ctx, groups = new Set()) {
   return { before: count(before), after: count(after), added: real.length, addedKinds, addedGroup: added.length - real.length, examples: real.slice(0, 3).map((p) => `${p.kind}:${p.ids.join(',')}`) };
 }
 
+/** The soft kinds bench --compare reports per edit (runs adding them) and holds E8 / E9 to (soft-budget.json). */
+export const SOFT_KINDS = ['crossings', 'backwardFlow'];
+
+/** Problems of the soft kinds a run added (problems involving a group excluded, like hardDelta). */
+export function softDelta(before, after, ctx, groups = new Set()) {
+  if (!before.problems || !after.problems) return { addedKinds: null };
+  const added = ctx.metrics.diff(before.problems, after.problems).added.filter((p) => SOFT_KINDS.includes(p.kind) && !p.ids.some((id) => groups.has(id)));
+  const addedKinds = Object.fromEntries(SOFT_KINDS.map((k) => [k, added.filter((p) => p.kind === k).length]));
+  return { addedKinds };
+}
+
 export function stability(before, after, exclude = new Set()) {
   const pairs = [];
   for (const [id] of before.nodes) {
@@ -116,6 +127,15 @@ export function checkEdit(e, m) {
     }
     case 'name':
       return { ok: n(e.id)?.name === e.name, hasDi: m.shapes.has(e.id) };
+    case 'decision': {
+      // E8 / E9: gateway -> task -> decision -> succ, decision -(no)-> no -> noEnd; E9: timer on the task -> task -> end
+      const t = e.timer;
+      const ev = t ? n(t.event) : undefined;
+      const timerOk = !t || (ev?.type === 'BoundaryEvent' && ev.attachedTo === e.task && ev.el.cancelActivity === false && incomingFrom(m, t.task, t.event) && n(t.end)?.type === 'EndEvent' && incomingFrom(m, t.end, t.task));
+      const ok = incomingFrom(m, e.task, e.gateway) && outgoingTo(m, e.task, e.decision) && outgoingTo(m, e.decision, e.succ) && outgoingTo(m, e.decision, e.no) && n(e.noEnd)?.type === 'EndEvent' && incomingFrom(m, e.noEnd, e.no) && timerOk;
+      const ids = [e.task, e.decision, e.no, e.noEnd, ...(t ? [t.event, t.task, t.end] : [])];
+      return { ok: !!ok, hasDi: ids.every((id) => m.shapes.has(id)) };
+    }
     default:
       return { ok: false, error: `unknown expectation ${e.kind}` };
   }

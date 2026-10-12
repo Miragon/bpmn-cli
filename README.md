@@ -1220,7 +1220,7 @@ Every mutating command updates the diagram in one of three modes
 | mode | what happens |
 | --- | --- |
 | `auto` (default) | A file without diagram is drawn from scratch. A drawing that the engine made and nobody changed since (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check) is redrawn in full, so it keeps the best global layout while the CLI owns it. Any other drawing, hand-made in a modeler or changed by a format command (also one that only reroutes a flow or moves a label), is kept: `incremental`. |
-| `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool, by the room that is missing (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
+| `incremental` | Keep every existing shape and connection. New elements are placed next to their neighbours (splice: between predecessor and successor; a new branch: one row below the existing branches; a boundary event: on the host's bottom border; ...), room is made like the modeler's space tool, by the room that is missing (everything right of / below the spot moves, pools, lanes and the sub-processes holding the spot grow; another expanded sub-process the line crosses moves as a whole or stays, it is never stretched; connection labels move with their connection), removed elements' DI is pruned (and an empty column closed; when shapes in other rows reach into it, only the removed node's own row closes, if that tears nothing apart), lane changes move a node into its new lane, an activity whose new name does not fit grows (wider in steps of 20 px up to 200, then higher; never smaller), and only the connections that need it are rerouted (a gateway docks on its vertices, one connection per vertex while one is free). A batch places its new nodes like the same ops sent one by one: in op order where their neighbours allow, a chain of new nodes spliced into one flow stays in the row also when one of them branches (a decision with a new "no" branch, a `split`), the exception path of a new boundary event waits for the normal flow's new nodes, and the flows of each placed node are routed before the next one is placed, so its row choice sees them (a branch row still keeps room for the new nodes that follow it). A new flow that would enter a merge gateway backwards (from a node right of it that it does not lead back to) places the merge again right of its rightmost source, before its successor. Untouched shapes keep their exact bounds, untouched connections their waypoints. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`), an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL` instead. |
 | `full` | Redraw everything with the engine (`--engine clean`, default, or `auto`). Colours (`bioc:` / `color:` attributes) and the DI ids are carried over by element id (new DI gets the file's id style); positions are not. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why (`layout: ok - incremental (hand-made
@@ -1245,6 +1245,7 @@ after the semantic ops and the layout, in batch order, all or nothing.
 | command / op | effect |
 | --- | --- |
 | `place <id...>` with `--row-of` / `--below` / `--above <id>` and/or `--column-of` / `--after` / `--before <id>` | Move the shapes as one rigid group so the first lands on the row (vertical centre) and/or column (horizontal centre) of another element; `below` / `above` keep one row of the drawing and clear the element, `after` / `before` one gap. Boundary events, labels and the content of an expanded sub-process follow; shapes in the way give way, frames grow (also for a label that reaches past their right or bottom border), flows are rerouted. `place --branch <flowId> --below <id>` moves a whole branch (see selectors below). |
+| `place <boundaryEventId> --side top\|bottom` | Move a boundary event to the top / bottom border of its host (the free spot nearest its column: other boundary events and docking connections are kept clear); its outgoing flows are routed again, and its exception path follows when it was drawn on the old side (the nodes only the event leads to, beyond that border, in the host's own lane, pool or sub-process: a node of another lane keeps its place), mirrored about the host's centre row (where that would leave the top of the host's lane, pool or sub-process, the space tool first makes the room at the top of that frame: its content moves down, it grows; below a lane with another lane underneath, that lane grows at its bottom first), the others give way. A reminder path below a task that crosses a branch goes above the task: `place Event_ApprovalOverdue --side top`. Only the boundary event, no row or column (op key `side`). |
 | `align <id...> --axis row\|column [--to <id>]` | Put the shapes on one horizontal / vertical centre line, the one of `--to` (default: the first id; with only `--kind` and `--axis column`: the rightmost one, so nothing moves left). Shapes that would land on each other give way along the free axis. |
 | `color <id...> --color blue\|orange\|green\|red\|purple\|default` | The bpmn-js colour picker colours on shapes and connections (`bioc:fill` / `bioc:stroke` / `color:background-color` / `color:border-color`, labels `color:color`); `default` removes them. `color --path <fromId> <toId> --color green` colours a whole path. |
 | `label <id> --side above\|below\|left\|right` | The external label of an event, gateway, data object / store or flow on that side (flows: of their longest horizontal / vertical segment), off lines and other labels where possible. |
@@ -1289,7 +1290,22 @@ be pushed away (a reference in another pool), the command fails with
 other and never takes a shape out of a sub-process, lane or pool that held
 it: a reference the neighbours would be pushed onto moves along with them
 when its row / column still holds, otherwise the command fails with
-`E_NO_ROOM`. Elements without a
+`E_NO_ROOM`. The refusal of `place` / `align` carries one space-tool run
+that makes the room, checked by a dry run inside the op (`space --after` the
+column reference by one to three columns, `space --below` the row
+reference by one or two rows, or for a row request right of the shape left
+of the moved ones; of the runs that let the request succeed, the one whose
+drawing has the fewest layout problems): `details.ops` (a batch op, to put
+before the place op) and, when the refused op saw the file's own drawing (a
+`place` / `align` command, or the first op of an `apply` batch of format ops
+only), `details.command` (`bpmn space <file> --after Gateway_1hd8x2m --by
+2col`; the CLI fills in the file); the hint says what it carries. After
+other ops of a batch (their changes and new ids are not in the file) the
+hint names only the op to put before the place op, checked on the drawing
+those ops leave. Without such a run the hint names the shapes to move
+first.
+`place --side` refuses with `E_NO_ROOM` when other boundary events and
+docking connections take the whole border. Elements without a
 shape fail with `E_NO_SHAPE` (for a pool use the participant id, not the
 process id), a reference on another diagram (inside a collapsed sub-process)
 with `E_DIFFERENT_DIAGRAM`, a task given to `label` with `E_WRONG_KIND`, an
@@ -2062,7 +2078,7 @@ and the flags of the matching command in lowerCamelCase (`--flow-name` ->
 | `move` | `ids` (required list), `after`, `before`, `flow`, `in`, `lane`, flow keys |
 | `order` | `id` (required), exactly one of `flows` (outgoing flows of a node), `lanes` (lanes of a pool / process / parent lane) or `pools` (participants of the collaboration `id`) |
 | `ext` | `id`, `action` (`add` / `remove`, required), `type` (add: type or path; remove: selector such as `camunda:inputParameter[name=x]`, or an index from `ext list` such as `"2"`, `"loop.0"`, `"definition[1].0"`; a `definition.` / `loop.` / `condition.` prefix addresses the nested element, `definition[<n>].` / `definition[<trigger>].` one of several event definitions), `attrs` (map), `body`, `xml`, `replace`, `index`, `slot` (`definition` / `loop` / `condition` / `definition[<n>]`, the same as the type prefix) |
-| `place` | `ids` (list; moved as one group, the first is the reference) and / or selectors, at most one of `rowOf` / `below` / `above` and at most one of `columnOf` / `after` / `before` (at least one key) |
+| `place` | `ids` (list; moved as one group, the first is the reference) and / or selectors, at most one of `rowOf` / `below` / `above` and at most one of `columnOf` / `after` / `before` (at least one key); or `side` (`top` / `bottom`) with exactly one id, a boundary event, and no row or column key |
 | `align` | `ids` (list) and / or selectors, `axis` (`row` / `column`, required), `to` (reference; default the first id; without it and without selectors two ids are needed) |
 | `color` | `ids` (list) and / or selectors, `color` (`blue` / `orange` / `green` / `red` / `purple` / `default`, required) |
 | `label` | `id`, `side` (`above` / `below` / `left` / `right`) (required) |
@@ -2353,7 +2369,10 @@ so the design-iq repository lookup (`--profile auto`) does not apply to it.
 Errors go to stderr: `error E_CODE: message`, then `  hint: ...` and the
 candidate ids when a reference could not be resolved; with `--json`:
 `{"ok": false, "error": {"code", "message", "element?", "related?",
-"candidates?", "hint?", "op?"}}`.
+"candidates?", "hint?", "op?", "command?", "ops?"}}` (`command` / `ops`:
+the checked space-tool run of an `E_NO_ROOM` that makes the room, as a
+command line with the file filled in, only when the refused op saw the
+file's own drawing, and as batch ops).
 
 | exit | meaning |
 | --- | --- |
@@ -2899,7 +2918,9 @@ Every function runs the code of the CLI command it names, without a file:
   ([Ids](#ids)) and the platform profile's new findings
   (`result.validation.platform`) work as on the command line.
 - A failure throws a `CliError`: `code`, `category`, `details` (`element`,
-  `related`, `candidates`, `hint`, `op`); `toJSON()` is the CLI's `--json`
+  `related`, `candidates`, `hint`, `op`; `E_NO_ROOM` also `ops` and, when
+  the refused op saw the document's own drawing, `command` with `<file>`
+  for the file); `toJSON()` is the CLI's `--json`
   error. Nothing is half done: the caller still has its input.
 - The Camunda 7 and Camunda 8 profile rules load on demand: the first call
   that validates a document of that platform loads them (`import()`, a
@@ -3215,3 +3236,27 @@ to `applyToXml`.
   browser may keep the failed fetch until the page reloads.
 - `tools/iso/check.mjs` enforces size budgets (`tools/iso/budget.json`) and
   prints the on-demand chunks (`--table`: the table above).
+
+### Changes from 0.5
+
+- A batch that edits a hand-made drawing places its new nodes like the
+  same ops sent as single commands (issue #18): a task and a decision
+  spliced into a flow stay in the row also when the decision gets a new
+  "no" branch or comes from `split`, a boundary path waits for the normal
+  flow, and each placed node's flows are routed before the next node is
+  placed. On the plugin eval's model the agent's batches give the same
+  shapes as single commands and score 0 (before: 9 to 19). A new flow
+  that would enter a merge backwards moves the merge after its sources
+  ([Layout modes](#layout-modes)).
+- `place <boundaryEventId> --side top|bottom` (op key `side`) moves a
+  boundary event to the other border of its host, with its exception path
+  ([Formatting without XML](#formatting-without-xml)).
+- An annotation's association to a flow docks on the nearest point of the
+  flow it reaches in a straight line without cutting a shape, else it is
+  routed around the shapes; when the flow is rerouted, it follows.
+- `E_NO_ROOM` from `place` / `align` carries the checked space-tool run that
+  makes the room with the fewest layout problems (`details.ops`; as
+  `details.command` when the refused op saw the file's own drawing).
+- `bench` has two batch edits, E8 and E9, and `--compare` reports the runs
+  adding crossings / backward flows per edit, with a budget for E8 / E9
+  (`tools/bench/soft-budget.json`).

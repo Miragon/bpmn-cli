@@ -175,6 +175,33 @@ read as it declares, a write is UTF-8 and says so), and the design profile
 test the cases design-iq's validator decides differently from a plain BPMN
 reading (its namespace check on the raw text, flows counted per id, every
 collaboration, an attribute written twice).
+`test/layout-batch-parity.test.ts` checks issue #18, stage A, on the
+synthetic hand-drawn model of the plugin eval `edit-hand-drawn-model`: the
+agent's batches (decision + "no" to the existing node, decision + a new "no"
+branch, `split`, a merge gateway; each with and without the timer reminder
+path) give the same shapes as the same ops sent as single commands and add no
+backward flow (without the reminder path no problem at all); a task and a
+decision stay in the row, an exception path waits for the normal flow even when
+its ops come first; a `connect` into a merge that would enter it backwards
+moves the merge, a loop return does not; `place --side top|bottom` puts the
+reminder path above the approval with score 0 (and back), makes the room above
+a task in the top lane of a pool inside that lane, and its refusals;
+`E_NO_ROOM` of both eval refusals (`test/fixtures/layout-batch/`: the drawings
+0.5.0 left after the agents' batches) carries a command that, run first, lets
+the place succeed (library and command line, the file filled in), and names
+the shapes to move without one; the bench edits E8 / E9 and the soft budget of
+`bench --compare`. Its last block holds the findings of the stage A
+verification, each failing on the stage A build: splices into two branches
+of one gateway in one batch (a task and a merge, two tasks, the merge
+batch, the merge added first; on the eval model and in a pool with lanes)
+give the shapes and the score of single commands; `place --side` top and
+back to the bottom in pools with lanes (`tools/scenarios`: a node of
+another lane is no part of the path), back to a border two other boundary
+events take (over its corner), into a lane with a lane underneath (the lane
+grows at its bottom), and next to an annotation on a flow the move
+reroutes (no `through`); `E_NO_ROOM` names the space-tool run with the
+fewest layout problems, and after other ops of a batch only the batch op
+(no command for the file).
 `test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
 of `tools/scenarios` and `test/fixtures` (and each of its other planes)
 renders to SVG and PNG within the default 2000 px, with the same bytes twice
@@ -386,7 +413,12 @@ tools/bench/render.sh /tmp/png tools/bench/results/latest/work/edits/new-auto/sc
 middle of the longest start-to-end path: E1 insert a user task, E2 a new branch
 at an exclusive gateway, E3 remove a task (bridged), E4 a boundary path (timer
 boundary plus end event), E5 move a task to the neighbouring lane, E6 a long
-rename, E7 all applicable edits one after the other. The global track runs the
+rename, E7 all applicable edits E1 to E6 one after the other. E8 and E9 are
+one batch each (issue #18; bpmn-cli arms only): E8 splices a decision into a
+branch of an existing exclusive split (a user task into the gateway's flow to
+a non-gateway node, an exclusive gateway after it, a new "no" branch with a
+send task and an end event), E9 adds a non-interrupting timer reminder path
+on the new task to it (the plugin eval's request). The global track runs the
 arm's full layout variants on the unedited model.
 
 **Arms.**
@@ -411,6 +443,8 @@ without `--layout` still runs as a baseline.
 - *harness score*: the metrics library's score before / after (the
   layout-regress score), with counts of every kind the library knows;
 - *hard defects added*: hard problems the run introduced, groups excluded;
+- *soft kinds added*: the crossings and backward flows the run introduced
+  (`soft.addedKinds`), groups excluded;
 - *PR score* (only with `BPMN_EDIT_MAIN`);
 - *validity*: import warnings, flow nodes without DI, edges without waypoints.
 
@@ -431,10 +465,16 @@ node tools/bench/run.mjs --no-run --compare tools/bench/results/base   # compare
 ```
 
 The comparison prints per edit type the semantic failures, the runs adding
-hard defects, the hard defects added, the mean harness delta and the median
-share of moved nodes (old -> new), the global hard counts, and every run that
-got worse or better. It exits 1 when semantic failures, runs adding hard
-defects, hard defects added or global hard counts increased. Only hard kinds
+hard defects, the hard defects added, the runs adding crossings and backward
+flows (soft kinds; `-` for results without them), the mean harness delta and
+the median share of moved nodes (old -> new), the global hard counts, and
+every run that got worse or better. It exits 1 when semantic failures, runs
+adding hard defects, hard defects added or global hard counts increased, or
+when the soft budget is exceeded: `tools/bench/soft-budget.json` holds per
+corpus and edit the largest number of runs of this repository's CLI (arm
+`new`) that may add a crossing / a backward flow, today for E8 and E9 on the
+scenarios (lower it when the layout improves, raise it only with a reviewed
+reason). A corpus the budget does not name is reported only. Only hard kinds
 known to both runs are compared, so a newly added metric kind is not a
 regression of the code. With `--engine`, set `BASELINE_BIN` so that both runs
 draw the engine corpus with the same CLI.
