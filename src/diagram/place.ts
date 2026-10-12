@@ -44,14 +44,31 @@
  *     preferring spots whose downward exit crosses no label; shapes right below
  *     are pushed down so the exception flow has room. Nodes after a boundary
  *     event go one column right of the host (or right below the event), one
- *     row below the host
- *   Branch and exception rows are chosen among the first free rows (and the
- *   first row opened with the space tool when it is taken) by a trial route
- *   from the anchor (connectionCost: cut shapes, crossings, labels hit, bends,
- *   length) plus penalties for lower rows, rows on existing lines and the
- *   shapes a frame growth or opened row would move. A row also keeps room
- *   free of shapes for the new nodes that follow in a simple chain (labels
- *   and lines there are dealt with when they are placed).
+ *     row below the host (or above it, see the row choice below)
+ *   Branch and exception rows (issue #18 stage B) are chosen among
+ *    · the first free rows below the anchor's branches (below the host for a
+ *      boundary event's path);
+ *    · the first of them opened with the space tool when it is taken by
+ *      shapes or a line, or a line runs between the anchor and it: everything
+ *      at or below the topmost thing in the way moves down, the horizontal
+ *      segments of lines running under the anchor (bypass and loop-back
+ *      lines) and the shapes they dock on included (linesUnder);
+ *    · rows above the anchor, when it has no branch above it; for the first
+ *      node of a boundary event's path that sits on the bottom border with
+ *      no other path, rows above the host with the event moved to the host's
+ *      top border (topCandidates); the first row above sticking out of the
+ *      frame gets room at the top of the frame first;
+ *   by a trial route from the anchor (connectionCost: cut shapes, crossings,
+ *   labels hit, bends, length), the rest of the chain on the row (chainCost:
+ *   lines crossing it, lines through the room it takes) and penalties for
+ *   lower rows, rows on existing lines, the shapes a frame growth or opened
+ *   row would move (an opened row costs less than one crossing) and rows
+ *   above (TOP_ROW). A row also keeps room free of shapes for the new nodes
+ *   that follow in a simple chain (labels and lines there are dealt with
+ *   when they are placed); a node without any successor yet keeps room for
+ *   one event (the next command mostly ends the branch there). The chosen
+ *   head and its number of candidates are recorded (ctx.heads); the local
+ *   repair (incremental.ts) can ask for the next cheapest one (ctx.skip).
  *   - unconnected: below the content of its frame (expanded sub-process, lane,
  *     pool or plane), left-aligned at the frame's first column; only the
  *     frame's own content counts (its members, what is drawn in it, the
@@ -89,7 +106,7 @@ import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, 
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { routingLines } from './reroute.js';
 import { attachedSide, defaultSides, routeOrthogonal, type ShapeKind } from './router.js';
-import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
+import { borderPad, fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
 
 export interface Spacing {
   /** horizontal gap between connected neighbours */
@@ -142,6 +159,14 @@ export interface PlaceCtx {
   spliced?: Map<string, string>;
   /** joins placed again right of their rightmost predecessor, before this successor (incremental.ts pullJoins) */
   joins?: Map<string, string>;
+  /** shapes whose label is placed again at the end (a boundary event moved to the top border) */
+  relabel?: Set<string>;
+  /** heads of branches and exception paths placed in this run: the number of row candidates they had */
+  heads?: Map<string, number>;
+  /** the local repair's request: start this head at its n-th cheapest candidate (0 = the cheapest) */
+  skip?: Map<string, number>;
+  /** nodes placed as the continuation of a chain (on their anchor's row, no row choice): a line touching them is routed again */
+  continued?: Set<string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -475,18 +500,18 @@ function edgeBoxes(plane: Plane): Box[] {
  * that follow need, kept free of shapes only (a label or a line there is
  * dealt with when the chain is drawn, like single commands would).
  */
-function freeRows(plane: Plane, frame: DShape | undefined, x: number, width: number, height: number, startCy: number, step: number, exclude: ReadonlySet<string>, count: number, extent = 0): Array<{ c: number; onLine: boolean }> {
+function freeRows(plane: Plane, frame: DShape | undefined, x: number, width: number, height: number, startCy: number, step: number, exclude: ReadonlySet<string>, count: number, extent = 0, up = false): Array<{ c: number; onLine: boolean }> {
   const obs = obstacles(plane, frame, exclude);
   const shapesOnly = { boxes: obs.boxes, labels: [] };
   const segs = edgeBoxes(plane);
   const out: Array<{ c: number; onLine: boolean }> = [];
   for (let k = 0; k < 40 && out.length < count; k++) {
-    const c = startCy + k * step;
+    const c = startCy + (up ? -k : k) * step;
     const box = { x, y: c - height / 2, width, height };
     if (!isFree(box, obs) || (extent > 0 && !isFree({ ...box, x: x + width, width: extent }, shapesOnly))) continue;
     out.push({ c, onLine: segs.some((sg) => overlaps(sg, box, 4)) });
   }
-  if (!out.length) out.push({ c: startCy, onLine: false });
+  if (!out.length && !up) out.push({ c: startCy, onLine: false });
   return out;
 }
 
@@ -511,11 +536,26 @@ interface Cand {
   c: number;
   size: { width: number; height: number };
   penalty: number;
+  /** room the new nodes that follow on the row need right of the box (chainExtent) */
+  extent?: number;
   /** a row opened with the space tool before placing */
   insert?: Shift;
   /** the frame growth placing there causes (fitInFrame), for the cost estimate */
   grow?: Shift;
+  /** a boundary event's path above its host: the event's spot on the host's top border */
+  top?: Box;
 }
+
+/** cost of a crossing in the trial route (connectionCost) and on the chain's row (chainCost) */
+const CROSSING = 300;
+/** an existing line running through the room the new nodes take: it is routed around them (and mostly crosses) */
+const LINE_HIT = 400;
+/** an opened row: its base penalty, per shape it moves (capped, so that one crossing always costs more), per px */
+const OPEN_ROW = 100;
+const OPEN_PER_SHAPE = 3;
+const OPEN_MAX_SHAPES = 40;
+/** a boundary event's path above its host instead of below (the convention): a clean row below costs less */
+const TOP_ROW = 160;
 
 const shiftedBox = (b: Box, sh: Shift | undefined): Box => (sh && b.y >= sh.line ? { ...b, y: b.y + sh.delta } : b);
 const shiftedLine = (pts: Point[], sh: Shift | undefined): Point[] => (sh ? pts.map((p) => (p.y >= sh.line ? { x: p.x, y: p.y + sh.delta } : p)) : pts);
@@ -529,7 +569,7 @@ function connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, 
   const host = from.hostId ? plane.shapes.get(from.hostId) : undefined;
   const obstacles: Box[] = [];
   for (const o of plane.shapes.values()) {
-    if (o === from || o.kind === 'group') continue;
+    if (o.id === from.id || o.kind === 'group') continue;
     if (isLeaf(o) || (o.kind === 'subProcess' && o.container && o.id !== from.parentId)) obstacles.push(shiftedBox(o.bounds, shift));
   }
   const flows = [...plane.edges.values()].map((e) => shiftedLine(e.points, shift)).filter((p) => p.length >= 2);
@@ -543,7 +583,7 @@ function connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, 
   for (const o of obstacles) if (o !== hostBox && pathHits(pts, o)) cost += 2000;
   for (const line of flows) {
     for (let i = 0; i + 1 < pts.length; i++) {
-      for (let j = 0; j + 1 < line.length; j++) if (properCross(pts[i]!, pts[i + 1]!, line[j]!, line[j + 1]!)) cost += 300;
+      for (let j = 0; j + 1 < line.length; j++) if (properCross(pts[i]!, pts[i + 1]!, line[j]!, line[j + 1]!)) cost += CROSSING;
     }
   }
   const labels = [...plane.shapes.values(), ...plane.edges.values()].map((x) => x.label).filter((l): l is Box => !!l);
@@ -551,54 +591,138 @@ function connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, 
   return cost;
 }
 
-/** The cheapest candidate position (by connectionCost plus the candidate's penalty). */
-function cheapest(plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): Cand {
-  let best: { cand: Cand; cost: number } | undefined;
+/**
+ * What the rest of a chain on the candidate's row would cost: the new nodes
+ * that follow take the room right of the box (`extent`), joined by a line on
+ * the row. Every existing line (after the shift) that crosses that line costs
+ * a crossing, one that runs through that room (or, for an opened row or a row
+ * above the host, through the box itself) costs LINE_HIT: it would be routed
+ * around the new shapes.
+ */
+function chainCost(plane: Plane, box: Box, cand: Cand): number {
+  const shift = cand.insert ?? cand.grow;
+  const extent = cand.extent ?? 0;
+  const run = extent > 0 ? ([{ x: right(box), y: cy(box) }, { x: right(box) + extent, y: cy(box) }] as const) : undefined;
+  const rest = extent > 0 ? { x: right(box), y: box.y, width: extent, height: box.height } : undefined;
+  const head = cand.insert || cand.top ? box : undefined;
+  let cost = 0;
+  for (const e of plane.edges.values()) {
+    const line = shiftedLine(e.points, shift);
+    for (let j = 0; j + 1 < line.length; j++) {
+      const p = line[j]!;
+      const q = line[j + 1]!;
+      if (run && properCross(run[0], run[1], p, q)) {
+        cost += CROSSING;
+        if (layoutDebugOn()) layoutDebug(`[place]   chain at c=${cand.c} crosses ${e.id}`);
+      } else if ((rest && segmentHits(p, q, rest, 2)) || (head && segmentHits(p, q, head, 2))) {
+        cost += LINE_HIT;
+        if (layoutDebugOn()) layoutDebug(`[place]   chain at c=${cand.c} is hit by ${e.id}`);
+      }
+    }
+  }
+  return cost;
+}
+
+/**
+ * The candidate a branch or exception path starts at: the cheapest by
+ * connectionCost and chainCost plus its penalty, or, when the local repair
+ * asked for it (ctx.skip: the chain crossed a line after placement,
+ * incremental.ts), the next cheapest one. The head and its number of
+ * candidates are recorded (ctx.heads), so the repair knows what it can retry.
+ */
+function cheapest(ctx: PlaceCtx, id: string, plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): Cand {
+  const ranked: Array<{ cand: Cand; cost: number }> = [];
   for (const cand of cands) {
     const box = { x: cand.x, y: cand.c - cand.size.height / 2, ...cand.size };
-    const cost = connectionCost(plane, from, box, kind, cand.insert ?? cand.grow) + cand.penalty;
-    if (layoutDebugOn()) layoutDebug(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ' insert' : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}`);
-    if (!best || cost < best.cost) best = { cand, cost };
+    const source = { ...from, bounds: cand.top ?? shiftedBox(from.bounds, cand.insert ?? cand.grow) };
+    const cost = connectionCost(plane, source, box, kind, cand.insert ?? cand.grow) + chainCost(plane, box, cand) + cand.penalty;
+    if (layoutDebugOn()) layoutDebug(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
+    ranked.push({ cand, cost });
   }
-  return best?.cand ?? cands[0]!;
+  // stable: equal costs keep the candidates' order
+  ranked.sort((a, b) => a.cost - b.cost);
+  (ctx.heads ??= new Map()).set(id, ranked.length);
+  const k = Math.min(ctx.skip?.get(id) ?? 0, ranked.length - 1);
+  if (k > 0 && layoutDebugOn()) layoutDebug(`[place] ${id}: candidate ${k + 1} of ${ranked.length} (the local repair retries the chain)`);
+  return ranked[k]?.cand ?? cands[0]!;
+}
+
+/**
+ * Horizontal segments of existing lines that a route from the anchor down to
+ * a row would cross or that run through the row: their y between `floor` and
+ * `below`, overlapping [x0, x1] (bypass and loop-back lines under the anchor).
+ */
+function linesUnder(plane: Plane, x0: number, x1: number, floor: number, below: number): number[] {
+  const out: number[] = [];
+  for (const e of plane.edges.values()) {
+    const n = e.points.length;
+    for (let i = 0; i + 1 < n; i++) {
+      const p = e.points[i]!;
+      const q = e.points[i + 1]!;
+      if (Math.abs(p.y - q.y) > 0.5 || p.y <= floor + 0.5 || p.y > below) continue;
+      if (Math.max(p.x, q.x) < x0 || Math.min(p.x, q.x) > x1) continue;
+      out.push(p.y);
+      // a segment docking on a shape below the anchor: the shape moves with it (the line stays orthogonal)
+      for (const end of [i === 0 ? e.sourceId : undefined, i + 1 === n - 1 ? e.targetId : undefined]) {
+        const s = end ? plane.shapes.get(end) : undefined;
+        if (s && isLeaf(s) && s.bounds.y > floor + 0.5) out.push(s.bounds.y);
+      }
+    }
+  }
+  return out;
 }
 
 /**
  * Candidate rows at or below `first` for a box at `x`: the first free rows, and
- * (when the first row is taken) that row opened with the space tool.
+ * (when the first row is taken by shapes or a line, or a line runs between the
+ * anchor and it) that row opened with the space tool: everything at or below
+ * the topmost thing in the way moves down, the horizontal segments of lines
+ * running under the anchor (bypass and loop-back lines) included, so the route
+ * from the anchor (leaving it downwards at `descend`) reaches the row without
+ * crossing them. An opened row costs less than one crossing.
  */
-function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>, frame: DShape | undefined, x: number, size: { width: number; height: number }, extent: number, first: number, step: number, floor: number, exclude: ReadonlySet<string>, basePenalty = 0, anchor?: DShape): Cand[] {
+function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>, frame: DShape | undefined, x: number, size: { width: number; height: number }, extent: number, first: number, step: number, floor: number, exclude: ReadonlySet<string>, basePenalty = 0, anchor?: DShape, descend?: number): Cand[] {
   const rows = freeRows(plane, frame, x, size.width, size.height, first, step, exclude, 3, extent);
   const band = spaceBand(plane, probe, anchor);
   const moving = (line: number): number => [...plane.shapes.values()].filter((s) => isLeaf(s) && s.bounds.y >= line && (!band.within || (s.bounds.x < right(band.within) && right(s.bounds) > band.within.x))).length;
   const cands: Cand[] = rows.map((r, k) => {
-    const cand: Cand = { x, c: r.c, size, penalty: basePenalty + 60 * k + (r.onLine ? 700 : 0) + Math.max(0, (r.c - first) / step - 1) * 40 };
-    // a row below the frame's interior grows the frame: content below it moves away
-    if (frame && r.c + size.height / 2 + 15 > bottom(frame.bounds)) {
+    const cand: Cand = { x, c: r.c, size, extent, penalty: basePenalty + 60 * k + (r.onLine ? 700 : 0) + Math.max(0, (r.c - first) / step - 1) * 40 };
+    // a row below the frame's interior grows the frame: content below it moves away (the shape keeps clear of the
+    // frame's boundary events on its bottom border, space.ts borderPad)
+    const pad = frame ? Math.max(15, borderPad(plane, frame, { x, y: r.c - size.height / 2, ...size }, 'y')) : 15;
+    if (frame && r.c + size.height / 2 + pad > bottom(frame.bounds)) {
       const line = bottom(frame.bounds) - 1;
-      const delta = Math.ceil(r.c + size.height / 2 + 15 - bottom(frame.bounds));
+      const delta = Math.ceil(r.c + size.height / 2 + pad - bottom(frame.bounds));
       cand.grow = { line, delta, ...band };
       cand.penalty += 10 * moving(line) + delta * 0.3;
     }
     return cand;
   });
-  if (rows.some((r) => Math.abs(r.c - first) < 1)) return cands;
   const box = { x, y: first - size.height / 2, width: size.width + extent, height: size.height };
+  const x0 = Math.min(descend ?? x, x) - 10;
+  const lines = linesUnder(plane, x0, right(box) + 10, floor, bottom(box) + 20);
+  const clean = rows.some((r) => Math.abs(r.c - first) < 1 && !r.onLine);
+  if (clean && !lines.length) return cands;
   const blockers = obstacles(plane, frame, exclude).boxes.filter((b) => overlaps(b, box, 20));
-  if (!blockers.length) return cands;
-  const top = Math.min(...blockers.map((b) => b.y));
+  const tops = [...blockers.map((b) => b.y), ...lines];
+  if (!tops.length) return cands;
+  const top = Math.min(...tops);
   if (top <= floor) return cands;
   const insert: Shift = { line: top - 0.5, delta: Math.ceil(bottom(box) + 20 - top), ...band };
-  cands.push({ x, c: first, size, penalty: basePenalty + 150 + 10 * moving(insert.line) + insert.delta * 0.3, insert });
+  if (layoutDebugOn()) layoutDebug(`[place] open row c=${first} floor=${Math.round(floor)} line=${insert.line} delta=${insert.delta} lines=${lines.join(',')} blockers=${blockers.map((b) => b.y).join(',')}`);
+  const n = Math.min(OPEN_MAX_SHAPES, moving(insert.line));
+  cands.push({ x, c: first, size, extent, penalty: basePenalty + OPEN_ROW + OPEN_PER_SHAPE * n + insert.delta * 0.2, insert });
   return cands;
 }
 
-/** Places at a chosen candidate (opening its row first). */
+/** Places at a chosen candidate (opening its row first; a path above its host takes the event to the top border first). */
 function placeCand(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, cand: Cand, anchor: DShape): void {
   if (cand.insert) {
     const { line, delta, within, frame } = cand.insert;
     recordSpace(ctx, makeSpace(plane, { axis: 'y', line, delta, anchors: [anchor.id, probe.parentId], ...(within ? { within } : {}), ...(frame ? { frame } : {}) }));
   }
+  // the spot after the room was made
+  if (cand.top) seatOnTop(ctx, plane, anchor, cand.top);
   placeAt(ctx, plane, id, cand.x, intoOwnLane(ctx, plane, probe, cand.x, cand.c, cand.size, [], anchor), cand.size);
 }
 
@@ -680,8 +804,15 @@ function probeOf(ctx: PlaceCtx, plane: Plane, id: string): Probe {
   return { id, kind: s.kind, ...(s.parentId ? { parentId: s.parentId } : {}), ...(s.laneId ? { laneId: s.laneId } : {}), ...(s.poolId ? { poolId: s.poolId } : {}) };
 }
 
-/** Room the new nodes that follow `id` in a simple chain need on its row (a branch row is chosen for all of them). */
+/**
+ * Room the new nodes that follow `id` in a simple chain need on its row (a
+ * branch row is chosen for all of them). A node without any successor yet
+ * (not an end event) keeps room for one event: the next command mostly ends
+ * its branch there, so a batch and the same ops as single commands choose
+ * the same row.
+ */
 function chainExtent(ctx: PlaceCtx, plane: Plane, id: string, pending: ReadonlySet<string>, gap: number): number {
+  if (!successors(ctx.sem, id).length && !is(ctx.sem.byId.get(id), 'bpmn:EndEvent')) return SIZES.event.width + gap;
   let extent = 0;
   let cur = id;
   for (let i = 0; i < 4; i++) {
@@ -699,25 +830,35 @@ function placeBoundary(ctx: PlaceCtx, plane: Plane, id: string): boolean {
   const hostId = idOf(raw(el, 'attachedToRef'));
   const host = hostId ? plane.shapes.get(hostId) : undefined;
   if (!host) return false;
-  const size = sizeFor(ctx, plane, id);
+  const box = boundarySpot(plane, host, sizeFor(ctx, plane, id));
+  if (box.y > host.bounds.y) makeRoomBelow(ctx, plane, host, box);
+  commit(ctx, plane, newShape(ctx, plane, id, box));
+  return true;
+}
+
+/**
+ * The spot placeBoundary gives a new boundary event on its host: the bottom
+ * border right to left (the corner included), then the top border; first
+ * with a clear exit. `self`: an event already drawn there, left out (where
+ * a command would have put it).
+ */
+function boundarySpot(plane: Plane, host: DShape, size: { width: number; height: number }, self?: string): Box {
   const hb = host.bounds;
-  const others = boundariesOf(plane, host.id).map((b) => b.bounds);
+  const others = boundariesOf(plane, host.id).filter((b) => b.id !== self).map((b) => b.bounds);
   const offset = Math.min(SIZES.event.width / 2 + 7, hb.width / 2);
   // the flow leaves a bottom boundary event downwards: keep that lane clear of other labels
-  const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.label).map((o) => o.label!);
+  const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.id !== self && o.label).map((o) => o.label!);
   const exitClear = (b: Box): boolean => b.y < hb.y || !labels.some((l) => overlaps(l, { x: b.x + b.width / 2 - 2, y: bottom(b), width: 4, height: 40 }));
   // where connections already dock on the host's border (a boundary event there would force them around)
   const docks: Point[] = [];
   for (const e of plane.edges.values()) {
-    if (e.points.length < 2) continue;
+    if (e.points.length < 2 || (self && e.sourceId === self)) continue;
     if (e.sourceId === host.id) docks.push(e.points[0]!);
     if (e.targetId === host.id) docks.push(e.points[e.points.length - 1]!);
   }
   const onDock = (b: Box): boolean => docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4);
   let strict = true;
   const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !onDock(b) && (!strict || (exitClear(b) && !labels.some((l) => overlaps(l, b, 2))));
-  // bottom border right to left (the corner included), then the top border; first with a clear exit
-  let box: Box | undefined;
   for (const [y, clear] of [[bottom(hb) - size.height / 2, true], [bottom(hb) - size.height / 2, false], [hb.y - size.height / 2, false]] as const) {
     strict = clear;
     const centres: number[] = [];
@@ -725,17 +866,10 @@ function placeBoundary(ctx: PlaceCtx, plane: Plane, id: string): boolean {
     for (let c = right(hb) - offset + 4; c <= right(hb); c += 4) centres.push(c);
     for (const c of centres) {
       const cand = { x: Math.round(c - size.width / 2), y: Math.round(y), ...size };
-      if (free(cand)) {
-        box = cand;
-        break;
-      }
+      if (free(cand)) return cand;
     }
-    if (box) break;
   }
-  box ??= { x: Math.round(right(hb) - offset - size.width / 2), y: Math.round(bottom(hb) - size.height / 2), ...size };
-  if (box.y > hb.y) makeRoomBelow(ctx, plane, host, box);
-  commit(ctx, plane, newShape(ctx, plane, id, box));
-  return true;
+  return { x: Math.round(right(hb) - offset - size.width / 2), y: Math.round(bottom(hb) - size.height / 2), ...size };
 }
 
 /**
@@ -861,8 +995,14 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     const extent = chainExtent(ctx, plane, id, pending, sp.gap);
     const start = cy(anchor.bounds) + sp.row;
     const xs = [right(anchor.bounds) + sp.gap, Math.round(cx(main.bounds) - size.width / 2)];
-    const cands = xs.flatMap((x, xi) => rowCandidates(plane, probe, frame, x, size, extent, start, sp.row, bottom(main.bounds), exclude, 40 * xi, anchor));
-    placeCand(ctx, plane, id, probe, cheapest(plane, main, kind, cands), main);
+    // an event on the top border: its path runs above the host (rows below cost TOP_ROW more), and what lies in the
+    // host's own row (its flows, the events on them) is never in the way of a row below it
+    const onTop = !!host && attachedSide(main.bounds, host.bounds) === 'top';
+    const floor = Math.max(bottom(main.bounds), host ? bottom(host.bounds) : -Infinity);
+    const cands = xs.flatMap((x, xi) => rowCandidates(plane, probe, frame, x, size, extent, start, sp.row, floor, exclude, 40 * xi + (onTop ? TOP_ROW : 0), anchor, cx(main.bounds)));
+    if (host && onTop) cands.push(...xs.flatMap((x, xi) => rowsAbove(plane, probe, frame, main, x, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, 40 * xi)));
+    else if (host) cands.push(...topCandidates(ctx, plane, id, probe, main, host, frame, size, extent, exclude));
+    placeCand(ctx, plane, id, probe, cheapest(ctx, id, plane, main, kind, cands), main);
     return;
   }
   const succShapes = successors(ctx.sem, main.id)
@@ -895,6 +1035,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     }
     if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
+    if (!S) (ctx.continued ??= new Set()).add(id);
     return;
   }
   // new branch: a free row below the anchor's existing branches (the first ones, cheapest connection)
@@ -903,8 +1044,111 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
   const below = succShapes.filter((s) => cy(s.bounds) >= cy(main.bounds) - sp.rowTol && frameOf(plane, s) === frame);
   const base = Math.max(cy(main.bounds), ...below.map((s) => cy(s.bounds)));
   const floor = Math.max(bottom(main.bounds), ...below.map((s) => cy(s.bounds)));
-  const cands = rowCandidates(plane, probe, frame, x, size, chainExtent(ctx, plane, id, pending, sp.gap), base + sp.row, sp.row, floor, exclude, 0, main);
-  placeCand(ctx, plane, id, probe, cheapest(plane, main, kind, cands), main);
+  const extent = chainExtent(ctx, plane, id, pending, sp.gap);
+  const cands = rowCandidates(plane, probe, frame, x, size, extent, base + sp.row, sp.row, floor, exclude, 0, main, cx(main.bounds));
+  // rows above the anchor when it has no branch above it yet (they win only when every row below crosses a line)
+  if (!succShapes.some((s) => cy(s.bounds) < cy(main.bounds) - sp.rowTol && frameOf(plane, s) === frame)) cands.push(...rowsAbove(plane, probe, frame, main, x, size, extent, cy(main.bounds) - sp.row, sp.row, exclude, TOP_ROW));
+  placeCand(ctx, plane, id, probe, cheapest(ctx, id, plane, main, kind, cands), main);
+}
+
+/**
+ * Up to two free rows at or above `startCy` for a box at `x`, inside the
+ * frame's interior, costing `penalty` and more for each row further up. When
+ * the first row sticks out of the frame at the top, room is made at the top
+ * of the frame first (an `insert` at its top border; it costs like an opened
+ * row). `top`: a boundary event's spot on the host's top border (moved down
+ * with the room).
+ */
+function rowsAbove(plane: Plane, probe: Probe, frame: DShape | undefined, anchor: DShape, x: number, size: { width: number; height: number }, extent: number, startCy: number, step: number, exclude: ReadonlySet<string>, penalty: number, top?: Box): Cand[] {
+  const inner = frame ? frameInterior(frame, 15) : undefined;
+  const out: Cand[] = [];
+  freeRows(plane, frame, x, size.width, size.height, startCy, step, exclude, 2, extent, true).forEach((r, k) => {
+    if (inner && r.c + size.height / 2 > bottom(inner)) return;
+    if (!inner || r.c - size.height / 2 >= inner.y) {
+      out.push({ x, c: r.c, size, extent, penalty: penalty + 60 * k + (r.onLine ? 700 : 0), ...(top ? { top } : {}) });
+      return;
+    }
+    // the first row above sticks out of the frame at the top: room at the top of the frame first (like `place
+    // --side top`: everything in it moves down, it grows), costing like an opened row
+    if (k || Math.abs(r.c - startCy) > 0.5) return;
+    const delta = Math.ceil(inner.y - (r.c - size.height / 2));
+    const band = spaceBand(plane, probe, anchor);
+    const insert: Shift = { line: frame!.bounds.y + 1, delta, ...band };
+    const moving = [...plane.shapes.values()].filter((s) => isLeaf(s) && s.bounds.y >= insert.line && (!band.within || (s.bounds.x < right(band.within) && right(s.bounds) > band.within.x))).length;
+    const shifted = top ? { ...top, y: top.y + delta } : undefined;
+    out.push({ x, c: r.c + delta, size, extent, insert, penalty: penalty + OPEN_ROW + OPEN_PER_SHAPE * Math.min(OPEN_MAX_SHAPES, moving) + delta * 0.2 + (r.onLine ? 700 : 0), ...(shifted ? { top: shifted } : {}) });
+  });
+  return out;
+}
+
+/**
+ * The spot on the host's top border nearest the boundary event's column that
+ * no other boundary event and no docking connection takes (like `place
+ * --side top`), or undefined.
+ */
+function topSpot(plane: Plane, event: DShape, host: DShape): Box | undefined {
+  const hb = host.bounds;
+  const size = { width: event.bounds.width, height: event.bounds.height };
+  const y = Math.round(hb.y - size.height / 2);
+  const others = boundariesOf(plane, host.id).filter((b) => b.id !== event.id).map((b) => b.bounds);
+  const docks: Point[] = [];
+  for (const e of plane.edges.values()) {
+    if (e.points.length < 2 || e.sourceId === event.id) continue;
+    if (e.sourceId === host.id) docks.push(e.points[0]!);
+    if (e.targetId === host.id) docks.push(e.points[e.points.length - 1]!);
+  }
+  const labels = [...plane.shapes.values(), ...plane.edges.values()].filter((o) => o.id !== host.id && o.id !== event.id && o.label).map((o) => o.label!);
+  // a line through the spot (a rework line right above the host): the event would sit on it, and the line would be
+  // routed again around the event (mostly with a crossing); the event's own flow does not count
+  const lines = [...plane.edges.values()].filter((e) => e.sourceId !== event.id).map((e) => e.points);
+  const onLine = (b: Box): boolean => lines.some((pts) => pathHits(pts, b, -4));
+  const free = (b: Box): boolean => !others.some((o) => overlaps(o, b, 4)) && !docks.some((p) => p.x > b.x - 4 && p.x < right(b) + 4 && p.y > b.y - 4 && p.y < bottom(b) + 4) && !labels.some((l) => overlaps(l, b, 2)) && !onLine(b);
+  const lo = hb.x + size.width / 2;
+  const hi = right(hb) - size.width / 2;
+  const start = Math.min(hi, Math.max(lo, cx(event.bounds)));
+  for (let d = 0; d <= hb.width; d += 4) {
+    for (const c of d ? [start + d, start - d] : [start]) {
+      const b = { x: Math.round(c - size.width / 2), y, ...size };
+      if (c >= lo - 0.5 && c <= hi + 0.5 && free(b)) return b;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Rows above the host for the first node of a boundary event's path (the
+ * event moves to the host's top border when one wins, seatOnTop): only for
+ * an event on the bottom border placed by the CLI (in this run, or by an
+ * earlier command where placeBoundary puts it; one drawn by hand elsewhere
+ * keeps its border) whose path starts with this node (no other drawn
+ * successor) and a free spot on the top border (topSpot: no other event,
+ * docking connection, label or line there). They cost TOP_ROW more than a
+ * row below (room at the top of the frame like an opened row on top), so a
+ * clean row below wins and a row below that crosses a line loses.
+ */
+function topCandidates(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, event: DShape, host: DShape, frame: DShape | undefined, size: { width: number; height: number }, extent: number, exclude: ReadonlySet<string>): Cand[] {
+  if (attachedSide(event.bounds, host.bounds) !== 'bottom') return [];
+  // an event drawn by hand keeps the border it was drawn on (the drawing's convention): only one placed in this
+  // run, or by an earlier command (it sits where placeBoundary puts a new event), goes to the top border
+  if (!ctx.placed.has(event.id)) {
+    const spot = boundarySpot(plane, host, { width: event.bounds.width, height: event.bounds.height }, event.id);
+    if (Math.abs(spot.x - event.bounds.x) > 1 || Math.abs(spot.y - event.bounds.y) > 1) return [];
+  }
+  if (successors(ctx.sem, event.id).some((n) => n !== id && plane.shapes.has(n))) return [];
+  const spot = topSpot(plane, event, host);
+  if (!spot) return [];
+  const sp = spacing(ctx, plane);
+  const xs = [right(host.bounds) + sp.gap, Math.round(cx(spot) - size.width / 2)];
+  return xs.flatMap((x, xi) => rowsAbove(plane, probe, frame, event, x, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, TOP_ROW + 40 * xi, spot));
+}
+
+/** Moves a boundary event to its spot on the host's top border (its path is placed above the host next). */
+function seatOnTop(ctx: PlaceCtx, plane: Plane, event: DShape, spot: Box): void {
+  const moved = shiftShape(plane, event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
+  for (const m of moved) if (!ctx.placed.has(m)) ctx.moved.add(m);
+  // its label is placed again once its path is drawn (incremental.ts labels)
+  if (event.label) (ctx.relabel ??= new Set()).add(event.id);
+  ctx.notes.push(`${event.id} moved to the top border of ${event.hostId}: its path runs above it (below, it would cross a line or take more room)`);
 }
 
 function placeBefore(ctx: PlaceCtx, plane: Plane, id: string, succ: DShape): void {

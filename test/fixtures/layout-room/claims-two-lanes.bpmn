@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Claims" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:collaboration id="Collaboration_Claims">
+    <bpmn:participant id="Participant_Insurer" name="Insurer" processRef="Process_Claims" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Claims" name="Lanes" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_Claims">
+      <bpmn:lane id="Lane_Clerk" name="Clerk">
+        <bpmn:flowNodeRef>Event_ClaimReceived</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RegisterClaim</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Simple</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_PayClaim</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_ClaimPaid</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Assessor" name="Assessor">
+        <bpmn:flowNodeRef>Activity_AssessClaim</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Fraud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ReportFraud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_FraudReported</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_ClaimReceived" name="Claim received">
+      <bpmn:outgoing>Flow_ClaimReceivedToRegisterClaim</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_RegisterClaim" name="Register claim">
+      <bpmn:incoming>Flow_ClaimReceivedToRegisterClaim</bpmn:incoming>
+      <bpmn:outgoing>Flow_RegisterClaimToSimple</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Simple" name="Simple?">
+      <bpmn:incoming>Flow_RegisterClaimToSimple</bpmn:incoming>
+      <bpmn:outgoing>Flow_SimpleYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SimpleNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Activity_PayClaim" name="Pay claim">
+      <bpmn:incoming>Flow_SimpleYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_PayClaimToClaimPaid</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_ClaimPaid" name="Claim paid">
+      <bpmn:incoming>Flow_PayClaimToClaimPaid</bpmn:incoming>
+      <bpmn:incoming>Flow_FraudNo</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Activity_AssessClaim" name="Assess claim">
+      <bpmn:incoming>Flow_SimpleNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_AssessClaimToFraud</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Fraud" name="Fraud?">
+      <bpmn:incoming>Flow_AssessClaimToFraud</bpmn:incoming>
+      <bpmn:outgoing>Flow_FraudYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FraudNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="Activity_ReportFraud" name="Report fraud">
+      <bpmn:incoming>Flow_FraudYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReportFraudToFraudReported</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_FraudReported" name="Fraud reported">
+      <bpmn:incoming>Flow_ReportFraudToFraudReported</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ClaimReceivedToRegisterClaim" sourceRef="Event_ClaimReceived" targetRef="Activity_RegisterClaim" />
+    <bpmn:sequenceFlow id="Flow_RegisterClaimToSimple" sourceRef="Activity_RegisterClaim" targetRef="Gateway_Simple" />
+    <bpmn:sequenceFlow id="Flow_SimpleYes" name="yes" sourceRef="Gateway_Simple" targetRef="Activity_PayClaim" />
+    <bpmn:sequenceFlow id="Flow_PayClaimToClaimPaid" sourceRef="Activity_PayClaim" targetRef="Event_ClaimPaid" />
+    <bpmn:sequenceFlow id="Flow_SimpleNo" name="no" sourceRef="Gateway_Simple" targetRef="Activity_AssessClaim" />
+    <bpmn:sequenceFlow id="Flow_AssessClaimToFraud" sourceRef="Activity_AssessClaim" targetRef="Gateway_Fraud" />
+    <bpmn:sequenceFlow id="Flow_FraudYes" name="yes" sourceRef="Gateway_Fraud" targetRef="Activity_ReportFraud" />
+    <bpmn:sequenceFlow id="Flow_ReportFraudToFraudReported" sourceRef="Activity_ReportFraud" targetRef="Event_FraudReported" />
+    <bpmn:sequenceFlow id="Flow_FraudNo" name="no" sourceRef="Gateway_Fraud" targetRef="Event_ClaimPaid" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_Claims">
+      <bpmndi:BPMNShape id="Participant_Insurer_di" bpmnElement="Participant_Insurer" isHorizontal="true">
+        <dc:Bounds x="130" y="80" width="970" height="450" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Clerk_di" bpmnElement="Lane_Clerk" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="940" height="230" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Assessor_di" bpmnElement="Lane_Assessor" isHorizontal="true">
+        <dc:Bounds x="160" y="310" width="940" height="220" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_ClaimReceived_di" bpmnElement="Event_ClaimReceived">
+        <dc:Bounds x="200" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="190" y="203" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegisterClaim_di" bpmnElement="Activity_RegisterClaim">
+        <dc:Bounds x="290" y="140" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Simple_di" bpmnElement="Gateway_Simple">
+        <dc:Bounds x="450" y="155" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="440" y="210" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PayClaim_di" bpmnElement="Activity_PayClaim">
+        <dc:Bounds x="560" y="140" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_ClaimPaid_di" bpmnElement="Event_ClaimPaid">
+        <dc:Bounds x="724" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="714" y="203" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AssessClaim_di" bpmnElement="Activity_AssessClaim">
+        <dc:Bounds x="560" y="380" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Fraud_di" bpmnElement="Gateway_Fraud">
+        <dc:Bounds x="720" y="395" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="710" y="450" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ReportFraud_di" bpmnElement="Activity_ReportFraud">
+        <dc:Bounds x="840" y="380" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_FraudReported_di" bpmnElement="Event_FraudReported">
+        <dc:Bounds x="994" y="402" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="984" y="443" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ClaimReceivedToRegisterClaim_di" bpmnElement="Flow_ClaimReceivedToRegisterClaim">
+        <di:waypoint x="236" y="180" />
+        <di:waypoint x="290" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RegisterClaimToSimple_di" bpmnElement="Flow_RegisterClaimToSimple">
+        <di:waypoint x="390" y="180" />
+        <di:waypoint x="450" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SimpleYes_di" bpmnElement="Flow_SimpleYes">
+        <di:waypoint x="500" y="180" />
+        <di:waypoint x="560" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PayClaimToClaimPaid_di" bpmnElement="Flow_PayClaimToClaimPaid">
+        <di:waypoint x="660" y="180" />
+        <di:waypoint x="724" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SimpleNo_di" bpmnElement="Flow_SimpleNo">
+        <di:waypoint x="475" y="205" />
+        <di:waypoint x="475" y="420" />
+        <di:waypoint x="560" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AssessClaimToFraud_di" bpmnElement="Flow_AssessClaimToFraud">
+        <di:waypoint x="660" y="420" />
+        <di:waypoint x="720" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FraudYes_di" bpmnElement="Flow_FraudYes">
+        <di:waypoint x="770" y="420" />
+        <di:waypoint x="840" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ReportFraudToFraudReported_di" bpmnElement="Flow_ReportFraudToFraudReported">
+        <di:waypoint x="940" y="420" />
+        <di:waypoint x="994" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FraudNo_di" bpmnElement="Flow_FraudNo">
+        <di:waypoint x="745" y="445" />
+        <di:waypoint x="745" y="500" />
+        <di:waypoint x="1060" y="500" />
+        <di:waypoint x="1060" y="300" />
+        <di:waypoint x="760" y="300" />
+        <di:waypoint x="760" y="198" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

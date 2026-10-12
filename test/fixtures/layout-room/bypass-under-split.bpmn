@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Shipping" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:process id="Process_Shipping" name="Shipping" isExecutable="false">
+    <bpmn:startEvent id="Event_OrderPaid" name="Order paid">
+      <bpmn:outgoing>Flow_OrderPaidToPickOrder</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_PickOrder" name="Pick order">
+      <bpmn:incoming>Flow_OrderPaidToPickOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_PickOrderToExpress</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Express" name="Express?" default="Flow_ExpressNo">
+      <bpmn:incoming>Flow_PickOrderToExpress</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpressYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ExpressNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Activity_PackExpress" name="Pack express parcel">
+      <bpmn:incoming>Flow_ExpressYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_PackExpressToExpressJoin</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_ExpressJoin">
+      <bpmn:incoming>Flow_PackExpressToExpressJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_ExpressNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpressJoinToShipOrder</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_ShipOrder" name="Ship order">
+      <bpmn:incoming>Flow_ExpressJoinToShipOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_ShipOrderToOrderShipped</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_OrderShipped" name="Order shipped">
+      <bpmn:incoming>Flow_ShipOrderToOrderShipped</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_OrderPaidToPickOrder" sourceRef="Event_OrderPaid" targetRef="Activity_PickOrder" />
+    <bpmn:sequenceFlow id="Flow_PickOrderToExpress" sourceRef="Activity_PickOrder" targetRef="Gateway_Express" />
+    <bpmn:sequenceFlow id="Flow_ExpressYes" name="yes" sourceRef="Gateway_Express" targetRef="Activity_PackExpress" />
+    <bpmn:sequenceFlow id="Flow_ExpressNo" name="no" sourceRef="Gateway_Express" targetRef="Gateway_ExpressJoin" />
+    <bpmn:sequenceFlow id="Flow_PackExpressToExpressJoin" sourceRef="Activity_PackExpress" targetRef="Gateway_ExpressJoin" />
+    <bpmn:sequenceFlow id="Flow_ExpressJoinToShipOrder" sourceRef="Gateway_ExpressJoin" targetRef="Activity_ShipOrder" />
+    <bpmn:sequenceFlow id="Flow_ShipOrderToOrderShipped" sourceRef="Activity_ShipOrder" targetRef="Event_OrderShipped" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Shipping">
+    <bpmndi:BPMNPlane id="BPMNPlane_Shipping" bpmnElement="Process_Shipping">
+      <bpmndi:BPMNShape id="Event_OrderPaid_di" bpmnElement="Event_OrderPaid">
+        <dc:Bounds x="102" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="94" y="125" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PickOrder_di" bpmnElement="Activity_PickOrder">
+        <dc:Bounds x="190" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Express_di" bpmnElement="Gateway_Express" isMarkerVisible="true">
+        <dc:Bounds x="345" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="347" y="52" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PackExpress_di" bpmnElement="Activity_PackExpress">
+        <dc:Bounds x="450" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ExpressJoin_di" bpmnElement="Gateway_ExpressJoin" isMarkerVisible="true">
+        <dc:Bounds x="605" y="75" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ShipOrder_di" bpmnElement="Activity_ShipOrder">
+        <dc:Bounds x="710" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_OrderShipped_di" bpmnElement="Event_OrderShipped">
+        <dc:Bounds x="872" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="855" y="125" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_OrderPaidToPickOrder_di" bpmnElement="Flow_OrderPaidToPickOrder">
+        <di:waypoint x="138" y="100" />
+        <di:waypoint x="190" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PickOrderToExpress_di" bpmnElement="Flow_PickOrderToExpress">
+        <di:waypoint x="290" y="100" />
+        <di:waypoint x="345" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpressYes_di" bpmnElement="Flow_ExpressYes">
+        <di:waypoint x="395" y="100" />
+        <di:waypoint x="450" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="414" y="82" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpressNo_di" bpmnElement="Flow_ExpressNo">
+        <di:waypoint x="370" y="125" />
+        <di:waypoint x="370" y="160" />
+        <di:waypoint x="630" y="160" />
+        <di:waypoint x="630" y="125" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="378" y="138" width="14" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PackExpressToExpressJoin_di" bpmnElement="Flow_PackExpressToExpressJoin">
+        <di:waypoint x="550" y="100" />
+        <di:waypoint x="605" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpressJoinToShipOrder_di" bpmnElement="Flow_ExpressJoinToShipOrder">
+        <di:waypoint x="655" y="100" />
+        <di:waypoint x="710" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ShipOrderToOrderShipped_di" bpmnElement="Flow_ShipOrderToOrderShipped">
+        <di:waypoint x="810" y="100" />
+        <di:waypoint x="872" y="100" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
