@@ -862,6 +862,44 @@ describe('move', () => {
     await expectRoundTrip(doc);
   });
 
+  it('a chain whose --after anchor or --flow source is one of its later nodes (or inside one) is refused before anything changes', async () => {
+    const doc = await fullDoc();
+    const xml = await doc.toXml();
+    const refusals: Array<[Parameters<typeof moveElements>[1], string]> = [
+      [{ op: 'move', ids: ['Call', 'End'], after: 'End' }, 'End cannot anchor the move of Call, End: it is one of the moved nodes'],
+      [{ op: 'move', ids: ['Task_A', 'Gw', 'Task_B'], after: 'Gw' }, 'Gw cannot anchor the move of Task_A, Gw, Task_B: it is one of the moved nodes'],
+      [{ op: 'move', ids: ['Task_A', 'Call'], flow: 'F6' }, 'F6 cannot anchor the move of Task_A, Call: its source Call is one of the moved nodes'],
+      [{ op: 'move', ids: ['Task_B', 'Sub'], after: 'SubTask' }, 'SubTask cannot anchor the move of Task_B, Sub: it is inside Sub, one of the moved nodes'],
+    ];
+    for (const [op, message] of refusals) {
+      expect(() => moveElements(doc, op), JSON.stringify(op)).toThrow(message);
+      expect(errorCode(() => moveElements(doc, op))).toBe('E_INVALID_PLACEMENT');
+    }
+    expect(await doc.toXml()).toBe(xml);
+  });
+
+  it('a move that leaves its nodes where they are changes nothing and says so; after a gateway it appends as before', async () => {
+    const doc = await fullDoc();
+    const xml = await doc.toXml();
+    const inPlace: Array<[Parameters<typeof moveElements>[1], string]> = [
+      [{ op: 'move', ids: ['Call'], after: 'Sub' }, 'Call is already after Sub'],
+      [{ op: 'move', ids: ['Call', 'End'], after: 'Sub' }, 'Call, End are already after Sub, in this order'],
+      // Sub has two flows in: Task_B is before it all the same (a splice would fail with E_HAS_PREDECESSOR)
+      [{ op: 'move', ids: ['Task_B'], before: 'Sub' }, 'Task_B is already before Sub'],
+      [{ op: 'move', ids: ['Task_B'], after: 'Gw', before: 'Sub' }, 'Task_B is already between Gw and Sub'],
+    ];
+    for (const [op, note] of inPlace) {
+      const cs = moveElements(doc, op);
+      expect([cs.created, cs.changed, cs.removed, cs.warnings, cs.notes], JSON.stringify(op)).toEqual([[], [], [], [], [note]]);
+    }
+    expect(await doc.toXml()).toBe(xml);
+    // a gateway's successor moved after it becomes a new branch (append), as before: F_yes is bridged to Sub
+    const cs = moveElements(doc, { op: 'move', ids: ['Task_B'], after: 'Gw' });
+    expect(cs.notes).toEqual(['bridged: Gw -> Sub', 'appended after Gw']);
+    expect(doc.require('F_yes').get<El>('targetRef').get('id')).toBe('Sub');
+    expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
+  });
+
   itLanes('move --lane assigns lanes (alone and combined with a placement)', async () => {
     const doc = await fullDoc();
     moveElements(doc, { op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });

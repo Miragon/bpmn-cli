@@ -369,13 +369,18 @@ function associationsOf(doc: Doc, flow: El): El[] {
   return [...doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && (a.get<El | undefined>('sourceRef') === flow || a.get<El | undefined>('targetRef') === flow));
 }
 
-/** Re-attaches the associations of `from` to `to` (bridging: the annotation stays on the flow that replaces `from`). */
-export function carryAssociations(doc: Doc, from: El, to: El, cs: ChangeSet): void {
-  for (const a of associationsOf(doc, from)) {
+/**
+ * Re-attaches the associations of `from` to `to` (bridging: the annotation
+ * stays on the flow that replaces `from`). Returns the ones it re-attached.
+ */
+export function carryAssociations(doc: Doc, from: El, to: El, cs: ChangeSet): El[] {
+  const carried = associationsOf(doc, from);
+  for (const a of carried) {
     for (const end of ['sourceRef', 'targetRef']) if (a.get<El | undefined>(end) === from) a.set(end, to);
     cs.change({ id: idOf(a), kind: 'association', detail: `re-attached from ${idOf(from)} to ${idOf(to)}` });
   }
   doc.invalidate();
+  return carried;
 }
 
 /** Removes the associations attached to a flow that is being removed (reported). */
@@ -718,12 +723,25 @@ export function spliceIntoFlow(doc: Doc, flow: El, node: El, reuse?: El, flowId?
 }
 
 /**
+ * A bridge detachNode made: the node's in-flow (`flow`), now running to the
+ * successor, the out-flow it replaced (`from`, removed) and what it took
+ * over from that one: the name and the condition where it had none, the
+ * associations of its annotations.
+ */
+export interface Bridge {
+  flow: El;
+  from: El;
+  took: { name?: string; condition?: El; associations: El[] };
+}
+
+/**
  * Removes every sequence flow of `node`. With `bridge`, a node with exactly
  * one incoming and one outgoing flow is bypassed: the incoming flow is
  * retargeted to the successor (label/condition of the outgoing flow are
- * carried over when the incoming flow has none). Returns whether it bridged.
+ * carried over when the incoming flow has none). Returns the bridge, or
+ * undefined when it did not bridge.
  */
-export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): boolean {
+export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): Bridge | undefined {
   const incoming = doc.incoming(node);
   const outgoing = doc.outgoing(node);
   if (bridge && incoming.length === 1 && outgoing.length === 1) {
@@ -734,17 +752,22 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
     if (successor !== node && predecessor !== node) {
       const outName = outFlow.get<string | undefined>('name');
       const outCond = outFlow.get<El | undefined>('conditionExpression');
-      if (outName && !inFlow.get<string | undefined>('name')) inFlow.set('name', outName);
-      else if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}`, element: idOf(outFlow) });
-      if (outCond && !inFlow.get<El | undefined>('conditionExpression')) inFlow.set('conditionExpression', outCond);
-      else if (outCond) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}`, element: idOf(outFlow) });
-      carryAssociations(doc, outFlow, inFlow, cs);
+      const took: Bridge['took'] = { associations: [] };
+      if (outName && !inFlow.get<string | undefined>('name')) {
+        inFlow.set('name', outName);
+        took.name = outName;
+      } else if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}`, element: idOf(outFlow) });
+      if (outCond && !inFlow.get<El | undefined>('conditionExpression')) {
+        inFlow.set('conditionExpression', outCond);
+        took.condition = outCond;
+      } else if (outCond) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}`, element: idOf(outFlow) });
+      took.associations = carryAssociations(doc, outFlow, inFlow, cs);
       removeSequenceFlow(doc, outFlow, cs);
       cs.remove(flowChange(outFlow));
       const renamed = redirectFlow(doc, inFlow, { target: successor });
       cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
       cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
-      return true;
+      return { flow: inFlow, from: outFlow, took };
     }
   }
   // a self-loop is both incoming and outgoing: remove and report it once
@@ -752,7 +775,7 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
     cs.remove(flowChange(f));
     removeSequenceFlow(doc, f, cs);
   }
-  return false;
+  return undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -819,7 +842,8 @@ export function placementScope(doc: Doc, p: Placement): El {
   }
 }
 
-function applyFlowOptions(doc: Doc, flow: El, opts: FlowOptions, cs: ChangeSet): void {
+/** The flow options of a placement (name, condition, default) on the flow into the node, reported as changed when one was given. */
+export function applyFlowOptions(doc: Doc, flow: El, opts: FlowOptions, cs: ChangeSet): void {
   let touched = false;
   if (opts.flowName !== undefined) {
     flow.set('name', opts.flowName || undefined);

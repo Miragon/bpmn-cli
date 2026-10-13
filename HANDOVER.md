@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, and an alias through a retype with a typed split's input checked)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, and the move fixes after #32)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2108 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2115 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,158 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Moves anchored on their own nodes, moves in place (2026-10-13, `fix/move-anchor-and-noop`)
+
+Three follow-ups of #32 (two from its "Left out, for later", one found
+while checking them), in both flow-id modes, with the fixes of their
+review:
+
+- **A chain anchored on one of its own nodes is refused**
+  (`ops/move.ts assertChainAnchor`). `move A Join Done --after Join`,
+  `move T1 E --after E` or `move A B --flow Flow_BToC` placed the chain
+  after one of its later nodes: exit 0 with unreachable nodes, a flow
+  listed as created and removed, `_2` ids. The per-node check
+  (`assertNotInside` against each node's own placement) never saw it. Now
+  the node the chain starts after (the `--after` anchor, also with
+  `--before`; the source of the `--flow`) must not move with a later node:
+  be it, lie inside it, or be one of its boundary events (`isInside` checks
+  `attachedToRef` too: `move A T --after <T's timer>` or `--flow` out of it
+  made a cycle T -> timer -> A -> T with exit 0). A `--before` anchor inside
+  a later node is refused too (`move A Sub --before <node in Sub>`; it was
+  refused with a message about Sub and A). `E_INVALID_PLACEMENT` before
+  anything changes; the hint names the move of the first node alone, or,
+  when that one is already there (`move C B --after B` with B -> C), the
+  reorder `bpmn move <file> C --before B` (only when B has one flow in). The
+  first node keeps its own check and message (`assertFirstPlacement` runs
+  moveNode's checks first, in their order); a single node after its own
+  boundary event is `E_INVALID_PLACEMENT` now (`that is one of its boundary
+  events, which move with it`; it was `E_NOT_FOUND` for the boundary event).
+  A `--before` anchor or the `--flow`'s target that is a later node stays
+  allowed (`move A Join --before Join`, keep-flow-ids.test.ts).
+- **A move in place changes nothing** (`inPlace`). `move B --after A` with
+  A -> B detached B (the bridge A -> C took B -> C's label and condition)
+  and spliced it back: by default `Flow_AToB_2 "go"`, `Flow_BToC_2` and two
+  `W_ID_SUFFIXED`; with ids kept the label moved to A -> B. A node with
+  several out-flows (a gateway after its predecessor) or several in-flows
+  (a merge before its successor) lost all of them. Now a placement that
+  leaves every node where it is gives a note (`Activity_B is already after
+  Activity_A`; for a chain `..., in this order`) and no change: each later
+  node follows the one before through its only in-flow, `--after X` is the
+  first node's only predecessor through its only in-flow (X no gateway: an
+  append makes a new branch), `--before Y` the last node's only successor
+  through its only out-flow (Y no join: a prepend), `--after` + `--before`
+  both (also `--after <gateway> --before <join>`). Flow options go to the
+  first node's in-flow (`optionsOnInFlow`: `applyFlowOptions`, now
+  exported, and a `flowId` renames that flow through `renameId`, like `set
+  id=`, `E_DUPLICATE_ID` when taken; one change entry `(renamed from
+  Flow_CToDone)`), so they need exactly one. Before the review fix a
+  `flowId` was dropped without a word; origin/main made a new flow with it
+  where it appended the node and dropped it where it spliced. Boundary
+  events, a node given twice and `--flow` are never in place. Some inputs
+  that failed before are notes now when the nodes are in place
+  (`E_HAS_SUCCESSOR` from an anchor with several out-flows,
+  `E_HAS_PREDECESSOR` before an implicit merge, `E_NO_FLOW` for a chain
+  with `--after X --before Y`, `E_INVALID_BRIDGE`).
+- **Nothing written.** The incremental layout placed every id of a move
+  with a placement again (`pipeline.ts relocatedIds`), so even a no-op
+  rearranged a hand-made drawing (step1/far-label.bpmn: SUB, SE and ST
+  moved). It now takes only the nodes a move relocated:
+  `ChangeSet.relocated` (new, public, additive; the ids at the time of the
+  move, not renamed, concatenated by `merge`, not in `toJSON`). This also
+  keeps `move X --in <its own scope>` ("already in") from moving X's shape.
+- **What the bridge took.** `detachNode` and `detachWithBridge` return the
+  `Bridge`: the in-flow (`flow`), the out-flow it replaced (`from`) and what
+  it `took` (the name string, the condition element, the associations;
+  `carryAssociations` returns them; the default-flow rule of
+  `detachWithBridge` deletes `took.condition`). With ids kept, once the
+  whole chain is placed (`reportBridgesKept`, after `giveBackLate`), the
+  last change entry of a put-back out-flow says what of its own label (as
+  the move started: `labelsBefore`) a bridge still holds, by the bridge's
+  id then: `(was -> Activity_C; its name and condition stay with the bridge
+  Flow_AToB)`. It follows later bridges of the chain that took the value
+  over, and says nothing for what the flow has again or what a later
+  bridge did not take (that detach warned). The first version built the
+  clause when the flow was put back: a bridge a later node renamed was
+  named by its old id (a batch flow following its ends), and a swap
+  (`move B A --after Start`) got two clauses pointing at each other and an
+  extra entry `ChangeSet.change` no longer deduplicated. A bridge a later
+  node removed (not bridged: an end event, a split) took the label along,
+  silently on origin/main too (`move A E1 --after G`: `removed F_T_A
+  "done"`, no "done" left): the flow now gets name and condition back when
+  it ends between its old ends (`giveBack`, listed once), else
+  `W_LABEL_DROPPED` / `W_CONDITION_DROPPED` (`the bridge F_S_A took it, and
+  a later node of the move removed F_S_A`). Default mode is unchanged (the
+  out-flow is `removed` with its label).
+- One #32 test changed: "a later change that leaves a stale flow where it
+  was" moved X in place to run Flow_AToB through its named ends; that move
+  is a no-op now, so the test moves X away and back (`move X --after C`,
+  `move X --after A`) with the same three expectations.
+- Rebased onto #46, #48, #52, #53 and #55: the change entries this branch
+  builds from another one (the renamed flow of a move in place, the clause
+  of `reportBridgesKept`) keep the element they are about
+  (`flowChange(flow, detail)`, `about`), as #46 made every entry of move.ts
+  do, so a later rename still finds them.
+
+Docs: commands.md (move), ops.md, reference.md (placement), migrating.md
+(Changes from 0.6: the refusal, the move in place and its `flowId`,
+`ChangeSet.relocated`, the clause), the guide (`E_INVALID_PLACEMENT` in
+the catalogue, the move summary, a placement note, the batch text), the
+`flowId` description of the op schema (batch.ts), SKILL.md (error table).
+`guide --short` is unchanged (4,644 bytes).
+
+Evidence: 7 new tests (test/keep-flow-ids.test.ts,
+test/ops-mutate.test.ts) fail on origin/main and pass here. A differential
+of generated move ops (the fuzz's own move, moves in place, chains along
+the flows with anchors inside and outside, flow options with `flowId`,
+swaps and reversed chains, chains anchored on a boundary event of a later
+node, `--before` inside a later sub-process; both modes, the whole pipeline
+with its layout) on origin/main and this branch differs only on no-op and
+self-anchored moves, in the clause and where a removed bridge's label is
+given back or warned about:
+
+| | test/fixtures + tools/scenarios (164 files) | private corpus (222 files, counts only) |
+| --- | --- | --- |
+| runs | 14,756 | 18,804 |
+| identical | 7,583 | 9,951 |
+| no-op on the branch | 4,330 | 5,356 |
+| ... origin/main kept the graph (new ids, label moved, `flowId` flow made) | 3,718 | 4,384 |
+| ... origin/main changed the graph (a gateway's or merge's other flows cut) | 406 | 740 |
+| ... origin/main refused (`E_INVALID_PLACEMENT`, `E_HAS_SUCCESSOR`, `E_INVALID_BRIDGE`, ...) | 206 | 232 |
+| refused as self-anchored (a later node, inside one, its boundary event) | 2,542 | 3,206 |
+| ... origin/main wrote a rewired model | 1,530 | 1,610 |
+| refused as placed on its own boundary event (origin/main: mostly `E_NOT_FOUND`) | 296 | 290 |
+| only the clause of the put-back flow added (keep mode) | 5 | 1 |
+| a removed bridge's label given back or warned about | 0 | 0 |
+| anything else | 0 | 0 |
+
+The fuzz walks themselves (tools/fuzz/walk.mjs, the same seeds on both
+builds, 96 walks x 25 steps, seed 1, auto and incremental, 130 move steps):
+82 walks identical step by step, 14 diverge, each first at a `move-after`
+that is a no-op here; one error-severity violation, the same in both builds
+(a walk that does not diverge). `npm run roundtrip` and `tools/speaking-ids.mjs
+--baseline` are identical to origin/main, the layout regress score stays
+444, and the gate's fuzz has `ERRORS 0` and 4 warnings, as on origin/main.
+Runtime: a move with the same output takes the same time (median 30 / 30
+ms and 35 / 35 ms per run, the two corpora, origin/main / branch); a no-op
+is about 16 % faster (no detach, nothing placed again). The differential,
+the walks and the runtimes were measured before the rebase. Bundles after
+it: whole entry 938.5 / 299.0 KB (origin/main 931.6 / 296.7), `applyToXml`
+alone 663.0 / 211.4 KB (657.5 / 209.6). Main's budgets (935 / 298 and 660
+/ 210) had 0.3 to 3.4 KB left after #46 and #48 grew the edit path, less
+than this change adds (about 7 / 2.3 and 5.5 / 1.8 KB), so they are raised
+to the measured size plus about 1 %: 948 / 302 and 670 / 214
+(tools/iso/budget.json, docs/library.md).
+
+Left for later (low, from the work and its review):
+
+- With `--before` and flow options a first node without exactly one
+  in-flow runs the old path (there is no single flow for the options).
+- A relocating move that splices drops a `flowId` without a warning, as on
+  origin/main (`add` says `W_OPTION_IGNORED` with the `set id=` hint); the
+  schema says `flowId` names only a flow the op creates.
+- The refusal hint is not run: "move the first node alone" can itself be
+  refused (a start event spliced into a flow).
 
 ## A batch alias through a retype, a split's input in the library (2026-10-13, `fix/batch-alias-retype-split-input`)
 
@@ -897,9 +1049,10 @@ from the change that makes a flow stale.
   `stillHolds`, against each flow's final ends (`reportStaleFlows`,
   `staleFlowWarning`): one per flow, none for a flow a later op removed or
   put back between its old ends, and none for a flow that ends where it did
-  when the batch began (a flow that was stale before: a no-op move of a node
-  a splice put in runs it through the ends its id names and back, which
-  recorded it again). `runOp` on its own (no batch) reports its own. The
+  when the batch began (a flow that was stale before: moving a node a splice
+  put in away and back, `move X --after C` then `move X --after A`, runs it
+  through the ends its id names and back, which recorded it again). `runOp`
+  on its own (no batch) reports its own. The
   message names the old and the new ends; the hint is `bpmn set <file>
   <flowId> id=<suggested>`, where the suggestion is what `IdStyle.next`
   gives the new ends against the document's ids plus the hints before it in
@@ -1071,13 +1224,6 @@ Left out, for later:
 - The flow a splice creates (new node -> old successor) has no alias:
   `flowAs` on a splicing `add` names the kept flow into the node. The docs
   say so; an `outAs` key would be new syntax.
-- With ids kept, a bridged move puts the node's out-flow back while its
-  name and condition move to the bridge's id; the docs say so, but the
-  change has no line naming where they went (a note would be new output).
-- A chain whose anchor is one of its own later nodes (`move T1 J E --after
-  J`, J a join): T1's append gives J a second out-flow before J moves, so J
-  is not bridged with two out-flows and J -> E comes back as a new flow, in
-  both modes. Seen once in 1,400 random keep-mode batches.
 - With ids kept and no layout (`--no-layout`, or a second `BPMNDiagram` the
   incremental layout leaves alone), a put-back flow keeps its BPMNEdge with
   the old waypoints and the result has no `run bpmn layout` note (default

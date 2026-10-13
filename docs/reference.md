@@ -146,6 +146,10 @@ Without a placement the node goes into the only process, unconnected (several pr
   the existing one: `--flow-id` is ignored (`W_OPTION_IGNORED`, whose hint renames it; with
   `--keep-flow-ids`, where `W_FLOW_ID_STALE` reports that flow, that warning suggests the
   `--flow-id` instead, one command for one flow). A flow without id takes the `--flow-id`.
+- `move` chains several ids: the first takes the placement, each next one goes after the one before.
+  The node the chain starts after (`--after`, the source of `--flow`) must lie outside the chain,
+  boundary events of its nodes included (`E_INVALID_PLACEMENT`). Nodes already where the placement
+  puts them stay, and a note says so ([`move`](commands.md#move-and-order)).
 - Data objects, data stores, text annotations, lanes and pools take `--in` only; wire them with
   `connect`. Sequence flows never cross scopes (`E_CROSS_SCOPE`): use a message flow between pools.
 - Branch order in the diagram: the default flow (else the first outgoing flow that leads to an end

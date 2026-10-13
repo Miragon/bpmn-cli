@@ -24,14 +24,18 @@
  *    a next node keeps it for that append), so it keeps its id, documentation
  *    and extensions and is reported as changed (W_FLOW_ID_STALE when its id
  *    named the old ends). Its name, condition and annotations stay with the
- *    bridge at the old place, and it is no longer a default flow; a node that
- *    is not bridged drops name and condition (W_LABEL_DROPPED /
+ *    bridge at the old place (once the chain is placed its last change says
+ *    which, by the bridge's id then: `(was -> C; its name stays with the
+ *    bridge Flow_AToB)`, reportBridgesKept), and it is no longer a default
+ *    flow; a node that is not bridged, or whose bridge a later node of the
+ *    chain removed, drops name and condition (W_LABEL_DROPPED /
  *    W_CONDITION_DROPPED), unless the flow ends between its old ends once the
- *    chain is placed (also when a later node of the chain takes it back there):
- *    then it gets them back, and its default marker, where the placement gave
- *    none; a default the placement gave the node wins (the change says the
- *    flow is no longer the default flow), and a flow the placement made the
- *    default flow gets no condition (W_CONDITION_DROPPED). A flowId for the
+ *    chain is placed (also when a later node of the chain takes it back
+ *    there): then it gets them back, and (not bridged) its default marker,
+ *    where the placement gave none; a default the placement gave the node
+ *    wins (the change says the flow is no longer the default flow), and a
+ *    flow the placement made the default flow gets no condition
+ *    (W_CONDITION_DROPPED). A flowId for the
  *    flow a prepend creates (node -> anchor) makes a new flow instead. The
  *    chain runs through these flows, so a flow between moved nodes
  *    that matches it (a -> b of `move a b`) ends where it was, unless a has
@@ -41,11 +45,26 @@
  *    the out-flow of the last node appended after a gateway or a node without
  *    successor, the other flows of a node that is not bridged (several in- or
  *    out-flows, or none in or none out), and with --in the group's out-flow.
+ *  - a placement that leaves every node where it is (inPlace: `move B
+ *    --after A` with A -> B, `move B C --after A` with A -> B -> C, also
+ *    --before and --after + --before) changes nothing, in both modes: a note
+ *    `<ids> is already after A`, no write; flow options still go to the flow
+ *    into the first node, and a flowId renames it (like `set id=`). Without
+ *    that check the detach and the placement would put the node back with the
+ *    out-flow's label on the in-flow and (by default) new flow ids. A move
+ *    with --after <gateway> alone (an append: a new branch) or --before
+ *    <join> alone (a prepend) is no such move.
  *
  * Conventions:
  *  - several ids with --after/--before/--flow are chained in the given order
  *    (X -> a -> b -> ...); with --in they are appended together and flows
- *    between them survive (re-declared in the new scope).
+ *    between them survive (re-declared in the new scope). The node the chain
+ *    starts after (the --after anchor, the source of the --flow) must not be
+ *    one of the moved nodes, inside one or a boundary event of one (it moves
+ *    with its host): E_INVALID_PLACEMENT, before anything changes (the chain
+ *    would be placed after itself). A --before anchor or the --flow's target
+ *    may be a later node (`move A Join --before Join` ends A -> Join), not
+ *    inside one.
  *  - lane membership is dropped when the node leaves its process or enters
  *    a sub-process; a node in a lane keeps it when it moves within its
  *    process (a note when the flow it went into runs between two other
@@ -60,12 +79,12 @@ import type { Doc } from '../document.js';
 import { modelError, usageError, type Warning } from '../errors.js';
 import { kindLabel } from '../kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
+import { about, ChangeSet } from '../result.js';
 import { assignLane, laneOf } from './containers.js';
-import { carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type PlacementOptions } from './flows.js';
+import { applyFlowOptions, carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
-import { changeOf, idOf } from './set.js';
+import { changeOf, idOf, renameId } from './set.js';
 import type { MoveOp } from './types.js';
 
 /** Moves the nodes of `op.ids` (see module contract). */
@@ -84,14 +103,25 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   } else if (mode === 'on') {
     for (const node of nodes) moveOnto(doc, node, placement, cs);
   } else if (mode !== 'none') {
-    // with flow ids kept: the flows the detach took out, by the moved node they leave, until a placement puts them back
-    const spare = new Map<El, SpareFlow>();
-    const dropped: DroppedLabel[] = [];
-    nodes.forEach((node, i) => {
-      const prev = nodes[i - 1];
-      dropped.push(...moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1] }));
-    });
-    giveBackLate(doc, dropped, cs);
+    assertFirstPlacement(doc, nodes[0]!, placement);
+    assertChainAnchor(doc, nodes, placement);
+    if (inPlace(doc, nodes, placement)) {
+      cs.note(`${nodes.map(idOf).join(', ')} ${nodes.length > 1 ? 'are' : 'is'} already ${describePlacement(placement)}${nodes.length > 1 ? ', in this order' : ''}`);
+      optionsOnInFlow(doc, doc.incoming(nodes[0]!)[0], placement, cs);
+    } else {
+      // with flow ids kept: the flows the detach took out, by the moved node they leave, until a placement puts them back
+      const spare = new Map<El, SpareFlow>();
+      const dropped: DroppedLabel[] = [];
+      // every bridge the detaches made, in order, and (flow ids kept) what the moved nodes' out-flows had before
+      const bridges: BridgeMade[] = [];
+      const before = doc.followFlowEnds ? undefined : labelsBefore(doc, nodes);
+      nodes.forEach((node, i) => {
+        const prev = nodes[i - 1];
+        dropped.push(...moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1], bridges }));
+      });
+      giveBackLate(doc, dropped, cs);
+      if (before) reportBridgesKept(doc, bridges, before, cs);
+    }
   }
   if (hasLane) {
     const lane = op.lane ? doc.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
@@ -139,14 +169,135 @@ function anchorsOf(doc: Doc, p: PlacementOptions): El[] {
   return out;
 }
 
+/** Whether `anchor` is a boundary event of `node` (a sibling in the scope that moves with it). */
+function isBoundaryOf(node: El, anchor: El): boolean {
+  return is(anchor, 'bpmn:BoundaryEvent') && anchor.get<El | undefined>('attachedToRef') === node;
+}
+
+/** Whether `anchor` moves with `node`: the node itself, one of its children, one of its boundary events. */
+function isInside(node: El, anchor: El): boolean {
+  return anchor === node || isBoundaryOf(node, anchor) || [...walk(node)].includes(anchor);
+}
+
 function assertNotInside(node: El, anchor: El): void {
-  if (anchor === node || [...walk(node)].includes(anchor)) {
-    throw modelError('E_INVALID_PLACEMENT', `${idOf(node)} cannot be moved relative to ${idOf(anchor)}: that is the node itself or one of its children`, {
+  if (isInside(node, anchor)) {
+    const what = isBoundaryOf(node, anchor) ? 'that is one of its boundary events, which move with it' : 'that is the node itself or one of its children';
+    throw modelError('E_INVALID_PLACEMENT', `${idOf(node)} cannot be moved relative to ${idOf(anchor)}: ${what}`, {
       element: idOf(node),
       related: [idOf(anchor)],
       hint: 'Pick an anchor outside the moved node.',
     });
   }
+}
+
+/** moveNode's own checks of the first node, in its order, before anything else looks at the placement. */
+function assertFirstPlacement(doc: Doc, node: El, p: PlacementOptions): void {
+  assertNotBoundary(node);
+  for (const a of anchorsOf(doc, p)) assertNotInside(node, a);
+}
+
+function assertNotBoundary(node: El): void {
+  if (is(node, 'bpmn:BoundaryEvent')) {
+    throw modelError('E_INVALID_PLACEMENT', `Boundary event ${idOf(node)} is moved with --on <activityId>`, { element: idOf(node) });
+  }
+}
+
+/**
+ * The node a chain starts after (the --after anchor, the source of the
+ * --flow) must not move with a later node of the chain (isInside: the node,
+ * a child, a boundary event of it): the chain would be placed after itself
+ * (E_INVALID_PLACEMENT). A --before anchor (or the target of the --flow)
+ * that is a later node is fine: `move A Join --before Join` ends A -> Join;
+ * one inside a later node is not (the chain would be placed inside itself).
+ * The hint has the move of the first node alone, or, when that one is
+ * already there, the move that puts it before the anchor. The first node is
+ * checked by assertFirstPlacement.
+ */
+function assertChainAnchor(doc: Doc, nodes: El[], p: PlacementOptions): void {
+  const mode = placementMode(p);
+  const later = nodes.slice(1);
+  const flow = mode === 'flow' ? doc.require(p.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
+  const after = mode === 'after' || mode === 'between' ? doc.require(p.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
+  const before = mode === 'before' || mode === 'between' ? doc.require(p.before!, 'bpmn:FlowNode') : undefined;
+  let anchor = after;
+  let holder = after && later.find((n) => isInside(n, after));
+  if (!holder && before) {
+    anchor = before;
+    holder = later.find((n) => n !== before && isInside(n, before));
+  }
+  if (!anchor || !holder) return;
+  const ids = nodes.map(idOf);
+  const first = ids[0]!;
+  const what = anchor === holder ? 'is one of the moved nodes' : `is ${isBoundaryOf(holder, anchor) ? 'a boundary event of' : 'inside'} ${idOf(holder)}, one of the moved nodes`;
+  const placement = flow ? `--flow ${idOf(flow)}` : [...(p.after ? [`--after ${p.after}`] : []), ...(p.before ? [`--before ${p.before}`] : [])].join(' ');
+  const itself = `The chain would be placed ${anchor === before ? 'inside' : 'after'} itself.`;
+  let hint = `${itself} Pick an anchor outside the moved nodes, or move ${first} alone: \`bpmn move <file> ${first} ${placement}\`.`;
+  if (inPlace(doc, nodes.slice(0, 1), p)) {
+    // the first node alone is already there: that command would change nothing; before the anchor is the reorder
+    const reorder = mode === 'after' && doc.incoming(anchor).length === 1;
+    hint = `${itself} ${first} is already ${describePlacement(p)}. Pick an anchor outside the moved nodes${reorder ? `, or put ${first} before ${idOf(anchor)}: \`bpmn move <file> ${first} --before ${idOf(anchor)}\`` : ''}.`;
+  }
+  throw modelError('E_INVALID_PLACEMENT', `${flow ? `${idOf(flow)} cannot anchor the move of ${ids.join(', ')}: its source ${idOf(anchor)}` : `${idOf(anchor)} cannot anchor the move of ${ids.join(', ')}: it`} ${what}`, {
+    element: flow ? idOf(flow) : idOf(anchor),
+    related: ids,
+    hint,
+  });
+}
+
+/**
+ * A move in place: the flow options describe the flow into the first node,
+ * as on a splice (applyFlowOptions), and a flowId renames it (like `set
+ * id=`, E_DUPLICATE_ID when the id is taken). One change entry for that flow.
+ */
+function optionsOnInFlow(doc: Doc, flow: El | undefined, p: PlacementOptions, cs: ChangeSet): void {
+  if (!flow) return;
+  const old = idOf(flow);
+  const renamed = p.flowId !== undefined && p.flowId !== old;
+  if (renamed) renameId(doc, flow, p.flowId!);
+  const options = new ChangeSet();
+  applyFlowOptions(doc, flow, p, options);
+  if (!renamed && !options.changed.length) return;
+  cs.change(flowChange(flow, `${flowChange(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
+}
+
+/**
+ * Whether the placement leaves every node where it is (boundary events, a
+ * node given twice and --flow never do): each later node follows the one
+ * before through its only in-flow, and the chain sits at the placement:
+ * --after X, X its first node's only predecessor through its only in-flow (X
+ * no gateway: after one the chain is appended as a new branch); --before Y,
+ * Y its last node's only successor through its only out-flow (Y no join:
+ * before one the chain is prepended without a flow in); --after X --before
+ * Y both. Flow options need a flow into the first node to describe (its
+ * only in-flow, which a splice would give them). The move then changes
+ * nothing but those; a note says so.
+ */
+function inPlace(doc: Doc, nodes: El[], p: PlacementOptions): boolean {
+  if (nodes.some((n) => is(n, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) return false;
+  const flowOptions = p.flowName !== undefined || p.flowId !== undefined || p.condition !== undefined || p.language !== undefined || !!p.default;
+  if (flowOptions && doc.incoming(nodes[0]!).length !== 1) return false;
+  const onlyIn = (n: El): El | undefined => {
+    const flows = doc.incoming(n);
+    return flows.length === 1 ? flows[0]!.get<El>('sourceRef') : undefined;
+  };
+  const onlyOut = (n: El): El | undefined => {
+    const flows = doc.outgoing(n);
+    return flows.length === 1 ? flows[0]!.get<El>('targetRef') : undefined;
+  };
+  for (let i = 1; i < nodes.length; i++) if (is(nodes[i - 1]!, 'bpmn:Gateway') || onlyIn(nodes[i]!) !== nodes[i - 1]) return false;
+  const first = nodes[0]!;
+  const last = nodes[nodes.length - 1]!;
+  const mode = placementMode(p);
+  if (mode === 'after') {
+    const x = doc.require(p.after!, 'bpmn:FlowNode');
+    return !is(x, 'bpmn:Gateway') && onlyIn(first) === x;
+  }
+  if (mode === 'before') {
+    const y = doc.require(p.before!, 'bpmn:FlowNode');
+    return !(is(y, 'bpmn:Gateway') && doc.incoming(y).length >= 2) && onlyOut(last) === y;
+  }
+  if (mode === 'between') return onlyIn(first) === doc.require(p.after!, 'bpmn:FlowNode') && onlyOut(last) === doc.require(p.before!, 'bpmn:FlowNode');
+  return false;
 }
 
 function deepestLane(doc: Doc, el: El): El | undefined {
@@ -314,11 +465,9 @@ interface DroppedLabel {
  * this move took out, for the placement to put back; `chain`: the nodes moved
  * before this one (it is placed after it) and after it.
  */
-function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El } = {}): DroppedLabel[] {
+function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El; bridges?: BridgeMade[] } = {}): DroppedLabel[] {
   const { prev, next } = chain;
-  if (is(node, 'bpmn:BoundaryEvent')) {
-    throw modelError('E_INVALID_PLACEMENT', `Boundary event ${idOf(node)} is moved with --on <activityId>`, { element: idOf(node) });
-  }
+  assertNotBoundary(node);
   const anchors = anchorsOf(doc, p);
   for (const a of anchors) assertNotInside(node, a);
   const oldScope = doc.scopeOf(node);
@@ -335,10 +484,11 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   // bridged: an end event, a join), the append after that node puts it back as it was
   const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && doc.keepsFlowId(f));
   const prevLabel = fromPrev && labelOf(fromPrev, prev!);
-  const bridged = detachWithBridge(doc, node, true, cs, undefined, 'move');
+  const bridge = detachWithBridge(doc, node, true, cs, undefined, 'move');
+  if (bridge) chain.bridges?.push({ node, target: bridge.flow.get<El>('targetRef'), bridge });
   reserveIds(doc, flowIds);
   // a bridge took the out-flow's name and condition (or warned); without one nothing did
-  if (oldOut && oldTarget && !doc.has(idOf(oldOut))) spare.set(node, { flow: oldOut, target: oldTarget, ...(bridged ? {} : { label: outLabel }) });
+  if (oldOut && oldTarget && !doc.has(idOf(oldOut))) spare.set(node, { flow: oldOut, target: oldTarget, ...(bridge ? {} : { label: outLabel }) });
   if (fromPrev && !doc.has(idOf(fromPrev)) && !spare.has(prev!)) spare.set(prev!, { flow: fromPrev, target: node, label: prevLabel });
   const laneBefore = laneOf(doc, node);
   leaveScope(doc, [node, ...boundaries], oldScope, targetScope, cs);
@@ -364,6 +514,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
     if (warning) cs.warn(warning);
   }
   cs.change(changeOf(node, `moved ${describePlacement(p)}`));
+  cs.relocated.push(idOf(node));
   doc.invalidate();
   return dropped;
 }
@@ -447,6 +598,114 @@ function giveBackLate(doc: Doc, dropped: DroppedLabel[], cs: ChangeSet): void {
   }
 }
 
+/** A bridge a detach of the chain made: the moved node, its successor then (the out-flow's old target), what the bridge took. */
+interface BridgeMade {
+  node: El;
+  target: El;
+  bridge: Bridge;
+}
+
+/** What a flow had when the move started: its name, condition and the associations of its annotations. */
+interface LabelBefore {
+  name: string | undefined;
+  condition: El | undefined;
+  associations: El[];
+}
+
+/** With flow ids kept: the labels of the moved nodes' out-flows (the ones a placement may put back) before the move. */
+function labelsBefore(doc: Doc, nodes: El[]): Map<El, LabelBefore> {
+  const out = new Map<El, LabelBefore>();
+  for (const n of nodes) {
+    for (const f of doc.outgoing(n)) if (doc.keepsFlowId(f)) out.set(f, { name: f.get<string | undefined>('name'), condition: f.get<El | undefined>('conditionExpression'), associations: [] });
+  }
+  if (!out.size) return out;
+  for (const a of doc.byId().values()) {
+    if (!is(a, 'bpmn:Association')) continue;
+    for (const end of ['sourceRef', 'targetRef']) out.get(a.get<El>(end))?.associations.push(a);
+  }
+  return out;
+}
+
+/**
+ * With flow ids kept, once the whole chain is placed: the out-flow of a
+ * bridged node that a placement put back says what of its own (its label
+ * before the move) a bridge keeps, by the bridge's id now, on its last
+ * change entry: `(was -> C; its name and condition stay with the bridge
+ * Flow_AToB)`. A later bridge of the chain that took it over is named
+ * instead; nothing is said for what the flow has again, or what a later
+ * bridge did not take (that detach warned). A bridge that a later node of
+ * the chain removed (not bridged: an end event, a join) took it along: the
+ * flow gets name and condition back when it ends between its old ends
+ * (giveBack; it is then listed once), else W_LABEL_DROPPED /
+ * W_CONDITION_DROPPED. Annotations go with a removed flow (reported).
+ */
+function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBefore>, cs: ChangeSet): void {
+  const alive = (el: El): boolean => doc.get(idOf(el)) === el;
+  made.forEach(({ node, target, bridge }, i) => {
+    const flow = bridge.from;
+    const had = before.get(flow);
+    if (!had || !alive(flow)) return;
+    // where a value the bridge took is now: later bridges of the chain take it over; undefined when one did not take it
+    const holder = (took: (b: Bridge) => boolean): El | undefined => {
+      let at = bridge.flow;
+      for (const later of made.slice(i + 1)) {
+        if (later.bridge.from !== at) continue;
+        if (!took(later.bridge)) return undefined;
+        at = later.bridge.flow;
+      }
+      return at;
+    };
+    const kept = new Map<El, string[]>();
+    const keep = (at: El, what: string): void => {
+      kept.set(at, [...(kept.get(at) ?? []), what]);
+    };
+    const lost: Array<{ what: 'name' | 'condition'; at: El }> = [];
+    const { name, condition, associations } = bridge.took;
+    if (name !== undefined && name === had.name && flow.get<string | undefined>('name') !== name) {
+      const at = holder((b) => b.took.name === name);
+      if (at && !alive(at)) lost.push({ what: 'name', at });
+      else if (at?.get<string | undefined>('name') === name) keep(at, 'name');
+    }
+    if (condition && condition === had.condition && flow.get<El | undefined>('conditionExpression') !== condition) {
+      const at = holder((b) => b.took.condition === condition);
+      if (at && !alive(at)) lost.push({ what: 'condition', at });
+      else if (at?.get<El | undefined>('conditionExpression') === condition) keep(at, 'condition');
+    }
+    for (const a of associations) {
+      if (!had.associations.includes(a) || !alive(a)) continue;
+      const at = holder((b) => b.took.associations.includes(a));
+      if (at && alive(at) && (a.get<El>('sourceRef') === at || a.get<El>('targetRef') === at)) keep(at, 'annotation');
+    }
+    const id = idOf(flow);
+    // back between its old ends, a flow gets what it has no other of back (giveBack), listed once (as giveBackLate does)
+    const back = flow.get<El>('sourceRef') === node && flow.get<El>('targetRef') === target;
+    const returned = lost.filter(({ what }) => back && !flow.get(what === 'name' ? 'name' : 'conditionExpression'));
+    if (returned.length) {
+      giveBack(node, flow, { name: returned.some((l) => l.what === 'name') ? name : undefined, condition: returned.some((l) => l.what === 'condition') ? condition : undefined, isDefault: false }, cs);
+      cs.changed = cs.changed.filter((c) => c.id !== id);
+      cs.change(flowChange(flow));
+    }
+    for (const { what, at } of lost.filter((l) => !returned.includes(l))) {
+      const why = `while moving ${idOf(node)}: the bridge ${idOf(at)} took it, and a later node of the move removed ${idOf(at)}`;
+      if (what === 'name') cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${name}" of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
+      else cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
+    }
+    if (!kept.size) return;
+    const clause = [...kept].map(([at, what]) => {
+      const notes = what.filter((w) => w === 'annotation').length;
+      const items = [...what.filter((w) => w !== 'annotation'), ...(notes ? [notes > 1 ? 'annotations' : 'annotation'] : [])];
+      const list = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]!;
+      return `its ${list} ${items.length > 1 || notes > 1 ? 'stay' : 'stays'} with the bridge ${idOf(at)}`;
+    }).join('; ');
+    const last = cs.changed.map((c) => c.id).lastIndexOf(id);
+    const entry = last === -1 ? flowChange(flow) : cs.changed[last]!;
+    const detail = entry.detail ?? '';
+    const said = /\(was -> [^()]*\)$/.test(detail) ? `${detail.slice(0, -1)}; ${clause})` : `${detail}${detail ? ' ' : ''}(${clause})`;
+    if (last === -1) cs.change(about({ ...entry, detail: said }, flow));
+    else cs.changed[last] = about({ ...entry, detail: said }, flow);
+  });
+}
+
 /** --in: append the nodes to the scope; the group is bridged, flows between its nodes survive, others are dropped. */
 function moveInto(doc: Doc, nodes: El[], p: PlacementOptions, cs: ChangeSet): void {
   const scope = placementScope(doc, p);
@@ -471,6 +730,7 @@ function moveInto(doc: Doc, nodes: El[], p: PlacementOptions, cs: ChangeSet): vo
     insertAfterInScope(scope, undefined, node, ...boundaries);
     moved.push(node, ...boundaries);
     cs.change(changeOf(node, `moved into ${idOf(scope)}`));
+    cs.relocated.push(idOf(node));
   }
   fixFlows(doc, moved, scope, cs);
   doc.invalidate();
