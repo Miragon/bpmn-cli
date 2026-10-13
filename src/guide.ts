@@ -115,7 +115,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_WOULD_DROP_CONTENT', meaning: '`retype` to a kind that cannot hold the element\'s content (a sub-process with nodes -> task / callActivity) would delete that content; nothing was written. The ids are listed.', fix: 'Move what should stay out first (`bpmn move <file> <ids> --in <scopeId>`), or pass --force to retype anyway (the listed elements are deleted).' },
   { code: 'E_INVALID_RETYPE', meaning: '`retype` between incompatible families (e.g. task -> gateway, start -> end event).', fix: 'Retype within a family (task <-> task/subProcess/callActivity, gateway <-> gateway, event <-> event of the same position); otherwise remove and add.' },
   // write-time
-  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (a host\'s validator in library use; the project\'s bpmnlint only when a library host asked for that, lintBlocks), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Run `bpmn validate <file>` and fix the listed problems (every finding has its own code and hint), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.' },
+  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (a host\'s validator in library use; the project\'s bpmnlint only when a library host asked for that, lintBlocks), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Read the errors in the refusal: the lines under it (JSON `error.errors`, library `err.details.errors`), each with its code and hint, a validator\'s with its name in brackets. The file is unchanged, so `bpmn validate <file>` does not show them. Change the edit so that it does not add them, e.g. make it in one transaction (`bpmn apply <file> ops.json`) that ends in a valid model, or pass --force (library: force: true) to write anyway.' },
   { code: 'E_VALIDATOR_FAILED', meaning: 'A validator (MutationOptions.validators / checkFile validators in library use) threw or did not return an array of findings; nothing was written.', fix: 'Fix the validator or the input it cannot read, or run without it.' },
   { code: 'E_LAYOUT_*', meaning: 'The layout engine could not draw the model (e.g. E_LAYOUT_ERROR); the suffix is the layouter\'s own code, the message names the element.', fix: 'Check the element named in the message (unsupported kind, broken flow graph), or write without DI using --no-layout and run `bpmn layout` later.' },
   { code: 'E_LAYOUT_INCREMENTAL', meaning: '`--layout incremental` was requested and the incremental layout (keep the drawing, place what is new) failed; nothing was written.', fix: 'Retry with --layout full (redraws the whole diagram) or --no-layout (writes without updating the diagram), and report the command and file.' },
@@ -845,8 +845,10 @@ export function guideText(): string {
   out.push('  A validator\'s findings (the project\'s bpmnlint; a host\'s validators in library use) carry `validator` and');
   out.push('  `severity`; in text they read "[<name>] <code> <element>: <message>" ("[bpmnlint error] <rule> ..." for a bpmnlint');
   out.push('  error, "warning [bpmnlint error] <rule> ..." when a write added it: bpmnlint is advisory, `blocks: false`).');
-  out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates); with --json as');
-  out.push('  {ok: false, error: {code, message, element?, related?, candidates?, hint?, op?}}.');
+  out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates; an E_VALIDATION refusal lists');
+  out.push('  each error it would add on a line under the message); with --json as {ok: false, error: {code, message,');
+  out.push('  element?, related?, candidates?, hint?, op?, command?, ops?, errors?}} (errors: those of an E_VALIDATION');
+  out.push('  refusal, each with its code and hint; command, ops: the checked space run of an E_NO_ROOM).');
   out.push(placementSection());
   out.push(triggersSection());
   out.push(opsSection());
@@ -1040,7 +1042,7 @@ const TOP_ERRORS: Array<[string, string]> = [
   ['E_INVALID_PLACEMENT', 'boundary events --on <activity>; data, annotations, lanes, pools --in only'],
   ['E_CROSS_SCOPE', 'sequence flows stay in one scope; between pools `connect` makes a message flow'],
   ['E_UNKNOWN_KEY', 'the message lists the settable keys; vendor keys need a prefix (camunda:assignee)'],
-  ['E_VALIDATION', 'the change would add a structural error: do it in one `apply` batch, or `bpmn validate`'],
+  ['E_VALIDATION', 'the refusal lists the new errors (file unchanged): do it in one `apply` batch that ends valid'],
   ['E_LEAVES_CONTAINER', 'move --lane first, then place'],
   ['E_NO_ROOM', 'run the checked `bpmn space` command of the hint, then place again'],
 ];

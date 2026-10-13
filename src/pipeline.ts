@@ -816,7 +816,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   if (validation.errors.length && !opts.force) {
     throw modelError('E_VALIDATION', `The change would introduce ${validation.errors.length} structural error(s); nothing was written`, {
       errors: validation.errors,
-      hint: 'Fix the listed problems, or pass --force to write anyway. `bpmn validate <file>` shows all findings.',
+      hint: 'Fix the listed problems, make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.',
     });
   }
 

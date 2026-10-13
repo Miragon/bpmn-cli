@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, and decision links in the file's spelling (#42))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), and the E_VALIDATION advice that reads the refusal)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2088 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2090 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,49 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## The E_VALIDATION advice reads the refusal (2026-10-13, `fix/e-validation-hint`)
+
+An open point after #35, and wider than its note said there: the
+advice after an `E_VALIDATION` refusal sent the reader to `bpmn validate
+<file>`. A refusal writes nothing, so validate runs on the unchanged file
+and shows none of the refused errors (`bpmn new; add task; add participant
+Customer --black-box`: refused with `E_EMPTY_COLLABORATION` and
+`E_ORPHAN_PROCESS`, then `validate` says `valid, 3 warning(s)`, exit 0). An
+agent that followed it could take the refusal for spurious. A host
+validator's errors never show in the CLI at all.
+
+- Text only, no code, id or output other than these: the catalogue's
+  `E_VALIDATION` fix (`bpmn guide` COMMON ERRORS, `guide errors`, `bpmn
+  kinds`, `kinds --json`, `ERROR_CATALOGUE`) says to read the errors in the
+  refusal (the lines under it, JSON `error.errors`, library
+  `err.details.errors`) and that `bpmn validate <file>` does not show them;
+  the `guide --short` line (4,644 of 5,120 bytes); the hint of a structural
+  refusal (`src/pipeline.ts`) is now the validator refusal's without its
+  brackets; the plugin skill's error table. The guide's error output
+  (`guide commands`) and `docs/reference.md` list `errors` in the JSON
+  error and the lines under a refusal (the guide also the `command` /
+  `ops` it left out), `docs/library.md` lists it in `CliError.details`, and
+  `docs/validators.md` says that a check of the unchanged document does not
+  show them.
+- Tests (`test/validators.test.ts`): the black-box refusal (text and JSON
+  hint, file unchanged, validate exit 0 without the refused codes, the hint
+  equal to `validatorRefusal`'s), and that no sentence of the catalogue fix,
+  the short-guide line or the skill row names `bpmn validate` except to say
+  that it does not show them, with `errors?` in the guide's JSON error.
+  Both fail on main; `docs/testing.md` describes them.
+- Differential against main (1,769 CLI runs on the scenarios: guide, every
+  topic and `--help`, kinds, refusals, forced and plain writes): only these
+  texts differ, each a pure substitution (209 structural refusals in text
+  and in JSON, 4 catalogue texts, `kinds --json`, the short line, the
+  error output in `guide` and `guide commands`); written
+  files, exit codes, ids, speaking-ids, layout-regress and roundtrip
+  identical.
+- `npm run gate` (rebased on #55 and #52): 2,090 tests (+246 opt-in),
+  isomorphism check (the whole entry 927.0 / 295.0 -> 927.5 / 295.2 KB,
+  `applyToXml` only 654.2 / 208.3 -> 654.3 / 208.3 KB, the table in
+  `docs/library.md` too, no budget raised), layout regression 444 (budget
+  444), fuzz 12 x 15 0 errors (the 4 group warnings in one walk of main).
 
 ## Decision links in the file's spelling (2026-10-13, `fix/42-decision-link-spelling`, issue #42)
 
@@ -1159,9 +1202,6 @@ Open after #35:
 
 - Once the release is out: the design-iq PR for Miragon/design-iq#248 (the
   version bump, `profile: 'none'` dropped).
-- The `E_VALIDATION` entry of the error catalogue still says to run `bpmn
-  validate <file>`, which cannot show a host validator's findings (the CLI
-  takes no validators; the host shows them in its result).
 
 ## Incremental layout of edits to hand-drawn models, stage B (2026-10-12, `feat/layout-room-making`, issue #18)
 

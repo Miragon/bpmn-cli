@@ -283,7 +283,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_UNKNOWN_KEY` | The message lists the settable keys; vendor keys need their prefix (`camunda:assignee`). |
 | `E_WRONG_HOST` | The attribute belongs on a nested element or elsewhere: use the key from the hint (`definition.camunda:errorCodeVariable=...`). |
 | `E_DUPLICATE_EXTENSION` | `ext remove` the old one or `--replace`; check `bpmn ext list <file> <id>`. |
-| `E_VALIDATION` | The change would add a structural error: do the whole change in one batch, or read `bpmn validate`. `--force` only when the user agrees. |
+| `E_VALIDATION` | The change would add an error. The refusal lists each one with its hint and nothing was written, so `bpmn validate <file>` does not show them. Do the whole change in one batch so that it ends valid. `--force` only when the user agrees. |
 | `E_LEAVES_CONTAINER` | `place` / `align` would leave the lane / pool: `move <id> --lane <laneId>` first (in a batch: a move op before it). |
 | `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
 | `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs` / `refAs`) in an earlier op of the batch. |

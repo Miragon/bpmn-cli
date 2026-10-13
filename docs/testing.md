@@ -181,7 +181,12 @@ helper writes (the `--out` target) or checks, unless `file` names another.
 a warning matched by its `key`, `covers`, the context, failing validators,
 the check of `validate`, and the CLI, which takes no host validators: a
 refusal lists the structural errors under its message, and `validate` exits
-with 2 on an error),
+with 2 on an error; a structural refusal (a black-box pool added to a file
+without pools) lists its errors and writes nothing, `validate` on the
+unchanged file shows none of them, the `E_VALIDATION` advice (the
+catalogue fix, the `guide --short` line, the plugin skill's row) does not
+send the reader to `bpmn validate`, and the guide's JSON error shape lists
+the `errors` that advice points to),
 `test/decision-link.test.ts` the decision link (`calledDecision`) in models
 without an engine (the unprefixed attribute; with `platform: 'none'` the
 spelling of the task's link or of the file's other links kept), Camunda 7,
