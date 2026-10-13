@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), and @miragon/bpmnlint-plugin-rules 0.12.1)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, and decision links in the file's spelling (#42))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2072 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2088 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,70 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Decision links in the file's spelling (2026-10-13, `fix/42-decision-link-spelling`, issue #42)
+
+With the library's `platform: 'none'` (design-iq's live host passes it for
+a document without an executable process), `set <id> calledDecision=`
+replaced a link in an engine spelling with the unprefixed attribute:
+`camunda:decisionRef` became `calledDecision`, a `zeebe:calledDecision` lost
+its `resultVariable`, and a new link next to engine links was unprefixed, so
+one file mixed spellings. #42 settles it as written. Auto-detection never
+gives none for such a file (a link in an engine spelling makes it Camunda 7
+/ 8), so the CLI's `set` is unchanged: it converts as before, and a file
+without engine content gets the unprefixed attribute as before. The docs
+(migrating.md, reference.md, the guide) say so.
+
+- **Spelling** (`src/ops/decision.ts`, `setDecisionLink`, platform none
+  only): a task whose link has an engine spelling keeps it
+  (`camunda:decisionRef` / `operaton:decisionRef` updated in place, the one
+  the readers read first when a task has two; a `zeebe:calledDecision` gets
+  the `decisionId` and keeps its `resultVariable`, no
+  `W_DECISION_RESULT_VARIABLE`). The own link is the one `decisionLinkOf`
+  reads: a `zeebe:calledDecision` without a `decisionId` is none, so such a
+  task follows the file (the element goes, or with a zeebe file it takes the
+  `decisionId` and keeps its `resultVariable`), and next to an own unprefixed
+  link it stays unprefixed. A task without a link takes the engine
+  spelling of the file's other links (every business rule task, in
+  sub-processes and other processes too) when they all have one and the
+  same, with a namespace that resolves (`fileEngineSpelling`, one walk over
+  the BPMN tree, only on this path; written with the file's prefix).
+  Otherwise, also on a task whose own link is unprefixed (`calledDecision`,
+  or a hand-written `calledElement`, which is still replaced; #42 does not
+  list it), the unprefixed `calledDecision` as before. The Camunda 7 / 8
+  branches share the writers (`writeC7`, `writeZeebe`) with unchanged
+  output; reading (`decisionLinkOf`) is unchanged.
+- **Whose spelling**: the unprefixed `calledDecision` is bpmn-cli's own
+  spelling for a model without an engine. The comments (decision.ts,
+  set.ts, c7.ts, view.ts, bpmnlint.ts), the guide (the `set` summary, the
+  `calledDecision` set key of `bpmn kinds`, the fix of
+  `W_C7_DEPLOY_SCHEMA`), the bpmnlint import-warning hint,
+  docs/bpmnlint.md, docs/reference.md (Set keys: the spellings),
+  docs/library.md (`platform`), docs/testing.md and docs/migrating.md say
+  so, and none names design-iq as the reason. docs/audit-2026-10.md keeps
+  its historical wording.
+- **Tests**: `test/decision-link.test.ts` 14 -> 30 cases (each acceptance
+  line of #42, the follow-up probes, a `zeebe:calledDecision` without
+  `decisionId`, the CLI's path with platform auto converting as before, and
+  a check that no guide entry about the link names design-iq); 11 of them
+  and the bpmnlint hint case fail on main. `test/c7-followups-integration.test.ts` and `test/c8-profile.test.ts`:
+  a comment and a case label only.
+- **Differential** against main (in-process: `set calledDecision=<d>` and
+  `calledDecision=` on every business rule task, an added business rule
+  task with a link after the first task, platform auto and none; 109 public
+  files and 197 private ones, counts only): with auto (the CLI's path) all
+  identical; with none 8 of 798 runs differ, in 4 files with engine links,
+  each a kept own spelling (4) or a new link that follows the file's single
+  spelling (4). The 47 private files with unprefixed links: identical.
+- `npm run gate`: 2,088 tests (+246 opt-in), isomorphism check (whole
+  entry 925.9 / 294.6 -> 927.0 / 295.0 KB, `applyToXml` only 653.3 / 208.0
+  -> 654.2 / 208.3 KB, budgets unchanged), layout regression 444 (budget
+  444), fuzz 12 x 15 0 errors. `guide --short` unchanged (4,638 bytes).
+
+Open after #42:
+
+- `ext add` of another platform's extension warns nothing (the other
+  upstream ask of design-iq's ADR 0009): an issue of its own.
 
 ## @miragon/bpmnlint-plugin-rules 0.12.1 (2026-10-13, `fix/bpmnlint-rules-0.12.1`)
 
@@ -1093,17 +1157,11 @@ that already has its own check.
 
 Open after #35:
 
-- design-iq's spelling of decision links: for a model with no engine
-  namespace bpmn-cli writes the unprefixed `calledDecision=`, design-iq's
-  convention. It gets its own issue, together with keeping a file's own link
-  spelling (design-iq's ADR 0009, upstream asks).
 - Once the release is out: the design-iq PR for Miragon/design-iq#248 (the
   version bump, `profile: 'none'` dropped).
 - The `E_VALIDATION` entry of the error catalogue still says to run `bpmn
   validate <file>`, which cannot show a host validator's findings (the CLI
   takes no validators; the host shows them in its result).
-- #33 and #34 (bpmnlint config, project config) stay open: they are generic
-  and do not depend on this issue.
 
 ## Incremental layout of edits to hand-drawn models, stage B (2026-10-12, `feat/layout-room-making`, issue #18)
 

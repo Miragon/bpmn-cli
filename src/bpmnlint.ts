@@ -42,7 +42,7 @@
  *  - what could not be resolved: W_LINT_UNAVAILABLE, one per package and reason;
  *  - the import warnings of the lint parse bpmn-cli's reader does not report
  *    itself: `import-warning` errors, as bpmnlint's CLI reports them, with a
- *    hint (design-iq's decision link in a design model: its own);
+ *    hint (bpmn-cli's decision link in a model without an engine: its own);
  *  - no-implicit-end, no-implicit-start, no-disconnected and
  *    event-based-gateway (which counts the outgoing list) read the incoming /
  *    outgoing lists, which bpmn-cli writes only where a file keeps them: a
@@ -282,9 +282,9 @@ const LIST_RULES: Record<string, (id: string, ends: FlowEnds) => boolean> = {
 const IMPORT_HINT =
   "bpmnlint parses the file with the .bpmnlintrc's moddle extensions only and reports this as an error; bpmnlint in CI fails on it too. Fix the XML the message names: an unknown attribute needs a moddle extension that declares it (a JSON descriptor in moddleExtensions) or goes (`bpmn set <file> <id> <attr>=`), a reference needs the element it names; bpmn-cli's own finding about the same content has its command. --no-lint-config skips bpmnlint.";
 
-/** The hint of design-iq's decision link in a design model, which the lint parse does not know. */
+/** The hint of bpmn-cli's decision link in a model without an engine, which the lint parse does not know. */
 const DECISION_LINK_HINT =
-  "design-iq's decision link (an unprefixed calledDecision on a business rule task of a design model; bpmn-cli's reader keeps it): keep it. bpmnlint does not know the attribute and fails on it in CI too; a JSON descriptor in the .bpmnlintrc's moddleExtensions that adds calledDecision (isAttr) to bpmn:BusinessRuleTask declares it.";
+  "bpmn-cli's decision link in a model without an engine (an unprefixed calledDecision on a business rule task; bpmn-cli's reader keeps it): keep it. bpmnlint does not know the attribute and fails on it in CI too; a JSON descriptor in the .bpmnlintrc's moddleExtensions that adds calledDecision (isAttr) to bpmn:BusinessRuleTask declares it.";
 
 export interface BpmnlintValidatorOptions {
   /** why it runs, e.g. `.bpmnlintrc in models` (the validator line of results) */

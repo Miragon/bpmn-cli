@@ -161,7 +161,7 @@ map of an `add` op. `key=` or `--unset key` removes a property. An unknown key f
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow; empty clears it) |
 | text annotations | `text` |
 | send / receive tasks | `message` (name of the root `bpmn:Message`, created when missing) |
-| business rule tasks | `calledDecision` (written in the spelling of the file's platform) |
+| business rule tasks | `calledDecision` (the decision link, in the file's spelling; see below) |
 | nested elements | `definition.<key>` (event definition), `loop.<key>` (loop characteristics), `condition.<key>` (condition expression) |
 
 A nested key addresses an element without an id of its own, as in `bpmn set order.bpmn
@@ -170,6 +170,28 @@ a selector: `'definition[1].<key>'` or `'definition[timer].<key>'`. A `camunda:`
 wrong element is refused with `E_WRONG_HOST`, and the hint names the right key. Camunda 8 settings
 are extension elements, not set keys ([Camunda](camunda.md)). All keys per element family and nested
 type: `bpmn kinds --section setKeys,nestedKeys`.
+
+`calledDecision=<decision>` links a business rule task to a DMN decision. BPMN 2.0 has no attribute
+for the link, so it is written in the file's spelling, and the other spellings on the task are
+removed:
+
+- Camunda 7: `camunda:decisionRef` (`operaton:decisionRef` in an Operaton-only file).
+- Camunda 8: a `zeebe:calledDecision` extension element with the decision as `decisionId`; a
+  `resultVariable` it has stays.
+- No engine detected: bpmn-cli writes its own spelling, an unprefixed
+  `calledDecision="<decision>"`. No engine reads the file, so there is no vendor namespace to write
+  the link in. Such a file has no link in an engine spelling: one would make it a Camunda 7 / 8
+  file. bpmn-moddle reports the attribute as unknown and the engines refuse it, so in a Camunda 7 /
+  8 file `bpmn set <file> <id> calledDecision=<decision>` converts it to the engine's spelling.
+- `platform: 'none'` in the library (the CLI has no such option for `set`): a task whose link has
+  an engine spelling keeps it (a `zeebe:calledDecision` keeps its `resultVariable`). A task without
+  a link (a `zeebe:calledDecision` without `decisionId` is none) takes the engine spelling of the
+  file's other links when they all have the same one. Otherwise it is the unprefixed
+  `calledDecision`.
+
+The change line names the spelling written (`calledDecision=risk (camunda:decisionRef)`), and an
+empty value removes the link in every spelling. `show` and `find` read every spelling, also a
+hand-written unprefixed `calledElement`, which a write replaces.
 
 ## Output, errors and exit codes
 

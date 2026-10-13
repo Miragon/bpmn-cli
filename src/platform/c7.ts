@@ -71,8 +71,9 @@
  *                                  schema (every definition in the file): link definition without name
  *   W_C7_DEPLOY_SCHEMA             an attribute without prefix that the BPMN schema does not define (anywhere in
  *                                  the file: the engines validate it against the schema); `set <id> <attr>=` removes it;
- *                                  a business rule task's calledDecision (design-iq's decision link) is converted to
- *                                  camunda:decisionRef by `set <id> calledDecision=<decision>`
+ *                                  a business rule task's calledDecision (bpmn-cli's decision link for a model
+ *                                  without an engine) is converted to camunda:decisionRef by
+ *                                  `set <id> calledDecision=<decision>`
  *   W_C7_DEPLOY_BOUNDARY_HOST      boundary event attached to a compensation handler (isForCompensation="true");
  *                                  validate.ts withProfile drops it next to the structural E_INVALID_HOST
  *   W_C7_DEPLOY_SCRIPT             script task without script and without camunda:resource
@@ -1625,7 +1626,7 @@ function checkSchemaAttributes(ctx: Ctx): void {
       const fits = !!vendor && vendor.owners.some((o) => is(el, o)) && !!id && el === owner;
       const where = el === owner ? describe(el, undefined) : `${el.$type}${id ? ` in ${id}` : ''}`;
       const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
-      // design-iq's decision link (calledDecision, or calledElement read as one): `set calledDecision=` writes the engines' spelling
+      // a decision link without prefix (bpmn-cli's calledDecision for a model without an engine, or calledElement read as one): `set calledDecision=` writes the engines' spelling
       // (not next to another implementation: class, delegateExpression, expression or type=external stay, the attribute just goes)
       const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && isC7Uri(uriOfName(a, ctx.ns)));
       const link = el === owner && !!id && !implemented && is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? decisionLinkOf(el, ctx.doc) : undefined;

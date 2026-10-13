@@ -350,17 +350,17 @@ describe('bpmnlintValidator: findings', () => {
     }
   });
 
-  it('the import warnings of the lint parse bpmn-cli\'s reader does not report: import-warning errors with a hint; design-iq\'s decision link has its own', async () => {
+  it('the import warnings of the lint parse bpmn-cli\'s reader does not report: import-warning errors with a hint; bpmn-cli\'s decision link in a model without an engine has its own', async () => {
     const engine = bpmnlintEngine();
     const run = async (xml: string, rc: object) => {
       const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc));
       return { check: await checkDoc(await Doc.fromXml(xml)), found: (await v.validate!(xml, ctx(xml))) as ValidatorFinding[] };
     };
-    // a design model (no engine namespace): bpmn-cli's reader takes calledDecision as the decision link, bpmnlint's parse does not know it
+    // a model without an engine (no engine namespace): bpmn-cli's reader takes calledDecision as the decision link, bpmnlint's parse does not know it
     const design = await model([...LINE, { op: 'add', kind: 'businessRuleTask', name: 'Decide', after: 'Activity_Check' }, { op: 'set', id: 'Activity_Decide', values: { calledDecision: 'risk' } }]);
     const linked = await run(design, { rules: { 'label-required': 'error' } });
     expect(linked.check.importWarnings).toEqual([]);
-    expect(linked.found).toEqual([{ severity: 'error', code: 'import-warning', message: 'Import warning: unknown attribute <calledDecision>', element: 'Activity_Decide', key: 'import|Activity_Decide|unknown attribute <calledDecision>', hint: expect.stringMatching(/^design-iq's decision link \(an unprefixed calledDecision on a business rule task of a design model; bpmn-cli's reader keeps it\): keep it\./) }]);
+    expect(linked.found).toEqual([{ severity: 'error', code: 'import-warning', message: 'Import warning: unknown attribute <calledDecision>', element: 'Activity_Decide', key: 'import|Activity_Decide|unknown attribute <calledDecision>', hint: expect.stringMatching(/^bpmn-cli's decision link in a model without an engine \(an unprefixed calledDecision on a business rule task; bpmn-cli's reader keeps it\): keep it\./) }]);
     // a moddle extension that declares the attribute: bpmnlint reads it
     const descriptor = { name: 'DesignIq', prefix: 'diq', uri: 'http://example.org/diq', types: [{ name: 'DecisionLink', extends: ['bpmn:BusinessRuleTask'], properties: [{ name: 'calledDecision', isAttr: true, type: 'String' }] }] };
     expect((await run(design, { rules: { 'label-required': 'error' }, moddleExtensions: { diq: descriptor } })).found).toEqual([]);

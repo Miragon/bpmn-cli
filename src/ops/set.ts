@@ -36,9 +36,12 @@
  *  Send / receive tasks: message (name of a root bpmn:Message, created when
  *    missing; empty removes the reference).
  *  Business rule tasks: calledDecision (the decision link, written in the
- *    spelling of the file's platform: calledDecision= in a design model,
- *    camunda:decisionRef in Camunda 7, zeebe:calledDecision in Camunda 8; the
- *    other spellings are removed, empty removes the link; see decision.ts).
+ *    spelling of the file's platform: camunda:decisionRef in Camunda 7,
+ *    zeebe:calledDecision in Camunda 8, bpmn-cli's unprefixed
+ *    calledDecision= without an engine; with an explicit platform none the
+ *    task's own engine spelling, else the one engine spelling of the file's
+ *    other links, else the unprefixed one; the other spellings are removed,
+ *    empty removes the link; see decision.ts).
  *  Nested elements without an id of their own are addressed with a prefix:
  *    `definition.<key>` (the event definition), `loop.<key>` (the loop
  *    characteristics; a parallel multi-instance loop is created when missing),
@@ -229,7 +232,7 @@ export const SET_KEYS: SetKeyDoc[] = [
   { key: 'expanded', appliesTo: 'subProcess', description: 'true|false: draw the sub-process expanded (default) or collapsed' },
   { key: 'triggeredByEvent', appliesTo: 'subProcess', description: 'true|false: event sub-process' },
   { key: 'message', appliesTo: 'sendTask, receiveTask', description: 'Message name of a send / receive task (a root bpmn:Message is created when missing; empty removes the reference)' },
-  { key: 'calledDecision', appliesTo: 'businessRuleTask', description: 'The decision the task calls, in the spelling of the file\'s platform: calledDecision="<id>" in a design model (no engine namespace, design-iq), camunda:decisionRef in Camunda 7, a zeebe:calledDecision decisionId in Camunda 8 (the other spellings are removed; empty removes the link)' },
+  { key: 'calledDecision', appliesTo: 'businessRuleTask', description: 'The decision the task calls, in the spelling of the file\'s platform: camunda:decisionRef in Camunda 7, a zeebe:calledDecision decisionId in Camunda 8, bpmn-cli\'s own unprefixed calledDecision="<id>" without an engine. With the library\'s platform \'none\' a link in an engine spelling keeps it (a zeebe:calledDecision its resultVariable too) and a new link takes the engine spelling all the file\'s other links share (the other spellings are removed; empty removes the link)' },
   { key: 'definition.<key>', appliesTo: 'event', description: "Attribute of the event definition, e.g. definition.camunda:errorCodeVariable=code, definition.camunda:type=external + definition.camunda:topic=x (message throw / end), definition.camunda:variableName=amount (conditional); an event with several event definitions takes 'definition[<n>].<key>' (0-based) or 'definition[<trigger>].<key>'" },
   { key: 'loop.<key>', appliesTo: 'activity', description: 'Attribute of the loop characteristics, e.g. loop.camunda:collection=${items}, loop.camunda:elementVariable=item, loop.camunda:asyncBefore=true (creates a parallel multi-instance loop when none exists)' },
   { key: 'condition.<key>', appliesTo: 'sequenceFlow', description: 'Attribute of the condition expression, e.g. condition.camunda:resource=deployment://check.groovy (a script resource condition; set language= too)' },

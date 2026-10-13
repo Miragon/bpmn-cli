@@ -228,7 +228,9 @@ prints), `runFormatOps` (the format operations on a loaded document;
 'c7' | 'c8' | 'none' })` (findings among the warnings, `result.platform`
 with the platform, its source and the counts), `MutationOptions.platform`
 (default auto; `'none'` switches it off; an explicit choice also decides the
-engine rules of the ops, e.g. which event-gateway rule a bridge follows),
+engine rules of the ops, e.g. which event-gateway rule a bridge follows, and
+the spelling of a decision link: with `'none'` a link keeps its engine
+spelling and a new one follows the file's, [Set keys](reference.md#set-keys)),
 `runProfile`, `detectPlatform`, `PLATFORM_CHOICES` and the types
 `ProfileFinding`, `PlatformSummary`, `Severity`; `listExtensions` /
 `listAllExtensions` (what `ext list` prints). `runProfile` and
@@ -341,8 +343,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 925.7 KB | 294.5 KB | 935 / 298 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 653.3 KB | 208.0 KB | 660 / 210 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 927.0 KB | 295.0 KB | 935 / 298 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 654.2 KB | 208.3 KB | 660 / 210 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
