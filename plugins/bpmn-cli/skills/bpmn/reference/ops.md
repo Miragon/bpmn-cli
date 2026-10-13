@@ -44,7 +44,9 @@ Give every created element an explicit speaking `id` (`Activity_<VerbObject>`,
 `Gateway_<Question>`, `Event_<State>`, `Lane_<Role>`, `Participant_<Party>`,
 `DataObjectReference_<Thing>`, `DataStoreReference_<Thing>`,
 `TextAnnotation_<Gist>`); later ops of the batch use it directly. Flow ids the
-CLI derives speak too (`Flow_CheckInvoiceToBookInvoice`). For an element you do
+CLI derives speak too (`Flow_CheckInvoiceToBookInvoice`). In a repository whose
+`.bpmnlintrc` declares id conventions (`bpmn show <file> --conventions`), use
+its patterns instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoice`). For an element you do
 not name, set an alias - `"as"` on add / connect / split and split nodes,
 `"flowAs"` for the flow into a new node, `"joinAs"` for a split's join - and use
 `"$alias"` wherever an id goes (also inside `values` for `default`, `source`,

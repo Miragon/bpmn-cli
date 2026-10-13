@@ -24,6 +24,9 @@
  *    W_PROPERTY_DROPPED; trigger options on a non-event -> W_OPTION_IGNORED.
  *  - message flows touching an event must still fit its new kind/trigger
  *    (E_INVALID_TRIGGER otherwise, the same rule `connect` applies).
+ *  - the id stays (ids are API); where the declared id conventions
+ *    (element-id-naming) accept its prefix for the old kind / trigger and not
+ *    for the new one, W_ID_PREFIX_STALE names the `bpmn set` that renames it.
  *  - a sub-process that stops being one loses its child diagram (DI), so a
  *    --no-layout write never leaves a BPMNPlane rooted at a task.
  *  - vendor attributes and extension elements are kept as they are (like the
@@ -58,10 +61,12 @@ import {
   currentTrigger,
   descriptorOf,
   idOf,
+  idStateOf,
   interruptingOnly,
   isEl,
   messageFlowConflicts,
   ownValue,
+  recordIdState,
   vendorAttributes,
   warnNonInterruptingDropped,
   type PropDescriptor,
@@ -211,6 +216,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
 
   // read the old trigger state before the swap moves the definitions over
   const existing = isEvent ? currentTrigger(el) : undefined;
+  const before = idStateOf(el);
   const conflictsBefore = new Set(messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
   const target = to.type === el.$type ? el : swapType(doc, el, to, cs);
   applyKindProps(target, from, to);
@@ -232,6 +238,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   }
   if (isEvent) assertMessageFlowsFit(doc, target, conflictsBefore);
   if (dropNonInterrupting && trigger !== undefined) warnNonInterruptingDropped(cs, target, trigger);
+  recordIdState(doc, target, before, oldLabel);
   doc.invalidate();
   const detail =
     from === to && sameTrigger

@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), and the project's bpmnlint configuration (#33))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), and the id conventions of its element-id-naming (#34))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -18,7 +18,8 @@ a host's own validators inside the transaction.
 Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
 engines; the rules of each platform load on demand (a chunk of their own in
 a host's bundle). Elements are addressed by id only; new ids speak (names, kind +
-place, the ends of a flow) in the file's id style, and an `apply` batch
+place, the ends of a flow) in the file's id style (where the project's
+`.bpmnlintrc` runs `element-id-naming`: in its prefixes and case), and an `apply` batch
 names what it creates with aliases (`"as": "$name"`); a flow whose id names
 its ends follows them, unless flow ids are API and kept (`--keep-flow-ids`,
 `BPMN_KEEP_FLOW_IDS=1`: `W_FLOW_ID_STALE` names the stale ones). An agent reads a
@@ -41,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2008 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2072 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -51,6 +52,236 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Id conventions of the .bpmnlintrc (2026-10-13, `feat/34-id-conventions`, issue #34)
+
+bpmn-cli learned the id style from the file alone. A new file got bpmn-js ids,
+a kind the file had never used fell back to the default prefix, and in a
+repository whose `.bpmnlintrc` runs `@miragon/rules/element-id-naming`
+(`recommended-for-automation` turns it on) every write added findings of that
+rule, which #33 then listed. Now the ids bpmn-cli generates follow the rule
+where it declares a prefix ([docs/bpmnlint.md](docs/bpmnlint.md#id-conventions)).
+The user's decisions hold: the conventions come only from the resolved
+setting of element-id-naming, read as the rule reads it, with the plugin's
+own naming helpers; no `.bpmn-cli.json` and no other config file (no topic
+or message name templates either); generated ids fill the
+gap a change opens, existing ids are never renamed for the conventions; a
+value new ids cannot follow never blocks a command.
+
+- **Core** (`src/conventions.ts`, browser-safe; the naming helpers are
+  injected): `idConventionsFromLint(setting, naming, { source })` merges the
+  options over `DEFAULT_PREFIXES` as the rule does, runs `resolvePrefix` on
+  an element of every concrete `bpmn:` type of the moddle registry (120
+  types; 23 hits for the bare flag, so `bpmn:Definitions`, `bpmn:DataStore`
+  and the rest are covered when named exactly) and `acceptedPrefixes` on an
+  event of each kind and trigger (32 qualified prefixes), and gives
+  `IdConventions` (plain data: prefixes, `case`, `qualifier`, `source`,
+  `ignored`) plus `W_CONFIG_IGNORED` notes: a prefix that is no string,
+  cannot start an id, has a character outside ASCII or is longer than 56
+  characters (left out: that type follows the learned style; `ignored`
+  names the concrete types the rule still checks with it), under
+  `required` a qualified prefix longer than 56 characters (`ignored` names
+  `bpmn:EndEvent:escalation`), an unknown case (the rule's PascalCase; also
+  `toString` and other names of JavaScript's Object, which the rule cannot
+  check) or qualifier (optional; the hint's guess is `closestKey` of
+  `src/batch.ts`).
+  DI types are out of scope. `conventionsView` / `renderConventions` are
+  `show --conventions`: rows grouped by pattern and source (`lint`, `file`,
+  `lint shape`, `default`), `<kind>_` for prefixes named after their kind,
+  `not checked` or `checked; prefix ignored (W_CONFIG_IGNORED)` for kinds
+  the rule names nothing new ids can follow, the flow head new flows really
+  get (`IdStyle.explainFlow`: `F_` after `F1`..`F12`, `Flow_` after a prefix
+  that leaves no room), one line for the qualified prefixes; where none are
+  declared, why (`undeclared`: `--no-lint-config`, no `.bpmnlintrc`, one
+  that did not load, the rule off, no usable prefix).
+- **Ids** (`src/idstyle.ts`, DECLARED CONVENTIONS in the module contract): a
+  request whose type has a declared prefix takes it (the qualified one only
+  under `required`) and a body in the declared case; the kind word drops
+  what the prefix says (`startEvent_timer1stOfMonth`), a number first gets
+  the kind word under camelCase / PascalCase, where the collision suffix is
+  glued (`serviceTask_checkInvoice2`) and a join is `<id>Join` (snake_case
+  `<id>_join`, also in a file of bare ids; after an explicit split id the
+  declared prefix does not start: that prefix and the gateway's label,
+  `gateway_checkJoin`; after one whose body is not in the declared case,
+  `CASE_BODY`, the rule's patterns: that prefix and the body's words,
+  `gateway_approvedJoin` for `gateway_Approved`). Flows take
+  the declared prefix in the `named` form (the file's scope segment left
+  out of the ends, `From` before a number); message flows an exact
+  `bpmn:MessageFlow` entry, else the style the file's own message flows
+  show (`flowVoted`: two that agree; the ones under the borrowed prefix do
+  not vote, so the second message flow no longer flips to `Flow_`), else
+  the sequence flows' prefix and style. The learner runs twice: `l` without the ids that
+  already start with a prefix the conventions accept for their element
+  (`conforms`; the drift fix: a PascalCase file keeps `Lane_TeamA` ..
+  `Lane_TeamH` over eight writes, and its `Activity_CheckOrder` still
+  votes), `all` over every id (`learnedOnly()`: rename recognition through
+  `derivedBases`, and the comparison behind the `conventions:` line).
+  Uncovered types take the declared case only where `l` shows none (single
+  lower-case words show none there: `lane_sales`, then `lane_backOffice`;
+  under a declared PascalCase, which they cannot be, they vote camel)
+  and its prefixes do not begin with the other letter (`otherShape`: a
+  Modeler file of `Participant_` and hashed `Activity_` ids keeps
+  PascalCase), the declared prefixes' shape only where `l` shows none.
+  Process and definitions ids are bpmn-cli's (`IdStyle.DEFAULT`:
+  `Process_<Name>`, also a new pool's process, never learned from the
+  lint-shaped `participant_` ids bpmn-cli wrote) unless an exact
+  `bpmn:Process` / `bpmn:Definitions` entry exists (`process_main` and
+  `definitions_main` without a name). Under `required` an event whose
+  qualified prefix is too long (`IdConventions.ignored`:
+  `bpmn:EndEvent:escalation`, one W_CONFIG_IGNORED) follows the learned
+  style, and `headsOf` accepts nothing for it. `stalePrefix` for
+  W_ID_PREFIX_STALE: the declared prefix of `to` on the rest of the id, or,
+  where nothing is declared for `from` (a type switched off, an ignored or
+  too long qualified prefix: the rule did not check the id before), the id
+  the element's request wants now (its name, else its id's words as the
+  context). Without declared conventions none of it runs.
+- **Doc, pipeline, ops**: `Doc.conventions` (setting other ones learns the
+  style again), `NewDocOptions` / `MutationOptions` / `EditOptions.conventions`;
+  `mutateDoc` sets them for the call and puts the caller's back.
+  `Doc.allocateId` records an id under a prefix the conventions declare
+  for the request (`explain(req).source === 'lint'`: not a lane, a pool or
+  a message flow that borrows the sequence flows' prefix) whose base
+  differs from what `learnedOnly()` gives (also a split's join and an exact
+  process or definitions prefix of `new`, each only where the rule names its
+  type); the result's `conventions: { ids, source }`, a
+  `conventions:` line in text and `--summary`. `retype` and trigger changes
+  record the element's state before them (`recordIdState` in `ops/set.ts`,
+  the first record of an id wins); `reportStaleIdPrefixes` builds
+  `W_ID_PREFIX_STALE` at the end of the op on its own or of the batch, like
+  W_FLOW_ID_STALE: once per element, from its state before the batch to the
+  one after, the `bpmn set <file> <id> id=<new>` free after the batch and
+  among the hints; none for an element a later op renamed or made fit. An
+  id the batch generated (`Doc.generatedBase`; a split's join too,
+  `markGenerated`; an explicit claim, `claimId`, takes an id out again, also
+  one an op freed) is nobody's API yet: a retype or trigger change gives
+  the element the new prefix on the id it wanted (`regeneratedId`, a suffix
+  where taken, W_ID_SUFFIXED), a rename with `Rename.regenerated` that the
+  entries' details, the notes and the warnings follow (its old
+  W_ID_SUFFIXED goes; a later op that names the old id gets an E_NOT_FOUND
+  that says so), and no warning. The sequence and message flows the batch
+  generated from its ends follow it (`flowsNamedAfter` before the rename,
+  `followRenamedEnd` after: `SFGoToSTCheck` -> `SFGoToUTCheck`,
+  `flow_task_b_serviceTask_check` -> `flow_task_b_userTask_check`,
+  `flow_checkToCheck2` -> `flow_checkToCheck`; `Rename.was` keeps them out
+  of the retyped ones in E_NOT_FOUND).
+- **Node** (`src/node/bpmnlint.ts`): `projectLint` gives the validator and
+  the conventions from one load (memoised per resolved configuration);
+  `projectIdConventions(file, opts)` for the CLI's `new` and `show` (its
+  notes add the configuration's W_LINT_UNAVAILABLE, and `unavailable` marks
+  a `.bpmnlintrc` that did not load, so `show --conventions` names it). The
+  notes go into the bpmnlint validator (`bpmnlintValidator(..., { notes })`),
+  so `validate` and `new` list them and a write only counts them, with
+  `N element-id-naming values ignored (W_CONFIG_IGNORED; ...)` in its
+  validator line. `fileContext` passes the conventions unless the host passes
+  `conventions` or a validator named bpmnlint; `validate -` gets them
+  through `checkLoadedDoc` (lookup from the working directory).
+  `LoadedBpmnlint.where` is new.
+- **CLI**: `show <file> --conventions` (with `--json`, `--lint-config`,
+  `--no-lint-config`, whose help says so and which are `E_USAGE` without
+  `--conventions`; a missing path shows a new model there, stdin looks up
+  from the working directory; an id or another view flag is `E_USAGE`);
+  `new` checks `--id` (`assertProcessId`) and an existing target
+  (`assertNewFile`, which `toFile` uses too) first, as main does without a
+  `.bpmnlintrc`, then reads the conventions before `Doc.create`;
+  `--no-lint-config` says it drops the conventions too. The view names the
+  triggers of an event type whose required qualified prefix is too long on
+  its row (`message, escalation: qualified prefix ignored, ...`) and in the
+  qualifier line (`not the triggers marked above`).
+- **Docs and codes**: `W_ID_PREFIX_STALE`, `W_CONFIG_IGNORED`; guide section
+  and topic `conventions`, `ID_CONVENTIONS.declared`, one line in the short
+  guide (4,638 of 5,120 bytes, 4,522 before); docs/bpmnlint.md (section, the examples of #33 now
+  without element-id-naming findings, a `show --conventions` example, all
+  three pinned), reference.md (also the JSON field), commands.md (also the
+  guide topics), contract.md, library.md, ops.md (the join id),
+  validators.md (the engine defaults turn the rule on: the snippet of its
+  advisory validators passes `conventions` and `notes`, pinned and run for
+  c7 and c8), migrating.md,
+  testing.md, README, SKILL.md (run `bpmn show <file> --conventions` before
+  the first change in a repository with a `.bpmnlintrc`; the `conventions:`
+  line and `W_ID_PREFIX_STALE`).
+- **Tests**: `test/conventions-lint.test.ts` (the real rule on every id of a
+  new file under 8 settings and of 6 file styles under 8 more, also of
+  elements created and then retyped or given another trigger with the flows
+  named after them, a split's gateways retyped in the same batch, the join
+  after an explicit split id in another case, 0 findings; a
+  control with findings; the table, the notes, also for `toString`, a
+  prefix outside ASCII and a qualified prefix too long under `required`);
+  `test/conventions-declared.test.ts` (drift, what the rule does not name
+  in a file with one `Lane_`, hashes or only covered ids, single words,
+  qualifier, kind word, suffix and join (also after an explicit split id
+  and in a file of bare ids), message flows and new pools' processes over
+  many writes, an element created and retyped in one batch, the
+  `conventions:` line of `new`, scoped flows, renames into the
+  declared form (also of a flow 0.6 named in a file of another flow form,
+  #31's recognition), a host table, W_ID_PREFIX_STALE alone and in a batch
+  (also for a type switched off), the flows that follow a regenerated id,
+  the split's join, an id freed and claimed again, the
+  result line and what it leaves out, the view with its reasons, ignored
+  prefixes, unqualified triggers and flow heads); `test/bpmnlint.test.ts` (#33's expectations
+  updated; the lookup and its switches, the notes in validate / write /
+  `new` / stdin, every fixture byte for byte without the rule, the CLI:
+  `new` byte-identical in an automation repository and its own errors
+  before E_LINT_CONFIG, `show --conventions` with a broken `.bpmnlintrc` and
+  a rule name with a typo).
+
+Evidence:
+
+- `npm run gate`: 2072 tests (+246 opt-in; 2008 on main), isomorphism check,
+  layout regression 444 (budget 444), fuzz 12 x 15 with 0 errors.
+- Against main (with #35, #31, #32 and #33), a build of each: every test
+  fixture (49) and `new` without one, under six setups (no `.bpmnlintrc`;
+  automation with element-id-naming off; the rule at severity 0 with
+  options; a `.bpmnlintrc` without the rule; recommended-for-modeling;
+  automation with the rule on and `--no-lint-config`), through `show`,
+  `validate`, 20 kinds of `add`, `connect`, `retype`, `set`, `remove`,
+  `move`, `layout`, `apply` and `new`: 16,302 command pairs, stdout,
+  stderr, exit code and every file in the directory identical (`bpmn show
+  --conventions` aside, which is new).
+- The whole entry grows 899.2 / 285.2 -> 925.7 / 294.5 KB (minified / gzip;
+  the guide's text 7.2, `src/idstyle.ts` 7.0, `src/conventions.ts` 6.4, the
+  rest 5.9 KB minified); that does not fit main's budget of 910 / 289 (#33's
+  size + about 1 %), so it is raised to 935 / 298, the measured size + 1.0 /
+  1.2 %. `applyToXml` only 641.2 / 203.8 -> 653.3 / 208.0 KB (the style 7.0,
+  `src/document.ts` 1.6, `src/ops/set.ts` 1.5, `src/ops/flows.ts` 0.7 KB,
+  the rest; the conventions module and the plugin's helpers are not in it);
+  that does not fit main's budget of 643 / 204 either (#35 lowered it to its
+  size), so it is raised to 660 / 210, the measured size + 1.0 %.
+- Runtime without a `.bpmnlintrc`, or with the rule off: unchanged (the CLI's
+  `add` on orders.bpmn 97 -> 97 ms, gallery.bpmn 151 -> 151 ms, main -> #34,
+  interleaved medians of 15). With an automation `.bpmnlintrc`: the table
+  takes 1.6 ms (3.3 ms the first time) once per loaded configuration (the
+  plugin load is #33's); learning the style twice takes gallery.bpmn's 140
+  ids from 0.7 to 1.5 ms (the check whether an id follows the conventions is
+  one prefix test per element); a write compares each new id under a
+  declared prefix with the file's own style once, and W_ID_PREFIX_STALE is
+  built once per retyped element after the batch. The CLI's `add` 133 -> 139
+  ms (orders.bpmn) and 191 -> 194 ms (gallery.bpmn), `validate` 100 -> 102 ms
+  / 128 -> 131 ms.
+
+Open after #34:
+
+- Topic and message names: Miragon/bpmnlint-rules#68.
+- DI ids (`bpmndi:*`) follow their element, also where the rule names a DI
+  type.
+- `mutateDoc` accepts a split's `branches` without `nodes` silently (the CLI
+  refuses them): a library input check, not #34.
+- The `conventions:` line compares with the file's own style, which needs
+  two ids per rule: a file that follows the rule gets it for its first ids
+  and for a kind it has no id of yet. Leaving such ids out would need the
+  learned style to say where it has no evidence of its own.
+
+Left for later (low findings of the second review, not fixed in #34):
+
+- A glued collision suffix after a body that ends in a number reads as another number (`serviceTask_step1` + `2` = `serviceTask_step12`, which then pushes the real "Step 12" to `serviceTask_step122`); unique and passes the rule, needs a letter word before the number (`step1No2`) with derivedBases / idNamesEnds following it.
+- W_ID_PREFIX_STALE keeps the old id's body as it is: an id that never passed the declared case (`serviceTask_shipGoods` under PascalCase) gets a suggestion the rule still rejects, and a prefix without separator matched by accident (`user` on `userTask_checkOrder`) a garbled one (`manualTask_Task_checkOrder`); fire only for ids that fully passed the rule, or re-case the body.
+- Pre-existing (also on main): an op that touches a sequence flow without id crashes with E_INTERNAL (`idNamesEnds` on `undefined`); the change report names a created flow by the id its spliced flow just freed (`ChangeSet.rename` renames every entry with that id); a batch alias used after `retype` of its element is E_NOT_FOUND (swapType makes a new element). Separate issue.
+
+Left for later (low findings of the review after the rebase onto main, not fixed in #34):
+
+- Ids the batch built from a regenerated element's id other than flows keep its old stem: an unnamed element after it (`task_AfterSTCheck` after `UTCheck`), a boundary event on it (`event_TimerOnSTCheck`). Only the flows named after it follow; the rest would need the requests (context, anchor) of what the batch created.
+- Message flows that follow the file's own `stemTo` / `stemSnake` form copy the ends' id stems as they are, so one id can mix cases (`mf_askQuestion_to_getQuestion` in a snake file under camelCase). The rule does not check message flow ids; re-casing the stems needs the form learner (`flowForms`) to read the re-cased ids as that form too, or the file's form flips.
+- A new pool's process takes `Process_<Name>` as specified, also where the file's processes show a convention of their own (`process_customer`, `process_shop`: `Process_BankAccount`, `process_bankAccount` without a `.bpmnlintrc`). Following the file's process ids where at least two share a prefix would keep such files consistent; the rule does not check processes.
+- The batch alias after a type-changing `retype` (above, also on main): a fix (rebind the alias to the element `swapType` makes) changes the output without a `.bpmnlintrc`, so it belongs in a PR of its own.
 
 ## The project's bpmnlint configuration (2026-10-13, `feat/33-bpmnlint`, issue #33)
 

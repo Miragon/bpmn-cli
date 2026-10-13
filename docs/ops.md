@@ -65,7 +65,10 @@ followed by a start event, a "Check invoice" user task and an end event:
 
 **`split`** has no CLI command. It places a gateway after the anchor, creates every branch (the first
 node gets the branch's flow options, further nodes are chained) and a join gateway of the same kind
-(`<gatewayId>_join`) that the branch ends connect to. When the anchor had a successor, the join
+(`<gatewayId>_join` in the file's case; `<gatewayId>Join` under a declared camelCase / PascalCase, and
+the declared prefix + the gateway after an `id` the declared prefix does not start, `gateway_checkJoin`,
+or whose body is not in the declared case, `gateway_approvedJoin` for `gateway_Approved`,
+see [bpmnlint](bpmnlint.md#id-conventions)) that the branch ends connect to. When the anchor had a successor, the join
 continues to it. An empty `nodes` list is a direct flow from gateway to join. A branch that ends in
 an end event stops there; with fewer than two branches left to join, no join gateway is created.
 

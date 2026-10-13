@@ -36,16 +36,20 @@
  * one only in its directory; a document without a file: from `lintFrom`),
  * or `lintConfig`, runs as an advisory validator next to the host's
  * (`lintBlocks`: a blocking one); without a .bpmnlintrc nothing is loaded.
+ * Its @miragon/rules/element-id-naming gives the id conventions new ids
+ * follow (src/conventions.ts), unless the host passes `conventions` itself
+ * (or a validator named bpmnlint: then its own conventions, if any).
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../document.js';
 import { declaredEncoding, isUtf8 } from '../encoding.js';
-import { CliError, ioError } from '../errors.js';
+import { ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
+import type { IdConventions } from '../conventions.js';
 import type { Validator } from '../validators.js';
-import { projectBpmnlint, type FileBpmnlintOptions } from './bpmnlint.js';
+import { projectLint, type FileBpmnlintOptions } from './bpmnlint.js';
 
 /** Where and whether the node layer writes the result of the in-memory pipeline. */
 export interface FileWriteOptions {
@@ -129,37 +133,48 @@ export async function writeAtomic(file: string, content: string): Promise<void> 
   }
 }
 
-/** What the core gets to know about the file (MutationOptions.file / validators). */
+/** What the core gets to know about the file (MutationOptions.file / validators / conventions). */
 interface FileContext {
   file?: string;
   validators?: Validator[];
+  conventions?: IdConventions;
 }
 
-/** The file the validators see (`ctx.file`: opts.file, else the file written or checked) and the project's bpmnlint. */
-async function fileContext(file: string | undefined, opts: FileBpmnlintOptions & { file?: string; validators?: Validator[] }): Promise<FileContext> {
+type ContextOptions = FileBpmnlintOptions & { file?: string; validators?: Validator[]; conventions?: IdConventions };
+
+/** The file the validators see (`ctx.file`: opts.file, else the file written or checked), the project's bpmnlint and the id conventions it declares (unless given). */
+async function fileContext(file: string | undefined, opts: ContextOptions): Promise<FileContext> {
   const named = opts.file ?? file;
   // the project's .bpmnlintrc: nothing is loaded without one
-  const lint = await projectBpmnlint(named, opts);
-  return { ...(named ? { file: named } : {}), ...(lint ? { validators: [...(opts.validators ?? []), lint] } : {}) };
+  const lint = await projectLint(named, opts);
+  const conventions = opts.conventions ?? lint.conventions;
+  return {
+    ...(named ? { file: named } : {}),
+    ...(lint.validator ? { validators: [...(opts.validators ?? []), lint.validator] } : {}),
+    ...(conventions ? { conventions } : {}),
+  };
+}
+
+/** Throws E_FILE_EXISTS where `target` exists, unless --force or --dry-run (a write that creates its file: `bpmn new`, which checks it before it reads the .bpmnlintrc). */
+export async function assertNewFile(target: string | undefined, opts: { force?: boolean; dryRun?: boolean }): Promise<void> {
+  if (!target || opts.force || opts.dryRun) return;
+  try {
+    await stat(target);
+  } catch {
+    return; // does not exist: fine
+  }
+  throw ioError('E_FILE_EXISTS', `${target} already exists`, { file: target, hint: 'Choose another name or pass --force to overwrite.' });
 }
 
 /** Runs `compute` (an in-memory pipeline call) and writes its XML to opts.out ?? doc.file unless dryRun. */
 async function toFile(
   doc: Doc,
-  opts: FileWriteOptions & FileBpmnlintOptions & { force?: boolean; file?: string; validators?: Validator[] },
+  opts: FileWriteOptions & ContextOptions & { force?: boolean },
   compute: (context: FileContext) => Promise<MutationResult>,
 ): Promise<MutationResult> {
   const target = opts.out ?? doc.file;
   if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
-  if (opts.mustNotExist && target && !opts.force && !opts.dryRun) {
-    try {
-      await stat(target);
-      throw ioError('E_FILE_EXISTS', `${target} already exists`, { file: target, hint: 'Choose another name or pass --force to overwrite.' });
-    } catch (err) {
-      if (err instanceof CliError) throw err;
-      /* does not exist: fine */
-    }
-  }
+  if (opts.mustNotExist) await assertNewFile(target, opts);
   const result = await compute(await fileContext(target, opts));
   // a result equal to the file is not written back over it; --out to another file still gets its copy
   const inPlace = !!target && !!doc.file && resolve(target) === resolve(doc.file);

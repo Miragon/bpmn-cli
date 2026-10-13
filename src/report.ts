@@ -10,7 +10,7 @@
  *                             (added / resolved / preexistingCount), not every warning of the file
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
  *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / renamed / removed ids, the format ops,
- *                             the added warnings, the layout score and added problems
+ *                             the added warnings, the layout score and added problems, the ids that follow declared conventions
  *   renderSummary(summary, { dryRun, advisory })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
  *   renderValidation(report)  its text
@@ -27,7 +27,7 @@ import type { LayoutProblem } from './diagram/metrics.js';
 import type { FormatResult } from './diagram/ops.js';
 import type { Warning } from './errors.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './format.js';
-import type { CheckResult, LayoutStatus, MutationResult } from './pipeline.js';
+import type { CheckResult, ConventionsReport, LayoutStatus, MutationResult } from './pipeline.js';
 import type { PlatformSummary } from './platform/profile.js';
 import { ChangeSet, type Change } from './result.js';
 import type { ValidationResult } from './validate.js';
@@ -71,6 +71,8 @@ export interface MutationReport {
   validation: Omit<ValidationResult, 'warnings'>;
   importWarnings: string[];
   view?: ModelView;
+  /** the new ids under a prefix the project's declared id conventions name (element-id-naming of the .bpmnlintrc) that the file's own style would give otherwise, and where those come from */
+  conventions?: ConventionsReport;
 }
 
 /** The JSON of `bpmn validate` (`file` aside). */
@@ -158,6 +160,7 @@ export function mutationReport(result: MutationResult): MutationReport {
     validation,
     importWarnings: result.importWarnings,
     ...(result.view ? { view: result.view } : {}),
+    ...(result.conventions ? { conventions: result.conventions } : {}),
   };
 }
 
@@ -217,8 +220,8 @@ export function warningLines(warnings: readonly Warning[], advisory: ReadonlySet
   return out;
 }
 
-/** What an advisory validator reports that is no rule of it: bpmn-cli's own codes about the validator, the lint parse's import warnings. */
-const NO_RULE = new Set(['W_LINT_UNAVAILABLE', 'W_LINT_FAILED', 'import-warning']);
+/** What an advisory validator reports that is no rule of it: bpmn-cli's own codes about the validator and its configuration, the lint parse's import warnings. */
+const NO_RULE = new Set(['W_LINT_UNAVAILABLE', 'W_LINT_FAILED', 'W_CONFIG_IGNORED', 'import-warning']);
 
 /**
  * validate's text of errors or warnings: renderProblems, but an error of an
@@ -227,8 +230,8 @@ const NO_RULE = new Set(['W_LINT_UNAVAILABLE', 'W_LINT_FAILED', 'import-warning'
  * the first: `[bpmnlint] <rule> x12 [ids]: <the most common message> (5 of
  * 12; 7 others with 3 other messages, --json lists them)  (<the hint>)`, the
  * ids those with that message. What bpmn-cli reports about the validator
- * itself (W_LINT_UNAVAILABLE, W_LINT_FAILED) and import warnings are no rule:
- * one line each.
+ * itself and its configuration (W_LINT_UNAVAILABLE, W_LINT_FAILED,
+ * W_CONFIG_IGNORED) and import warnings are no rule: one line each.
  */
 function problemLines(problems: readonly Warning[], advisory: ReadonlySet<string>): string {
   const isAdvisory = (p: Warning): boolean => {
@@ -322,9 +325,10 @@ function validatorLines(reports: readonly ValidatorReport[] | undefined, what: s
 export type MutationReportLike = Omit<MutationReport, 'file' | 'written'> & { file?: string; written?: boolean };
 
 /**
- * The text the CLI prints for a mutation: changes, warnings, the layout
- * block, the file line (when the report names a file: written, unchanged
- * and not written, or `dryRun`), the view (--show).
+ * The text the CLI prints for a mutation: changes, warnings, the validator
+ * lines, the conventions line, the layout block, the file line (when the
+ * report names a file: written, unchanged and not written, or `dryRun`),
+ * the view (--show).
  */
 export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string {
   const changes = Object.assign(new ChangeSet(), { created: result.created, changed: result.changed, removed: result.removed, warnings: [], notes: result.notes });
@@ -340,10 +344,23 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
   if (result.warnings.preexistingCount) lines.push(preexistingLine(result.warnings.preexistingCount));
   lines.push(...validatorLines(result.validation.validators, 'result'));
+  lines.push(...conventionsLines(result.conventions));
   lines.push(...renderLayout(result.layout));
   lines.push(...fileLines(result, opts));
   if (result.view) lines.push('', renderView(result.view).trimEnd());
   return lines.join('\n');
+}
+
+/**
+ * `conventions: serviceTask_bookOrder, flow_checkOrderToBookOrder follow
+ * element-id-naming (.bpmnlintrc in .), not the file's own id style`: only
+ * for new ids under a prefix the declared conventions name, where they
+ * differ from what the file's own style would give.
+ */
+export function conventionsLines(c: ConventionsReport | undefined): string[] {
+  if (!c?.ids.length) return [];
+  const ids = c.ids.length > FLOOD_IDS ? `${c.ids.slice(0, FLOOD_IDS).join(', ')}, +${c.ids.length - FLOOD_IDS} more` : c.ids.join(', ');
+  return [`conventions: ${ids} follow${c.ids.length === 1 ? 's' : ''} element-id-naming (${c.source ?? 'the host'}), not the file's own id style  (\`bpmn show <file> --conventions\`)`];
 }
 
 /** `aliases: $check = Activity_CheckInvoice, $ok = Gateway_InvoiceOk` */
@@ -385,6 +402,8 @@ export interface MutationSummary {
   layout: { status: 'ok' | 'skipped'; mode?: 'full' | 'incremental'; score?: { before?: number; after: number }; added?: LayoutProblem[]; problems?: number };
   /** what each format op (place, align, color, compact, lane / pool order, ...) did to the drawing, in batch order */
   format?: FormatResult[];
+  /** the new ids that follow the declared id conventions rather than the file's own style (MutationReport.conventions) */
+  conventions?: ConventionsReport;
 }
 
 function uniqueIds(changes: readonly Change[]): string[] {
@@ -421,6 +440,7 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
       ...(m && !m.before && m.added.length ? { problems: m.added.length } : {}),
     },
     ...(report.layout.format?.length ? { format: report.layout.format } : {}),
+    ...(report.conventions ? { conventions: report.conventions } : {}),
   };
 }
 
@@ -430,8 +450,8 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
  * errors, the added warnings (floods as one line; `advisory`: the names of
  * the advisory validators, whose findings group by code and message),
  * `warnings: n added, n resolved, n already in the file`, one layout line
- * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`)
- * and the file line.
+ * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`),
+ * the conventions line and the file line.
  */
 export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {}): string {
   const lines: string[] = [];
@@ -455,6 +475,7 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
   if (l.added?.length) lines.push(`${head}; added: ${l.added.map((p) => `${p.kind} [${p.ids.join(', ')}]`).join(', ')}`);
   else if (l.problems) lines.push(`${head} (${l.problems} layout problem${l.problems === 1 ? '' : 's'}: \`bpmn metrics <file>\` lists them)`);
   else lines.push(head);
+  lines.push(...conventionsLines(summary.conventions));
   lines.push(...fileLines(summary, opts));
   return lines.join('\n');
 }

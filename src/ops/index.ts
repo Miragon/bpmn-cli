@@ -14,18 +14,21 @@ import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
 import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
-import { setProperties } from './set.js';
+import { reportStaleIdPrefixes, setProperties } from './set.js';
 import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
 
 export function runOp(doc: Doc, op: Op): ChangeSet {
-  // a flow id kept although its ends changed: a batch takes the flows before it and reports it at its end (runBatch), an op on its own here
+  // a flow id kept although its ends changed, an id whose prefix a retype left stale: a batch takes the flows before it
+  // and reports both at its end (runBatch), an op on its own here
   const alone = !doc.batch;
   const outerFlows = doc.flowsBefore;
   let before: ReadonlyMap<El, FlowEnds> | undefined;
   if (alone) {
     readIdStyle(doc);
     doc.takeKeptFlows();
+    doc.takeIdStates();
+    doc.forgetGeneratedIds();
     doc.flowsBefore = before = flowsNow(doc);
   }
   try {
@@ -35,7 +38,10 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
     doc.reportSuffixed(cs);
     // a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too)
     cs.rename(doc.takeRenames());
-    if (alone) reportStaleFlows(doc, cs, before);
+    if (alone) {
+      reportStaleFlows(doc, cs, before);
+      reportStaleIdPrefixes(doc, cs);
+    }
     return cs;
   } finally {
     doc.flowsBefore = outerFlows;
@@ -115,7 +121,10 @@ export interface BatchRun {
  * each one whose id no longer names its ends at the end of the batch is a
  * W_FLOW_ID_STALE warning (one per flow, none for a flow a later op removed
  * or put back between its old ends, or that ends where it did when the batch
- * began: it was stale before).
+ * began: it was stale before). Likewise W_ID_PREFIX_STALE: one per element a
+ * retype or a trigger change kept the id of, from its state before the
+ * batch to its state after it; an element the batch created takes the
+ * prefix of its new kind instead (ops/set.ts recordIdState).
  */
 export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const all = new ChangeSet();
@@ -123,9 +132,11 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const resolved: Op[] = [];
   const deferred: number[] = [];
   // what the batch did so far, for E_NOT_FOUND (document.ts require / suggest)
-  const context: BatchContext = { created: [], renamed: new Map(), aliases: () => table.toRecord() };
+  const context: BatchContext = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => table.toRecord() };
   readIdStyle(doc);
   doc.takeKeptFlows();
+  doc.takeIdStates();
+  doc.forgetGeneratedIds();
   const outer = doc.batch;
   const outerFlows = doc.flowsBefore;
   const before = flowsNow(doc);
@@ -150,6 +161,10 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
         for (const r of cs.renames) {
           for (const [old, now] of context.renamed) if (now === r.from) context.renamed.set(old, r.to);
           context.renamed.set(r.from, r.to);
+          // an element created and retyped in the batch (and a flow named after it): E_NOT_FOUND says why, and lists it under its new id
+          if (!r.regenerated) continue;
+          if (!r.was) context.retyped!.add(r.from);
+          context.created = context.created.map((c) => (c === r.from ? r.to : c));
         }
       }),
     );
@@ -168,8 +183,9 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   all.bindings = [];
   // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
   all.warnings = all.warnings.filter((w) => stillHolds(doc, w));
-  // a kept flow id is stale against the flow's final ends
+  // a kept flow id is stale against the flow's final ends, a kept id's prefix against the element's final type and trigger
   reportStaleFlows(doc, all, before);
+  reportStaleIdPrefixes(doc, all);
   return { changes: all, ops: resolved, aliases: table.toRecord() };
 }
 

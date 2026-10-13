@@ -305,3 +305,23 @@
   trace and exited 1 when the command succeeded), and a model piped in from
   a slow writer (`curl ... | bpmn validate -`) is read whole (0.6 could fail
   with `E_IO` `EAGAIN`).
+- Where the `.bpmnlintrc` that runs has `@miragon/rules/element-id-naming` on
+  (`recommended-for-automation` turns it on, `recommended-for-modeling` has
+  it off), the ids a write generates follow its prefixes and case instead of
+  the file's style: `serviceTask_checkInvoice` next to `Activity_CheckOrder`,
+  `flow_checkInvoiceToBookInvoice` also for a flow renamed after its new ends
+  ([bpmnlint](bpmnlint.md#id-conventions)). The process and definitions ids
+  of `new` change only where the rule names `bpmn:Process` /
+  `bpmn:Definitions` exactly (`process_orderHandling`, `process_main`
+  without a name); no id the file has changes. Under camelCase or
+  PascalCase a taken id gets a glued `2` (`serviceTask_checkInvoice2`) and a
+  split's join is `<gatewayId>Join`. A result names such ids
+  (`conventions:`; `MutationResult.conventions`). `--no-lint-config` gives
+  the ids of before.
+- Library: `MutationOptions`, `EditOptions` and `NewDocOptions` take
+  `conventions` (`IdConventions`, plain data; `idConventionsFromLint` builds
+  them from a rule setting with the plugin's naming helpers). The file
+  helpers pass the conventions of the `.bpmnlintrc` they run, unless the host
+  passes `conventions` or a validator named bpmnlint of its own.
+  `bpmnlintValidator` takes `notes` (W_CONFIG_IGNORED), and `LoadedBpmnlint`
+  has `where`.

@@ -22,7 +22,7 @@
 import type { Doc, FlowEnds, KeptFlow } from '../document.js';
 import { edgeStyleOf, styledId } from '../diagram/write.js';
 import { modelError, type Warning } from '../errors.js';
-import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem } from '../idstyle.js';
+import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../idstyle.js';
 import { IdRegistry } from '../ids.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
@@ -446,6 +446,12 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   if (id === old) return undefined;
   flow.set('id', id);
   doc.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`);
+  followEdgeId(doc, flow, old, id);
+  return old;
+}
+
+/** The DI edge of a flow renamed `old` -> `id` follows where its id was derived from the flow's (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`). */
+function followEdgeId(doc: Doc, flow: El, old: string, id: string): void {
   for (const diagram of many(doc.definitions, 'diagrams')) {
     const plane = diagram.get<El | undefined>('plane');
     for (const di of plane ? many(plane, 'planeElement') : []) {
@@ -460,7 +466,49 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
     }
   }
   doc.invalidate();
-  return old;
+}
+
+/** The request a connection's id is built from (its type, its ends). */
+function connectionRequestOf(flow: El): IdRequest {
+  return flowRequest(flow.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
+}
+
+/**
+ * The sequence and message flows at `node` whose id the batch (or the op on
+ * its own) generated from their ends as they are now (Doc.generatedBase is
+ * the base their ends give): nobody's API yet, so they follow when the batch
+ * gives `node` another id (ops/set.ts recordIdState; followRenamedEnd).
+ * Call it before the rename.
+ */
+export function flowsNamedAfter(doc: Doc, node: El): El[] {
+  const flows = new Set([...many(node, 'incoming'), ...many(node, 'outgoing')]);
+  for (const root of many(doc.definitions, 'rootElements')) {
+    if (!is(root, 'bpmn:Collaboration')) continue;
+    for (const f of many(root, 'messageFlows')) if (f.get<El | undefined>('sourceRef') === node || f.get<El | undefined>('targetRef') === node) flows.add(f);
+  }
+  return [...flows].filter((f) => {
+    const base = doc.generatedBase(idOf(f));
+    return base !== undefined && !!f.get<El | undefined>('sourceRef') && !!f.get<El | undefined>('targetRef') && base === doc.idStyle.derivedBase(connectionRequestOf(f));
+  });
+}
+
+/**
+ * Renames a flow flowsNamedAfter found after its ends, once one of them
+ * took another id (the regenerated id of an element the batch created and
+ * retyped, ops/set.ts recordIdState): the id its ends give now (a taken
+ * one with a suffix, W_ID_SUFFIXED), its DI edge id with it; `was`: the
+ * ends before (`A -> B`). None where its ends give the id it has.
+ */
+export function followRenamedEnd(doc: Doc, flow: El, was: string): void {
+  const old = idOf(flow);
+  const req = connectionRequestOf(flow);
+  if (doc.idStyle.derivedBase(req) === doc.generatedBase(old)) return;
+  doc.ids.release(old);
+  const id = doc.allocateId(req).id;
+  if (id === old) return;
+  flow.set('id', id);
+  doc.recordRegenerated(old, id, was);
+  followEdgeId(doc, flow, old, id);
 }
 
 /**

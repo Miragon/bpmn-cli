@@ -55,6 +55,13 @@
  *    introduced among the warnings and never blocks; for a created document
  *    (`new`) it reports everything it finds in the new model.
  *
+ * Declared id conventions (MutationOptions.conventions, src/conventions.ts:
+ * element-id-naming of the project's .bpmnlintrc, which the node layer reads)
+ * are the document's for the call: the ids the ops and a full redraw
+ * generate follow them where they declare a prefix (src/idstyle.ts); the
+ * result names those that differ from the file's own style
+ * (`conventions`). Without them nothing changes.
+ *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
  *  - 'full': redraw everything with the engine (clean or auto); bpmn-js
@@ -95,6 +102,7 @@
  * write that moves no node leaves them untouched. `layout.stickies` lists
  * the stickies that moved.
  */
+import type { IdConventions } from './conventions.js';
 import { withLayoutDebug, type DebugSink } from './debug.js';
 import { utf8Declaration } from './encoding.js';
 import { Doc } from './document.js';
@@ -159,6 +167,14 @@ export interface MutationOptions {
    * ones (the CLI's default). Undefined: Doc.followFlowEnds decides.
    */
   keepFlowIds?: boolean;
+  /**
+   * the project's declared id conventions (src/conventions.ts: the
+   * prefixes, case and qualifier of element-id-naming; the node layer reads
+   * them from the .bpmnlintrc it runs): ids the change generates follow
+   * them where they declare a prefix, the file's own style elsewhere;
+   * existing ids stay. Undefined: Doc.conventions
+   */
+  conventions?: IdConventions;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -217,6 +233,15 @@ export interface MutationResult {
   delta?: ValidationDelta;
   view?: ModelView;
   xml: string;
+  /** the ids the change generated under a prefix the declared conventions name that the file's own style would give otherwise, and where the conventions come from; absent when there are none */
+  conventions?: ConventionsReport;
+}
+
+/** MutationResult.conventions: the new ids that follow the declared conventions rather than the file's own style. */
+export interface ConventionsReport {
+  ids: string[];
+  /** IdConventions.source (`.bpmnlintrc in models`) */
+  source?: string;
 }
 
 /** A mutation's validation findings compared with the document before the ops (MutationResult.delta). */
@@ -725,7 +750,19 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: O
  * and leaves nothing half done: the caller keeps its input when it throws.
  */
 export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
-  return withLayoutDebug(opts.debug, () => mutate(doc, ops, opts));
+  return withLayoutDebug(opts.debug, () => withConventions(doc, opts.conventions, () => mutate(doc, ops, opts)));
+}
+
+/** Runs `fn` with the document's id conventions set for the call (MutationOptions.conventions), its own back afterwards. */
+async function withConventions<T>(doc: Doc, conventions: IdConventions | undefined, fn: () => Promise<T>): Promise<T> {
+  if (conventions === undefined) return fn();
+  const own = doc.conventions;
+  doc.conventions = conventions;
+  try {
+    return await fn();
+  } finally {
+    doc.conventions = own;
+  }
 }
 
 async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
@@ -844,6 +881,8 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   }
 
   const unchanged = doc.source !== undefined && xml === doc.source.text;
+  // the generated ids under a declared prefix that the file's style would give otherwise (the ones the change kept)
+  const declared = doc.takeDeclaredIds().filter((id) => doc.has(id));
 
   const result: MutationResult = {
     ok: true,
@@ -858,6 +897,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     // a document created in memory (`new`) has no file whose warnings were already there: everything is reported
     ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation, profileAfter, validatorCovered) } : {}),
     xml,
+    ...(declared.length ? { conventions: { ids: [...new Set(declared)], ...(doc.conventions?.source ? { source: doc.conventions.source } : {}) } } : {}),
   };
   if (opts.show) {
     const fresh = await Doc.fromXml(xml, doc.file);

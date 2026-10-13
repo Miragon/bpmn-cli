@@ -23,7 +23,7 @@ import { modelError, usageError } from '../errors.js';
 import { parseKind, KindError } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { anchorContext } from '../idstyle.js';
+import { anchorContext, keyRequest, labelOf } from '../idstyle.js';
 import { cutAt, MAX_ID } from '../ids.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
@@ -72,22 +72,32 @@ function createdId(cs: ChangeSet): string {
 
 /**
  * The join gateway's id: op.joinId, else `<gatewayId>_join` (in the file's
- * case: camel `<gatewayId>Join`, pascalSnake `<gatewayId>_Join`); a taken
- * one gets `_2`, cut so that it stays within MAX_ID (the join kept).
+ * case: camel `<gatewayId>Join`, pascalSnake `<gatewayId>_Join`; a declared
+ * camelCase / PascalCase: `<gatewayId>Join`, snake_case `<gatewayId>_join`;
+ * a split id the declared prefix does not start: that prefix and the
+ * gateway's label, gateway_checkJoin); a taken one gets `_2` (a declared
+ * camelCase / PascalCase: `2`), cut so that it stays within MAX_ID (the
+ * join kept); with the id it wanted (`base`), which a generated one has
+ * (Doc.markGenerated: a retype in the same batch gives it the new prefix).
  */
-function joinIdFor(doc: Doc, op: SplitOp, gatewayId: string, cs: ChangeSet): string {
-  if (op.joinId) return op.joinId;
-  const base = doc.idStyle.joinId(gatewayId);
+function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: string): { id: string; base?: string } {
+  if (op.joinId) return { id: op.joinId };
+  const gatewayId = idOf(gateway);
+  const base = doc.idStyle.joinId(gatewayId, kind, labelOf(gateway));
+  const sep = doc.idStyle.suffixSep(kind);
   let id = base;
   let n = 2;
   while (doc.has(id) || doc.ids.has(id)) {
-    const suffix = `_${n++}`;
+    const suffix = `${sep}${n++}`;
     id = `${cutAt(base, MAX_ID - suffix.length)}${suffix}`;
   }
   if (id !== base) {
     cs.warn({ code: 'W_ID_SUFFIXED', message: `Id ${base} is already taken; using ${id}`, element: id, hint: 'Pass joinId to choose the join id yourself.' });
   }
-  return id;
+  // the result's `conventions:` line: a join under a prefix the declared conventions name, other than the file's style gives
+  const style = doc.idStyle;
+  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.recordDeclaredId(id);
+  return { id, base };
 }
 
 /**
@@ -187,10 +197,12 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   } else if (withJoin && lone) {
     cs.note(`only the branch ending at ${lone.direct ? gatewayId : lone.end} continues; no join gateway created${successor ? ` (it runs on to ${idOf(successor)})` : ''}`);
   } else if (withJoin) {
-    const wanted = joinIdFor(doc, op, gatewayId, cs);
-    const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted, in: idOf(scope), ...laneOpt });
+    const wanted = joinIdFor(doc, op, gateway, cs, kind);
+    const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
     cs.merge(joinCs);
     joinId = createdId(joinCs);
+    // generated, not the caller's (addElement claimed it as given)
+    if (wanted.base !== undefined) doc.markGenerated(joinId, wanted.base);
     cs.bind(op.joinAs, doc.get(joinId));
     const joinEntry = cs.created.find((c) => c.id === joinId);
     if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;

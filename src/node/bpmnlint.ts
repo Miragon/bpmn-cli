@@ -7,6 +7,9 @@
  *   loadBpmnlint(rcPath)             -> the resolved configuration with its resolver chain (cached on the file's text), or why bpmnlint cannot run
  *   projectBpmnlint(file, opts)      -> the NamedValidator for a file, or undefined (no .bpmnlintrc, --no-lint-config)
  *   projectBpmnlintSettings(file)    -> the effective rule settings (same lookup, flags, cache and errors)
+ *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/conventions.ts), the
+ *                                       W_CONFIG_IGNORED notes the validator reports and what it leaves out (same lookup,
+ *                                       flags, cache)
  *
  * Lookup (FileBpmnlintOptions): `lintConfig: false` (--no-lint-config) runs
  * nothing; a `lintConfig` path (--lint-config, relative to `lintFrom`) is
@@ -75,8 +78,9 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../bpmnlint.js';
+import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../conventions.js';
 import { ioError } from '../errors.js';
-import type { NamedValidator, Validator } from '../validators.js';
+import type { NamedValidator, Validator, ValidatorFinding } from '../validators.js';
 import { findUp, gitRoot } from './find-up.js';
 
 export const BPMNLINT_CONFIG_FILE = '.bpmnlintrc';
@@ -111,13 +115,8 @@ export interface BpmnlintPlugin {
   createBundledResolver(): BpmnlintResolver;
   /** a host's default without a .bpmnlintrc: bpmnlint:recommended, a Miragon preset, the engine's camunda-compat config and moddle descriptor */
   getDefaultLintConfig(options?: { engine?: 'c7' | 'c8'; preset?: 'modeling' | 'automation' }): BpmnlintConfig;
-  /** the helpers of its element-id-naming rule */
-  naming: {
-    DEFAULT_PREFIXES: Record<string, string | false | null>;
-    resolvePrefix(element: unknown, prefixes: Record<string, string | false | null>): { type: string; prefix: string } | null;
-    acceptedPrefixes(element: unknown, prefix: string, mode: 'off' | 'optional' | 'required'): string[];
-    resolveCase(caseName: string): { pattern: RegExp; label: string };
-    resolveQualifierMode(mode: string | undefined): 'off' | 'optional' | 'required';
+  /** the helpers of its element-id-naming rule (idConventionsFromLint takes them) */
+  naming: IdNamingHelpers & {
     eventQualifiers(element: unknown): string[];
     isGeneratedId(id: string): boolean;
   };
@@ -574,6 +573,8 @@ export type LoadedBpmnlint =
   | {
       ok: true;
       path: string;
+      /** where it is, as messages name it: `.bpmnlintrc in models`, `--lint-config lint/strict.json` */
+      where: string;
       /** bpmnlint's Linter and the resolver chain (`used`: which tier answered what) */
       engine: BpmnlintEngine & { resolver: BpmnlintChain };
       resolved: ResolvedBpmnlintConfig;
@@ -584,7 +585,7 @@ export type LoadedBpmnlint =
       /** the validator line's detail: where the .bpmnlintrc is, project plugins, how much is left out (W_LINT_UNAVAILABLE), a bpmnlint other than the pinned one */
       detail: string;
     }
-  | { ok: false; path: string; unavailable: BpmnlintUnavailable[]; detail: string };
+  | { ok: false; path: string; where: string; unavailable: BpmnlintUnavailable[]; detail: string };
 
 const cache = new Map<string, { text: string; loaded: Promise<LoadedBpmnlint> }>();
 
@@ -599,7 +600,7 @@ export async function loadBpmnlint(rcPath: string, opts: { explicit?: boolean; p
   const where = opts.explicit ? `--lint-config ${shown(abs, opts.from)}` : `${BPMNLINT_CONFIG_FILE} in ${shown(dirname(abs), opts.from)}`;
   const broken = (reason: string, hint: string): LoadedBpmnlint => {
     if (opts.explicit) throw ioError('E_LINT_CONFIG', `Cannot use the bpmnlint configuration ${rcPath}: ${reason}`, { file: rcPath, hint: 'Pass an existing .bpmnlintrc in strict JSON to --lint-config, or --no-lint-config.' });
-    return { ok: false, path: abs, unavailable: [{ kind: 'file', name: abs, pkg: abs, reason, hint }], detail: `${where}; bpmnlint did not run (bpmn validate lists why)` };
+    return { ok: false, path: abs, where, unavailable: [{ kind: 'file', name: abs, pkg: abs, reason, hint }], detail: `${where}; bpmnlint did not run (bpmn validate lists why)` };
   };
   let text: string;
   try {
@@ -628,7 +629,7 @@ export async function loadBpmnlint(rcPath: string, opts: { explicit?: boolean; p
 async function load(abs: string, config: BpmnlintConfig, where: string, repo: Repo | undefined, opts: { projectCode?: boolean; from?: string }): Promise<LoadedBpmnlint> {
   const notRun = `${where}; bpmnlint did not run (bpmn validate lists why)`;
   const l = loadLibs();
-  if (isFailure(l)) return { ok: false, path: abs, unavailable: [engineUnavailable(l, opts.from)], detail: notRun };
+  if (isFailure(l)) return { ok: false, path: abs, where, unavailable: [engineUnavailable(l, opts.from)], detail: notRun };
   // everything that loads or resolves in one try: whatever throws, the write goes ahead with one W_LINT_UNAVAILABLE
   try {
     const rcDir = dirname(abs);
@@ -646,9 +647,9 @@ async function load(abs: string, config: BpmnlintConfig, where: string, repo: Re
     const left = bpmnlintUnavailableFindings([...resolved.unavailable, ...moddle.unavailable]).length;
     if (left) parts.push(`${left} left out (W_LINT_UNAVAILABLE; bpmn validate lists ${left === 1 ? 'it' : 'them'})`);
     if (l.bpmnlint.version !== l.pinned) parts.push(`bpmnlint ${l.bpmnlint.version} from ${shown(l.bpmnlint.dir, opts.from)} (bpmn-cli pins ${l.pinned})`);
-    return { ok: true, path: abs, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') };
+    return { ok: true, path: abs, where, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') };
   } catch (err) {
-    return { ok: false, path: abs, unavailable: [engineUnavailable({ ...l, message: firstLine(err) }, opts.from)], detail: notRun };
+    return { ok: false, path: abs, where, unavailable: [engineUnavailable({ ...l, message: firstLine(err) }, opts.from)], detail: notRun };
   }
 }
 
@@ -661,22 +662,89 @@ function lintConfigOf(file: string | undefined, opts: FileBpmnlintOptions): { pa
   return found ? { path: found, explicit: false } : undefined;
 }
 
+/** The id conventions of a loaded .bpmnlintrc (idConventionsFromLint on its element-id-naming), computed once per load. */
+const idConventionsCache = new WeakMap<ResolvedBpmnlintConfig, ProjectIdConventions>();
+
+function idConventionsOf(loaded: LoadedBpmnlint & { ok: true }): ProjectIdConventions {
+  const hit = idConventionsCache.get(loaded.resolved);
+  if (hit) return hit;
+  const setting = loaded.resolved.rules[ID_NAMING_RULE];
+  const l = loadLibs();
+  const out: ProjectIdConventions = { notes: [], where: loaded.where, ...(setting ? { setting } : {}) };
+  if (setting && setting.severity !== 'off' && !isFailure(l)) Object.assign(out, idConventionsFromLint(setting, l.plugin.naming, { source: loaded.where }));
+  idConventionsCache.set(loaded.resolved, out);
+  return out;
+}
+
+/** The validator line's note on what element-id-naming declares and new ids cannot follow (a write only counts those notes). */
+function ignoredDetail(notes: readonly ValidatorFinding[]): string {
+  return notes.length ? `; ${notes.length} element-id-naming value${notes.length === 1 ? '' : 's'} ignored (W_CONFIG_IGNORED; bpmn validate lists ${notes.length === 1 ? 'it' : 'them'})` : '';
+}
+
+/**
+ * The project's bpmnlint for a file (the one written or checked; without one
+ * the lookup starts at `lintFrom`): its validator and the id conventions its
+ * element-id-naming declares; nothing with no .bpmnlintrc, `lintConfig:
+ * false`, or `validators` that already hold one named bpmnlint (the host's,
+ * who passes the conventions of its own configuration).
+ */
+export async function projectLint(file: string | undefined, opts: FileBpmnlintOptions & { validators?: readonly Validator[] } = {}): Promise<{ validator?: NamedValidator; conventions?: IdConventions }> {
+  if (opts.validators?.some((v) => (typeof v === 'function' ? v.name : v?.name) === BPMNLINT_VALIDATOR)) return {};
+  const rc = lintConfigOf(file, opts);
+  if (!rc) return {};
+  const loaded = await loadBpmnlint(rc.path, { explicit: rc.explicit, projectCode: opts.lintProjectCode, from: opts.lintFrom });
+  const blocks = opts.lintBlocks ?? false;
+  if (!loaded.ok) {
+    const findings = bpmnlintUnavailableFindings(loaded.unavailable);
+    return { validator: { name: BPMNLINT_VALIDATOR, detail: loaded.detail, blocks, validate: () => findings } };
+  }
+  const ids = idConventionsOf(loaded);
+  const validator = bpmnlintValidator(loaded.engine, loaded.resolved, { detail: `${loaded.detail}${ignoredDetail(ids.notes)}`, blocks, unavailable: loaded.notes, notes: ids.notes });
+  return { validator, ...(ids.conventions ? { conventions: ids.conventions } : {}) };
+}
+
 /**
  * The bpmnlint validator for a file (the one written or checked; without one
  * the lookup starts at `lintFrom`), or undefined: no .bpmnlintrc, `lintConfig:
  * false`, or `validators` already hold one named bpmnlint (the host's).
  */
 export async function projectBpmnlint(file: string | undefined, opts: FileBpmnlintOptions & { validators?: readonly Validator[] } = {}): Promise<NamedValidator | undefined> {
-  if (opts.validators?.some((v) => (typeof v === 'function' ? v.name : v?.name) === BPMNLINT_VALIDATOR)) return undefined;
+  return (await projectLint(file, opts)).validator;
+}
+
+/** What the .bpmnlintrc of a file declares about ids (projectIdConventions). */
+export interface ProjectIdConventions {
+  /** the id conventions of its element-id-naming (src/conventions.ts); absent: the rule is off or not configured, or every prefix is switched off */
+  conventions?: IdConventions;
+  /** W_CONFIG_IGNORED: values of the rule's options new ids do not follow (the validator reports them); W_LINT_UNAVAILABLE: what the configuration leaves out, or why it could not be loaded */
+  notes: ValidatorFinding[];
+  /** the rule's effective setting, when the configuration has it */
+  setting?: BpmnlintRuleSetting;
+  /** where the .bpmnlintrc is: `.bpmnlintrc in models` */
+  where: string;
+  /** the .bpmnlintrc could not be loaded (bpmnlint did not run): its conventions are unknown, `notes` say why */
+  unavailable?: true;
+}
+
+/**
+ * The id conventions the .bpmnlintrc that applies to a file declares through
+ * @miragon/rules/element-id-naming (src/conventions.ts idConventionsFromLint
+ * with the plugin's own naming helpers): the same lookup, flags and cache as
+ * projectBpmnlint; undefined without a .bpmnlintrc or with `lintConfig:
+ * false`. The notes list what `validate` lists about the configuration: its
+ * W_CONFIG_IGNORED, and a W_LINT_UNAVAILABLE for what it leaves out (a rule
+ * name with a typo leaves element-id-naming out) or for a .bpmnlintrc that
+ * cannot be loaded (`unavailable`, no conventions).
+ */
+export async function projectIdConventions(file: string | undefined, opts: FileBpmnlintOptions = {}): Promise<ProjectIdConventions | undefined> {
   const rc = lintConfigOf(file, opts);
   if (!rc) return undefined;
   const loaded = await loadBpmnlint(rc.path, { explicit: rc.explicit, projectCode: opts.lintProjectCode, from: opts.lintFrom });
-  const blocks = opts.lintBlocks ?? false;
-  if (!loaded.ok) {
-    const findings = bpmnlintUnavailableFindings(loaded.unavailable);
-    return { name: BPMNLINT_VALIDATOR, detail: loaded.detail, blocks, validate: () => findings };
-  }
-  return bpmnlintValidator(loaded.engine, loaded.resolved, { detail: loaded.detail, blocks, unavailable: loaded.notes });
+  if (!loaded.ok) return { notes: bpmnlintUnavailableFindings(loaded.unavailable), where: loaded.where, unavailable: true };
+  const ids = idConventionsOf(loaded);
+  // a new object: the cached one's notes are the validator's, which a write counts as W_CONFIG_IGNORED
+  const left = bpmnlintUnavailableFindings([...loaded.resolved.unavailable, ...loaded.notes]);
+  return left.length ? { ...ids, notes: [...ids.notes, ...left] } : ids;
 }
 
 /** The effective bpmnlint settings for a file (projectBpmnlintSettings). */

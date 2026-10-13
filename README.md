@@ -93,7 +93,9 @@ Details: [Camunda 7 and Camunda 8](docs/camunda.md).
 ## bpmnlint
 
 A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate` and in every write: the
-agent sees the findings its change added and fixes them in the same batch, instead of in CI.
+agent sees the findings its change added and fixes them in the same batch, instead of in CI. Where
+it runs `@miragon/rules/element-id-naming`, the ids bpmn-cli generates follow its prefixes and case
+(`bpmn show <file> --conventions` lists them).
 
 Details: [bpmnlint](docs/bpmnlint.md).
 

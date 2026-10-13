@@ -12,6 +12,7 @@
  *   viewXml(xml, opts)           `bpmn show --json` (an element with id, its context with id + context,
  *                                the neighbourhood with around, the drawing with layout)
  *   showXml(xml, opts)           `bpmn show` as text
+ *   conventionsXml(xml, opts)    `bpmn show --conventions --json` (xml undefined: a new file)  -> ConventionsView
  *   metricsXml(xml)              `bpmn metrics --json`                           -> { score, counts, problems }
  *   findXml(xml, text, opts)     `bpmn find --json`                              -> FindHit[]
  *   extensionsXml(xml, id)       `bpmn ext list --json`                          -> ExtensionInfo[]
@@ -25,9 +26,12 @@
  * (E_VALIDATION) and content a retype would delete (E_WOULD_DROP_CONTENT)
  * are refused unless `force`; the layout modes, the format ops and the
  * platform profile's new findings work as in the CLI, a host's own
- * validators (`validators`) run in the same transaction, and `keepFlowIds`
- * keeps flow ids like `--keep-flow-ids`. The result keeps the input's text
- * wherever the ops changed nothing (the text-preserving step).
+ * validators (`validators`) run in the same transaction, `keepFlowIds`
+ * keeps flow ids like `--keep-flow-ids`, and `conventions` are the declared
+ * id conventions new ids follow (src/conventions.ts; a host that lints with
+ * element-id-naming builds them from the same configuration). The result
+ * keeps the input's text wherever the ops changed nothing (the
+ * text-preserving step).
  *
  * Errors are CliError instances (code, category, details with element,
  * candidates, hint, op), exactly what the CLI prints with --json; the input
@@ -38,6 +42,8 @@ import type { DebugSink } from './debug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import { layoutView, type LayoutView } from './diagram/view.js';
 import { aroundView, elementContext, type AroundView, type ElementContext } from './context.js';
+import type { BpmnlintSeverity } from './bpmnlint.js';
+import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './conventions.js';
 import { Doc, type NewDocOptions } from './document.js';
 import { CliError, usageError } from './errors.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './format.js';
@@ -48,7 +54,7 @@ import type { Op } from './ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline.js';
 import type { PlatformChoice } from './platform/profile.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report.js';
-import type { Validator } from './validators.js';
+import type { Validator, ValidatorFinding } from './validators.js';
 import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './view.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
@@ -70,6 +76,11 @@ export interface EditOptions {
    * W_FLOW_ID_STALE names each one whose id no longer names its ends; default false: such a flow is renamed after its new ends
    */
   keepFlowIds?: boolean;
+  /**
+   * declared id conventions (idConventionsFromLint on element-id-naming, or a table of your own): ids the ops generate
+   * follow them where they declare a prefix, the file's own style elsewhere; existing ids stay
+   */
+  conventions?: IdConventions;
   /** include the model view of the result (`--show`) */
   show?: boolean;
   /** receives the layout engines' diagnostic lines of this call (what BPMN_LAYOUT_DEBUG prints) */
@@ -124,9 +135,9 @@ export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = 
   return toEditResult(xml, await mutateDoc(doc, list, opts));
 }
 
-/** `bpmn new`: a document with one empty process (processName, processId, executable, target), laid out. */
+/** `bpmn new`: a document with one empty process (processName, processId, executable, target, conventions), laid out. */
 export async function newXml(opts: NewDocOptions & EditOptions = {}): Promise<EditResult> {
-  const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target });
+  const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(opts.conventions ? { conventions: opts.conventions } : {}) });
   const mutation = await mutateDoc(doc, [], opts);
   mutation.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: opts.processName });
   return toEditResult(undefined, mutation);
@@ -244,6 +255,21 @@ export async function viewXml(xml: string, opts: ViewOptions = {}): Promise<Mode
 export async function showXml(xml: string, opts: ViewOptions = {}): Promise<string> {
   assertViewOptions(opts);
   return renderShown(viewDoc(await Doc.fromXml(xml), opts));
+}
+
+/**
+ * `bpmn show --conventions --json`: the conventions new ids follow in a
+ * document (undefined: a new file), `conventions` declared over its own
+ * style; `severity` and `notes` as idConventionsFromLint and the
+ * configuration give them, `where` and `undeclared` where the configuration
+ * is and why it declares none.
+ */
+export async function conventionsXml(
+  xml: string | undefined,
+  opts: { conventions?: IdConventions; file?: string; severity?: BpmnlintSeverity; notes?: ValidatorFinding[]; where?: string; undeclared?: Undeclared } = {},
+): Promise<ConventionsView> {
+  const { conventions, ...rest } = opts;
+  return conventionsView(xml === undefined ? undefined : await Doc.fromXml(xml, opts.file), conventions, rest);
 }
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */

@@ -22,7 +22,10 @@ prints the short form.
    only (names may repeat); a taken id gets `_2`, `_3` (`W_ID_SUFFIXED`). Every result lists the
    ids it created; in an `apply` batch an alias (`"as": "$check"`) names what an op creates.
    Existing ids stay, with one exception: a flow whose id names its ends follows them, unless flow
-   ids are kept with `--keep-flow-ids` ([Limitations](#limitations)).
+   ids are kept with `--keep-flow-ids` ([Limitations](#limitations)). Where the project's
+   `.bpmnlintrc` declares id conventions (`element-id-naming`), new ids follow them instead
+   (`serviceTask_checkInvoice`; [bpmnlint](bpmnlint.md#id-conventions)); existing ids never change
+   for them.
 4. **Nothing is half done.** A command, or a whole `apply` batch, succeeds completely or leaves
    the file untouched. Structural validation errors the change would introduce block the write
    (`--force` overrides). Errors the file already had are reported as `W_PREEXISTING_ERROR` and do

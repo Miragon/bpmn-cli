@@ -8,6 +8,7 @@ bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target c
 bpmn show <file> [<id> [--context]] [--json] [--scope <id>]
 bpmn show <file> --around <id> [--depth <n>] [--inner] [--json]
 bpmn show <file> --layout [--json]
+bpmn show <file> --conventions [--json] [--lint-config <path> | --no-lint-config]
 bpmn find <file> <text> [--kind <kind>] [--json]
 bpmn add <file> <kind[:trigger]> [<name>] [--id <id>]
          [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--to <id>]
@@ -75,13 +76,16 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--no-keep-flow-ids` | rename a flow whose id names its old ends after its new ones (the default), also when `BPMN_KEEP_FLOW_IDS=1` |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
 | `--lint-config <path>` | the project's bpmnlint configuration instead of the nearest `.bpmnlintrc`, see [bpmnlint](bpmnlint.md) |
-| `--no-lint-config` | do not run the project's bpmnlint configuration |
+| `--no-lint-config` | do not read the project's bpmnlint configuration: no bpmnlint findings, no id conventions from its `element-id-naming` |
 
 ## `new`
 
 Creates a file with one empty, executable process: `bpmn new order.bpmn --name "Order handling"`.
 `--name` drives the ids (`Process_OrderHandling`, `Definitions_OrderHandling`), `--id` sets the
-process id; without either they are `Process_1` and `Definitions_1`. `--target camunda8` declares
+process id; without either they are `Process_1` and `Definitions_1`. A `bpmn:Process` or
+`bpmn:Definitions` prefix that the `.bpmnlintrc`'s `element-id-naming` names exactly gives
+`process_orderHandling` (`process_main` without `--name`), see
+[bpmnlint](bpmnlint.md#id-conventions). `--target camunda8` declares
 the `zeebe:` and `modeler:` namespaces and the platform version,
 `--target camunda7` the `camunda:` and `modeler:` namespaces plus `camunda:historyTimeToLive="180"`,
 without which the engines refuse to deploy. Use `camunda7` for CIB seven and Operaton too (see
@@ -97,6 +101,12 @@ appear under the first branch that reaches it; nodes that no start event reaches
 `show <file> --layout` prints the drawing instead, still without coordinates: per pool and lane the
 rows of node ids with their column (`row 1: c0 Event_A, c1 Activity_B`), colours, labels off their
 default side and the problems of [`metrics`](#metrics).
+`show <file> --conventions` prints the id conventions new ids follow in the file: each pattern with
+its kinds and where it comes from (`element-id-naming` of the `.bpmnlintrc`, the file's ids or
+bpmn-cli's default). It works for a file that does not exist yet; run it before the first change in
+a repository with a `.bpmnlintrc` ([bpmnlint](bpmnlint.md#id-conventions)). Where none are declared it
+says why; a `.bpmnlintrc` that cannot be loaded is named with `W_LINT_UNAVAILABLE`. `--lint-config`
+and `--no-lint-config` go only with `--conventions`.
 
 `find` is a case-insensitive substring search over ids, names and vendor attribute values:
 `bpmn find order.bpmn kermit` finds the task with `camunda:assignee=kermit`.
@@ -269,8 +279,9 @@ the repository; outside a git repository only in the file's directory), `validat
 project's bpmnlint configuration and lists its findings as `[bpmnlint error] <rule> <id>:
 <message>` or `[bpmnlint] <rule> <id>: <message>`; a bpmnlint error fails the check (exit 2).
 Every write runs it too (the one above the file it writes, `-o`), but only lists the findings the
-change added and never refuses because of them. `--lint-config <path>` names another
-configuration, `--no-lint-config` switches it off. See [bpmnlint](bpmnlint.md).
+change added and never refuses because of them. Its `element-id-naming` decides the prefix and
+case of the ids a write generates. `--lint-config <path>` names another configuration,
+`--no-lint-config` switches it off. See [bpmnlint](bpmnlint.md).
 
 `layout` redraws the whole diagram from the model: a hand-made layout is replaced, colours and DI
 ids survive. `--expand` and `--collapse` change which sub-processes are drawn expanded.
@@ -316,4 +327,4 @@ format, error catalogue and exit codes. `kinds --section errors` prints one part
 the data. `guide` is the cheat sheet written for agents; `guide --short` is its core in at most
 5 KB, and `guide <topic>` prints one part: `contract`, `workflow`, `reading`, `output`, `layout`,
 `format`, `render`, `ops`, `placement`, `triggers`, `errors`, `quoting`, `camunda7`, `camunda8`,
-`commands`.
+`bpmnlint`, `conventions`, `commands`.

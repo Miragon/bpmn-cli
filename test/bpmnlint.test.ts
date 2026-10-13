@@ -19,6 +19,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/bpmnlint.js';
+import { idConventionsFromLint, ID_NAMING_RULE } from '../src/conventions.js';
 import { Doc } from '../src/document.js';
 import type { CliError } from '../src/errors.js';
 import type { Op } from '../src/ops/types.js';
@@ -879,25 +880,34 @@ describe('the resolver chain: bundled, shipped, project', () => {
 describe('writes and validate with a .bpmnlintrc (in process)', () => {
   const RC = { extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-automation'], rules: { 'no-overlapping-elements': 'off', 'missing/x': 'warn' } };
 
-  it('a write lists the findings it added ([bpmnlint error] in text), never refuses for them, and counts the rest; the bytes are those without bpmnlint', async () => {
+  it('a write lists the findings it added ([bpmnlint error] in text), never refuses for them, and counts the rest; the bytes differ from those without bpmnlint only in the ids element-id-naming declares', async () => {
     const dir = repo(RC, { 'x.bpmn': await model(LINE) });
     const file = join(dir, 'x.bpmn');
     const ops: Op[] = [{ op: 'add', kind: 'task', after: 'Activity_Check' }];
     const plain = await mutateFile(file, ops, { dryRun: true, lintConfig: false });
     const r = await mutateFile(file, ops, { dryRun: true, lintFrom: dir });
-    expect(r.xml).toBe(plain.xml);
+    // recommended-for-automation turns element-id-naming on: the new task and the flows bpmn-cli names take its prefixes and case (#34)
+    const ids: Array<[string, string]> = [
+      ['Activity_AfterCheck', 'task_afterCheck'],
+      ['Flow_CheckToAfterCheck', 'flow_checkToAfterCheck'],
+      ['Flow_AfterCheckToDone', 'flow_afterCheckToDone'],
+    ];
+    expect(r.xml).toBe(ids.reduce((xml, [a, b]) => xml.replaceAll(a, b), plain.xml));
+    expect(r.conventions).toEqual({ ids: ['task_afterCheck', 'flow_checkToAfterCheck', 'flow_afterCheckToDone'], source: '.bpmnlintrc in .' });
     const report = mutationReport(r);
-    // the spliced flow is renamed (Flow_CheckToDone -> Flow_CheckToAfterCheck) and keeps its finding: not added
-    expect(codes(lintOf(report.warnings.added))).toEqual(['label-required Activity_AfterCheck', '@miragon/rules/element-id-naming Activity_AfterCheck', '@miragon/rules/element-id-naming Flow_AfterCheckToDone']);
+    // no element-id-naming finding is added; the spliced flow's old one (Flow_CheckToDone) is resolved by its rename
+    expect(codes(lintOf(report.warnings.added))).toEqual(['label-required task_afterCheck']);
+    expect(codes(lintOf(report.warnings.resolved))).toEqual(['@miragon/rules/element-id-naming Flow_CheckToDone']);
     expect(lintOf(report.warnings.added)[0]).toMatchObject({ severity: 'error' });
     // W_LINT_UNAVAILABLE is the same before and after: counted, not added
     expect(codes(report.warnings.added)).not.toContain('W_LINT_UNAVAILABLE');
     const v = report.validation.validators?.find((x) => x.name === 'bpmnlint');
     expect(v).toMatchObject({ blocks: false, errors: [], preexisting: [] });
     const text = renderMutation(report);
-    expect(text).toContain('warning [bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
-    const kept = v!.counts.errors + v!.counts.warnings - 3;
-    expect(text).toContain(`\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): ${v!.counts.errors} error(s), ${v!.counts.warnings} warning(s) in the result (3 added, ${v!.resolved.length} resolved, ${kept} already in the file)\n`);
+    expect(text).toContain('warning [bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
+    const kept = v!.counts.errors + v!.counts.warnings - 1;
+    expect(text).toContain(`\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): ${v!.counts.errors} error(s), ${v!.counts.warnings} warning(s) in the result (1 added, ${v!.resolved.length} resolved, ${kept} already in the file)\n`);
+    expect(text).toContain("\nconventions: task_afterCheck, flow_checkToAfterCheck, flow_afterCheckToDone follow element-id-naming (.bpmnlintrc in .), not the file's own id style  (`bpmn show <file> --conventions`)\n");
     // --summary has no validator line: its count line counts the old findings (the library form of the CLI's --summary)
     const summary = renderSummary(mutationSummary(report), { advisory: advisoryValidators(report) });
     expect(summary).toContain(`\nwarnings: ${report.warnings.added.length} added, ${report.warnings.resolved.length} resolved, ${report.warnings.preexistingCount + kept} already in the file\n`);
@@ -954,8 +964,96 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     for (const id of ids) expect(all.find((f) => f.code === '@miragon/rules/element-id-naming' && f.element === id)?.message, id).toBe(convention);
     const loose = ['A', 'B', 'C'].map((name): Op => ({ op: 'add', kind: 'task', name, in: 'Process_RenderGallery' }));
     const write = renderMutation(mutationReport(await mutateFile(join(dir, 'gallery.bpmn'), loose, { dryRun: true, lintFrom: dir })));
-    expect(write).toMatch(/^warning \[bpmnlint error\] no-disconnected x3 \[Activity_A, Activity_B, Activity_C\]: Element is not connected$/m);
+    expect(write).toMatch(/^warning \[bpmnlint error\] no-disconnected x3 \[task_a, task_b, task_c\]: Element is not connected$/m);
   });
+});
+
+describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
+  const AUTOMATION = { extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-automation'] };
+  const ADD: Op[] = [{ op: 'add', kind: 'serviceTask', name: 'Ship', after: 'Activity_Check' }];
+
+  it('element-id-naming of the .bpmnlintrc decides the new ids; lintConfig false, a host\'s own conventions or its own bpmnlint validator switch the lookup off', async () => {
+    const dir = repo(AUTOMATION, { 'x.bpmn': await model(LINE) });
+    const file = join(dir, 'x.bpmn');
+    const ids = async (opts: Parameters<typeof mutateFile>[2]) => (await mutateFile(file, ADD, { dryRun: true, lintFrom: dir, ...opts })).changes.created.map((c) => c.id);
+    expect(await ids({})).toEqual(['serviceTask_ship', 'flow_shipToDone']);
+    expect(await ids({ lintConfig: false })).toEqual(['Activity_Ship', 'Flow_ShipToDone']);
+    expect(await ids({ conventions: { prefixes: { 'bpmn:ServiceTask': 'svc_' }, case: 'PascalCase' } })).toEqual(['svc_Ship', 'Flow_ShipToDone']);
+    const own = bpmnlintValidator(bpmnlintEngine(), await resolveBpmnlintConfig(bpmnlintEngine(), { extends: 'bpmnlint:recommended' }));
+    expect(await ids({ validators: [own] })).toEqual(['Activity_Ship', 'Flow_ShipToDone']);
+  });
+
+  it('a value new ids cannot follow is one W_CONFIG_IGNORED of the validator: validate and `new` list it, a write only counts it', async () => {
+    const rc = { extends: 'bpmnlint:recommended', rules: { '@miragon/rules/element-id-naming': ['warn', { case: 'camelcase', prefixes: { 'bpmn:UserTask': 'user task_' } }] } };
+    const dir = repo(rc, { 'x.bpmn': await model(LINE) });
+    const file = join(dir, 'x.bpmn');
+    const notes = (issues: readonly unknown[]) => lintOf(issues).filter((i) => i.code === 'W_CONFIG_IGNORED');
+    const checked = await checkFile(file, { lintFrom: dir });
+    expect(notes(checked.validation.warnings).map((n) => n.message)).toEqual([
+      '.bpmnlintrc in .: @miragon/rules/element-id-naming case "camelcase" is unknown: the rule checks PascalCase, and new ids take it',
+      ".bpmnlintrc in .: @miragon/rules/element-id-naming prefix of bpmn:UserTask \"user task_\" cannot start an id (a letter or _ first, then letters, digits, _ . -, at most 56 characters): new ids of the type follow the learned id style, and the rule reports them",
+    ]);
+    expect(renderValidation(validationReport(checked))).toMatch(/^\[bpmnlint\] W_CONFIG_IGNORED: \.bpmnlintrc in \.: @miragon\/rules\/element-id-naming case "camelcase" is unknown: .* {2}\(Write one of camelCase, PascalCase, snake_case, any in the \.bpmnlintrc\. Did you mean camelCase\?\)$/m);
+    const write = await mutateFile(file, [...ADD, { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_Check' }], { dryRun: true, lintFrom: dir });
+    // the user task's prefix is ignored: learned from the file's ids that do not follow the rule (Activity_Check)
+    expect(write.changes.created.map((c) => c.id)).toEqual(['serviceTask_Ship', 'flow_ShipToDone', 'Activity_Approve', 'flow_ApproveToShip']);
+    const report = mutationReport(write);
+    expect(notes(report.warnings.added)).toEqual([]);
+    expect(renderMutation(report)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .; 2 element-id-naming values ignored (W_CONFIG_IGNORED; bpmn validate lists them)): ');
+    const { mutateDocToFile } = await import('../src/node/files.js');
+    const created = await mutateDocToFile(Doc.create({ processName: 'Order' }, join(dir, 'new.bpmn')), [], { dryRun: true, lintFrom: dir });
+    expect(notes(mutationReport(created).warnings.added)).toHaveLength(2);
+    // stdin: looked up from lintFrom
+    expect(notes((await checkLoadedDoc(await Doc.fromXml(readFileSync(file, 'utf8')), { lintFrom: dir })).validation.warnings)).toHaveLength(2);
+  });
+
+  it('projectIdConventions: the conventions, the notes, the setting; nothing without a .bpmnlintrc or with lintConfig false', async () => {
+    const { projectIdConventions } = await import('../src/node/bpmnlint.js');
+    const dir = repo(AUTOMATION, { 'x.bpmn': await model(LINE) });
+    const found = await projectIdConventions(join(dir, 'x.bpmn'), { lintFrom: dir });
+    expect(found).toMatchObject({ notes: [], where: '.bpmnlintrc in .', setting: { severity: 'warn', config: {} }, conventions: { case: 'camelCase', qualifier: 'optional', source: '.bpmnlintrc in .' } });
+    expect(found!.conventions!.prefixes['bpmn:UserTask']).toBe('userTask_');
+    expect(await projectIdConventions(join(dir, 'x.bpmn'), { lintConfig: false })).toBeUndefined();
+    expect(await projectIdConventions(join(repo(undefined), 'x.bpmn'))).toBeUndefined();
+    // the rule off (as in recommended-for-modeling): nothing declared
+    const modeling = repo({ extends: 'plugin:@miragon/rules/recommended-for-modeling' });
+    expect((await projectIdConventions(join(modeling, 'x.bpmn'), { lintFrom: modeling }))?.conventions).toBeUndefined();
+  });
+
+  it('a .bpmnlintrc without element-id-naming, or with it off, writes every byte as without a .bpmnlintrc (the fixtures)', async () => {
+    const fixtures = readdirSync(join(ROOT, 'test', 'fixtures'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.bpmn'));
+    expect(fixtures.length).toBeGreaterThan(40);
+    const off = repo({ extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-modeling'], rules: { '@miragon/rules/element-id-naming': 'off' } });
+    const absent = repo({ extends: 'bpmnlint:recommended' });
+    const compared: string[] = [];
+    for (const fixture of fixtures) {
+      const text = readFileSync(join(ROOT, 'test', 'fixtures', fixture), 'utf8');
+      const doc = await Doc.fromXml(text).catch(() => undefined);
+      const process = doc?.processes()[0]?.get<string>('id');
+      const flow = doc ? [...doc.byId().values()].find((el) => el.$type === 'bpmn:SequenceFlow')?.get<string>('id') : undefined;
+      if (!doc || !process || doc.lossyImportWarnings.length) continue;
+      const ops: Op[] = [
+        { op: 'add', kind: 'serviceTask', name: 'Conventions probe', in: process },
+        { op: 'add', kind: 'xor', in: process },
+        { op: 'add', kind: 'startEvent:timer', name: '2 days', in: process, timer: 'P2D' },
+        ...(flow ? [{ op: 'add', kind: 'task', name: 'Spliced probe', flow } as Op] : []),
+      ];
+      const results: string[] = [];
+      for (const dir of [off, absent, undefined]) {
+        const file = join(dir ?? top, `probe-${compared.length}.bpmn`);
+        writeFileSync(file, text);
+        const r = await mutateFile(file, ops, { dryRun: true, ...(dir ? { lintFrom: dir } : { lintConfig: false }) }).then(
+          (m) => `${m.xml}\n${JSON.stringify(m.changes.created)}`,
+          (e: CliError) => `${e.code} ${e.message}`,
+        );
+        results.push(r);
+      }
+      expect(results[0], fixture).toBe(results[2]);
+      expect(results[1], fixture).toBe(results[2]);
+      compared.push(fixture);
+    }
+    expect(compared.length).toBeGreaterThan(30);
+  }, 120000);
 });
 
 /* ------------------------------------------------------------------ */
@@ -1194,7 +1292,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
   it('the examples of docs/bpmnlint.md: validate and a write on a Camunda 7 project with camunda-compat, @miragon/rules and a project plugin', async () => {
     const doc = readFileSync(join(ROOT, 'docs', 'bpmnlint.md'), 'utf8');
     const blocks = [...doc.matchAll(/```\n(\$ bpmn [\s\S]*?)```/g)].map((m) => m[1]!.trimEnd().split('\n'));
-    expect(blocks.map((b) => b[0])).toEqual(['$ bpmn validate models/order.bpmn', '$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external']);
+    expect(blocks.map((b) => b[0])).toEqual(['$ bpmn validate models/order.bpmn', '$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external', '$ bpmn show models/order.bpmn --conventions']);
     const dir = repo({
       extends: ['bpmnlint:recommended', 'plugin:camunda-compat/camunda-platform-7-24', 'plugin:@miragon/rules/recommended-for-automation', 'plugin:local/recommended'],
       moddleExtensions: { camunda: 'camunda-bpmn-moddle/resources/camunda.json' },
@@ -1212,14 +1310,71 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       { op: 'add', kind: 'end', name: 'Order checked', id: 'Event_OrderChecked', after: 'Activity_CheckOrder' },
     ])).xml);
     const args = (line: string) => [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]!).slice(2);
-    const [validate, add] = blocks as [string[], string[]];
-    // the write first, then validate the result
+    const [validate, add, conventions] = blocks as [string[], string[], string[]];
+    // the write first, then validate the result and show its id conventions
     const written = bpmn(dir, args(add[0]!));
     expect(written.code, written.err).toBe(0);
     for (const line of add.slice(1).filter((l) => l !== '...')) expect(written.out.split('\n'), line).toContain(line);
     const checked = bpmn(dir, args(validate[0]!));
     expect(checked.code).toBe(2);
     expect(checked.out.trimEnd()).toBe(validate.slice(1).join('\n'));
+    const shown = bpmn(dir, args(conventions[0]!));
+    expect(shown.code, shown.err).toBe(0);
+    expect(shown.out.trimEnd()).toBe(conventions.slice(1).join('\n'));
+  });
+
+  it('id conventions (#34): `new` keeps the process id, show --conventions (a missing file, stdin, --json, --no-lint-config), validate - names W_CONFIG_IGNORED', async () => {
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-automation'] });
+    mkdirSync(join(dir, 'models'));
+    // `new` in a repository whose .bpmnlintrc extends recommended-for-automation: the bytes of --no-lint-config
+    expect(bpmn(dir, ['new', 'models/a.bpmn', '--name', 'Invoice handling']).code).toBe(0);
+    expect(bpmn(dir, ['new', 'models/b.bpmn', '--name', 'Invoice handling', '--no-lint-config']).code).toBe(0);
+    expect(readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8')).toBe(readFileSync(join(dir, 'models', 'b.bpmn'), 'utf8'));
+    expect(readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8')).toContain('<bpmn:process id="Process_InvoiceHandling"');
+    // what fails without a .bpmnlintrc fails first, also with a --lint-config that cannot be read
+    const exists = bpmn(dir, ['new', 'models/a.bpmn', '--name', 'Other', '--lint-config', 'missing.json']);
+    expect([exists.code, exists.err.split('\n')[0]]).toEqual([4, 'error E_FILE_EXISTS: models/a.bpmn already exists']);
+    const badId = bpmn(dir, ['new', 'models/c.bpmn', '--id', '1bad', '--lint-config', 'missing.json']);
+    expect([badId.code, badId.err.split('\n')[0]]).toEqual([2, 'error E_INVALID_ID: "1bad" is not a valid id (XML NCName)']);
+    expect(bpmn(dir, ['new', 'models/c.bpmn', '--name', 'Other', '--lint-config', 'missing.json']).err).toContain('error E_LINT_CONFIG: ');
+    // a file that does not exist yet: the conventions of a new model there
+    const fresh = bpmn(dir, ['show', 'models/new.bpmn', '--conventions']);
+    expect(fresh.code, fresh.err).toBe(0);
+    expect(fresh.out.split('\n').slice(0, 3)).toEqual([
+      'conventions of models/new.bpmn (no file yet: a new model)',
+      'element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional',
+      '  <kind>_{name:camel}               lint        task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent',
+    ]);
+    const json = JSON.parse(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--json']).out);
+    expect(json).toMatchObject({ file: 'models/a.bpmn', exists: true, source: '.bpmnlintrc in .', rule: { severity: 'warn', case: 'camelCase', qualifier: 'optional' }, notes: [] });
+    expect(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--no-lint-config']).out.split('\n')[1]).toBe("no id conventions: --no-lint-config leaves the .bpmnlintrc out; new ids follow the file's id style");
+    // the .bpmnlintrc only decides the conventions: without --conventions its options are an error
+    for (const flag of [['--lint-config', 'nope.json'], ['--no-lint-config']]) {
+      const plain = bpmn(dir, ['show', 'models/a.bpmn', ...flag]);
+      expect(plain.code).toBe(1);
+      expect(plain.err).toContain(`error E_USAGE: ${flag[0]} goes only with --conventions`);
+    }
+    expect(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--lint-config', 'nope.json']).code).toBe(4);
+    const stdin = bpmn(dir, ['show', '-', '--conventions'], readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8'));
+    expect(stdin.out.split('\n').slice(0, 2)).toEqual(['conventions of the model', 'element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional']);
+    const usage = bpmn(dir, ['show', 'models/a.bpmn', 'Process_InvoiceHandling', '--conventions', '--layout']);
+    expect(usage.code).toBe(1);
+    expect(usage.err).toContain('error E_USAGE: --conventions shows the id conventions of the whole file; drop the element id and --layout');
+    // a .bpmnlintrc that is not strict JSON, one that leaves the rule out (a typo): the reason and the W_LINT_UNAVAILABLE
+    const broken = repo('{"extends":["plugin:@miragon/rules/recommended-for-automation"],}');
+    const notJson = bpmn(broken, ['show', 'x.bpmn', '--conventions']);
+    expect(notJson.code, notJson.err).toBe(0);
+    expect(notJson.out.split('\n')[1]).toBe("no id conventions: the .bpmnlintrc in . could not be loaded (W_LINT_UNAVAILABLE below); new ids follow the file's id style");
+    expect(notJson.out).toMatch(/^warning W_LINT_UNAVAILABLE: \.bpmnlintrc is not JSON /m);
+    expect(JSON.parse(bpmn(broken, ['show', 'x.bpmn', '--conventions', '--json']).out)).toMatchObject({ source: '.bpmnlintrc in .', undeclared: 'not loaded', notes: [{ code: 'W_LINT_UNAVAILABLE' }] });
+    const typo = repo({ rules: { 'miragon/element-id-naming': 'error' } });
+    const left = bpmn(typo, ['show', 'x.bpmn', '--conventions']);
+    expect(left.out.split('\n')[1]).toBe("no id conventions: element-id-naming is off or not configured in the .bpmnlintrc in .; new ids follow the file's id style");
+    expect(left.out).toContain('warning W_LINT_UNAVAILABLE: miragon/element-id-naming left out: bpmnlint-plugin-miragon is not installed');
+    // validate - (stdin) looks the .bpmnlintrc up from the working directory: its W_CONFIG_IGNORED too
+    const odd = repo({ rules: { '@miragon/rules/element-id-naming': ['warn', { eventDefinitionQualifier: 'requried' }] } });
+    const piped = bpmn(odd, ['validate', '-'], readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8'));
+    expect(piped.out).toContain('[bpmnlint] W_CONFIG_IGNORED: .bpmnlintrc in .: @miragon/rules/element-id-naming eventDefinitionQualifier "requried" is unknown: the rule and new ids take optional  (Write one of off, optional, required in the .bpmnlintrc. Did you mean required?)\n');
   });
 });
 
@@ -1237,13 +1392,54 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
     const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });
     const edit = await applyToXml(await model(LINE), [{ op: 'add', kind: 'task', after: 'Activity_Check' }], { validators: [lint] });
     expect(edit.result.warnings.added).toContainEqual(expect.objectContaining({ code: 'label-required', validator: 'bpmnlint', severity: 'error' }));
-    // docs/validators.md: the plugin's default for an engine (a descriptor object as moddle extension)
+    // docs/validators.md: the plugin's default for an engine (a descriptor object as moddle extension), which turns element-id-naming on
     const validators = readFileSync(join(ROOT, 'docs', 'validators.md'), 'utf8');
-    expect(validators).toContain("const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });");
-    const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });
-    const c7 = await resolveBpmnlintConfig(engine, rc);
-    expect(c7.unavailable).toEqual([]);
+    for (const line of [
+      "const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });",
+      'const resolved = await resolveBpmnlintConfig(engine, rc);',
+      'const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);',
+      "const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });",
+      'await applyToXml(xml, ops, { validators: [lint], conventions });',
+    ]) expect(validators).toContain(line);
+    for (const target of ['c7', 'c8'] as const) {
+      const rc = engine.plugin.getDefaultLintConfig({ engine: target });
+      const resolved = await resolveBpmnlintConfig(engine, rc);
+      expect(resolved.unavailable).toEqual([]);
+      expect(resolved.rules[ID_NAMING_RULE]?.severity, target).toBe('warn');
+      const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);
+      const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });
+      const xml = (await newXml({ processName: 'Order', target: target === 'c7' ? 'camunda7' : 'camunda8' })).xml;
+      const ops: Op[] = [
+        { op: 'add', kind: 'start', name: 'Order received', as: '$s' },
+        { op: 'add', kind: 'userTask', name: 'Check order', after: '$s', as: '$t' },
+        { op: 'add', kind: 'end', name: 'Done', after: '$t' },
+      ];
+      const result = (await applyToXml(xml, ops, { validators: [lint], conventions })).result;
+      expect(result.created.map((c) => c.id), target).toEqual(['startEvent_orderReceived', 'userTask_checkOrder', 'flow_orderReceivedToCheckOrder', 'endEvent_done', 'flow_checkOrderToDone']);
+      expect(lintOf(result.warnings.added).filter((w) => w.code === ID_NAMING_RULE), target).toEqual([]);
+    }
+    const c7 = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ engine: 'c7' }));
     expect(Object.keys(c7.moddleExtensions)).toEqual(['camunda']);
     expect(Object.keys(c7.rules)).toContain('camunda-compat/history-time-to-live');
+  });
+
+  it('the declared id conventions of a configuration of the host (docs/library.md): new ids pass its element-id-naming', async () => {
+    const library = readFileSync(join(ROOT, 'docs', 'library.md'), 'utf8');
+    for (const line of [
+      "const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));",
+      "const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });",
+      'const named = await applyToXml(xml, ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });',
+      "await applyToXml(xml, ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });",
+    ]) expect(library).toContain(line);
+    const engine = bpmnlintEngine();
+    const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));
+    const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });
+    const ops: Op[] = [{ op: 'add', kind: 'serviceTask', name: 'Ship', after: 'Activity_Check' }];
+    const named = await applyToXml(await model(LINE), ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });
+    expect(named.result.created.map((c) => c.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
+    expect(named.result.conventions).toEqual({ ids: ['serviceTask_ship', 'flow_checkToShip', 'flow_shipToDone'], source: 'our rules' });
+    expect(lintOf(named.result.warnings.added).filter((w) => w.code === ID_NAMING_RULE)).toEqual([]);
+    const table = await applyToXml(await model(LINE), ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });
+    expect(table.result.created.map((c) => c.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
   });
 });

@@ -25,6 +25,15 @@ export interface Rename {
    * changed, so the change lists each id once and no rename
    */
   takeover?: true;
+  /**
+   * an element the same change created took another id (ops/set.ts
+   * recordIdState: its generated id after a retype), or a flow the change
+   * named after it followed (with `was`): the old id was never in the file,
+   * so the details of the change's entries (a flow's ends), its notes and
+   * its warnings name the element by the new one too, and a W_ID_SUFFIXED
+   * about the old id goes
+   */
+  regenerated?: true;
 }
 
 /** ` (renamed from <old>: ...)`, the detail a change entry gets when followEnds renamed the flow. */
@@ -80,6 +89,14 @@ export class ChangeSet {
     for (const r of renames) {
       const created = this.created.some((c) => c.id === r.from || c.id === r.to);
       for (const c of [...this.created, ...this.changed]) if (c.id === r.from) c.id = r.to;
+      if (r.regenerated) {
+        const old = new RegExp(`(?<![A-Za-z0-9_.-])${r.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
+        for (const c of [...this.created, ...this.changed]) if (c.detail) c.detail = c.detail.replace(old, r.to);
+        this.notes = this.notes.map((n) => n.replace(old, r.to));
+        this.warnings = this.warnings
+          .filter((w) => !(w.code === 'W_ID_SUFFIXED' && w.element === r.from))
+          .map((w) => (w.element === r.from ? { ...w, element: r.to, message: w.message.replace(old, r.to), ...(w.hint ? { hint: w.hint.replace(old, r.to) } : {}) } : w));
+      }
       const gone = r.takeover || created ? -1 : this.removed.findIndex((c) => c.id === r.to);
       if (gone === -1) {
         this.renames.push(r);

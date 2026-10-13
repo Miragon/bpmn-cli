@@ -176,16 +176,26 @@ way, advisory or blocking: the engine's default configuration from the plugin bp
 or the repository's own `.bpmnlintrc` through the file helpers ([library.md](library.md#building-blocks)).
 
 ```js
-import { applyToXml, bpmnlintValidator, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
+import { applyToXml, bpmnlintValidator, idConventionsFromLint, ID_NAMING_RULE, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
 import { bpmnlintEngine, mutateFile } from '@miragon/bpmn-cli/node';
 
 const engine = bpmnlintEngine();
 const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });
-const lint = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc), { detail: 'default rules' });
-await applyToXml(xml, ops, { validators: [lint] });
+const resolved = await resolveBpmnlintConfig(engine, rc);
+// the engine defaults turn element-id-naming on: new ids follow it
+const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);
+const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });
+await applyToXml(xml, ops, { validators: [lint], conventions });
 // the repository's .bpmnlintrc (bundled rules only), its errors blocking
 await mutateFile('processes/order.bpmn', ops, { lintFrom: repoRoot, lintBlocks: true });
 ```
+
+The engine defaults (`getDefaultLintConfig({ engine: 'c7' })` and `'c8'`) and `preset: 'automation'`
+turn `@miragon/rules/element-id-naming` on, so the lint checks the ids bpmn-cli generates.
+`idConventionsFromLint` returns `{ conventions, notes }`. Pass `conventions` to the write and `notes`
+to `bpmnlintValidator`; without them the lint reports every new id
+([library.md](library.md#building-blocks)). The file helpers do this for the repository's
+`.bpmnlintrc`.
 
 ## The file
 

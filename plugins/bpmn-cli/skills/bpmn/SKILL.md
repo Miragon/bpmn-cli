@@ -36,8 +36,9 @@ The CLI documents itself, and that documentation is always right for the
 installed version. Ask it instead of guessing:
 
 - `bpmn guide --short` - the core in 5 KB; `bpmn guide <topic>` - one section
-  (contract, workflow, reading, output, layout, format, ops, placement,
-  triggers, errors, quoting, camunda7, camunda8, bpmnlint, commands)
+  (contract, workflow, reading, output, layout, format, render, ops,
+  placement, triggers, errors, quoting, camunda7, camunda8, bpmnlint,
+  conventions, commands)
 - `bpmn kinds --section kinds,triggers,setKeys,nestedKeys,zeebeElements,ops,errors`
   (`--json` for the ops JSON schema), `bpmn <command> --help`
 
@@ -58,6 +59,13 @@ installed version. Ask it instead of guessing:
    CLI derive them; derived ids speak too). PascalCase ASCII (ae oe ue ss), no
    numbers or hashes - also when the file's own ids are Modeler hashes like
    `Activity_0k3x9qa`. Keep a file's existing prefix and case (`Task_check_stock`).
+   In a repository with a `.bpmnlintrc`, run `bpmn show <file> --conventions`
+   before the first change (a file that does not exist yet too): where its
+   `element-id-naming` declares a prefix (`lint` rows), new ids follow it
+   instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoice`).
+   Write explicit ids in those patterns, or let the CLI derive them. A
+   `warning W_LINT_UNAVAILABLE` there means the `.bpmnlintrc` did not load:
+   fix it (or tell the user) before the first change.
 4. **Back references inside a batch:** an id you set explicitly can be used by
    every later op. For what you do not name yourself, set an alias and use it:
    `"as": "$x"` (add, connect, split), `"flowAs": "$f"` (the flow into a new
@@ -80,6 +88,8 @@ installed version. Ask it instead of guessing:
    - `bpmn show <file> <id> --context` - where it is, lane, before / after,
      boundary events, what catches it, message flows
    - `bpmn find <file> <text> [--kind userTask]` - ids for a name or a vendor value
+   - `bpmn show <file> --conventions` - the id patterns new ids follow (the
+     `.bpmnlintrc`'s `element-id-naming`, else the file's style); once per file
    - `bpmn show <file> --layout` - the drawing: rows / columns of ids per lane,
      colours, layout problems (read it before formatting)
 2. **Change** in one batch with explicit ids. Ops are the CLI flags in
@@ -121,6 +131,12 @@ installed version. Ask it instead of guessing:
      through; CI would fail on an error). Fix it in the same batch, e.g. name
      the element or follow the id convention the message names; an
      `import-warning` is XML bpmnlint cannot parse: its hint says what to fix
+   - `conventions: <ids> follow element-id-naming ...`: those new ids carry a
+     prefix the `.bpmnlintrc` declares, not the file's older style; use them as
+     printed.
+     `warning W_ID_PREFIX_STALE <id>` after a retype or a trigger change: the
+     id keeps a prefix the convention rejects; rename it with the `bpmn set` of
+     its hint only when nothing else uses the id (ask the user)
    - `layout: ok - incremental (hand-made diagram: kept, changes placed locally)`
      with `placed:` / `moved:` / `rerouted:`, or `full` for a new / engine-drawn
      diagram; `layout quality: score a -> b; added: <problem> [ids]` - fix added
