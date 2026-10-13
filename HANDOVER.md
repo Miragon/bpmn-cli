@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, and the move fixes after #32)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, and the note when BPMN_KEEP_FLOW_IDS kept the flow ids)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2115 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2118 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,109 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## A result says when BPMN_KEEP_FLOW_IDS kept the flow ids (2026-10-13, `feat/keep-flow-ids-env-note`)
+
+The second half of a #32 'Left out' item. `BPMN_KEEP_FLOW_IDS=1` usually
+sits in the `env` of an agent's settings, where the agent reading a result
+does not see it. With it set, a result could differ from the default with
+no warning at all: on a line of numbered flows, a move put the node's old
+out-flow back (`changed: Flow_2, Flow_4, Flow_3, ...`) where the default
+creates a new flow and removes the old one. Nothing in the result named the
+variable.
+
+- **CLI only** (`src/cli.ts`): `keepFlowIdsOption` returns the value and,
+  when the variable (not a flag) turned keeping on, the variable's value.
+  `printMutation` (every mutating command and `apply`, with stdin / stdout
+  too) adds one note, `flow ids kept: BPMN_KEEP_FLOW_IDS=1
+  (--no-keep-flow-ids renames flows after their new ends for one command)`
+  with the value as set, where the kept ids changed the result
+  (`keptByEnvNote`): the change gave `W_FLOW_ID_STALE`, or a move
+  relocated a node (`ChangeSet.relocated`, from #47) and the change lists a
+  sequence flow it did not create as changed. The note sits among the result's notes (text and JSON
+  `notes`); `--summary`, which prints no notes of its own, prints it after
+  its change lines (`summaryText`), and `--summary --json` gets a `notes`
+  key only then. An `E_NOT_FOUND` of a batch of two or more ops gets one
+  more hint sentence (`keptIdsHint`): the missing id may be the one the
+  default renames a flow to, which kept its old id here. The library and
+  its reports are unchanged; the browser bundle only by the guide's text.
+- **When the note shows.** Kept ids change a result in two places only:
+  `followEnds` (`src/ops/flows.ts`) keeps a flow whose id names its old ends
+  and records it for `W_FLOW_ID_STALE`, and a move puts the moved node's
+  one out-flow back (`src/ops/move.ts`, `doc.keepsFlowId`) instead of
+  removing it and creating a new one. A flow whose id does not name its ends
+  (`Flow_10`, Camunda Modeler's `Flow_1q7m2zd`) is renamed in neither mode,
+  so a splice, a bridging remove or `set target=` on it is listed as changed
+  in both; a flow the change created follows its ends in both; `set <flow>
+  name=` / `id=` (also the rename `W_FLOW_ID_STALE`'s hint gives) is the
+  same in both. None of these gets the note. The first version of this
+  branch showed it for any changed sequence flow; the review's differential
+  found that 548 of its 636 edits came out byte-identical without the
+  variable.
+- **No change** when a flag decides (also `--keep-flow-ids` with the
+  variable set), when the variable is unset, empty or off, and for `new`,
+  `layout` and the read commands.
+- **Docs**: guide OUTPUT and the `--summary --json` shape, docs/reference.md
+  (Environment, `--summary --json`), docs/commands.md, docs/contract.md
+  (Limitations), plugins/bpmn-cli/skills/bpmn/SKILL.md. `guide --short` is
+  unchanged.
+- **Tests**: test/cli.test.ts (the note in text, `--summary`, `--json` and
+  `--summary --json`, with the value as set, for a stale flow and for the
+  numbered-flow move that has no warning, also in `apply`; byte-identical
+  output where a flag decides, the variable is unset or off, or the kept ids
+  changed nothing: a task rename, `connect`, `remove <flow>`, a batch that
+  connects and then names a flow, `set <flow> name=` / `id=`, and a splice,
+  a bridging remove and `set target=` on numbered and on Camunda Modeler
+  flow ids; the `E_NOT_FOUND` hint in text and JSON, none where a flag
+  decides or for one op); test/batch.test.ts (guide, docs and skill name
+  the note).
+- **Evidence**: `apply ... -o -` of the benchmark's edits E1-E6, E8, E9
+  plus a move, a `set target=`, a `set name=`, a bridging remove and a batch
+  that splices after a task and then names the task's old out-flow, on every
+  scenario (1,094 edits, 26,256 runs) and again on a copy of the scenarios
+  whose flows got ids that name their ends (the same counts). Against a
+  build of origin/main: every run with the variable unset, set with either
+  flag, `0`, or unset with `--keep-flow-ids` is byte-identical (exit, XML,
+  report); with it set the exit and the XML are identical and the report
+  differs only by the note. On the branch, the variable set against unset
+  in the same output format: the note is present exactly where the two
+  differ. On the scenarios (numbered flow ids) that is the 88 moves and
+  nothing else; on the speaking copy 724 edits (E1 108, E3 112, E8 76, E9
+  76, and 88 each of the move, `set target=`, the bridging remove and the
+  splice-then-name batch). `set name=` on a flow, E2 and E4-E6 come out the
+  same and get no note. No run failed only with the variable, so the
+  `E_NOT_FOUND` hint has its test only. Only `dist/cli.js` and
+  `dist/guide.js` differ; layout-regress (SCORE 444, 0 better / 0 worse),
+  speaking-ids and roundtrip print the same numbers for both builds. Gate:
+  2075 tests, fuzz ERRORS 0, bundle +0.4 KB minified / +0.2 KB gzip (guide
+  text), `applyToXml` alone unchanged.
+- **Rebased onto #55, #52, #53, #46, #48 and #47.** #47 made a move in
+  place a no-op whose flow options (`flowName`, `condition`, `flowId`) go
+  to the flow into its first node, the same in both modes. The first
+  version of this branch keyed the move case on "the ops ran a move"
+  (`moves`, set by `mutateArg`), so such a batch got the note with nothing
+  kept (`[{op:'move', ids:['Activity_BookInvoice'], after:
+  'Activity_CheckInvoice', flowName:'ok'}]`: `changed: Flow_2` in both
+  modes). It now asks `ChangeSet.relocated`, which a move in place leaves
+  empty, and `moves` is gone; test/cli.test.ts has the two cases (speaking
+  ids with `flowId`, numbered with `flowName`), which fail with the old
+  condition. docs/reference.md names the move in place among the results
+  without a note. Gate after the rebase: 2118 tests (+246 opt-in; 2115 on
+  main), fuzz ERRORS 0, layout regress SCORE 444, `guide --short` 4,644
+  bytes; bundles 938.9 / 299.2 KB whole entry and 663.0 / 211.4 KB
+  `applyToXml` alone, within main's budgets (948 / 302, 670 / 214;
+  docs/library.md).
+
+Left for later:
+
+- A move that changes a flow without putting one back (a gateway with
+  several out-flows spliced into a flow; a node the same batch created)
+  still gets the note. Telling the put-back apart would need the library to
+  mark it; the benchmark has no such move (every move with the note
+  differs from the default).
+- The `E_NOT_FOUND` hint is conditional ("If it is the id ..."): the CLI
+  does not know whether the default would have given that id, so a typo in
+  a later op of a batch gets the sentence too.
 
 ## Moves anchored on their own nodes, moves in place (2026-10-13, `fix/move-anchor-and-noop`)
 
@@ -1210,7 +1313,8 @@ Left out, for later:
   mismatch, a follow-up of its own.
 - There is no repository default in a project file; the flag and the
   variable set it. A result does not say why ids were kept (flag or
-  variable).
+  variable): for the variable it does since 2026-10-13 (see the section at
+  the top); a flag is the caller's own.
 - `add --flow-id` on a splice with ids kept gives two rename hints for one
   flow: `W_OPTION_IGNORED` with the given id, `W_FLOW_ID_STALE` with the
   speaking one.

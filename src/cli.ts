@@ -6,8 +6,9 @@
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
  * The file I/O is src/node/files.ts, everything else the browser-safe core;
  * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug,
- * BPMN_KEEP_FLOW_IDS to keepFlowIds) and is the only one that reads the
- * environment. Mutating commands and `validate` run the project's
+ * BPMN_KEEP_FLOW_IDS to keepFlowIds; a result the variable's kept flow ids
+ * changed says so) and is the only one that reads the environment. Mutating
+ * commands and `validate` run the project's
  * .bpmnlintrc (nearest above the file written (-o) or checked; a model from
  * stdin without -o: above the working directory; --lint-config,
  * --no-lint-config), project plugins included (lintProjectCode); its
@@ -43,7 +44,7 @@ import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport } from './report.js';
+import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report.js';
 import { findElements } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
@@ -65,6 +66,8 @@ interface OutputOptions {
   summary?: boolean;
   /** --render <file>: draw the result to this image */
   render?: string;
+  /** the value of BPMN_KEEP_FLOW_IDS when it, not a flag, kept the flow ids: the result says so (keptByEnvNote) */
+  keepFlowIdsEnv?: string;
 }
 
 type Out = NodeJS.WriteStream;
@@ -83,18 +86,64 @@ function printJson(value: unknown, pretty?: boolean, out: Out = process.stdout):
  * in-memory API); --render draws the result (its own block / `render` key);
  * --strict exits 5 on any warning (process.exitCode, like every exit code:
  * process.exit would cut off what a pipe has not taken yet, beyond 64 KB on macOS).
+ * Flow ids BPMN_KEEP_FLOW_IDS kept add a note (keptByEnvNote), also to --summary.
  */
 async function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: Out = process.stdout): Promise<void> {
+  const note = keptByEnvNote(result, opts.keepFlowIdsEnv);
+  if (note) result.changes.note(note);
   const report = mutationReport(result);
   const shot = opts.render ? await renderMutationResult(result.xml, report, opts.render) : undefined;
   const shotText = shot ? `\n${shot.lines.join('\n')}` : '';
   if (opts.summary) {
     const summary = mutationSummary(report);
-    if (opts.json) printJson({ ...summary, ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-    else print(renderSummary(summary, { dryRun: opts.dryRun, advisory: advisoryValidators(report) }) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
+    if (opts.json) printJson({ ...summary, ...(note ? { notes: [note] } : {}), ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
+    else print(summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryValidators(report) }, note) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
   } else if (opts.json) printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
   else print(renderMutation(report, { dryRun: opts.dryRun }).replace(/\n$/, '') + shotText, out);
   if (opts.strict && mutationWarnings(result).length) process.exitCode = 5;
+}
+
+/**
+ * `flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` when the variable (`value`), not
+ * a flag, kept the flow ids where the default would have given another
+ * result: the change named a flow whose kept id no longer names its ends
+ * (W_FLOW_ID_STALE), or a move relocated a node (ChangeSet.relocated) and
+ * the change lists a sequence flow it did not create as changed (with ids
+ * kept a move puts the moved node's old out-flow back, where the default
+ * removes it and creates a new one). A move in place relocates nothing: the
+ * flow options it puts on the flow into its first node (a name, a
+ * condition, a flowId) change that flow the same in both modes.
+ * Nowhere else do kept ids change a result (an error they cause:
+ * keptIdsHint): a flow whose id does not name its ends (Flow_10,
+ * Flow_1q7m2zd) is renamed in neither mode, a flow the change created
+ * follows its ends in both, a property change (`set <flow> name=`, `id=`)
+ * is the same in both. A move that changed a flow without putting one back
+ * gets the note too: the result does not tell the two apart. The variable
+ * sits in a shell or an agent's settings, where the agent reading the
+ * result does not see it.
+ */
+function keptByEnvNote(result: MutationResult, value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const { created, changed, warnings, relocated } = result.changes;
+  const putBack = relocated.length > 0 && changed.some((c) => c.kind === 'sequenceFlow' && !created.some((n) => n.id === c.id));
+  if (!putBack && !warnings.some((w) => w.code === 'W_FLOW_ID_STALE')) return undefined;
+  return `flow ids kept: BPMN_KEEP_FLOW_IDS=${value} (--no-keep-flow-ids renames flows after their new ends for one command)`;
+}
+
+/**
+ * renderSummary, with `note` (keptByEnvNote; the summary prints no notes of
+ * its own) after the change lines, where the full result has its notes: the
+ * lines below them are what renderSummary prints for no changes, without
+ * its `no changes` line.
+ */
+function summaryText(summary: MutationSummary, opts: Parameters<typeof renderSummary>[1], note: string | undefined): string {
+  const text = renderSummary(summary, opts);
+  if (!note) return text;
+  const { aliases: _aliases, renamed: _renamed, format: _format, ...rest } = summary;
+  const below = renderSummary({ ...rest, created: {}, changed: [], removed: [] }, opts).split('\n').length - 1;
+  const lines = text.split('\n');
+  lines.splice(lines.length - below, 0, `note: ${note}`);
+  return lines.join('\n');
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,8 +213,22 @@ async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & Ou
       },
     );
   } catch (err) {
-    throw withFile(err, file);
+    throw withFile(keptIdsHint(err, ops, opts.keepFlowIdsEnv), file);
   }
+}
+
+/**
+ * E_NOT_FOUND in a batch whose flow ids BPMN_KEEP_FLOW_IDS (`value`) kept:
+ * the missing id may be the one the default gives a flow an earlier op gave
+ * other ends, which kept its old id here. The hint says so, because whoever
+ * reads the error may not see the variable (keptByEnvNote for a result).
+ */
+function keptIdsHint(err: unknown, ops: readonly Op[], value: string | undefined): unknown {
+  if (value === undefined || ops.length < 2 || !isCliError(err) || err.code !== 'E_NOT_FOUND') return err;
+  const kept = `If it is the id a flow an earlier op gave other ends would be renamed to: flow ids are kept here (BPMN_KEEP_FLOW_IDS=${value}), so that flow kept its old id; use the old id, or --no-keep-flow-ids to rename it after its new ends.`;
+  const hint = err.details.hint;
+  err.details.hint = typeof hint === 'string' && hint ? `${hint} ${kept}` : kept;
+  return err;
 }
 
 /** A refusal that carries a runnable command (E_NO_ROOM: details.command) names the file in it and in its hint. */
@@ -291,12 +354,17 @@ function envSwitch(name: string, hint: string): boolean | undefined {
   throw usageError(`${name}=${value} is not a switch value`, { hint });
 }
 
-/** --keep-flow-ids / --no-keep-flow-ids, else BPMN_KEEP_FLOW_IDS, else undefined (flows follow their ends). */
-function keepFlowIdsOption(o: RawOpts): boolean | undefined {
-  return (
-    (o['keepFlowIds'] as boolean | undefined) ??
-    envSwitch('BPMN_KEEP_FLOW_IDS', 'Set BPMN_KEEP_FLOW_IDS=1 (true, yes, on) to keep flow ids, BPMN_KEEP_FLOW_IDS=0 (false, no, off) or unset it to rename them after their new ends; --keep-flow-ids / --no-keep-flow-ids decide for one command.')
-  );
+/**
+ * --keep-flow-ids / --no-keep-flow-ids, else BPMN_KEEP_FLOW_IDS, else
+ * undefined (flows follow their ends); `env`: the variable's value when it
+ * kept them (the result says so: keptByEnvNote).
+ */
+function keepFlowIdsOption(o: RawOpts): { keep?: boolean; env?: string } {
+  const flag = o['keepFlowIds'] as boolean | undefined;
+  if (flag !== undefined) return { keep: flag };
+  const keep = envSwitch('BPMN_KEEP_FLOW_IDS', 'Set BPMN_KEEP_FLOW_IDS=1 (true, yes, on) to keep flow ids, BPMN_KEEP_FLOW_IDS=0 (false, no, off) or unset it to rename them after their new ends; --keep-flow-ids / --no-keep-flow-ids decide for one command.');
+  if (keep === undefined) return {};
+  return keep ? { keep, env: process.env['BPMN_KEEP_FLOW_IDS']!.trim() } : { keep };
 }
 
 /** The working directory, or undefined when it was removed (a command on absolute paths still runs there). */
@@ -316,7 +384,7 @@ function lintOptions(o: RawOpts): Pick<FileMutationOptions, 'lintConfig' | 'lint
 }
 
 function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
-  const keepFlowIds = keepFlowIdsOption(o);
+  const { keep: keepFlowIds, env: keepFlowIdsEnv } = keepFlowIdsOption(o);
   return {
     json: !!o['json'],
     pretty: !!o['pretty'],
@@ -331,6 +399,7 @@ function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
     ...(o['render'] !== undefined ? { render: String(o['render']) } : {}),
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
     ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
+    ...(keepFlowIdsEnv !== undefined ? { keepFlowIdsEnv } : {}),
     ...lintOptions(o),
   };
 }

@@ -259,8 +259,9 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   already had.
 - `--summary --json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed, renamed?,
   removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status,
-  mode, score}, format?, conventions?}`; `preexistingCount` includes the project's bpmnlint findings
-  the file already had.
+  mode, score}, format?, conventions?, notes?}`; `preexistingCount` includes the project's bpmnlint
+  findings the file already had; `notes` holds only the note of flow ids `BPMN_KEEP_FLOW_IDS` kept
+  ([Environment](#environment)).
 - Errors go to stderr as `error E_CODE: message` with a hint and candidate ids; with `--json` as
   `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?", "errors?"}}`
   (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room; `errors`:
@@ -295,7 +296,7 @@ The CLI reads three variables; the library reads none (its options do the same).
 
 | variable | effect |
 | --- | --- |
-| `BPMN_KEEP_FLOW_IDS` | `1`, `true`, `yes`, `on` (any case): every mutating command keeps flow ids, as with `--keep-flow-ids`. `0`, `false`, `no`, `off`, empty or unset: a flow whose id names its ends follows them. Any other value fails a mutating command with `E_USAGE`; `show`, `validate` and the other read commands ignore it. `--keep-flow-ids` / `--no-keep-flow-ids` win over it. |
+| `BPMN_KEEP_FLOW_IDS` | `1`, `true`, `yes`, `on` (any case): every mutating command keeps flow ids, as with `--keep-flow-ids`. `0`, `false`, `no`, `off`, empty or unset: a flow whose id names its ends follows them. Any other value fails a mutating command with `E_USAGE`; `show`, `validate` and the other read commands ignore it. `--keep-flow-ids` / `--no-keep-flow-ids` win over it. Where it kept the flow ids and that changed the result, the result says so, because whoever reads it may not see the variable: `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (--no-keep-flow-ids renames flows after their new ends for one command)` with the value as set, also with `--summary` (JSON: `notes`). That is where the change gives `W_FLOW_ID_STALE`, or a move puts the node's old out-flow back (a sequence flow it did not create listed as changed); a flow whose id does not name its ends, a flow the change created, a property change (`set <flow> name=`, `id=`) and a move in place (its flow options on the flow into its first node) come out the same in both modes and get no note. An `E_NOT_FOUND` of an `apply` batch with more than one op says in its hint that the flow ids are kept: the id a later op names may be the one the default renames a flow to. |
 | `BPMN_LAYOUT_DEBUG` | any value: the layout engines' diagnostic lines on stderr (library: `debug`) |
 | `BPMN_DEBUG` | any value: the stack trace of an `E_INTERNAL` |
 
