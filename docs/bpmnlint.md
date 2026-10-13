@@ -136,7 +136,8 @@ defaults) with the rule's own helpers.
   body that would begin with a number (`startEvent_timer1stOfMonth`). Where the prefix says all of it
   and the body would else be empty or begin with a number, the whole word stays (`scriptTask_scriptTask`,
   `scriptTask_scriptTask4AugenPrinzip`). Under camelCase or PascalCase a taken id gets a glued `2`
-  (`serviceTask_checkInvoice2`) and the join of a split is `<gatewayId>Join` (snake_case:
+  (`serviceTask_checkInvoice2`; after a digit `No2`, `serviceTask_step1No2`, which never reads as the id
+  of Step 12) and the join of a split is `<gatewayId>Join` (snake_case:
   `<gatewayId>_join`). A split whose explicit id the rule rejects gets a join under the rule's prefix,
   named after the gateway (`gateway_checkJoin` for `Gateway_Check`, `gateway_approvedJoin` for
   `gateway_Approved` under camelCase).
@@ -174,6 +175,8 @@ defaults) with the rule's own helpers.
 `bpmn show <file> --conventions` lists the patterns new ids follow, the kinds of each and where each
 comes from: `lint` (the rule), `file` (the file's ids), `lint shape` (shaped like the rule's prefixes,
 the file shows none), `default` (bpmn-cli's). A kind the rule declares nothing for is `not checked`.
+A file's flow prefix or scope so long that it leaves a flow's ends fewer than 16 characters is marked
+`Flow_ where the ends do not fit`: new flows keep it where their ends fit beside it at whole words.
 It works for a file that does not exist yet, so an agent sees the conventions before `bpmn new`.
 Where none are declared, the second line says why: `--no-lint-config`, no `.bpmnlintrc`, one that could
 not be loaded (with its `W_LINT_UNAVAILABLE` below), the rule off or not configured in it, or no

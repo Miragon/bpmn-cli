@@ -83,7 +83,7 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
-import { cutAt, IdRegistry, MAX_ID } from '../ids.js';
+import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids.js';
 import { kindRequest, type IdRequest, type IdState } from '../idstyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { diExpansionState } from '../layout.js';
@@ -1460,7 +1460,7 @@ export function reportStaleIdPrefixes(doc: Doc, cs: ChangeSet): void {
     if (!el || !stale) continue;
     let suggested = stale.suggested;
     const sep = style.suffixSep(kindOf(el)?.kind ?? el.$type);
-    for (let n = 2; hinted.has(suggested); n++) suggested = `${stale.suggested}${sep}${n}`;
+    for (let n = 2; hinted.has(suggested); n++) suggested = withSuffix(stale.suggested, sep, n, () => stale.suggested);
     hinted.claim(suggested);
     const rule = `element-id-naming (${doc.conventions?.source ?? 'the host'})`;
     const expects = `${stale.heads.join(' or ')} for ${aKind(kindLabel(el))}`;

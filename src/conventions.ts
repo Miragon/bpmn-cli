@@ -289,7 +289,9 @@ export function conventionsView(
     // message flows the rule does not name: they take the sequence flows' prefix, unchecked
     const borrowed = kind === 'messageFlow' && f.source === 'lint' && !declared?.prefixes['bpmn:MessageFlow'];
     const pattern = `${f.head}${flowTail(f.form, f.style.scope)}`;
-    add(kind, pattern, pattern, borrowed ? 'lint shape' : f.source, borrowed || f.source !== 'lint' ? unnamed(type) : undefined);
+    // a long head stays where the ends fit beside it: Flow_ elsewhere
+    const notes = [borrowed || f.source !== 'lint' ? unnamed(type) : undefined, f.fallback ? `${f.fallback} where the ends do not fit` : undefined].filter((n): n is string => !!n);
+    add(kind, pattern, pattern, borrowed ? 'lint shape' : f.source, notes.length ? notes.join('; ') : undefined);
   }
   // a pattern of one kind reads as it is (Process_{name:pascal}, not <Kind>_)
   const rows: ConventionsRow[] = groups.map(({ concrete, ...row }) => (row.kinds.length === 1 ? { ...row, pattern: concrete } : row));

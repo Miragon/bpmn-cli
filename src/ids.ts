@@ -14,7 +14,10 @@
  * everything that is not a letter or digit separates words. A generated id
  * is at most MAX_ID characters long: slugs are cut at whole words (cutAt;
  * inside a word only where one word alone does not fit, or where the whole
- * words that fit would keep no letter), the same way for the same input.
+ * words that fit would keep no letter; a room that ends inside a leading
+ * number starts at the first word with a letter, withLetter), the same way
+ * for the same input; a name or a body cut so never ends on a filler word
+ * (cutName: und, an, the).
  */
 
 /** The longest slug of a name or context (an id body before the prefix). */
@@ -22,6 +25,18 @@ export const MAX_SLUG = 40;
 
 /** The longest id the id style generates, a collision suffix included (src/idstyle.ts). */
 export const MAX_ID = 64;
+
+/**
+ * Function words a cut never ends on (cutName, the ends of a flow:
+ * src/idstyle.ts fitPair), German and English: `LieferantenbestellungVersenden`,
+ * never `...VersendenUnd`.
+ */
+const FILLERS = new Set(['und', 'oder', 'an', 'am', 'auf', 'aus', 'bei', 'mit', 'von', 'vom', 'zu', 'zum', 'zur', 'fuer', 'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'im', 'in', 'and', 'or', 'of', 'to', 'the', 'a', 'for', 'with', 'on', 'at', 'by']);
+
+/** Whether a word of an id (idWords: `Und`, `_und`) is a filler word a cut does not end on. */
+export function isFiller(word: string): boolean {
+  return FILLERS.has(word.replace(/^[_.-]+/, '').toLowerCase());
+}
 
 /** Letters that are spelled out (Å -> Aa, not the A NFKD would leave). */
 const SPELLED: Record<string, string> = {
@@ -97,19 +112,35 @@ const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
  * (`10Warenwirtschaftssystemabgleich10` -> never `1010`), the next word is
  * cut inside to fill the room. Deterministic: the same input gives the same
  * result. `legacy`: as 0.6 cut, without that guard (recognising the ids it
- * wrote).
+ * wrote). `names`: cutName.
  */
-export function cutAt(slug: string, max: number, legacy = false): string {
+export function cutAt(slug: string, max: number, legacy = false, names = false): string {
   if (slug.length <= max) return slug;
   const tail = keptTail(slug);
   if (tail && max - tail.length >= 8) {
     const head = slug.slice(0, -tail.length);
-    const cut = cutWords(head, max - tail.length, legacy);
+    const cut = cutWords(head, max - tail.length, legacy, names);
     if (legacy || readsApart(cut, tail)) return `${cut}${tail}`;
+    // a filler word between a number and the number tail stays: it keeps them apart (`StartAfter2Und2`, never a word
+    // cut inside)
+    const kept = names ? cutWords(head, max - tail.length) : cut;
+    if (readsApart(kept, tail)) return `${kept}${tail}`;
     const inside = trimSeparators(head.slice(0, max - tail.length));
     if (readsApart(inside, tail)) return `${inside}${tail}`;
   }
-  return cutWords(slug, max, legacy);
+  return cutWords(slug, max, legacy, names);
+}
+
+/**
+ * cutAt for a name's or a context's words (the slug of a name, an id's body
+ * cut to the room its prefix leaves): the words that fit, but never a filler
+ * word at the end of the cut (`LieferantenbestellungVersenden` for
+ * Lieferantenbestellung versenden und Zahlungseingang prüfen, 0.6:
+ * `...VersendenUnd`); the first word stays, and so does one between a
+ * number and the number tail it keeps apart (`StartAfter2Und2`).
+ */
+export function cutName(slug: string, max: number): string {
+  return cutAt(slug, max, false, true);
 }
 
 /** Whether a cut head and the tail kept after it read as words: the head has a letter and does not run into a number tail as one number (`Stufe2` + `3`). */
@@ -119,16 +150,35 @@ export function readsApart(head: string, tail: string): boolean {
 
 const trimSeparators = (slug: string): string => slug.replace(/[_.-]+$/, '');
 
-/** cutAt without keeping a tail: the slug's first words (idWords) that fit, else (none, or no letter among them) its first `max` characters. */
-function cutWords(slug: string, max: number, legacy = false): string {
+/** cutAt without keeping a tail: the slug's first words (idWords) that fit (`names`: not ending on a filler word), else (none, or no letter among them) its first `max` characters. */
+function cutWords(slug: string, max: number, legacy = false, names = false): string {
   if (slug.length <= max) return slug;
   if (legacy) return legacyCutWords(slug, max);
-  let out = '';
+  const words: string[] = [];
+  let length = 0;
   for (const w of idWords(slug)) {
-    if (out.length + w.length > max) break;
-    out += w;
+    if (length + w.length > max) break;
+    words.push(w);
+    length += w.length;
   }
-  return trimSeparators(out && /[A-Za-z]/.test(out) ? out : slug.slice(0, Math.max(max, 0)));
+  // a filler word at the end of the cut goes too (never the first word, never the last word with a letter)
+  if (names) while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((w) => /[A-Za-z]/.test(w))) words.pop();
+  const out = words.join('');
+  if (out && /[A-Za-z]/.test(out)) return trimSeparators(out);
+  return trimSeparators(withLetter(slug, slug.slice(0, Math.max(max, 0)), (rest) => cutWords(rest, max, false, names)));
+}
+
+/**
+ * A cut that keeps no letter (the room ends inside a leading number:
+ * `10202422024` for 10202422024 Rechnung in 11 characters) starts at the
+ * slug's first word with a letter instead, the number words before it
+ * dropped (`Rechnung`; `again` cuts that rest); any other cut as it is.
+ */
+export function withLetter(slug: string, cut: string, again: (rest: string) => string): string {
+  if (/[A-Za-z]/.test(cut)) return cut;
+  const words = idWords(slug);
+  const at = words.findIndex((w) => /[A-Za-z]/.test(w));
+  return at > 0 ? again(words.slice(at).join('').replace(/^[_.-]+/, '')) : cut;
 }
 
 /** cutWords as 0.6 cut: at the last boundary that fits, also the one right after a separator (a slug that begins with `_` and whose first word does not fit is cut to ''). */
@@ -174,9 +224,9 @@ export function keptTail(slug: string): string {
   return tail.length < slug.length ? tail : '';
 }
 
-/** Cuts a slug to MAX_SLUG characters at a word boundary (`legacy`: as 0.6 cut, cutAt; the slugs below take it too, for recognising the flows 0.6 named). */
+/** Cuts a slug to MAX_SLUG characters at a word boundary, never after a filler word (cutName; `legacy`: as 0.6 cut, cutAt; the slugs below take it too, for recognising the flows 0.6 named). */
 function cut(slug: string, legacy = false): string {
-  return cutAt(slug, MAX_SLUG, legacy);
+  return legacy ? cutAt(slug, MAX_SLUG, true) : cutName(slug, MAX_SLUG);
 }
 
 /** ASCII-only PascalCase slug of a name, or '' when nothing usable remains (the bpmn-cli default body). */
@@ -206,6 +256,41 @@ export function snakeSlug(name: string | undefined, legacy = false): string {
 /** Pascal_Snake slug: `Check_Invoice`. */
 export function pascalSnakeSlug(name: string | undefined, legacy = false): string {
   return cut(nameWords(name).map(cap).join('_'), legacy);
+}
+
+/**
+ * The letter word between a base that ends in a digit and a glued collision
+ * number (`serviceTask_step1No2`, never `serviceTask_step12`, which reads as
+ * the id of Step 12).
+ */
+export const SUFFIX_WORD = 'No';
+
+/**
+ * `base` with the collision suffix `n` after `sep` (`_2`; '' glues it:
+ * `checkInvoice2`), within MAX_ID: a base that leaves the suffix no room is
+ * cut (`cut`, by default cutAt). A glued number after a base that ends in a
+ * digit gets SUFFIX_WORD before it (`step1No2`), where the cut base still
+ * ends in one.
+ */
+export function withSuffix(base: string, sep: string, n: number, cut: (max: number) => string = (max) => cutAt(base, max)): string {
+  const fit = (suffix: string): string => (base.length + suffix.length <= MAX_ID ? base : cut(MAX_ID - suffix.length));
+  if (sep !== '') return `${fit(`${sep}${n}`)}${sep}${n}`;
+  const glued = fit(`${n}`);
+  if (!/\d$/.test(glued)) return `${glued}${n}`;
+  const worded = fit(`${SUFFIX_WORD}${n}`);
+  return /\d$/.test(worded) ? `${worded}${SUFFIX_WORD}${n}` : `${worded}${n}`;
+}
+
+/**
+ * Whether `rest`, what an id has after `base`, is a collision suffix `sep`
+ * gives (`_2`, a glued `2`; after a base that ends in a digit also
+ * `No2`); `either`: `_2` or a glued one (a flow's id, whose separator the
+ * reader does not know).
+ */
+export function isSuffix(base: string, rest: string, sep: string | 'either'): boolean {
+  const word = /\d$/.test(base) ? `(?:${SUFFIX_WORD})?` : '';
+  if (sep === 'either') return new RegExp(`^(?:_|${word})\\d+$`).test(rest);
+  return new RegExp(sep === '' ? `^${word}\\d+$` : `^${sep}\\d+$`).test(rest);
 }
 
 /** Edit distance with adjacent transpositions (optimal string alignment; small strings only). */

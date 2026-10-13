@@ -31,7 +31,7 @@ import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { anchorContext, keyRequest, labelOf } from '../idstyle.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from '../batch.js';
-import { cutAt, MAX_ID } from '../ids.js';
+import { withSuffix } from '../ids.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
@@ -93,11 +93,7 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
   const base = doc.idStyle.joinId(gatewayId, kind, labelOf(gateway));
   const sep = doc.idStyle.suffixSep(kind);
   let id = base;
-  let n = 2;
-  while (doc.has(id) || doc.ids.has(id)) {
-    const suffix = `${sep}${n++}`;
-    id = `${cutAt(base, MAX_ID - suffix.length)}${suffix}`;
-  }
+  for (let n = 2; doc.has(id) || doc.ids.has(id); n++) id = withSuffix(base, sep, n);
   if (id !== base) {
     cs.warn({ code: 'W_ID_SUFFIXED', message: `Id ${base} is already taken; using ${id}`, element: id, hint: 'Pass joinId to choose the join id yourself.' });
   }

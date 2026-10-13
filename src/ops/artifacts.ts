@@ -77,14 +77,20 @@ export function isDataReference(el: El): boolean {
  * bpmn:DataStore): the reference's name, else its context. The two need
  * distinct speaking ids: where the file's prefix for both is the same (the
  * id would be the reference's own and take `_2`), the element's id also
- * says what it is (`data_invoiceObject`, `Data_InvoiceStore`).
+ * says what it is (`data_invoiceObject`, `Data_InvoiceStore`); where the
+ * name's 40 characters leave no room for that word, it goes after the body
+ * and the body is cut for it (IdRequest.tailWord:
+ * `processDataArtefactItem_lieferung_vollstaendig_object`).
  */
 function backingRequest(doc: Doc, type: 'bpmn:DataObject' | 'bpmn:DataStore', refId: string, name: string | undefined): IdRequest {
   const context = speakingStem(refId) ?? '';
   const req = typeRequest(type, { ...(name ? { name } : {}), context });
   if (doc.idStyle.derivedBase(req) !== refId) return req;
   const word = type === 'bpmn:DataObject' ? 'Object' : 'Store';
-  return typeRequest(type, name ? { name: `${name} ${word}` } : { context: `${context} ${word}` });
+  const worded = typeRequest(type, name ? { name: `${name} ${word}` } : { context: `${context} ${word}` });
+  // the word must survive the name's cut too (a name that ends on a filler word loses both: ..._variante, not ..._object)
+  const id = doc.idStyle.derivedBase(worded);
+  return id !== refId && id.toLowerCase().endsWith(word.toLowerCase()) ? worded : { ...req, tailWord: word };
 }
 
 /** Creates a data object (reference + backing bpmn:DataObject) in `scope`; returns the reference. */

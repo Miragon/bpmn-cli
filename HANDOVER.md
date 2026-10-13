@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, and group boxes drawn again by a full redraw)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, and the id forms fixed before 0.7)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2149 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2158 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,153 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Id forms before 0.7 (2026-10-13, `fix/id-forms-before-0.7`, follow-ups of #31 and #34)
+
+Six follow-ups of #31 and #34 change the form of new ids, so they land
+before 0.7.0 (release PR #43), which then ships them; #31's cuts and #34's
+glued suffix were never released and need no compatibility, 0.6's ids are
+recognised as before (the legacy paths and tests are unchanged). The user's
+decisions: the letter word is `No`; a long head stays wherever the id fits
+(Q3 a); the filler rule covers the 40-character name slugs too.
+
+- **`No` before a glued collision number after a digit** (`withSuffix`,
+  `isSuffix` in `src/ids.ts`): under a declared camelCase / PascalCase and
+  in learned stemTo / scopedTo flows a taken base that ends in a digit gets
+  `No2` (`serviceTask_step1No2`, `ServiceTask_Phase2No2`,
+  `flow_checkOrderToSendPdf10No2`; before `serviceTask_step12`, which
+  pushed the real Step 12 to `serviceTask_step122`). `IdStyle.next`,
+  `Doc.regeneratedId`, the `W_ID_PREFIX_STALE` hint and a split's join use
+  it; `idNamesEnds`, `flowForms` and `cutOfForm` accept `No` before the
+  digits (`idNamesEnds` also for the former ends and labels a batch
+  records since #46, `test/conventions-ids.test.ts`), glued digits stay
+  accepted (0.6's `...Pdf102` follows). The real element-id-naming rule
+  passes the new ids (`test/conventions-lint.test.ts`).
+- **No filler word at the end of a cut** (`isFiller`, `cutName`; `endForms`):
+  a cut flow end gives up a filler word (und, oder, an, die, the, of, ...;
+  a fixed German / English list) that a given-up word leaves last or before
+  its Join / number tail, and the 40-character slug of a name and a body cut
+  to its room drop one too (`Activity_LieferantenbestellungVersenden`, was
+  `...VersendenUnd`). The first word stays, and so does a filler word
+  between a number and the number tail (`StartAfter2Und2`; without that
+  the cut fell back to a word cut inside, `...Lieferantenbestellungsueb2`);
+  whole-id cuts (DI ids, joins) are unchanged; an uncut name that ends on
+  one keeps it.
+- **Numbers before a number tail stay** (`endForms`): a flow's end
+  `zahlungseingang_2_2` never shrinks to `zahlungseingang_2` (another
+  element's id; the suffix then skipped `_2`), so no flow skips a suffix.
+  An element body that the 64-character cap ends on a number still skips
+  the suffix its cut gives back, as on main (`<prefix>_auftrag_2_2`,
+  `_2_3`): a guard that cut one more word instead gave the second
+  "Auftrag 2 2" `<prefix>_auftrag_2`, the id of an element named Auftrag 2,
+  and three equal names a mix of cuts; the review removed it.
+- **A body keeps a letter; long element prefixes per id** (`withLetter`,
+  `cutBody`, `leadOf`): a room that ends inside a leading number starts at
+  the first word with a letter (`<prefix>_rechnung`, was `<prefix>_10202422024`;
+  camelCase lower first); a file prefix of more than 52 characters (fewer
+  than 8 left beside a `_99`) stays where the body's words up to its first
+  word with a letter and no filler word fit whole, else `activity_...`, per
+  id (`<55>_auftrag`, `activity_auftrag_2`; a 56+ prefix now keeps
+  `<prefix>_gh`). For an unnamed element that lead runs to the anchor's
+  first word (`afterCheck`, `timerOnReview`), so its id still names the
+  anchor: `activity_afterCheckOrder` under a 56-character prefix as on main,
+  not `<prefix>_after`, `<prefix>_after_2`, ... with `W_ID_SUFFIXED`.
+- **The backing data object keeps its word** (`IdRequest.tailWord`,
+  `backingRequest`): where references and data objects share a prefix and
+  the name's 40 characters leave `Object` / `Store` no room, the word goes
+  after the body (`processDataArtefactItem_lieferung_vollstaendig_object`,
+  was `..._eingegangen_2` with a `W_ID_SUFFIXED` that named no collision),
+  bare ids too. `<name> Object` counts only where its id still ends in the
+  word: a name that ends on a filler word lost both to the cut
+  (`..._variante` for "... Variante A"), and the next reference named
+  "... Variante" took `_2`.
+- **A long flow head stays where the ends fit** (`wholePair`, `wholeEnds`,
+  `wholeIdFormBase`, `namedHead().long`): a flow prefix or scope that leaves
+  the ends fewer than 16 characters stays where they fit at whole words
+  (`Flow_<41-char scope>_ValidateToPack`, was `Flow_Validate_To_Pack`), else
+  Flow_ as before. A suffix whose cut gives the head up gives the whole id
+  the `Flow_` form with its `_2` (`Flow_Validate_To_Step1_2`; before the
+  review `Flow_<scope>_ValidateToStep1_2`, a form the learner does not read
+  back). `show --conventions` shows the file's head with `Flow_ where the
+  ends do not fit`. One file can hold both forms; `derivedBases` lists both.
+
+Evidence:
+
+- `npm run gate` after the rebase onto 74c3b50 (#46 to #55): 2158 tests
+  (+246 opt-in; 2149 on main), isomorphism check, layout regression 444
+  (budget 444), fuzz 12 x 15 with 0 errors; `guide --short` 4,644 bytes,
+  unchanged. Before the rebase (on 98fa834): `npm run roundtrip` and
+  `tools/speaking-ids.mjs --baseline` (scenarios and fixtures) as on main.
+- A differential against main (98fa834, before the rebase), classified per changed id by a
+  trigger read off main's and the branch's ids (a local script, not
+  committed): filler = main's id has a filler word right before an end
+  boundary (the end, `To`, a number, a suffix, the next id of an idPair
+  flow) where the rule drops it (not the first word of an end, not between
+  two numbers, `To` itself no filler) and the branch's id has none there,
+  or main's 40-character slug of a name in the edit was cut after one;
+  No = `<digit>No<n>`; x22 = two numbers in a row; long element prefix =
+  the head changed and one is over 52 characters, or main's body has no
+  letter; data = a backing id that now ends in `Object` / `Store`, or a
+  reference whose name it freed; long flow head = one id starts with the
+  file's long head. The suffixed ids of a changed base take its class, a
+  flow that names a changed element id that element's. Anything else, an
+  id over 64 or a change of warnings alone is unexplained. The first
+  version attributed changes by commit and took any filler word in the
+  edit (`To` too) as the trigger, which held for every corpus edit; these
+  counts replace it.
+  - 512 BPMN files on disk (the fixtures, the scenarios and a private
+    corpus, counts only), 11,892 edits (a task, a gateway, two unnamed
+    tasks, a timer, long names, a splice, a leading number, two flows,
+    Step 1 / Step 12, Auftrag 2 2, data, data names that end on a filler
+    word; without and with the rule's defaults): 7,730 identical, 4,162
+    different with 13,342 changed ids: filler 6,371, No 5,448, data 40,
+    flows naming a changed id 1,483, unexplained 0; `show --conventions`
+    identical on every file.
+  - 372,000 synthetic request sequences (three ids each) in 31 file styles
+    (long prefixes and scopes, bare ids, a shared data prefix, declared
+    cases), with filler words and numbers: 77,200 differ (207,063 ids:
+    filler 92,415, long flow head 80,597, long element prefix 24,750, No
+    8,780, x22 521), unexplained 0; the filler trigger holds for 39 % of
+    all sequences, changed or not. Without filler words and numbers
+    (372,000): 32,707 differ, all of them long flow head (67,820 ids) or
+    long element prefix (24,715) in those styles.
+  - The first version found four slips (a bare-id data object, a number
+    that ended a cut end held like a tail, the glued suffix after a head
+    given up for Flow_, a filler first word kept a long element prefix);
+    the review and the stricter one five more, fixed in the last commit:
+    the unnamed lead, the data object after a filler word, the suffix
+    form after a long head, the guard in `next()`, the filler word between
+    two numbers.
+- Runtime (in-process, CPU time medians, 98fa834 -> branch, two runs):
+  `derivedBase` 12-13 -> 11-12 us, `derivedBases` 48 -> 50-51 us, three
+  ids from `next()` 31 -> 30 us per request, `IdStyle.infer` on 300 flows
+  (250 cut) 3.4-4.3 vs 2.9-3.5 ms, a splice write without layout 1.9 ->
+  1.8 ms median.
+- Bundle, on 74c3b50: whole entry 950.6 / 303.2 -> 955.0 / 304.7 KB,
+  `applyToXml` only 671.8 / 214.4 -> 675.0 / 215.5 KB (minified / gzip);
+  both fit the budgets (960 / 306, 679 / 217), unchanged;
+  `docs/library.md` updated.
+
+Left for later:
+
+- The filler list is fixed and short (`ueber`, `nach`, `vor` are not in
+  it: `Activity_BenachrichtigungUeber`); a number left before a dropped
+  word (`...Und4`, c31-count-before-dropped-word) and an end that shrinks
+  to a leading filler word stay as in #31.
+- An element body that the cap ends on a number skips a suffix (above).
+  A suffix that never reads as another name's id would need a word there
+  (`No` is for glued suffixes only, Q1).
+- A long element prefix kept for a base gives way in a suffixed id that
+  leaves the lead no room: `<55>_auftrag`, then `activity_auftrag_2`,
+  although `activity_auftrag` is free (the id still names Auftrag).
+- A slug the filler rule frees of its last word can end on a number that
+  #31's number tail then keeps at the cost of words in a small room
+  (`<45>_user_task_2024` for a spelled "user task after ok 2024 und ...",
+  main `<45>_user_task_after_ok`; `<50>_after2024` for "After Daten 2024
+  zur ..."): the tail rule is #31's, the slug only shorter.
+- A suffix cut that cuts a flow end inside a word does not know that the
+  numbers before a number tail stay, and can drop one there
+  (`..._kund_2024ToLieferante2` after the base `..._kunde_1_2024ToLieferan`).
 
 ## Group boxes over a full redraw (2026-10-13, `fix/full-redraw-keeps-groups`)
 
