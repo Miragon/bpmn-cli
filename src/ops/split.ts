@@ -138,7 +138,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   if (spliced) {
     const renamed = redirectFlow(doc, spliced, { target: gateway });
     insertAfterInScope(scope, spliced, gateway);
-    cs.change({ ...flowChange(spliced), detail: `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}` });
+    cs.change(flowChange(spliced, `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}`));
     cs.note(`inserted ${gatewayId} between ${op.after} and ${idOf(successor!)}`);
   } else {
     const flow = createSequenceFlow(doc, anchor, gateway);

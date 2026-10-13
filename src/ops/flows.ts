@@ -17,16 +17,20 @@
  * or `Edge_<id>`). Every other id stays. With Doc.followFlowEnds false
  * (`--keep-flow-ids`, where flow ids are API) a flow the document had keeps
  * its id, and the batch reports each one whose id no longer names its ends
- * (W_FLOW_ID_STALE, reportStaleFlows).
+ * (W_FLOW_ID_STALE, reportStaleFlows). An end `set` gave another id or
+ * name earlier in the batch (or the op on its own) is recognised by what it
+ * was called too (Doc.recordFormerEnd), and by its name also where its id
+ * speaks. A flow without id (valid BPMN, rare in files) whose ends change
+ * gets an id from its new ends.
  */
-import type { Doc, FlowEnds, KeptFlow } from '../document.js';
+import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../document.js';
 import { edgeStyleOf, styledId } from '../diagram/write.js';
 import { modelError, type Warning } from '../errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../idstyle.js';
-import { IdRegistry } from '../ids.js';
+import { hasIdWords, IdRegistry, isValidId, slugify } from '../ids.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
-import { renamedNote, type ChangeSet } from '../result.js';
+import { about, renamedNote, type ChangeSet } from '../result.js';
 import type { FlowOptions, Placement } from './types.js';
 
 export interface FlowAttrs {
@@ -53,16 +57,20 @@ function label(el: El): string {
   return `${kindLabel(el)} ${idOf(el)}${name ? ` "${name}"` : ''}`;
 }
 
-export function flowChange(flow: El): { id: string; kind: string; name?: string; detail: string } {
+/** The change entry of a sequence flow: its ends, or `detail` (the entry is about the flow: ChangeSet.rename). */
+export function flowChange(flow: El, detail?: string): { id: string; kind: string; name?: string; detail: string } {
   const src = flow.get<El | undefined>('sourceRef');
   const tgt = flow.get<El | undefined>('targetRef');
   const name = flow.get<string | undefined>('name');
-  return {
-    id: idOf(flow),
-    kind: 'sequenceFlow',
-    ...(name ? { name } : {}),
-    detail: `${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}`,
-  };
+  return about(
+    {
+      id: idOf(flow),
+      kind: 'sequenceFlow',
+      ...(name ? { name } : {}),
+      detail: detail ?? `${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}`,
+    },
+    flow,
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -320,7 +328,7 @@ export function createSequenceFlow(doc: Doc, source: El, target: El, attrs: Flow
   let flow: El;
   if (reuse) {
     flow = reuse;
-    doc.ids.claim(idOf(flow));
+    if (idOf(flow)) doc.ids.claim(idOf(flow));
     flow.set('name', attrs.name || undefined);
     flow.set('conditionExpression', attrs.condition ? conditionExpression(doc, attrs.condition, attrs.language) : undefined);
     flow.set('sourceRef', source);
@@ -405,19 +413,49 @@ export function removeSequenceFlow(doc: Doc, flow: El, cs?: ChangeSet): void {
 }
 
 /**
+ * The labels a flow id may name an end by (idNamesEnds): how ids name it
+ * now (labelOf), the speaking part of its id (an end renamed since), its
+ * name also where its id speaks (Activity_Verify, named Check, after `set
+ * id=`; left out where it gives the same words as one of the others), and
+ * how earlier versions named an unnamed end (formerLabels).
+ */
+export function endLabels(el: El): string[] {
+  const labels = [labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l);
+  const name = el.get<string | undefined>('name');
+  if (hasIdWords(name) && !labels.some((l) => l === name || (!l.includes('_') && slugify(l) === slugify(name)))) labels.push(name!);
+  return [...new Set(labels)];
+}
+
+/**
+ * Records what `node` is called as a flow end before `set` gives it another
+ * id or name (ops/set.ts; Doc.recordFormerEnd): a flow whose id named it so
+ * is still renamed, or with ids kept reported, when a later op of the batch
+ * changes its ends. Only a node with sequence flows.
+ */
+export function recordFormerEnd(doc: Doc, node: El): void {
+  if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) return;
+  doc.recordFormerEnd(node, { id: idOf(node), labels: endLabels(node) });
+}
+
+/**
  * Whether `id` is the id the file's style gives a sequence flow between
  * `source` and `target` (in a file of another flow form also the `named` one
  * earlier versions gave it), or such an id with a collision suffix: the ends
  * named by their names or (an end renamed since) by their ids, also as
  * earlier versions named an unnamed end (by its kind: Flow_CheckToGateway),
- * before the length cap and as 0.6 cut it (IdStyle.derivedBases). The one
- * test behind a rename (followEnds) and a stale id (staleFlowWarning).
+ * before the length cap and as 0.6 cut it (IdStyle.derivedBases); an end
+ * `set` renamed or named earlier in the batch also as it was called then
+ * (its id and labels, Doc.formerEndsOf). False for a flow without id. The
+ * one test behind a rename (followEnds) and a stale id (staleFlowWarning).
  */
-export function idNamesEnds(doc: Doc, id: string, source: El, target: El): boolean {
-  const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l))];
+export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target: El): boolean {
+  if (!id) return false;
   const derived = (base: string): boolean => id === base || (id.startsWith(base) && /^_?\d+$/.test(id.slice(base.length)));
-  const ends = [idOf(source), idOf(target)] as const;
-  return labels(source).some((s) => labels(target).some((t) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', ends[0], ends[1], { sourceLabel: s, targetLabel: t })).some(derived)));
+  const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: endLabels(el) }, ...doc.formerEndsOf(el)];
+  const targets = names(target);
+  return names(source).some((s) =>
+    targets.some((t) => s.labels.some((a) => t.labels.some((b) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b })).some(derived)))),
+  );
 }
 
 /**
@@ -427,14 +465,24 @@ export function idNamesEnds(doc: Doc, id: string, source: El, target: El): boole
  * (Doc.followFlowEnds false) a flow the document had before the batch or the
  * op on its own (Doc.flowsBefore) keeps its id too and is recorded for
  * W_FLOW_ID_STALE (reportStaleFlows); one the batch created is nobody's API
- * yet and still follows its ends.
+ * yet and still follows its ends. A flow without id gets one in both modes
+ * (its change entry and the layout name it by it): `wanted`, the id an op
+ * asked for it (`add --flow-id` on a splice: the flow into the new node;
+ * claimed like the id of a flow add creates), else one from its new ends;
+ * returns `''` (renamedNote: `id added`).
  */
-export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTarget: El | undefined): string | undefined {
+export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTarget: El | undefined, wanted?: string): string | undefined {
   if (!is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;
   const source = flow.get<El | undefined>('sourceRef');
   const target = flow.get<El | undefined>('targetRef');
   if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
   const old = idOf(flow);
+  if (!old) {
+    if (wanted) doc.claimId(wanted);
+    flow.set('id', wanted || doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id);
+    doc.invalidate();
+    return '';
+  }
   if (!idNamesEnds(doc, old, oldSource, oldTarget)) return undefined;
   const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
   if (doc.keepsFlowId(flow)) {
@@ -445,7 +493,7 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
   if (id === old) return undefined;
   flow.set('id', id);
-  doc.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`);
+  doc.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
   followEdgeId(doc, flow, old, id);
   return old;
 }
@@ -507,7 +555,7 @@ export function followRenamedEnd(doc: Doc, flow: El, was: string): void {
   const id = doc.allocateId(req).id;
   if (id === old) return;
   flow.set('id', id);
-  doc.recordRegenerated(old, id, was);
+  doc.recordRegenerated(old, id, was, flow);
   followEdgeId(doc, flow, old, id);
 }
 
@@ -517,18 +565,22 @@ export function followRenamedEnd(doc: Doc, flow: El, was: string): void {
  * (a later op restored them), it ends where it did when the batch began
  * (`began`: it was stale before, this change did not make it so) or the
  * batch renamed it since (`set id=`: the id it chose). The hint names the id
- * its ends give now, which the document does not claim: renaming it is the
+ * its ends give now, or the id an op wanted for it while it still ends where
+ * that op put it (`add --flow-id` on a splice: KeptFlow.preferred, a valid
+ * id that is free), which the document does not claim: renaming it is the
  * human's call, together with the code that uses the id. `hinted`
  * (reportStaleFlows): the document's ids and those of the hints before; the
  * hint's id is free there and is added.
  */
-export function staleFlowWarning(doc: Doc, flow: El, { was, id: keptId }: KeptFlow, hinted?: IdRegistry, began?: FlowEnds): Warning | undefined {
+export function staleFlowWarning(doc: Doc, flow: El, { was, id: keptId, preferred }: KeptFlow, hinted?: IdRegistry, began?: FlowEnds): Warning | undefined {
   const id = idOf(flow);
   const source = flow.get<El | undefined>('sourceRef');
   const target = flow.get<El | undefined>('targetRef');
   if (id !== keptId || doc.get(id) !== flow || !source || !target || idNamesEnds(doc, id, source, target)) return undefined;
   if (began?.[0] === source && began[1] === target) return undefined;
-  const suggested = doc.idStyle.next(flowRequest('bpmn:SequenceFlow', source, target), hinted ?? doc.ids).id;
+  const taken = hinted ?? doc.ids;
+  const wanted = preferred?.target === target && isValidId(preferred.id) && !taken.has(preferred.id) && !doc.has(preferred.id) ? preferred.id : undefined;
+  const suggested = wanted ?? doc.idStyle.next(flowRequest('bpmn:SequenceFlow', source, target), taken).id;
   hinted?.claim(suggested);
   return {
     code: 'W_FLOW_ID_STALE',
@@ -554,7 +606,36 @@ export function reportStaleFlows(doc: Doc, cs: ChangeSet, before?: ReadonlyMap<E
   for (const [flow, was] of kept) {
     const warning = staleFlowWarning(doc, flow, was, hinted, before?.get(flow));
     if (warning) cs.warn(warning);
+    else if (was.preferred) restoreFlowIdHints(doc, cs, flow, was.id);
   }
+}
+
+/**
+ * The hint of add's W_OPTION_IGNORED for `--flow-id <flowId>` on a splice,
+ * whose flow into the node is the existing `entry`: the command that renames
+ * it; `deferred` (with ids kept, a splice that kept the flow,
+ * Doc.preferFlowId): that its W_FLOW_ID_STALE names the command, one for the
+ * flow (reportStaleFlows puts the command back where none comes).
+ */
+export function flowIdIgnoredHint(flowId: string, entry: string | undefined, deferred = false): string {
+  const rename = !entry ? '' : deferred ? `; W_FLOW_ID_STALE names the command that renames ${entry}` : `; rename the existing one with \`bpmn set <file> ${entry} id=${flowId}\``;
+  return `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${rename}.`;
+}
+
+/**
+ * A kept flow `id` gets no W_FLOW_ID_STALE (its id still names its ends, a
+ * later op put it back or renamed it): the W_OPTION_IGNORED hints that
+ * deferred to it (flowIdIgnoredHint) name the command that renames it
+ * again, while the flow still has that id and the --flow-id is free, else
+ * none.
+ */
+function restoreFlowIdHints(doc: Doc, cs: ChangeSet, flow: El, id: string): void {
+  cs.warnings = cs.warnings.map((w) => {
+    const flowId = w.code === 'W_OPTION_IGNORED' ? /^--flow-id (\S+) ignored/.exec(w.message)?.[1] : undefined;
+    if (!flowId || w.hint !== flowIdIgnoredHint(flowId, id, true)) return w;
+    const still = doc.get(id) === flow && !doc.has(flowId);
+    return { ...w, hint: flowIdIgnoredHint(flowId, still ? id : undefined) };
+  });
 }
 
 /** ` (renamed from <old>)` for a change detail when followEnds renamed the flow (result.ts, where a takeover drops it again). */
@@ -614,10 +695,11 @@ export function setFlowCondition(doc: Doc, flow: El, expr: string | undefined, l
 /**
  * Inserts `node` into `flow` (A -> B becomes A -> node -> B). The original
  * flow keeps its attributes (and its id, unless the id named A and B:
- * followEnds; `renamedFrom`) and now ends at `node`; a new plain flow node ->
- * B is created, or `reuse` is put back as it (createSequenceFlow).
+ * followEnds; `renamedFrom`, `''` for a flow without id that got one,
+ * `flowId` when given) and now ends at `node`; a new plain flow node -> B is
+ * created, or `reuse` is put back as it (createSequenceFlow).
  */
-export function spliceIntoFlow(doc: Doc, flow: El, node: El, reuse?: El): { first: El; second: El; renamedFrom?: string } {
+export function spliceIntoFlow(doc: Doc, flow: El, node: El, reuse?: El, flowId?: string): { first: El; second: El; renamedFrom?: string } {
   const target = flow.get<El>('targetRef');
   const scope = doc.scopeOf(flow)!;
   const source = flow.get<El>('sourceRef');
@@ -629,10 +711,10 @@ export function spliceIntoFlow(doc: Doc, flow: El, node: El, reuse?: El): { firs
   removeFrom(target, 'incoming', flow);
   flow.set('targetRef', node);
   addTo(node, 'incoming', flow);
-  const renamedFrom = followEnds(doc, flow, source, target);
+  const renamedFrom = followEnds(doc, flow, source, target, flowId);
   const second = createSequenceFlow(doc, node, target, reuse ? { reuse } : {}, node);
   doc.invalidate();
-  return { first: flow, second, ...(renamedFrom ? { renamedFrom } : {}) };
+  return { first: flow, second, ...(renamedFrom !== undefined ? { renamedFrom } : {}) };
 }
 
 /**
@@ -660,7 +742,7 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
       removeSequenceFlow(doc, outFlow, cs);
       cs.remove(flowChange(outFlow));
       const renamed = redirectFlow(doc, inFlow, { target: successor });
-      cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}` });
+      cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
       cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
       return true;
     }
@@ -795,16 +877,17 @@ function assertSpliceable(doc: Doc, node: El, flow: El): void {
 /**
  * Splices `node` into `flow` and reports it. `flow` (now source -> node) is
  * the flow into the node, so it takes the flow options; it keeps its id
- * (`add` warns when --flow-id was given for it). `outFlow`: put back as the
- * flow node -> old target (placeNode `reuse`).
+ * (`add` warns when --flow-id was given for it), and one without id takes
+ * --flow-id. `outFlow`: put back as the flow node -> old target (placeNode
+ * `reuse`).
  */
 function spliceWithOptions(doc: Doc, node: El, flow: El, p: PlacementOptions, cs: ChangeSet, outFlow?: El): El {
   assertSpliceable(doc, node, flow);
   const src = flow.get<El>('sourceRef');
   const tgt = flow.get<El>('targetRef');
-  const { second, renamedFrom } = spliceIntoFlow(doc, flow, node, outFlow);
+  const { second, renamedFrom } = spliceIntoFlow(doc, flow, node, outFlow, p.flowId);
   cs.create(flowChange(second));
-  cs.change({ ...flowChange(flow), detail: `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}` });
+  cs.change(flowChange(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
   cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
   applyFlowOptions(doc, flow, p, cs);
   return flow;

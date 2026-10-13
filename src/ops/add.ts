@@ -12,7 +12,8 @@
  *  - flow options: default + condition -> E_USAGE, an empty condition ->
  *    E_INVALID_VALUE (before anything is mutated); options the placement
  *    cannot apply (no flow created by --in/--on, or --flow-id when the flow
- *    into the node already existed) -> W_OPTION_IGNORED.
+ *    into the node already existed; a spliced flow without id takes it)
+ *    -> W_OPTION_IGNORED.
  *  - eventSubProcess: a trigger (`eventSubProcess:<trigger>` or inferred from
  *    --error/--message/--timer/...) also creates the triggered start event
  *    inside it (an unnamed event: Event_<Trigger>StartIn<SubProcess> by default), so the event sub-process is valid in one op.
@@ -58,12 +59,12 @@ import { CliError, modelError, usageError } from '../errors.js';
 import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../idstyle.js';
 import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
+import { ChangeSet, renamedNote, type Change } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
-import { assertCondition, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
+import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { zeebeUserTaskDefault } from './platform.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
@@ -271,14 +272,18 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
     }
     return;
   }
-  if (op.flowId && !cs.created.some((c) => c.kind === 'sequenceFlow' && c.id === op.flowId)) {
+  // the flow add created, or a spliced flow without id that took it (ops/flows.ts followEnds: `id added`)
+  const named = (c: Change): boolean => c.kind === 'sequenceFlow' && c.id === op.flowId;
+  if (op.flowId && !cs.created.some(named) && !cs.changed.some((c) => named(c) && !!c.detail?.endsWith(renamedNote('')))) {
     const entry = entryFlow ?? doc.incoming(node)[0];
+    // with flow ids kept, a splice kept the id of the flow into the node: its W_FLOW_ID_STALE suggests --flow-id, one command for one flow
+    const kept = !!entry && doc.preferFlowId(entry, op.flowId, node);
     cs.warn({
       code: 'W_OPTION_IGNORED',
       message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
       element: id,
       ...(entry ? { related: [idOf(entry)] } : {}),
-      hint: `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${entry ? `; rename the existing one with \`bpmn set <file> ${idOf(entry)} id=${op.flowId}\`` : ''}.`,
+      hint: flowIdIgnoredHint(op.flowId, entry && idOf(entry), kept),
     });
   }
 }

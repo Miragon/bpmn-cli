@@ -518,6 +518,23 @@ describe('W_ID_PREFIX_STALE', () => {
     expect(stale(explicit).map((w) => w.element)).toEqual(['serviceTask_mine']);
   });
 
+  it('an op of the batch that changed the element before its retype (a new element of the new type): every entry names the final id', async () => {
+    const start = definitionsXml('<bpmn:startEvent id="startEvent_start" name="Start"/>');
+    const changes: Op[] = [
+      { op: 'set', id: '$t', values: { doc: 'Reviews the invoice' } },
+      { op: 'set', id: '$t', values: { name: 'Check bill' } },
+      { op: 'move', ids: ['$t'], in: 'Process_1' },
+    ];
+    for (const change of changes) {
+      const r = await run(start, [{ op: 'add', kind: 'serviceTask', name: 'Check invoice', after: 'startEvent_start', as: '$t' }, change, { op: 'retype', id: '$t', kind: 'userTask' }]);
+      const ids = new Set([...r.xml.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
+      expect([...r.changes.created, ...r.changes.changed].map((c) => c.id).filter((id) => !ids.has(id)), change.op).toEqual([]);
+      expect(r.changes.changed.map((c) => c.id), change.op).toContain('userTask_checkInvoice');
+      const summary = mutationSummary(mutationReport(r));
+      expect(summary.changed.filter((id) => !ids.has(id)), change.op).toEqual([]);
+    }
+  });
+
   it('the flows the batch named after such an element follow its new id: a prefix without separator, flows named by the ends\' ids, a suffix that no longer applies, a message flow', async () => {
     const glued = declared({ case: 'PascalCase', prefixes: { 'bpmn:ServiceTask': 'ST', 'bpmn:UserTask': 'UT', 'bpmn:SendTask': 'SN', 'bpmn:ReceiveTask': 'RT', 'bpmn:SequenceFlow': 'SF' } });
     const start = definitionsXml('<bpmn:startEvent id="startEvent_Go" name="Go"/>');

@@ -267,7 +267,7 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   cs.remove(flowChange(outFlow));
   reserveIds(doc, [idOf(outFlow)]);
   const renamed = redirectFlow(doc, inFlow, { target: successor });
-  cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}` });
+  cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
 
@@ -386,8 +386,7 @@ function reportPutBack(doc: Doc, spare: Map<El, SpareFlow>, cs: ChangeSet): Drop
     const lost = label && back ? giveBack(node, flow, label, cs) : '';
     cs.removed = cs.removed.filter((c) => c.id !== id);
     cs.created = cs.created.filter((c) => c.id !== id);
-    const change = flowChange(flow);
-    cs.change({ ...change, detail: `${change.detail}${back ? lost : ` (was -> ${idOf(target)})`}` });
+    cs.change(flowChange(flow, `${flowChange(flow).detail}${back ? lost : ` (was -> ${idOf(target)})`}`));
     if (!label || back) continue;
     const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
     const warnings: Warning[] = [];
@@ -444,7 +443,7 @@ function giveBackLate(doc: Doc, dropped: DroppedLabel[], cs: ChangeSet): void {
     const lost = giveBack(node, flow, label, cs);
     const change = flowChange(flow);
     cs.changed = cs.changed.filter((c) => c.id !== change.id);
-    cs.change({ ...change, detail: `${change.detail}${lost}` });
+    cs.change(flowChange(flow, `${change.detail}${lost}`));
   }
 }
 

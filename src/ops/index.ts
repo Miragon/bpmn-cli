@@ -29,6 +29,7 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
     doc.takeKeptFlows();
     doc.takeIdStates();
     doc.forgetGeneratedIds();
+    doc.forgetFormerEnds();
     doc.flowsBefore = before = flowsNow(doc);
   }
   try {
@@ -137,6 +138,8 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   doc.takeKeptFlows();
   doc.takeIdStates();
   doc.forgetGeneratedIds();
+  // what `set` renamed or named in the batch: a flow named after the old id or name still follows (ops/flows.ts idNamesEnds)
+  doc.forgetFormerEnds();
   const outer = doc.batch;
   const outerFlows = doc.flowsBefore;
   const before = flowsNow(doc);

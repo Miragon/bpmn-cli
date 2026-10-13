@@ -90,12 +90,12 @@ import { diExpansionState } from '../layout.js';
 import { addTo, is, localType, many, walk, type El } from '../model.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
-import { ChangeSet, type Change } from '../result.js';
+import { about, ChangeSet, type Change } from '../result.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { setCorrelationKey } from './ext.js';
-import { assertCondition, flowChange, flowsNamedAfter, followRenamedEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
+import { assertCondition, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -149,10 +149,10 @@ export function changeKind(el: El): string {
   return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
-/** ChangeSet entry for an element. */
+/** ChangeSet entry for an element (about it: ChangeSet.rename). */
 export function changeOf(el: El, detail?: string): Change {
   const name = el.get<string | undefined>('name');
-  return { id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) };
+  return about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
 }
 
 /* ------------------------------------------------------------------ */
@@ -442,11 +442,14 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     case 'id': {
       if (!value) throw invalidValue(el, key, 'an id cannot be empty');
       const old = idOf(el);
+      // a flow whose id names it by its old id follows when a later op of the batch changes the flow's ends
+      recordFormerEnd(doc, el);
       renameId(doc, el, value);
       cs.change(changeOf(el, `renamed from ${old}`));
       return;
     }
     case 'name':
+      recordFormerEnd(doc, el);
       el.set('name', value || undefined);
       break;
     case 'doc':
@@ -461,7 +464,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!value) throw invalidValue(el, key, 'a flow always needs a source and a target');
       const node = doc.require(value, 'bpmn:FlowNode');
       const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
-      cs.change({ ...flowChange(el), detail: `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}` });
+      cs.change(flowChange(el, `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}`));
       return;
     }
     case 'loop':
@@ -1432,7 +1435,7 @@ export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: strin
   const flows = flowsNamedAfter(doc, el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
   renameId(doc, el, next);
   doc.markGenerated(next, wanted);
-  doc.recordRegenerated(id, next);
+  doc.recordRegenerated(id, next, undefined, el);
   for (const { flow, was } of flows) followRenamedEnd(doc, flow, was);
 }
 

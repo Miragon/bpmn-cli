@@ -38,10 +38,16 @@ decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken 
   `W_ID_SUFFIXED` warning.
 - A flow whose id names its ends is renamed when an edit changes them, and the result says so
   (`renamed:`): the id the file's flow form gives it, and in a file of another form also
-  `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. In a
-  batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
+  `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. An end
+  counts by its name too, also where its id speaks (after `set Activity_Check id=Activity_Verify`,
+  `Flow_CheckToOk` still names Verify, which is named Check), and in a batch by the id and name it
+  had before a `set id=` or `set name=` earlier in the batch. A flow without id (valid BPMN) whose
+  ends change gets an id from its new ends, or the `--flow-id` of the `add` that splices into it
+  (`(id added: it had none)`). In a batch, use aliases instead of guessing ids:
+  [Ops JSON](ops.md#ops-json-bpmn-apply).
   With `--keep-flow-ids` (or `BPMN_KEEP_FLOW_IDS=1`) a flow the file had keeps its id instead, and
-  `W_FLOW_ID_STALE` names it with the id its new ends give ([Limitations](contract.md#limitations)).
+  `W_FLOW_ID_STALE` names it with the id its new ends give, or the `--flow-id` a splice into it
+  was given ([Limitations](contract.md#limitations)).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
 
@@ -136,7 +142,10 @@ Without a placement the node goes into the only process, unconnected (several pr
 | `--to <T>` | `to` | Additionally connect `node -> T` (a branch that re-joins the main path). |
 
 - `--flow-name`, `--flow-id`, `--condition`, `--language` and `--default` describe the flow into the
-  new node, so they need `--after`, `--before` or `--flow`.
+  new node, so they need `--after`, `--before` or `--flow`. On a splice the flow into the node is
+  the existing one: `--flow-id` is ignored (`W_OPTION_IGNORED`, whose hint renames it; with
+  `--keep-flow-ids`, where `W_FLOW_ID_STALE` reports that flow, that warning suggests the
+  `--flow-id` instead, one command for one flow). A flow without id takes the `--flow-id`.
 - Data objects, data stores, text annotations, lanes and pools take `--in` only; wire them with
   `connect`. Sequence flows never cross scopes (`E_CROSS_SCOPE`): use a message flow between pools.
 - Branch order in the diagram: the default flow (else the first outgoing flow that leads to an end

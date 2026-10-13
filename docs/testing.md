@@ -161,7 +161,8 @@ suffixes and joins, also after an explicit split id, message flows and
 the processes of new pools over many writes, flows renamed into the declared
 form, `W_ID_PREFIX_STALE` alone and in a batch (also for a type the rule
 switched off), the new id of an element the batch created and of the flows
-named after it, an id freed and then claimed explicitly, the `conventions`
+named after it (also in the entries of an op before its retype), an id
+freed and then claimed explicitly, the `conventions`
 of a result, the view of `show --conventions` with its reasons).
 `test/bpmnlint.test.ts` checks the lookup, the notes in validate and writes,
 `show --conventions` and `new` on the command line (its own errors before
@@ -250,7 +251,8 @@ created elements not also listed as changed, the subscription redirect in the
 warnings delta, a plain remove of a merge and `move` into a cross-lane flow
 renaming flows after their new ends).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
-ids before drawing them, and `test/node-files.test.ts` the encodings (a file
+ids before drawing them, and that an op giving a sequence flow without id
+other ends gives it one from them, and `test/node-files.test.ts` the encodings (a file
 is read as it declares, a write is UTF-8 and says so).
 `test/layout-batch-parity.test.ts` checks issue #18, stage A, on the
 synthetic hand-drawn model of the plugin eval `edit-hand-drawn-model`: the
@@ -637,8 +639,10 @@ node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
 
 The regression tests: `test/speaking-ids.test.ts` and
 `test/conventions-ids.test.ts` (ids in every file style, renamed flows and
-their DI), `test/keep-flow-ids.test.ts` (flow ids kept with
-`--keep-flow-ids`, `W_FLOW_ID_STALE`), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
+their DI, also after an end got another id earlier in the batch),
+`test/keep-flow-ids.test.ts` (flow ids kept with `--keep-flow-ids`,
+`W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a
+splice), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
 line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
 `test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
 `test/lane-splice.test.ts` (the lane and the geometry of a node added into a

@@ -460,6 +460,19 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
     }
   });
 
+  it('an end `set id=` renamed earlier in the batch still names its flows in every flow form (the id it had: stemTo, idPair, scopedTo)', async () => {
+    const cases: Array<[string, Op[], string]> = [
+      [CAMEL, [{ op: 'set', id: 'serviceTask_checkStock', values: { id: 'serviceTask_verifyStock' } }, { op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_verifyStock' }], 'flow_checkStockToApproveOrder -> flow_verifyStockToPackGoods'],
+      [SNAKE, [{ op: 'set', id: 'Task_check_risk', values: { id: 'Task_assess_risk' } }, { op: 'add', kind: 'serviceTask', name: 'Pack goods', after: 'Task_assess_risk' }], 'Flow_Task_check_risk_Gateway_risk_ok -> Flow_Task_assess_risk_Task_pack_goods'],
+      [SCOPED, [{ op: 'set', id: 'userTask_KotO_ConfirmShipment', values: { id: 'userTask_KotO_ApproveShipment' } }, { op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', before: 'userTask_KotO_ApproveShipment' }], 'Flow_KotO_ReserveToConfirm -> Flow_KotO_ReserveToReview'],
+    ];
+    for (const [xml, ops, line] of cases) {
+      const { renamed, stale } = await bothModes(xml, ops);
+      expect(renamed, line).toEqual([line]);
+      expect(stale, line).toEqual([line]);
+    }
+  });
+
   it('flow ids that do not name their ends neither follow nor go stale (hashes, numbers)', async () => {
     for (const [xml, anchor] of [[MODELER, 'Activity_0k3x9qa'], [NUMBERED, 'Task_1'], [OLD_MODELER, 'Task_1bcd234']] as const) {
       expect(await bothModes(xml, [{ op: 'add', kind: 'task', name: 'Pack', after: anchor }])).toEqual({ renamed: [], stale: [] });

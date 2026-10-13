@@ -94,7 +94,9 @@ batch created still follows its ends, so name it with an alias where an op creat
 an add that appends or prepends (after a gateway or a node without successor, before a join or a
 node without incoming flow) and on split nodes, `"as"` on connect. On a splice `"flowAs"` names the
 flow the file had, now into the new node; the flow the splice creates (new node -> old successor)
-has no alias, so take its id from the result.
+has no alias, so take its id from the result. An end that a `set` earlier in the batch gave another
+id or name still counts by the id and name it had, so a flow named after them follows (or, with ids
+kept, is reported) when a later op changes its ends.
 
 **Checks.** Unknown ops and keys (with a suggestion for typos such as `colour`), wrong value types,
 conflicting placements, flow options without a flow-creating placement, `default` together with

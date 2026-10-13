@@ -520,7 +520,8 @@ export function renderFind(hits: readonly FindHit[]): string {
 /* ------------------------------------------------------------------ */
 
 function changeLine(verb: string, c: Change): string {
-  let line = `${verb} ${c.kind} ${c.id}`;
+  // a flow without id (valid BPMN) that an op removed
+  let line = `${verb} ${c.kind} ${c.id || '(no id)'}`;
   if (c.name) line += ` ${q(c.name)}`;
   if (c.detail) line += ` - ${c.detail}`;
   return line;

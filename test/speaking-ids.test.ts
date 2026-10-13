@@ -9,6 +9,7 @@ import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/report.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 /** Hashes, numbers and tool defaults: what a generated id never ends in. */
@@ -123,6 +124,34 @@ describe('flows whose ids name their ends follow them', () => {
     expect(cs.created.map((c) => c.id)).toEqual(['Event_Start', 'Event_End', 'Flow_StartToWork', 'Activity_Work', 'Flow_WorkToEnd']);
     expect(doc.get('Flow_StartToEnd')).toBeUndefined();
     expect(flowBetween(doc, 'Event_Start', 'Activity_Work')).toBe('Flow_StartToWork');
+  });
+});
+
+describe('the change report names a flow that took the id a renamed flow freed by its own id', () => {
+  /** Check -> Done: a new node with the id Activity_Check spliced after Check gives the flow into it Flow_CheckToCheck and the flow out of it Flow_CheckToDone, the id the spliced flow had. */
+  const FREED = definitionsXml(`
+    <bpmn:startEvent id="Event_Check" name="Check"><bpmn:outgoing>Flow_CheckToDone</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:endEvent id="Event_Done" name="Done"><bpmn:incoming>Flow_CheckToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_CheckToDone" sourceRef="Event_Check" targetRef="Event_Done" />`);
+  const splice: Op = { op: 'add', kind: 'task', id: 'Activity_Check', after: 'Event_Check' };
+
+  it('text, JSON and summary agree with the file, alone and in a batch', async () => {
+    for (const ops of [[splice], [{ op: 'set', id: 'Flow_CheckToDone', values: { name: 'go' } }, splice]] as Op[][]) {
+      const r = await applyToXml(FREED, ops, { layout: false });
+      const doc = await Doc.fromXml(r.xml);
+      expect([flowBetween(doc, 'Event_Check', 'Activity_Check'), flowBetween(doc, 'Activity_Check', 'Event_Done')]).toEqual(['Flow_CheckToCheck', 'Flow_CheckToDone']);
+      expect(r.result.created.map((c) => `${c.id}: ${c.detail}`)).toEqual(['Activity_Check: after Event_Check', 'Flow_CheckToDone: Activity_Check -> Event_Done']);
+      expect(r.result.changed.map((c) => `${c.id}: ${c.detail}`)).toContain('Flow_CheckToCheck: Event_Check -> Activity_Check (was -> Event_Done) (renamed from Flow_CheckToDone: its id named its old ends)');
+      // the entry of the earlier op is about the spliced flow: it names its final id
+      if (ops.length === 2) expect(r.result.changed.map((c) => `${c.id}: ${c.detail}`)).toContain('Flow_CheckToCheck: name=go');
+      expect(r.result.changed.map((c) => c.id)).not.toContain('Flow_CheckToDone');
+      expect(r.result.renamed).toEqual({ Flow_CheckToDone: 'Flow_CheckToCheck' });
+      const text = renderMutation(r.result);
+      expect(text).toContain('created sequenceFlow Flow_CheckToDone - Activity_Check -> Event_Done\n');
+      const summary = mutationSummary(r.result);
+      expect([summary.created['sequenceFlow'], summary.changed, summary.renamed]).toEqual([['Flow_CheckToDone'], ['Flow_CheckToCheck'], { Flow_CheckToDone: 'Flow_CheckToCheck' }]);
+      expect(renderSummary(summary)).toMatch(/^created task: Activity_Check\ncreated sequenceFlow: Flow_CheckToDone\nchanged: Flow_CheckToCheck\nrenamed: Flow_CheckToDone -> Flow_CheckToCheck\n/);
+    }
   });
 });
 
