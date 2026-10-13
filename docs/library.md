@@ -90,8 +90,10 @@ Every function runs the code of the CLI command it names, without a file:
 - A failure throws a `CliError`: `code`, `category`, `details` (`element`,
   `related`, `candidates`, `hint`, `op`; `E_NO_ROOM` also `ops` and, when
   the refused op saw the document's own drawing, `command` with `<file>`
-  for the file); `toJSON()` is the CLI's `--json`
-  error. Nothing is half done: the caller still has its input.
+  for the file; `E_VALIDATION` also `errors`, the errors the change would
+  add, which a check of the unchanged document does not show); `toJSON()`
+  is the CLI's `--json` error. Nothing is half done: the caller still has
+  its input.
 - The Camunda 7 and Camunda 8 profile rules load on demand: the first call
   that validates a document of that platform loads them (`import()`, a
   chunk of its own in a host's bundle, see [Browser bundles](#browser-bundles));
@@ -343,8 +345,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 927.0 KB | 295.0 KB | 935 / 298 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 654.2 KB | 208.3 KB | 660 / 210 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 927.5 KB | 295.2 KB | 935 / 298 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 654.3 KB | 208.3 KB | 660 / 210 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |

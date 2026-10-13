@@ -107,9 +107,10 @@ A write runs every validator twice:
 Then the findings are compared:
 
 - An error the change added refuses the write with `E_VALIDATION`. Its `details.errors` list the
-  new errors, each with `validator` and `severity`. Nothing is written. `force: true` writes
-  anyway, and the errors stay in `result.validation.errors` (in text: `forced [house-rules]
-  DEAD_END Activity_Archive: ...`).
+  new errors, each with `validator` and `severity`. Nothing is written, so a check of the document
+  does not show them: they are only in the refusal. `force: true` writes anyway, and the errors
+  stay in `result.validation.errors` (in text: `forced [house-rules] DEAD_END Activity_Archive:
+  ...`).
 - An error the document already had does not block. It becomes a `W_PREEXISTING_ERROR` warning
   whose message starts with its code (`DEAD_END: Activity_Archive has no outgoing sequence flow
   (already in the model before this change)`). The result counts it with the other warnings the

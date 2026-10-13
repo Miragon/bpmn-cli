@@ -249,8 +249,10 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   mode, score}, format?, conventions?}`; `preexistingCount` includes the project's bpmnlint findings
   the file already had.
 - Errors go to stderr as `error E_CODE: message` with a hint and candidate ids; with `--json` as
-  `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?"}}`
-  (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room).
+  `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?", "errors?"}}`
+  (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room; `errors`:
+  the errors an `E_VALIDATION` refusal names, in text the lines under the error, each with its code
+  and hint. Nothing was written, so `bpmn validate <file>` does not show them).
 
 | exit | meaning |
 | --- | --- |

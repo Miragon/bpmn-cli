@@ -13,13 +13,14 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
+import { ERROR_CATALOGUE } from '../src/guide.js';
 import type { CliError, Warning } from '../src/errors.js';
 import { is, type El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
 import { checkFile, mutateFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline.js';
 import { mutationReport, renderMutation, renderValidation, validationReport, validatorTag } from '../src/report.js';
-import { compareRuns, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validators.js';
+import { compareRuns, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
@@ -395,7 +396,7 @@ describe('the CLI takes no validators', () => {
     const refused = cli('apply', file, ops);
     expect(refused.code).toBe(2);
     expect(refused.err).toContain('error E_VALIDATION: The change would introduce 1 structural error(s); nothing was written\n  E_EVENT_SUBPROCESS_NO_START Esp2: Event sub-process Esp2 has no start event  (');
-    expect(refused.err).toMatch(/^ {2}hint: Fix the listed problems, or pass --force/m);
+    expect(refused.err).toMatch(/^ {2}hint: Fix the listed problems, make the edit in one transaction \(`bpmn apply <file> ops.json`\) so that it ends in a valid model, or pass --force/m);
     const refusedJson = cli('apply', file, ops, '--json');
     expect(refusedJson.code).toBe(2);
     expect(JSON.parse(refusedJson.err)).toMatchObject({ ok: false, error: { code: 'E_VALIDATION', errors: [{ code: 'E_EVENT_SUBPROCESS_NO_START', element: 'Esp2' }] } });
@@ -412,6 +413,64 @@ describe('the CLI takes no validators', () => {
     const checkJson = cli('validate', file, '--json');
     expect(checkJson.code).toBe(2);
     expect(JSON.parse(checkJson.out)).toMatchObject({ ok: false, errors: [{ code: 'E_EVENT_SUBPROCESS_NO_START', element: 'Esp2' }] });
+  }, 60000);
+});
+
+/** The sentences of a text that name `bpmn validate` without saying that it does not show the refused errors. */
+const sendsToValidate = (text: string): string[] => text.split(/(?<=\.)\s+/).filter((s) => s.includes('bpmn validate') && !s.includes('does not show'));
+
+describe('the E_VALIDATION advice: the refusal lists the errors, `bpmn validate` cannot', () => {
+  const HINT = 'Fix the listed problems, make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.';
+
+  it('a structural refusal: its errors are under it, the file is unchanged and validate shows none of them; the hint is the validator refusal\'s', () => {
+    const file = join(dir, 'black-box.bpmn');
+    expect(cli('new', file).code).toBe(0);
+    expect(cli('add', file, 'task', 'Check invoice').code).toBe(0);
+    const before = readFileSync(file, 'utf8');
+
+    const refused = cli('add', file, 'participant', 'Customer', '--black-box');
+    expect(refused.code).toBe(2);
+    expect(refused.err).toMatch(/^error E_VALIDATION: The change would introduce 2 structural error\(s\); nothing was written$/m);
+    expect(refused.err).toMatch(/^ {2}E_EMPTY_COLLABORATION /m);
+    expect(refused.err).toMatch(/^ {2}E_ORPHAN_PROCESS /m);
+    expect(refused.err).toContain(`\n  hint: ${HINT}\n`);
+    const json = JSON.parse(cli('add', file, 'participant', 'Customer', '--black-box', '--json').err) as { error: Record<string, unknown> };
+    expect(json.error).toMatchObject({ code: 'E_VALIDATION', hint: HINT, errors: [{ code: 'E_EMPTY_COLLABORATION' }, { code: 'E_ORPHAN_PROCESS' }] });
+    expect(readFileSync(file, 'utf8')).toBe(before);
+
+    // where the old advice sent the reader: the unchanged file is valid, and none of the refused errors shows
+    const check = cli('validate', file);
+    expect(check.code).toBe(0);
+    expect(check.out).toMatch(/^valid, \d+ warning\(s\)$/m);
+    expect(check.out).not.toMatch(/E_EMPTY_COLLABORATION|E_ORPHAN_PROCESS/);
+
+    // the same advice as a validator's refusal, without its brackets
+    const byValidator = validatorRefusal([{ code: 'DEAD_END', message: 'A has no outgoing flow', element: 'A', validator: 'house-rules', severity: 'error' }]);
+    expect(byValidator.details.hint?.replace(' (each names its validator in brackets)', '')).toBe(HINT);
+    expect(sendsToValidate(`${byValidator.details.hint}`)).toEqual([]);
+  }, 60000);
+
+  it('the catalogue (guide, kinds, kinds --json), the short guide and the plugin skill do not send the reader to `bpmn validate`', () => {
+    const entry = ERROR_CATALOGUE.find((e) => e.code === 'E_VALIDATION');
+    expect(entry?.fix).toMatch(/^Read the errors in the refusal: /);
+    expect(entry?.fix).toContain('The file is unchanged, so `bpmn validate <file>` does not show them.');
+    expect(sendsToValidate(entry?.fix ?? '')).toEqual([]);
+    expect(cli('guide', 'errors').out).toContain(`      fix: ${entry?.fix}\n`);
+    // the error output the fix points to: the guide's own JSON shape has `errors`
+    const commands = cli('guide', 'commands').out;
+    expect(commands).toContain('an E_VALIDATION refusal lists\n  each error it would add on a line under the message');
+    expect(commands).toMatch(/\{ok: false, error: \{code, message,\n {2}element\?, related\?, candidates\?, hint\?, op\?, command\?, ops\?, errors\?\}\}/);
+
+    const short = cli('guide', '--short').out;
+    const line = short.split('\n').find((l) => /^ {2}E_VALIDATION /.test(l)) ?? '';
+    expect(line).toMatch(/the refusal lists the new errors \(file unchanged\)/);
+    expect(line).not.toContain('bpmn validate');
+    expect(Buffer.byteLength(short)).toBeLessThanOrEqual(5120);
+
+    const skill = readFileSync(join(ROOT, 'plugins', 'bpmn-cli', 'skills', 'bpmn', 'SKILL.md'), 'utf8');
+    const row = skill.split('\n').find((l) => l.startsWith('| `E_VALIDATION` |')) ?? '';
+    expect(row).toContain('The refusal lists each one');
+    expect(sendsToValidate(row)).toEqual([]);
   }, 60000);
 });
 
