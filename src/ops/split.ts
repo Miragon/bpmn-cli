@@ -16,14 +16,21 @@
  *         reach it: when one continues, its end connects to the old
  *         successor directly (no pass-through gateway), when none does no
  *         join is created either.
+ *  - Typed ops of the library skip parseOps (src/batch.ts): before the split
+ *    changes anything, `branches` must be an array of objects, each with a
+ *    `nodes` array (empty allowed) of objects with a string `kind`, else
+ *    E_USAGE in parseOps' words (the path starts with `split`, not
+ *    `ops[i] (split)`). The rest of a node (an unknown kind, its options)
+ *    is checked when addElement creates it.
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
 import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
+import { modelError, usageError, type CliError } from '../errors.js';
 import { parseKind, KindError } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { anchorContext, keyRequest, labelOf } from '../idstyle.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from '../batch.js';
 import { cutAt, MAX_ID } from '../ids.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
@@ -100,6 +107,42 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
   return { id, base };
 }
 
+function describe(v: unknown): string {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'an array';
+  if (typeof v === 'object') return 'an object';
+  return `${typeof v} ${JSON.stringify(v)}`;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The shape parseOps checks, in its words, for typed ops that skip it
+ * (mutateDoc, runOps): `branches` (when given) an array of objects, each with
+ * a `nodes` array of objects with a string `kind`. A branch without `nodes`
+ * is no empty branch: the CLI refuses it too.
+ */
+function checkShape(branches: unknown): void {
+  if (branches === undefined || branches === null) return;
+  if (!Array.isArray(branches)) {
+    throw usageError(`split: "branches" must be an array of branch objects, got ${describe(branches)}`, { hint: 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].' });
+  }
+  const missing = (path: string, key: string, description: string): CliError => usageError(`${path}: missing required key "${key}" (${description})`);
+  branches.forEach((branch: unknown, i) => {
+    if (!isObject(branch)) throw usageError(`split branches[${i}]: expected an object, got ${describe(branch)}`);
+    const nodes = branch['nodes'];
+    if (nodes === undefined || nodes === null) throw missing(`split branches[${i}]`, 'nodes', BRANCH_FIELDS.nodes.description);
+    if (!Array.isArray(nodes)) throw usageError(`split branches[${i}]: "nodes" must be an array of node objects, got ${describe(nodes)}`, { hint: 'An empty array is allowed: the branch is then a direct gateway -> join flow.' });
+    nodes.forEach((node: unknown, j) => {
+      const path = `split branches[${i}].nodes[${j}]`;
+      if (!isObject(node)) throw usageError(`${path}: expected an object, got ${describe(node)}`);
+      const kind = node['kind'];
+      if (kind === undefined || kind === null) throw missing(path, 'kind', NODE_FIELDS.kind.description);
+      if (typeof kind !== 'string') throw usageError(`${path}: "kind" must be a string, got ${describe(kind)}`, { hint: 'Write it as a JSON string, e.g. "kind": "...".' });
+    });
+  });
+}
+
 /**
  * Splits the flow after `op.after` into branches through a gateway, with an
  * optional join gateway. Every node is created with addElement(), every extra
@@ -108,6 +151,7 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
 export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const cs = new ChangeSet();
   const kind = gatewayKind(op.kind);
+  checkShape(op.branches);
   if (!op.branches?.length) {
     throw modelError('E_INVALID_VALUE', 'split needs at least one branch', { hint: 'Pass branches: [{ nodes: [...] }, ...].' });
   }

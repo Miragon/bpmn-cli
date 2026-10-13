@@ -595,6 +595,7 @@ function opsSection(): string {
   out.push('the format ops with their selectors path / via / branch). An unknown or later-defined alias fails before anything');
   out.push('runs (E_UNKNOWN_ALIAS, listing the aliases defined so far); the result lists alias -> final id ("aliases:" line,');
   out.push('`aliases` in --json) and the old -> new id of a flow it renamed after its new ends ("renamed:" with --summary, `renamed`).');
+  out.push('An alias follows its element through a rename and a retype (also to another type: create, retype, then configure).');
   out.push('With --keep-flow-ids a flow the file had keeps its id through the whole batch unless an op removes it (the flows of a');
   out.push('removed node, the out-flow a bridge replaces: "removed:"), so later ops can use it; a move puts the moved node\'s');
   out.push('out-flow back at its new place, with its id, documentation and extensions (its name, condition and annotations stay');

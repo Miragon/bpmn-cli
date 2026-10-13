@@ -8,6 +8,9 @@ import { assignLane, laneOf } from '../src/ops/containers.js';
 import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events.js';
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
+import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/batch.js';
+import type { CliError } from '../src/errors.js';
+import { mutateDoc } from '../src/pipeline.js';
 import { ChangeSet } from '../src/result.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 
@@ -851,6 +854,52 @@ describe('split', () => {
     add(doc, { kind: 'task', name: 'Alone', in: 'Process_1' });
     expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
     expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'complexGateway', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
+  });
+
+  it('typed ops (mutateDoc, no parseOps): a branch without a nodes array is E_USAGE in parseOps\' words, and the document stays as it was', async () => {
+    const doc = await linearDoc();
+    const before = await doc.toXml();
+    // what the CLI's parseOps says about the same op (message with `ops[0] (split)` -> `split`, and hint)
+    const cli = (branches: unknown): [string, unknown] => {
+      try {
+        parseOps([{ op: 'split', after: 'Task_A', branches }]);
+      } catch (err) {
+        const e = err as CliError;
+        return [e.message.replace(/^ops\[0\] \(split\)/, 'split'), e.details?.hint];
+      }
+      return ['NO_ERROR', undefined];
+    };
+    const refused = async (branches: unknown): Promise<[string | undefined, string, unknown]> => {
+      try {
+        await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches } as unknown as SplitOp]);
+      } catch (err) {
+        const e = err as CliError;
+        expect([e.message, e.details?.hint]).toEqual(cli(branches));
+        return [e.code, e.message, e.details?.op];
+      }
+      return ['NO_ERROR', '', undefined];
+    };
+    // the CLI (parseOps) refuses a branch without nodes: it is no direct flow here either
+    const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
+    expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
+    expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
+    // no TypeError: the batch aliases read only arrays of objects (ops/aliases.ts), the split checks the shape
+    expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
+    expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
+    expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);
+    expect(await refused([null, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: expected an object, got null', 0]);
+    // a node that is no object fails before the split gateway is added
+    expect(await refused([{ nodes: ['x'] }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0].nodes[0]: expected an object, got string "x"', 0]);
+    // a node without a string kind too (it used to throw a TypeError with the split gateway already added)
+    const kindKey = `missing required key "kind" (${NODE_FIELDS.kind.description})`;
+    expect(await refused([{ nodes: [{ name: 'B' }] }, { nodes: [] }])).toEqual(['E_USAGE', `split branches[0].nodes[0]: ${kindKey}`, 0]);
+    expect(await refused([{ nodes: [{ kind: 'task', name: 'B' }, {}] }, { nodes: [] }])).toEqual(['E_USAGE', `split branches[0].nodes[1]: ${kindKey}`, 0]);
+    expect(await refused([{ nodes: [{ kind: 5 }] }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0].nodes[0]: "kind" must be a string, got number 5', 0]);
+    expect(await doc.toXml()).toBe(before);
+    // an empty nodes array is still a direct gateway -> join flow
+    const r = await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: [] }] }], { layout: false });
+    expect(r.changes.created.map((c) => c.id)).toContain('Gateway_AfterDoA_join');
+    expect(flowBetween(doc, 'Gateway_AfterDoA', 'Gateway_AfterDoA_join')).toBeTruthy();
   });
 
   it('branch nodes inherit the anchor lane and can carry triggers', async () => {

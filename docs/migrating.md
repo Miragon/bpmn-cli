@@ -365,3 +365,18 @@
   such a link, so `bpmn set <file> <id> calledDecision=<decision>` writes
   the Camunda 7 / 8 spelling as in 0.6, and in a file without engine
   content the unprefixed `calledDecision` ([Set keys](reference.md#set-keys)).
+- In an `apply` batch (and a typed batch of `mutateDoc` / `runOps`) an alias
+  follows its element through a retype to another type, also to the new id
+  the declared id conventions give it (`serviceTask_checkInvoice` ->
+  `userTask_checkInvoice`), so a batch can create, retype and then
+  configure an element. 0.6 failed a later op that used the alias with
+  `E_NOT_FOUND` (exit 2) and left the alias out of `aliases` (the
+  `aliases:` line and `--json`), which now lists it with the new id.
+- Library: a typed `split` op (`mutateDoc`, `runOps`, `mutateFile`) whose
+  branch has no `nodes` array is `E_USAGE`, worded like `parseOps` (`split
+  branches[0]: missing required key "nodes" (...)`); 0.6 made it a direct
+  gateway -> join flow. Write `nodes: []` for a direct flow, as the CLI
+  already asked. `branches` or `nodes` that are not arrays of objects, and a
+  node without a string `kind`, are `E_USAGE` too (0.6: a `TypeError`, a
+  node without `kind` with the split gateway already added). The split
+  checks this before it changes anything.

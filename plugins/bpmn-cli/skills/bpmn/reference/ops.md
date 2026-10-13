@@ -50,7 +50,9 @@ its patterns instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoic
 not name, set an alias - `"as"` on add / connect / split and split nodes,
 `"flowAs"` for the flow into a new node, `"joinAs"` for a split's join - and use
 `"$alias"` wherever an id goes (also inside `values` for `default`, `source`,
-`target`, `lane`). The result prints `aliases: $x = <id>`.
+`target`, `lane`). The result prints `aliases: $x = <id>`. An alias follows
+its element through a rename and a retype, so create, retype, then configure
+works in one batch.
 
 ## A first batch: split, aliases, end
 

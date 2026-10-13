@@ -159,6 +159,7 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
         resolved.push(ready);
         const cs = runOp(doc, ready);
         all.merge(cs);
+        for (const r of cs.replaced) table.rebind(r.from, r.to);
         for (const b of cs.bindings) table.define(b.alias, b.el, i);
         context.created.push(...cs.created.map((c) => c.id));
         for (const r of cs.renames) {
@@ -184,6 +185,7 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
     doc.flowsBefore = outerFlows;
   }
   all.bindings = [];
+  all.replaced = [];
   // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
   all.warnings = all.warnings.filter((w) => stillHolds(doc, w));
   // a kept flow id is stale against the flow's final ends, a kept id's prefix against the element's final type and trigger

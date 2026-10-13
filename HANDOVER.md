@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), and the E_VALIDATION advice that reads the refusal, and flows that follow every end change)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, and an alias through a retype with a typed split's input checked)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2104 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2108 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,85 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## A batch alias through a retype, a split's input in the library (2026-10-13, `fix/batch-alias-retype-split-input`)
+
+Two items #34 left open ("Open after #34" and "Left for later" below).
+
+- **An alias follows its element through a retype** (`src/ops/retype.ts`,
+  `src/result.ts`, `src/ops/index.ts`, `src/ops/aliases.ts`). A retype to
+  another BPMN type replaces the element (`swapType` makes a new one), and
+  the alias table kept the old one: a later op that used the alias got
+  `E_NOT_FOUND` ("which an op before this one removed"), and the result's
+  `aliases` left the alias out. Now `ChangeSet.replaced` records
+  `{ from, to }` (merged like `bindings`; `runBatch` clears both before it
+  returns), and `runBatch` calls `AliasTable.rebind(from, to)` after each
+  op. The alias follows the new element, also when a retype under the
+  declared conventions gave it a new id (`serviceTask_checkInvoice` ->
+  `userTask_checkInvoice`). A retype within one type (a trigger change)
+  never replaced the element, so nothing changes there. Output changes only
+  for batches that alias an element and retype it to another type: a batch
+  that uses the alias afterwards now runs, and `aliases:` and the JSON
+  `aliases` list the retyped element's alias.
+- **A split's input in the library** (`src/ops/split.ts`,
+  `src/ops/aliases.ts`). Typed ops skip `parseOps`. `mutateDoc` took a
+  branch without `nodes` as a direct gateway -> join flow. `nodes: 'abc'`,
+  `branches: 'oops'`, a null branch, a node that is no object and a node
+  without a string `kind` crashed with an uncoded TypeError, in the alias
+  table's `slots()` or partway through the split with the gateway already
+  added. `splitFlow` now checks that shape before the split changes
+  anything (the ops before it in the batch have run). The error is
+  `E_USAGE` with parseOps' message and hint, `split` where parseOps has
+  `ops[i] (split)`: `split branches[0]: missing required key "nodes"
+  (Nodes of the branch in order ...)`; the parentheses come from
+  `BRANCH_FIELDS` / `NODE_FIELDS` of `src/batch.ts` (imported, batch.ts
+  unchanged), and the test compares each message and hint with
+  `parseOps`. The alias helpers read the split's lists only where they are
+  arrays of objects. `branches` that are missing or empty stay
+  `E_INVALID_VALUE`. The CLI and `applyToXml` run parseOps first, so their
+  texts do not change.
+- Docs: [docs/ops.md](docs/ops.md) (an alias follows its element "through
+  a rename and a retype"), [docs/library.md](docs/library.md) (`mutateDoc`:
+  what a split checks, and that the ops before it have run),
+  [docs/migrating.md](docs/migrating.md) (two bullets in "Changes from
+  0.6": the alias through a retype; a typed split without `nodes` is
+  `E_USAGE`, 0.6 made it a direct flow), one sentence each in the full
+  guide's ops section and the skill's `reference/ops.md`. `guide --short`
+  is unchanged (4644 bytes on main with #55, #52, #53 and #46).
+- Tests: `test/batch-aliases.test.ts` (create, retype, set and a format op
+  on the alias, also for a gateway and an event; retyped twice; removed
+  after the retype is still `E_NOT_FOUND`; a new id under the declared
+  conventions; the CLI's `aliases:` line and `--json`) and
+  `test/ops-create.test.ts` (`mutateDoc` with branches without `nodes`,
+  `nodes: 'abc'`, `branches: 'oops'`, a null branch or node, a node
+  without a string `kind`: `E_USAGE` in parseOps' words, the document
+  unchanged; `nodes: []` still a direct flow). All four fail on main.
+- Evidence against a build of main: the same batches through
+  `applyToXml` on test/fixtures and tools/scenarios (164 files, 2216
+  batches). Batches without a type-changing retype of an aliased element,
+  and the split errors of parseOps, are byte-identical (xml and result):
+  1793. The alias used after a retype: 259 now run (main `E_NOT_FOUND`).
+  The retype only: 162 differ by the added alias alone. On a private
+  corpus (counts only) the numbers are 231 / 27 / 21 of 279, with no other
+  difference. The CLI's split errors are identical. A seeded fuzz campaign
+  `--via apply` (40 walks x 25 steps, 44 retypes) wrote byte-identical
+  models and logs, apart from timings. `layout-regress --compare`: 0
+  better, 0 worse; `speaking-ids --baseline` and `roundtrip --baseline`
+  are unchanged. Bundle: whole entry 925.7 -> 927.2 KB minified (294.5 ->
+  295.0 KB gzip) before the rebase; after the rebase onto main with #55,
+  #52, #53 and #46 930.1 -> 931.6 KB (296.1 -> 296.7 KB gzip), `applyToXml`
+  656.1 -> 657.5 KB (209.0 -> 209.6 KB gzip): within the budget, which
+  stays as it is. Runtime: one loop over the op's
+  replaced elements (empty without a retype) and a check over the split's
+  lists; within noise.
+- Left for later: a typed split node whose `kind` is a string but empty or
+  unknown is `E_UNKNOWN_KIND` from `addElement`, after the split gateway
+  was added (coded, as before; parseOps refuses it up front). Checking it
+  in `checkShape` would need parseOps' `checkKind` (the
+  `eventSubProcess:<trigger>` kinds), which lives in `src/batch.ts`, which
+  P6b (`outAs`) edits. The other keys of a typed split node (`set`,
+  `flowName`) are not checked, as for a typed `add`. `split.ts` has its own
+  five-line `describe()` (batch.ts does not export its copy).
 
 ## Flows follow every end change (2026-10-13, `fix/flows-follow-every-end-change`, follow-ups of #32 and #34)
 
@@ -544,7 +623,8 @@ Open after #34:
 - DI ids (`bpmndi:*`) follow their element, also where the rule names a DI
   type.
 - `mutateDoc` accepts a split's `branches` without `nodes` silently (the CLI
-  refuses them): a library input check, not #34.
+  refuses them): a library input check, not #34. Fixed in
+  `fix/batch-alias-retype-split-input` (above).
 - The `conventions:` line compares with the file's own style, which needs
   two ids per rule: a file that follows the rule gets it for its first ids
   and for a kind it has no id of yet. Leaving such ids out would need the
@@ -554,14 +634,14 @@ Left for later (low findings of the second review, not fixed in #34):
 
 - A glued collision suffix after a body that ends in a number reads as another number (`serviceTask_step1` + `2` = `serviceTask_step12`, which then pushes the real "Step 12" to `serviceTask_step122`); unique and passes the rule, needs a letter word before the number (`step1No2`) with derivedBases / idNamesEnds following it.
 - W_ID_PREFIX_STALE keeps the old id's body as it is: an id that never passed the declared case (`serviceTask_shipGoods` under PascalCase) gets a suggestion the rule still rejects, and a prefix without separator matched by accident (`user` on `userTask_checkOrder`) a garbled one (`manualTask_Task_checkOrder`); fire only for ids that fully passed the rule, or re-case the body.
-- Pre-existing (also on main): an op that touches a sequence flow without id crashes with E_INTERNAL (`idNamesEnds` on `undefined`); the change report names a created flow by the id its spliced flow just freed (`ChangeSet.rename` renames every entry with that id); a batch alias used after `retype` of its element is E_NOT_FOUND (swapType makes a new element). Separate issue.
+- Pre-existing (also on main): an op that touches a sequence flow without id crashes with E_INTERNAL (`idNamesEnds` on `undefined`); the change report names a created flow by the id its spliced flow just freed (`ChangeSet.rename` renames every entry with that id); a batch alias used after `retype` of its element is E_NOT_FOUND (swapType makes a new element; fixed in `fix/batch-alias-retype-split-input`, above). Separate issue.
 
 Left for later (low findings of the review after the rebase onto main, not fixed in #34):
 
 - Ids the batch built from a regenerated element's id other than flows keep its old stem: an unnamed element after it (`task_AfterSTCheck` after `UTCheck`), a boundary event on it (`event_TimerOnSTCheck`). Only the flows named after it follow; the rest would need the requests (context, anchor) of what the batch created.
 - Message flows that follow the file's own `stemTo` / `stemSnake` form copy the ends' id stems as they are, so one id can mix cases (`mf_askQuestion_to_getQuestion` in a snake file under camelCase). The rule does not check message flow ids; re-casing the stems needs the form learner (`flowForms`) to read the re-cased ids as that form too, or the file's form flips.
 - A new pool's process takes `Process_<Name>` as specified, also where the file's processes show a convention of their own (`process_customer`, `process_shop`: `Process_BankAccount`, `process_bankAccount` without a `.bpmnlintrc`). Following the file's process ids where at least two share a prefix would keep such files consistent; the rule does not check processes.
-- The batch alias after a type-changing `retype` (above, also on main): a fix (rebind the alias to the element `swapType` makes) changes the output without a `.bpmnlintrc`, so it belongs in a PR of its own.
+- The batch alias after a type-changing `retype` (above, also on main): a fix (rebind the alias to the element `swapType` makes) changes the output without a `.bpmnlintrc`, so it belongs in a PR of its own. Fixed in `fix/batch-alias-retype-split-input` (above).
 
 ## The project's bpmnlint configuration (2026-10-13, `feat/33-bpmnlint`, issue #33)
 

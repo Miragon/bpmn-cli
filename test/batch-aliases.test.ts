@@ -11,8 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { renderMutation } from '../src/report.js';
 import { OPS_SCHEMA, opsExample, parseOps } from '../src/batch.js';
+import { idConventionsFromLint } from '../src/conventions.js';
 import { Doc } from '../src/document.js';
 import { CliError } from '../src/errors.js';
+import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline.js';
 
@@ -97,6 +99,60 @@ describe('batch aliases', () => {
     expect(r.result.aliases).toEqual({ $work: 'Activity_Work', $in: 'Flow_StartToPrepare' });
     expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_StartToPrepare" name="go" sourceRef="Event_Start" targetRef="Activity_Prepare" />');
     expect(r.result.layout.format?.[0]).toMatchObject({ colored: ['Flow_StartToPrepare'] });
+  });
+
+  it('an alias follows its element through a retype to another type (a new element): later ops, format ops and the result use it', async () => {
+    const xml = (await newXml({ processName: 'Invoice' })).xml;
+    const r = await applyToXml(xml, [
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Invoice', as: '$s' },
+      { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: '$s', as: '$t' },
+      { op: 'retype', id: '$t', kind: 'userTask' },
+      { op: 'set', id: '$t', values: { name: 'Check the invoice' } },
+      // twice, and a gateway and an event too
+      { op: 'retype', id: '$t', kind: 'manualTask' },
+      { op: 'add', kind: 'xor', name: 'Ok?', after: '$t', as: '$ok' },
+      { op: 'retype', id: '$ok', kind: 'and' },
+      { op: 'add', kind: 'intermediateCatchEvent:message', name: 'Paid', after: '$ok', message: 'Paid', as: '$paid' },
+      { op: 'retype', id: '$paid', kind: 'intermediateThrowEvent:message' },
+      { op: 'add', kind: 'end', name: 'Done', after: '$paid' },
+      { op: 'color', ids: ['$t', '$ok'], color: 'green' },
+    ]);
+    expect(r.result.aliases).toEqual({ $s: 'Event_Start', $t: 'Activity_CheckInvoice', $ok: 'Gateway_Ok', $paid: 'Event_Paid' });
+    expect(r.xml).toContain('<bpmn:manualTask id="Activity_CheckInvoice" name="Check the invoice">');
+    expect(r.xml).toContain('<bpmn:parallelGateway id="Gateway_Ok" name="Ok?">');
+    expect(r.xml).toContain('<bpmn:intermediateThrowEvent id="Event_Paid" name="Paid">');
+    expect(r.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_CheckInvoice', 'Gateway_Ok'] });
+    expect(renderMutation(r.result)).toContain('aliases: $s = Event_Start, $t = Activity_CheckInvoice, $ok = Gateway_Ok, $paid = Event_Paid');
+    // removed after the retype: still E_NOT_FOUND, and left out of the result
+    const removed = await rejection(
+      applyToXml(xml, [
+        { op: 'add', kind: 'task', name: 'T', in: 'Process_Invoice', as: '$t' },
+        { op: 'retype', id: '$t', kind: 'userTask' },
+        { op: 'remove', ids: ['$t'] },
+        { op: 'set', id: '$t', values: { name: 'x' } },
+      ]),
+    );
+    expect([removed.code, removed.message]).toEqual(['E_NOT_FOUND', 'ops[3] (set): "id": $t named Activity_T, which an op before this one removed']);
+  });
+
+  it('an alias follows a retype that gives the element a new id under the declared conventions (#34)', async () => {
+    const conventions = idConventionsFromLint({ severity: 'warn', config: {} }, bpmnlintEngine().plugin.naming, { source: '.bpmnlintrc in .' }).conventions!;
+    const doc = await Doc.fromXml((await newXml({ processName: 'Invoice' })).xml);
+    const r = await mutateDoc(
+      doc,
+      [
+        { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Invoice', as: '$s' },
+        { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: '$s', as: '$t' },
+        { op: 'retype', id: '$t', kind: 'userTask' },
+        { op: 'set', id: '$t', values: { name: 'Check the invoice' } },
+        { op: 'add', kind: 'end', name: 'Done', after: '$t' },
+      ] as Op[],
+      { layout: false, conventions },
+    );
+    expect(r.aliases).toEqual({ $s: 'startEvent_start', $t: 'userTask_checkInvoice' });
+    expect(r.xml).toContain('<bpmn:userTask id="userTask_checkInvoice" name="Check the invoice">');
+    expect(r.xml).toContain('sourceRef="userTask_checkInvoice" targetRef="endEvent_done"');
+    expect(r.xml).not.toContain('serviceTask_checkInvoice');
   });
 
   it('resolve in the lane of split nodes and in the set map of add', async () => {
@@ -204,5 +260,20 @@ describe('batch aliases on the command line (`bpmn apply`)', () => {
     const json = JSON.parse(execFileSync('node', [bin, 'apply', file, '-', '--json'], { encoding: 'utf8', input: JSON.stringify([{ op: 'add', kind: 'task', name: 'Archivieren', after: 'Activity_Buchen', as: '$archive' }]) }));
     expect(json.aliases).toEqual({ $archive: 'Activity_Archivieren' });
     expect(readFileSync(file, 'utf8')).toContain('id="Activity_Archivieren"');
+  });
+
+  it('lists the alias of an element retyped to another type, in the aliases line and in the JSON', async () => {
+    const file = join(dir, 'retyped.bpmn');
+    writeFileSync(file, (await newXml({ processName: 'Invoice' })).xml);
+    const ops = [
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Invoice', as: '$s' },
+      { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: '$s', as: '$t' },
+      { op: 'retype', id: '$t', kind: 'userTask' },
+    ];
+    const json = JSON.parse(execFileSync('node', [bin, 'apply', file, '-', '--json', '--dry-run'], { encoding: 'utf8', input: JSON.stringify(ops) }));
+    expect(json.aliases).toEqual({ $s: 'Event_Start', $t: 'Activity_CheckInvoice' });
+    const text = execFileSync('node', [bin, 'apply', file, '-'], { encoding: 'utf8', input: JSON.stringify([...ops, { op: 'set', id: '$t', values: { name: 'Check the invoice' } }]) });
+    expect(text).toMatch(/^aliases: \$s = Event_Start, \$t = Activity_CheckInvoice$/m);
+    expect(readFileSync(file, 'utf8')).toContain('<bpmn:userTask id="Activity_CheckInvoice" name="Check the invoice">');
   });
 });

@@ -221,6 +221,8 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const target = to.type === el.$type ? el : swapType(doc, el, to, cs);
   applyKindProps(target, from, to);
   if (target !== el) {
+    // a batch alias of the element follows it to the new one (ops/aliases.ts AliasTable.rebind)
+    cs.replaced.push({ from: el, to: target });
     const inapplicable = inapplicableCamundaContent(doc, target, to);
     if (inapplicable) cs.warn(inapplicable);
     if (zeebeUserTaskDefault(doc, target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
