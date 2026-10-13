@@ -4,8 +4,7 @@ Six layers, from fast to thorough (plus the isomorphism check of the
 browser-safe core, see [Isomorphism check](#isomorphism-check), the opt-in
 Camunda 7 engine check, see [Engine checks](#engine-checks-camunda-7), the
 opt-in Camunda 8 engine check, see
-[Engine checks (Camunda 8)](#engine-checks-camunda-8), and the opt-in check
-against design-iq's validator, see [design-iq](#design-iq-validator-check)):
+[Engine checks (Camunda 8)](#engine-checks-camunda-8)):
 
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
@@ -119,9 +118,18 @@ ops matter) and add that.
 pipeline: the in-memory API keeps the text (a no-op is the input string
 itself, an insert gets ids in the file's style and changes only what it
 touched, a full redraw keeps every DI start tag, a sticky keeps its text
-when it follows its node), validators see the text-preserving result, the
-design profile runs in memory with a content repository the host names, and
-the file helpers find the repository of the file they write.
+when it follows its node), validators see the text-preserving result, a
+host validator runs in memory (a write that adds its error is refused,
+`validateXml` reports every finding), and the validators see the file a
+helper writes (the `--out` target) or checks, unless `file` names another.
+`test/validators.test.ts` covers the validator hook of the pipeline
+(blocking, pre-existing errors through renames, findings counted one by one,
+a warning matched by its `key`, `covers`, the context, failing validators,
+the check of `validate`, and the CLI, which takes no validators: a refusal
+lists the structural errors under its message, and `validate` exits with 2
+on an error),
+`test/decision-link.test.ts` the decision link (`calledDecision`) in design
+models (no engine namespace), Camunda 7, Operaton and Camunda 8 files.
 `test/views.test.ts` checks the reading views (`show --around`, `show <id>
 --context`, lanes and message-flow names in `show`, message flows and
 annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`
@@ -170,11 +178,8 @@ created elements not also listed as changed, the subscription redirect in the
 warnings delta, a plain remove of a merge and `move` into a cross-lane flow
 renaming flows after their new ends).
 `test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
-ids before drawing them, `test/node-files.test.ts` the encodings (a file is
-read as it declares, a write is UTF-8 and says so), and the design profile
-test the cases design-iq's validator decides differently from a plain BPMN
-reading (its namespace check on the raw text, flows counted per id, every
-collaboration, an attribute written twice).
+ids before drawing them, and `test/node-files.test.ts` the encodings (a file
+is read as it declares, a write is UTF-8 and says so).
 `test/layout-batch-parity.test.ts` checks issue #18, stage A, on the
 synthetic hand-drawn model of the plugin eval `edit-hand-drawn-model`: the
 agent's batches (decision + "no" to the existing node, decision + a new "no"
@@ -323,11 +328,10 @@ npx vitest run test/isomorphic.test.ts
 - `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
   needed), checks that the check sees a planted `node:fs` import and
   `process` read, and runs the bundle in a `vm` context without any Node
-  global: `applyToXml` (also with the design profile and a host validator,
-  and a no-op that must come back `unchanged`), `layoutXml` (both engines),
-  `newXml`, `validateXml` with the Camunda 7, the Camunda 8 and the design
-  profile,
-  `showXml`, `findXml` and `metricsXml` must give there exactly what they
+  global: `applyToXml` (also with host validators, and a no-op that must
+  come back `unchanged`), `layoutXml` (both engines), `newXml`,
+  `validateXml` with the Camunda 7 and the Camunda 8 profile and with host
+  validators, `showXml`, `findXml` and `metricsXml` must give there exactly what they
   give in Node, and `renderSvg` the same SVG. It also checks that the inlined
   Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
@@ -335,8 +339,9 @@ npx vitest run test/isomorphic.test.ts
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
   esbuild make of the `import()` in `src/platform/profile.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
-  chunk is evaluated: a plain model, a design model and `platform: 'none'`
-  load no profile chunk, a Camunda 7 file only the Camunda 7 rules, a
+  chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
+  error and covered lint warning come out like Node's) and
+  `platform: 'none'` load no profile chunk, a Camunda 7 file only the Camunda 7 rules, a
   Camunda 8 file only the Camunda 8 rules; a batch that turns a plain file
   into a Camunda 7 / 8 file loads them after the ops and reports the added
   findings of 0.4.0; `runProfile` without loaded rules throws
@@ -655,40 +660,6 @@ When you change how zeebe content is written, deploy the CLI-built models
 and run them, and run the real-file battery on your private corpus (deploy
 every file before and after each edit; compare every element's
 `<bpmn:extensionElements>` text outside the edited element byte for byte).
-
-## design-iq validator check
-
-The design profile (`src/platform/design.ts`) mirrors the save gate of
-Miragon's design-iq. `test/design-profile.test.ts` holds one synthetic model
-per rule with design-iq's verdict (`designIq: 'pass' | 'fail'`, and the number
-of its errors where it differs from the profile's); by default it checks the
-profile only. To check the verdicts against design-iq's own validator, point
-`BPMN_DESIGN_IQ_VALIDATOR` at `packages/validator/src/validate.ts` of a
-design-iq checkout whose dependencies are installed (Node 22.6+ strips the
-types; the test runs it in a child process and never imports it):
-
-```
-BPMN_DESIGN_IQ_VALIDATOR=<checkout>/packages/validator/src/validate.ts npx vitest run test/design-profile.test.ts
-```
-
-`test/validators.test.ts` covers the validator hook of the pipeline
-(blocking, pre-existing errors through renames, warnings, context, failing
-validators, the content-repository auto profile and the CLI output),
-`test/decision-link.test.ts` the decision link (`calledDecision`) in design,
-Camunda 7, Operaton and Camunda 8 files.
-
-**On a private corpus.** Compare, per file, design-iq's `checkModel(xml, {
-path })` errors with `checkFile(file, { profile: 'design' })` of
-`@miragon/bpmn-cli/node` (or `validateXml(xml, { profile: 'design' })`; the
-design profile's errors carry `validator: "design"`), file by file and finding by
-finding (design-iq names the element in its message: `<id> is a dead end`,
-`expected exactly one start event in process <id>`; it reports several start
-events once per process, the profile once per start event). For the gate
-itself, run edits through `mutateDoc(doc, ops, { profile: 'design' })` (or
-`applyToXml`; neither writes) and check that a refused edit (E_VALIDATION with a `design`
-finding) is exactly one whose output (written with `force: true`) has an
-error design-iq did not report before. Keep the scripts and their output
-outside the repository and report counts only.
 
 ## Private corpora
 

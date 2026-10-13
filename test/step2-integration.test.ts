@@ -1,22 +1,21 @@
 /**
  * Step 2 integration: the four packages of the design-iq round (the
  * browser-safe core with its in-memory API, the text-preserving writes, the
- * file's id conventions, the validators and the design profile) work as one
- * pipeline:
+ * file's id conventions and the validator hook) work as one pipeline:
  *
  *  - the in-memory API runs the text-preserving step: a no-op is `unchanged`
  *    (the input string itself), an edit changes only what it touched;
  *  - new ids and DI ids follow the file and survive that step; a full redraw
  *    keeps every DI start tag; a sticky that follows its node keeps its text;
  *  - validators see exactly what is written (after the text-preserving step),
- *    in memory too: the design profile with a host's content repository;
- *  - the node layer finds the content repository of the file it writes and
- *    tells the validators that file (also with `out`).
+ *    in memory too: a host validator refuses a write that introduces its error;
+ *  - the node layer tells the validators the file it writes (also with `out`)
+ *    or checks.
  *
  * Fixtures are synthetic (test/fixtures/roundtrip/styled.bpmn and inline).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -53,8 +52,8 @@ async function rejected(p: Promise<unknown>): Promise<CliError> {
   throw new Error('expected a rejection');
 }
 
-/** A design model: start -> call activity -> end, drawn (the design profile wants every node in the diagram). */
-async function designModel(called: string): Promise<string> {
+/** A model without engine namespace: start -> call activity -> end, drawn. */
+async function orderModel(called: string): Promise<string> {
   const drawn = await applyToXml(
     `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_D" targetNamespace="http://bpmn.io/schema/bpmn">
@@ -66,7 +65,6 @@ async function designModel(called: string): Promise<string> {
       { op: 'add', kind: 'callActivity', id: 'Call_Billing', name: 'Bill', after: 'Start', set: { calledElement: called } },
       { op: 'add', kind: 'endEvent', id: 'End', name: 'Done', after: 'Call_Billing' },
     ],
-    { profile: 'none' },
   );
   return drawn.xml;
 }
@@ -142,24 +140,27 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
     expect(renderLines(r.result.warnings.added)).toContain('[spy] audit/seen');
   });
 
-  it('the design profile in memory: auto runs it for a content repository the host names, with its link checks', async () => {
-    const xml = await designModel('billing');
-    // without a repository, auto runs no profile (in memory there is no bpmiq.yml to find)
-    expect((await validateXml(xml)).profile).toEqual({ profile: 'none', source: 'none', detail: expect.any(String) });
-    const repo = { processIds: ['payments'], decisionIds: [] };
-    const report = await validateXml(xml, { contentRepo: repo, file: 'order.bpmn' });
-    expect(report.profile).toMatchObject({ profile: 'design', source: 'content-repo' });
+  it('a host validator in memory: a write that introduces its error is refused, validateXml reports every finding', async () => {
+    const xml = await orderModel('billing');
+    /** a call activity calls a process the host knows (a warning); every task is reached by a sequence flow (an error) */
+    const host = (text: string): ValidatorFinding[] => [
+      ...[...text.matchAll(/<bpmn:callActivity id="([^"]+)"[^>]*calledElement="([^"]+)"/g)]
+        .filter((m) => m[2] !== 'payments')
+        .map((m) => ({ severity: 'WARN', ruleId: 'refs/dangling', message: `${m[1]} calls ${m[2]}, which the host does not know`, element: m[1] })),
+      ...[...text.matchAll(/<bpmn:task id="([^"]+)"/g)].filter((m) => !text.includes(`targetRef="${m[1]}"`)).map((m) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${m[1]} is never reached`, element: m[1] })),
+    ];
+    expect((await validateXml(xml)).validators).toBeUndefined();
+    const report = await validateXml(xml, { validators: [host], file: 'order.bpmn' });
     expect(report.ok).toBe(true);
-    expect(report.warnings.map((w) => `${w.code} ${w.element}`)).toEqual(['W_DESIGN_CALL_LINK Call_Billing']);
-    expect((await validateXml(xml, { contentRepo: { processIds: ['billing'] } })).warnings).toEqual([]);
+    expect(report.warnings.map((w) => `${w.code} ${w.element}`)).toEqual(['refs/dangling Call_Billing']);
+    expect((await validateXml(await orderModel('payments'), { validators: [host] })).warnings).toEqual([]);
 
-    // a write that leaves a node unconnected is refused by the design gate, a connected one passes
-    const err = await rejected(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }], { contentRepo: repo }));
+    // a write that leaves a node unconnected is refused by the host validator, a connected one passes
+    const err = await rejected(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }], { validators: [host] }));
     expect(err.code).toBe('E_VALIDATION');
-    expect((err.details['errors'] as Array<{ code: string; validator?: string }>).map((e) => `${e.validator} ${e.code}`)).toEqual(['design E_DESIGN_UNREACHABLE', 'design E_DESIGN_DEAD_END']);
-    const ok = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', after: 'Start' }], { contentRepo: repo });
-    expect(ok.result.validation.validators?.[0]).toMatchObject({ name: 'design', errors: [], counts: { errors: 0 } });
-    expect(await rejected(applyToXml(xml, [], { profile: 'strict' as never }))).toMatchObject({ code: 'E_USAGE' });
+    expect((err.details['errors'] as Array<{ code: string; validator?: string }>).map((e) => `${e.validator} ${e.code}`)).toEqual(['host flow/unreachable']);
+    const ok = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', after: 'Start' }], { validators: [host] });
+    expect(ok.result.validation.validators?.[0]).toMatchObject({ name: 'host', errors: [], counts: { errors: 0, warnings: 1 } });
   });
 });
 
@@ -168,44 +169,34 @@ function renderLines(findings: Array<{ code: string; validator?: string }>): str
   return findings.map((f) => `${f.validator ? `[${f.validator}] ` : ''}${f.code}`);
 }
 
-describe('the node layer finds the content repository of the file it writes (validation + core)', () => {
-  it('auto: a model of a bpmiq.yml repository gets the design gate; the validators see the target of --out', async () => {
-    const repo = join(dir, 'repo');
-    mkdirSync(join(repo, 'models'), { recursive: true });
-    writeFileSync(join(repo, 'bpmiq.yml'), 'models: models\n');
-    writeFileSync(join(repo, 'models', 'payments.bpmn'), await designModel('billing'));
-    const model = join(repo, 'models', 'order.bpmn');
-    writeFileSync(model, await designModel('payments'));
-    const outside = join(dir, 'order.bpmn');
-    writeFileSync(outside, await designModel('payments'));
-
-    const loose = [{ op: 'add' as const, kind: 'task', name: 'Loose', in: 'Process_Order' }];
-    expect(await rejected(mutateFile(model, loose, { dryRun: true }))).toMatchObject({ code: 'E_VALIDATION' });
-    expect((await mutateFile(outside, loose, { dryRun: true })).validation.validators).toBeUndefined();
-    expect((await mutateFile(model, loose, { dryRun: true, profile: 'none' })).validation.validators).toBeUndefined();
-
-    // the call link resolves against the repository's models (payments.bpmn), so the file is clean
-    const check = await checkFile(model);
-    expect(check.profile).toMatchObject({ profile: 'design', source: 'content-repo' });
-    expect(check.validation.warnings.filter((w) => w.code.startsWith('W_DESIGN'))).toEqual([]);
-
-    // with --out the validators are told the file being written, and the repository is the target's
+describe('the node layer tells the validators the file (validation + core)', () => {
+  it('the validators see the file written (the target of --out) or checked, unless `file` names another', async () => {
+    const source = join(dir, 'order.bpmn');
+    writeFileSync(source, await orderModel('payments'));
     const files: Array<string | undefined> = [];
-    const target = join(repo, 'models', 'copy.bpmn');
-    const r = await mutateFile(outside, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill the order' } }], { out: target, validators: [(_xml, ctx) => (files.push(ctx.file), [])] });
+    const seen = (_xml: string, ctx: ValidatorContext): ValidatorFinding[] => (files.push(ctx.file), []);
+    const target = join(dir, 'models', 'copy.bpmn');
+    const r = await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill the order' } }], { out: target, validators: [seen] });
     expect(files).toEqual([target, target]);
-    expect(r.validation.validators?.[0]).toMatchObject({ name: 'design', errors: [] });
+    expect(r.validation.validators).toMatchObject([{ name: 'seen', errors: [] }]);
     expect(r.written).toBe(true);
+    expect(r.file).toBe(target);
+
+    files.length = 0;
+    await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill' } }], { dryRun: true, validators: [seen] });
+    await checkFile(source, { validators: [seen] });
+    await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill' } }], { dryRun: true, file: 'models/order.bpmn', validators: [seen] });
+    expect(files).toEqual([source, source, source, 'models/order.bpmn', 'models/order.bpmn']);
   });
 
-  it('`bpmn validate --profile design --json` and validateXml report the same', async () => {
-    const xml = await designModel('billing');
+  it('`bpmn validate --json` and validateXml report the same', async () => {
+    const xml = await orderModel('billing');
     const file = join(dir, 'same.bpmn');
     writeFileSync(file, xml);
-    const run = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), 'validate', file, '--profile', 'design', '--json'], { encoding: 'utf8', cwd: ROOT });
+    const run = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), 'validate', file, '--json'], { encoding: 'utf8', cwd: ROOT });
     expect(run.status, run.stderr).toBe(0);
     const { file: _file, ...cli } = JSON.parse(run.stdout) as Record<string, unknown>;
-    expect(await validateXml(xml, { profile: 'design', file })).toEqual(cli);
-    expect(cli['profile']).toEqual({ profile: 'design', source: 'option', detail: '--profile design' });
+    expect(await validateXml(xml, { file })).toEqual(cli);
+    expect(cli).not.toHaveProperty('profile');
   });
 });

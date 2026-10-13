@@ -47,10 +47,8 @@ export type {
 export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult, type ValidationDelta } from './pipeline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
 export { preserveText, type PreservedText } from './preserve.js';
-/* validators run inside the write transaction (MutationOptions.validators) and the design profile (design-iq's save gate) */
+/* a host's validators, run inside the write transaction (MutationOptions.validators) and by validate (CheckOptions.validators) */
 export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './validators.js';
-export { designFindings, designValidator, undeclaredPrefixes, DESIGN_VALIDATOR, type DesignOptions, type UndeclaredPrefix } from './platform/design.js';
-export { resolveProfile, profileValidators, modelsFolderOf, PROFILE_CHOICES, CONTENT_CONFIG_FILE, type ContentRepo, type ProfileChoice, type ProfileInfo } from './platform/repo.js';
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './result.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate.js';

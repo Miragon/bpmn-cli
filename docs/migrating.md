@@ -19,7 +19,8 @@
   (`CheckResult.profile`), and `MutationOptions` / `CheckOptions` take
   `profile`, `contentRepo`, `validators` and `file`; in a design-iq content
   repository the CLI and the file helpers run the design profile by default
-  (`--profile none` switches it off).
+  (`--profile none` switches it off). The validation profile is gone again
+  after 0.6 (see [Changes from 0.6](#changes-from-06)).
 - `readXml` and the other file helpers read a file in the encoding its XML
   declaration names (0.2 read UTF-8 only); a write is UTF-8 and declares it.
 - A full redraw gives an element it draws that has no id (a hand-written
@@ -166,3 +167,52 @@
   never trades a crossing with a new flow for one between two drawn lines;
   a line along a new end event is routed again; a reroute that would still
   cross is not measured (faster writes on large models).
+
+## Changes from 0.6
+
+- The design profile, bpmn-cli's copy of design-iq's save gate, is gone
+  (issue #35). bpmn-cli no longer looks for a `bpmiq.yml` above a file, and
+  a write in a design-iq content repository is no longer checked against
+  design-iq's rules.
+- The CLI option `--profile` is gone from every mutating command and from
+  `validate`. It is now an unknown option (`E_USAGE`, exit 1): drop it from
+  scripts.
+- The library options `profile` and `contentRepo` are gone: from
+  `applyToXml`, `newXml`, `layoutXml` and `validateXml` (`EditOptions`,
+  `LayoutXmlOptions`, `ValidateXmlOptions`), from `MutationOptions` and
+  `CheckOptions` (`mutateDoc`, `layoutDoc`, `checkDoc`) and from the file
+  helpers (`mutateFile`, `mutateDocToFile`, `layoutFile`, `layoutDocToFile`,
+  `checkFile`). TypeScript reports them; at runtime they are ignored, so a
+  host that passed `profile: 'none'` only drops it. `file` stays: it is the
+  validators' `ctx.file`.
+- Removed exports of `@miragon/bpmn-cli`: `designFindings`,
+  `designValidator`, `undeclaredPrefixes`, `DESIGN_VALIDATOR`,
+  `resolveProfile`, `profileValidators`, `modelsFolderOf`, `PROFILE_CHOICES`,
+  `CONTENT_CONFIG_FILE` and the types `DesignOptions`, `UndeclaredPrefix`,
+  `ContentRepo`, `ProfileChoice`, `ProfileInfo`.
+- Removed exports of `@miragon/bpmn-cli/node`: `findContentRepo`,
+  `contentModelIds`, `contentRepoOf`, `resolveFileProfile` and the type
+  `ContentRepoOnDisk`.
+- The result of `bpmn validate --json`, `validateXml` (`ValidationReport`)
+  and `checkFile` / `checkDoc` (`CheckResult`) has no `profile` field.
+  `bpmn kinds --json` has no `profiles` key, and `bpmn kinds --section
+  profiles` is gone.
+- The codes `E_DESIGN_*` and `W_DESIGN_*` are gone from the error catalogue
+  (`ERROR_CATALOGUE`, `bpmn kinds --section errors`), and so are the
+  `bpmn guide design` topic and the DESIGN-IQ section of `bpmn guide`.
+- Unchanged: the validator hook (`validators`, `W_PREEXISTING_ERROR`,
+  `E_VALIDATOR_FAILED`, `covers`), the platform profiles (`--platform`,
+  Camunda 7 / 8), stickies (`bpmiq:sticky` follows its node) and the
+  decision links in every spelling.
+- Migration: in a design-iq content repository, run design-iq's own
+  validator after edits:
+
+  ```
+  npx @miragon/design-iq-validator --root .
+  ```
+
+- Migration: a library host that wants a check inside the write passes its
+  own validator through `validators` ([Validators](validators.md)). An error
+  a change adds refuses the write (`E_VALIDATION`); one the file already had
+  is a `W_PREEXISTING_ERROR` warning. design-iq's live host already passes
+  its own check this way.

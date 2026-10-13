@@ -37,7 +37,7 @@ installed version. Ask it instead of guessing:
 
 - `bpmn guide --short` - the core in 5 KB; `bpmn guide <topic>` - one section
   (contract, workflow, reading, output, layout, format, ops, placement,
-  triggers, errors, quoting, camunda7, camunda8, design, commands)
+  triggers, errors, quoting, camunda7, camunda8, commands)
 - `bpmn kinds --section kinds,triggers,setKeys,nestedKeys,zeebeElements,ops,errors`
   (`--json` for the ops JSON schema), `bpmn <command> --help`
 
@@ -148,9 +148,7 @@ installed version. Ask it instead of guessing:
 5. **Validate**: `bpmn validate <file>` (structure, lint, the engine profile of
    the file's platform, a layout dry run); `--strict` exits 5 on any warning -
    use it when the user wants a clean or deployable model. Fix findings with the
-   command in their hint, then validate again. Inside a design-iq content
-   repository (a `bpmiq.yml` above the file) every write also passes design-iq's
-   save gate (`E_DESIGN_*`, see `bpmn guide design`).
+   command in their hint, then validate again.
 6. **Confirm** with `bpmn show` (or `--around`) and report to the user what
    changed, naming the ids.
 

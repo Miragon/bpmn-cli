@@ -1,4 +1,4 @@
-# Handover, 2026-10-12 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), and stages A and B of the incremental layout of edits to hand-drawn models (#18))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), and the removal of the design profile (#35))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -13,7 +13,7 @@ validate, lay out, write atomically; the write keeps the text of everything
 the change did not touch, and a result equal to the file is not written. The
 same pipeline runs in the browser on strings (`@miragon/bpmn-cli`:
 `applyToXml` and friends; the file helpers are `@miragon/bpmn-cli/node`), with
-host validators and a copy of design-iq's save gate inside the transaction.
+a host's own validators inside the transaction.
 `validate` (and every write) runs the engine profile of the file's platform:
 Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
 engines; the rules of each platform load on demand (a chunk of their own in
@@ -39,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1933 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1888 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -49,6 +49,124 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## The design profile removed (2026-10-13, `feat/35-remove-design-profile`, issue #35)
+
+The decision on #30: bpmn-cli does not couple to design-iq, and design-iq's
+own validator is the only place its rules live. design-iq's live host
+already embeds the core with `profile: 'none'` and passes its own
+`checkModel` through the validator hook (design-iq's ADR 0009,
+Miragon/design-iq#244). A checkout of a content repository has its own check
+(`npx @miragon/design-iq-validator --root .`, which the repository's
+`CLAUDE.md` asks for after every model edit). The copy drifted: the rename
+to `designiq.yml` turned it off without a message (#30), and the analysis
+for #30 found about 15 edge differences to `checkModel`. This replaces the
+issue's earlier plan, a project-validator mechanism in bpmn-cli with an
+adapter shipped by design-iq: that would be new coupling for one consumer
+that already has its own check.
+
+- **Removed** (no replacement in bpmn-cli):
+  - the rules: `src/platform/design.ts` (`designFindings`,
+    `designValidator`, `undeclaredPrefixes`, `DESIGN_VALIDATOR`) and the
+    `E_DESIGN_*` / `W_DESIGN_*` codes;
+  - the profile and the repository lookup: `src/platform/repo.ts`
+    (`resolveProfile`, `profileValidators`, `modelsFolderOf`,
+    `PROFILE_CHOICES`, `CONTENT_CONFIG_FILE`, `ContentRepo`, `ProfileChoice`,
+    `ProfileInfo`), `src/node/repo.ts` (`findContentRepo`,
+    `contentModelIds`, `contentRepoOf`, `resolveFileProfile`,
+    `ContentRepoOnDisk`) and the lookup in `src/node/files.ts`
+    (`fileContext` only names the file the validators see);
+  - the options: `--profile` on the mutating commands and on `validate` (now
+    an unknown option: `E_USAGE`, exit 1, the hint any unknown option gets),
+    and `profile` / `contentRepo` in `MutationOptions`, `CheckOptions`,
+    `EditOptions`, `ValidateXmlOptions` and the file helpers;
+  - the output: `profile` in the `validate` result (`ValidationReport`,
+    `CheckResult`), `profiles` in `bpmn kinds --json` and `kinds --section
+    profiles`;
+  - the guide: the DESIGN-IQ section, the `design` topic, `PROFILE_DOCS`,
+    the `--profile` common option and the catalogue entries. `E_VALIDATION`,
+    `W_PREEXISTING_ERROR` and a line of the COMMANDS section (the result
+    format of the mutating commands, `bpmn guide commands`) name "a host's
+    validator"; a validator's `E_VALIDATION` hint no longer mentions
+    `--profile none`. The fix of `W_PREEXISTING_ERROR` says that a host
+    validator's error is listed by the host's own check or by `validateXml`
+    with `validators`, and the COMMANDS line shows a finding as `[<name>]
+    <code> <element>: <message>` (a host's codes are its own, not `E_...`);
+  - the docs: `docs/design-iq.md` became `docs/validators.md` (the hook
+    only, with a product-neutral example run against the sources), the
+    verdict suite of `docs/testing.md` and the skill's line on content
+    repositories are gone, and `docs/migrating.md` ("Changes from 0.6")
+    lists every breaking change with what to do instead.
+- **Stays**: the validator hook (`validators`, `NamedValidator`,
+  `ValidatorFinding` with `ruleId` and `key`, the before and after runs,
+  `W_PREEXISTING_ERROR`, `E_VALIDATOR_FAILED`, `covers`, `ctx.file`); sticky
+  support (a `bpmiq:sticky` follows its node: file format compatibility, the
+  namespace is frozen); decision links read and written in every spelling
+  (`src/ops/decision.ts` unchanged, also the unprefixed `calledDecision=` for
+  `platform: none`); the platform profiles (Camunda 7 / 8, `--platform`).
+- **Instead**: in a design-iq content repository an agent runs
+  `npx @miragon/design-iq-validator --root .` after its edits; a library
+  host that wants a check inside the write passes its own validator through
+  `validators`. The design-iq side (drop `profile: 'none'` with the bump) is
+  Miragon/design-iq#248.
+- **Tests**: `test/design-profile.test.ts` is deleted: its 36 rule cases and
+  12 explicit cases only tested design-iq's rules or the repository lookup,
+  and its opt-in suite compared the copy with design-iq's validator (48
+  passing tests and 1 skipped suite fewer). The generic hook coverage runs
+  through two host validators in `test/validators.test.ts` (15 -> 18
+  cases): `gate()` reads the parsed document (unreachable and dead-end
+  errors that cover the lint warnings, start-event errors counted one by
+  one, a size warning with a `key` and no element), `shapes` reads the XML.
+  Ported to them: a refused change and the same change without the
+  validator, `--force`, a pre-existing error through a rename, one start
+  event per process and a node with its flows in one transaction, findings
+  counted one by one, warnings reported once (the `key` identity), the same
+  bytes with and without a validator, the check of what would be written
+  (`--no-layout`), `ruleId` findings, the check of `validate` (every
+  finding, `covers`) and the validators seeing the file's own diagram. The
+  CLI cases: "`--profile` is an unknown option like any other" (the same
+  stderr as `--bogus none`), and a structural error through the CLI: `bpmn
+  apply` refuses it with the error list under the message and in `--json`
+  `error.errors` (exit 2, nothing written), and after `--force` (no `.bak`
+  without `--backup`) `bpmn validate` reports it and exits 2. The deleted
+  design-profile tests were the only CLI runs of these. `test/step2-integration.test.ts` and
+  `test/isomorphic.test.ts` keep their case counts with host validators
+  (`ctx.file` of `--out`, of `checkFile` and of the `file` option; `bpmn
+  validate --json` equals `validateXml` and has no `profile`; no profile
+  chunk loads, and the split bundle reports a host validator's error, its
+  `W_PREEXISTING_ERROR` after an edit and the lint warning it covers like
+  Node); `test/decision-link.test.ts` drops `profile: 'none'`.
+  Deleted with the profile: the guide's DESIGN-IQ recipe case and the
+  `--profile bogus` / `profile: 'strict'` cases.
+- **Closed**: #30 (decided: no coupling) and PR #36 (the `designiq.yml`
+  lookup fix, option a of #30), obsolete since the lookup is gone.
+- **Release**: one minor release with a `BREAKING CHANGE` footer, no
+  deprecation release (design-iq is the only known library host and does
+  not use the profile; CLI scripts drop `--profile`).
+- `npm run gate`: 1,888 tests (+246 opt-in), isomorphism check,
+  layout regression 444 (budget 444), fuzz 12 x 15 0 errors (4 group
+  warnings in one walk). The bundles shrink and the
+  budgets go down with the code (`tools/iso/budget.json`, measured + about
+  2 %): `applyToXml` only 642.6 / 204.0 -> 630.6 / 199.9 KB, budget 650 /
+  206 -> 643 / 204; the whole entry 887.2 / 280.3 -> 865.8 / 273.2 KB,
+  budget 899 / 284 -> 883 / 279 (the table in `docs/library.md` too). The
+  Camunda 7 / 8 chunks do not change. Importing one guide export adds 116
+  to 140 KB minified (35 to 43 KB gzip) to `applyToXml`; `docs/library.md`
+  said 118 to 141, measured at #13 (on main it was 123 to 149).
+
+Open after #35:
+
+- design-iq's spelling of decision links: for a model with no engine
+  namespace bpmn-cli writes the unprefixed `calledDecision=`, design-iq's
+  convention. It gets its own issue, together with keeping a file's own link
+  spelling (design-iq's ADR 0009, upstream asks).
+- Once the release is out: the design-iq PR for Miragon/design-iq#248 (the
+  version bump, `profile: 'none'` dropped).
+- The `E_VALIDATION` entry of the error catalogue still says to run `bpmn
+  validate <file>`, which cannot show a host validator's findings (the CLI
+  takes no validators; the host shows them in its result).
+- #33 and #34 (bpmnlint config, project config) stay open: they are generic
+  and do not depend on this issue.
 
 ## Incremental layout of edits to hand-drawn models, stage B (2026-10-12, `feat/layout-room-making`, issue #18)
 
@@ -2005,11 +2123,11 @@ file in bpmn-moddle's order; 1 of 218 real Camunda 7 files, refused by the
 engines before and after an edit); a spliced or bridged flow keeps its id
 (#48) and files that number their flows can still collide across branches (9
 of 225 file pairs) (both resolved by step 3's speaking ids); in a process with two lane sets the design profile checks
-the lanes design-iq does not read (stricter, documented); a sticky moves by its node's centre shift only; nested lanes
+the lanes design-iq does not read (stricter, documented; moot since the design profile was removed with #35); a sticky moves by its node's centre shift only; nested lanes
 (`set lane=` writes the child lane only, design-iq reads top-level lanes) and
 lane inheritance of a node placed next to a node in no lane; design-iq's
 degree rules make compensation handlers, link events and ad-hoc content
-unsavable there; host validators only through the library, not the CLI;
+unsavable there (the design profile reported them; removed with #35); host validators only through the library, not the CLI;
 `mutateDoc` still takes typed ops unchecked (#49; `applyToXml` checks them);
 bundle size (`applyToXml` 594 / 186 KB minified / gzip; ops, diagram and the
 Camunda 7 profile are the largest parts: a lazy profile or a slimmer build
@@ -2331,13 +2449,12 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
 
 ## Known residuals
 
-- Design profile: design-iq's flow rules are degree checks, so compensation
-  handlers, link events and ad-hoc sub-process content cannot be saved there;
-  the profile reports them with that explanation (BPMN allows them). A new
-  node next to a node in no lane inherits no lane and is refused
-  (`--lane` in the same command). The CLI cannot pass host validators (only
-  the library can); a host validator that needs repository context (design-iq's
-  `checkModel` with `modelIds`) gets it from the host.
+- Validators: the CLI cannot pass host validators (only the library can);
+  a host validator that needs repository context (design-iq's `checkModel`
+  with `modelIds`) gets it from the host. bpmn-cli has no copy of
+  design-iq's rules since #35: in a content repository, run design-iq's own
+  validator after edits. A new node next to a node in no lane inherits no
+  lane (`--lane` in the same command).
 
 - Camunda 7: an Operaton-namespace file is checked the way Operaton reads it
   (operaton first, camunda as the fallback), so `operaton:historyTimeToLive`

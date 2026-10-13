@@ -94,7 +94,7 @@ Details: [Camunda 7 and Camunda 8](docs/camunda.md).
 
 The package is also a library that edits BPMN in memory, in Node and in the browser.
 
-Details: [library use](docs/library.md), [migrating between versions](docs/migrating.md).
+Details: [library use](docs/library.md), [validators](docs/validators.md), [migrating between versions](docs/migrating.md).
 
 ## Documentation
 
@@ -104,9 +104,9 @@ Details: [library use](docs/library.md), [migrating between versions](docs/migra
 - [Layout and formatting](docs/layout.md): layout modes and the diagram-only commands
 - [The contract and its limits](docs/contract.md): what the CLI guarantees, what a write changes, limitations
 - [Camunda 7 and Camunda 8](docs/camunda.md): platform settings with worked examples
-- [design-iq](docs/design-iq.md): the design profile and its validators
 - [A worked session](docs/walkthrough.md): one process from an empty file to a validated model
 - [Library use](docs/library.md) and [migrating](docs/migrating.md)
+- [Validators](docs/validators.md): a library host's own checks inside the write
 - [Testing](docs/testing.md) and [releasing](docs/releasing.md)
 
 ## Contributing

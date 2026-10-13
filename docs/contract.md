@@ -24,8 +24,8 @@ prints the short form.
 4. **Nothing is half done.** A command, or a whole `apply` batch, succeeds completely or leaves
    the file untouched. Structural validation errors the change would introduce block the write
    (`--force` overrides). Errors the file already had are reported as `W_PREEXISTING_ERROR` and do
-   not block, so a file with an old problem stays editable. In a design-iq content repository the
-   same holds for design-iq's save gate ([design-iq.md](design-iq.md)).
+   not block, so a file with an old problem stays editable. The same holds for the validators a
+   library host passes ([Validators](validators.md)).
 5. **Conventions instead of coordinates.** Sub-processes are expanded by default; branches follow
    the rule under [The DI contract](#the-di-contract); exclusive gateways should be named as a
    question and their branches named; joins and parallel gateways stay unnamed. `bpmn validate`

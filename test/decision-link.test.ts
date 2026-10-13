@@ -48,7 +48,7 @@ const C8 = { ns: `${ZEEBE} ${MODELER}`, attrs: 'modeler:executionPlatform="Camun
 
 async function set(source: string, values: Record<string, string>): Promise<{ doc: Doc; xml: string; result: Awaited<ReturnType<typeof mutateDoc>> }> {
   const doc = await Doc.fromXml(source);
-  const result = await mutateDoc(doc, [{ op: 'set', id: 'R', values }], { layout: false, profile: 'none' });
+  const result = await mutateDoc(doc, [{ op: 'set', id: 'R', values }], { layout: false });
   return { doc: await Doc.fromXml(result.xml), xml: result.xml, result };
 }
 

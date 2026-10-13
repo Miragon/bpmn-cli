@@ -163,7 +163,7 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(edited.xml)));
   });
 
-  it('keeps the text, runs the design profile and host validators like Node (step 2 packages together)', async () => {
+  it('keeps the text and runs host validators like Node (step 2 packages together)', async () => {
     const styled = readFileSync(join(ROOT, 'test', 'fixtures', 'roundtrip', 'styled.bpmn'), 'utf8');
     const same = await browser.applyToXml(styled, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }]);
     expect(same.unchanged).toBe(true);
@@ -173,19 +173,22 @@ describe('the browser bundle in a context without Node globals', () => {
       phases.push(`${ctx.phase}:${xml.includes('<!-- the order starts here -->')}`);
       return [];
     };
+    /** every task is reached by a sequence flow */
+    const reached = (xml: string): Array<{ severity: string; ruleId: string; message: string; element: string }> =>
+      [...xml.matchAll(/<bpmn:\w*[tT]ask id="([^"]+)"/g)].filter((m) => !xml.includes(`targetRef="${m[1]}"`)).map((m) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${m[1]} is never reached`, element: m[1]! }));
     const ops = [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }];
-    const opts = { profile: 'design' as const, contentRepo: { processIds: ['Process_Styled'], decisionIds: [] }, validators: [host] };
+    const opts = { validators: [host, reached] };
     const there = await browser.applyToXml(styled, ops, opts);
     expect(phases).toEqual(['before:true', 'after:true']);
     expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
-    expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['design', 'host']);
+    expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['host', 'reached']);
     const here = await core.applyToXml(styled, ops, opts);
     expect(there.xml).toBe(here.xml);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
-    const report = await browser.validateXml(here.xml, { profile: 'design' });
-    expect(report.profile.profile).toBe('design');
-    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { profile: 'design' })));
-    await expect(browser.applyToXml(styled, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Styled' }], { profile: 'design' })).rejects.toMatchObject({ code: 'E_VALIDATION' });
+    const report = await browser.validateXml(here.xml, { validators: [reached] });
+    expect(report.validators?.map((v) => v.name)).toEqual(['reached']);
+    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { validators: [reached] })));
+    await expect(browser.applyToXml(styled, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Styled' }], { validators: [reached] })).rejects.toMatchObject({ code: 'E_VALIDATION', name: 'CliError' });
   });
 
   it('refuses like Node: CliError codes cross the realm boundary', async () => {
@@ -207,7 +210,15 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   const rename = [{ op: 'set', id: 'Task_A', values: { name: 'Check the order' } }];
   const toC7 = [{ op: 'set', id: 'Task_A', values: { 'camunda:assignee': 'demo' } }];
   const toC8 = [{ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'check' } }];
-  const design = { profile: 'design' as const, contentRepo: { processIds: ['Proc_A', 'Proc_B'], decisionIds: [] } };
+  /** a host validator with an error the fixture already has (Task_Recv has no flow); it says W_DEAD_END again */
+  const hosted = {
+    validators: [{
+      name: 'host',
+      covers: { E_HOST_LOOSE: 'W_DEAD_END' },
+      validate: (xml: string): Array<{ severity: string; code: string; message: string; element: string }> =>
+        xml.includes('id="Task_Recv"') ? [{ severity: 'ERROR', code: 'E_HOST_LOOSE', message: 'Task_Recv has no sequence flow', element: 'Task_Recv' }] : [],
+    }],
+  };
   let c7: string;
   let c8: string;
   let bundle: Bundle;
@@ -303,13 +314,20 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     expect(profiles()).toEqual([]);
   });
 
-  it('a design model loads no profile chunk', async () => {
+  it('host validators on a plain model load no profile chunk and report like Node', async () => {
     const { lib, profiles } = await fresh();
-    const report = await lib.validateXml(plain, design);
-    expect(report.profile.profile).toBe('design');
-    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(plain, design)));
-    const edited = await lib.applyToXml(plain, rename, design);
-    expect(JSON.stringify(edited.result)).toBe(JSON.stringify((await core.applyToXml(plain, rename, design)).result));
+    const report = await lib.validateXml(plain, hosted);
+    expect(report.ok).toBe(false);
+    expect(report.errors).toEqual([expect.objectContaining({ code: 'E_HOST_LOOSE', validator: 'host', severity: 'error', element: 'Task_Recv' })]);
+    expect(report.warnings.map((w) => w.code)).not.toContain('W_DEAD_END');
+    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(plain, hosted)));
+    const edited = await lib.applyToXml(plain, rename, hosted);
+    expect(edited.result.validation.validators?.[0]?.preexisting.map((i) => i.code)).toEqual(['E_HOST_LOOSE']);
+    expect(JSON.stringify(edited.result)).toBe(JSON.stringify((await core.applyToXml(plain, rename, hosted)).result));
+    // the library's MutationResult keeps the pre-existing error among the warnings
+    const mutated = await lib.mutateDoc(await lib.Doc.fromXml(plain), rename as core.Op[], hosted);
+    expect(mutated.validation.warnings).toContainEqual(expect.objectContaining({ code: 'W_PREEXISTING_ERROR', validator: 'host', element: 'Task_Recv' }));
+    expect(JSON.stringify(mutated.validation)).toBe(JSON.stringify((await core.mutateDoc(await core.Doc.fromXml(plain), rename as core.Op[], hosted)).validation));
     expect(profiles()).toEqual([]);
   });
 

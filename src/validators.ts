@@ -1,7 +1,6 @@
 /**
- * Pluggable validators: checks a host (or a built-in profile such as the
- * design profile, src/platform/design.ts) runs inside the write transaction,
- * on the XML that would be written.
+ * Pluggable validators: checks a host runs inside the write transaction, on
+ * the XML that would be written.
  *
  *   mutateDoc(doc, ops, { validators: [fn, { name: 'host', validate: fn }] })
  *   fn(xml, ctx) => ValidatorFinding[] | Promise<ValidatorFinding[]>
@@ -21,14 +20,16 @@
  * `validation.validators` has one report per validator (introduced errors and
  * warnings, pre-existing errors, resolved findings, totals); the reported
  * findings are also among `validation.errors` / `validation.warnings` with a
- * `validator` field. `bpmn validate` / checkFile run each validator once on
- * the file and report every finding (errors fail the check).
+ * `validator` field. A check (checkDoc, checkFile, validateXml) runs each
+ * validator once on the document and reports every finding (an error makes
+ * `ok` false in the validateXml report; checkDoc and checkFile list it in
+ * `validation.errors`).
  *
  * Findings are matched before / after by validator, code and element (an
  * element the ops renamed keeps its findings) or, without an element, by code
  * and message (the old ids in the message replaced by the renamed ones); a
- * finding's `key` replaces that identity. design-iq's `Finding` ({severity:
- * 'ERROR' | 'WARN', ruleId, message}) is accepted as it is.
+ * finding's `key` replaces that identity. A finding of the shape
+ * {severity: 'ERROR' | 'WARN', ruleId, message} is accepted as it is.
  */
 import type { Doc } from './document.js';
 import { modelError, type Warning } from './errors.js';
@@ -43,9 +44,9 @@ export type ValidatorSeverity = 'error' | 'warning';
 export interface ValidatorFinding {
   /** 'error' blocks a write that introduces it, 'warning' is reported; ERROR / WARN / WARNING in any case are accepted too */
   severity: string;
-  /** stable rule id, e.g. E_DESIGN_DEAD_END (`ruleId` is read when there is no code) */
+  /** stable rule id, e.g. UNNAMED_TASK (`ruleId` is read when there is no code) */
   code?: string;
-  /** design-iq's name for the code (`bpmn/flow`) */
+  /** another name for the code (`naming/task`) */
   ruleId?: string;
   message: string;
   /** id of the element the finding is about */
@@ -75,9 +76,9 @@ export interface NamedValidator {
   /** shown with every finding (`[name]` in the CLI, `validator` in JSON) */
   name: string;
   validate?: ValidatorFn;
-  /** an in-process validator may read the parsed document instead of the XML (saves a serialisation) */
+  /** an in-process validator may read the parsed document instead of the XML: the live document before the ops and in a check, a fresh parse of the candidate after them (one parse more per write; it saves a serialisation only for a document created in memory) */
   validateDoc?: (doc: Doc, ctx: ValidatorContext) => ValidatorFinding[] | Promise<ValidatorFinding[]>;
-  /** one line on why it runs, e.g. `bpmiq.yml in <dir>` (shown in results) */
+  /** one line on why it runs (shown in results) */
   detail?: string;
   /** finding code -> the lint warning code it says again about the same element (the lint warning is dropped) */
   covers?: Record<string, string>;
@@ -265,7 +266,7 @@ export function validatorRefusal(errors: ValidatorIssue[]) {
   const names = [...new Set(errors.map((e) => e.validator))];
   return modelError('E_VALIDATION', `The change would introduce ${errors.length} error(s) reported by ${names.map((n) => `validator ${n}`).join(', ')}; nothing was written`, {
     errors,
-    hint: `Fix the listed problems (each names its validator in brackets), make the edit in one transaction (\`bpmn apply <file> ops.json\`) so that it ends in a valid model, or pass --force to write anyway.${names.includes('design') ? ' The design profile mirrors the design-iq save gate; `--profile none` switches it off.' : ''}`,
+    hint: 'Fix the listed problems (each names its validator in brackets), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.',
   });
 }
 

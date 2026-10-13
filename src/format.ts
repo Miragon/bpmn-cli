@@ -539,7 +539,7 @@ export function renderChanges(cs: ChangeSet): string {
 }
 
 function problemLine(p: Warning): string {
-  // a validator's finding (src/validators.ts) names its validator: `[design] E_DESIGN_DEAD_END ...`
+  // a validator's finding (src/validators.ts) names its validator: `[host] UNNAMED_TASK ...`
   const validator = (p as Warning & { validator?: string }).validator;
   let head = validator ? `[${validator}] ${p.code}` : p.code;
   if (p.element) head += ` ${p.element}`;
