@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
+import type { El } from '../src/model.js';
 import type { Warning } from '../src/errors.js';
 import { runOp, runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
@@ -87,6 +88,17 @@ const JOIN_B = definitionsXml(`
     <bpmn:sequenceFlow id="Flow_AToB" sourceRef="Activity_A" targetRef="Activity_B" />
     <bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved}</bpmn:conditionExpression></bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_CToDone" sourceRef="Activity_C" targetRef="Event_Done" />`);
+
+/** Start -> X -> Done, and apart from it A -> B (A has no flow in, so it is not bridged) with a label and a condition. */
+const APART = definitionsXml(`
+    <bpmn:startEvent id="Event_Start" name="Start"><bpmn:outgoing>Flow_StartToX</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Activity_X" name="X"><bpmn:incoming>Flow_StartToX</bpmn:incoming><bpmn:outgoing>Flow_XToDone</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="Event_Done" name="Done"><bpmn:incoming>Flow_XToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:task id="Activity_A" name="A"><bpmn:outgoing>Flow_AToB</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_B" name="B"><bpmn:incoming>Flow_AToB</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_StartToX" sourceRef="Event_Start" targetRef="Activity_X" />
+    <bpmn:sequenceFlow id="Flow_XToDone" sourceRef="Activity_X" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_B"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved}</bpmn:conditionExpression></bpmn:sequenceFlow>`);
 
 /** A split into A and B, both ending in Done: Done has two flows in. */
 const SHARED_END = definitionsXml(`
@@ -248,6 +260,38 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
     const renamed = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { layout: false });
     expect(renamed.result.removed).toContainEqual({ id: 'Flow_BToC', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_B -> Activity_C' });
     expect(renamed.result.warnings.added.map((w) => w.code)).not.toContain('W_LABEL_DROPPED');
+  });
+
+  it('a chain whose first node is not bridged: the flow to the next node, put back elsewhere and then between its old ends again, gets its label back', async () => {
+    // A's splice puts A -> B back as A -> Done, B's splice after A ends it at B again
+    const r = await applyToXml(APART, [{ op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_X' }], { keepFlowIds: true, layout: false });
+    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_B">\s*<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\$\{approved\}<\/bpmn:conditionExpression>/);
+    expect(r.result.warnings.added.map((w) => w.code)).toEqual(['W_FLOW_ID_STALE']);
+    expect(r.result.changed.filter((c) => c.id === 'Flow_AToB')).toEqual([{ id: 'Flow_AToB', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_A -> Activity_B' }]);
+    // its default marker comes back the same way
+    const marked = APART.replace('<bpmn:task id="Activity_A" name="A">', '<bpmn:task id="Activity_A" name="A" default="Flow_AToB">').replace(/<bpmn:conditionExpression.*?<\/bpmn:conditionExpression>/, '');
+    const def = await kept([{ op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_X' }], marked);
+    expect(def.doc.get('Activity_A')!.get<El>('default')).toBe(def.doc.get('Flow_AToB'));
+    expect(def.warnings.map((w) => w.code)).toEqual(['W_FLOW_ID_STALE']);
+  });
+
+  it('a put-back default flow never carries a condition, and a default the placement gave wins over the marker the flow had', async () => {
+    // B (two flows in, not bridged) before C, its old target: the prepend makes Flow_BToC the default flow, so its condition stays dropped
+    const r = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C', default: true }], { keepFlowIds: true, layout: false });
+    expect(r.xml).toContain('<bpmn:task id="Activity_B" name="B" default="Flow_BToC">');
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C" />');
+    expect(r.result.warnings.added.filter((w) => w.code === 'W_CONDITION_DROPPED').map((w) => w.message)).toEqual([
+      'Condition of Flow_BToC was dropped while moving Activity_B: Flow_BToC is now the default flow of Activity_B',
+    ]);
+    // the join's default flow comes back to Done, but the prepend made Join -> Archive the default, as asked (as by default)
+    const archive = JOINED.replace('<bpmn:exclusiveGateway id="Gateway_Join">', '<bpmn:exclusiveGateway id="Gateway_Join" default="Flow_JoinToDone">')
+      .replace('<bpmn:endEvent id="Event_Done"', '<bpmn:task id="Activity_Archive" name="Archive" />\n    <bpmn:endEvent id="Event_Done"');
+    const ops: Op[] = [{ op: 'move', ids: ['Gateway_Join', 'Event_Done'], before: 'Activity_Archive', default: true }];
+    const wins = await kept(ops, archive);
+    expect(flowBetween(wins.doc, 'Gateway_Join', 'Event_Done')).toBe('Flow_JoinToDone');
+    expect(wins.doc.get('Gateway_Join')!.get<El>('default')).toBe(wins.doc.get('Flow_JoinToArchive'));
+    expect(wins.cs.changed.filter((c) => c.id === 'Flow_JoinToDone').map((c) => c.detail)).toEqual(['Gateway_Join -> Event_Done (no longer the default flow of Gateway_Join)']);
+    expect((await applyToXml(archive, ops, { layout: false })).xml).toContain('<bpmn:exclusiveGateway id="Gateway_Join" default="Flow_JoinToArchive">');
   });
 
   it('none for a hashed id, an id that did not name its ends, ends a later op restored, or a flow a later op removed', async () => {

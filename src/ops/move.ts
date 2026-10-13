@@ -26,9 +26,14 @@
  *    named the old ends). Its name, condition and annotations stay with the
  *    bridge at the old place, and it is no longer a default flow; a node that
  *    is not bridged drops name and condition (W_LABEL_DROPPED /
- *    W_CONDITION_DROPPED), unless the flow is put back between its old ends. A
- *    flowId for the flow a prepend creates (node -> anchor) makes a new flow
- *    instead. The chain runs through these flows, so a flow between moved nodes
+ *    W_CONDITION_DROPPED), unless the flow ends between its old ends once the
+ *    chain is placed (also when a later node of the chain takes it back there):
+ *    then it gets them back, and its default marker, where the placement gave
+ *    none; a default the placement gave the node wins (the change says the
+ *    flow is no longer the default flow), and a flow the placement made the
+ *    default flow gets no condition (W_CONDITION_DROPPED). A flowId for the
+ *    flow a prepend creates (node -> anchor) makes a new flow instead. The
+ *    chain runs through these flows, so a flow between moved nodes
  *    that matches it (a -> b of `move a b`) ends where it was, unless a has
  *    several out-flows; when the detach of b takes it out (b is not bridged: an
  *    end event, a join), the append of b after a puts it back with its name,
@@ -52,7 +57,7 @@
  *    its host's lane).
  */
 import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
+import { modelError, usageError, type Warning } from '../errors.js';
 import { kindLabel } from '../kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -81,10 +86,12 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   } else if (mode !== 'none') {
     // with flow ids kept: the flows the detach took out, by the moved node they leave, until a placement puts them back
     const spare = new Map<El, SpareFlow>();
+    const dropped: DroppedLabel[] = [];
     nodes.forEach((node, i) => {
       const prev = nodes[i - 1];
-      moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1] });
+      dropped.push(...moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1] }));
     });
+    giveBackLate(doc, dropped, cs);
   }
   if (hasLane) {
     const lane = op.lane ? doc.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
@@ -288,12 +295,26 @@ function labelOf(flow: El, source: El): FlowLabel {
 }
 
 /**
+ * A label a placement dropped (a spare flow put back to another node), with
+ * the warnings that said so: a later node of the chain may take the flow
+ * back between its old ends (`move a b`, a not bridged: a's splice puts
+ * a -> b back elsewhere, b's splice after a ends it at b again).
+ */
+interface DroppedLabel {
+  node: El;
+  flow: El;
+  target: El;
+  label: FlowLabel;
+  warnings: Warning[];
+}
+
+/**
  * --after / --before / --flow: detach, then place like a new node
  * (`explicitLane`: op.lane assigns the lane afterwards). `spare`: the flows
  * this move took out, for the placement to put back; `chain`: the nodes moved
  * before this one (it is placed after it) and after it.
  */
-function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El } = {}): void {
+function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El } = {}): DroppedLabel[] {
   const { prev, next } = chain;
   if (is(node, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_PLACEMENT', `Boundary event ${idOf(node)} is moved with --on <activityId>`, { element: idOf(node) });
@@ -328,7 +349,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   // the next node of the chain is appended to a gateway (a new branch): the gateway's out-flow waits for that append
   const holdOwn = !!next && is(node, 'bpmn:Gateway');
   placeNode(doc, node, p, cs, (source) => (source === node && holdOwn ? undefined : spare.get(source)?.flow));
-  reportPutBack(doc, spare, cs);
+  const dropped = reportPutBack(doc, spare, cs);
   // the new place may give an event-based gateway a target BPMN 2.0 does not allow (like add / connect)
   for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) warnEventGatewayFlow(doc, f, cs);
   if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
@@ -344,38 +365,86 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   }
   cs.change(changeOf(node, `moved ${describePlacement(p)}`));
   doc.invalidate();
+  return dropped;
 }
 
 /**
  * The spare flows a placement put back (flow ids kept): each is one changed
  * entry, `<node> -> <new target> (was -> <old target>)`, instead of the
  * removed entry of the detach and the created entry of the placement. A
- * flow back between its old ends gets the name, condition and default
- * marker no bridge took back (where the placement gave none); one with
- * another target drops them: W_LABEL_DROPPED / W_CONDITION_DROPPED.
+ * flow back between its old ends gets the label no bridge took back
+ * (giveBack); one with another target drops it: W_LABEL_DROPPED /
+ * W_CONDITION_DROPPED, returned for giveBackLate.
  */
-function reportPutBack(doc: Doc, spare: Map<El, SpareFlow>, cs: ChangeSet): void {
+function reportPutBack(doc: Doc, spare: Map<El, SpareFlow>, cs: ChangeSet): DroppedLabel[] {
+  const dropped: DroppedLabel[] = [];
   for (const [node, { flow, target, label }] of spare) {
     if (doc.get(idOf(flow)) !== flow) continue;
     spare.delete(node);
     const id = idOf(flow);
     const back = flow.get<El>('targetRef') === target;
-    if (label && back) {
-      if (label.name && !flow.get<string | undefined>('name')) flow.set('name', label.name);
-      if (label.condition && !flow.get<El | undefined>('conditionExpression')) {
-        flow.set('conditionExpression', label.condition);
-        label.condition.$parent = flow;
-      }
-      if (label.isDefault && !flow.get<El | undefined>('conditionExpression')) node.set('default', flow);
-    }
+    const lost = label && back ? giveBack(node, flow, label, cs) : '';
     cs.removed = cs.removed.filter((c) => c.id !== id);
     cs.created = cs.created.filter((c) => c.id !== id);
     const change = flowChange(flow);
-    cs.change(back ? change : { ...change, detail: `${change.detail} (was -> ${idOf(target)})` });
+    cs.change({ ...change, detail: `${change.detail}${back ? lost : ` (was -> ${idOf(target)})`}` });
     if (!label || back) continue;
     const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
-    if (label.name) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${label.name}" of ${id} was dropped ${why}`, element: id });
-    if (label.condition) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id });
+    const warnings: Warning[] = [];
+    if (label.name) warnings.push({ code: 'W_LABEL_DROPPED', message: `Flow label "${label.name}" of ${id} was dropped ${why}`, element: id });
+    if (label.condition) warnings.push({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id });
+    for (const w of warnings) cs.warn(w);
+    dropped.push({ node, flow, target, label, warnings });
+  }
+  return dropped;
+}
+
+/**
+ * Gives a put-back flow, back between its old ends, the label no bridge
+ * took: the name and condition where the placement gave none, the default
+ * marker where its source has no other default and the flow no condition.
+ * A flow the placement made the default flow gets no condition
+ * (W_CONDITION_DROPPED: a default flow has none). Returns the detail for a
+ * default marker that could not come back.
+ */
+function giveBack(node: El, flow: El, label: FlowLabel, cs: ChangeSet): string {
+  const id = idOf(flow);
+  if (label.name && !flow.get<string | undefined>('name')) flow.set('name', label.name);
+  if (label.condition && !flow.get<El | undefined>('conditionExpression')) {
+    if (node.get<El | undefined>('default') === flow) {
+      cs.warn({
+        code: 'W_CONDITION_DROPPED',
+        message: `Condition of ${id} was dropped while moving ${idOf(node)}: ${id} is now the default flow of ${idOf(node)}`,
+        element: id,
+        hint: `A default flow has no condition; use \`bpmn set <file> ${id} condition=...\` if the condition should replace the default marker.`,
+      });
+    } else {
+      flow.set('conditionExpression', label.condition);
+      label.condition.$parent = flow;
+    }
+  }
+  if (!label.isDefault || node.get<El | undefined>('default') === flow) return '';
+  if (!node.get<El | undefined>('default') && !flow.get<El | undefined>('conditionExpression')) {
+    node.set('default', flow);
+    return '';
+  }
+  return ` (no longer the default flow of ${idOf(node)})`;
+}
+
+/**
+ * After the whole chain is placed: a flow whose label a placement dropped
+ * that ends between its old ends again (a later node of the chain took it
+ * back) gets it back after all, and the warnings that said otherwise go.
+ * It is listed once, as a flow back between its old ends.
+ */
+function giveBackLate(doc: Doc, dropped: DroppedLabel[], cs: ChangeSet): void {
+  for (const { node, flow, target, label, warnings } of dropped) {
+    if (doc.get(idOf(flow)) !== flow || flow.get<El>('sourceRef') !== node || flow.get<El>('targetRef') !== target) continue;
+    cs.warnings = cs.warnings.filter((w) => !warnings.includes(w));
+    const lost = giveBack(node, flow, label, cs);
+    const change = flowChange(flow);
+    cs.changed = cs.changed.filter((c) => c.id !== change.id);
+    cs.change({ ...change, detail: `${change.detail}${lost}` });
   }
 }
 

@@ -261,8 +261,11 @@
   and creating a new one (0.6), so a flow between nodes moved together stays
   theirs.
 - A batch or an op learns the file's id style before its first op runs
-  (`Doc.idStyle`). Before, a batch whose first op removed flows could learn
+  (`Doc.idStyle`). Before, it was learned when the first new id was needed,
+  so the ops before that could change it: a first op that removed flows
+  (also a single `move`, which detaches its node first), renamed ids
+  (`set <flow> id=`), named elements or retyped them could make it learn
   another style from what was left: new elements were named in it, and a
   flow whose id named its old ends was not renamed (with ids kept: not
-  reported as `W_FLOW_ID_STALE`). Such batches now name and rename in the
-  style of the file as read.
+  reported as `W_FLOW_ID_STALE`). Such batches and commands now name and
+  rename in the style of the file as read.
