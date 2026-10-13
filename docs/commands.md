@@ -214,16 +214,29 @@ bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice Flow_Invo
 
 - `move --in` moves into another scope without connecting; flows that would cross scopes are
   removed and reported. Boundary events travel with their host, and a node keeps its lane.
+- Several ids form a chain: the first takes the placement, each next one goes after the one before.
+  The node the chain starts after (the `--after` anchor, the source of the `--flow`) must lie
+  outside the chain, and not be a boundary event of one of its nodes: `move A Join Done --after
+  Join` fails with `E_INVALID_PLACEMENT` and changes nothing. A `--before` anchor in the chain is
+  fine (`move A Join --before Join`), one inside a moved sub-process is not.
+- A move that leaves its nodes where they are (`move B --after A` with A -> B, `move B C --after A`
+  with A -> B -> C, also with `--before` or both) changes nothing and notes `Activity_B is already
+  after Activity_A`: no flow is renamed or relabelled, nothing is written. In a batch (`apply`) its
+  flow keys still go to the flow into the first node, and `"flowId"` renames that flow. With
+  `--after <gateway>` alone the node is appended as a new branch, and with `--before <join>` alone
+  prepended without a flow in, as always: such a move is no move in place.
 - With `--keep-flow-ids` the moved node's one out-flow becomes its out-flow at the new place and
   the bridge keeps its in-flow, so both keep their ids (`W_FLOW_ID_STALE` when an id named the old
   ends). The out-flow keeps its documentation and extensions; its name, condition and annotations
-  stay with the bridge at the old place, and it is no longer a default flow (a node that is not
-  bridged drops name and condition, `W_LABEL_DROPPED`, `W_CONDITION_DROPPED`, unless the flow is
-  put back between its old ends). Nodes moved together keep the flow between them, unless the
-  first has several out-flows. What cannot be put back is removed (`removed:`): the out-flow after
-  an append (after a gateway or a node without successor) or `--in`, and the other flows of a node
-  that is not bridged (several in- or out-flows, or none in or none out, like a start or end
-  event).
+  stay with the bridge at the old place, and its change says which (`changed sequenceFlow
+  Flow_BToC - Activity_B -> Event_Done (was -> Activity_C; its name and condition stay with the
+  bridge Flow_AToB)`); it is no longer a default flow (a node that is not bridged, or whose bridge
+  a later node of the same move removed, drops name and condition, `W_LABEL_DROPPED`,
+  `W_CONDITION_DROPPED`, unless the flow is put back between its old ends). Nodes moved together
+  keep the flow between them, unless the first has several out-flows. What cannot be put back is
+  removed (`removed:`): the out-flow after an append (after a gateway or a node without successor)
+  or `--in`, and the other flows of a node that is not bridged (several in- or out-flows, or none
+  in or none out, like a start or end event).
 - The flow order drives the picture: the default flow (else the first) continues straight, the
   others alternate below and above it. To pin a branch as the continuation, make it the default.
 - Ids that `order` does not list follow in their old order. A full redraw (`bpmn layout`) orders

@@ -98,6 +98,12 @@ export class ChangeSet {
   bindings: Array<{ alias: string; el: El }> = [];
   /** elements an op replaced by a new one (a retype to another type, ops/retype.ts swapType): the batch aliases follow */
   replaced: Array<{ from: El; to: El }> = [];
+  /**
+   * nodes a `move` placed elsewhere, by their id at the time (ops/move.ts; not
+   * renamed): the incremental layout places them again. A move that left a
+   * node where it was lists nothing, so its drawing stays.
+   */
+  relocated: string[] = [];
 
   create(change: Change): this {
     this.created.push(change);
@@ -173,6 +179,7 @@ export class ChangeSet {
   merge(other: ChangeSet): this {
     this.bindings.push(...other.bindings);
     this.replaced.push(...other.replaced);
+    this.relocated.push(...other.relocated);
     this.created.push(...other.created);
     for (const c of other.changed) this.change(c);
     this.removed.push(...other.removed);

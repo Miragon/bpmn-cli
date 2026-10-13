@@ -65,7 +65,7 @@ import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
-import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote } from './flows.js';
+import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
 import type { RemoveOp } from './types.js';
 
@@ -285,9 +285,10 @@ export function canLoopToItself(node: El): boolean {
  * would create a self-loop `connect` refuses (non-activities) is skipped (both
  * flows removed, noted), and a condition that bridging carried onto the
  * predecessor's default flow is dropped again with W_CONDITION_DROPPED (a
- * default flow has no condition). Returns whether it bridged.
+ * default flow has no condition). Returns the bridge (what it carried), or
+ * undefined when it did not bridge.
  */
-export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): boolean {
+export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): Bridge | undefined {
   const incoming = doc.incoming(node);
   const outgoing = doc.outgoing(node);
   if (!bridge || incoming.length !== 1 || outgoing.length !== 1) return detachNode(doc, node, bridge, cs);
@@ -298,15 +299,16 @@ export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: Change
   if (predecessor === successor && !canLoopToItself(predecessor)) {
     detachNode(doc, node, false, cs);
     if (predecessor !== node) cs.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
-    return false;
+    return undefined;
   }
   assertBridgeAllowed(doc, node, inFlow, outFlow, removing, command);
   const outCond = outFlow.get<El | undefined>('conditionExpression');
   const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
   const inHadCondition = !!inFlow.get<El | undefined>('conditionExpression');
   const bridged = detachNode(doc, node, true, cs);
-  if (outCond && inFlowIsDefault && !inHadCondition && inFlow.get<El | undefined>('conditionExpression') === outCond && predecessor.get<El | undefined>('default') === inFlow) {
+  if (bridged && outCond && inFlowIsDefault && !inHadCondition && inFlow.get<El | undefined>('conditionExpression') === outCond && predecessor.get<El | undefined>('default') === inFlow) {
     inFlow.set('conditionExpression', undefined);
+    delete bridged.took.condition;
     cs.warn({
       code: 'W_CONDITION_DROPPED',
       message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}: ${idOf(inFlow)} is the default flow of ${idOf(predecessor)}`,

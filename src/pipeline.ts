@@ -533,11 +533,17 @@ function requestedMode(layout: MutationOptions['layout']): LayoutMode | 'skip' {
   return layout;
 }
 
-/** Nodes the ops re-insert elsewhere (move with a placement): the incremental engine places them again. */
-function relocatedIds(ops: Op[]): string[] {
+/**
+ * Nodes the ops re-insert elsewhere (move with a placement): the incremental
+ * engine places them again. A node a move left where it was (`move B
+ * --after A` with A -> B, `--in` its own scope; ChangeSet.relocated does not
+ * list it) keeps its place in the drawing.
+ */
+function relocatedIds(ops: Op[], changes: ChangeSet): string[] {
+  const moved = new Set(changes.relocated);
   const out: string[] = [];
   for (const op of ops) {
-    if (op.op === 'move' && (op.after || op.before || op.flow || op.in)) out.push(...op.ids);
+    if (op.op === 'move' && (op.after || op.before || op.flow || op.in)) out.push(...op.ids.filter((id) => moved.has(id)));
   }
   return out;
 }
@@ -686,9 +692,9 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
-async function incrementalLayout(doc: Doc, before: Before, ops: Op[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
+async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
-  const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated: relocatedIds(ops), created, ...expansion });
+  const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated, created, ...expansion });
   const xml = await doc.toXml();
   return {
     xml,
@@ -719,13 +725,13 @@ function firstLine(err: unknown): string {
  * INCREMENTAL_FAILED, shown as W_LAYOUT_*); a requested incremental layout
  * that fails is a layout error instead (LAYOUT_INCREMENTAL, shown as E_LAYOUT_*).
  */
-async function runLayout(doc: Doc, requested: LayoutMode, before: Before, ops: Op[], opts: MutationOptions, created: readonly string[] = []): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
+async function runLayout(doc: Doc, requested: LayoutMode, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[] = []): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
   const decision = await decideMode(requested, before, opts);
   let ran: { xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] };
   if (decision.mode === 'full') ran = await fullLayout(doc, opts);
   else {
     try {
-      ran = await incrementalLayout(doc, before, ops, opts, created);
+      ran = await incrementalLayout(doc, before, relocated, opts, created);
     } catch (err) {
       if (err instanceof CliError) throw err;
       if (requested === 'incremental') {
@@ -838,7 +844,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else {
     let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, ran, opts, changes.created.map((c) => c.id)));
+      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, relocatedIds(ran, changes), opts, changes.created.map((c) => c.id)));
     } catch (err) {
       throw toCliError(err);
     }

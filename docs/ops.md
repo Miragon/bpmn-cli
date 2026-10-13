@@ -88,17 +88,27 @@ later ops can use it, and the result names the stale ones (`W_FLOW_ID_STALE`) in
 A `move` puts the moved node's out-flow back at its new place, so a flow between nodes moved
 together (`move B C` with B -> C) stays theirs, unless B has several out-flows. The put-back flow
 keeps its id, documentation and extensions; its name, condition and annotations stay with the bridge
-at the old place, and it is no longer a default flow (a node that is not bridged drops name and
-condition, `W_LABEL_DROPPED`, `W_CONDITION_DROPPED`, unless the flow is put back between its old
-ends). A `"flowId"` on a move that prepends (before a join or a node without incoming flow) names a
-new flow node -> anchor instead, and the old out-flow stays removed. A flow an earlier op of the
-batch created still follows its ends, so name it with an alias where an op creates it: `"flowAs"` on
-an add that appends or prepends (after a gateway or a node without successor, before a join or a
-node without incoming flow) and on split nodes, `"as"` on connect. On a splice `"flowAs"` names the
-flow the file had, now into the new node; the flow the splice creates (new node -> old successor)
-has no alias, so take its id from the result. An end that a `set` earlier in the batch gave another
-id or name still counts by the id and name it had, so a flow named after them follows (or, with ids
-kept, is reported) when a later op changes its ends.
+at the old place (its change says which: `(was -> Activity_C; its name stays with the bridge
+Flow_AToB)`), and it is no longer a default flow (a node that is not bridged, or whose bridge a
+later node of the same move removed, drops name and condition, `W_LABEL_DROPPED`,
+`W_CONDITION_DROPPED`, unless the flow is put back between its old ends). A `"flowId"` on a move
+that prepends (before a join or a node without incoming flow) names a new flow node -> anchor
+instead, and the old out-flow stays removed. A flow an earlier op of the batch created still follows
+its ends, so name it with an alias where an op creates it: `"flowAs"` on an add that appends or
+prepends (after a gateway or a node without successor, before a join or a node without incoming
+flow) and on split nodes, `"as"` on connect. On a splice `"flowAs"` names the flow the file had, now
+into the new node; the flow the splice creates (new node -> old successor) has no alias, so take
+its id from the result. An end that a `set` earlier in the batch gave another id or name still
+counts by the id and name it had, so a flow named after them follows (or, with ids kept, is
+reported) when a later op changes its ends.
+
+**`move`** chains several `ids` (the first takes the placement, each next one goes after the one
+before); the node the chain starts after (`after`, the source of `flow`) must lie outside the chain
+(a boundary event of one of its nodes moves with it), else the op fails with `E_INVALID_PLACEMENT`
+before anything changes. A move that leaves its nodes where they are (`{"op": "move", "ids":
+["Activity_B"], "after": "Activity_A"}` with A -> B) changes nothing and notes `Activity_B is
+already after Activity_A`; its flow keys still go to the flow into the first node, and a
+`"flowId"` renames that flow.
 
 **Checks.** Unknown ops and keys (with a suggestion for typos such as `colour`), wrong value types,
 conflicting placements, flow options without a flow-creating placement, `default` together with

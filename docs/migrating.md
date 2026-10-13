@@ -256,11 +256,12 @@
   instead of guessing its id; the flow a splice creates (new node -> old
   successor) has none. With ids kept, `move` puts the moved node's out-flow
   back at its new place (`changed`, keeping its id, documentation and
-  extensions; its name and condition stay with the bridge, and a node that
-  is not bridged drops them with `W_LABEL_DROPPED` / `W_CONDITION_DROPPED`
-  unless the flow is put back between its old ends) instead of removing it
-  and creating a new one (0.6), so a flow between nodes moved together stays
-  theirs.
+  extensions; its name and condition stay with the bridge, and its change
+  says which; a node that is not bridged, or whose bridge a later node of
+  the same move removed, drops them with `W_LABEL_DROPPED` /
+  `W_CONDITION_DROPPED` unless the flow is put back between its old ends)
+  instead of removing it and creating a new one (0.6), so a flow between
+  nodes moved together stays theirs.
 - A batch or an op learns the file's id style before its first op runs
   (`Doc.idStyle`). Before, it was learned when the first new id was needed,
   so the ops before that could change it: a first op that removed flows
@@ -380,3 +381,24 @@
   node without a string `kind`, are `E_USAGE` too (0.6: a `TypeError`, a
   node without `kind` with the split gateway already added). The split
   checks this before it changes anything.
+- `move` checks the chain before anything changes: when the node a chain of
+  several ids starts after (the `--after` anchor, the source of the
+  `--flow`) is one of its later nodes, inside one or a boundary event of
+  one, or a `--before` anchor lies inside one, the move fails with
+  `E_INVALID_PLACEMENT` (exit 2). 0.6 wrote a rewired model with exit 0
+  (`move A Join Done --after Join`: unreachable nodes, a flow listed as
+  created and removed). A single node after its own boundary event is
+  `E_INVALID_PLACEMENT` too (0.6: `E_NOT_FOUND`).
+- A move that leaves its nodes where they are (`move B --after A` with
+  A -> B) changes nothing and adds a note (`Activity_B is already after
+  Activity_A`), in both flow-id modes. 0.6 detached and placed the node
+  again: by default new or suffixed flow ids (`W_ID_SUFFIXED`), the
+  out-flow's label on the in-flow, and a gateway or merge in the chain lost
+  its other flows; some such moves were refused (`E_HAS_SUCCESSOR`,
+  `E_HAS_PREDECESSOR`, `E_NO_FLOW`, `E_INVALID_BRIDGE`) and are notes now. In
+  a batch its flow keys go to the flow into the first node, and `"flowId"`
+  renames that flow (0.6 made a new flow with that id where the node was
+  appended, and dropped the id where it was spliced). The incremental layout
+  places only the nodes a move relocated (0.6: every node a move named, so a
+  move in place could rearrange a hand-made drawing). Library:
+  `ChangeSet.relocated` lists them.

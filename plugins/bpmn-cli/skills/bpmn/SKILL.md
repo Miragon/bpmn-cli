@@ -278,7 +278,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_NOT_FOUND` | Use a listed candidate id; `bpmn find <file> <text>` lists ids. In a batch the hint lists the ids created so far. Never retry with a name. |
 | `E_HAS_SUCCESSOR` / `E_HAS_PREDECESSOR` | The anchor has several flows: use `flow` <flowId> or `after` X + `before` Y. |
 | `E_AMBIGUOUS_SCOPE` | Several processes: add `in` <processId or participantId>. |
-| `E_INVALID_PLACEMENT` | Boundary events need `on`; lanes, pools, data, annotations take `in` only. |
+| `E_INVALID_PLACEMENT` | Boundary events need `on`; lanes, pools, data, annotations take `in` only. A move of several nodes starts after an anchor outside them (not a boundary event of one); the hint has the command to run instead. |
 | `E_CROSS_SCOPE` | Sequence flows stay inside one pool / sub-process; between pools `connect` makes a message flow. |
 | `E_UNKNOWN_KEY` | The message lists the settable keys; vendor keys need their prefix (`camunda:assignee`). |
 | `E_WRONG_HOST` | The attribute belongs on a nested element or elsewhere: use the key from the hint (`definition.camunda:errorCodeVariable=...`). |

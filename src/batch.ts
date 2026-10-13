@@ -89,7 +89,7 @@ export const PLACEMENT_FIELDS: FieldsOf<Placement> = {
 
 export const FLOW_FIELDS: FieldsOf<FlowOptions> = {
   flowName: str('Label of the flow into the new node.'),
-  flowId: ref('Explicit id of the flow into the new node (only used when a new flow is created).'),
+  flowId: ref('Explicit id of the flow into the new node (only used when a new flow is created; a move that leaves its nodes in place renames the flow into the first node).'),
   condition: str('Condition expression of the flow into the new node, e.g. "${ok}".'),
   language: str('Expression language of `condition` (omit for the engine default).'),
   default: bool('Mark the flow into the new node as the default flow of its source (exclusive/inclusive gateway or activity).'),

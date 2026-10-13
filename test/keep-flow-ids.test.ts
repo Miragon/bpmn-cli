@@ -6,6 +6,9 @@
  * the `bpmn set` that renames it). A flow the same change created still
  * follows its ends. Synthetic fixtures only.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
@@ -423,14 +426,15 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
   it('a later change that leaves a stale flow where it was does not repeat it, although the flow passes its old ends on the way', async () => {
     const first = await applyToXml(LINE, [{ op: 'add', kind: 'task', name: 'X', after: 'Activity_A' }], { keepFlowIds: true, layout: false });
     expect(staleLines(first.result.warnings.added)).toEqual(['Flow_AToB Activity_A->Activity_X => Flow_AToX']);
-    // moving X where it is: the bridge runs Flow_AToB A -> B (the ends its id names), the splice A -> X again
-    const again = await applyToXml(first.xml, [{ op: 'move', ids: ['Activity_X'], after: 'Activity_A' }], { keepFlowIds: true, layout: false });
+    // moving X away and back: the bridge runs Flow_AToB A -> B (the ends its id names), the splice A -> X again
+    const away: Op[] = [{ op: 'move', ids: ['Activity_X'], after: 'Activity_C' }, { op: 'move', ids: ['Activity_X'], after: 'Activity_A' }];
+    const again = await applyToXml(first.xml, away, { keepFlowIds: true, layout: false });
     expect(stale(again.result.warnings.added)).toEqual([]);
     const doc = await Doc.fromXml(first.xml);
     doc.followFlowEnds = false;
-    expect(stale(runOp(doc, { op: 'move', ids: ['Activity_X'], after: 'Activity_A' }).warnings)).toEqual([]);
+    expect(stale(runOps(doc, away).warnings)).toEqual([]);
     // a later op of the same change that gives it other ends again reports it
-    const moved = await kept([{ op: 'move', ids: ['Activity_X'], after: 'Activity_A' }, { op: 'add', kind: 'task', name: 'Y', after: 'Activity_A' }], first.xml);
+    const moved = await kept([...away, { op: 'add', kind: 'task', name: 'Y', after: 'Activity_A' }], first.xml);
     expect(staleLines(moved.warnings)).toEqual(['Flow_AToB Activity_A->Activity_Y => Flow_AToY']);
   });
 });
@@ -575,5 +579,224 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
       { op: 'add', kind: 'task', id: 'Flow_IntoOk', name: 'X', in: 'Process_1' },
     ]);
     expect(hints(taken.warnings).filter((h) => h.startsWith('W_OPTION_IGNORED'))).toEqual([none]);
+  });
+});
+
+/** LINE where B -> C has a label and a condition. */
+const NAMED_LINE = LINE.replace(
+  '<bpmn:sequenceFlow id="Flow_BToC" sourceRef="Activity_B" targetRef="Activity_C" />',
+  '<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approved}</bpmn:conditionExpression></bpmn:sequenceFlow>',
+);
+
+/** Start -> T -> Sub (SubStart -> Inner -> SubEnd) -> Done. */
+const WITH_SUB = definitionsXml(`
+    <bpmn:startEvent id="Event_Start"><bpmn:outgoing>Flow_StartToT</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Activity_T" name="T"><bpmn:incoming>Flow_StartToT</bpmn:incoming><bpmn:outgoing>Flow_TToSub</bpmn:outgoing></bpmn:task>
+    <bpmn:subProcess id="Activity_Sub" name="Sub"><bpmn:incoming>Flow_TToSub</bpmn:incoming><bpmn:outgoing>Flow_SubToDone</bpmn:outgoing>
+      <bpmn:startEvent id="Event_SubStart"><bpmn:outgoing>Flow_SubStartToInner</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:task id="Activity_Inner" name="Inner"><bpmn:incoming>Flow_SubStartToInner</bpmn:incoming><bpmn:outgoing>Flow_InnerToSubEnd</bpmn:outgoing></bpmn:task>
+      <bpmn:endEvent id="Event_SubEnd"><bpmn:incoming>Flow_InnerToSubEnd</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_SubStartToInner" sourceRef="Event_SubStart" targetRef="Activity_Inner" />
+      <bpmn:sequenceFlow id="Flow_InnerToSubEnd" sourceRef="Activity_Inner" targetRef="Event_SubEnd" />
+    </bpmn:subProcess>
+    <bpmn:endEvent id="Event_Done"><bpmn:incoming>Flow_SubToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StartToT" sourceRef="Event_Start" targetRef="Activity_T" />
+    <bpmn:sequenceFlow id="Flow_TToSub" sourceRef="Activity_T" targetRef="Activity_Sub" />
+    <bpmn:sequenceFlow id="Flow_SubToDone" sourceRef="Activity_Sub" targetRef="Event_Done" />`);
+
+/** Start -> A -> T -> Done; a timer on T leads to Remind -> Late. */
+const WITH_TIMER = definitionsXml(`
+    <bpmn:startEvent id="Event_Start"><bpmn:outgoing>Flow_StartToA</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Activity_A" name="A"><bpmn:incoming>Flow_StartToA</bpmn:incoming><bpmn:outgoing>Flow_AToT</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_T" name="T"><bpmn:incoming>Flow_AToT</bpmn:incoming><bpmn:outgoing>Flow_TToDone</bpmn:outgoing></bpmn:task>
+    <bpmn:boundaryEvent id="Event_Timeout" attachedToRef="Activity_T"><bpmn:outgoing>Flow_TimeoutToRemind</bpmn:outgoing><bpmn:timerEventDefinition id="TimerEventDefinition_Timeout" /></bpmn:boundaryEvent>
+    <bpmn:task id="Activity_Remind" name="Remind"><bpmn:incoming>Flow_TimeoutToRemind</bpmn:incoming><bpmn:outgoing>Flow_RemindToLate</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="Event_Done"><bpmn:incoming>Flow_TToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="Event_Late"><bpmn:incoming>Flow_RemindToLate</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StartToA" sourceRef="Event_Start" targetRef="Activity_A" />
+    <bpmn:sequenceFlow id="Flow_AToT" sourceRef="Activity_A" targetRef="Activity_T" />
+    <bpmn:sequenceFlow id="Flow_TToDone" sourceRef="Activity_T" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_TimeoutToRemind" sourceRef="Event_Timeout" targetRef="Activity_Remind" />
+    <bpmn:sequenceFlow id="Flow_RemindToLate" sourceRef="Activity_Remind" targetRef="Event_Late" />`);
+
+/** `<flow>: <detail>` of the changed sequence flows. */
+const changedFlows = (cs: Pick<ChangeSet, 'changed'>): string[] => cs.changed.filter((c) => c.kind === 'sequenceFlow').map((c) => `${c.id}: ${c.detail}`);
+
+describe('move: a chain anchored on its own nodes, nodes already in place, what the bridge took', () => {
+  it('a chain whose --after anchor or --flow source is one of its later nodes, or inside one, is refused before anything changes, in both modes', async () => {
+    const cases: Array<[string, Op, string, string]> = [
+      [JOINED, { op: 'move', ids: ['Activity_A', 'Gateway_Join', 'Event_Done'], after: 'Gateway_Join' }, 'Gateway_Join cannot anchor the move of Activity_A, Gateway_Join, Event_Done: it is one of the moved nodes', '`bpmn move <file> Activity_A --after Gateway_Join`'],
+      [LINE, { op: 'move', ids: ['Activity_A', 'Activity_B'], flow: 'Flow_BToC' }, 'Flow_BToC cannot anchor the move of Activity_A, Activity_B: its source Activity_B is one of the moved nodes', '`bpmn move <file> Activity_A --flow Flow_BToC`'],
+      [LINE, { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_C' }, 'Activity_C cannot anchor the move of Activity_B, Activity_C: it is one of the moved nodes', '`bpmn move <file> Activity_B --after Activity_C`'],
+      // C alone is already after B: the hint has the reorder instead
+      [LINE, { op: 'move', ids: ['Activity_C', 'Activity_B'], after: 'Activity_B' }, 'Activity_B cannot anchor the move of Activity_C, Activity_B: it is one of the moved nodes', 'Activity_C is already after Activity_B. Pick an anchor outside the moved nodes, or put Activity_C before Activity_B: `bpmn move <file> Activity_C --before Activity_B`.'],
+      [LINE, { op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_B', before: 'Activity_C' }, 'Activity_B cannot anchor the move of Activity_A, Activity_B: it is one of the moved nodes', '`bpmn move <file> Activity_A --after Activity_B --before Activity_C`'],
+      [WITH_SUB, { op: 'move', ids: ['Activity_T', 'Activity_Sub'], after: 'Activity_Inner' }, 'Activity_Inner cannot anchor the move of Activity_T, Activity_Sub: it is inside Activity_Sub, one of the moved nodes', '`bpmn move <file> Activity_T --after Activity_Inner`'],
+      // a --before anchor inside a later node: the chain would be placed inside itself
+      [WITH_SUB, { op: 'move', ids: ['Activity_T', 'Activity_Sub'], before: 'Activity_Inner' }, 'Activity_Inner cannot anchor the move of Activity_T, Activity_Sub: it is inside Activity_Sub, one of the moved nodes', 'placed inside itself. Pick an anchor outside the moved nodes, or move Activity_T alone: `bpmn move <file> Activity_T --before Activity_Inner`'],
+      // a boundary event moves with its host
+      [WITH_TIMER, { op: 'move', ids: ['Activity_A', 'Activity_T'], after: 'Event_Timeout' }, 'Event_Timeout cannot anchor the move of Activity_A, Activity_T: it is a boundary event of Activity_T, one of the moved nodes', '`bpmn move <file> Activity_A --after Event_Timeout`'],
+      [WITH_TIMER, { op: 'move', ids: ['Activity_A', 'Activity_T'], flow: 'Flow_TimeoutToRemind' }, 'Flow_TimeoutToRemind cannot anchor the move of Activity_A, Activity_T: its source Event_Timeout is a boundary event of Activity_T, one of the moved nodes', '`bpmn move <file> Activity_A --flow Flow_TimeoutToRemind`'],
+    ];
+    for (const [xml, op, message, command] of cases) {
+      for (const keepFlowIds of [true, false]) {
+        const what = `${JSON.stringify(op)} keep=${keepFlowIds}`;
+        const err = await applyToXml(xml, [op], { keepFlowIds, layout: false }).then(() => undefined, (e: unknown) => e as { code: string; message: string; details: { hint?: string } });
+        expect(err, what).toMatchObject({ code: 'E_INVALID_PLACEMENT', message });
+        expect(err!.details.hint, what).toContain(command);
+        // refused before the first node moved: the document is as it was
+        const doc = await Doc.fromXml(xml);
+        doc.followFlowEnds = !keepFlowIds;
+        const flowsBefore = [...doc.byId().values()].filter((e) => e.$type === 'bpmn:SequenceFlow').map((f) => `${f.get<string>('id')} ${f.get<El>('sourceRef').get<string>('id')}->${f.get<El>('targetRef').get<string>('id')}`);
+        expect(() => runOp(doc, op), what).toThrow(message);
+        expect([...doc.byId().values()].filter((e) => e.$type === 'bpmn:SequenceFlow').map((f) => `${f.get<string>('id')} ${f.get<El>('sourceRef').get<string>('id')}->${f.get<El>('targetRef').get<string>('id')}`), what).toEqual(flowsBefore);
+      }
+    }
+    // the node itself as the anchor keeps its own message, and so does its own boundary event; a --before anchor in the chain is fine (it ends A -> Join)
+    await expect(applyToXml(LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_B' }], { layout: false })).rejects.toMatchObject({ code: 'E_INVALID_PLACEMENT', message: 'Activity_B cannot be moved relative to Activity_B: that is the node itself or one of its children' });
+    await expect(applyToXml(WITH_TIMER, [{ op: 'move', ids: ['Activity_T'], after: 'Event_Timeout' }], { layout: false })).rejects.toMatchObject({ code: 'E_INVALID_PLACEMENT', message: 'Activity_T cannot be moved relative to Event_Timeout: that is one of its boundary events, which move with it' });
+    const afterTimer = await kept([{ op: 'move', ids: ['Activity_A'], after: 'Event_Timeout' }], WITH_TIMER);
+    expect([flowBetween(afterTimer.doc, 'Event_Timeout', 'Activity_A'), flowBetween(afterTimer.doc, 'Activity_A', 'Activity_Remind')]).toEqual(['Flow_TimeoutToRemind', 'Flow_AToT']);
+    const before = await kept([{ op: 'move', ids: ['Activity_A', 'Gateway_Join'], before: 'Gateway_Join' }], JOINED);
+    expect(flowBetween(before.doc, 'Activity_A', 'Gateway_Join')).toBe('Flow_AToJoin');
+  });
+
+  it('a move that leaves its nodes where they are changes nothing, in both modes: no write, no warning, the label and condition stay', async () => {
+    const cases: Array<[Op, string]> = [
+      [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A' }, 'Activity_B is already after Activity_A'],
+      [{ op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_A' }, 'Activity_B, Activity_C are already after Activity_A, in this order'],
+      [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C' }, 'Activity_B is already before Activity_C'],
+      [{ op: 'move', ids: ['Activity_B', 'Activity_C'], before: 'Event_Done' }, 'Activity_B, Activity_C are already before Event_Done, in this order'],
+      [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', before: 'Activity_C' }, 'Activity_B is already between Activity_A and Activity_C'],
+      [{ op: 'move', ids: ['Activity_C', 'Event_Done'], after: 'Activity_B' }, 'Activity_C, Event_Done are already after Activity_B, in this order'],
+    ];
+    for (const [op, note] of cases) {
+      for (const keepFlowIds of [true, false]) {
+        const what = `${JSON.stringify(op)} keep=${keepFlowIds}`;
+        const r = await applyToXml(NAMED_LINE, [op], { keepFlowIds, layout: false });
+        expect(r.unchanged, what).toBe(true);
+        expect([r.result.created, r.result.changed, r.result.removed, r.result.renamed], what).toEqual([[], [], [], undefined]);
+        expect(r.result.warnings.added, what).toEqual([]);
+        expect(r.result.notes, what).toEqual([note]);
+      }
+    }
+    // a drawn file with its layout: nothing to write either
+    const drawn = await drawnDefault();
+    for (const keepFlowIds of [true, false]) {
+      const r = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_Check'], after: 'Event_Start' }], { keepFlowIds });
+      expect(r.unchanged).toBe(true);
+      expect(r.result.notes).toContain('Activity_Check is already after Event_Start');
+    }
+    // a hand-made drawing keeps every shape: the incremental layout places no node a move left where it was (--in its own scope too)
+    const hand = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'step1', 'far-label.bpmn'), 'utf8');
+    for (const op of [{ op: 'move', ids: ['ST', 'SE'], after: 'SS' }, { op: 'move', ids: ['ST'], in: 'SUB' }] satisfies Op[]) {
+      const r = await applyToXml(hand, [op]);
+      expect([r.unchanged, r.result.layout?.mode, r.result.layout?.moved], JSON.stringify(op)).toEqual([true, 'incremental', []]);
+    }
+    // flow options describe the flow into the first node, as on a splice: only that flow changes
+    for (const keepFlowIds of [true, false]) {
+      const r = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowName: 'start' }], { keepFlowIds, layout: false });
+      expect(changedFlows(r.result)).toEqual(['Flow_AToB: Activity_A -> Activity_B']);
+      expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_AToB" name="start" sourceRef="Activity_A" targetRef="Activity_B" />');
+      expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C">\s*<bpmn:conditionExpression/);
+    }
+    // after a gateway the node is appended as a new branch: that move still runs
+    const forked = await applyToXml(FORKED, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A' }], { layout: false });
+    expect(forked.result.notes).toContain('appended after Activity_A');
+  });
+
+  it('a "flowId" on a move in place renames the flow into the first node, in both modes', async () => {
+    for (const keepFlowIds of [true, false]) {
+      const r = await applyToXml(LINE, [{ op: 'move', ids: ['Event_Done'], after: 'Activity_C', flowId: 'Flow_CToEnd' }], { keepFlowIds, layout: false });
+      expect([r.result.created, r.result.removed, r.result.warnings.added], `keep=${keepFlowIds}`).toEqual([[], [], []]);
+      expect(changedFlows(r.result)).toEqual(['Flow_CToEnd: Activity_C -> Event_Done (renamed from Flow_CToDone)']);
+      expect(r.result.notes).toEqual(['Event_Done is already after Activity_C']);
+      expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_CToEnd" sourceRef="Activity_C" targetRef="Event_Done" />');
+      expect(r.xml).not.toContain('Flow_CToDone');
+      // with a name: one entry; the id of another element is refused
+      const named = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowId: 'Flow_Start', flowName: 'start' }], { keepFlowIds, layout: false });
+      expect(changedFlows(named.result)).toEqual(['Flow_Start: Activity_A -> Activity_B (renamed from Flow_AToB)']);
+      expect(named.xml).toContain('<bpmn:sequenceFlow id="Flow_Start" name="start" sourceRef="Activity_A" targetRef="Activity_B" />');
+      await expect(applyToXml(LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowId: 'Flow_BToC' }], { keepFlowIds, layout: false })).rejects.toMatchObject({ code: 'E_DUPLICATE_ID' });
+    }
+  });
+
+  it('with ids kept, the change of a bridged node\'s put-back out-flow names what the bridge took: its name, condition and annotations', async () => {
+    const move: Op[] = [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }];
+    const both = await applyToXml(NAMED_LINE, move, { keepFlowIds: true, layout: false });
+    expect(changedFlows(both.result)).toEqual([
+      'Flow_AToB: Activity_A -> Activity_C (bridged Activity_B)',
+      'Flow_CToDone: Activity_C -> Activity_B (was -> Event_Done)',
+      'Flow_BToC: Activity_B -> Event_Done (was -> Activity_C; its name and condition stay with the bridge Flow_AToB)',
+    ]);
+    expect(both.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_C">\s*<bpmn:conditionExpression/);
+    expect(renderMutation(both.result)).toContain('changed sequenceFlow Flow_BToC - Activity_B -> Event_Done (was -> Activity_C; its name and condition stay with the bridge Flow_AToB)');
+    // an annotation goes with them; a name the bridge already had stays, so only the rest is named
+    const annotated = NAMED_LINE.replace('<bpmn:sequenceFlow id="Flow_AToB" sourceRef', '<bpmn:sequenceFlow id="Flow_AToB" name="start" sourceRef')
+      .replace('<bpmn:sequenceFlow id="Flow_CToDone"', '<bpmn:textAnnotation id="TextAnnotation_Note"><bpmn:text>note</bpmn:text></bpmn:textAnnotation>\n    <bpmn:association id="Association_Note" sourceRef="Flow_BToC" targetRef="TextAnnotation_Note" />\n    <bpmn:sequenceFlow id="Flow_CToDone"');
+    const some = await applyToXml(annotated, move, { keepFlowIds: true, layout: false });
+    expect(changedFlows(some.result)).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C; its condition and annotation stay with the bridge Flow_AToB)');
+    expect(some.result.warnings.added.map((w) => w.code)).toContain('W_LABEL_DROPPED');
+    // the bridge is the default flow of A: the condition is dropped there (W_CONDITION_DROPPED), so only the name is named
+    const byDefault = NAMED_LINE.replace('<bpmn:task id="Activity_A" name="A">', '<bpmn:task id="Activity_A" name="A" default="Flow_AToB">');
+    const named = await applyToXml(byDefault, move, { keepFlowIds: true, layout: false });
+    expect(changedFlows(named.result)).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C; its name stays with the bridge Flow_AToB)');
+    // put back between its old ends (before the join, a prepend): the clause alone
+    const join = JOINED.replace('<bpmn:sequenceFlow id="Flow_AToJoin" sourceRef', '<bpmn:sequenceFlow id="Flow_AToJoin" name="done" sourceRef');
+    const back = await applyToXml(join, [{ op: 'move', ids: ['Activity_A'], before: 'Gateway_Join' }], { keepFlowIds: true, layout: false });
+    expect(changedFlows(back.result)).toContain('Flow_AToJoin: Activity_A -> Gateway_Join (its name stays with the bridge Flow_OkToA)');
+    // nothing to name: as before; by default the out-flow is removed with its label, as before
+    expect(changedFlows(await applyToXml(LINE, move, { keepFlowIds: true, layout: false }).then((r) => r.result))).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C)');
+    const renamed = await applyToXml(NAMED_LINE, move, { layout: false });
+    expect(renamed.result.removed).toContainEqual({ id: 'Flow_BToC', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_B -> Activity_C' });
+    expect(changedFlows(renamed.result).join('\n')).not.toContain('stay');
+  });
+
+  it('with ids kept, the clause is decided once the chain is placed: a bridge a later node removed, renamed or took it back from', async () => {
+    // A's bridge T -> Done takes "done", then Done's detach (an end event) removes it: Flow_AToDone, back between A and Done, gets it back
+    const branched = definitionsXml(`
+    <bpmn:startEvent id="Event_Start"><bpmn:outgoing>Flow_StartToOk</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_Ok"><bpmn:incoming>Flow_StartToOk</bpmn:incoming><bpmn:outgoing>Flow_OkToT</bpmn:outgoing><bpmn:outgoing>Flow_OkToU</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:task id="Activity_T"><bpmn:incoming>Flow_OkToT</bpmn:incoming><bpmn:outgoing>Flow_TToA</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_A"><bpmn:incoming>Flow_TToA</bpmn:incoming><bpmn:outgoing>Flow_AToDone</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="Event_Done"><bpmn:incoming>Flow_AToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:task id="Activity_U"><bpmn:incoming>Flow_OkToU</bpmn:incoming><bpmn:outgoing>Flow_UToOther</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="Event_Other"><bpmn:incoming>Flow_UToOther</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StartToOk" sourceRef="Event_Start" targetRef="Gateway_Ok" />
+    <bpmn:sequenceFlow id="Flow_OkToT" sourceRef="Gateway_Ok" targetRef="Activity_T" />
+    <bpmn:sequenceFlow id="Flow_TToA" sourceRef="Activity_T" targetRef="Activity_A" />
+    <bpmn:sequenceFlow id="Flow_AToDone" name="done" sourceRef="Activity_A" targetRef="Event_Done"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${done}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_OkToU" sourceRef="Gateway_Ok" targetRef="Activity_U" />
+    <bpmn:sequenceFlow id="Flow_UToOther" sourceRef="Activity_U" targetRef="Event_Other" />`);
+    const removed = await applyToXml(branched, [{ op: 'move', ids: ['Activity_A', 'Event_Done'], after: 'Gateway_Ok' }], { keepFlowIds: true, layout: false });
+    expect(removed.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToDone" name="done" sourceRef="Activity_A" targetRef="Event_Done">\s*<bpmn:conditionExpression/);
+    expect(changedFlows(removed.result)).toEqual(['Flow_TToA: Activity_T -> Event_Done (bridged Activity_A)', 'Flow_AToDone: Activity_A -> Event_Done']);
+    expect(removed.result.removed.map((c) => c.id)).toEqual(['Flow_TToA']);
+    expect(removed.result.warnings.added.filter((w) => w.code.endsWith('_DROPPED'))).toEqual([]);
+    // T's bridge Ok -> A takes "next", then Ok's detach (a split: not bridged) removes it, and T -> A ends at Ok now: the label is dropped, and said so
+    const named = branched.replace('id="Flow_TToA" sourceRef', 'id="Flow_TToA" name="next" sourceRef');
+    const lost = await applyToXml(named, [{ op: 'move', ids: ['Activity_T', 'Gateway_Ok'], after: 'Activity_U' }], { keepFlowIds: true, layout: false });
+    expect(lost.xml).not.toContain('"next"');
+    expect(lost.result.warnings.added.filter((w) => w.code === 'W_LABEL_DROPPED').map((w) => w.message)).toEqual([
+      'Flow label "next" of Flow_TToA was dropped while moving Activity_T: the bridge Flow_OkToT took it, and a later node of the move removed Flow_OkToT',
+    ]);
+    expect(changedFlows(lost.result).join('\n')).not.toContain('stay');
+    // a bridge a later node renamed (a flow the batch created follows its ends): the clause names the id it has now
+    const long = NAMED_LINE.replace('<bpmn:outgoing>Flow_CToDone</bpmn:outgoing></bpmn:task>', '<bpmn:outgoing>Flow_CToD</bpmn:outgoing></bpmn:task>\n    <bpmn:task id="Activity_D" name="D"><bpmn:incoming>Flow_CToD</bpmn:incoming><bpmn:outgoing>Flow_DToDone</bpmn:outgoing></bpmn:task>')
+      .replace('<bpmn:incoming>Flow_CToDone</bpmn:incoming>', '<bpmn:incoming>Flow_DToDone</bpmn:incoming>')
+      .replace('<bpmn:sequenceFlow id="Flow_CToDone" sourceRef="Activity_C" targetRef="Event_Done" />', '<bpmn:sequenceFlow id="Flow_CToD" sourceRef="Activity_C" targetRef="Activity_D" />\n    <bpmn:sequenceFlow id="Flow_DToDone" sourceRef="Activity_D" targetRef="Event_Done" />');
+    const batch = await applyToXml(long, [{ op: 'add', kind: 'task', name: 'X', after: 'Activity_A' }, { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_D' }], { keepFlowIds: true, layout: false });
+    expect(batch.xml).toMatch(/<bpmn:sequenceFlow id="Flow_XToD" name="approved" sourceRef="Activity_X" targetRef="Activity_D">/);
+    expect(changedFlows(batch.result).filter((c) => c.includes('stay'))).toEqual(['Flow_BToC: Activity_B -> Activity_C (was -> Event_Done; its name and condition stay with the bridge Flow_XToD)']);
+    // B and A swap places: the second bridge takes the label back to Flow_BToC, so nothing is said, and each entry is listed once
+    const swap = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B', 'Activity_A'], after: 'Event_Start' }], { keepFlowIds: true, layout: false });
+    expect(changedFlows(swap.result)).toEqual([
+      'Flow_AToB: Activity_A -> Activity_C (bridged Activity_B)',
+      'Flow_StartToA: Event_Start -> Activity_B (was -> Activity_A)',
+      'Flow_BToC: Activity_B -> Activity_A (was -> Activity_C)',
+      'Flow_BToC: Activity_B -> Activity_C (bridged Activity_A)',
+      'Flow_AToB: Activity_A -> Activity_C',
+    ]);
+    expect(swap.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_A">\s*<bpmn:conditionExpression/);
   });
 });
