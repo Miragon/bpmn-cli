@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, and the note when BPMN_KEEP_FLOW_IDS kept the flow ids)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, and a write's count of what bpmnlint leaves out)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2118 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2126 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,138 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## A write counts what bpmnlint leaves out (2026-10-13, `fix/lint-left-out-counted`)
+
+Two findings of #33's third review ("Left for later" in its section, the
+2nd and the 3rd). On a file without incoming / outgoing lists a write's
+validator line read `0 error(s)` while `bpmn validate` exited 2: the
+list-rule findings a write leaves out were dropped without a count. And a
+moddle descriptor BpmnModdle rejects stopped every rule, while a write's
+line looked like a healthy run. Now a write's totals are validate's, and
+its line says what it did not compare
+([docs/bpmnlint.md](docs/bpmnlint.md#writes)):
+`validator bpmnlint (.bpmnlintrc in .): 7 error(s), 0 warning(s) in the
+result (0 added, 0 resolved, 0 already in the file, 7 left out (incoming /
+outgoing lists the file does not keep; `bpmn validate <file>` lists them))`.
+
+- **A per-run channel** (`src/validators.ts`, additive and optional API):
+  `ValidatorFinding.leftOut` (a short reason). The issue keeps it hidden (a
+  symbol like the key, never serialised). `compareRuns` skips such issues
+  before and after: never added, resolved, kept or pre-existing, never
+  blocking. A left-out finding after also takes its unmarked twin before
+  out of `resolved`: a real dead end that a change gives a flow in a file
+  without the lists is still reported by bpmnlint in CI, so it is not
+  resolved (W_DEAD_END is, as itself). It counts them in `counts` and in
+  `ValidatorReport.leftOut` (`[{ reason, count }]`, one entry per reason,
+  absent when there is none). A run with no run before (the advisory
+  bpmnlint of a created document, `bpmn new`) ignores the mark and reports
+  every finding, so `new` still lists a whole-model W_LINT_FAILED with its
+  cause and hint. A write's left-out finding covers no lint warning; a
+  check reports and covers as before
+  ([docs/validators.md](docs/validators.md#left-out)).
+- **bpmnlint** (`src/bpmnlint.ts`): in before / after, a list-rule finding
+  the element's flows contradict is marked `incoming / outgoing lists the
+  file does not keep` (it was a `continue`), and the W_LINT_FAILED of a
+  model bpmnlint could not lint at all `W_LINT_FAILED, no rule ran`.
+  validate is unchanged. `resolveBpmnlintConfig` builds a BpmnModdle with
+  all descriptors once; when that throws it adds them one prefix at a time
+  and leaves out each one BpmnModdle rejects (a prefix or uri already
+  defined, an extends of an unknown type) as a `moddle` W_LINT_UNAVAILABLE
+  (`BpmnModdle rejects it (<first line>)`, pkg the module path or
+  `descriptor object`). The other rules run, and the node layer's detail
+  counts it (`1 left out (W_LINT_UNAVAILABLE; ...)`) without a change there.
+  The whole-model case that is left: a descriptor BpmnModdle takes but
+  cannot parse the file with (a property that redefines one bpmn does not
+  have).
+- **Text** (`src/report.ts`): `keptOf` subtracts the left-out findings, so
+  `already in the file` and `--summary`'s `preexistingCount` count what they
+  counted before on a list-less file. The line adds ``N left out (<reason>;
+  `bpmn validate <file>` lists it/them)`` inside an advisory validator's
+  parenthesis, and ` (N left out (...))` to a blocking one (`lintBlocks`);
+  a host's validator, which `bpmn validate` does not run, says `a check
+  lists it/them` instead. `--summary` names them in a line of its own
+  (``validator bpmnlint: 7 left out (...; `bpmn validate <file>` lists
+  them)``) and its JSON in `leftOut: [{ validator, reason, count }]`
+  (additive, optional): a list-less write with `--summary` showed nothing
+  while validate exited 2, and the redefines case no longer said that no
+  rule ran.
+- Docs: docs/bpmnlint.md (Writes, Which rules are available,
+  moddleExtensions, Lists of incoming and outgoing flows),
+  docs/validators.md (`leftOut` in Findings, a Left out section at the end
+  of Before and after, Results), docs/library.md, docs/reference.md
+  (`--json`, `--summary --json`), the guide's bpmnlint topic, its JSON
+  shapes and the catalogue entries of W_LINT_UNAVAILABLE and W_LINT_FAILED,
+  SKILL.md (the left-out findings include the ones of elements the change
+  added). `guide --short` is unchanged (4,644 bytes).
+
+Evidence:
+
+- Tests (each fails on main): test/validators.test.ts, a host validator
+  that leaves its dead ends out (blocking: not refused, not resolved, the
+  lint warning it would cover stays; advisory: the line and `--summary`; a
+  check reports it), one entry per reason, a finding real before and left
+  out after (not resolved) and the reverse (added), and a created document
+  (advisory: reported; blocking: left out); test/bpmnlint.test.ts, a write
+  on a list-less file (the line, the JSON, `--summary`, a new element there:
+  the write's totals equal validate's on the written file, `lintBlocks`), a
+  file with lists (no `leftOut`, the line as before), `add end --after` and
+  `connect` on a real loose node of a list-less file (no bpmnlint finding
+  resolved, W_DEAD_END / W_UNREACHABLE resolved as themselves), descriptors
+  BpmnModdle rejects (duplicate prefix and uri, `extends: ['bpmn:Nope']`,
+  two of one prefix, `{}` after `[]`) in the core and on disk (validate
+  lists the real findings), the whole-model W_LINT_FAILED left out of a
+  write (line and `--summary`) and listed by a new file with its cause and
+  hint. The core test of a model that cannot be linted now uses the
+  redefines descriptor (`{ c: [], d: {} }` is no longer one).
+- `npm run gate` (after the rebase on #54): 2126 tests (+246 opt-in;
+  2118 on main), isomorphism check, layout regression 444 (budget 444),
+  fuzz 12 x 15 0 errors. The whole entry 938.9 / 299.2 -> 941.8 / 300.2 KB,
+  `applyToXml` only 663.0 / 211.4 -> 663.5 / 211.6 KB: within main's
+  budgets (948 / 302, 670 / 214), unchanged; docs/library.md has the new
+  sizes.
+- Differential against main (in process, test/fixtures + tools/scenarios,
+  164 files as they are and without the lists, configurations
+  recommended, recommended + automation, camunda-compat 7-24 and 8-10 with
+  their moddle descriptors, a duplicate-prefix and a redefines descriptor;
+  validate, `set name=`, `add task --after` and a new file, text, JSON,
+  `--summary` and the written XML; 5832 cases, 3568 identical, 0
+  unexplained): every file that keeps its lists gives byte-identical
+  output. The differences: a write on a list-less file (650 cases, 12 of
+  them fixtures whose own lists are incomplete) differs only in the
+  validator's `counts` and `leftOut`, its line and `--summary`'s
+  `leftOut`, and its totals equal validate's on the result; in 4 of them a
+  list finding main called resolved is no longer resolved (all 6 are still
+  in validate's result) and the lint warning it covered is resolved as
+  itself. The duplicate prefix (969 cases plus `new`) equals recommended
+  plus one W_LINT_UNAVAILABLE in validate (328 of 328 checked). The
+  redefines descriptor (644 writes) moves the W_LINT_FAILED from `already
+  in the file` to `1 left out (W_LINT_FAILED, no rule ran; ...)`, and
+  `--summary` from `preexistingCount` to its `leftOut` line; its `new` is
+  identical to main (W_LINT_FAILED added, with cause and hint).
+  `tools/roundtrip.mjs` and `tools/speaking-ids.mjs --baseline` are
+  identical to main.
+- Runtime: with nothing left out, `compareRuns` does one more test per
+  issue. A `.bpmnlintrc` with moddle extensions costs one BpmnModdle
+  construction more per load (resolveBpmnlintConfig with the camunda
+  descriptor 0.05 -> 0.68 ms, once per load, cached with it); without them
+  nothing. The CLI's validate and `set` with camunda-compat 7-24 on
+  orders.bpmn: within noise (119 -> 117 ms, 856 -> 828 ms, medians of 15).
+
+Left:
+
+- A whole-model failure in one run only (before lints, after cannot, or
+  the reverse) still lists the other run's findings as resolved / added.
+  With the descriptor check the remaining causes are the configuration's,
+  which fail both runs alike.
+- `rules reading <x>: properties` in the W_LINT_UNAVAILABLE of a rejected
+  descriptor names the moddleExtensions key, also where the descriptor's own
+  prefix is another (`x` with prefix `bpmn`).
+- The W_LINT_UNAVAILABLE and W_CONFIG_IGNORED notes in the validator's
+  detail keep main's `bpmn validate lists it` (no `<file>`, no backticks):
+  changing them would change the line of every file that keeps its lists.
+- A finding left out before and real after (a node with flows loses them)
+  is added, like on main: the change made it real.
 
 ## A result says when BPMN_KEEP_FLOW_IDS kept the flow ids (2026-10-13, `feat/keep-flow-ids-env-note`)
 

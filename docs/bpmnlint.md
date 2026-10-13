@@ -57,7 +57,8 @@ layout: ok
 
 Every mutating command and `apply` run the configuration on the model before the change and on
 what they would write. The result lists only the findings the change added, never refuses because
-of them, and counts the rest in the validator line (`--summary`: in its `warnings:` line). An error
+of them, and counts the rest in the validator line (`--summary`: in its `warnings:` line, and what
+it left out in a `validator bpmnlint:` line). An error
 reads `[bpmnlint error]`; three or more findings of one rule with one message are one line.
 `--strict` exits 5 on the findings the change added; `bpmn validate --strict` also fails on the
 rest.
@@ -82,8 +83,18 @@ ids the file had keep theirs ([Id conventions](#id-conventions)).
 A finding the file already had is not listed again, also when its element was renamed or a sibling
 before it removed. What the configuration names but cannot run (`W_LINT_UNAVAILABLE`) is the same
 before and after, so a write only counts it, and its validator line says so: `1 left out
-(W_LINT_UNAVAILABLE; bpmn validate lists it)`. A file from `bpmn new` lists the findings of the new
-model, `W_LINT_UNAVAILABLE` too. An empty process has no start and no end event, so
+(W_LINT_UNAVAILABLE; bpmn validate lists it)`. Findings a write does not compare at all are counted
+in its totals and named at the end of the line, so the totals are those of `bpmn validate` on the
+result: the findings of the [incoming / outgoing lists](#lists-of-incoming-and-outgoing-flows) a
+file does not keep (``7 left out (incoming / outgoing lists the file does not keep; `bpmn validate
+<file>` lists them)``), and the `W_LINT_FAILED` of a model bpmnlint could not lint at all (``1 left
+out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)``). Such a finding is never added
+or resolved, also where the file had it before as a real one. `--json` has them in
+`validation.validators[].leftOut` (`[{ "reason", "count" }]`); `--summary` names them in their own
+line (``validator bpmnlint: 7 left out (...; `bpmn validate <file>` lists them)``, `--json`:
+`leftOut: [{ "validator", "reason", "count" }]`), not in its `warnings:` line. A file from `bpmn
+new` lists the findings of the new model, `W_LINT_UNAVAILABLE` and `W_LINT_FAILED` too. An empty
+process has no start and no end event, so
 `start-event-required` and `end-event-required` are errors and `bpmn validate` exits 2 until the
 first `apply` batch adds them.
 
@@ -226,8 +237,12 @@ package and reason, and the rest runs:
 
 A rule that throws is one `W_LINT_FAILED` and its findings are left out; nothing goes to stderr.
 So is an async check that rejects, and a rule factory that returns a promise (bpmnlint rules are
-synchronous). When bpmnlint cannot lint the model at all (a moddle descriptor it cannot load), no
-rule runs: one `W_LINT_FAILED` that `bpmn validate` lists and a later write only counts.
+synchronous). When bpmnlint cannot lint the model at all, no rule runs: one `W_LINT_FAILED` that
+`bpmn validate` and `bpmn new` list, and a later write's validator line says ``1 left out
+(W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)``. A moddle descriptor that
+BpmnModdle rejects outright no longer stops every rule (see [moddleExtensions](#moddleextensions));
+what is left is one it takes but cannot parse the file with (a property that redefines one bpmn
+does not have).
 
 ## Project code
 
@@ -268,7 +283,12 @@ that cannot be found, is left out with `W_LINT_UNAVAILABLE`, and so is a value t
 path nor a descriptor object (`5`, `null`), and a `moddleExtensions` that is a string, not an
 object of prefix -> path (bpmnlint fails on the whole file with either); rules that read its
 properties may then report findings that are not there, as they would in CI without the
-extension.
+extension. So is a descriptor BpmnModdle rejects: a prefix or uri another descriptor (or bpmn
+itself) already has, a type that extends one that does not exist. bpmn-cli adds the descriptors
+one prefix at a time, leaves out each one BpmnModdle rejects (`moddle extension x (descriptor
+object) left out: BpmnModdle rejects it (package with prefix <bpmn> already defined)`; a module
+path instead of `descriptor object` for one read from a file) and runs the rules with the others.
+bpmnlint in CI fails on the whole file with such a descriptor: fix it or remove its entry.
 
 ## Import warnings
 
@@ -299,8 +319,11 @@ itself, directly or through the configs it extends, is walked once (its rules ap
 `outgoing` lists, and `event-based-gateway` counts a gateway's `outgoing` list. bpmn-cli writes
 those lists only where a file keeps them, so in a generated or hand-written file without them these
 rules report nodes that do have flows, and an event-based gateway with two branches (bpmnlint in
-CI does too). A write leaves such findings out; `validate` lists them with a hint that says so. A
-node that really has no flow, or a gateway with one branch, is reported in both.
+CI does too). `validate` lists them with a hint that says so. A write does not compare them, so
+they are never added or resolved, but it counts them: its totals are those of `validate`, and its
+validator line ends with ``7 left out (incoming / outgoing lists the file does not keep; `bpmn
+validate <file>` lists them)``. The count grows with the nodes a change adds: CI reports their
+findings too. A node that really has no flow, or a gateway with one branch, is reported in both.
 
 ## A hoisted bpmnlint
 

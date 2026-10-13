@@ -15,7 +15,11 @@
  * failing the whole configuration, and so is a rule name it cannot parse or a
  * rule it cannot resolve. A config that extends itself, directly or through
  * others (bpmnlint has no guard and fails on it), is walked once: its rules
- * apply, the extends that closes the cycle is listed. `rules` are the
+ * apply, the extends that closes the cycle is listed. So is a moddle
+ * descriptor BpmnModdle rejects (a prefix or uri already defined, an extends
+ * of an unknown type; bpmnlint fails on the whole file with it): the
+ * descriptors are added one prefix at a time, the rules run with the ones it
+ * accepts. `rules` are the
  * effective settings, keyed by bpmnlint's normalised names (`label-required`,
  * `camunda-compat/history-time-to-live`, `@miragon/rules/element-id-naming`),
  * `off` ones included: `{ severity, config }`, `config` as bpmnlint hands it
@@ -38,7 +42,10 @@
  *  - a rule that throws (its factory on the options, or its check on an
  *    element) is left out of that run: W_LINT_FAILED, nothing on stderr; so
  *    is an async check that rejects and a factory that returns a promise
- *    (bpmnlint rules are synchronous);
+ *    (bpmnlint rules are synchronous); a model it cannot lint at all (a
+ *    descriptor BpmnModdle accepts but cannot parse with): one W_LINT_FAILED,
+ *    which a write leaves out (ValidatorFinding.leftOut: its validator line
+ *    says that no rule ran);
  *  - what could not be resolved: W_LINT_UNAVAILABLE, one per package and reason;
  *  - the import warnings of the lint parse bpmn-cli's reader does not report
  *    itself: `import-warning` errors, as bpmnlint's CLI reports them, with a
@@ -46,8 +53,9 @@
  *  - no-implicit-end, no-implicit-start, no-disconnected and
  *    event-based-gateway (which counts the outgoing list) read the incoming /
  *    outgoing lists, which bpmn-cli writes only where a file keeps them: a
- *    finding the element's sequence flows contradict is left out of a write
- *    (before / after) and carries a hint in `bpmn validate` (check);
+ *    finding the element's sequence flows contradict is left out of a
+ *    write's comparison (before / after: ValidatorFinding.leftOut, counted)
+ *    and carries a hint in `bpmn validate` (check);
  *  - BPMNLINT_COVERS: bpmn-cli's lint warning about the same element is
  *    dropped where a covering rule reports, and the finding takes its hint.
  * The validator never throws: what goes wrong is W_LINT_FAILED.
@@ -161,6 +169,33 @@ function firstLine(err: unknown): string {
   return String((err as Error)?.message ?? err).split('\n')[0]!;
 }
 
+/**
+ * The descriptors BpmnModdle rejects (prefix -> its first line), added one
+ * prefix at a time to the ones it accepted; all at once first, so a
+ * configuration it accepts costs one construction.
+ */
+function rejectedDescriptors(descriptors: Record<string, object>): Map<string, string> {
+  const rejected = new Map<string, string>();
+  const entries = Object.entries(descriptors);
+  if (!entries.length) return rejected;
+  try {
+    void new BpmnModdle(descriptors);
+    return rejected;
+  } catch {
+    /* one at a time */
+  }
+  const accepted: Record<string, object> = {};
+  for (const [prefix, descriptor] of entries) {
+    try {
+      void new BpmnModdle({ ...accepted, [prefix]: descriptor });
+      accepted[prefix] = descriptor;
+    } catch (err) {
+      rejected.set(prefix, firstLine(err));
+    }
+  }
+  return rejected;
+}
+
 function hintOf(err: unknown): { hint?: string } {
   const hint = (err as { hint?: unknown })?.hint;
   return typeof hint === 'string' ? { hint } : {};
@@ -249,6 +284,12 @@ export async function resolveBpmnlintConfig(engine: BpmnlintEngine, config: Bpmn
     // a module path the host resolved nothing for (the node layer resolves them and lists what it cannot itself)
     else if (!opts.moddleExtensions) unavailable.push({ kind: 'moddle', name: prefix, pkg: String(value), reason: 'a module path, which the host resolves', hint: 'Put the descriptor object into the configuration, or pass it in resolveBpmnlintConfig\'s moddleExtensions.' });
   }
+  // a descriptor BpmnModdle rejects stops every rule (bpmnlint fails on the whole file with it): it alone is left out
+  for (const [prefix, why] of rejectedDescriptors(moddleExtensions)) {
+    const value = moddleEntries(config).find(([p]) => p === prefix)?.[1];
+    delete moddleExtensions[prefix];
+    unavailable.push({ kind: 'moddle', name: prefix, pkg: typeof value === 'string' ? value : 'descriptor object', reason: `BpmnModdle rejects it (${why})`, hint: 'Fix the descriptor, or remove the moddleExtensions entry; bpmnlint in CI fails on the whole file with it.' });
+  }
   return { rules, unavailable, moddleExtensions };
 }
 
@@ -277,6 +318,12 @@ const LIST_RULES: Record<string, (id: string, ends: FlowEnds) => boolean> = {
   // counts the outgoing list (its other finding is on a conditional flow: a flow id, never contradicted)
   'event-based-gateway': (id, e) => (e.outgoing.get(id) ?? 0) >= 2,
 };
+
+/** Why a write leaves a list-rule finding the element's sequence flows contradict out of its comparison (ValidatorFinding.leftOut). */
+const LISTS_LEFT_OUT = 'incoming / outgoing lists the file does not keep';
+
+/** Why a write leaves the W_LINT_FAILED of a model bpmnlint could not lint out of its comparison: its validator line says that no rule ran. */
+const NOT_LINTED = 'W_LINT_FAILED, no rule ran';
 
 /** The hint of an import warning of the lint parse. */
 const IMPORT_HINT =
@@ -456,17 +503,18 @@ export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmn
             }
             const id = r.id === undefined || r.id === null ? undefined : String(r.id);
             let hint: string | undefined;
+            let leftOut: string | undefined;
             const list = LIST_RULES[rule];
             if (list && id) {
               ends ??= flowEnds(rootElement as ModdleNode);
               if (list(id, ends)) {
-                // a write compares what it changed: a finding of the lists the file does not keep is not news
-                if (ctx.phase !== 'check') continue;
                 hint = `The element has sequence flows the file does not list under incoming / outgoing, which ${rule} reads (bpmnlint in CI reports it too); bpmn-cli writes those lists only where the file keeps them.`;
+                // a write compares what it changed: a finding of the lists the file does not keep is not news, it is counted as left out
+                if (ctx.phase !== 'check') leftOut = LISTS_LEFT_OUT;
               }
             }
             const path = (r.path ?? []).filter((p) => typeof p !== 'number').join('.');
-            out.push({ severity: r.category === 'error' ? 'error' : 'warning', code: rule, message: String(r.message), ...(id ? { element: id } : {}), key: `${id ?? ''}|${path}|${r.message}`, ...(hint ? { hint } : {}) });
+            out.push({ severity: r.category === 'error' ? 'error' : 'warning', code: rule, message: String(r.message), ...(id ? { element: id } : {}), key: `${id ?? ''}|${path}|${r.message}`, ...(hint ? { hint } : {}), ...(leftOut ? { leftOut } : {}) });
           }
         }
         for (const [rule, msg] of failures) {
@@ -485,7 +533,8 @@ export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmn
           }
         }
       } catch (err) {
-        out.push({ severity: 'warning', code: 'W_LINT_FAILED', message: `bpmnlint could not lint the model: ${firstLine(err)}`, key: 'failed|', hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint." });
+        // a write counts it as left out: its validator line says that no rule ran
+        out.push({ severity: 'warning', code: 'W_LINT_FAILED', message: `bpmnlint could not lint the model: ${firstLine(err)}`, key: 'failed|', hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint.", ...(ctx.phase === 'check' ? {} : { leftOut: NOT_LINTED }) });
       }
       return out;
     },

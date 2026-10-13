@@ -75,6 +75,9 @@ const LINE = [
   { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Check' },
 ];
 
+/** A moddle descriptor BpmnModdle takes, and fails on when it parses any file: a property that redefines one bpmn has not. */
+const REDEFINES_NOTHING = { name: 'X', prefix: 'x', uri: 'http://example.org/x', types: [{ name: 'A', extends: ['bpmn:BaseElement'], properties: [{ name: 'id', type: 'String', redefines: 'bpmn:Nope#x' }] }] };
+
 /** The same XML without the incoming / outgoing lists (a generated or hand-written model). */
 const listless = (xml: string): string => xml.replace(/\s*<bpmn:(incoming|outgoing)>[^<]*<\/bpmn:\1>/g, '');
 
@@ -308,18 +311,55 @@ describe('bpmnlintValidator: findings', () => {
     }
   });
 
-  it('a model bpmnlint cannot lint at all (moddle descriptors it cannot load) is one W_LINT_FAILED that says no rule ran', async () => {
+  it('a model bpmnlint cannot lint at all (a descriptor BpmnModdle takes but cannot parse with) is one W_LINT_FAILED that says no rule ran; a write leaves it out', async () => {
     const engine = bpmnlintEngine();
     const xml = await model(LINE);
-    const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', moddleExtensions: { c: [], d: {} } });
-    expect(await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))).toEqual([
-      {
-        severity: 'warning',
-        code: 'W_LINT_FAILED',
-        message: 'bpmnlint could not lint the model: package with prefix <undefined> already defined',
-        key: 'failed|',
-        hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint.",
-      },
+    const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', moddleExtensions: { x: REDEFINES_NOTHING } });
+    expect(resolved.unavailable).toEqual([]);
+    const failed = {
+      severity: 'warning',
+      code: 'W_LINT_FAILED',
+      message: 'bpmnlint could not lint the model: refined property <bpmn:x> not found',
+      key: 'failed|',
+      hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint.",
+    };
+    const v = bpmnlintValidator(engine, resolved);
+    expect(await v.validate!(xml, ctx(xml))).toEqual([failed]);
+    // a write does not compare it: its validator line says that no rule ran
+    for (const phase of ['before', 'after'] as const) expect(await v.validate!(xml, ctx(xml, phase)), phase).toEqual([{ ...failed, leftOut: 'W_LINT_FAILED, no rule ran' }]);
+  });
+
+  it('a moddle descriptor BpmnModdle rejects (a prefix or uri already defined, an extends of an unknown type) is left out alone: W_LINT_UNAVAILABLE, the other rules run', async () => {
+    const engine = bpmnlintEngine();
+    const xml = await model([...LINE, { op: 'add', kind: 'task', in: 'Process_Order' }]);
+    const ext = (prefix: string, more: object = {}) => ({ name: prefix.toUpperCase(), prefix, uri: `http://example.org/${prefix}`, types: [], ...more });
+    const moddleExtensions = {
+      dup: ext('bpmn'),
+      nope: ext('nope', { types: [{ name: 'A', extends: ['bpmn:Nope'], properties: [] }] }),
+      uri: ext('u', { uri: 'http://www.omg.org/spec/BPMN/20100524/MODEL' }),
+      ok: ext('ok'),
+      again: ext('ok'),
+      empty: [],
+      second: {},
+    };
+    const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', moddleExtensions });
+    expect(resolved.moddleExtensions).toEqual({ ok: moddleExtensions.ok, empty: [] });
+    const hint = 'Fix the descriptor, or remove the moddleExtensions entry; bpmnlint in CI fails on the whole file with it.';
+    expect(resolved.unavailable).toEqual([
+      { kind: 'moddle', name: 'dup', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with prefix <bpmn> already defined)', hint },
+      { kind: 'moddle', name: 'nope', pkg: 'descriptor object', reason: expect.stringMatching(/^BpmnModdle rejects it \(.+\)$/), hint },
+      { kind: 'moddle', name: 'uri', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with uri <http://www.omg.org/spec/BPMN/20100524/MODEL> already defined)', hint },
+      { kind: 'moddle', name: 'again', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with prefix <ok> already defined)', hint },
+      { kind: 'moddle', name: 'second', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with prefix <undefined> already defined)', hint },
+    ]);
+    const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
+    expect(codes(found.filter((f) => !f.code.startsWith('W_LINT_')))).toEqual(['label-required Activity_Task', 'no-disconnected Activity_Task', 'no-implicit-end Activity_Task', 'no-implicit-start Activity_Task']);
+    expect(found.filter((f) => f.code.startsWith('W_LINT_')).map((f) => f.message)).toEqual([
+      'moddle extension dup (descriptor object) left out: BpmnModdle rejects it (package with prefix <bpmn> already defined); rules reading dup: properties may report findings that are not there',
+      expect.stringMatching(/^moddle extension nope \(descriptor object\) left out: BpmnModdle rejects it \(.+\); rules reading nope: properties may report findings that are not there$/),
+      'moddle extension uri (descriptor object) left out: BpmnModdle rejects it (package with uri <http://www.omg.org/spec/BPMN/20100524/MODEL> already defined); rules reading uri: properties may report findings that are not there',
+      'moddle extension again (descriptor object) left out: BpmnModdle rejects it (package with prefix <ok> already defined); rules reading again: properties may report findings that are not there',
+      'moddle extension second (descriptor object) left out: BpmnModdle rejects it (package with prefix <undefined> already defined); rules reading second: properties may report findings that are not there',
     ]);
   });
 
@@ -417,6 +457,61 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     expect(codes(lintOf(loose))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
     expect(codes(loose)).not.toContain('W_DEAD_END Activity_Loose');
     expect(lintOf(loose).find((f) => f.code === 'no-implicit-end')!.hint).toMatch(/^Continue the flow/);
+  });
+
+  it("a write on a file without incoming / outgoing lists counts the findings it leaves out: its totals are validate's, also after a new element; they never block", async () => {
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'listless.bpmn': listless(await model(LINE)) });
+    const file = join(dir, 'listless.bpmn');
+    expect((await checkFile(file)).validation.validators![0]!.counts).toEqual({ errors: 7, warnings: 0 });
+    const lists = 'incoming / outgoing lists the file does not keep';
+    const renamed = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: dir }));
+    expect(renamed.validation.validators).toEqual([{ name: 'bpmnlint', detail: '.bpmnlintrc in .', blocks: false, errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 7, warnings: 0 }, leftOut: [{ reason: lists, count: 7 }] }]);
+    expect(renderMutation(renamed)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 7 error(s), 0 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 7 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them))\n');
+    // --summary counts the findings the file already had among the warnings, and names the left-out ones in a line of its own
+    const summary = mutationSummary(renamed);
+    expect(summary.warnings.preexistingCount).toBe(renamed.warnings.preexistingCount);
+    expect(summary.leftOut).toEqual([{ validator: 'bpmnlint', reason: lists, count: 7 }]);
+    expect(renderSummary(summary, { dryRun: true }).split('\n')).toContain('validator bpmnlint: 7 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them)');
+    // a new element: its list-rule findings are left out too, none is added; validate on the written file gives the same totals
+    const added = await mutateFile(file, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }], { lintFrom: dir });
+    expect(lintOf(mutationReport(added).warnings.added)).toEqual([]);
+    const after = added.validation.validators![0]!;
+    const validate = (await checkFile(file)).validation.validators![0]!;
+    expect(after.counts).toEqual(validate.counts);
+    expect(after.counts).toEqual({ errors: 10, warnings: 0 });
+    expect(after.leftOut).toEqual([{ reason: lists, count: 10 }]);
+    // lintBlocks: they do not block, and the line of a blocking validator names them too
+    const blocking = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Ship', values: { name: 'Ship order' } }], { dryRun: true, lintBlocks: true, lintFrom: dir }));
+    expect(renderMutation(blocking)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 10 error(s), 0 warning(s) in the result (10 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them))\n');
+    // a file that keeps its lists: no leftOut, the line as before
+    const kept = repo({ extends: 'bpmnlint:recommended' }, { 'lists.bpmn': await model(LINE) });
+    const plain = mutationReport(await mutateFile(join(kept, 'lists.bpmn'), [{ op: 'set', id: 'Activity_Check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: kept }));
+    expect(plain.validation.validators![0]).not.toHaveProperty('leftOut');
+    expect(renderMutation(plain)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 0 error(s), 0 warning(s) in the result (0 added, 0 resolved, 0 already in the file)\n');
+    expect(mutationSummary(plain)).not.toHaveProperty('leftOut');
+  });
+
+  it('a write on a file without the lists that gives a real dead end or a loose node a flow resolves no bpmnlint finding it still has; W_DEAD_END is resolved as itself', async () => {
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'loose.bpmn': listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }])) });
+    const file = join(dir, 'loose.bpmn');
+    // the loose task: no-disconnected, no-implicit-end and no-implicit-start, real ones (it has no flow)
+    expect(codes(lintOf((await checkFile(file)).validation.errors)).filter((c) => c.endsWith('Activity_Loose'))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
+    for (const ops of [[{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], [{ op: 'connect', source: 'Activity_Check', target: 'Activity_Loose' }]] as Op[][]) {
+      const r = mutationReport(await mutateFile(file, ops, { dryRun: true, lintFrom: dir }));
+      const v = r.validation.validators![0]!;
+      // bpmnlint in CI still reports them (the lists stay unwritten): left out, not resolved
+      expect(lintOf(r.warnings.resolved), ops[0]!.op).toEqual([]);
+      expect(v.resolved, ops[0]!.op).toEqual([]);
+      // added + already in the file + left out = the totals
+      const kept = v.counts.errors + v.counts.warnings - v.warnings.length - v.leftOut![0]!.count;
+      expect(renderMutation(r), ops[0]!.op).toContain(` in the result (${v.warnings.length} added, 0 resolved, ${kept} already in the file, ${v.leftOut![0]!.count} left out (`);
+    }
+    const ended = mutationReport(await mutateFile(file, [{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], { dryRun: true, lintFrom: dir }));
+    expect(codes(ended.warnings.resolved)).toEqual(['W_DEAD_END Activity_Loose']);
+    expect(ended.validation.validators![0]).toMatchObject({ counts: { errors: 12, warnings: 0 }, leftOut: [{ count: 11 }] });
+    const connected = mutationReport(await mutateFile(file, [{ op: 'connect', source: 'Activity_Check', target: 'Activity_Loose' }], { dryRun: true, lintFrom: dir }));
+    expect(codes(connected.warnings.resolved)).toEqual(['W_UNREACHABLE Activity_Loose']);
+    expect(connected.validation.validators![0]).toMatchObject({ counts: { errors: 10, warnings: 0 }, leftOut: [{ count: 9 }] });
   });
 
   it('validate folds a list rule by hint: a real dead end keeps its own line and the fixing command', async () => {
@@ -917,6 +1012,38 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     const renamed = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Check', values: { id: 'userTask_check' } }], { dryRun: true, lintFrom: dir }));
     expect(codes(lintOf(renamed.warnings.added))).toEqual([]);
     expect(codes(lintOf(renamed.warnings.resolved))).toEqual(['@miragon/rules/element-id-naming Activity_Check']);
+  });
+
+  it('a moddle descriptor on disk BpmnModdle rejects is left out and counted, the rules run in validate and writes; with one it cannot parse with, a write says that no rule ran', async () => {
+    const loose = await model([...LINE, { op: 'add', kind: 'task', in: 'Process_Order' }]);
+    const dup = { name: 'Dup', prefix: 'bpmn', uri: 'http://example.org/dup', types: [] };
+    const dir = repo({ extends: 'bpmnlint:recommended', moddleExtensions: { dup: './moddle/dup.json' } }, { 'moddle/dup.json': JSON.stringify(dup), 'x.bpmn': loose });
+    const file = join(dir, 'x.bpmn');
+    const report = validationReport(await checkFile(file, { lintFrom: dir }));
+    expect(codes(lintOf(report.errors))).toEqual(['label-required Activity_Task', 'no-disconnected Activity_Task', 'no-implicit-end Activity_Task', 'no-implicit-start Activity_Task']);
+    const text = renderValidation(report);
+    expect(text).toContain('\n[bpmnlint] W_LINT_UNAVAILABLE: moddle extension dup (./moddle/dup.json) left out: BpmnModdle rejects it (package with prefix <bpmn> already defined); rules reading dup: properties may report findings that are not there  (Fix the descriptor, or remove the moddleExtensions entry; bpmnlint in CI fails on the whole file with it.)\n');
+    expect(text).toContain('\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): 4 error(s), 1 warning(s) in the file\n');
+    const named = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Task', values: { name: 'Loose' } }], { dryRun: true, lintFrom: dir }));
+    expect(codes(lintOf(named.warnings.resolved))).toEqual(['label-required Activity_Task']);
+    expect(renderMutation(named)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): 3 error(s), 1 warning(s) in the result (0 added, 1 resolved, 4 already in the file)\n');
+
+    const broken = repo({ extends: 'bpmnlint:recommended', moddleExtensions: { x: './x.json' } }, { 'x.json': JSON.stringify(REDEFINES_NOTHING), 'x.bpmn': loose });
+    expect(codes((await checkFile(join(broken, 'x.bpmn'), { lintFrom: broken })).validation.warnings)).toContain('W_LINT_FAILED');
+    const failed = mutationReport(await mutateFile(join(broken, 'x.bpmn'), [{ op: 'set', id: 'Activity_Task', values: { name: 'Loose' } }], { dryRun: true, lintFrom: broken }));
+    expect(failed.validation.validators![0]).toMatchObject({ resolved: [], counts: { errors: 0, warnings: 1 }, leftOut: [{ reason: 'W_LINT_FAILED, no rule ran', count: 1 }] });
+    expect(renderMutation(failed)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 0 error(s), 1 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 1 left out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it))\n');
+    // --summary says that no rule ran
+    expect(mutationSummary(failed).leftOut).toEqual([{ validator: 'bpmnlint', reason: 'W_LINT_FAILED, no rule ran', count: 1 }]);
+    expect(renderSummary(mutationSummary(failed), { dryRun: true }).split('\n')).toContain('validator bpmnlint: 1 left out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)');
+    // a new file has nothing to compare: it lists the W_LINT_FAILED with its cause and hint
+    const { mutateDocToFile } = await import('../src/node/files.js');
+    const created = mutationReport(await mutateDocToFile(Doc.create({ processName: 'Order' }, join(broken, 'new.bpmn')), [], { mustNotExist: true, dryRun: true, lintFrom: broken }));
+    expect(codes(lintOf(created.warnings.added))).toEqual(['W_LINT_FAILED']);
+    expect(created.validation.validators![0]).not.toHaveProperty('leftOut');
+    const createdText = renderMutation(created, { dryRun: true });
+    expect(createdText).toContain("\nwarning [bpmnlint] W_LINT_FAILED: bpmnlint could not lint the model: refined property <bpmn:x> not found  (No rule ran. Check the .bpmnlintrc's moddleExtensions");
+    expect(createdText).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 0 error(s), 1 warning(s) in the result (1 added, 0 resolved, 0 already in the file)\n');
   });
 
   it('a lint warning the change resolved that a bpmnlint finding covers is listed once, as that finding', async () => {

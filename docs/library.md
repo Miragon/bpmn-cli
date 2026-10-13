@@ -251,8 +251,12 @@ Validation in the transaction (see [Validators](validators.md)):
 `MutationOptions.validators` / `CheckOptions.validators` (also `validators`
 of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
 `ValidatorFn`, `NamedValidator`, `ValidatorFinding`, `ValidatorContext`,
-`ValidatorIssue`, `ValidatorReport`, `ValidatorSeverity`. `decisionLinkOf(element,
-doc)` reads a business rule task's decision link in any spelling.
+`ValidatorIssue`, `ValidatorReport`, `ValidatorSeverity`. A finding a write
+should not compare carries `ValidatorFinding.leftOut` (a reason); the report
+counts it and lists it in `ValidatorReport.leftOut`, the summary in
+`MutationSummary.leftOut` (see [Left out](validators.md#left-out)).
+`decisionLinkOf(element, doc)` reads a business rule task's decision link in
+any spelling.
 
 A bpmnlint configuration as an advisory validator (`blocks: false`, see
 [Advisory validators](validators.md#advisory-validators)):
@@ -260,7 +264,8 @@ A bpmnlint configuration as an advisory validator (`blocks: false`, see
 flattened, every rule resolved once; what cannot be resolved is in
 `unavailable`; a moddle extension the configuration names by module path
 needs its descriptor in `moddleExtensions`, else it is in `unavailable`
-too), `bpmnlintValidator(engine, resolved, { detail, blocks })`
+too, and so is a descriptor `BpmnModdle` rejects),
+`bpmnlintValidator(engine, resolved, { detail, blocks })`
 (`BPMNLINT_VALIDATOR` is its name, `BPMNLINT_COVERS` the lint warnings it
 replaces). The core does not import bpmnlint: `engine` is
 `{ Linter, resolver }`. In Node, `bpmnlintEngine()` from
@@ -349,8 +354,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 938.9 KB | 299.2 KB | 948 / 302 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 663.0 KB | 211.4 KB | 670 / 214 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 941.8 KB | 300.2 KB | 948 / 302 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 663.5 KB | 211.6 KB | 670 / 214 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |

@@ -59,6 +59,7 @@ A validator returns an array of findings (`ValidatorFinding`):
 | `related` | other ids it involves (optional) |
 | `hint` | how to fix it (optional) |
 | `key` | the finding's identity before and after a change (optional, see [Before and after](#before-and-after)) |
+| `leftOut` | a short reason why a write does not compare this finding (optional, see [Left out](#left-out)) |
 
 So a finding of the shape `{ severity: 'ERROR' | 'WARN', ruleId, message }` is accepted as it is.
 
@@ -144,6 +145,24 @@ which run failed: `Validator broken failed on the document before the change: bo
 written` (or `on the changed document`, `on the file`). One that returns no array gets `Validator
 broken returned undefined instead of an array of findings; nothing was written`.
 
+### Left out
+
+A validator may know that some of its findings say nothing about the change: they come from data
+the file does not keep, so a write would report them as new or resolved at random. It marks such a
+finding with `leftOut`, a short reason (the project's bpmnlint: `incoming / outgoing lists the file
+does not keep`, `W_LINT_FAILED, no rule ran`). In a write such a finding, before or after, is never
+added, resolved, kept or pre-existing, never refuses the write and covers no lint warning. A
+finding the document had that is still in the result, now marked, is not resolved either. It is
+counted: in `counts`, so the totals equal a check's on the result, and in the report's `leftOut`,
+one `{ reason, count }` per reason in the order of the findings (absent when there is none).
+`renderMutation` ends the validator line with `1 left out (dead ends the host checks elsewhere; a
+check lists it)`, after the counts of an advisory validator (the project's bpmnlint: ``7 left out
+(incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them)``), and
+`mutationSummary` lists them in `leftOut` (`[{ validator, reason, count }]`, text: `validator gate:
+1 left out (...)`). A check reports a finding with `leftOut` like any other, and so does a write
+of a created document (`newXml`, `bpmn new`) for an advisory validator, which has no run before to
+compare with. The field itself is never in a result.
+
 ## Covers
 
 A validator may say again what a lint warning says, as `DEAD_END` above repeats `W_DEAD_END`.
@@ -212,8 +231,9 @@ to `bpmnlintValidator`; without them the lint reports every new id
 
 - **A write** reports one `ValidatorReport` per validator in `result.validation.validators`:
   `name`, `detail`, `blocks` (only `false`, for an advisory one), `errors` (the errors the change
-  added; only in a forced write), `warnings` (the warnings it added), `preexisting`, `resolved`
-  and `counts` (the errors and warnings after the change). The added warnings are also in `result.warnings.added`, and the errors of a forced
+  added; only in a forced write), `warnings` (the warnings it added), `preexisting`, `resolved`,
+  `counts` (the errors and warnings after the change) and `leftOut` (only when it left findings
+  out, see [Left out](#left-out)). The added warnings are also in `result.warnings.added`, and the errors of a forced
   write in `result.validation.errors`, each with `validator`. `renderMutation` prints one line per validator: `validator house-rules (our
   modelling guideline): 0 error(s), 0 warning(s) in the result`.
 - **A check** reports every finding: `validators` of the `validateXml` report

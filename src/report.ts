@@ -10,7 +10,8 @@
  *                             (added / resolved / preexistingCount), not every warning of the file
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
  *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / renamed / removed ids, the format ops,
- *                             the added warnings, the layout score and added problems, the ids that follow declared conventions
+ *                             the added warnings, what validators left out, the layout score and added problems, the ids that
+ *                             follow declared conventions
  *   renderSummary(summary, { dryRun, advisory })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
  *   renderValidation(report)  its text
@@ -20,7 +21,8 @@
  * line); an error among them reads `[bpmnlint error]` (in validate too), and
  * its validator line says how many it added, resolved and found already in
  * the file (`--summary` counts those among the warnings already in the
- * file). validate's text folds one of its rules with FLOOD_MIN findings or
+ * file) and, in a write, how many it left out of the comparison (`--summary`
+ * too). validate's text folds one of its rules with FLOOD_MIN findings or
  * more of one hint into one line (`--json` lists every finding).
  */
 import type { LayoutProblem } from './diagram/metrics.js';
@@ -302,22 +304,42 @@ function warningLine(w: Warning): string {
   return `warning ${warningTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
 }
 
-/** The findings of an advisory validator's report of a result that the change did not add: the file already had them. */
+/** The findings a validator left out of the comparison of a result (ValidatorReport.leftOut). */
+function leftOutCount(r: ValidatorReport): number {
+  return (r.leftOut ?? []).reduce((n, g) => n + g.count, 0);
+}
+
+/**
+ * `7 left out (incoming / outgoing lists the file does not keep; `bpmn
+ * validate <file>` lists them)`: the project's bpmnlint runs in `bpmn
+ * validate`, a host's validator in the host's check.
+ */
+function leftOutText(validator: string, g: { reason: string; count: number }): string {
+  const it = g.count === 1 ? 'it' : 'them';
+  // 'bpmnlint': BPMNLINT_VALIDATOR, as validatorRefusal names it (report.ts does not import src/bpmnlint.ts)
+  return `${g.count} left out (${g.reason}; ${validator === 'bpmnlint' ? `\`bpmn validate <file>\` lists ${it}` : `a check lists ${it}`})`;
+}
+
+/** The findings of an advisory validator's report of a result that the change did not add and the validator did not leave out: the file already had them. */
 function keptOf(r: ValidatorReport): number {
-  return r.counts.errors + r.counts.warnings - r.errors.length - r.warnings.length;
+  return r.counts.errors + r.counts.warnings - r.errors.length - r.warnings.length - leftOutCount(r);
 }
 
 /**
  * One line per validator that ran: its name, why it ran and the totals of the
  * result (`what`: result / file); an advisory validator's line of a result
  * adds how many findings the change added and resolved and how many the file
- * already had.
+ * already had; a result's line adds how many findings the validator left out
+ * of the comparison, and why (`7 left out (incoming / outgoing lists the file
+ * does not keep; `bpmn validate <file>` lists them)`).
  */
 function validatorLines(reports: readonly ValidatorReport[] | undefined, what: string): string[] {
   return (reports ?? []).map((r) => {
     const line = `validator ${r.name}${r.detail ? ` (${r.detail})` : ''}: ${r.counts.errors} error(s), ${r.counts.warnings} warning(s) in the ${what}`;
-    if (r.blocks !== false || what !== 'result') return line;
-    return `${line} (${r.errors.length + r.warnings.length} added, ${r.resolved.length} resolved, ${keptOf(r)} already in the file)`;
+    if (what !== 'result') return line;
+    const left = (r.leftOut ?? []).map((g) => leftOutText(r.name, g));
+    if (r.blocks !== false) return left.length ? `${line} (${left.join(', ')})` : line;
+    return `${line} (${[`${r.errors.length + r.warnings.length} added`, `${r.resolved.length} resolved`, `${keptOf(r)} already in the file`, ...left].join(', ')})`;
   });
 }
 
@@ -394,6 +416,8 @@ export interface MutationSummary {
   forced?: Warning[];
   /** preexistingCount: the warnings the file already had, and the findings of an advisory validator (bpmnlint) the file already had (the full result counts those in its validator line) */
   warnings: { added: Warning[]; resolvedCount: number; preexistingCount: number };
+  /** the findings validators left out of the comparison (ValidatorReport.leftOut), per validator and reason; absent when there are none */
+  leftOut?: Array<{ validator: string; reason: string; count: number }>;
   /**
    * the layout that ran, the score before -> after, the layout problems the
    * change added; without a drawing before, only how many problems the
@@ -419,6 +443,7 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     if (!ids.includes(c.id)) ids.push(c.id);
   }
   const m = report.layout.metrics;
+  const left = (report.validation.validators ?? []).flatMap((r) => (r.leftOut ?? []).map((g) => ({ validator: r.name, ...g })));
   return {
     ok: true,
     ...(report.file !== undefined ? { file: report.file } : {}),
@@ -433,6 +458,8 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
     // the summary prints no validator line: an advisory validator's old findings are counted here
     warnings: { added: report.warnings.added, resolvedCount: report.warnings.resolved.length, preexistingCount: report.warnings.preexistingCount + (report.validation.validators ?? []).filter((r) => r.blocks === false).reduce((n, r) => n + keptOf(r), 0) },
+    // what no count above has: the findings a validator did not compare (bpmnlint in CI reports them)
+    ...(left.length ? { leftOut: left } : {}),
     layout: {
       status: report.layout.status,
       ...(report.layout.mode ? { mode: report.layout.mode } : {}),
@@ -445,12 +472,21 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
   };
 }
 
+/** The summary's left-out findings by validator, in their order. */
+function groupLeftOut(left: MutationSummary['leftOut']): Map<string, Array<{ reason: string; count: number }>> {
+  const out = new Map<string, Array<{ reason: string; count: number }>>();
+  for (const { validator, reason, count } of left ?? []) out.set(validator, [...(out.get(validator) ?? []), { reason, count }]);
+  return out;
+}
+
 /**
  * The text of `--summary`: `created <kind>: ids` per kind, `aliases:`,
  * `changed:`, `renamed: old -> new` and `removed:` ids, one `format <op> #<i>: ...` line per format op, forced
  * errors, the added warnings (floods as one line; `advisory`: the names of
  * the advisory validators, whose findings group by code and message),
- * `warnings: n added, n resolved, n already in the file`, one layout line
+ * `warnings: n added, n resolved, n already in the file`, what a validator
+ * left out (`validator bpmnlint: 7 left out (incoming / outgoing lists the
+ * file does not keep; `bpmn validate <file>` lists them)`), one layout line
  * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`),
  * the conventions line and the file line.
  */
@@ -469,6 +505,7 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
   lines.push(...warningLines(summary.warnings.added, opts.advisory));
   const w = summary.warnings;
   if (w.added.length || w.resolvedCount || w.preexistingCount) lines.push(`warnings: ${w.added.length} added, ${w.resolvedCount} resolved, ${w.preexistingCount} already in the file`);
+  for (const [validator, groups] of groupLeftOut(summary.leftOut)) lines.push(`validator ${validator}: ${groups.map((g) => leftOutText(validator, g)).join(', ')}`);
   const l = summary.layout;
   const parts = [l.status === 'ok' ? `layout: ${l.mode ?? 'ok'}` : 'layout: skipped'];
   if (l.score) parts.push(l.score.before !== undefined ? `score ${l.score.before} -> ${l.score.after}` : `score ${l.score.after}`);
