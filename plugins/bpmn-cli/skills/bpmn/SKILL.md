@@ -136,7 +136,12 @@ installed version. Ask it instead of guessing:
      a finding of the project's `.bpmnlintrc` this change added (the write went
      through; CI would fail on an error). Fix it in the same batch, e.g. name
      the element or follow the id convention the message names; an
-     `import-warning` is XML bpmnlint cannot parse: its hint says what to fix
+     `import-warning` is XML bpmnlint cannot parse: its hint says what to fix.
+     The `validator bpmnlint` line counts the rest; `N left out (incoming /
+     outgoing lists the file does not keep; ...)` counts findings of the lists
+     the file does not keep, which bpmnlint in CI reports too, also for the
+     elements this change added (`bpmn validate <file>` lists them; with
+     `--summary` they are a `validator bpmnlint:` line)
    - `conventions: <ids> follow element-id-naming ...`: those new ids carry a
      prefix the `.bpmnlintrc` declares, not the file's older style; use them as
      printed.

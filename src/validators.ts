@@ -37,6 +37,15 @@
  * compared in order (the second run after with the second run before). A
  * finding of the shape {severity: 'ERROR' | 'WARN', ruleId, message} is
  * accepted as it is.
+ *
+ * A finding a validator marks `leftOut` (a short reason) is not compared: a
+ * write neither adds, resolves nor keeps it, never blocks on it and counts
+ * it in `counts` and in the report's `leftOut` (one entry per reason), so
+ * its totals equal a check's (the project's bpmnlint: list-rule findings on
+ * a file without incoming / outgoing lists, a model it could not lint); a
+ * finding the file had that is still in the result, now marked, is not
+ * resolved. A check reports it like any other finding, and so does a write with
+ * nothing to compare (an advisory validator of a created document).
  */
 import type { Doc } from './document.js';
 import { modelError, type Warning } from './errors.js';
@@ -62,6 +71,8 @@ export interface ValidatorFinding {
   hint?: string;
   /** identity for the before / after comparison (default: code + element, or code + message without an element) */
   key?: string;
+  /** a write does not compare this finding, it counts it as left out for this reason (`incoming / outgoing lists the file does not keep`); a check reports it like any other */
+  leftOut?: string;
 }
 
 export interface ValidatorContext {
@@ -116,8 +127,10 @@ export interface ValidatorReport {
   preexisting: ValidatorIssue[];
   /** mutation: findings the change removed */
   resolved: ValidatorIssue[];
-  /** findings after the change (validate: in the file) */
+  /** findings after the change (validate: in the file); a mutation counts the left-out ones too */
   counts: { errors: number; warnings: number };
+  /** mutation: findings after the change the validator left out of the comparison (ValidatorFinding.leftOut), one entry per reason; absent when there are none */
+  leftOut?: Array<{ reason: string; count: number }>;
 }
 
 /** The findings of one validator on one document. */
@@ -131,7 +144,14 @@ export interface ValidatorRun {
 
 /** Hidden identity of an issue (not serialised). */
 const KEY: unique symbol = Symbol('validator-issue-key');
-type Keyed = ValidatorIssue & { [KEY]?: string };
+/** Hidden reason why a write leaves an issue out of the comparison (ValidatorFinding.leftOut; not serialised). */
+const LEFT_OUT: unique symbol = Symbol('validator-issue-left-out');
+type Keyed = ValidatorIssue & { [KEY]?: string; [LEFT_OUT]?: string };
+
+/** Why a write leaves the issue out of the comparison (ValidatorFinding.leftOut), or undefined. */
+function leftOutOf(issue: ValidatorIssue): string | undefined {
+  return (issue as Keyed)[LEFT_OUT];
+}
 
 /** The validators with their names: a function is named by its function name, else `validator<n>` (1-based). */
 export function namedValidators(list: readonly Validator[] | undefined): NamedValidator[] {
@@ -156,6 +176,7 @@ function toIssue(name: string, f: ValidatorFinding): ValidatorIssue {
   if (f.related?.length) issue.related = f.related.map(String);
   if (f.hint) issue.hint = String(f.hint);
   if (f.key) Object.defineProperty(issue, KEY, { value: String(f.key), enumerable: false });
+  if (f.leftOut) Object.defineProperty(issue, LEFT_OUT, { value: String(f.leftOut), enumerable: false });
   return issue;
 }
 
@@ -233,6 +254,11 @@ function counts(issues: ValidatorIssue[]): { errors: number; warnings: number } 
  * matches at most one after; the n-th run of a name after compares with the
  * n-th run of that name before. An advisory run (`blocks: false`) reports
  * the errors it introduced among the warnings and only counts its old ones.
+ * A left-out finding (ValidatorFinding.leftOut) is not compared, before or
+ * after: it is in `counts` and in `leftOut`; one after takes its finding
+ * before out of `resolved` (it is still in the result). A run with no run
+ * before (an advisory validator of a created document) reports every
+ * finding, left-out ones too.
  */
 export function compareRuns(before: ValidatorRun[], after: ValidatorRun[], renames: Map<string, string> = new Map()): ValidatorReport[] {
   const rename = renamer(renames);
@@ -241,11 +267,21 @@ export function compareRuns(before: ValidatorRun[], after: ValidatorRun[], renam
   return after.map((run) => {
     const nth = seen.get(run.name) ?? 0;
     seen.set(run.name, nth + 1);
-    const old = before.filter((b) => b.name === run.name)[nth]?.issues ?? [];
-    const left = old.map((issue) => ({ issue, id: identity(issue, rename, renames) }));
+    const prev = before.filter((b) => b.name === run.name)[nth];
+    // a run without one before (an advisory validator of a created document) has nothing to compare: it reports every finding
+    const reasonOf = (issue: ValidatorIssue) => (prev ? leftOutOf(issue) : undefined);
+    const left = (prev?.issues ?? []).filter((issue) => reasonOf(issue) === undefined).map((issue) => ({ issue, id: identity(issue, rename, renames) }));
     const blocking = run.blocks !== false;
     const report: ValidatorReport = { name: run.name, ...(run.detail ? { detail: run.detail } : {}), ...(blocking ? {} : { blocks: false as const }), errors: [], warnings: [], preexisting: [], resolved: [], counts: counts(run.issues) };
+    const leftOut = new Map<string, number>();
+    const marked: ValidatorIssue[] = [];
     for (const issue of run.issues) {
+      const reason = reasonOf(issue);
+      if (reason !== undefined) {
+        leftOut.set(reason, (leftOut.get(reason) ?? 0) + 1);
+        marked.push(issue);
+        continue;
+      }
       const id = identity(issue, (text) => text, none);
       const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
       if (i !== -1) {
@@ -256,7 +292,14 @@ export function compareRuns(before: ValidatorRun[], after: ValidatorRun[], renam
       if (issue.severity === 'error' && blocking) report.errors.push(issue);
       else report.warnings.push(issue);
     }
+    // a finding the file had that is still in the result, now left out (a node the change gave a flow, in a file without the lists): not resolved
+    for (const issue of marked) {
+      const id = identity(issue, (text) => text, none);
+      const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
+      if (i !== -1) left.splice(i, 1);
+    }
     report.resolved = left.map((b) => b.issue);
+    if (leftOut.size) report.leftOut = [...leftOut].map(([reason, count]) => ({ reason, count }));
     return report;
   });
 }
@@ -300,14 +343,16 @@ export function validatorRefusal(errors: ValidatorIssue[]) {
 export function withValidatorReports(result: ValidationResult, reports: ValidatorReport[], runs: ValidatorRun[]): ValidationResult {
   if (!reports.length) return result;
   const covering = new Map<string, ValidatorIssue[]>();
-  for (const run of runs) {
+  runs.forEach((run, i) => {
+    // a finding a write left out is not reported, so it covers nothing (a check's report never has leftOut: it reports every finding)
+    const write = reports[i]?.leftOut !== undefined;
     for (const issue of run.issues) {
       const lint = run.covers?.[issue.code];
-      if (!lint || !issue.element) continue;
+      if (!lint || !issue.element || (write && leftOutOf(issue) !== undefined)) continue;
       const key = `${lint}|${issue.element}`;
       covering.set(key, [...(covering.get(key) ?? []), issue]);
     }
-  }
+  });
   const warnings = result.warnings.filter((w) => {
     const by = covering.get(`${w.code}|${w.element ?? ''}`);
     if (!by) return true;

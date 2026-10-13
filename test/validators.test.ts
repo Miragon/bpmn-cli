@@ -19,8 +19,8 @@ import { is, type El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
 import { checkFile, mutateFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline.js';
-import { mutationReport, renderMutation, renderValidation, validationReport, validatorTag } from '../src/report.js';
-import { compareRuns, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validators.js';
+import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report.js';
+import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
@@ -328,6 +328,96 @@ describe('validator findings in a refusal, a result and their text (library use)
     expect(pre.warnings.preexistingCount).toBeGreaterThan(0);
     expect(renderMutation(pre)).not.toContain('W_PREEXISTING_ERROR');
     expect(renderMutation(pre)).toMatch(/^\d+ warnings? already in the file \(not repeated/m);
+  });
+});
+
+/** gate(), but a write leaves its dead ends out of the comparison (ValidatorFinding.leftOut); a check reports them. */
+function leftOutGate(blocks = true): NamedValidator {
+  const g = gate();
+  return {
+    ...g,
+    ...(blocks ? {} : { blocks: false }),
+    validateDoc: async (doc, ctx) => (await g.validateDoc!(doc, ctx)).map((f) => (f.code === 'E_GATE_DEAD_END' && ctx.phase !== 'check' ? { ...f, leftOut: 'dead ends the host checks elsewhere' } : f)),
+  };
+}
+
+describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
+  it('are not compared: never added, kept or resolved, never blocking; counted with their reason, in the text too; their lint warnings stay', async () => {
+    const file = await drawn('left-out.bpmn', DEAD_END);
+    // the loose task's dead end is left out: only its unreachable start blocks
+    const r = await refusal(file, LOOSE, { validators: [leftOutGate()] });
+    expect(codes(r.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose']);
+
+    const renamed = await mutateFile(file, [{ op: 'set', id: 'A', values: { name: 'Checked' } }], { validators: [leftOutGate()], dryRun: true });
+    const v = renamed.validation.validators![0]!;
+    expect(v).toEqual({ name: 'gate', detail: 'the test host', errors: [], warnings: [], preexisting: [expect.objectContaining({ code: 'E_GATE_UNREACHABLE', element: 'E' })], resolved: [], counts: { errors: 2, warnings: 0 }, leftOut: [{ reason: 'dead ends the host checks elsewhere', count: 1 }] });
+    // the issues keep their reason hidden: JSON has the report's leftOut only
+    expect(JSON.stringify(renamed.validation)).not.toContain('"leftOut":"');
+    // `bpmn validate` does not run a host's validators: the host's check lists them
+    expect(renderMutation(mutationReport(renamed))).toContain('\nvalidator gate (the test host): 2 error(s), 0 warning(s) in the result (1 left out (dead ends the host checks elsewhere; a check lists it))\n');
+
+    // fixing both: only the compared finding is resolved; the lint warning the left-out one would cover is resolved as itself
+    const fixed = mutationReport(await mutateFile(file, [{ op: 'connect', source: 'A', target: 'E' }], { validators: [leftOutGate()], dryRun: true }));
+    expect(fixed.validation.validators![0]).toMatchObject({ resolved: [expect.objectContaining({ code: 'E_GATE_UNREACHABLE', element: 'E' })], counts: { errors: 0, warnings: 0 } });
+    expect(fixed.validation.validators![0]).not.toHaveProperty('leftOut');
+    expect(codes(fixed.warnings.resolved)).toEqual(['W_DEAD_END A', '[gate] E_GATE_UNREACHABLE E']);
+
+    // advisory: the line adds them after the findings the file already had; a new dead end keeps its lint warning
+    const advisory = mutationReport(await mutateFile(file, LOOSE, { validators: [leftOutGate(false)], dryRun: true }));
+    expect(codes(advisory.warnings.added)).toEqual(['W_DEAD_END Activity_Loose', '[gate] E_GATE_UNREACHABLE Activity_Loose']);
+    expect(renderMutation(advisory)).toContain('\nvalidator gate (the test host): 4 error(s), 0 warning(s) in the result (1 added, 0 resolved, 1 already in the file, 2 left out (dead ends the host checks elsewhere; a check lists them))\n');
+    // the summary counts what the file already had among the warnings, and names what was left out in a line of its own
+    const summary = mutationSummary(advisory);
+    expect(summary.warnings.preexistingCount).toBe(advisory.warnings.preexistingCount + 1);
+    expect(summary.leftOut).toEqual([{ validator: 'gate', reason: 'dead ends the host checks elsewhere', count: 2 }]);
+    expect(renderSummary(summary, { dryRun: true }).split('\n')).toContain('validator gate: 2 left out (dead ends the host checks elsewhere; a check lists them)');
+    expect(mutationSummary(fixed)).not.toHaveProperty('leftOut');
+
+    // a check reports them like any other finding (and they cover their lint warning)
+    const check = await checkFile(file, { validators: [leftOutGate()] });
+    expect(codes(check.validation.errors)).toEqual(['[gate] E_GATE_DEAD_END A', '[gate] E_GATE_UNREACHABLE E']);
+    expect(check.validation.warnings.map((w) => w.code)).not.toContain('W_DEAD_END');
+    expect(check.validation.validators![0]).not.toHaveProperty('leftOut');
+  });
+
+  it('one entry per reason, in the order of the findings; errors and warnings alike', async () => {
+    const host = (_xml: string, ctx: ValidatorContext): ValidatorFinding[] => {
+      const left = (reason: string) => (ctx.phase === 'check' ? {} : { leftOut: reason });
+      return [
+        { severity: 'error', code: 'E_ONE', message: 'one', ...left('the first reason') },
+        { severity: 'warning', code: 'W_TWO', message: 'two', ...left('the second reason') },
+        { severity: 'warning', code: 'W_THREE', message: 'three', ...left('the first reason') },
+      ];
+    };
+    const r = await mutateDoc(await Doc.fromXml(LINE), [{ op: 'set', id: 'A', values: { name: 'Y' } }], { validators: [{ name: 'host', blocks: false, validate: host }] });
+    expect(r.validation.validators).toEqual([{ name: 'host', blocks: false, errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 1, warnings: 2 }, leftOut: [{ reason: 'the first reason', count: 2 }, { reason: 'the second reason', count: 1 }] }]);
+    expect(renderMutation(mutationReport(r))).toContain('\nvalidator host: 1 error(s), 2 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it))\n');
+    expect(renderSummary(mutationSummary(mutationReport(r))).split('\n')).toContain('validator host: 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it)');
+  });
+
+  it('a finding the file had that is still in the result, now left out, is not resolved; one left out before and real after is added', async () => {
+    const doc = await Doc.fromXml(LINE);
+    const reason = 'the host checks it elsewhere';
+    // `A` is real before and left out after, `B` the reverse, `C` real in both
+    const host = (_xml: string, ctx: ValidatorContext): ValidatorFinding[] => [
+      { severity: 'error', code: 'E_HOST', message: 'about A', element: 'A', ...(ctx.phase === 'after' ? { leftOut: reason } : {}) },
+      { severity: 'error', code: 'E_HOST', message: 'about B', element: 'B', ...(ctx.phase === 'before' ? { leftOut: reason } : {}) },
+      { severity: 'error', code: 'E_HOST', message: 'about C', element: 'C' },
+    ];
+    const runs = (phase: 'before' | 'after') => runValidators([{ name: 'host', blocks: false, validate: host }], { xml: async () => '', doc: async () => doc }, { phase, platform: 'none', ops: [] });
+    const [report] = compareRuns(await runs('before'), await runs('after'));
+    // A is still in the result: not resolved; B is news; added (B) + kept (C) + left out (A) = counts
+    expect(report).toEqual({ name: 'host', blocks: false, errors: [], warnings: [expect.objectContaining({ element: 'B' })], preexisting: [], resolved: [], counts: { errors: 3, warnings: 0 }, leftOut: [{ reason, count: 1 }] });
+    expect(renderMutation(mutationReport(await mutateDoc(doc, [], { validators: [{ name: 'host', blocks: false, validate: host }] })))).toContain('\nvalidator host: 3 error(s), 0 warning(s) in the result (1 added, 0 resolved, 1 already in the file, 1 left out (the host checks it elsewhere; a check lists it))\n');
+  });
+
+  it('a run with no run before (an advisory validator of a created document) reports every finding, left-out ones too', async () => {
+    const host = (_xml: string, ctx: ValidatorContext): ValidatorFinding[] => [{ severity: 'warning', code: 'W_HOST', message: 'not linted', ...(ctx.phase === 'check' ? {} : { leftOut: 'no rule ran' }) }];
+    const created = await mutateDoc(Doc.create({ processName: 'Order' }), [], { validators: [{ name: 'host', blocks: false, validate: host }] });
+    expect(created.validation.validators).toEqual([{ name: 'host', blocks: false, errors: [], warnings: [expect.objectContaining({ code: 'W_HOST' })], preexisting: [], resolved: [], counts: { errors: 0, warnings: 1 } }]);
+    // a blocking one has its run before: the finding is left out
+    const blocking = await mutateDoc(Doc.create({ processName: 'Order' }), [], { validators: [{ name: 'host', validate: host }] });
+    expect(blocking.validation.validators![0]).toMatchObject({ warnings: [], leftOut: [{ reason: 'no rule ran', count: 1 }] });
   });
 });
 

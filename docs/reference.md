@@ -256,12 +256,16 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   error it finds in the change is among `warnings.added` with `"severity": "error"` and reads
   `warning [bpmnlint error] <rule> <id>: ...` in text (`validate`: `[bpmnlint error] <rule> <id>:
   ...`); its line says how many findings the change added and resolved and how many the file
-  already had.
+  already had. Findings a write does not compare (on a file without incoming / outgoing lists,
+  those of the lists) are in its `counts` and in `leftOut` (`[{reason, count}]`), and the line
+  ends with ``N left out (<reason>; `bpmn validate <file>` lists them)``.
 - `--summary --json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed, renamed?,
-  removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status,
-  mode, score}, format?, conventions?, notes?}`; `preexistingCount` includes the project's bpmnlint
-  findings the file already had; `notes` holds only the note of flow ids `BPMN_KEEP_FLOW_IDS` kept
-  ([Environment](#environment)).
+  removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, leftOut?, layout:
+  {status, mode, score}, format?, conventions?, notes?}`; `preexistingCount` includes the project's
+  bpmnlint findings the file already had, except the ones a write leaves out: those are in
+  `leftOut` (`[{validator, reason, count}]`; text: ``validator bpmnlint: 7 left out (<reason>;
+  `bpmn validate <file>` lists them)``); `notes` holds only the note of flow ids
+  `BPMN_KEEP_FLOW_IDS` kept ([Environment](#environment)).
 - Errors go to stderr as `error E_CODE: message` with a hint and candidate ids; with `--json` as
   `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?", "errors?"}}`
   (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room; `errors`:
