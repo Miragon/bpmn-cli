@@ -378,9 +378,11 @@ export function removeSequenceFlow(doc: Doc, flow: El, cs?: ChangeSet): void {
 
 /**
  * Renames a flow whose id named its old ends (the id the file's style gives
- * a flow between them, or that id with a collision suffix) after its new
- * ends, together with a DI edge id derived from it; returns the old id when
- * it renamed the flow. A flow with any other id keeps it.
+ * a flow between them, in a file of another flow form also the `named` one
+ * earlier versions gave it, or such an id with a collision suffix:
+ * IdStyle.derivedBases) after its new ends, together with a DI edge id
+ * derived from it; returns the old id when it renamed the flow. A flow with
+ * any other id keeps it.
  */
 export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTarget: El | undefined): string | undefined {
   if (!doc.followFlowEnds || !is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;

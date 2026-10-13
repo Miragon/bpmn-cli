@@ -237,4 +237,5 @@
   `Flow_<sourceId>_<targetId>` flows to `Flow_<Source>To<Target>`, and its
   flows stopped following their ends). The same edit can therefore give a
   long id that differs from the one 0.6 gave. Flows 0.6 named are still
-  renamed after their ends.
+  renamed after their ends, also as 0.6 cut them and in a file that now
+  reads as another form (they then get that form's id).

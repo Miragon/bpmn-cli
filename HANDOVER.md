@@ -39,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1911 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1914 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -140,9 +140,12 @@ first word longer than the room cut inside a word that could go whole.
   and `pairEnds` never passes fitPair a negative room.
   A glued flow named by its ends with a suffix
   (`flowVertragsunterlagenarchivieToKundenstammdatenaktualisierung_2`,
-  `GLUED_SUFFIXED`) does not vote in `learn`: 0.6 read it as the prefix
+  `GLUED_SUFFIXED`) lends no prefix in `learn`: 0.6 read it as the prefix
   `flowVertrags...` and a number, and three of them made that the flow
-  prefix (80-character ids, splices not followed).
+  prefix (80-character ids, splices not followed). In a file of `flow12`
+  ids it still counts for their form, as 0.6 counted it (an earlier cut
+  of this branch dropped it from the count, and such a file switched to
+  `Flow_` a few edits sooner, its glued flows no longer followed).
 - **Cut flows vote for their form** (`cutOfForm` in `learn`): a flow whose
   id matches no form uncut votes for a form built from its ends' ids
   (stemTo, idPair, stemSnake, idSnake) when it is one of the cuts
@@ -151,10 +154,20 @@ first word longer than the room cut inside a word that could go whole.
   lower case, the start of a stem form's source). Before, enough cut flows
   flipped an idPair / idSnake / stemSnake file to `named`: the 7th
   long-named splice in an idPair file renamed nothing, and new flows
-  switched convention. In a file whose flows read as stemTo / stemSnake,
-  `derivedBases` also lists the `named` bases, so the `named` flows
-  bpmn-cli gave it before (a flow to a join is named by the join's label,
-  `CheckOrderJoin`) still follow their ends. Cost: `IdStyle.infer` on 300
+  switched convention. In a file whose flows read as any other form than
+  `named`, `derivedBases` also lists the `named` bases (uncut, cut for a
+  suffix, and as 0.6 cut them, also again for `_100`; with the form's
+  prefix and the file's most used flow prefix, `namedPrefixes`, which 0.6
+  took), so the `named` flows bpmn-cli gave it before still follow their
+  ends: 0.6's in an idPair / idSnake file it read as `named`
+  (`Flow_PackOrderToArchiveOrder`, renamed to
+  `Flow_Activity_PackOrder_Activity_WeighParcel`), 0.6's cut ones to a
+  suffixed end (`Flow_lieferantenbestellungsueberToLieferantenbestellungsuebe2`),
+  and a flow to a join, named by the join's label (`CheckOrderJoin`). An
+  id an author wrote in that form follows too (nothing tells it apart;
+  `ID_CONVENTIONS.renames` and docs/reference.md say so): of 537 files on
+  disk one flow changes, in a stemTo file whose start event has a
+  snake_case id, renamed where 0.6 kept it. Cost: `IdStyle.infer` on 300
   flows of which 250 are cut, 2 to 6 ms of CPU (idPair) and 3 to 11 ms
   (idSnake); a file of named flows is unchanged.
 - **Flows written by 0.6** (`derivedBases`, used by `followEnds`): the uncut
@@ -162,7 +175,10 @@ first word longer than the room cut inside a word that could go whole.
   suffix of up to 4 characters, `_100`), the id 0.6 cut (`legacyFitPair`,
   the old algorithm with 0.6's `cutAt` and scoped end words, kept only for
   this) and that id cut again to 60, as 0.6 did for a suffix from `_100`,
-  so a flow 0.6 cut inside a word still follows its ends.
+  so a flow 0.6 cut inside a word still follows its ends; and the id 0.6
+  wanted before its cap, with the file's head also where it now gives way
+  to `Flow_` (a 65-character `Flow_<41-character scope>_ValidateToShipping`
+  follows its ends as in 0.6).
 - DI ids keep `MAX_DI` 61 and go through `cutAt`, so only its letter guard
   changes them: a DI id 0.6 cut to a bare number or to two numbers in a row
   is not recognised by `edgeStyleOf` and keeps its id when its flow is
@@ -176,10 +192,17 @@ most characters among its cuts of seven words,
 with long names is unchanged (4.6 to 4.7 ms median, as in 0.6), the
 layout-regression score (444) and the gate's fuzz campaign are identical; on
 long name pairs `derivedBase` takes about 10 instead of 7 microseconds and
-`derivedBases` about 50 instead of 12 (a few calls per renamed flow).
-Bundle (on top of #35): whole entry 865.8 / 273.2 -> 872.0 / 275.5 KB,
-`applyToXml` only 630.6 / 199.9 -> 635.6 / 201.8 KB (budgets unchanged,
-883 / 279 and 643 / 204; `docs/library.md` updated).
+`derivedBases` about 50 instead of 12 (a few calls per renamed flow; in a
+file of another flow form than `named` about three times that for its
+`named` bases, while a long-named splice write in an idPair file stays at
+2 to 3 ms median, as before).
+Bundle (on top of #35): whole entry 865.8 / 273.2 -> 872.5 / 275.7 KB,
+`applyToXml` only 630.6 / 199.9 -> 636.0 / 201.9 KB. The budgets #35 set
+stay (883 / 279 and 643 / 204, `tools/iso/budget.json` unchanged): the
+change fits them, `applyToXml` 7.0 / 2.1 KB below and the whole entry
+10.5 / 3.3 KB below, so nothing needs raising (before #35 this branch had
+raised the gzip budget of `applyToXml` from 206 to 207 KB);
+`docs/library.md` updated.
 Tests: `#31` cases in `test/step3-ids-report.test.ts` (the issue's ids,
 camelCase, a seeded check of 2,000 name pairs whose cut ends have no room
 for their next word, a cut inside a word in one end, fitPair's tie, tail
@@ -191,11 +214,15 @@ random idPair / idSnake flows, a 0.6 flow, also with `_100` and a leading
 separator, suffixes up to `_101` and none skipped, stemTo `2`, a suffix on
 an id that names the anchor's kind, a 58-character file prefix, long flow
 prefixes and a long scope in every flow form, an idPair file through seven
-long-named splices, a stemTo file's `named` join flow, ends of 1,600 words,
+long-named splices, a stemTo file's `named` join flow, flows 0.6 named in
+files that now read as idPair, idSnake and stemTo (also cut to an end with
+a suffix) and an author's id in that form, a 65-character scoped flow
+whose head now gives way to `Flow_`, ends of 1,600 words,
 element ids of 62 to 64 characters with the `--if-absent` hint and a data
 object, joins), a
 design-iq splice, scoped flows with long and number-led end words and a
-glued file with suffixed flows in `test/conventions-ids.test.ts`, the
+glued file with suffixed flows, also one they keep on `flowAToB`, in
+`test/conventions-ids.test.ts`, the
 issue's commands in `test/cli.test.ts`, doc pins in `test/batch.test.ts`
 and `test/conventions-ids.test.ts`. Left for later: a stop word left at the end of a cut
 (`Flow_Task_lieferung_versenden_und_Task_rechnung_eingegangen_und`: the
@@ -219,7 +246,11 @@ base again, so `_2` is skipped), and a count before a dropped word kept at
 the end of a target that has no separated suffix
 (`...ToLieferantenbestellungen4` for `Lieferantenbestellungen 4 Augen ab`:
 only a suffix's look is checked, not whether the number counts the next
-word).
+word), and the fallback for a long head, which looks at the head's length
+alone: a scope of 41 or more characters (a flow prefix of 46, an element
+prefix of 56) gives `Flow_Pack_To_Reserve` (`activity_gh`) also where the
+id with the file's head would fit within 64 (0.6:
+`Flow_<scope>_PackToReserve`, 60 characters).
 
 ## The design profile removed (2026-10-13, `feat/35-remove-design-profile`, issue #35)
 

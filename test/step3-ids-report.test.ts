@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, validateXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
+import { ID_CONVENTIONS } from '../src/guide.js';
 import { cutAt, IdRegistry, idWords, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids.js';
 import { connectionRequest, IdStyle, kindRequest } from '../src/idstyle.js';
 import { kindByName } from '../src/kinds.js';
@@ -669,6 +670,98 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect((await Doc.fromXml(camel)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
     const spliced = await applyToXml(camel, [{ op: 'add', kind: 'task', name: 'Archive order', flow: 'Flow_billOrderToCheckOrderJoin' }], { layout: false });
     expect(spliced.result.renamed).toEqual({ Flow_billOrderToCheckOrderJoin: 'Flow_billOrderToArchiveOrder' });
+  });
+
+  it('#31: flows 0.6 named still follow their ends where the file now reads as another form, also as 0.6 cut them', async () => {
+    /** a chain of tasks ([id, name]) joined by the given flows */
+    const chainXml = (tasks: Array<[string, string]>, flows: string[]): string =>
+      definitionsXml(
+        tasks.map(([id, name], i) => `<bpmn:task id="${id}" name="${name}">${i ? `<bpmn:incoming>${flows[i - 1]}</bpmn:incoming>` : ''}${i < flows.length ? `<bpmn:outgoing>${flows[i]}</bpmn:outgoing>` : ''}</bpmn:task>`).join('\n') +
+          flows.map((id, i) => `<bpmn:sequenceFlow id="${id}" sourceRef="${tasks[i]![0]}" targetRef="${tasks[i + 1]![0]}" />`).join('\n'),
+      );
+    // an idPair file 0.6 read as `named` once it had cut three of its flows, and gave two named flows; the cut ones vote
+    // for idPair again (before: Flow_PackOrderToArchiveOrder kept its id on the flow to Activity_WeighParcel)
+    const idPair = chainXml(
+      [
+        ['Activity_CheckOrder', 'Check order'],
+        ['Activity_ShipOrder', 'Ship order'],
+        ['Activity_BillOrder', 'Bill order'],
+        ['Activity_ZahlungseingangsbestaetigungenPruefen', 'Zahlungseingangsbestaetigungen pruefen'],
+        ['Activity_Lieferantenbestellungsuebersicht', 'Lieferantenbestellungsuebersicht erstellen'],
+        ['Activity_KundenstammdatenaktualisierungAnstossen', 'Kundenstammdatenaktualisierung anstossen'],
+        ['Activity_PackOrder', 'Pack order'],
+        ['Activity_ArchiveOrder', 'Archive order'],
+      ],
+      ['Flow_Activity_CheckOrder_Activity_ShipOrder', 'Flow_Activity_ShipOrder_Activity_BillOrder', 'Flow_Activity_BillOrder_ActivityPruefen', 'Flow_Activity_ZahlungseingangsbestaetigungenPruefen_Activity', 'Flow_Activity_ActivityAnstossen', 'Flow_KundenstammdatenaktualisierungAnstossenToPackOrder', 'Flow_PackOrderToArchiveOrder'],
+    );
+    expect((await Doc.fromXml(idPair)).idStyle.info().sequenceFlow).toEqual({ form: 'idPair', prefix: 'Flow' });
+    const pack = await applyToXml(idPair, [{ op: 'add', kind: 'task', name: 'Weigh parcel', after: 'Activity_PackOrder' }], { layout: false });
+    expect(pack.result.renamed).toEqual({ Flow_PackOrderToArchiveOrder: 'Flow_Activity_PackOrder_Activity_WeighParcel' });
+    const before = await applyToXml(idPair, [{ op: 'add', kind: 'task', name: 'Weigh parcel', flow: 'Flow_KundenstammdatenaktualisierungAnstossenToPackOrder' }], { layout: false });
+    expect(Object.keys(before.result.renamed ?? {})).toEqual(['Flow_KundenstammdatenaktualisierungAnstossenToPackOrder']);
+    // an idSnake file with a flow 0.6 named (Flow_pay_to_done)
+    const idSnake = chainXml(
+      [['Task_check', 'Check'], ['Task_ship', 'Ship'], ['Task_bill', 'Bill'], ['Task_pay', 'Pay'], ['Task_done', 'Done']],
+      ['Flow_Task_check_to_Task_ship', 'Flow_Task_ship_to_Task_bill', 'Flow_Task_bill_to_Task_pay', 'Flow_pay_to_done'],
+    );
+    expect((await Doc.fromXml(idSnake)).idStyle.info().sequenceFlow).toEqual({ form: 'idSnake', prefix: 'Flow' });
+    const log = await applyToXml(idSnake, [{ op: 'add', kind: 'task', name: 'Log', flow: 'Flow_pay_to_done' }], { layout: false });
+    expect(log.result.renamed).toEqual({ Flow_pay_to_done: 'Flow_Task_pay_to_Task_log' });
+    // a camelCase file that reads as stemTo, with flows 0.6 named and cut at 61 characters to an end with a suffix
+    // (before: both kept their ids)
+    const stem = chainXml(
+      [
+        ['Activity_checkOrder', 'Check order'],
+        ['Activity_shipOrder', 'Ship order'],
+        ['Activity_billOrder', 'Bill order'],
+        ['Activity_lieferantenbestellungsuebersicht', 'Lieferantenbestellungsuebersicht erstellen'],
+        ['Activity_lieferantenbestellungsuebersicht_2', 'Lieferantenbestellungsuebersicht erstellen'],
+        ['Activity_kundenstammdatenaktualisierungAnstossen', 'Kundenstammdatenaktualisierung anstossen'],
+      ],
+      ['Flow_checkOrderToShipOrder', 'Flow_shipOrderToBillOrder', 'Flow_billOrderToLieferantenbestellungsuebersicht', 'Flow_lieferantenbestellungsueberToLieferantenbestellungsuebe2', 'Flow_lieferantenbestellungsuebe2ToKundenstammdatenaktualisier'],
+    );
+    expect((await Doc.fromXml(stem)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
+    const weigh = await applyToXml(
+      stem,
+      [
+        { op: 'add', kind: 'task', name: 'Weigh parcel', after: 'Activity_lieferantenbestellungsuebersicht' },
+        { op: 'add', kind: 'task', name: 'Scan', after: 'Activity_lieferantenbestellungsuebersicht_2' },
+      ],
+      { layout: false },
+    );
+    expect(weigh.result.renamed).toEqual({
+      Flow_lieferantenbestellungsueberToLieferantenbestellungsuebe2: 'Flow_lieferantenbestellungsuebersichtToWeighParcel',
+      Flow_lieferantenbestellungsuebe2ToKundenstammdatenaktualisier: 'Flow_lieferantenbestellungsuebersicht_2ToScan',
+    });
+    // an id an author wrote in the `named` form follows too: nothing tells it from one bpmn-cli wrote (ID_CONVENTIONS.renames)
+    const handWritten = definitionsXml(`
+    <bpmn:startEvent id="start_event_order_received" name="Order received"><bpmn:outgoing>flow_eventOrderReceivedToCheckOrder</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:serviceTask id="serviceTask_checkOrder" name="Check order"><bpmn:incoming>flow_eventOrderReceivedToCheckOrder</bpmn:incoming><bpmn:outgoing>flow_checkOrderToShipOrder</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="serviceTask_shipOrder" name="Ship order"><bpmn:incoming>flow_checkOrderToShipOrder</bpmn:incoming><bpmn:outgoing>flow_shipOrderToOrderShipped</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:endEvent id="endEvent_orderShipped" name="Order shipped"><bpmn:incoming>flow_shipOrderToOrderShipped</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_eventOrderReceivedToCheckOrder" sourceRef="start_event_order_received" targetRef="serviceTask_checkOrder" />
+    <bpmn:sequenceFlow id="flow_checkOrderToShipOrder" sourceRef="serviceTask_checkOrder" targetRef="serviceTask_shipOrder" />
+    <bpmn:sequenceFlow id="flow_shipOrderToOrderShipped" sourceRef="serviceTask_shipOrder" targetRef="endEvent_orderShipped" />`);
+    expect((await Doc.fromXml(handWritten)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
+    const gate = await applyToXml(handWritten, [{ op: 'add', kind: 'serviceTask', name: 'Check gate', after: 'start_event_order_received' }], { layout: false });
+    expect(gate.result.renamed).toEqual({ flow_eventOrderReceivedToCheckOrder: 'flow_event_order_receivedToCheckGate' });
+    expect(ID_CONVENTIONS.renames).toMatch(/in a file of another flow form also the named Flow_<Source>To<Target> id in the file's case, which earlier versions gave its flows, whoever wrote it/);
+  });
+
+  it('#31: a flow whose head now gives way to Flow_ still follows its ends, as in 0.6', async () => {
+    // a scope of 41 characters leaves the ends fewer than 16: new flows are Flow_<Source>_To_<Target>, but a flow with the
+    // scope still names its ends (before: the 65-character flow below kept its id on the flow to Pack)
+    const scope = 'KundenauftragsabwicklungLieferantenpflege';
+    const task = (w: string): string => `serviceTask_${scope}_${w}`;
+    const xml = definitionsXml(`
+    <bpmn:serviceTask id="${task('Validate')}" name="Validate"><bpmn:outgoing>Flow_${scope}_ValidateToShipping</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="${task('Shipping')}" name="Shipping"><bpmn:incoming>Flow_${scope}_ValidateToShipping</bpmn:incoming><bpmn:outgoing>Flow_${scope}_ShippingToInvoicing</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="${task('Invoicing')}" name="Invoicing"><bpmn:incoming>Flow_${scope}_ShippingToInvoicing</bpmn:incoming></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_${scope}_ValidateToShipping" sourceRef="${task('Validate')}" targetRef="${task('Shipping')}" />
+    <bpmn:sequenceFlow id="Flow_${scope}_ShippingToInvoicing" sourceRef="${task('Shipping')}" targetRef="${task('Invoicing')}" />`);
+    expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope });
+    const r = await applyToXml(xml, [{ op: 'add', kind: 'serviceTask', name: 'Pack', after: task('Validate') }], { layout: false });
+    expect(r.result.renamed).toEqual({ [`Flow_${scope}_ValidateToShipping`]: 'Flow_Validate_To_Pack' });
   });
 
   it('#31: a suffix that cuts an anchor-qualified id again keeps the anchor kind', async () => {

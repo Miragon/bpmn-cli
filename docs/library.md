@@ -241,8 +241,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 872.0 KB | 275.5 KB | 883 / 279 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 635.6 KB | 201.8 KB | 643 / 204 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 872.5 KB | 275.7 KB | 883 / 279 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 636.0 KB | 201.9 KB | 643 / 204 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |

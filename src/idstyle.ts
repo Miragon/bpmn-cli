@@ -37,7 +37,8 @@
  *     needs at least half of the flows of its type; a flow the length cap
  *     cut votes for its form too (cutOfForm: one of the cuts derivedBases
  *     lists, also 0.6's), a glued flow named by its ends with a suffix
- *     (`flowCheckOrderToShip_2`) does not vote.
+ *     (`flowCheckOrderToShip_2`) lends no prefix and votes only for a
+ *     file's glued numbered flows (flow12).
  *  A document without ids to learn from gets the default style: pascal
  *  bodies, the bpmn-cli prefixes, `named` flows with the prefix Flow.
  *
@@ -85,9 +86,10 @@
  *  same word (the unnamed elements after one anchor) keeps each end's last
  *  word when the length cap cuts it (fitPair), so the ends keep what tells
  *  them apart. style.derivedBase(req) is that base without allocating
- *  (derivedBases: also the uncut one, the ones a suffix leaves room for and
- *  the ones 0.6 cut, also for a suffix from `_100`, and in a stemTo /
- *  stemSnake file the `named` ones, for ids written before);
+ *  (derivedBases: also the uncut one, the ones a suffix leaves room for,
+ *  the one 0.6 wanted and the ones it cut, also for a suffix from `_100`,
+ *  and in a file of another flow form the `named` ones, also as 0.6 cut
+ *  them, for ids written before);
  *  style.joinId(gatewayId) the id of a split's join gateway.
  */
 import { camelSlug, cutAt, hasIdWords, idWords, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, type IdRegistry } from './ids.js';
@@ -548,6 +550,8 @@ interface Learned {
   strong: boolean;
   /** scopedTo flows: the scopes of a type's flows, most used first */
   scopes: Map<string, string[]>;
+  /** flows of another form than `named`: the prefix a type's flows took as `named` before (the most used one), where it is not the form's */
+  namedPrefixes: Map<string, string>;
   /** flow node ids without / with a prefix: a file whose flow nodes mostly have none gives a kind without own evidence none either */
   bareNodes: number;
   prefixedNodes: number;
@@ -608,6 +612,7 @@ function learn(defs: El | undefined): Learned {
     body: 'pascal',
     flows: new Map(),
     scopes: new Map(),
+    namedPrefixes: new Map(),
     bareNodes: 0,
     bareBody: 'camel',
     prefixedNodes: 0,
@@ -618,19 +623,23 @@ function learn(defs: El | undefined): Learned {
   const nodeBodies = new Tally<BodyClass>();
   const bareBodies = new Tally<BodyClass>();
   const otherBodies = new Tally<BodyClass>();
-  const flowVotes = new Map<string, { n: number; forms: Tally<SeenForm>; prefixes: Map<SeenForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
+  const flowVotes = new Map<string, { n: number; glued: number; forms: Tally<SeenForm>; prefixes: Map<SeenForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
 
   for (const el of defs ? walk(defs, { bpmnOnly: true }) : []) {
     if (!isBpmnElement(el) || /^(bpmndi|dc|di):/.test(el.$type)) continue;
     const id = el.get<string | undefined>('id');
     if (!id) continue;
     if (CONNECTIONS.has(el.$type)) {
-      // a glued flow named by its ends with a suffix (flowCheckToShip_2) is not the prefix flowCheckToShip and a number: it does not vote
-      if (GLUED_SUFFIXED.test(id)) continue;
       const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
       const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
       let v = flowVotes.get(el.$type);
-      if (!v) flowVotes.set(el.$type, (v = { n: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
+      if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
+      // a glued flow named by its ends with a suffix (flowCheckToShip_2) is not the prefix flowCheckToShip and a number: it
+      // lends no prefix, and counts only for a file's glued numbered flows (flow12, below)
+      if (GLUED_SUFFIXED.test(id)) {
+        v.glued++;
+        continue;
+      }
       v.n++;
       const p = PREFIXED.exec(id)?.[1];
       if (p) v.any.add(p);
@@ -711,16 +720,26 @@ function learn(defs: El | undefined): Learned {
   l.body = best[0];
 
   for (const [type, v] of flowVotes) {
+    // the glued flows bpmn-cli named with a suffix in a file of flow12 ids vote for that form, as 0.6 counted them
+    if (v.glued && [...v.seps.values()].includes('')) {
+      v.n += v.glued;
+      v.forms.add('numbered', v.glued);
+    }
+    // a type whose flows are all such glued flows has no style of its own (the sequence flows', else the default)
+    if (!v.n) continue;
     const form = v.forms.top();
     const prefix = form ? v.prefixes.get(form)!.top() : undefined;
     const scope = form === 'scopedTo' ? v.scopes.top() : undefined;
+    const any = v.any.top() ?? 'Flow';
     if (form && prefix && v.forms.get(form) * 2 >= v.n && (form !== 'scopedTo' || scope)) {
       const sep = v.seps.get(prefix);
       // hashed and numbered flows lend new flows their prefix (and a numbered prefix's separator: flow12 -> flowAToB)
       const named = form === 'hash' || form === 'numbered';
       l.flows.set(type, { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) });
       if (form === 'scopedTo') l.scopes.set(type, [...v.scopes.counts.keys()].sort((a, b) => v.scopes.get(b) - v.scopes.get(a)));
-    } else l.flows.set(type, { form: 'named', prefix: v.any.top() ?? 'Flow' });
+      // the prefix its flows took as `named` before the form had the majority (derivedBases)
+      if (!named && any !== prefix) l.namedPrefixes.set(type, any);
+    } else l.flows.set(type, { form: 'named', prefix: any });
   }
   return l;
 }
@@ -895,10 +914,12 @@ export class IdStyle {
    * The ids a request wants: derivedBase, and for a request with a long id
    * also the id before the length cap, the ids cut to leave room for a
    * collision suffix of up to 4 characters (`_100`, see next) and, for a
-   * flow, the ids 0.6 and earlier cut it to (legacyFitPair; cut again for a
-   * suffix from `_100`) and, in a file whose flows read as stemTo or
-   * stemSnake, the `named` ones bpmn-cli gave it before they did, so that a
-   * flow a file got before still names its ends (ops/flows.ts followEnds).
+   * flow, the id 0.6 and earlier wanted before their cap (a head that now
+   * gives way to Flow_ included) and the ids they cut it to (legacyFitPair;
+   * cut again for a suffix from `_100`) and, in a file whose flows have
+   * another form, the `named` ones bpmn-cli gave it before they did (also
+   * as 0.6 cut them), so that a flow a file got before still names its ends
+   * (ops/flows.ts followEnds).
    */
   derivedBases(req: IdRequest): string[] {
     const uncut = this.wanted(req, Infinity).base;
@@ -906,13 +927,23 @@ export class IdStyle {
     const bases = uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => this.wanted(req, MAX_ID - suffix).base);
     if (isConnection(req)) {
       // also a short one: a scopedTo end word 0.6 took (Flow_KotO_ReserveTo4); cut again for a suffix of 4 characters
-      // and more (`_100`; stemTo / scopedTo: `1000`)
+      // and more (`_100`; stemTo / scopedTo: `1000`); and the id 0.6 wanted before its cap, with a head that now leaves
+      // the ends too little room (connectionBase)
       const legacy = this.connectionBase(req, LEGACY_BASE, true).base;
-      bases.push(legacy, cutAt(legacy, MAX_ID - 4, true));
-      // a file whose flows read as stemTo / stemSnake got `named` flows from bpmn-cli until enough of them voted for
-      // that form (a flow to the join of a split is named by its label, CheckJoin, not by its id stem)
+      bases.push(legacy, cutAt(legacy, MAX_ID - 4, true), this.connectionBase(req, Infinity, true).base);
+      // a file whose flows have another form got `named` flows from bpmn-cli until enough of them voted for that form
+      // (0.6 read a file of cut flows as `named`), with the file's most used flow prefix; a flow to the join of a split
+      // is named by its label, CheckJoin, not by its id stem
       const { form, prefix, sep } = this.flowOf(req.key);
-      if (form === 'stemTo' || form === 'stemSnake') for (const max of [Infinity, MAX_ID, MAX_ID - 1, MAX_ID - 2, MAX_ID - 3, MAX_ID - 4]) bases.push(this.namedBase(req, max, prefix, sep, false));
+      if (form !== 'named') {
+        for (const p of new Set([prefix, this.l.namedPrefixes.get(this.l.flows.has(req.key) ? req.key : 'bpmn:SequenceFlow') ?? prefix])) {
+          const whole = this.namedBase(req, Infinity, p, sep, false);
+          bases.push(whole);
+          if (whole.length > MAX_ID - 4) for (const max of [MAX_ID, MAX_ID - 1, MAX_ID - 2, MAX_ID - 3, MAX_ID - 4]) bases.push(this.namedBase(req, max, p, sep, false));
+          const old = this.namedBase(req, LEGACY_BASE, p, sep, true);
+          bases.push(old, cutAt(old, MAX_ID - 4, true));
+        }
+      }
     }
     return [...new Set([...bases, uncut])];
   }

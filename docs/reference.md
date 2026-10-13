@@ -36,7 +36,9 @@ Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
   in every flow form: `Flow_` and the flow's ends). A taken id gets `_2`, `_3` and a
   `W_ID_SUFFIXED` warning.
 - A flow whose id names its ends is renamed when an edit changes them, and the result says so
-  (`renamed:`). In a batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
+  (`renamed:`): the id the file's flow form gives it, and in a file of another form also
+  `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. In a
+  batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
 

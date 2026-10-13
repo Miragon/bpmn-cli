@@ -295,6 +295,23 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     expect([...again.ids.values()].filter((id) => id.length > 64)).toEqual([]);
   });
 
+  it("#31: bpmn-cli's own suffixed flows still count for a flow12 file's form, as in 0.6: the file keeps flowAToB as long", async () => {
+    const tasks = ['Check', 'Ship', 'Bill', 'Archive', 'Pay', 'Log', 'Send'].map((n): [string, string, string] => ['task', `Activity_${n}`, n]);
+    const glued = chain(tasks, ['flow1', 'flow2', 'flow3', 'flowArchiveToPay', 'flowPayToLog', 'flowLogToSend']);
+    const { doc } = await created(glued, [
+      { op: 'connect', source: 'Activity_Pay', target: 'Activity_Log' },
+      { op: 'add', kind: 'task', name: 'Done', after: 'Activity_Send' },
+    ]);
+    expect(doc.ids.has('flowPayToLog_2') && doc.ids.has('flowSendToDone')).toBe(true);
+    // three flow12 ids, four glued flows and one with a suffix (before: the suffixed one did not count, the file read as
+    // Flow_, and the splice kept flowLogToSend on the flow to Audit)
+    const again = await Doc.fromXml(await doc.toXml());
+    expect(again.idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'flow', sep: '' });
+    const cs = runOps(again, [{ op: 'add', kind: 'task', name: 'Audit', flow: 'flowLogToSend' }]);
+    expect(cs.renames).toEqual([expect.objectContaining({ from: 'flowLogToSend', to: 'flowLogToAudit' })]);
+    expect(cs.created.map((c) => c.id)).toEqual(['Activity_Audit', 'flowAuditToSend']);
+  });
+
   it('an unnamed element in such a file still gets a prefix (its kind and context need one)', async () => {
     const { ids } = await created(BARE, [{ op: 'add', kind: 'exclusiveGateway', after: 'packGoods' }]);
     expect(ids).toEqual(['Gateway_AfterPackGoods', 'flowAfterPackGoodsToShipOrder']);
