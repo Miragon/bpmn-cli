@@ -82,6 +82,9 @@ describe('warnings as a delta', () => {
     expect(lines[0]).toMatch(/^warning W_UNREACHABLE x4 \[T1, T2, T3, End\]: task T1 "Twin" is not reachable from any start event/);
     // two of a code stay two lines
     expect(warningLines([{ code: 'W_A', message: 'a', element: 'X' }, { code: 'W_A', message: 'b', element: 'Y' }])).toEqual(['warning W_A X: a', 'warning W_A Y: b']);
+    // a stale flow id never floods: each hint is the rename command of its flow
+    const stale = ['F1', 'F2', 'F3'].map((id) => ({ code: 'W_FLOW_ID_STALE', message: `${id} stale`, element: id, hint: `\`bpmn set <file> ${id} id=${id}x\`` }));
+    expect(warningLines(stale)).toEqual(stale.map((w) => `warning W_FLOW_ID_STALE ${w.element}: ${w.message}  (${w.hint})`));
   });
 
   it('a new document reports its warnings (there was no file before)', async () => {

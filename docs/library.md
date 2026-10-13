@@ -36,7 +36,10 @@ Every function runs the code of the CLI command it names, without a file:
   [Layout modes](layout.md#layout-modes)), `engine` (`'clean'` or `'auto'`), `force`,
   `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `validators` (see
   [Validators](validators.md)), `file` (the document's name for the
-  validators), `show` (add the model view) and
+  validators), `keepFlowIds` (keep the id of every existing sequence flow
+  the ops give other ends, like `--keep-flow-ids`; `W_FLOW_ID_STALE` in
+  `result.warnings.added` names each one whose id no longer names its
+  ends), `show` (add the model view) and
   `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
   of `layout`; `newXml` takes `processName`, `processId`, `executable` and
   `target`; `viewXml` and `showXml` take `id`, `context`, `around`,
@@ -157,8 +160,12 @@ with the bundled Arimo font only; a rasteriser failure is a `CliError` with
 ## Building blocks
 
 The in-memory API is made of exported parts. `Doc` (`Doc.fromXml(xml)`,
-`Doc.create({ target })` with `TARGETS`; query the model), `parseOps` and
-`OPS_SCHEMA`, `runOps` (the ops alone, without any guard), the pipeline on a
+`Doc.create({ target })` with `TARGETS`; query the model;
+`doc.followFlowEnds = false` keeps the ids of the flows the document had
+before the call (a flow the call creates still follows its ends), which
+`MutationOptions.keepFlowIds` sets for one call), `parseOps` and
+`OPS_SCHEMA`, `runOps` (the ops alone, without any guard; with flow ids
+kept it reports `W_FLOW_ID_STALE` too), the pipeline on a
 `Doc`: `mutateDoc(doc, ops, opts)` / `layoutDoc` / `checkDoc` (never write;
 `written` is `false`; typed ops, not checked by `parseOps`), with the types
 `MutationOptions`, `MutationResult`, `LayoutMode`, `LayoutStatus` and
@@ -241,8 +248,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 872.5 KB | 275.7 KB | 883 / 279 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 636.0 KB | 201.9 KB | 643 / 204 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 880.9 KB | 278.6 KB | 883 / 279 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 640.4 KB | 203.5 KB | 643 / 204 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |

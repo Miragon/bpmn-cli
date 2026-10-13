@@ -25,6 +25,12 @@ bugs are open, a random campaign would hit them by chance. Layout quality is
 gated deterministically by the property test's fixed walks, the regression
 budget and `bench --compare`.
 
+None of the layers depends on the shell's `BPMN_KEEP_FLOW_IDS`: the unit
+tests clear it before every file (`test/setup.ts`), so the CLIs they spawn
+rename flows as by default, and the fuzzer, the benchmark, the layout
+regression and the demo run the CLI without it (`CLI_ENV` in
+`tools/fuzz/lib/setup.mjs`). A test that needs it sets it for its own spawn.
+
 The audit that motivated this tooling is summarised in
 [audit-2026-10.md](audit-2026-10.md).
 
@@ -576,7 +582,8 @@ node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
 
 The regression tests: `test/speaking-ids.test.ts` and
 `test/conventions-ids.test.ts` (ids in every file style, renamed flows and
-their DI), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
+their DI), `test/keep-flow-ids.test.ts` (flow ids kept with
+`--keep-flow-ids`, `W_FLOW_ID_STALE`), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
 line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
 `test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
 `test/lane-splice.test.ts` (the lane and the geometry of a node added into a

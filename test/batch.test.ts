@@ -5,7 +5,7 @@ import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/batch.js';
 import { Doc } from '../src/document.js';
 import { isCliError } from '../src/errors.js';
 import { renderView } from '../src/format.js';
-import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideText, kindsJson, kindsSectionText, kindsText } from '../src/guide.js';
+import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids.js';
 import { KINDS } from '../src/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
@@ -46,6 +46,140 @@ function codesInSource(): string[] {
     for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
   }
   return [...codes].sort();
+}
+
+/**
+ * Every `bpmn <command> <arguments>` in backticks in `text` whose first
+ * argument, the second for ext, is not the file: `<file>`, a *.bpmn name,
+ * `-` (stdin) or `${quoted}` (cli.ts withFile puts the file's name in). A
+ * command named without arguments or with an option first (`bpmn ext add`,
+ * `bpmn layout --tidy`, `bpmn validate --platform c7`) is a name, not a
+ * command to paste.
+ */
+function commandsWithoutFile(text: string): string[] {
+  const out: string[] = [];
+  for (const [command, cmd, rest] of text.matchAll(/`bpmn ([a-z]+) ([^`]+)`/g)) {
+    if (cmd === 'kinds' || cmd === 'guide' || cmd === 'help') continue;
+    const first = rest!.split(' ').slice(cmd === 'ext' ? 1 : 0)[0];
+    if (!first || (first.startsWith('-') && first !== '-')) continue;
+    if (!['<file>', '-', '${quoted}'].includes(first) && !first.endsWith('.bpmn')) out.push(command);
+  }
+  return out;
+}
+
+/** Resolves the escapes of a string or template piece (`\n`, `\x41`, `\u{1F600}`, a line continuation, `\'`). */
+function cooked(raw: string): string {
+  return raw.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (_, e: string) => {
+    if (e[0] === 'u' || e[0] === 'x') return String.fromCodePoint(parseInt(e.replace(/[ux{}]/g, ''), 16));
+    const simple: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0', '\n': '', '\r\n': '', '\u2028': '', '\u2029': '' };
+    return simple[e] ?? e;
+  });
+}
+
+/** Words after which a `/` starts a regular expression, not a division. */
+const BEFORE_REGEX = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+
+/**
+ * The string literals and templates of TypeScript source as the program
+ * sees them (escapes resolved, comments and regular expressions left out).
+ * A template keeps its backticks, so one that is a command itself (`bpmn
+ * space ${quoted}`) is checked too; its substitutions read `${name}` for a
+ * plain name or property and `${…}` for anything else (a nested template is
+ * checked on its own). A small scanner, not TypeScript's compiler API: that
+ * API moves between majors (typescript 7 no longer exports it).
+ */
+function stringsIn(src: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  // false after a value (a name, a number, a string, `)`, `]`, `}`): a `/` there divides
+  let regexAllowed = true;
+  /** Scans from `i` to the end, or (`inSubstitution`) to the `}` that closes a template's `${`, and returns its index. */
+  const scan = (inSubstitution: boolean): number => {
+    let depth = 0;
+    while (i < src.length) {
+      const c = src[i]!;
+      const next = src[i + 1];
+      if (c === '/' && next === '/') {
+        const end = src.indexOf('\n', i);
+        i = end === -1 ? src.length : end;
+      } else if (c === '/' && next === '*') {
+        const end = src.indexOf('*/', i + 2);
+        i = end === -1 ? src.length : end + 2;
+      } else if (c === "'" || c === '"') {
+        let j = i + 1;
+        while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+        out.push(cooked(src.slice(i + 1, j)));
+        i = j + 1;
+        regexAllowed = false;
+      } else if (c === '`') {
+        out.push(template());
+        regexAllowed = false;
+      } else if (c === '/' && regexAllowed) {
+        let j = i + 1;
+        let inClass = false;
+        while (j < src.length && src[j] !== '\n' && (inClass || src[j] !== '/')) {
+          if (src[j] === '\\') j++;
+          else if (src[j] === '[') inClass = true;
+          else if (src[j] === ']') inClass = false;
+          j++;
+        }
+        i = j + 1;
+        while (i < src.length && /[a-z]/.test(src[i]!)) i++;
+        regexAllowed = false;
+      } else if (/[A-Za-z_$#]/.test(c)) {
+        const word = /^[#\w$]+/.exec(src.slice(i, i + 64))![0];
+        i += word.length;
+        regexAllowed = BEFORE_REGEX.has(word);
+      } else if (/[0-9]/.test(c)) {
+        i += /^[\w.]+/.exec(src.slice(i, i + 64))![0].length;
+        regexAllowed = false;
+      } else if (/\s/.test(c)) {
+        i++;
+      } else {
+        if (c === '{') depth++;
+        else if (c === '}') {
+          if (depth === 0 && inSubstitution) return i;
+          depth--;
+        }
+        regexAllowed = !')]}'.includes(c);
+        i++;
+      }
+    }
+    return i;
+  };
+  /** Reads the template at `i` (a backtick) up to its closing backtick. */
+  const template = (): string => {
+    let text = '`';
+    let raw = '';
+    i++;
+    while (i < src.length && src[i] !== '`') {
+      if (src[i] === '\\') {
+        raw += src.slice(i, i + 2);
+        i += 2;
+      } else if (src[i] === '$' && src[i + 1] === '{') {
+        text += cooked(raw);
+        raw = '';
+        i += 2;
+        const start = i;
+        regexAllowed = true;
+        const end = scan(true);
+        const expr = src.slice(start, end).trim();
+        text += `\${${/^[\w.]+$/.test(expr) ? expr : '…'}}`;
+        i = end + 1;
+      } else {
+        raw += src[i];
+        i++;
+      }
+    }
+    i++;
+    return `${text}${cooked(raw)}\``;
+  };
+  scan(false);
+  return out;
+}
+
+function stringsInSource(file: string): string[] {
+  return stringsIn(readFileSync(file, 'utf8'));
 }
 
 describe('parseOps: shapes', () => {
@@ -345,6 +479,27 @@ describe('guide', () => {
     const missing = codesInSource().filter((c) => !codes.includes(c));
     expect(missing, `codes used in src/ but missing from ERROR_CATALOGUE: ${missing.join(', ')}`).toEqual([]);
   });
+
+  it('every command the catalogue and the strings under src/ name with arguments names the file first', () => {
+    const problems = ERROR_CATALOGUE.flatMap((e) => commandsWithoutFile(`${e.meaning} ${e.fix}`).map((c) => `${e.code}: ${c}`));
+    for (const file of sourceFiles(SRC_DIR)) {
+      // the strings only: comments describe commands, hints and notes reach the user
+      for (const text of stringsInSource(file)) problems.push(...commandsWithoutFile(text).map((c) => `${file.slice(SRC_DIR.length + 1)}: ${c}`));
+    }
+    // the scanner: strings and templates with their escapes and substitutions, no comment, no regular expression
+    expect(stringsIn("// 'no'\nconst a = 'it\\'s' + \"x\\ty\" + `bpmn set ${quoted} ${f(`in`)}` /* `no` */ / 2;\nconst r = /['`]/g.test(a) ? `\\u0041` : '';")).toEqual([
+      "it's",
+      'x\ty',
+      '`in`',
+      '`bpmn set ${quoted} ${…}`',
+      '`A`',
+      '',
+    ]);
+    // the rule itself: an option first is a name, stdin is a file, a command without the file is found
+    expect(commandsWithoutFile('`bpmn layout --engine auto` `bpmn validate --platform c7` `bpmn set - x=1` `bpmn help add`')).toEqual([]);
+    expect(commandsWithoutFile("`bpmn move <id> --in <scope>` `bpmn set <id> 'a=b'`")).toEqual(['`bpmn move <id> --in <scope>`', "`bpmn set <id> 'a=b'`"]);
+    expect(problems).toEqual([]);
+  });
 });
 
 describe('guide, README and docs: documented syntax matches the CLI', () => {
@@ -377,6 +532,30 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(PLACEMENT_NOTES.join(' ')).toMatch(/default flow .* continues straight/);
     expect(command('order').summary).toMatch(/default flow/);
     expect(DOCS).toMatch(/alternately below and above/);
+  });
+
+  it('documents keeping flow ids wherever renames are described (--keep-flow-ids, BPMN_KEEP_FLOW_IDS, W_FLOW_ID_STALE)', () => {
+    const keep = COMMON_OPTIONS.find((o) => o.option === '--keep-flow-ids')!;
+    expect(keep.description).toMatch(/W_FLOW_ID_STALE[\s\S]*BPMN_KEEP_FLOW_IDS=1/);
+    expect(COMMON_OPTIONS.map((o) => o.option)).toContain('--no-keep-flow-ids');
+    for (const [name, text] of Object.entries({ guide: guideText(), DOCS, library: repoFile('docs/library.md') })) {
+      for (const word of ['--keep-flow-ids', 'W_FLOW_ID_STALE']) expect(text, `${name}: ${word}`).toContain(word);
+    }
+    expect(DOCS).toContain('BPMN_KEEP_FLOW_IDS=1');
+    expect(guideShort()).toContain('--keep-flow-ids');
+    expect(catalogue('W_FLOW_ID_STALE').fix).toContain('`bpmn set <file> <flowId> id=<newId>`');
+    // the first variable that can fail a command: the code an agent looks up names it
+    expect(catalogue('E_USAGE').meaning).toContain('BPMN_KEEP_FLOW_IDS');
+    expect(DOCS).not.toMatch(/the CLI has no switch/);
+    // a batch keeps the ids of the flows it does not remove; a move puts the node's out-flow back; a splice's new flow has no alias
+    for (const [name, text] of Object.entries({ guide: guideText(), ops: repoFile('docs/ops.md') })) {
+      expect(text, name).not.toMatch(/every flow the file had keeps its id/);
+      expect(text, name).toMatch(/unless an op\s+removes it/);
+      expect(text, name).toMatch(/move`? puts the moved\s+node's\s+out-flow back/);
+      expect(text, name).toMatch(/node -> old\s+successor\)?\s+has no alias/);
+    }
+    // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
+    expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);
   });
 
   it('keeps usages, options and the result description in sync with the CLI', () => {

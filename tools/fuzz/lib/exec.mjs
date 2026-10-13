@@ -9,7 +9,8 @@
  * where `layout` is the `layout` block of the mutation result and `readBack`
  * (CLI only) is the file content after a failed run, to detect a write on
  * failure. Modes other than 'auto' are passed as `--layout <mode>`.
- *  - `cliExecutor({ bin, workDir, via })` spawns `node <bin>`: a one-op step
+ *  - `cliExecutor({ bin, workDir, via, env })` spawns `node <bin>` (in `env`,
+ *    default this process's environment): a one-op step
  *    with an equivalent command runs as that command (`via: 'commands'`,
  *    default), everything else as `apply <file> <ops.json>`; `via: 'apply'`
  *    always uses apply. Exit 1 = usage, 70 / signal / timeout = crash.
@@ -41,7 +42,7 @@ function classify(res) {
   return res.status === 1 ? 'usage' : 'refused';
 }
 
-export function cliExecutor({ bin, workDir, via = 'commands', timeout = 300_000 }) {
+export function cliExecutor({ bin, workDir, via = 'commands', timeout = 300_000, env = process.env }) {
   mkdirSync(workDir, { recursive: true });
   const file = join(workDir, 'work.bpmn');
   const opsFile = join(workDir, 'ops.json');
@@ -57,7 +58,7 @@ export function cliExecutor({ bin, workDir, via = 'commands', timeout = 300_000 
       writeFileSync(file, xml);
       const argv = [bin, ...argvFor(ops), '--json', ...(mode === 'auto' ? [] : ['--layout', mode])];
       const t0 = process.hrtime.bigint();
-      const res = spawnSync(process.execPath, argv, { encoding: 'utf8', timeout, maxBuffer: 256 * 1024 * 1024 });
+      const res = spawnSync(process.execPath, argv, { encoding: 'utf8', timeout, maxBuffer: 256 * 1024 * 1024, env });
       if (res.status === 0) {
         let layout;
         try { layout = JSON.parse(res.stdout).layout; } catch { /* layout stays undefined */ }

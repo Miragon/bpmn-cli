@@ -39,6 +39,8 @@ Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
   (`renamed:`): the id the file's flow form gives it, and in a file of another form also
   `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. In a
   batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
+  With `--keep-flow-ids` (or `BPMN_KEEP_FLOW_IDS=1`) a flow the file had keeps its id instead, and
+  `W_FLOW_ID_STALE` names it with the id its new ends give ([Limitations](contract.md#limitations)).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
 
@@ -193,7 +195,7 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
 | exit | meaning |
 | --- | --- |
 | 0 | ok (warnings allowed) |
-| 1 | usage error: unknown command / option / kind, bad ops JSON (`E_USAGE`) |
+| 1 | usage error: unknown command / option / kind, bad ops JSON, a `BPMN_KEEP_FLOW_IDS` that is no switch value (`E_USAGE`) |
 | 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...) |
 | 3 | layout error (`E_LAYOUT_*`) |
 | 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`, `E_RENDER`) |
@@ -210,6 +212,16 @@ The result format: `bpmn guide output`. Every code with its fix: `bpmn kinds --s
 `render`) to stdout and leaves the input file as it was. With the XML on stdout the report goes to
 stderr and says `written: -`. stdin holds one input, so `apply - -` is `E_USAGE`: write `bpmn apply -
 ops.json < model.bpmn > new.bpmn`.
+
+### Environment
+
+The CLI reads three variables; the library reads none (its options do the same).
+
+| variable | effect |
+| --- | --- |
+| `BPMN_KEEP_FLOW_IDS` | `1`, `true`, `yes`, `on` (any case): every mutating command keeps flow ids, as with `--keep-flow-ids`. `0`, `false`, `no`, `off`, empty or unset: a flow whose id names its ends follows them. Any other value fails a mutating command with `E_USAGE`; `show`, `validate` and the other read commands ignore it. `--keep-flow-ids` / `--no-keep-flow-ids` win over it. |
+| `BPMN_LAYOUT_DEBUG` | any value: the layout engines' diagnostic lines on stderr (library: `debug`) |
+| `BPMN_DEBUG` | any value: the stack trace of an `E_INTERNAL` |
 
 ## Quoting
 

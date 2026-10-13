@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
+import { CLI_ENV } from '../fuzz/lib/setup.mjs';
 
 const REPO = fileURLToPath(new URL('../..', import.meta.url));
 const GIF = join(REPO, 'docs/assets/demo.gif');
@@ -29,7 +30,7 @@ const CROSSFADE_FRAMES = 8;
 const ADD_APPROVAL = ['add', 'order.bpmn', 'userTask', 'Approve invoice', '--after', 'Activity_CheckInvoice'];
 
 const work = mkdtempSync(join(tmpdir(), 'bpmn-demo-'));
-const bpmn = (...args) => execFileSync(join(REPO, 'bin/bpmn.js'), args, { cwd: work, encoding: 'utf8' });
+const bpmn = (...args) => execFileSync(join(REPO, 'bin/bpmn.js'), args, { cwd: work, encoding: 'utf8', env: CLI_ENV });
 const escapeXml = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const shellQuoted = (arg) => (arg.includes(' ') ? `"${arg}"` : arg);
 const seconds = (n) => Math.round(n * FPS);

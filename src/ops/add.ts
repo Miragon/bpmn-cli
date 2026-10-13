@@ -278,7 +278,7 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
       message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
       element: id,
       ...(entry ? { related: [idOf(entry)] } : {}),
-      hint: `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${entry ? `; rename the existing one with \`bpmn set ${idOf(entry)} id=${op.flowId}\`` : ''}.`,
+      hint: `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${entry ? `; rename the existing one with \`bpmn set <file> ${idOf(entry)} id=${op.flowId}\`` : ''}.`,
     });
   }
 }

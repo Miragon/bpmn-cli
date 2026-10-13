@@ -108,6 +108,15 @@ export interface BatchContext {
   aliases: () => Record<string, string>;
 }
 
+/** A sequence flow's ends (sourceRef, targetRef) when a batch or an op on its own began (Doc.flowsBefore). */
+export type FlowEnds = readonly [El | undefined, El | undefined];
+
+/** A flow that kept its id (Doc.recordKeptFlow): the ends `A -> B` that id named, and the id. */
+export interface KeptFlow {
+  was: string;
+  id: string;
+}
+
 /** True for elements somewhere below a bpmn:extensionElements container. */
 function insideExtension(el: El): boolean {
   for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
@@ -123,12 +132,24 @@ export class Doc {
   private suffixed: Array<{ id: string; base: string }> = [];
   /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
   private renamedIds: Rename[] = [];
+  /** flows that kept an id naming their old ends since the last takeKeptFlows() -> those ends (`A -> B`) and that id, for W_FLOW_ID_STALE */
+  private keptFlows = new Map<El, KeptFlow>();
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
-   * them (ops/flows.ts followEnds); false keeps every id (the pipeline's
-   * engine-ownership check simulates a remove on a copy and compares ids).
+   * them (ops/flows.ts followEnds). False keeps the id of every flow the
+   * document had before the batch (flowsBefore); the batch reports each one
+   * whose id no longer names its ends as W_FLOW_ID_STALE (ops/index.ts). The
+   * pipeline sets it for one call from MutationOptions.keepFlowIds; its
+   * engine-ownership check sets it on a copy to simulate a remove.
    */
   followFlowEnds = true;
+  /**
+   * with ids kept (followFlowEnds false): the sequence flows the document had
+   * before the running batch or op (ops/index.ts runBatch / runOp), the only
+   * ones that keep their id (keepsFlowId), with the ends they had then (a
+   * flow that ends there again is not stale: ops/flows.ts staleFlowWarning)
+   */
+  flowsBefore: ReadonlyMap<El, FlowEnds> | undefined;
 
   private constructor(
     public readonly model: Model,
@@ -424,6 +445,34 @@ export class Doc {
   takeRenames(): Rename[] {
     const out = this.renamedIds;
     this.renamedIds = [];
+    return out;
+  }
+
+  /**
+   * Whether `flow` keeps its id when an op gives it other ends: with ids kept
+   * (followFlowEnds false) a flow the document had before the batch or the op
+   * on its own (flowsBefore). ops/flows.ts followEnds keeps it instead of
+   * renaming it; ops/move.ts puts a moved node's old out-flow back at the new
+   * place instead of creating a new one.
+   */
+  keepsFlowId(flow: El): boolean {
+    return !this.followFlowEnds && (this.flowsBefore?.has(flow) ?? true);
+  }
+
+  /**
+   * Records that a flow kept an id that named its old ends `was` (ops/flows.ts
+   * followEnds with followFlowEnds false). The first ends stay while the flow
+   * has the id it kept; a flow renamed since (`set id=`) keeps a new id.
+   */
+  recordKeptFlow(flow: El, was: string): void {
+    const id = flow.get<string>('id');
+    if (this.keptFlows.get(flow)?.id !== id) this.keptFlows.set(flow, { was, id });
+  }
+
+  /** The flows kept since the last call, with the ends their id named and that id (reportStaleFlows turns them into W_FLOW_ID_STALE). */
+  takeKeptFlows(): Map<El, KeptFlow> {
+    const out = this.keptFlows;
+    this.keptFlows = new Map();
     return out;
   }
 

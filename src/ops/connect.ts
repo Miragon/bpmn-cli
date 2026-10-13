@@ -254,7 +254,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
       });
       cs.create(flowChange(flow));
       warnEventGatewayFlow(doc, flow, cs);
-      if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set ${idOf(source)} loop=standard\`) is the conventional alternative`);
+      if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
       const out = doc.outgoing(source).length;
       const inc = doc.incoming(target).length;
       if (!is(source, 'bpmn:Gateway') && out > 1) {

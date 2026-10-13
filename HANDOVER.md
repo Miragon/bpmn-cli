@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), and ids up to 64 characters cut at whole words (#31))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), and flow ids kept on request (#32))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -19,7 +19,9 @@ Camunda 7 (`W_C7_*`) or Camunda 8 (`W_C8_*`), each rule checked on the
 engines; the rules of each platform load on demand (a chunk of their own in
 a host's bundle). Elements are addressed by id only; new ids speak (names, kind +
 place, the ends of a flow) in the file's id style, and an `apply` batch
-names what it creates with aliases (`"as": "$name"`). An agent reads a
+names what it creates with aliases (`"as": "$name"`); a flow whose id names
+its ends follows them, unless flow ids are API and kept (`--keep-flow-ids`,
+`BPMN_KEEP_FLOW_IDS=1`: `W_FLOW_ID_STALE` names the stale ones). An agent reads a
 large model through `show --around <id>` and `show <id> --context`, and a
 write reports the warnings it added, not the file's old ones (`--summary`
 for a few lines). A hand-made diagram is kept (new elements
@@ -39,7 +41,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1914 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1942 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -49,6 +51,241 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Flow ids kept on request (2026-10-13, `feat/32-keep-flow-ids`, issue #32)
+
+A splice, a bridge, a move or `set <flow> source=` / `target=` renames a
+flow whose id names its old ends. Where flow ids are API (bpmn-to-code
+writes them into the generated process API, process tests name them), that
+rename breaks code far from the model. The library could keep them
+(`Doc.followFlowEnds = false`), but the CLI had no switch, and nothing said
+which ids no longer name their ends. The decisions: one name at every
+layer; flag > `BPMN_KEEP_FLOW_IDS` > library option / `Doc` field > default
+(rename); no project config file (#34 reads id conventions from the
+`.bpmnlintrc` and adds none); a strict environment value; the warning only
+from the change that makes a flow stale.
+
+- **Switch** (`src/cli.ts`): `--keep-flow-ids` / `--no-keep-flow-ids` on
+  every mutating command and `apply` (`withMutationOptions`), else
+  `BPMN_KEEP_FLOW_IDS` (`envSwitch`: unset or empty = default; 1 / true /
+  yes / on and 0 / false / no / off in any case; anything else is `E_USAGE`
+  with a hint). Only `mutationOptions` reads it, so `show` and `validate`
+  never fail on it, and a flag decides without reading it. `src/cli.ts` is
+  still the only module that reads the environment.
+- **Library**: `MutationOptions.keepFlowIds` and `EditOptions.keepFlowIds`.
+  `mutate()` sets `Doc.followFlowEnds` for the call and puts the caller's
+  value back in `finally` (an explicit option wins; undefined: the field).
+  `Doc.followFlowEnds = false` no longer keeps every id: a flow the same
+  call created follows its ends (migrating.md, library.md).
+- **One test for a rename and a stale id** (`ops/flows.ts idNamesEnds`,
+  extracted from `followEnds`). With ids kept, `followEnds` records a flow
+  whose id named its old ends (`Doc.recordKeptFlow`; the first ends stay
+  while the flow has the id it kept, so a flow the batch renamed with `set
+  id=` takes that id and a later splice records the ends that id named)
+  instead of renaming it, but only a flow the document had before the batch
+  (`Doc.flowsBefore`, the sequence flows as elements, with their ends, when
+  `runBatch`, or a `runOp` outside a batch, starts: a flow an earlier op or
+  the op itself created is nobody's API and still follows;
+  `BatchContext.created` holds ids, which a later rename changes).
+  `runBatch` turns the kept flows into `W_FLOW_ID_STALE` once, after
+  `stillHolds`, against each flow's final ends (`reportStaleFlows`,
+  `staleFlowWarning`): one per flow, none for a flow a later op removed or
+  put back between its old ends, and none for a flow that ends where it did
+  when the batch began (a flow that was stale before: a no-op move of a node
+  a splice put in runs it through the ends its id names and back, which
+  recorded it again). `runOp` on its own (no batch) reports its own. The
+  message names the old and the new ends; the hint is `bpmn set <file>
+  <flowId> id=<suggested>`, where the suggestion is what `IdStyle.next`
+  gives the new ends against the document's ids plus the hints before it in
+  the same report (`reportStaleFlows` keeps a copy of the registry): two
+  flows that end up between the same ends get the id and its `_2`, so every
+  hint can be followed. The document claims none. In every flow form it is
+  the id the default rename gives (`test/conventions-ids.test.ts`).
+- **Move puts the out-flow back** (`ops/move.ts`, `Doc.keepsFlowId`, the
+  `reuse` of `createSequenceFlow` / `placeNode`): with ids kept, a moved
+  node's one out-flow, which the detach takes out, is put back as the first
+  flow the placement creates out of that node (a splice's node -> old
+  target, a prepend's node -> anchor, the append of the next node of the
+  chain, which a gateway always gets: a gateway followed by another node of
+  the chain keeps it for that append, so `move Gateway_Ok Activity_Book`
+  keeps Flow_OkToBook between them and the gateway's splice makes a new
+  flow), with its id, documentation and extensions. Its name, condition
+  and annotations stay with the bridge (`detachNode` carries them), and it
+  is no longer a default flow; a node that is not bridged (`detachWithBridge`
+  and `detachNode` now return whether they bridged) drops name and
+  condition, and once the flow is put back to another node
+  `W_LABEL_DROPPED` / `W_CONDITION_DROPPED` name it (before, they were gone
+  without a word); between its old ends once the chain is placed it gets
+  them back, and its default marker (`giveBack`), also when a later node of
+  the chain takes it back there (`giveBackLate` withdraws the warnings:
+  `move A B --after X` with A not bridged splices A -> B in as A -> Done,
+  B's splice after A ends it at B again). A default the move gives the node
+  (`"default"` on a prepend, batch and library only) wins over the marker
+  (the change entry adds `no longer the default flow of <node>`), and a flow
+  it made the default flow gets no condition (`W_CONDITION_DROPPED`; it had
+  kept it, a default flow with a condition). A `flowId` for the flow a
+  prepend creates (node -> anchor, batch and library only) names a new flow
+  instead (`createSequenceFlow` ignores `reuse` with an id). The result
+  lists the put-back flow as changed (`B -> A (was -> C)`), not as removed
+  and created. The chain runs through these flows, so `move B C` keeps B -> C
+  between B and C, unless B has several out-flows (then it is removed with
+  B's other flows). When the detach of a node takes out the flow from the
+  node moved before it (the node is not bridged: an end event, a join;
+  `move C Done --after B` on a line, which changes nothing), that flow is
+  filed under the node before, and the append puts it back with its name,
+  condition and default marker (it used to come back as `Flow_CToDone_2`).
+  What nothing puts back stays removed: the out-flow of the last node
+  appended after a gateway or a node without successor, the other flows of
+  a node that is not bridged (several in- or out-flows, or none in or none
+  out; its single out-flow and the flow from the node before it are put
+  back), and with `--in` the group's out-flow. Default mode never reuses
+  (no output change). The incremental layout reroutes a put-back flow like
+  any flow whose ends changed, also into a collapsed sub-process's plane.
+- **Id style read before the ops** (`ops/index.ts readIdStyle`): `runBatch`
+  and `runOp` on its own read `Doc.idStyle` before the first op. It was
+  learned lazily when the first new id was needed, from the ids, names,
+  types and flow ends then in the file, so whatever ran before changed it: a
+  first op that removed flows (also a single `move`, whose detach removes
+  them), `set <flow> id=`, `set <node> name=` or `retype` could make it learn
+  another style (prefix `F` -> `Flow`, `idPair` -> `named`, `UserTask_` ->
+  `ServiceTask_`): new ids in that style, and a flow whose id named its old
+  ends was neither renamed nor reported. This changes default-mode output
+  against 0.6 in those batches and commands (migrating.md).
+- **Report**: it is an op warning, so it is in `warnings.added` of the
+  change that made the flow stale only; it counts for `--strict` (exit 5),
+  `bpmn validate` never lists it (without the old ends a lint could only
+  guess), and it never floods (`report.ts NEVER_FLOOD`: each line carries its
+  own command). There is no `renamed` key when ids are kept.
+- **Hints name the file**: the `W_OPTION_IGNORED` hint of `add --flow-id`
+  on a splice, both `E_INVALID_RETYPE` hints, the `E_CROSS_SCOPE` hint, the
+  hints of `E_INVALID_TRIGGER` (retype, set), `W_FLOW_DROPPED`, the lane
+  conflict of `add lane`, a blocked `attachedToRef`, a default flow's
+  condition, a call activity's `calledElement`, a boundary event's `place`,
+  the notes of a self loop and a split whose branches all end, and the
+  catalogue entries `E_DANGLING_REF`, `E_FLOW_LINKS`, `E_CROSS_SCOPE`,
+  `E_INVALID_HOST`, `E_LANE_CONFLICT`, `W_NOT_IN_LANE`, `W_UNREACHABLE`,
+  `W_C7_DEPLOY_HISTORY_TTL` named a command without `<file>`. A test now
+  checks every command with arguments in the catalogue and in the strings
+  under `src/` (a small scanner in the test reads the string literals and
+  templates, so comments and regular expressions are left out and escaped
+  quotes hide nothing; not TypeScript's compiler API, which typescript 7,
+  Dependabot #28, no longer exports; a command with an option first is a
+  name, not one to paste).
+- **Test isolation**: `test/setup.ts` (vitest `setupFiles`) deletes
+  `BPMN_KEEP_FLOW_IDS` before every test file, so the CLIs the tests spawn
+  rename as by default; `CLI_ENV` in `tools/fuzz/lib/setup.mjs` is the
+  environment of the fuzzer, the benchmark, `tools/layout-regress.mjs` and
+  the demo.
+- **Docs**: the guide (catalogue `W_FLOW_ID_STALE` after `W_ID_SUFFIXED`,
+  the common options, CONTRACT, OUTPUT, ops JSON, the `--flow` rule,
+  `kinds --section ids`; `guide --short` one line more, 4,389 of 5,120
+  bytes), docs/contract.md (the limitation says how to keep ids),
+  commands.md, reference.md (Ids and a new Environment table), library.md,
+  ops.md, testing.md, migrating.md (Changes from 0.6), the skill (when to
+  keep flow ids; `BPMN_KEEP_FLOW_IDS` in the `env` of the Claude Code
+  settings, because an inline variable in front of `bpmn` is not covered by
+  the pre-approved `Bash(bpmn *)`) and recipes.md. `E_USAGE` (catalogue,
+  exit code 1 in the guide and reference.md, the skill's error table) names
+  a bad `BPMN_KEEP_FLOW_IDS`, the first variable that can fail a command.
+
+Evidence: `npm run gate` passes with 1,942 tests (+246 opt-in; 28 new:
+`test/keep-flow-ids.test.ts` for every op that changes the ends of a flow,
+the negatives, a batch, a flow the batch renames with `set id=`, a flow an
+op creates (also `runOp` on its own), a move that puts back the node's
+out-flow and a group move (spliced and appended; a second node that is not
+bridged: an end event, a shared end, a join; a gateway first), a moved node
+that is not bridged with a labelled, conditional out-flow (also first in a
+chain whose next node takes the flow back, and as a prepend made the
+default flow, next to a default the prepend gave), a later change
+that leaves a stale flow where it was, the library precedence and the
+report; `test/conventions-ids.test.ts` for every flow form, two flows with
+the same new ends (hints `Flow_OkToJoin` / `Flow_OkToJoin_2`) and the style
+read before a batch that removes first; `test/cli.test.ts` for the flag, the
+variable and its bad values on the built CLI; `test/isomorphic.test.ts` in
+the browser bundle; the doc pins in `test/batch.test.ts`, whose string
+scanner checks itself and passes with typescript 7.0.2 installed); the
+layout regression stays at 444 and the gate's fuzz campaign is unchanged
+(173 ok, 7 refused, 0 errors). With `BPMN_KEEP_FLOW_IDS=maybe` set in the
+shell the CLI tests still pass. Default mode does the same work as before
+(`idNamesEnds` is the old check); against origin/main it differs only where
+the style read applies (seeded batches at the `runOps` level: 27 of 2,000
+differ, none once main's `Doc.idStyle` is read before the ops too). With ids
+kept, a batch takes one set of the document's sequence flows and runs
+`idNamesEnds` and `IdStyle.next` once per stale flow at its end: 60 splices
+in one batch, ops alone 96.5 ms following vs 94.2 ms kept, `applyToXml`
+without layout 120.7 vs 121.6 ms (noise). A `runOp` outside a batch takes
+the same set once per op (only with ids kept; every CLI and pipeline path
+runs a batch): 60 single splices on a 200-flow chain, 125.0 ms following vs
+119.7 ms kept (noise). Bundle: whole entry 872.5 -> 880.9 KB minified (275.7
+-> 278.6 gzip), `applyToXml` only 636.0 -> 640.4 KB (201.9 -> 203.5), within
+main's budgets (883 / 279 and 643 / 204 KB, unchanged; the whole entry's
+gzip is 0.4 KB below its budget). Seeded random batches after the third
+review: with ids kept, 1,400 batches (4,901 ops, 1,919 moves, each also op
+by op) keep every invariant (no flow gone without `removed:`, no file flow
+renamed, hints free and followable, the same DI edge id, no new validation
+error) except the chain in Left for later and one hint case older than this
+round. The check that a move never replaces a moved node's out-flow with a
+new flow out of it failed in 12 of them before and fails in that 1 now, and
+the 2 repeated stale warnings are gone. Default mode is byte-identical to
+the state before the third review in 3,258 comparisons (600 batches with and
+without layout, and each op alone).
+
+Rebased onto main after #35 (the design profile removed) and #31 (ids cut
+at whole words): `--keep-flow-ids` and `keepFlowIds` follow #35's removal
+of `--profile`, `profile` and `contentRepo` (none is added back;
+library.md points at validators.md); `idNamesEnds` carries #31's forms of
+`derivedBases` (in a file of another flow form also the `named` id, and the
+ids 0.6 cut); the catalogue keeps #31's `W_ID_SUFFIXED` with
+`W_FLOW_ID_STALE` after it, and `kinds --section ids` #31's length and
+collisions with the renames of both. The test count, `guide --short`, the
+bundle, the layout regression and the fuzz campaign above are measured on
+the rebased tree (main alone: 1,914 tests, 4,282 bytes, 872.5 / 275.7 and
+636.0 / 201.9 KB, score 444, 173 ok, 7 refused, 0 errors); the timings,
+the comparison with the old main and the random batches were measured
+before the rebase.
+
+Left out, for later:
+
+- `bpmn set <flow> id=`, the hint's command, does not move a derived DI edge
+  id the way the automatic rename does (`BPMNEdge_<old>` stays): a cosmetic
+  mismatch, a follow-up of its own.
+- There is no repository default in a project file; the flag and the
+  variable set it. A result does not say why ids were kept (flag or
+  variable).
+- `add --flow-id` on a splice with ids kept gives two rename hints for one
+  flow: `W_OPTION_IGNORED` with the given id, `W_FLOW_ID_STALE` with the
+  speaking one.
+- An end renamed earlier in the same change (`set <end> id=`, or `name=` on
+  an end without a speaking id) hides the next end change of its flows:
+  `idNamesEnds` labels the end as it is then, so `Flow_CheckToOk` after `set
+  Activity_Check id=Activity_Verify` no longer names its ends and gets
+  neither a rename nor `W_FLOW_ID_STALE`, the same in both modes. A fix
+  would record each end's id and name at batch start (`flowsNow`) and accept
+  those too.
+- The flow a splice creates (new node -> old successor) has no alias:
+  `flowAs` on a splicing `add` names the kept flow into the node. The docs
+  say so; an `outAs` key would be new syntax.
+- With ids kept, a bridged move puts the node's out-flow back while its
+  name and condition move to the bridge's id; the docs say so, but the
+  change has no line naming where they went (a note would be new output).
+- A chain whose anchor is one of its own later nodes (`move T1 J E --after
+  J`, J a join): T1's append gives J a second out-flow before J moves, so J
+  is not bridged with two out-flows and J -> E comes back as a new flow, in
+  both modes. Seen once in 1,400 random keep-mode batches.
+- With ids kept and no layout (`--no-layout`, or a second `BPMNDiagram` the
+  incremental layout leaves alone), a put-back flow keeps its BPMNEdge with
+  the old waypoints and the result has no `run bpmn layout` note (default
+  mode removes that flow's edge and says so); the next incremental write
+  leaves it stale too. Default mode keeps bridged and spliced edges stale
+  the same way; a fix would drop the edge of a flow whose ends changed, or
+  reroute edges that no longer touch their ends.
+- In a file of mixed id styles, following `W_FLOW_ID_STALE` hints can tip
+  the learned style (`IdStyle` takes the first prefix seen on a tie: a move
+  declares a put-back `F3` before `G1`), so the next read no longer sees the
+  followed ids as naming their ends: a later end change neither renames nor
+  reports them. The drift is older than #32 (origin/main switches `fX` to
+  `Flow_X` after a few adds to polish-rename.bpmn); a fix belongs in
+  `idNamesEnds`, accepting the forms of every flow prefix in use.
 
 ## Ids up to 64 characters, cut at whole words (2026-10-13, `fix/31-flow-id-cut`, issue #31)
 
@@ -1751,7 +1988,7 @@ Private corpora used locally, outside the repository; counts only.
   at anchors of the same name) get the same id, a merge of both a
   duplicate; a flow renamed after its ends is the one exception to "ids
   never change" (`Doc.followFlowEnds = false` in the library, no CLI
-  switch); `bpmn new` without `--name` (and without a speaking `--id`)
+  switch; since #32 `--keep-flow-ids`, see the section at the top); `bpmn new` without `--name` (and without a speaking `--id`)
   writes `Process_1` / `Definitions_1`; `move` of a node with several
   incoming flows still disconnects them (only `remove` bridges a merge),
   and removing a join together with its predecessors (the join first) is

@@ -248,7 +248,7 @@ const TRIGGER_OF_KEY: Record<string, Trigger> = {
 
 /** Properties that must not be set generically (they have a dedicated command / key). */
 const BLOCKED_PROPS: Record<string, string> = {
-  attachedToRef: 'use `bpmn move <id> --on <activityId>`',
+  attachedToRef: 'use `bpmn move <file> <id> --on <activityId>`',
   sourceRef: 'use source=<nodeId>',
   targetRef: 'use target=<nodeId>',
   processRef: 'a participant is bound to its process on creation',
@@ -1448,7 +1448,7 @@ export function assertMessageFlowsFit(doc: Doc, event: El, before: Set<string>):
     {
       element: idOf(event),
       related: broken.map((c) => idOf(c.flow)),
-      hint: `Remove the message flow first (\`bpmn remove ${broken.map((c) => idOf(c.flow)).join(' ')}\`) or keep a message / untyped event.`,
+      hint: `Remove the message flow first (\`bpmn remove <file> ${broken.map((c) => idOf(c.flow)).join(' ')}\`) or keep a message / untyped event.`,
     },
   );
 }

@@ -46,7 +46,7 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from '../fuzz/lib/setup.mjs';
+import { CLI_ENV, parseArgs } from '../fuzz/lib/setup.mjs';
 import { ALL_EDITS } from './gen-edits.mjs';
 import { defaultArmNames, FORCEABLE, resolveArms } from './lib/arms.mjs';
 import { compareResults, formatComparison } from './lib/compare.mjs';
@@ -65,7 +65,7 @@ const SPEC = { arms: undefined, layout: 'auto', track: 'all', corpus: undefined,
 function exec(argv, cwd) {
   return new Promise((done) => {
     const t0 = process.hrtime.bigint();
-    const child = spawn(process.execPath, argv, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, argv, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: CLI_ENV });
     let stdout = '', stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
     child.stderr.on('data', (d) => { stderr += d; });

@@ -285,15 +285,12 @@ export function canLoopToItself(node: El): boolean {
  * would create a self-loop `connect` refuses (non-activities) is skipped (both
  * flows removed, noted), and a condition that bridging carried onto the
  * predecessor's default flow is dropped again with W_CONDITION_DROPPED (a
- * default flow has no condition).
+ * default flow has no condition). Returns whether it bridged.
  */
-export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): void {
+export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): boolean {
   const incoming = doc.incoming(node);
   const outgoing = doc.outgoing(node);
-  if (!bridge || incoming.length !== 1 || outgoing.length !== 1) {
-    detachNode(doc, node, bridge, cs);
-    return;
-  }
+  if (!bridge || incoming.length !== 1 || outgoing.length !== 1) return detachNode(doc, node, bridge, cs);
   const inFlow = incoming[0]!;
   const outFlow = outgoing[0]!;
   const predecessor = inFlow.get<El>('sourceRef');
@@ -301,13 +298,13 @@ export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: Change
   if (predecessor === successor && !canLoopToItself(predecessor)) {
     detachNode(doc, node, false, cs);
     if (predecessor !== node) cs.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
-    return;
+    return false;
   }
   assertBridgeAllowed(doc, node, inFlow, outFlow, removing, command);
   const outCond = outFlow.get<El | undefined>('conditionExpression');
   const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
   const inHadCondition = !!inFlow.get<El | undefined>('conditionExpression');
-  detachNode(doc, node, true, cs);
+  const bridged = detachNode(doc, node, true, cs);
   if (outCond && inFlowIsDefault && !inHadCondition && inFlow.get<El | undefined>('conditionExpression') === outCond && predecessor.get<El | undefined>('default') === inFlow) {
     inFlow.set('conditionExpression', undefined);
     cs.warn({
@@ -315,9 +312,10 @@ export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: Change
       message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}: ${idOf(inFlow)} is the default flow of ${idOf(predecessor)}`,
       element: idOf(outFlow),
       related: [idOf(inFlow)],
-      hint: `A default flow has no condition; use \`bpmn set ${idOf(inFlow)} condition=...\` if the condition should replace the default marker.`,
+      hint: `A default flow has no condition; use \`bpmn set <file> ${idOf(inFlow)} condition=...\` if the condition should replace the default marker.`,
     });
   }
+  return bridged;
 }
 
 /** The command that detaches (its hint differs: `move` has no --no-bridge). */
@@ -514,7 +512,7 @@ function afterDetach(doc: Doc, el: El, parent: El | undefined, cs: ChangeSet): v
           message: `${idOf(e)} still calls the removed process ${pid}`,
           element: idOf(e),
           related: [pid],
-          hint: `Set another process with \`bpmn set ${idOf(e)} calledElement=<processId>\` or remove the call activity.`,
+          hint: `Set another process with \`bpmn set <file> ${idOf(e)} calledElement=<processId>\` or remove the call activity.`,
         });
       }
     }

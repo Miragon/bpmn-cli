@@ -9,8 +9,12 @@
  *    whatever CLI is fuzzed) -> { measure, diff, hard, keys }.
  *  - `loadRender()` imports dist/node/render.js -> { draw(xml), maxSize }:
  *    the PNG of `bpmn render --problems --tiles` (the walk's render oracle).
- *  - `makeExecutor({ exec, via, workDir, bin })`: exec 'cli' (default) or
- *    'lib' (dist/index.js in-process).
+ *  - `makeExecutor({ exec, via, workDir, bin })`: exec 'cli' (default, in
+ *    CLI_ENV) or 'lib' (dist/index.js in-process).
+ *  - `CLI_ENV`: the environment the tools run the CLI in: this one without
+ *    the switches that change what an edit does (BPMN_KEEP_FLOW_IDS), so a
+ *    shell that sets one does not change the results (also the benchmark,
+ *    tools/layout-regress.mjs and the demo).
  *  - `corpusFiles(dirs, filter)`: every *.bpmn below the given directories,
  *    sorted, de-duplicated. `defaultCorpus()`: test/fixtures and tools/scenarios
  *    plus the directories in env BPMN_FUZZ_CORPUS (colon-separated; private
@@ -27,6 +31,7 @@ import { hardKinds, newKinds } from './metric-kinds.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const DEFAULT_BIN = join(ROOT, 'bin', 'bpmn.js');
+export const CLI_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'BPMN_KEEP_FLOW_IDS'));
 const DIST = join(ROOT, 'dist');
 
 async function importDist(rel) {
@@ -51,7 +56,7 @@ export async function makeExecutor({ exec = 'cli', via = 'commands', workDir, bi
     const api = await importDist('index.js');
     return libExecutor({ Doc: api.Doc, parseOps: api.parseOps, mutateDoc: api.mutateDoc, CliError: api.CliError }, { label: 'lib:dist' });
   }
-  return cliExecutor({ bin: bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir, via });
+  return cliExecutor({ bin: bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir, via, env: CLI_ENV });
 }
 
 function walkDir(dir, out) {
