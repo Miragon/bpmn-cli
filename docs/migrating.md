@@ -279,7 +279,7 @@
   refuses because of them. `--no-lint-config` leaves bpmnlint out of the
   output; without a `.bpmnlintrc` nothing of bpmnlint is loaded and bpmnlint
   adds nothing.
-- `bpmnlint` 11.15.0 and `@miragon/bpmnlint-plugin-rules` 0.12.0 are
+- `bpmnlint` 11.15.0 and `@miragon/bpmnlint-plugin-rules` 0.12.1 are
   dependencies (exact versions); `bpmn-moddle` resolves to 10.3.
 - Library: `NamedValidator.blocks: false` makes a validator advisory
   (`ValidatorReport.blocks`); the file helpers run the `.bpmnlintrc` too,

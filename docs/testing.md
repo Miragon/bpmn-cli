@@ -132,8 +132,9 @@ mock the uid (skipped as root and on Windows), and the case of a system
 without uids (Windows: only a repository inside the home directory runs
 plugins) mocks `process.getuid` away and sets `HOME`. Its CLI cases build
 `src/` with tsc into a temporary directory and run it under plain node,
-which is where the plugin's ESM build would fail (vitest hides that); they
-also run as root over the tester's checkout (a `--require` preload makes
+which loads bpmnlint and the plugin as the published package does
+(vitest's module loader would hide a load failure); they also run as root
+over the tester's checkout (a `--require` preload makes
 `process.getuid()` 0), build a broken install and a project whose own
 bpmnlint is hoisted next to the plugin, close the pipe after the first
 chunk (the exit code stays, no `EPIPE` trace), load a plugin that leaves a

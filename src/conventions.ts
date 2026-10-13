@@ -106,12 +106,15 @@ export function idConventionsFromLint(setting: BpmnlintRuleSetting | undefined, 
   const options = (setting.config ?? {}) as { prefixes?: Record<string, string | false | null>; case?: string; eventDefinitionQualifier?: string };
   const { prefixes: overrides = {}, case: caseName = 'camelCase' } = options;
   const prefixes = { ...naming.DEFAULT_PREFIXES, ...overrides };
-  // a name of JavaScript's Object (`toString`) reaches no case of the rule's table but a function without a label
+  // an unknown case resolves to the rule's fallback, PascalCase, which the rule checks (since 0.12.1 also `toString`);
+  // injected helpers of a plugin before 0.12.1 answer a property name of Object.prototype with that property (a
+  // function for `toString`, Object.prototype itself for `__proto__`), which has no label: new ids take the fallback,
+  // and that plugin's rule cannot check the case (it reports `<prefix_undefined>` or throws), which the note says
   const resolved = (naming.resolveCase(caseName) as { label?: unknown } | undefined)?.label;
   const label = typeof resolved === 'string' && CASES.includes(resolved) ? resolved : 'PascalCase';
   const qualifier = naming.resolveQualifierMode(options.eventDefinitionQualifier);
   const caseHint = `Write one of ${CASES.join(', ')} in the .bpmnlintrc.${didYouMean(caseName, CASES)}`;
-  if (label !== resolved) note('case', caseName, 'is unknown and the rule cannot check it: new ids take PascalCase, the fallback for an unknown case', caseHint);
+  if (label !== resolved) note('case', caseName, 'is unknown, and the rule of a @miragon/bpmnlint-plugin-rules before 0.12.1 cannot check it: new ids take PascalCase, the fallback for an unknown case', caseHint);
   else if (label !== caseName) note('case', caseName, `is unknown: the rule checks ${label}, and new ids take it`, caseHint);
   if (options.eventDefinitionQualifier !== undefined && options.eventDefinitionQualifier !== qualifier) {
     note('eventDefinitionQualifier', options.eventDefinitionQualifier, `is unknown: the rule and new ids take ${qualifier}`, `Write one of ${QUALIFIERS.join(', ')} in the .bpmnlintrc.${didYouMean(options.eventDefinitionQualifier, QUALIFIERS)}`);

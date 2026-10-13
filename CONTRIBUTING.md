@@ -52,7 +52,7 @@ them on a private corpus without copying it into the repository, are described i
 `bpmn-moddle` (the semantic model; `moddle` for its types), `bpmn-auto-layout` (pinned to
 `2.0.0-alpha.2`, loaded only for `--engine auto`), `@resvg/resvg-wasm` (the PNG rasteriser of
 `bpmn render`), `commander` (the CLI only), and `bpmnlint` (pinned to `11.15.0`) with
-`@miragon/bpmnlint-plugin-rules` (pinned to `0.12.0`: bpmnlint's rules, camunda-compat and
+`@miragon/bpmnlint-plugin-rules` (pinned to `0.12.1`: bpmnlint's rules, camunda-compat and
 Miragon's rules behind one resolver), loaded only when a `.bpmnlintrc` applies (see
 [bpmnlint](docs/bpmnlint.md)). Both are pinned exactly: they decide which findings an agent sees,
 the tests pin those findings, and bpmn-cli uses bpmnlint's `Linter` beyond its documented API.
