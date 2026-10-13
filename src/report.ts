@@ -21,7 +21,6 @@ import type { Warning } from './errors.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './format.js';
 import type { CheckResult, LayoutStatus, MutationResult } from './pipeline.js';
 import type { PlatformSummary } from './platform/profile.js';
-import type { ProfileInfo } from './platform/repo.js';
 import { ChangeSet, type Change } from './result.js';
 import type { ValidationResult } from './validate.js';
 import type { ValidatorReport } from './validators.js';
@@ -74,9 +73,7 @@ export interface ValidationReport {
   /** lint, platform findings and the layout dry run's warnings (W_LAYOUT_<code>) */
   warnings: Warning[];
   platform?: PlatformSummary;
-  /** the validation profile that ran, or why none did (`--profile`; the repository's model ids left out) */
-  profile: Omit<ProfileInfo, 'repo'>;
-  /** the validators that ran (the design profile, host validators): every finding of each; they are among errors / warnings too */
+  /** the validators that ran (a host's, `validators` in library use): every finding of each; they are among errors / warnings too */
   validators?: ValidatorReport[];
   layout: CheckResult['layout'];
   /** content the reader could not keep or understand */
@@ -209,7 +206,7 @@ function preexistingLine(count: number): string {
   return `${count} warning${count === 1 ? '' : 's'} already in the file (not repeated: \`bpmn validate <file>\` lists them)`;
 }
 
-/** `[design] ` for a validator's finding (src/validators.ts), else ''. */
+/** `[<validator>] ` for a validator's finding (src/validators.ts), else ''. */
 export function validatorTag(w: Warning): string {
   const name = (w as Warning & { validator?: string }).validator;
   return name ? `[${name}] ` : '';
@@ -366,13 +363,11 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
 export function validationReport(check: CheckResult): ValidationReport {
   const warnings = [...check.validation.warnings, ...(check.layout.status === 'ok' ? layoutWarnings(check.layout) : [])];
   const errors = [...check.validation.errors, ...(check.layout.status === 'failed' ? [check.layout.error] : [])];
-  const { repo: _repo, ...profile } = check.profile;
   return {
     ok: errors.length === 0,
     errors,
     warnings,
     platform: check.validation.platform,
-    profile,
     ...(check.validation.validators ? { validators: check.validation.validators } : {}),
     layout: check.layout,
     importWarnings: check.importWarnings,

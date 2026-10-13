@@ -39,7 +39,7 @@ bpmn space <file> (--after <id> | --below <id>) [--by column|row|<n>col|<n>row|<
 bpmn tidy <file> [<id>...] [SELECTORS]
 bpmn compact <file> [<poolId|laneId|subProcessId>...]
   SELECTORS: --path <fromId> <toId> [--via <flowId...>] | --kind <kind> | --branch <flowId>
-bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--profile auto|design|none]
+bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
@@ -71,7 +71,6 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--show` | append the full model view (as `show` prints it) to the result |
 | `--strict` | exit with code 5 when the result has warnings |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
-| `--profile <auto\|design\|none>` | validation profile, see [design-iq](design-iq.md) |
 
 ## `new`
 
@@ -249,8 +248,6 @@ and `valid, 2 warning(s)` or `1 error(s), 2 warning(s)`. Errors exit with code 2
 with 0, or with 5 under `--strict`. The platform is detected from `modeler:executionPlatform`, else
 from the vendor namespace in use, and `--platform` overrides it. Engine findings are warnings named
 `W_C7_*` or `W_C8_*`; a `W_C7_DEPLOY_*` or `W_C8_DEPLOY_*` one means the engine refuses the file.
-`--profile design` adds the checks of [design-iq](design-iq.md), whose `E_DESIGN_*` findings are
-errors.
 
 `layout` redraws the whole diagram from the model: a hand-made layout is replaced, colours and DI
 ids survive. `--expand` and `--collapse` change which sub-processes are drawn expanded.
@@ -296,4 +293,4 @@ format, error catalogue and exit codes. `kinds --section errors` prints one part
 the data. `guide` is the cheat sheet written for agents; `guide --short` is its core in at most
 5 KB, and `guide <topic>` prints one part: `contract`, `workflow`, `reading`, `output`, `layout`,
 `format`, `render`, `ops`, `placement`, `triggers`, `errors`, `quoting`, `camunda7`, `camunda8`,
-`design`, `commands`.
+`commands`.

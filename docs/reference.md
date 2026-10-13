@@ -166,8 +166,9 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
 - Warnings are `{code, message, element, hint}`. `written` is `false` with `--dry-run` and when
   `unchanged` is `true`. `importWarnings` lists what the parser reported while reading the input.
 - Present only when they apply: `aliases` (batch alias -> final id), `renamed` (old id -> new id),
-  `view` (`--show`), `validation.validators` (the design profile). An incremental layout adds
-  `placed`, `moved`, `rerouted`, `pruned`, `notes` and `format` to `layout`.
+  `view` (`--show`), `validation.validators` (in library use only: a host's validators, see
+  [Validators](validators.md)). An incremental layout adds `placed`, `moved`, `rerouted`,
+  `pruned`, `notes` and `format` to `layout`.
 - `--summary --json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed, renamed?,
   removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status,
   mode, score}, format?}`.
@@ -194,8 +195,7 @@ The result format: `bpmn guide output`. Every code with its fix: `bpmn kinds --s
 `-o <file>` names a file, and `-o -` sends the result of any mutating command (or the image of
 `render`) to stdout and leaves the input file as it was. With the XML on stdout the report goes to
 stderr and says `written: -`. stdin holds one input, so `apply - -` is `E_USAGE`: write `bpmn apply -
-ops.json < model.bpmn > new.bpmn`. A model from stdin has no file name, so the design-iq repository
-lookup (`--profile auto`) does not apply to it.
+ops.json < model.bpmn > new.bpmn`.
 
 ## Quoting
 

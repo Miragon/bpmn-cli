@@ -34,17 +34,16 @@ Every function runs the code of the CLI command it names, without a file:
 - Options of the writing functions (`EditOptions`): `layout` (`'auto'`, the
   default, `'incremental'`, `'full'` or `false`, see
   [Layout modes](layout.md#layout-modes)), `engine` (`'clean'` or `'auto'`), `force`,
-  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `profile` (`'auto'`,
-  `'design'`, `'none'`), `contentRepo` and `validators` (see
-  [design-iq](design-iq.md#design-iq-the-design-profile-and-validators)), `file` (the
-  document's name for the validators), `show` (add the model view) and
+  `platform` (`'auto'`, `'c7'`, `'c8'`, `'none'`), `validators` (see
+  [Validators](validators.md)), `file` (the document's name for the
+  validators), `show` (add the model view) and
   `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
   of `layout`; `newXml` takes `processName`, `processId`, `executable` and
   `target`; `viewXml` and `showXml` take `id`, `context`, `around`,
   `depth`, `inner`, `scope` and `layout` like `show` (`viewDoc(doc, opts)`
   and `renderShown(view)` do the same on a parsed `Doc`; `aroundView`,
   `elementContext` and `implementationOf` are the builders); `validateXml`
-  takes `platform`, `profile`, `contentRepo`, `validators` and `file`;
+  takes `platform`, `validators` and `file`;
   `renderSvg` takes `plane`, `scale` and `maxSize` (no limit by default;
   `RENDER_MAX_SIZE` is the CLI's 2000), the crops `around: { id, depth?,
   inner? }`, `path: { from, to, via? }`, `scope` and `ids`, `highlight` (a
@@ -70,8 +69,8 @@ Every function runs the code of the CLI command it names, without a file:
   `mutationSummary(result)` / `renderSummary(summary)` the `--summary`
   form, `renderValidation(report)` the text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
-  errors the ops would introduce (`E_VALIDATION`, also those of the design
-  profile and of `validators`) and content a retype would delete
+  errors the ops would introduce (`E_VALIDATION`, also those of
+  `validators`) and content a retype would delete
   (`E_WOULD_DROP_CONTENT`) are refused unless `force: true`. The layout
   modes, the format ops, the file's id style for new ids
   ([Ids](reference.md#ids)) and the platform profile's new findings
@@ -139,17 +138,14 @@ no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
 opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
 ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`), `layoutDocToFile(doc,
 opts)` (`layout` on a loaded document, e.g. one read from stdin) and
-`checkFile(file, { platform, profile, validators })` (`validate`).
+`checkFile(file, { platform, validators })` (`validate`).
 `FileMutationOptions` adds the file options to the core options: `out`,
 `dryRun`, `backup` and `mustNotExist` (`E_FILE_EXISTS` unless `force`); the
 result says `written: true` and names the file. A result equal to the file
 it was read from is not written back (`written: false`, `unchanged: true`;
-`out` to another file still writes the copy). For the validation profile
-the helpers look up the design-iq content repository of the file they write
-or check (`contentRepoOf(file)`: the nearest `bpmiq.yml`, the model ids of
-its models folder) unless `contentRepo` is given or the profile is `none`,
-and tell the validators that file (`ctx.file`, the `out` target with
-`out`).
+`out` to another file still writes the copy). The helpers tell the
+validators the file they write or check (`ctx.file`, the `out` target with
+`out`) unless `file` names another.
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
 `renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
@@ -193,21 +189,12 @@ platform they check loaded: `await loadProfile(platform)` (`'c7'`, `'c8'`;
 `E_PROFILE_NOT_LOADED`. `mutateDoc`, `checkDoc` and the in-memory API load
 the rules themselves.
 
-Validation in the transaction (see
-[design-iq](design-iq.md#design-iq-the-design-profile-and-validators)):
+Validation in the transaction (see [Validators](validators.md)):
 `MutationOptions.validators` / `CheckOptions.validators` (also `validators`
 of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
 `ValidatorFn`, `NamedValidator`, `ValidatorFinding`, `ValidatorContext`,
-`ValidatorIssue`, `ValidatorReport`; `profile` (`'auto' | 'design' |
-'none'`, `PROFILE_CHOICES`, `resolveProfile`, `ProfileInfo`) and
-`contentRepo` (`ContentRepo`: the design-iq content repository the document
-is a model of, with its `processIds` / `decisionIds` for the link checks; in
-memory `auto` runs the design profile only when it is given; the file
-helpers find it on disk: `findContentRepo`, `contentRepoOf`,
-`resolveFileProfile` in `@miragon/bpmn-cli/node`), the design profile itself
-as `designFindings(doc, { processIds, decisionIds })` / `designValidator(...)`
-(`DESIGN_VALIDATOR` is its name), and `decisionLinkOf(element, doc)` (a
-business rule task's decision link in any spelling).
+`ValidatorIssue`, `ValidatorReport`, `ValidatorSeverity`. `decisionLinkOf(element,
+doc)` reads a business rule task's decision link in any spelling.
 
 Text preservation: `mutateDoc` returns the text to store as `result.xml`:
 the original text of everything the ops did not change (see [What a write
@@ -228,8 +215,8 @@ import of a Node builtin or a reference to `process`, `Buffer`, `global`,
 also checks that both entries and their types resolve for a strict
 TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
 `test/isomorphic.test.ts` runs the browser bundle in a vm context without any
-Node global and compares `applyToXml` (also with the design profile and a
-host validator), `layoutXml` (both engines), `validateXml`, `showXml`,
+Node global and compares `applyToXml` (also with host validators),
+`layoutXml` (both engines), `validateXml`, `showXml`,
 `findXml`, `metricsXml` and `renderSvg` with Node, byte for byte; it also loads an ESM
 split bundle and checks which profile chunks a call loads.
 
@@ -254,8 +241,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 887.2 KB | 280.3 KB | 899 / 284 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 642.6 KB | 204.0 KB | 650 / 206 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 865.8 KB | 273.2 KB | 883 / 279 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 630.6 KB | 199.9 KB | 643 / 204 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
@@ -270,5 +257,5 @@ is only in `@miragon/bpmn-cli/node`.
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import. The guide is the exception:
 importing any one of `guideShort`, `ERROR_CATALOGUE`, `kindsJson`,
-`kindsText` or `guideText` adds 118 to 141 KB minified (35 to 42 KB gzip)
+`kindsText` or `guideText` adds 116 to 140 KB minified (35 to 43 KB gzip)
 to `applyToXml`.

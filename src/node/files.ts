@@ -26,12 +26,9 @@
  * that the characters of an ISO-8859-1 / Windows-1252 file survive; every
  * write is UTF-8, and a changed result declares UTF-8 (src/encoding.ts).
  *
- * Validation profile: unless `contentRepo` is given (or the profile is
- * `none`), the design-iq content repository of the file being written or
- * checked is looked up on disk (src/node/repo.ts: bpmiq.yml and the
- * repository's model ids) and handed to the core, which runs the design
- * profile for its models (`--profile auto`); the validators see that file as
- * `ctx.file`.
+ * Validators (MutationOptions.validators): they see the file being written
+ * (the `out` target with `out`) or checked as `ctx.file`, unless `file` names
+ * another.
  */
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -40,8 +37,6 @@ import { declaredEncoding, isUtf8 } from '../encoding.js';
 import { CliError, ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
-import type { ContentRepo } from '../platform/repo.js';
-import { contentRepoOf } from './repo.js';
 
 /** Where and whether the node layer writes the result of the in-memory pipeline. */
 export interface FileWriteOptions {
@@ -117,25 +112,19 @@ export async function writeAtomic(file: string, content: string): Promise<void> 
   await rename(tmp, file);
 }
 
-/** What the core gets to know about the file (MutationOptions.file / contentRepo). */
+/** What the core gets to know about the file (MutationOptions.file). */
 interface FileContext {
   file?: string;
-  contentRepo?: ContentRepo;
 }
 
-/** The file the validators see and its content repository (looked up unless given or the profile is none). */
-function fileContext(file: string | undefined, opts: { profile?: string; contentRepo?: ContentRepo; file?: string }): FileContext {
+/** The file the validators see (`ctx.file`): opts.file, else the file written or checked. */
+function fileContext(file: string | undefined, opts: { file?: string }): FileContext {
   const named = opts.file ?? file;
-  const contentRepo = opts.contentRepo ?? (named && opts.profile !== 'none' ? contentRepoOf(named) : undefined);
-  return { ...(named ? { file: named } : {}), ...(contentRepo ? { contentRepo } : {}) };
+  return named ? { file: named } : {};
 }
 
 /** Runs `compute` (an in-memory pipeline call) and writes its XML to opts.out ?? doc.file unless dryRun. */
-async function toFile(
-  doc: Doc,
-  opts: FileWriteOptions & { force?: boolean; profile?: string; contentRepo?: ContentRepo; file?: string },
-  compute: (context: FileContext) => Promise<MutationResult>,
-): Promise<MutationResult> {
+async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean; file?: string }, compute: (context: FileContext) => Promise<MutationResult>): Promise<MutationResult> {
   const target = opts.out ?? doc.file;
   if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
   if (opts.mustNotExist && target && !opts.force && !opts.dryRun) {
@@ -195,9 +184,8 @@ export async function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): P
 
 /**
  * `bpmn validate`: validation with the platform profile (auto-detected unless
- * `opts.platform`), the validation profile (`opts.profile`; auto: design for
- * the models of a design-iq content repository) and `opts.validators`, and a
- * layout dry run; nothing is written.
+ * `opts.platform`) and `opts.validators`, and a layout dry run; nothing is
+ * written.
  */
 export async function checkFile(file: string, opts: CheckOptions = {}): Promise<CheckResult> {
   const doc = await readDoc(file);

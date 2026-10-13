@@ -71,7 +71,7 @@ export interface ValidationResult {
   warnings: Warning[];
   /** the platform profile that ran (validateDoc with a platform option, mutations); its findings are among the warnings */
   platform?: PlatformSummary;
-  /** the validators that ran (the design profile, MutationOptions.validators; src/validators.ts); their findings are among the errors / warnings */
+  /** the validators that ran (MutationOptions.validators, CheckOptions.validators; src/validators.ts); their findings are among the errors / warnings */
   validators?: ValidatorReport[];
 }
 

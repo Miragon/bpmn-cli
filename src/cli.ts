@@ -34,7 +34,6 @@ import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { PROFILE_CHOICES, type ProfileChoice } from './platform/repo.js';
 import { mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport } from './report.js';
 import { findElements } from './view.js';
 
@@ -188,11 +187,6 @@ function printError(err: unknown, json: boolean | undefined): never {
 /* option helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-function profileArg(v: string): string {
-  if (!(PROFILE_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PROFILE_CHOICES.join(', ')}`);
-  return v;
-}
-
 /** --json, and --pretty to indent it. */
 function withJsonOptions(cmd: CommandType): CommandType {
   return cmd.option('--json', 'machine-readable output (compact JSON)').option('--pretty', 'with --json: indented JSON');
@@ -214,7 +208,6 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
   }
   return cmd
-    .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate: one start event, every node connected and in a lane, complete diagram) or none', profileArg)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
@@ -271,7 +264,6 @@ function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
     strict: !!o['strict'],
     ...(o['render'] !== undefined ? { render: String(o['render']) } : {}),
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
-    ...(o['profile'] ? { profile: o['profile'] as ProfileChoice } : {}),
   };
 }
 
@@ -1178,10 +1170,9 @@ withJsonOptions(
     if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
     return v;
   })
-  .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate) or none', profileArg)
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' };
+      const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' };
       const report = validationReport(file === '-' ? await checkDoc(await readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
       if (o['json']) {
         const { ok, ...rest } = report;
