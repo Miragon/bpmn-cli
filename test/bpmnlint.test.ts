@@ -14,9 +14,9 @@
  * temporary directory of their own.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/bpmnlint.js';
@@ -794,6 +794,41 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
     }
   });
 
+  // symbolic links to directories need rights on Windows
+  it.skipIf(process.platform === 'win32')('a model reached through a linked directory: the path as given first, then the physical directory (as git finds the repository)', async () => {
+    // physical paths, like the CLI's working directory (the temporary directory itself may be reached through a link)
+    const base = join(realpathSync(top), 'links');
+    mkdirSync(base, { recursive: true });
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': xml }, base);
+    // outside/mlink -> repo/models: as given, outside lies in no repository and has no .bpmnlintrc; the physical directory is the repository's
+    const outside = join(base, 'outside');
+    mkdirSync(outside);
+    symlinkSync(join(dir, 'models'), join(outside, 'mlink'), 'dir');
+    expect(findBpmnlintConfig(join(outside, 'mlink'))).toBe(join(dir, '.bpmnlintrc'));
+    // a subdirectory a write is about to create: from its deepest existing ancestor
+    expect(findBpmnlintConfig(join(outside, 'mlink', 'new', 'deeper'))).toBe(join(dir, '.bpmnlintrc'));
+    // a linked model file counts by the directory of the link (outside: nothing)
+    symlinkSync(join(dir, 'models', 'x.bpmn'), join(outside, 'flink.bpmn'), 'file');
+    expect((await checkFile(join(outside, 'flink.bpmn'), { lintFrom: outside })).validation.validators ?? []).toEqual([]);
+    const linked = await checkFile(join(outside, 'mlink', 'x.bpmn'), { lintProjectCode: true, lintFrom: outside });
+    expect(linked.validation.validators?.[0]).toMatchObject({ name: 'bpmnlint', detail: `.bpmnlintrc in ../${basename(dir)}` });
+    expect(codes(lintOf(linked.validation.errors))).toContain('label-required Activity_AfterCheck');
+    // stdin from the linked directory: the same lookup from lintFrom; the path as `..` resolves there
+    expect(await projectBpmnlint(undefined, { lintFrom: join(outside, 'mlink') })).toMatchObject({ name: 'bpmnlint', detail: '.bpmnlintrc in ..' });
+    // the opposite: repo/extlink -> a directory of another repository; as given the walk finds this repository's .bpmnlintrc, which stays
+    const other = repo({ extends: 'bpmnlint:all' }, { 'models/y.bpmn': xml }, base);
+    symlinkSync(join(other, 'models'), join(dir, 'extlink'), 'dir');
+    expect(findBpmnlintConfig(join(dir, 'extlink'))).toBe(join(dir, '.bpmnlintrc'));
+    expect(findBpmnlintConfig(join(other, 'models'))).toBe(join(other, '.bpmnlintrc'));
+    // nothing either way (no repository as given, none physically): nothing runs
+    const loose = join(base, 'loose');
+    mkdirSync(join(loose, 'models'), { recursive: true });
+    writeFileSync(join(base, '.bpmnlintrc'), '{}');
+    symlinkSync(join(loose, 'models'), join(outside, 'llink'), 'dir');
+    expect(findBpmnlintConfig(join(outside, 'llink'))).toBeUndefined();
+  });
+
   it('lintConfig false runs nothing; a document without a file looks up from lintFrom only', async () => {
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': await model(LINE) });
     expect(await projectBpmnlint(join(dir, 'x.bpmnl'), { lintConfig: false })).toBeUndefined();
@@ -879,6 +914,27 @@ describe('the resolver chain: bundled, shipped, project', () => {
       expect(Object.keys(loaded.resolved.rules).length, config).toBeGreaterThan(0);
       expect(loaded.project).toEqual([]);
     }
+  });
+
+  it('bpmnlintEngine() for library hosts resolves the same offline: camunda-compat configs the bundle lacks, synchronously; what neither tier knows keeps the bundled resolver\'s error', async () => {
+    const engine = bpmnlintEngine();
+    const xml = (await applyToXml((await newXml({ processName: 'Order', target: 'camunda8' })).xml, LINE)).xml;
+    for (const config of ['camunda-cloud-8-5', 'camunda-platform-7-20']) {
+      const rc = { extends: [`plugin:camunda-compat/${config}`] };
+      const resolved = await resolveBpmnlintConfig(engine, rc);
+      expect(resolved.unavailable, config).toEqual([]);
+      // the rules a .bpmnlintrc with the same configuration gets through the chain, and the same findings
+      const dir = repo(rc, { 'x.bpmn': xml });
+      const { loaded } = await chainOf(dir, false);
+      expect(resolved.rules, config).toEqual(loaded.resolved.rules);
+      expect(Object.keys(resolved.rules).length, config).toBeGreaterThan(0);
+      const library = (await checkDoc(await Doc.fromXml(xml), { validators: [bpmnlintValidator(engine, resolved)] })).validation;
+      const file = (await checkFile(join(dir, 'x.bpmn'))).validation;
+      expect(codes(lintOf([...library.errors, ...library.warnings])), config).toEqual(codes(lintOf([...file.errors, ...file.warnings])));
+    }
+    expect(engine.resolver.resolveConfig('bpmnlint-plugin-camunda-compat', 'camunda-cloud-8-5')).toMatchObject({ rules: expect.any(Object) });
+    expect(() => engine.resolver.resolveConfig('bpmnlint-plugin-camunda-compat', 'camunda-cloud-99-0')).toThrow('unknown config <bpmnlint-plugin-camunda-compat/camunda-cloud-99-0>');
+    expect(() => engine.resolver.resolveRule('bpmnlint-plugin-acme', 'topic')).toThrow('unknown rule <bpmnlint-plugin-acme/topic>');
   });
 
   it('a project plugin runs from the repository\'s node_modules (named in the detail); a config the project answers pins its package', async () => {
@@ -970,6 +1026,98 @@ describe('the resolver chain: bundled, shipped, project', () => {
     expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([
       'plugin:bad/recommended left out: bpmnlint-plugin-bad fails to load: cannot start  (Fix or reinstall bpmnlint-plugin-bad; --no-lint-config skips bpmnlint.)',
     ]);
+  });
+});
+
+describe('a long-running host: the load cache follows what the .bpmnlintrc left out or read from the project', () => {
+  const ALWAYS = "module.exports = () => ({ check(node, reporter) { if (node.$type === 'bpmn:Process') reporter.report(node.id, 'always'); } });";
+  const descriptor = (prefix: string, uri = `http://${prefix}`) => JSON.stringify({ name: prefix.toUpperCase(), prefix, uri, types: [] });
+
+  it('a plugin or moddle package installed after the hint, and a descriptor fixed or edited, are picked up by the next call in the same process', async () => {
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:local/recommended'], moddleExtensions: { y: './tools/y.json', z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE), 'tools/y.json': '{ broken' });
+    const opts = { lintProjectCode: true, lintFrom: dir };
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    expect(await left()).toEqual([
+      'plugin:local/recommended: bpmnlint-plugin-local is not installed (looked up from .)',
+      expect.stringMatching(/^y: cannot be read \(/),
+      'z: not installed (looked up from .); bpmn-cli brings camunda-bpmn-moddle/resources/camunda.json and zeebe-bpmn-moddle/resources/zeebe.json only',
+    ]);
+    // the hint's npm i -D: the plugin runs from the next call on
+    plugin(dir, 'bpmnlint-plugin-local', { configs: { recommended: { rules: { always: 'warn' } } }, rules: { always: ALWAYS } });
+    expect(await left()).toEqual([expect.stringMatching(/^y: cannot be read/), expect.stringMatching(/^z: not installed/)]);
+    expect(codes(lintOf((await checkFile(join(dir, 'x.bpmn'), opts)).validation.warnings))).toContain('local/always Process_Order');
+    // the descriptor fixed, the moddle package installed
+    writeFileSync(join(dir, 'tools', 'y.json'), descriptor('y'));
+    expect(await left()).toEqual([expect.stringMatching(/^z: not installed/)]);
+    mkdirSync(join(dir, 'node_modules', 'z-moddle', 'resources'), { recursive: true });
+    writeFileSync(join(dir, 'node_modules', 'z-moddle', 'resources', 'z.json'), descriptor('z'));
+    expect(await left()).toEqual([]);
+    // nothing changed: the same load; an edited descriptor of the project: a new load with it
+    const rc = join(dir, '.bpmnlintrc');
+    const before = await loadBpmnlint(rc, { projectCode: true, from: dir });
+    expect(await loadBpmnlint(rc, { projectCode: true, from: dir })).toBe(before);
+    expect(before.ok && Object.keys(before.resolved.moddleExtensions)).toEqual(['y', 'z']);
+    writeFileSync(join(dir, 'tools', 'y.json'), descriptor('y', 'http://example.com/y/2'));
+    const edited = await loadBpmnlint(rc, { projectCode: true, from: dir });
+    expect(edited).not.toBe(before);
+    expect(edited.ok && edited.resolved.moddleExtensions['y']).toMatchObject({ uri: 'http://example.com/y/2' });
+    expect(await loadBpmnlint(rc, { projectCode: true, from: dir })).toBe(edited);
+  });
+
+  it('a project plugin that failed to load is loaded again once it is fixed; a library host without lintProjectCode gets the hint for the installed package', async () => {
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:bad/recommended'] }, { 'x.bpmn': await model(LINE) });
+    const pkg = plugin(dir, 'bpmnlint-plugin-bad', { main: "throw new Error('cannot start');" });
+    const left = async (lintProjectCode: boolean) => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode, lintFrom: dir }))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    expect(await left(true)).toEqual(['plugin:bad/recommended: bpmnlint-plugin-bad fails to load: cannot start']);
+    writeFileSync(join(pkg, 'index.js'), `module.exports = { configs: { recommended: { rules: { always: 'error' } } } };`);
+    writeFileSync(join(pkg, 'rules', 'always.js'), ALWAYS);
+    expect(await left(true)).toEqual([]);
+    // the host that does not run project code: not installed -> installed changes the reason
+    const other = repo({ extends: ['plugin:later/recommended'] });
+    const hostLeft = async () => (await projectBpmnlintSettings(join(other, 'x.bpmn'), { lintFrom: other }))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    expect(await hostLeft()).toEqual(['plugin:later/recommended: bpmnlint-plugin-later is not installed (looked up from .)']);
+    plugin(other, 'bpmnlint-plugin-later', { configs: { recommended: { rules: {} } } });
+    expect(await hostLeft()).toEqual(['plugin:later/recommended: bpmnlint-plugin-later is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)']);
+  });
+
+  it('a plugin and a moddle package found above the repository, then installed inside it as the hint says, are used from the next call (Node remembers where it found a package)', async () => {
+    // a monorepo parent or ~ with its own node_modules
+    const parent = join(top, 'above');
+    const moddle = (base: string) => {
+      mkdirSync(join(base, 'node_modules', 'z-moddle', 'resources'), { recursive: true });
+      writeFileSync(join(base, 'node_modules', 'z-moddle', 'resources', 'z.json'), descriptor('z'));
+    };
+    plugin(parent, 'bpmnlint-plugin-outer', { configs: { recommended: { rules: { always: 'warn' } } }, rules: { always: ALWAYS } });
+    moddle(parent);
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:outer/recommended'], moddleExtensions: { z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE) }, parent);
+    const opts = { lintProjectCode: true, lintFrom: dir };
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((u) => `${u.name}: ${u.reason} (${u.hint})`);
+    expect(await left()).toEqual([
+      expect.stringMatching(/^plugin:outer\/recommended: bpmnlint-plugin-outer resolves outside the repository \(.*\(Install it inside the repository \(npm i -D bpmnlint-plugin-outer\)\.\)$/),
+      expect.stringMatching(/^z: not installed \(looked up from \.\);.*\(Install its package next to the \.bpmnlintrc/),
+    ]);
+    // nothing changed: the same answer
+    expect(await left()).toHaveLength(2);
+    plugin(dir, 'bpmnlint-plugin-outer', { configs: { recommended: { rules: { always: 'error' } } }, rules: { always: ALWAYS } });
+    expect(await left()).toEqual([expect.stringMatching(/^z: not installed/)]);
+    const loaded = await loadBpmnlint(join(dir, '.bpmnlintrc'), { projectCode: true, from: dir });
+    expect(loaded.ok && loaded.project).toEqual(['bpmnlint-plugin-outer@1.2.0']);
+    expect(loaded.ok && loaded.resolved.rules['outer/always']).toMatchObject({ severity: 'error' });
+    moddle(dir);
+    expect(await left()).toEqual([]);
+    const checked = (await checkFile(join(dir, 'x.bpmn'), opts)).validation;
+    expect(codes(lintOf(checked.errors))).toContain('outer/always Process_Order');
+  });
+
+  it('a package or descriptor that appears while the load runs is seen by the next call (the state is taken before the load looks)', async () => {
+    // a project plugin that writes the moddle descriptor when it is required: npm i finishing while the host lints
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:setup/recommended'], moddleExtensions: { z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE) });
+    const z = join(dir, 'node_modules', 'z-moddle', 'resources');
+    plugin(dir, 'bpmnlint-plugin-setup', { main: `require('fs').mkdirSync(${JSON.stringify(z)}, { recursive: true }); require('fs').writeFileSync(${JSON.stringify(join(z, 'z.json'))}, ${JSON.stringify(descriptor('z'))});\nmodule.exports = { configs: { recommended: { rules: {} } } };` });
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir }))!.unavailable.map((u) => u.name);
+    expect(await left()).toEqual(['z']);
+    expect(await left()).toEqual([]);
+    expect(await left()).toEqual([]);
   });
 });
 
@@ -1322,6 +1470,28 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(off.code, off.err).toBe(0);
     const add = inGone(['add', join(dir, 'x.bpmn'), 'task', 'Ship', '--after', 'Activity_AfterCheck', '--dry-run']);
     expect(add.code, add.err).toBe(0);
+  });
+
+  it.skipIf(process.platform === 'win32')('a model reached through a linked directory from outside its repository runs the repository\'s .bpmnlintrc; a link inside a repository keeps that repository\'s', async () => {
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': xml });
+    const outside = join(top, 'cli-links');
+    mkdirSync(join(outside, 'ext'), { recursive: true });
+    writeFileSync(join(outside, 'ext', 'y.bpmn'), xml);
+    symlinkSync(join(dir, 'models'), join(outside, 'mlink'), 'dir');
+    symlinkSync(join(outside, 'ext'), join(dir, 'extlink'), 'dir');
+    const linked = bpmn(outside, ['validate', 'mlink/x.bpmn']);
+    expect(linked.code, linked.err).toBe(2);
+    expect(linked.out).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(linked.out).toContain(`validator bpmnlint (.bpmnlintrc in ../${basename(dir)}): 1 error(s), 0 warning(s) in the file\n`);
+    // a new file in a subdirectory the write creates behind the link: the same .bpmnlintrc
+    const created = bpmn(outside, ['new', 'mlink/sub/n.bpmn', '--name', 'Order']);
+    expect(created.code, created.err).toBe(0);
+    expect(created.out).toContain(`validator bpmnlint (.bpmnlintrc in ../${basename(dir)}): 2 error(s), 0 warning(s) in the result`);
+    expect(existsSync(join(dir, 'models', 'sub', 'n.bpmn'))).toBe(true);
+    const inRepo = bpmn(dir, ['validate', 'extlink/y.bpmn']);
+    expect(inRepo.code, inRepo.err).toBe(2);
+    expect(inRepo.out).toContain('validator bpmnlint (.bpmnlintrc in .): 1 error(s), 0 warning(s) in the file\n');
   });
 
   it('a write looks the .bpmnlintrc up from the file it writes (-o); a model from stdin without -o from the working directory', async () => {

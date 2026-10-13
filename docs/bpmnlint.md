@@ -13,6 +13,13 @@ caused it and fixes it in the same batch, not later in CI.
   repository only the model's own directory counts, so a `.bpmnlintrc` in `~` or `/tmp` does not
   apply to every model below it. A `.git` file that names no git directory (a moved worktree)
   makes no repository, as for git.
+- A model whose directory is reached through a symbolic link: the lookup takes the path as given
+  first. Where that finds no `.bpmnlintrc`, it walks again from the physical directory, where git
+  finds the repository. So `bpmn validate mlink/x.bpmn` with `mlink -> repo/models` runs the
+  repository's `.bpmnlintrc` (`validator bpmnlint (.bpmnlintrc in ../repo)`), also for a new file
+  in a subdirectory the write creates (`bpmn new mlink/sub/x.bpmn`), and a link inside a
+  repository to a directory outside it (`repo/extlink -> ../ext`) keeps the repository's. A linked
+  model file counts by the directory of the link, as git counts the working directory.
 - Whose repository it is does not matter for the lookup. In a repository of another user a
   `.bpmnlintrc` can only switch on rules bpmn-cli ships (element-id-naming then also sets the
   [id conventions](#id-conventions) of new ids) and name moddle descriptors, which are read as
@@ -268,9 +275,9 @@ the CLI, only in a repository of its user).
 So a repository's `.bpmnlintrc` can make `bpmn validate` run the repository's plugin code, as
 `npx bpmnlint` would. In Claude Code the plugin's skill pre-approves `bpmn` commands, so that code
 runs without a prompt. In a repository you do not trust (a clone, an unpacked archive with its
-`.git`), pass `--no-lint-config` (the skill tells the agent to). Project plugins stay loaded in a
-long-running host until it restarts, and so does what the `.bpmnlintrc` could not resolve (see
-Limits).
+`.git`), pass `--no-lint-config` (the skill tells the agent to). A project plugin that loaded stays
+loaded in a long-running host until it restarts; what the `.bpmnlintrc` could not resolve is
+looked up again by the next call, with one exception (see Limits).
 
 ## moddleExtensions
 
@@ -346,7 +353,10 @@ its errors block a write with `E_VALIDATION`), and they give the core the id con
 `element-id-naming`. The core has the validator itself (`bpmnlintValidator`,
 `resolveBpmnlintConfig`) and reads the conventions with `idConventionsFromLint`; bpmnlint and the
 plugin's naming helpers are injected. A host that lints with a configuration of its own passes the
-conventions of that same configuration (`conventions`), or its own lint reports bpmn-cli's ids. See
+conventions of that same configuration (`conventions`), or its own lint reports bpmn-cli's ids.
+`bpmnlintEngine()` gives a host without a `.bpmnlintrc` the first two sources of
+[Which rules are available](#which-rules-are-available), offline and without project code, so
+`plugin:camunda-compat/camunda-cloud-8-5` resolves there as it does in a `.bpmnlintrc`. See
 [library.md](library.md#building-blocks) and [Advisory validators](validators.md#advisory-validators).
 
 ## Limits
@@ -355,7 +365,11 @@ conventions of that same configuration (`conventions`), or its own lint reports 
   `bpmn validate` lists them, and `bpmn set <file> <id> id=<Id>` renames one.
 - For a rule the bundle lacks, the project's plugin version can mix with the shipped one of the
   same package; the validator line names the project plugins that ran.
-- A long-running host keeps a project plugin loaded after it changed; restart it. It also keeps
-  what it could not resolve, since the load is cached on the `.bpmnlintrc`'s text: after
-  installing a missing plugin or moddle package, or editing a moddle descriptor, restart it (or
-  change the `.bpmnlintrc`).
+- A long-running host keeps a project plugin that loaded after it changed; restart it. The load
+  is cached on the `.bpmnlintrc`'s text and on what it left out or read from the project: a
+  plugin or moddle package installed after the hint (also inside the repository after one above
+  it was found), a plugin that failed to load and was fixed or reinstalled, and an edited moddle
+  descriptor of the project are picked up by the next call. A fix inside a module the failed one
+  requires in turn is not seen; reinstalling the plugin is. A failed plugin reinstalled as a
+  version whose entry module moved (another `main`) needs a restart: Node keeps the
+  `package.json` it read, so until then the host reports the plugin as not installed.

@@ -166,7 +166,10 @@ validators the file they write or check (`ctx.file`, the `out` target with
 The project's bpmnlint ([bpmnlint](bpmnlint.md)): every file helper runs
 the nearest `.bpmnlintrc` above the file it writes or checks (up to the
 repository root, whoever owns it; outside a git repository only the file's
-directory) as an advisory validator, `FileBpmnlintOptions`:
+directory; the path as given, then the physical directory where the
+file's directory is reached through a symbolic link; a linked file counts
+by the directory of the link) as an advisory validator,
+`FileBpmnlintOptions`:
 `lintConfig` (a path, relative to `lintFrom`; `false` runs nothing),
 `lintFrom` (where a document without a file looks it up, and the base of
 the paths in messages; without it such a document gets no lookup),
@@ -180,10 +183,14 @@ so a library host runs only what bpmn-cli ships; the CLI passes true). A
 host that passes its own validator named `bpmnlint` gets no second one. The
 parts: `findBpmnlintConfig(dir)`,
 `loadBpmnlint(path, { explicit, projectCode, from })` (cached on the file's
-text, also what it could not resolve: a long-running host restarts after
-installing a missing plugin or moddle package or editing a moddle
-descriptor; `engine.resolver` is the resolver chain, `used` says which tier
-answered what),
+text and on what it left out or read from the project: a plugin or moddle
+package installed after the hint, also inside the repository after one
+above it was found, a failed plugin fixed or reinstalled and an edited
+moddle descriptor are loaded by the next call; a project plugin that loaded
+stays in Node's require cache until the host restarts, and so does the
+`package.json` of a failed plugin whose reinstall moved its entry module;
+`engine.resolver` is the resolver chain, `used` says which tier answered
+what),
 `projectBpmnlint(file, opts)` (the validator, or undefined),
 `projectBpmnlintSettings(file, opts)` (the effective rule settings: the
 same lookup, flags and errors), `projectIdConventions(file, opts)` (the id
@@ -192,7 +199,9 @@ conventions of its `element-id-naming`, its `W_CONFIG_IGNORED` notes, the
 `unavailable` where the `.bpmnlintrc` could not be loaded; the file helpers
 pass these conventions to the core unless the host passes `conventions`
 itself or a validator named `bpmnlint` of its own) and `bpmnlintEngine()`
-(bpmnlint's `Linter` with the plugin's bundled resolver, and the plugin:
+(bpmnlint's `Linter` with the offline part of that chain: the plugin's
+bundled resolver, then the camunda-compat bpmn-cli ships, so every
+camunda-compat config resolves, no project code; and the plugin:
 `getDefaultLintConfig`, `naming`).
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
@@ -269,10 +278,14 @@ too, and so is a descriptor `BpmnModdle` rejects),
 (`BPMNLINT_VALIDATOR` is its name, `BPMNLINT_COVERS` the lint warnings it
 replaces). The core does not import bpmnlint: `engine` is
 `{ Linter, resolver }`. In Node, `bpmnlintEngine()` from
-`@miragon/bpmn-cli/node` gives it (it requires the plugin, and bpmnlint
-from the plugin's own location, so the `Linter` and the rules are one
-bpmnlint); a browser host bundles `bpmnlint`'s `Linter` and the plugin's
-`createBundledResolver()` itself:
+`@miragon/bpmn-cli/node` gives it (it requires the plugin's CJS build, and
+bpmnlint from the plugin's own location, so the `Linter` and the rules are
+one bpmnlint; its resolver answers synchronously, like the bundled one, and
+also resolves the camunda-compat configs the bundle lacks,
+`camunda-cloud-8-5`, `camunda-platform-7-20`); a browser host bundles
+`bpmnlint`'s `Linter` and the plugin's `createBundledResolver()` itself,
+which knows only `camunda-platform-7-24` and `camunda-cloud-8-10` of
+camunda-compat:
 
 ```ts
 import { applyToXml, bpmnlintValidator, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
@@ -354,7 +367,7 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 941.8 KB | 300.2 KB | 948 / 302 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 942.0 KB | 300.3 KB | 948 / 302 KB | with the entry |
 | `applyToXml` only (tree-shaken) | 663.5 KB | 211.6 KB | 670 / 214 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
