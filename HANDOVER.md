@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), and the E_VALIDATION advice that reads the refusal)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), and the E_VALIDATION advice that reads the refusal, and flows that follow every end change)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2090 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2104 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,127 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Flows follow every end change (2026-10-13, `fix/flows-follow-every-end-change`, follow-ups of #32 and #34)
+
+Four leftovers of #32 ("Left out, for later") and #34 ("Pre-existing"), all
+in the test whether a flow id names its ends and in the change report.
+
+- **An end renamed earlier** (`ops/flows.ts endLabels`, `recordFormerEnd`,
+  `idNamesEnds`; `Doc.recordFormerEnd`): `idNamesEnds` named an end only as
+  it was called then (labelOf, its id's stem, formerLabels). After `set
+  Activity_Check id=Activity_Verify` (in the batch or a command before) or
+  `set name=` on an end whose id says nothing, `Flow_CheckToOk` neither
+  followed a later splice nor was reported with ids kept. It now also tries
+  (a) the end's name where its id speaks (left out where its words are a
+  label's, `slugify` equal, so a file whose ids are their names' slugs does
+  the same work as before); this covers `set id=` of a named end across
+  commands; and (b) the id and labels `set` recorded before it changed an
+  end's `id` or `name` in the running batch or op on its own
+  (`Doc.formerEndsOf`, forgotten where `runBatch` and `runOp` alone forget
+  the kept flows), with the connection request built from the recorded id
+  (stemTo, idPair and scopedTo are built from ids). It records on change,
+  only for a node with sequence flows; no snapshot of every end. A retype
+  that builds a new element (`swapType`) hands the record on
+  (`Doc.replaceElement`). followEnds renames such a flow after its current
+  ends (`Flow_VerifyToLog`), staleFlowWarning reports it against them.
+- **A flow without id** (`followEnds`): `idNamesEnds` is false for an empty
+  id; `followEnds` gives a flow without id whose ends change an id in both
+  modes, from its new ends (`allocateId`, no Rename: there was no old id) or
+  the `--flow-id` of the `add` that splices into it (claimed like the id of
+  a flow add creates: E_INVALID_ID / E_DUPLICATE_ID alike; no
+  W_OPTION_IGNORED then), and returns `''`, which `renamedNote` turns into
+  ` (id added: it had none)` on its one change entry; `Doc.keepsFlowId` is
+  false for it (a move does not put it back); `createSequenceFlow` claims no
+  undefined id. `add`, `split`, `apply` and a bridge into it ran into
+  E_INTERNAL (exit 70); the incremental layout now draws it by that id.
+  `format.ts` prints `(no id)` for a removed one (was `undefined`),
+  `--summary` leaves it out (`report.ts uniqueIds`).
+- **The report names a flow by its own id** (`result.ts about`, `replaced`):
+  a splice renamed the spliced flow, the new flow took the freed id, and
+  `ChangeSet.rename` renamed every entry with that id, the new flow's too:
+  `created sequenceFlow Flow_CheckToCheck` twice in the text and `--json`,
+  `--summary` without the changed one, no `renamed`. Change entries and
+  renames now carry their element in a WeakMap (`about`; JSON and the
+  entries' shape unchanged): `flowChange(flow, detail?)` and `changeOf`
+  record it (the six `{ ...flowChange(x), detail }` sites pass the detail
+  instead, so they keep it), `Doc.recordRename` / `recordRegenerated` take
+  it, and `ChangeSet.rename` renames an entry with the old id only when it
+  has no element or the renamed one (also in a batch's merge). A retype
+  that builds a new element records it as the old one's successor
+  (`Doc.replaceElement` -> `replaced`), so the entries an earlier op made
+  for the old element still follow its regenerated id under declared
+  conventions (`[add, set doc=, retype]` names `userTask_checkInvoice`
+  everywhere, as on main). The file was always right.
+- **One command per flow for a splicing `add --flow-id` with ids kept**
+  (`Doc.preferFlowId`, `KeptFlow.preferred`, `flowIdIgnoredHint`):
+  `W_OPTION_IGNORED` named `bpmn set <file> F id=<flowId>` and
+  `W_FLOW_ID_STALE` `bpmn set <file> F id=<speaking>`; following both failed
+  (E_NOT_FOUND). Where the splice kept the flow, add records the given id
+  with the node the flow then ends at; `staleFlowWarning` suggests it while
+  the flow still ends there and the id is valid and free (else the speaking
+  id), and the `W_OPTION_IGNORED` hint says `W_FLOW_ID_STALE names the
+  command that renames F`. Where no W_FLOW_ID_STALE comes for that flow (its
+  id still names its new ends, a later op put it back or renamed it),
+  `reportStaleFlows` gives the hint its own command back, or none where the
+  flow no longer has that id or the `--flow-id` is taken. Default mode and a
+  flow that was not kept (hashed, or created in the batch): unchanged.
+- Docs: guide (`W_FLOW_ID_STALE`, `W_OPTION_IGNORED`, the `--flow` rule,
+  `kinds --section ids` renames; `guide --short` unchanged, 4,644 bytes),
+  reference.md (Ids, flow options), ops.md, migrating.md.
+
+Evidence:
+
+- `npm run gate` (rebased on #55, #52 and #53): 2,104 tests (+246 opt-in;
+  2,090 on main; 14 new in keep-flow-ids, drawn-ids, speaking-ids,
+  conventions-ids and conventions-declared, 11 of them fail on main, 3
+  guards pass on both: a renamed end changes nothing else, the `--flow-id`
+  fallbacks, and every entry names the final id after `[add, change,
+  retype]` under declared conventions), isomorphism check, layout
+  regression 444, fuzz 12 x 15: 173 ok, 7 refused, 0 errors.
+- Against main, a build of each, the same seeded batches (the fuzzer's
+  semantic steps, a `set id=` before a quarter of them, a second step chained
+  to almost a third; with and without ids kept, every third step with the
+  layout too) on tools/scenarios and test/fixtures: 164 files, 1,968
+  batches, 5,248 comparisons. 5,017 identical, 181 refused alike, 50 differ,
+  each only in flow ids (by default the same file once the new ids are mapped
+  back, with ids kept the same file and result plus W_FLOW_ID_STALE): 32
+  where an end got another id in an earlier command and its name still
+  names the flow (16 renamed, 16 reported), 18 where it got it earlier in
+  the batch. None of the 164 files as read has a flow the wider test reads
+  differently. `tools/speaking-ids.mjs` on the same files: identical output
+  (18 renamed flows on both); `layout-regress --compare`: 0 better, 0 worse;
+  `tools/roundtrip.mjs`: identical.
+- With the conventions of a bare element-id-naming: seeded batches on
+  tools/scenarios (920, 166 with a retype; 1,840 comparisons) differ in 2,
+  both a `set name=` earlier in the batch (renamed / reported); `[add, set
+  name=, retype]` after the first task of each of 112 files gives the same
+  result as main in all of them.
+- With ids kept, the same 1,968 batches (`set id=` or `name=` before 30 %):
+  no E_INTERNAL, no flow id changed, one rename command per flow, every
+  W_FLOW_ID_STALE command can be followed (295 hints; 281 on main). 4
+  followed ids no longer name their ends on the next read (3 on main): the
+  mixed-style drift in #32's Left out (polish-*.bpmn, `f` and `Flow_`); the
+  fourth is a flow only this branch reports.
+- Bundle (rebased on #55, #52 and #53): whole entry 927.5 / 295.2 -> 930.1 /
+  296.1 KB (minified / gzip), `applyToXml` only 654.3 / 208.3 -> 656.1 /
+  209.0 KB, the table in `docs/library.md` too; budgets unchanged.
+- Runtime: by default `idNamesEnds` makes the same `derivedBases` calls as
+  before where an end's name gives its id's words (one `slugify` more per
+  named end); only an end with a different name, or one `set` renamed
+  earlier in the batch, adds a label or an id to try. Under a machine load
+  of 100 to 190 (other worktrees), medians of 15 interleaved runs, base ->
+  branch: 60 splices on a 200-flow chain 206 -> 203 ms following, 211 -> 212
+  ms with ids kept, 30 `set id=` + splice pairs 147 -> 150 ms, the 60
+  splices through `applyToXml` 271 -> 269 ms.
+
+Left out: `set name=` on an end whose id says nothing, followed by an end
+change in a later command, and `set id=` on an end without a name (or whose
+name gives no id words) followed by an end change in a later command:
+nothing records the old name or id across commands, so such a flow keeps
+its id without a word (by default too); a retype or trigger change that
+changes an unnamed end's kind word (`Task` -> `UserTask`) before an end
+change in the same batch (not recorded; only `set id=` / `name=` are).
 
 ## The E_VALIDATION advice reads the refusal (2026-10-13, `fix/e-validation-hint`)
 

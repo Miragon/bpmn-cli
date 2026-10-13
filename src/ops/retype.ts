@@ -404,6 +404,8 @@ function swapType(doc: Doc, el: El, to: KindDef, cs: ChangeSet): El {
       ref.holder.set(ref.prop, next);
     }
   }
+  // what the batch recorded about the element (its change entries, what it was called as a flow end) is about the new one
+  doc.replaceElement(el, next);
   doc.invalidate();
   return next;
 }

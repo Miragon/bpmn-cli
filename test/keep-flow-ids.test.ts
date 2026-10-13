@@ -434,3 +434,146 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
     expect(staleLines(moved.warnings)).toEqual(['Flow_AToB Activity_A->Activity_Y => Flow_AToY']);
   });
 });
+
+describe('an end renamed or named earlier in the change, and --flow-id on a splice', () => {
+  /** CHAIN with a Camunda Modeler id for Check (its id says nothing: it is named by its name) and an unnamed Done. */
+  const HASHED = CHAIN.replace(/Activity_Check/g, 'Activity_0abc123').replace('<bpmn:endEvent id="Event_Done" name="Done">', '<bpmn:endEvent id="Event_Done">');
+
+  /** `old -> new` of the renames by default, and `flow source->target => suggested id` of each W_FLOW_ID_STALE with ids kept. */
+  async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
+    const follow = await Doc.fromXml(xml);
+    const renamed = runOps(follow, ops).renames.map((r) => `${r.from} -> ${r.to}`);
+    const keep = await kept(ops, xml);
+    expect(keep.renames).toBe(0);
+    return { renamed, stale: staleLines(keep.warnings) };
+  }
+
+  it('an end `set id=` gave another id earlier in the batch: its flows follow, or with ids kept are reported, by default and with ids kept', async () => {
+    const renamedThenSpliced = await bothModes(CHAIN, [
+      { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Verify' } },
+      { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' },
+    ]);
+    expect(renamedThenSpliced).toEqual({ renamed: ['Flow_CheckToOk -> Flow_VerifyToLog'], stale: ['Flow_CheckToOk Activity_Verify->Activity_Log => Flow_VerifyToLog'] });
+    // --flow names the flow by its id, the target end too
+    expect(await bothModes(CHAIN, [
+      { op: 'set', id: 'Gateway_Ok', values: { id: 'Gateway_Approved' } },
+      { op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk' },
+    ])).toEqual({ renamed: ['Flow_CheckToOk -> Flow_CheckToAudit'], stale: ['Flow_CheckToOk Activity_Check->Activity_Audit => Flow_CheckToAudit'] });
+    // an unnamed end: only the id it had tells (Flow_BookToDone, Done renamed Finished); a remove bridges to it
+    expect(await bothModes(HASHED, [
+      { op: 'set', id: 'Event_Done', values: { id: 'Event_Finished' } },
+      { op: 'add', kind: 'task', name: 'Log', before: 'Event_Finished' },
+    ])).toEqual({ renamed: ['Flow_BookToDone -> Flow_BookToLog'], stale: ['Flow_BookToDone Activity_Book->Activity_Log => Flow_BookToLog'] });
+    expect(await bothModes(HASHED, [
+      { op: 'set', id: 'Event_Done', values: { id: 'Event_Finished' } },
+      { op: 'remove', ids: ['Activity_Book'] },
+    ])).toEqual({ renamed: ['Flow_OkToBook -> Flow_OkToFinished'], stale: ['Flow_OkToBook Gateway_Ok->Event_Finished => Flow_OkToFinished'] });
+  });
+
+  it('an end `set name=` named again (its id says nothing), and `set id=` in a command before (the end keeps its name): the same', async () => {
+    expect(await bothModes(HASHED, [
+      { op: 'set', id: 'Activity_0abc123', values: { name: 'Verify' } },
+      { op: 'add', kind: 'task', name: 'Log', after: 'Activity_0abc123' },
+    ])).toEqual({ renamed: ['Flow_CheckToOk -> Flow_VerifyToLog'], stale: ['Flow_CheckToOk Activity_0abc123->Activity_Log => Flow_VerifyToLog'] });
+    // two commands: the first renames Check, the second splices after it; Check is still named Check
+    const first = await applyToXml(await drawnDefault(), [{ op: 'set', id: 'Activity_Check', values: { id: 'Activity_Verify' } }]);
+    expect(first.xml).toContain('<bpmn:sequenceFlow id="Flow_CheckToOk" sourceRef="Activity_Verify" targetRef="Gateway_Ok" />');
+    const splice: Op[] = [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' }];
+    const renamed = await applyToXml(first.xml, splice);
+    expect(renamed.result.renamed).toEqual({ Flow_CheckToOk: 'Flow_VerifyToLog' });
+    expect(renamed.xml).toContain('<bpmndi:BPMNEdge id="Flow_VerifyToLog_di" bpmnElement="Flow_VerifyToLog">');
+    const keptIds = await applyToXml(first.xml, splice, { keepFlowIds: true });
+    expect(staleLines(keptIds.result.warnings.added)).toEqual(['Flow_CheckToOk Activity_Verify->Activity_Log => Flow_VerifyToLog']);
+    // the warning's command renames it; nothing is stale afterwards
+    const followed = await applyToXml(keptIds.xml, [{ op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_VerifyToLog' } }], { keepFlowIds: true });
+    expect(stale(followed.result.warnings.added)).toEqual([]);
+  });
+
+  it('a retype between the `set` and the end change (a new element of the new type) keeps what the end was called', async () => {
+    for (const retype of [{ op: 'retype', id: 'Activity_0abc123', kind: 'userTask' }, { op: 'retype', id: 'Activity_0abc123', kind: 'serviceTask' }] as Op[]) {
+      expect(await bothModes(HASHED, [
+        { op: 'set', id: 'Activity_0abc123', values: { name: 'Verify' } },
+        retype,
+        { op: 'add', kind: 'task', name: 'Log', after: 'Activity_0abc123' },
+      ])).toEqual({ renamed: ['Flow_CheckToOk -> Flow_VerifyToLog'], stale: ['Flow_CheckToOk Activity_0abc123->Activity_Log => Flow_VerifyToLog'] });
+    }
+  });
+
+  it('a renamed end changes nothing else: flows whose ends stay keep their ids, and a flow whose id names no ends stays', async () => {
+    // Book is renamed, the splice is after Check: Flow_CheckToOk follows as always, Flow_OkToBook and Flow_BookToDone keep their ids
+    const r = await bothModes(CHAIN, [
+      { op: 'set', id: 'Activity_Book', values: { id: 'Activity_Post', name: 'Post' } },
+      { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Check' },
+    ]);
+    expect(r).toEqual({ renamed: ['Flow_CheckToOk -> Flow_CheckToLog'], stale: ['Flow_CheckToOk Activity_Check->Activity_Log => Flow_CheckToLog'] });
+    const own = await bothModes(CHAIN.replace(/Flow_CheckToOk/g, 'Flow_Review'), [
+      { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Verify' } },
+      { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' },
+    ]);
+    expect(own).toEqual({ renamed: [], stale: [] });
+  });
+
+  it('--flow-id on a splice with ids kept: W_FLOW_ID_STALE suggests it, W_OPTION_IGNORED names no second command, and every hint can be followed', async () => {
+    for (const placement of [{ flow: 'Flow_CheckToOk' }, { after: 'Activity_Check' }]) {
+      const r = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Audit', ...placement, flowId: 'Flow_IntoAudit' }], { keepFlowIds: true });
+      const ignored = r.result.warnings.added.filter((w) => w.code === 'W_OPTION_IGNORED');
+      expect(ignored.map((w) => w.hint)).toEqual(['--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); W_FLOW_ID_STALE names the command that renames Flow_CheckToOk.']);
+      expect(staleLines(r.result.warnings.added)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Audit => Flow_IntoAudit']);
+      // every command the warnings name, in order: one per flow, none fails
+      const commands = r.result.warnings.added.flatMap((w) => [...(w.hint ?? '').matchAll(/`bpmn set <file> (\S+) id=(\S+)`/g)]);
+      expect(commands.map((m) => `${m[1]} -> ${m[2]}`)).toEqual(['Flow_CheckToOk -> Flow_IntoAudit']);
+      const followed = await applyToXml(r.xml, commands.map((m) => ({ op: 'set', id: m[1]!, values: { id: m[2]! } })), { keepFlowIds: true });
+      expect(followed.xml).toContain('<bpmn:sequenceFlow id="Flow_IntoAudit" sourceRef="Activity_Check" targetRef="Activity_Audit" />');
+    }
+    // by default the flow follows its ends and W_OPTION_IGNORED names the one rename, as before
+    const renamed = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoAudit' }]);
+    expect(renamed.result.warnings.added.map((w) => `${w.code}: ${w.hint}`)).toEqual([
+      'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with `bpmn set <file> Flow_CheckToAudit id=Flow_IntoAudit`.',
+    ]);
+  });
+
+  it('--flow-id with ids kept: a taken id, a later splice into the same flow or a flow that does not name its ends give the id its ends give, or the old command', async () => {
+    // taken: the speaking id
+    const taken = await kept([{ op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_StartToCheck' }]);
+    expect(staleLines(taken.warnings)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Audit => Flow_CheckToAudit']);
+    // the flow no longer ends at Audit: Log was put in between, so --flow-id no longer describes it
+    const later = await kept([
+      { op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoAudit' },
+      { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Check' },
+    ]);
+    expect(staleLines(later.warnings)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Log => Flow_CheckToLog']);
+    // a hashed flow keeps its id without going stale: W_OPTION_IGNORED keeps its own command
+    const hashed = await kept([{ op: 'add', kind: 'task', name: 'Pack', after: 'Activity_0k3x9qa', flowId: 'Flow_IntoPack' }], MODELER);
+    expect(hashed.warnings.map((w) => `${w.code}: ${w.hint}`)).toEqual([
+      'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with `bpmn set <file> Flow_1q2w3e4 id=Flow_IntoPack`.',
+    ]);
+  });
+
+  it('--flow-id with ids kept where no W_FLOW_ID_STALE comes: W_OPTION_IGNORED names its own command, or none where it could not be followed', async () => {
+    const hints = (ws: readonly Warning[]): string[] => ws.map((w) => `${w.code}: ${w.hint}`);
+    const own = (flow: string, id: string): string =>
+      `W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with \`bpmn set <file> ${flow} id=${id}\`.`;
+    const none = 'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node).';
+    // the kept flow still names its new ends: a task named Ok before the gateway Ok?, an unnamed gateway before the unnamed Gateway_1
+    expect(hints((await kept([{ op: 'add', kind: 'task', name: 'Ok', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoOk' }])).warnings)).toEqual([own('Flow_CheckToOk', 'Flow_IntoOk')]);
+    const unnamed = CHAIN.replace('<bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?"', '<bpmn:exclusiveGateway id="Gateway_1"').replace(/Gateway_Ok/g, 'Gateway_1').replace(/Flow_CheckToOk/g, 'Flow_CheckToGateway');
+    expect(hints((await kept([{ op: 'add', kind: 'parallelGateway', flow: 'Flow_CheckToGateway', flowId: 'Flow_IntoFork' }], unnamed)).warnings)).toEqual([own('Flow_CheckToGateway', 'Flow_IntoFork')]);
+    // a later op puts the flow back between its old ends (it was not made stale)
+    const putBack = await kept([
+      { op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoAudit', as: '$a' },
+      { op: 'remove', ids: ['$a'] },
+    ]);
+    expect(hints(putBack.warnings)).toEqual([own('Flow_CheckToOk', 'Flow_IntoAudit')]);
+    // a later op renames the flow, or takes the --flow-id: no command that would fail
+    const renamed = await kept([
+      { op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoAudit' },
+      { op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_Review' } },
+    ]);
+    expect(hints(renamed.warnings)).toEqual([none]);
+    const taken = await kept([
+      { op: 'add', kind: 'task', name: 'Ok', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoOk' },
+      { op: 'add', kind: 'task', id: 'Flow_IntoOk', name: 'X', in: 'Process_1' },
+    ]);
+    expect(hints(taken.warnings).filter((h) => h.startsWith('W_OPTION_IGNORED'))).toEqual([none]);
+  });
+});

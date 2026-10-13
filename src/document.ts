@@ -10,7 +10,7 @@
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
-import type { ChangeSet, Rename } from './result.js';
+import { about, replaced, type ChangeSet, type Rename } from './result.js';
 import { cutAt, editDistance, hasIdWords, IdRegistry, isValidId, MAX_ID, transliterate, typoTolerance } from './ids.js';
 import type { IdConventions } from './conventions.js';
 import { IdStyle, speakingStem, typeRequest, type IdRequest, type IdState } from './idstyle.js';
@@ -121,10 +121,26 @@ export interface BatchContext {
 /** A sequence flow's ends (sourceRef, targetRef) when a batch or an op on its own began (Doc.flowsBefore). */
 export type FlowEnds = readonly [El | undefined, El | undefined];
 
-/** A flow that kept its id (Doc.recordKeptFlow): the ends `A -> B` that id named, and the id. */
+/**
+ * A flow that kept its id (Doc.recordKeptFlow): the ends `A -> B` that id
+ * named, and the id; `preferred`: the id an op wanted for it while it ends
+ * at `target` (`add --flow-id` on a splice, Doc.preferFlowId), which
+ * W_FLOW_ID_STALE suggests.
+ */
 export interface KeptFlow {
   was: string;
   id: string;
+  preferred?: { id: string; target: El };
+}
+
+/**
+ * What a node was called as the end of sequence flows before `set` gave it
+ * another id or name in the running batch or op on its own
+ * (Doc.recordFormerEnd): its id and its labels (ops/flows.ts endLabels).
+ */
+export interface FormerEnd {
+  id: string;
+  labels: readonly string[];
 }
 
 /** What an element was when a retype or a trigger change first kept its id (Doc.recordIdState): its type and trigger, and its kind label. */
@@ -177,6 +193,8 @@ export class Doc {
   private renamedIds: Rename[] = [];
   /** flows that kept an id naming their old ends since the last takeKeptFlows() -> those ends (`A -> B`) and that id, for W_FLOW_ID_STALE */
   private keptFlows = new Map<El, KeptFlow>();
+  /** nodes `set` gave another id or name since the last forgetFormerEnds() -> what they were called before, as flow ends */
+  private formerEnds = new Map<El, FormerEnd[]>();
   /** the declared id conventions (see the conventions accessor) */
   private declared: IdConventions | undefined;
   /** generated ids under a declared prefix that the file's own style would give otherwise, since the last takeDeclaredIds() */
@@ -558,9 +576,13 @@ export class Doc {
     return out;
   }
 
-  /** Records that an op renamed an element (ops/index.ts rewrites the op's change entries); `was`: what the old id named (a flow's old ends). */
-  recordRename(from: string, to: string, was?: string): void {
-    this.renamedIds.push({ from, to, ...(was ? { was } : {}) });
+  /**
+   * Records that an op renamed an element (ops/index.ts rewrites the op's
+   * change entries; `el`: only those of that element, ChangeSet.rename);
+   * `was`: what the old id named (a flow's old ends).
+   */
+  recordRename(from: string, to: string, was?: string, el?: El): void {
+    this.renamedIds.push(about({ from, to, ...(was ? { was } : {}) }, el));
   }
 
   /**
@@ -569,8 +591,8 @@ export class Doc {
    * the flow's ends before): the entries, their details, notes and
    * warnings name it by the new one (Rename.regenerated).
    */
-  recordRegenerated(from: string, to: string, was?: string): void {
-    this.renamedIds.push({ from, to, ...(was ? { was } : {}), regenerated: true });
+  recordRegenerated(from: string, to: string, was?: string, el?: El): void {
+    this.renamedIds.push(about({ from, to, ...(was ? { was } : {}), regenerated: true as const }, el));
   }
 
   /** The renames since the last call. */
@@ -585,10 +607,10 @@ export class Doc {
    * (followFlowEnds false) a flow the document had before the batch or the op
    * on its own (flowsBefore). ops/flows.ts followEnds keeps it instead of
    * renaming it; ops/move.ts puts a moved node's old out-flow back at the new
-   * place instead of creating a new one.
+   * place instead of creating a new one. A flow without id has none to keep.
    */
   keepsFlowId(flow: El): boolean {
-    return !this.followFlowEnds && (this.flowsBefore?.has(flow) ?? true);
+    return !this.followFlowEnds && !!flow.get<string | undefined>('id') && (this.flowsBefore?.has(flow) ?? true);
   }
 
   /**
@@ -599,6 +621,56 @@ export class Doc {
   recordKeptFlow(flow: El, was: string): void {
     const id = flow.get<string>('id');
     if (this.keptFlows.get(flow)?.id !== id) this.keptFlows.set(flow, { was, id });
+  }
+
+  /**
+   * Gives a flow kept since the last takeKeptFlows() (with the id it kept)
+   * the id an op wanted for it while it ends at `target` (`add --flow-id` on
+   * a splice: the flow into the new node is the kept one), so that its
+   * W_FLOW_ID_STALE suggests that id and one command renames it. False for
+   * a flow that was not kept.
+   */
+  preferFlowId(flow: El, id: string, target: El): boolean {
+    const kept = this.keptFlows.get(flow);
+    if (!kept || kept.id !== flow.get<string>('id')) return false;
+    kept.preferred = { id, target };
+    return true;
+  }
+
+  /**
+   * Records what a node was called as a flow end (`end`: its id and labels)
+   * before `set` gives it another id or name (ops/flows.ts recordFormerEnd):
+   * a flow whose id named it so still names its ends (idNamesEnds) until
+   * the batch or the op on its own ends (forgetFormerEnds).
+   */
+  recordFormerEnd(node: El, end: FormerEnd): void {
+    const list = this.formerEnds.get(node) ?? [];
+    if (!list.some((e) => e.id === end.id && e.labels.join('\n') === end.labels.join('\n'))) list.push(end);
+    this.formerEnds.set(node, list);
+  }
+
+  /** What `node` was called as a flow end before `set` changed its id or name in the running batch or op on its own (recordFormerEnd). */
+  formerEndsOf(node: El): readonly FormerEnd[] {
+    return this.formerEnds.get(node) ?? [];
+  }
+
+  /** Forgets the former ends (recordFormerEnd), at the start of a batch or of an op on its own. */
+  forgetFormerEnds(): void {
+    this.formerEnds.clear();
+  }
+
+  /**
+   * `next` took the place of `old` (a retype that changes the type builds a
+   * new element, ops/retype.ts swapType): what the running batch recorded
+   * about `old` is about `next`, its former ends (recordFormerEnd) and the
+   * change entries made for it (result.ts replaced).
+   */
+  replaceElement(old: El, next: El): void {
+    replaced(old, next);
+    const former = this.formerEnds.get(old);
+    if (!former) return;
+    this.formerEnds.delete(old);
+    for (const end of former) this.recordFormerEnd(next, end);
   }
 
   /**

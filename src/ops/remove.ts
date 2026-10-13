@@ -256,7 +256,7 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
       continue;
     }
     const renamed = redirectFlow(doc, inFlow, { target: successor });
-    cs.change({ ...flowChange(inFlow), detail: `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}` });
+    cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
     bridged.push(idOf(predecessor));
   }
   cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);

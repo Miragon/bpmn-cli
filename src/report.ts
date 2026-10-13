@@ -406,8 +406,9 @@ export interface MutationSummary {
   conventions?: ConventionsReport;
 }
 
+/** The ids of the entries, once each (an entry without id, a removed flow that had none, names nothing to use). */
 function uniqueIds(changes: readonly Change[]): string[] {
-  return [...new Set(changes.map((c) => c.id))];
+  return [...new Set(changes.map((c) => c.id).filter(Boolean))];
 }
 
 /** The summary of a mutation report (`--summary`; also of applyToXml's `result`). */

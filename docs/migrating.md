@@ -244,9 +244,10 @@
   an agent session, `keepFlowIds` in `EditOptions` / `MutationOptions`. A
   flow the file had then keeps its id when an edit gives it other ends, and
   the change names each one whose id no longer names its ends
-  (`W_FLOW_ID_STALE`, with the `bpmn set` that renames it;
-  [Limitations](contract.md#limitations)). A library caller that sets
-  `Doc.followFlowEnds = false` gets these warnings now too, and a `--strict`
+  (`W_FLOW_ID_STALE`, with the `bpmn set` that renames it; after a splicing
+  `add --flow-id`, to that id; [Limitations](contract.md#limitations)). A
+  library caller that sets `Doc.followFlowEnds = false` gets these warnings
+  now too, and a `--strict`
   run exits 5 on them. Only the flows the document had keep their ids: a
   flow the same `runOp`, `runOps` or `mutateDoc` call created follows its
   ends, `renames` lists it and `created` has its final id (0.6: every id
@@ -269,6 +270,31 @@
   flow whose id named its old ends was not renamed (with ids kept: not
   reported as `W_FLOW_ID_STALE`). Such batches and commands now name and
   rename in the style of the file as read.
+- A flow end is also recognised by its name where its id speaks, and in a
+  batch by the id and name it had before a `set id=` / `set name=` earlier
+  in the batch. 0.6 named an end only as it was called at that moment: after
+  `set Activity_Check id=Activity_Verify` (in the same batch, or in a command
+  before while the end keeps its name "Check"), or `set name=` on an end
+  whose id says nothing, a splice next to it kept `Flow_CheckToOk` without a
+  word. Such flows are now renamed after their new ends (`Flow_VerifyToLog`;
+  with ids kept: `W_FLOW_ID_STALE`), so a file whose flow ids name their ends
+  by the ends' names (`Flow_CheckToOk` between `Activity_Verify` "Check" and
+  `Event_Ok`) sees more renames. An end without a name renamed in a command
+  before is still missed: nothing records its old id across commands.
+- A sequence flow without id (valid BPMN, written by hand) no longer makes
+  `add`, `split` or `apply` fail with `E_INTERNAL` (exit 70) when they splice
+  into it, nor a bridge into it: it gets an id from its new ends (or the
+  `--flow-id` of the `add` that splices into it) and is listed as changed
+  with `(id added: it had none)`. A removed one is
+  `removed sequenceFlow (no id)` (0.6: `undefined`); `--summary` leaves it
+  out of `removed:`.
+- The change report names a flow that took the id a renamed flow freed by
+  its own id: `add --id Activity_Check --after Event_Check` into
+  `Flow_CheckToDone` lists `created sequenceFlow Flow_CheckToDone -
+  Activity_Check -> Event_Done` and the spliced flow as changed
+  (`Flow_CheckToCheck`, `renamed: Flow_CheckToDone -> Flow_CheckToCheck`);
+  0.6 listed both under `Flow_CheckToCheck`, and `--summary` dropped the
+  changed one. The written file is the same.
 - Node 22.12 or later (`engines.node`; commander 15 and vitest 5 need it,
   0.6 declared Node 20).
 - `bpmn validate` and every write run the project's bpmnlint configuration:
