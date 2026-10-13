@@ -36,7 +36,7 @@ export interface ErrorDoc {
 export const ERROR_CATALOGUE: ErrorDoc[] = [
   // usage / I/O
   { code: 'E_USAGE', meaning: 'Bad command line, ops JSON or environment value (unknown command, option, op, key or value type; a BPMN_KEEP_FLOW_IDS that is no switch value: 1 / true / yes / on, 0 / false / no / off).', fix: 'Read the message (it names the op index and the allowed keys), then `bpmn <command> --help` or `bpmn guide`. A bad BPMN_KEEP_FLOW_IDS: set it to 1 or 0, or unset it, where it is set (shell, Claude Code settings `env`); --keep-flow-ids / --no-keep-flow-ids decide for one command.' },
-  { code: 'E_UNKNOWN_ALIAS', meaning: 'An op of an `apply` batch uses a batch alias (`"after": "$check"`) that no op before it defines (exit 1; checked before anything runs). The message lists the aliases defined so far.', fix: 'Define it with "as": "$check" (add, connect, split, the nodes of a split branch), "flowAs" (add: the flow into the new node), "joinAs" (split) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references) in an earlier op, or fix the spelling (the candidates are the defined aliases).' },
+  { code: 'E_UNKNOWN_ALIAS', meaning: 'An op of an `apply` batch uses a batch alias (`"after": "$check"`) that no op before it defines (exit 1; checked before anything runs). The message lists the aliases defined so far.', fix: 'Define it with "as": "$check" (add, connect, split, the nodes of a split branch), "flowAs" (add: the flow into the new node), "outAs" (add: the flow it creates out of the new node), "joinAs" (split) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references) in an earlier op, or fix the spelling (the candidates are the defined aliases).' },
   { code: 'E_DUPLICATE_ALIAS', meaning: 'Two ops of a batch define the same alias (exit 1).', fix: 'Give every element its own alias.' },
   { code: 'E_FILE_NOT_FOUND', meaning: 'The .bpmn file does not exist.', fix: 'Check the path, or create the file with `bpmn new <file>`.' },
   { code: 'E_IO', meaning: 'Reading or writing the file failed (permissions, directory missing, ...).', fix: 'Check the path and permissions; use -o <file> to write elsewhere.' },
@@ -589,7 +589,9 @@ function opsSection(): string {
     out.push(`           keys: ${Object.keys(OP_FIELDS[n]).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
   }
   out.push('\nBatch aliases: "as": "$name" on add / connect / split / split nodes ("flowAs" on add and split nodes: the flow into the');
-  out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "joinAs" on split: the join;');
+  out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "outAs" on add: the one flow');
+  out.push('the add creates out of the node, to the old successor on a splice, to the anchor on a prepend, else to "to"; E_USAGE');
+  out.push('when it creates none or two; "joinAs" on split: the join;');
   out.push('"refAs" on add / connect / set / retype: the message, error, signal or escalation');
   out.push('the element references) names what the op creates; later ops use "$name" wherever an id goes (after, before,');
   out.push('flow, in, on, to, source, target, id, ids, set values default / source / target / lane, order flows / lanes / pools,');
@@ -604,8 +606,10 @@ function opsSection(): string {
   out.push('bridge a later node of the move removed, drops name and condition, W_LABEL_DROPPED, W_CONDITION_DROPPED, unless the');
   out.push('flow is put back between its old ends; a "flowId" on a move that prepends names a new flow node -> anchor instead).');
   out.push('The result names the stale ones (W_FLOW_ID_STALE) instead. A flow the batch created still follows its ends: name it');
-  out.push('where an op creates it, with "flowAs" on an add that appends or prepends and on split nodes, or "as" on connect. On a');
-  out.push('splice "flowAs" names the kept flow into the node; the flow node -> old successor has no alias (take its id from the result).');
+  out.push('where an op creates it, with "flowAs" on an add that appends or prepends and on split nodes, "outAs" on an add that');
+  out.push('splices, prepends or has "to", or "as" on connect. On a splice "flowAs" names the kept flow into the node and "outAs"');
+  out.push('the new flow node -> old successor, so the batch that splices a gateway in can set that flow\'s condition or make it');
+  out.push('the default.');
   out.push('\nExample (after `bpmn new order.bpmn --name "Order handling" --target camunda8`, start -> "Check invoice" -> end):');
   out.push(JSON.stringify(opsExample(), null, 2));
   return out.join('\n');
@@ -693,9 +697,9 @@ export function guideText(): string {
       '    process tests), --keep-flow-ids or BPMN_KEEP_FLOW_IDS=1 keeps them; W_FLOW_ID_STALE then names each flow',
       '    whose id no longer names its ends, with the `bpmn set` that renames it.',
       '    Every result names the ids it created; use them in the next command. In `apply`, name what an op creates',
-      '    with an alias ("as": "$check"; add: "flowAs" for the flow into the node; split: "joinAs"; "refAs": the message,',
-      '    error, signal or escalation the element references) and use the alias in later ops wherever an id goes',
-      '    ("after": "$check"); the result lists alias -> id.',
+      '    with an alias ("as": "$check"; add: "flowAs" for the flow into the node, "outAs" for the flow it creates out of',
+      '    it; split: "joinAs"; "refAs": the message, error, signal or escalation the element references) and use the',
+      '    alias in later ops wherever an id goes ("after": "$check"); the result lists alias -> id.',
       '  - Sub-processes are drawn expanded by default (`--collapsed` / `set expanded=false` to collapse).',
       '  - Branches: the default flow (else the first outgoing flow) continues straight; the other branches alternate',
       '    below and above it in declaration order (`bpmn order` changes the order, `set <flowId> default=true` the continuation).',
@@ -1065,11 +1069,14 @@ const TOP_ERRORS: Array<[string, string]> = [
   ['E_NO_ROOM', 'run the checked `bpmn space` command of the hint, then place again'],
 ];
 
-/** Every op with its keys (`*` = required); add / retype fold their trigger keys into `<trigger keys>`. */
+/** Keys the short guide leaves out: `bpmn guide ops` and the schema list them (outAs, the flow an add creates out of the node: for a rare batch, not worth the short guide's bytes). */
+const FULL_GUIDE_ONLY_KEYS: ReadonlySet<string> = new Set(['outAs']);
+
+/** Every op with its keys (`*` = required; but FULL_GUIDE_ONLY_KEYS); add / retype fold their trigger keys into `<trigger keys>`. */
 function opKeyLines(): string[] {
   const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((t) => t.keys), 'nonInterrupting']);
   return OP_NAMES.map((n) => {
-    const fields = Object.entries(OP_FIELDS[n]);
+    const fields = Object.entries(OP_FIELDS[n]).filter(([k]) => !FULL_GUIDE_ONLY_KEYS.has(k));
     // an op with the whole set of trigger options (add, retype) shows them as one item
     const folds = fields.filter(([k]) => triggerKeys.has(k)).length > 3;
     const keys = fields.filter(([k]) => !folds || !triggerKeys.has(k)).map(([k, spec]) => (spec.required ? `${k}*` : k));

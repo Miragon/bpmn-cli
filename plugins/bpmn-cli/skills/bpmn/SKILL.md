@@ -69,8 +69,10 @@ installed version. Ask it instead of guessing:
 4. **Back references inside a batch:** an id you set explicitly can be used by
    every later op. For what you do not name yourself, set an alias and use it:
    `"as": "$x"` (add, connect, split), `"flowAs": "$f"` (the flow into a new
-   node), `"joinAs": "$j"` (the join of a split), `"refAs": "$m"` (the message,
-   error, signal or escalation an element references). The result lists alias -> id.
+   node), `"outAs": "$o"` (the flow an add creates out of the new node, e.g. a
+   splice's flow to the old successor), `"joinAs": "$j"` (the join of a split),
+   `"refAs": "$m"` (the message, error, signal or escalation an element
+   references). The result lists alias -> id.
 5. **One change, one transaction:** more than two related edits go into one
    `bpmn apply` batch (one validation, one layout, all or nothing). Paths that
    are invalid halfway (a new boundary event and its handling path) must be in
@@ -303,7 +305,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_VALIDATION` | The change would add an error. The refusal lists each one with its hint and nothing was written, so `bpmn validate <file>` does not show them. Do the whole change in one batch so that it ends valid. `--force` only when the user agrees. |
 | `E_LEAVES_CONTAINER` | `place` / `align` would leave the lane / pool: `move <id> --lane <laneId>` first (in a batch: a move op before it). |
 | `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
-| `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
+| `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `outAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
 | `E_USAGE` | Bad flag, ops key or `BPMN_KEEP_FLOW_IDS` value: the message names it; see `bpmn <command> --help`. A bad `BPMN_KEEP_FLOW_IDS` is in the user's settings: tell them; `--keep-flow-ids` / `--no-keep-flow-ids` decide for one command. |
 

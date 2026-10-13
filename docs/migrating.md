@@ -266,9 +266,9 @@
   flow the same `runOp`, `runOps` or `mutateDoc` call created follows its
   ends, `renames` lists it and `created` has its final id (0.6: every id
   stayed). Name such a flow with an alias where an op creates it (`flowAs`
-  on an add that appends or prepends and on split nodes, `as` on connect)
-  instead of guessing its id; the flow a splice creates (new node -> old
-  successor) has none. With ids kept, `move` puts the moved node's out-flow
+  on an add that appends or prepends and on split nodes, `outAs` on an add
+  that splices, prepends or has `to`, for the flow out of the new node, `as`
+  on connect) instead of guessing its id. With ids kept, `move` puts the moved node's out-flow
   back at its new place (`changed`, keeping its id, documentation and
   extensions; its name and condition stay with the bridge, and its change
   says which; a node that is not bridged, or whose bridge a later node of

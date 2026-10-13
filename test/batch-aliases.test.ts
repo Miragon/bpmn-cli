@@ -1,7 +1,7 @@
 /**
  * Batch aliases: an op names what it creates (`"as": "$name"`, `"flowAs"`,
- * `"joinAs"`), later ops of the batch use the alias wherever an element id
- * goes, the result lists alias -> final id. Synthetic fixtures only.
+ * `"outAs"`, `"joinAs"`), later ops of the batch use the alias wherever an
+ * element id goes, the result lists alias -> final id. Synthetic fixtures only.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +14,7 @@ import { OPS_SCHEMA, opsExample, parseOps } from '../src/batch.js';
 import { idConventionsFromLint } from '../src/conventions.js';
 import { Doc } from '../src/document.js';
 import { CliError } from '../src/errors.js';
+import { ERROR_CATALOGUE, guideShort, guideText } from '../src/guide.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline.js';
@@ -243,6 +244,145 @@ describe('batch aliases', () => {
   });
 });
 
+/** start -> Check -> Ok, made by bpmn-cli (Flow_CheckToOk names its ends). */
+async function checkToOk(): Promise<string> {
+  return (
+    await applyToXml((await newXml({ processName: 'Audit' })).xml, [
+      { op: 'add', kind: 'start', name: 'Start' },
+      { op: 'add', kind: 'userTask', name: 'Check', after: 'Event_Start' },
+      { op: 'add', kind: 'end', name: 'Ok', after: 'Activity_Check' },
+    ])
+  ).xml;
+}
+
+/** A gateway spliced into the flow to Ok, its new branch to Rejected the default: what a one-shot batch builds. */
+const SPLICE_GATEWAY: unknown[] = [
+  { op: 'add', kind: 'exclusiveGateway', name: 'Valid?', flow: 'Flow_CheckToOk', as: '$valid', flowAs: '$in', outAs: '$yes' },
+  { op: 'add', kind: 'end', name: 'Rejected', after: '$valid', flowAs: '$no' },
+  { op: 'set', id: '$yes', values: { name: 'yes', condition: '${valid}' } },
+  { op: 'set', id: '$no', values: { name: 'no' } },
+  { op: 'set', id: '$valid', values: { default: '$no' } },
+];
+
+describe('outAs: the flow an add creates out of the new node', () => {
+  it('names the flow a splice creates (new node -> old successor): the same batch gives it a condition', async () => {
+    const r = await applyToXml(await checkToOk(), SPLICE_GATEWAY);
+    // flowAs is the flow the file had (renamed after its new ends), outAs the one the splice created
+    expect(r.result.aliases).toEqual({ $in: 'Flow_CheckToValid', $yes: 'Flow_ValidToOk', $valid: 'Gateway_Valid', $no: 'Flow_ValidToRejected' });
+    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_ValidToOk" name="yes" sourceRef="Gateway_Valid" targetRef="Event_Ok">\s*<bpmn:conditionExpression[^>]*>\$\{valid\}<\/bpmn:conditionExpression>/);
+    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Valid" name="Valid?" default="Flow_ValidToRejected">');
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_CheckToValid" sourceRef="Activity_Check" targetRef="Gateway_Valid" />');
+    expect(renderMutation(r.result)).toContain('aliases: $in = Flow_CheckToValid, $yes = Flow_ValidToOk, $valid = Gateway_Valid, $no = Flow_ValidToRejected');
+    // the other splices: after a node with one outgoing flow, before a node with one incoming flow
+    const after = await applyToXml(await checkToOk(), [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_Check', outAs: '$o' }]);
+    expect(after.result.aliases).toEqual({ $o: 'Flow_LogToOk' });
+    const before = await applyToXml(await checkToOk(), [{ op: 'add', kind: 'task', name: 'Log', before: 'Activity_Check', outAs: '$o' }]);
+    expect(before.result.aliases).toEqual({ $o: 'Flow_LogToCheck' });
+  });
+
+  it('names the flow to "to" and the flow of a prepend, follows a later rename, and binds an existing node\'s with --if-absent', async () => {
+    const xml = (await applyToXml(await checkToOk(), SPLICE_GATEWAY)).xml;
+    const r = await applyToXml(xml, [
+      // a branch that re-joins: appended after the gateway, connected to "to"
+      { op: 'add', kind: 'task', name: 'Escalate', after: 'Gateway_Valid', to: 'Event_Ok', condition: '${late}', outAs: '$back' },
+      // unconnected with "to", and a boundary event with "to"
+      { op: 'add', kind: 'task', name: 'Lone', in: 'Process_Audit', to: 'Event_Rejected', as: '$lone', outAs: '$loneOut' },
+      { op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_Check', timer: 'PT1H', to: 'Event_Rejected', outAs: '$timeout' },
+      // a prepend: flowAs and outAs both name the one flow it creates (node -> anchor)
+      { op: 'add', kind: 'task', name: 'Prepare', before: '$lone', flowAs: '$f', outAs: '$o' },
+      // the flow named after its ends follows a later splice into it, and so does its alias
+      { op: 'add', kind: 'task', name: 'Recheck', flow: '$back', outAs: '$recheck' },
+      { op: 'set', id: '$back', values: { name: 'back' } },
+      { op: 'add', kind: 'userTask', id: 'Activity_Check', ifAbsent: true, after: 'Event_Start', outAs: '$checkOut' },
+    ]);
+    expect(r.result.aliases).toEqual({
+      $back: 'Flow_EscalateToRecheck',
+      $loneOut: 'Flow_LoneToRejected',
+      $lone: 'Activity_Lone',
+      $timeout: 'Flow_TimerOnCheckToRejected',
+      $f: 'Flow_PrepareToLone',
+      $o: 'Flow_PrepareToLone',
+      $recheck: 'Flow_RecheckToOk',
+      $checkOut: 'Flow_CheckToValid',
+    });
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_EscalateToRecheck" name="back" sourceRef="Activity_Escalate" targetRef="Activity_Recheck" />');
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_RecheckToOk" sourceRef="Activity_Recheck" targetRef="Event_Ok" />');
+    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_LoneToRejected" sourceRef="Activity_Lone" targetRef="Event_Rejected" />');
+  });
+
+  it('is refused where the add creates no flow out of the node or two (E_USAGE), before anything runs where the keys tell', async () => {
+    const xml = (await applyToXml(await checkToOk(), SPLICE_GATEWAY)).xml;
+    const parse = failure(() => parseOps([{ op: 'add', kind: 'task', name: 'T', in: 'Process_Audit', outAs: '$o' }]));
+    expect([parse.code, parse.message]).toEqual(['E_USAGE', 'ops[0] (add): "outAs" names the flow out of the node and needs "after", "before", "flow" or "to"']);
+    expect(failure(() => parseOps([{ op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_Check', timer: 'PT1H', outAs: '$o' }])).message).toMatch(/"outAs" names the flow out of the node/);
+    // an append: the new node ends its path
+    const append = await rejection(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'X', after: 'Gateway_Valid', outAs: '$o' }]));
+    expect([append.code, append.message, append.details.op]).toEqual(['E_USAGE', 'outAs $o: Activity_X gets no flow out of it from this placement (--after Gateway_Valid appends it)', 0]);
+    expect(append.details.hint).toBe('outAs names the flow an add creates out of the new node: a splice, a prepend or "to" creates one. Otherwise connect the node with a connect op that has "as".');
+    // a splice with "to": two flows leave the node
+    const two = await rejection(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'X', after: 'Activity_Check', to: 'Event_Rejected', outAs: '$o' }]));
+    expect([two.code, two.message]).toEqual(['E_USAGE', 'outAs $o: Activity_X gets 2 flows out of it from this placement (Flow_XToValid to Gateway_Valid, Flow_XToRejected to Event_Rejected)']);
+    expect(two.details.hint).toBe('outAs names one flow: drop "to" and connect Activity_X to Event_Rejected with a connect op that has "as" (outAs then names the other flow).');
+    // no flow node: "to" makes an association, no sequence flow; parseOps knows the kind, so "to" is not suggested
+    const data = await rejection(applyToXml(xml, [{ op: 'add', kind: 'dataObject', name: 'D', in: 'Process_Audit', to: 'Activity_Check', outAs: '$d' }]));
+    expect([data.code, data.message]).toEqual(['E_USAGE', 'ops[0] (add): "outAs": add dataObject creates no sequence flow out of it']);
+    expect(data.details.hint).toBe('Drop "outAs"; name a connection with a connect op that has "as".');
+    for (const kind of ['dataObject', 'textAnnotation', 'lane', 'participant']) {
+      expect(failure(() => parseOps([{ op: 'add', kind, name: 'D', in: 'Process_Audit', outAs: '$d' }])).message).toBe(`ops[0] (add): "outAs": add ${kind} creates no sequence flow out of it`);
+    }
+    const typedData = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'dataObject', name: 'D', in: 'Process_Audit', to: 'Activity_Check', outAs: '$d' }] as Op[], { layout: false }));
+    expect([typedData.code, typedData.message]).toEqual(['E_USAGE', 'outAs $d: add dataObject creates no sequence flow out of it']);
+    // split nodes take no outAs (the split creates the flow out of a node with the next one)
+    expect(failure(() => parseOps([{ op: 'split', after: 'X', branches: [{ nodes: [{ kind: 'task', outAs: '$o' }] }] }])).message).toMatch(/nodes\[0\]: unknown key "outAs"/);
+    // typed ops of the library skip parseOps: the add refuses it while it runs
+    const typed = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'task', name: 'T', in: 'Process_Audit', outAs: '$o' }] as Op[], { layout: false }));
+    expect([typed.code, typed.message]).toEqual(['E_USAGE', 'outAs $o: Activity_T gets no flow out of it from this placement (--in)']);
+    // an alias like any other: used before its op, the message says which op defines it
+    const early = failure(() => parseOps([{ op: 'set', id: '$o', values: { name: 'x' } }, { op: 'add', kind: 'task', name: 'T', after: 'A', outAs: '$o' }]));
+    expect(early.message).toBe('ops[0] (set): "id": alias $o is not defined before this op (ops[1] defines it); no op before it defines one');
+    expect(early.details.hint).toContain('"outAs" (add: the flow it creates out of the new node)');
+  });
+
+  it('with --if-absent binds an existing node\'s flow only when exactly one leaves it: a re-run never puts the condition on another branch', async () => {
+    // the one-shot batch made idempotent: the gateway's add skips when it exists
+    const batch = [
+      { op: 'add', kind: 'exclusiveGateway', id: 'Gateway_Valid', name: 'Valid?', ifAbsent: true, flow: 'Flow_CheckToOk', as: '$valid', outAs: '$yes' },
+      { op: 'set', id: '$yes', values: { name: 'yes', condition: '${valid}' } },
+    ];
+    const first = await applyToXml(await checkToOk(), batch);
+    expect(first.result.aliases).toEqual({ $valid: 'Gateway_Valid', $yes: 'Flow_ValidToOk' });
+    // the same batch again while the gateway still has one flow out of it binds that one
+    expect((await applyToXml(first.xml, batch)).result.aliases).toEqual({ $valid: 'Gateway_Valid', $yes: 'Flow_ValidToOk' });
+    // a second branch, put first: the gateway's first out-flow is now the other branch
+    const branched = (
+      await applyToXml(first.xml, [
+        { op: 'add', kind: 'end', name: 'Rejected', after: 'Gateway_Valid' },
+        { op: 'order', id: 'Gateway_Valid', flows: ['Flow_ValidToRejected', 'Flow_ValidToOk'] },
+      ])
+    ).xml;
+    const again = await rejection(applyToXml(branched, batch));
+    expect([again.code, again.message, again.details.op]).toEqual(['E_USAGE', 'outAs $yes: Gateway_Valid already exists and has 2 flows out of it (Flow_ValidToRejected, Flow_ValidToOk)', 0]);
+    expect(again.details.candidates).toEqual(['Flow_ValidToRejected', 'Flow_ValidToOk']);
+    expect(again.details.hint).toBe('With ifAbsent, outAs binds the flow out of an existing node only when exactly one leaves it: drop "outAs" there and use the flow\'s id.');
+    // no flow out of it, or no flow node: E_USAGE as on a first run, not an E_UNKNOWN_ALIAS later
+    const none = await rejection(applyToXml(branched, [{ op: 'add', kind: 'end', id: 'Event_Ok', ifAbsent: true, before: 'Activity_Check', outAs: '$o' }, { op: 'set', id: '$o', values: { name: 'x' } }]));
+    expect([none.code, none.message]).toEqual(['E_USAGE', 'outAs $o: Event_Ok already exists and has no flow out of it']);
+    const pool = (await applyToXml(branched, [{ op: 'add', kind: 'participant', name: 'Audit' }])).xml;
+    const notFlowNode = await rejection(applyToXml(pool, [{ op: 'add', kind: 'task', id: 'Participant_Audit', ifAbsent: true, after: 'Activity_Check', outAs: '$o' }]));
+    expect([notFlowNode.code, notFlowNode.message]).toEqual(['E_USAGE', 'outAs $o: Participant_Audit already exists and is a participant, no flow node']);
+  });
+
+  it('is in the schema, the full guide and the catalogue; the short guide leaves it out', () => {
+    const defs = OPS_SCHEMA['$defs'] as Record<string, { properties: Record<string, { pattern?: string }> }>;
+    expect(defs['add']!.properties['outAs']!.pattern).toBe(defs['add']!.properties['as']!.pattern);
+    expect(Object.keys(defs['node']!.properties)).not.toContain('outAs');
+    expect(guideText()).toMatch(/"outAs" on add: the one flow\s+the add creates out of the node, to the old successor on a splice/);
+    expect(guideText()).toMatch(/^ {11}keys: kind, name, id, as, flowAs, outAs, refAs, /m);
+    expect(ERROR_CATALOGUE.find((e) => e.code === 'E_UNKNOWN_ALIAS')!.fix).toContain('"outAs"');
+    expect(guideShort()).not.toContain('outAs');
+  });
+});
+
 describe('batch aliases on the command line (`bpmn apply`)', () => {
   let dir = '';
   const bin = join(__dirname, '..', 'bin', 'bpmn.js');
@@ -275,5 +415,15 @@ describe('batch aliases on the command line (`bpmn apply`)', () => {
     const text = execFileSync('node', [bin, 'apply', file, '-'], { encoding: 'utf8', input: JSON.stringify([...ops, { op: 'set', id: '$t', values: { name: 'Check the invoice' } }]) });
     expect(text).toMatch(/^aliases: \$s = Event_Start, \$t = Activity_CheckInvoice$/m);
     expect(readFileSync(file, 'utf8')).toContain('<bpmn:userTask id="Activity_CheckInvoice" name="Check the invoice">');
+  });
+
+  it('lists the outAs alias of a spliced gateway\'s new flow, in the aliases line and in the JSON', async () => {
+    const file = join(dir, 'spliced.bpmn');
+    writeFileSync(file, await checkToOk());
+    const json = JSON.parse(execFileSync('node', [bin, 'apply', file, '-', '--json', '--dry-run'], { encoding: 'utf8', input: JSON.stringify(SPLICE_GATEWAY) }));
+    expect(json.aliases).toEqual({ $in: 'Flow_CheckToValid', $yes: 'Flow_ValidToOk', $valid: 'Gateway_Valid', $no: 'Flow_ValidToRejected' });
+    const text = execFileSync('node', [bin, 'apply', file, '-'], { encoding: 'utf8', input: JSON.stringify(SPLICE_GATEWAY) });
+    expect(text).toMatch(/^aliases: \$in = Flow_CheckToValid, \$yes = Flow_ValidToOk, \$valid = Gateway_Valid, \$no = Flow_ValidToRejected$/m);
+    expect(readFileSync(file, 'utf8')).toMatch(/<bpmn:sequenceFlow id="Flow_ValidToOk" name="yes" sourceRef="Gateway_Valid" targetRef="Event_Ok">\s*<bpmn:conditionExpression/);
   });
 });

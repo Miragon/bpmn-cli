@@ -20,6 +20,9 @@ export type Family =
   | 'data'
   | 'artifact';
 
+/** The families whose kinds are flow nodes (sequence flows connect them). */
+export const FLOW_NODE_FAMILIES: ReadonlySet<Family> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
+
 export type Trigger =
   | 'none'
   | 'message'

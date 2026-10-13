@@ -1,6 +1,7 @@
 /**
  * Batch aliases: an op of an `apply` batch names an element it creates
- * (`"as": "$check"`; add also `"flowAs"`: the flow into the new node; split
+ * (`"as": "$check"`; add also `"flowAs"`: the flow into the new node, and
+ * `"outAs"`: the flow it creates out of it, ops/add.ts; split
  * `"joinAs"`: its join gateway; the nodes of a split branch take `as` /
  * `flowAs` too; add, connect, set and retype `"refAs"`: the bpmn:Message /
  * Error / Signal / Escalation the element references, created or found by
@@ -78,7 +79,7 @@ export const SET_REF_KEYS: readonly string[] = ['default', 'source', 'target', '
 const NEW_ID_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['id', 'flowId'], connect: ['id'], split: ['id', 'joinId'] };
 
 /** Keys that define an alias, per op (`refAs`: the root element the op's element references, ops/events.ts bindRefAs). */
-const DEF_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['as', 'flowAs', 'refAs'], connect: ['as', 'refAs'], split: ['as', 'joinAs'], set: ['refAs'], retype: ['refAs'] };
+const DEF_KEYS: Partial<Record<Op['op'], readonly string[]>> = { add: ['as', 'flowAs', 'outAs', 'refAs'], connect: ['as', 'refAs'], split: ['as', 'joinAs'], set: ['refAs'], retype: ['refAs'] };
 
 const NODE_DEF_KEYS = ['as', 'flowAs', 'refAs'] as const;
 
@@ -163,7 +164,7 @@ function unknownAlias(index: number, op: Op, key: string, alias: string, defined
   return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}${close}; ${listing(defined)}`, 'usage', {
     op: index,
     candidates,
-    hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node), "joinAs" (split: the join gateway) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references); only the ops after it can use it.',
+    hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node), "outAs" (add: the flow it creates out of the new node), "joinAs" (split: the join gateway) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references); only the ops after it can use it.',
   });
 }
 
