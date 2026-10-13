@@ -22,13 +22,19 @@
  *    far); an alias in a field that names a new id (`id`, `flowId`,
  *    `joinId`) is a usage error that points to `as`.
  *  - AliasTable binds an alias to the element itself, so it follows a
- *    rename later in the batch (ops/flows.ts followEnds); resolveOp(op)
+ *    rename later in the batch (ops/flows.ts followEnds), and a retype to
+ *    another type, which replaces the element by a new one
+ *    (ChangeSet.replaced, ops/retype.ts swapType: runBatch rebinds the
+ *    alias, also when the new element got a new id); resolveOp(op)
  *    returns a copy of the op with every alias replaced by the element's
  *    current id (an alias of a removed element is E_NOT_FOUND). The format
  *    ops run after the layout: runBatch (ops/index.ts) resolves them with
  *    the ids at the end of the batch.
  *  - The result lists every alias with its element's final id
  *    (MutationResult.aliases, the `aliases:` line).
+ *  - Typed ops of the library skip parseOps: the lists of a split
+ *    (`branches`, their `nodes`) are read only where they are arrays of
+ *    objects, so a malformed one reaches splitFlow's own check (E_USAGE).
  */
 import type { Doc } from '../document.js';
 import { CliError, usageError } from '../errors.js';
@@ -78,11 +84,22 @@ const NODE_DEF_KEYS = ['as', 'flowAs', 'refAs'] as const;
 
 type Raw = Record<string, unknown>;
 
+/** Calls `fn` for every object of `list` with its index (nothing when `list` is no array: see the module contract). */
+function eachObject(list: unknown, fn: (item: Raw, i: number) => void): void {
+  if (Array.isArray(list)) list.forEach((item, i) => item && typeof item === 'object' && fn(item as Raw, i));
+}
+
 /** The aliases an op defines (a split: also its branch nodes'). */
 export function definedBy(op: Op): string[] {
   const raw = op as unknown as Raw;
   const out = (DEF_KEYS[op.op] ?? []).map((k) => raw[k]).filter((v): v is string => typeof v === 'string');
-  if (op.op === 'split') for (const b of op.branches ?? []) for (const n of b.nodes ?? []) for (const k of NODE_DEF_KEYS) if (typeof n[k] === 'string') out.push(n[k]!);
+  if (op.op === 'split') {
+    eachObject(op.branches, (b) =>
+      eachObject(b['nodes'], (n) => {
+        for (const k of NODE_DEF_KEYS) if (typeof n[k] === 'string') out.push(n[k] as string);
+      }),
+    );
+  }
   return out;
 }
 
@@ -101,10 +118,10 @@ function slots(op: Op): Array<{ key: string; get: () => unknown; put: (v: unknow
   if (op.op === 'set') map(raw, 'values', 'values');
   if (op.op === 'add') map(raw, 'set', 'set');
   if (op.op === 'split') {
-    (op.branches ?? []).forEach((b, i) =>
-      (b.nodes ?? []).forEach((n, j) => {
-        slot(n as unknown as Raw, 'lane', `branches[${i}].nodes[${j}].lane`);
-        map(n as unknown as Raw, 'set', `branches[${i}].nodes[${j}].set`);
+    eachObject(op.branches, (b, i) =>
+      eachObject(b['nodes'], (n, j) => {
+        slot(n, 'lane', `branches[${i}].nodes[${j}].lane`);
+        map(n, 'set', `branches[${i}].nodes[${j}].set`);
       }),
     );
   }
@@ -180,7 +197,7 @@ export function checkAliases(ops: readonly Op[]): void {
   });
 }
 
-/** The aliases of a running batch: alias -> the element (it follows renames) and the op that defined it. */
+/** The aliases of a running batch: alias -> the element (it follows renames and retypes) and the op that defined it. */
 export class AliasTable {
   private readonly map = new Map<string, { el: El; op: number }>();
 
@@ -195,6 +212,11 @@ export class AliasTable {
     if (prev) throw new CliError('E_DUPLICATE_ALIAS', `ops[${op}]: alias ${alias} is already defined by ops[${prev.op}]`, 'usage', { op, hint: 'Every alias names one element of the batch: pick another name.' });
     if (!isAlias(alias)) throw usageError(`ops[${op}]: alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op });
     this.map.set(alias, { el, op });
+  }
+
+  /** Points every alias of `from` at `to`, the element that replaced it (a retype to another type: ChangeSet.replaced). */
+  rebind(from: El, to: El): void {
+    for (const entry of this.map.values()) if (entry.el === from) entry.el = to;
   }
 
   /** The current id of the aliased element. */

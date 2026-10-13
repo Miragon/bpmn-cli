@@ -96,6 +96,8 @@ export class ChangeSet {
   renames: Rename[] = [];
   /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/aliases.ts): the element itself */
   bindings: Array<{ alias: string; el: El }> = [];
+  /** elements an op replaced by a new one (a retype to another type, ops/retype.ts swapType): the batch aliases follow */
+  replaced: Array<{ from: El; to: El }> = [];
 
   create(change: Change): this {
     this.created.push(change);
@@ -170,6 +172,7 @@ export class ChangeSet {
 
   merge(other: ChangeSet): this {
     this.bindings.push(...other.bindings);
+    this.replaced.push(...other.replaced);
     this.created.push(...other.created);
     for (const c of other.changed) this.change(c);
     this.removed.push(...other.removed);

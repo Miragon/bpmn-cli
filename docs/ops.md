@@ -78,7 +78,9 @@ later ops use `$name` wherever an id goes, so a batch never guesses a generated 
 node without incoming flow: the flow out of it), `"joinAs"` the join of a split,
 and `"refAs"` the message, error, signal or escalation the element references, for example to give a
 new message its `zeebe:subscription`. An alias is defined once and used only after its op
-(`E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`); it follows its element through a rename. The result lists
+(`E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`); it follows its element through a rename and a retype (also
+to another type, where the element is replaced by a new one, and to a new id under the declared id
+conventions), so a batch can create, retype and then configure an element. The result lists
 alias and final id (`aliases: $ok = Gateway_InvoiceOk, ...`, `"aliases"` in `--json`). With
 `apply --keep-flow-ids` a flow the file had keeps its id through the whole batch unless an op
 removes it (the flows of a removed node, the out-flow a bridge replaces; `removed:` lists them), so
