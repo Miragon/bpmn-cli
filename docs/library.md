@@ -39,10 +39,15 @@ Every function runs the code of the CLI command it names, without a file:
   validators), `keepFlowIds` (keep the id of every existing sequence flow
   the ops give other ends, like `--keep-flow-ids`; `W_FLOW_ID_STALE` in
   `result.warnings.added` names each one whose id no longer names its
-  ends), `show` (add the model view) and
-  `debug` (below). `layoutXml` takes `expand`, `collapse` and `tidy` instead
-  of `layout`; `newXml` takes `processName`, `processId`, `executable` and
-  `target`; `viewXml` and `showXml` take `id`, `context`, `around`,
+  ends), `conventions` (declared id conventions, see
+  [Building blocks](#building-blocks); `result.conventions` names the new ids
+  under a prefix they declare that differ from the file's style), `show`
+  (add the model view) and `debug` (below). `layoutXml` takes `expand`,
+  `collapse` and `tidy` instead of `layout`; `newXml` takes `processName`,
+  `processId`, `executable`, `target` and `conventions`; `conventionsXml(xml,
+  { conventions, file, severity, notes, where, undeclared })` is `show
+  --conventions` (`xml` undefined: a new file; `undeclared` says why none
+  are declared); `viewXml` and `showXml` take `id`, `context`, `around`,
   `depth`, `inner`, `scope` and `layout` like `show` (`viewDoc(doc, opts)`
   and `renderShown(view)` do the same on a parsed `Doc`; `aroundView`,
   `elementContext` and `implementationOf` are the builders); `validateXml`
@@ -179,9 +184,14 @@ descriptor; `engine.resolver` is the resolver chain, `used` says which tier
 answered what),
 `projectBpmnlint(file, opts)` (the validator, or undefined),
 `projectBpmnlintSettings(file, opts)` (the effective rule settings: the
-same lookup, flags and errors) and `bpmnlintEngine()` (bpmnlint's `Linter`
-with the plugin's bundled resolver, and the plugin: `getDefaultLintConfig`,
-`naming`).
+same lookup, flags and errors), `projectIdConventions(file, opts)` (the id
+conventions of its `element-id-naming`, its `W_CONFIG_IGNORED` notes, the
+`W_LINT_UNAVAILABLE` of what it leaves out, the rule's setting, and
+`unavailable` where the `.bpmnlintrc` could not be loaded; the file helpers
+pass these conventions to the core unless the host passes `conventions`
+itself or a validator named `bpmnlint` of its own) and `bpmnlintEngine()`
+(bpmnlint's `Linter` with the plugin's bundled resolver, and the plugin:
+`getDefaultLintConfig`, `naming`).
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
 `renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
@@ -261,6 +271,27 @@ const edit = await applyToXml(xml, ops, { validators: [lint] });
 edit.result.warnings.added; // the bpmnlint findings the change added, an error with severity 'error'
 ```
 
+Declared id conventions: `idConventionsFromLint(setting, naming, { source })`
+reads the effective setting of `@miragon/rules/element-id-naming`
+(`resolved.rules[ID_NAMING_RULE]`) as the rule reads it, with the plugin's
+naming helpers (`engine.plugin.naming`; injected, the core does not import the
+plugin), and returns `conventions` (`IdConventions`: plain data, a prefix per
+BPMN type and per event type and trigger, `case`, `qualifier`, `source`) and
+its `W_CONFIG_IGNORED` notes (pass them to `bpmnlintValidator` as `notes`). A
+host that lints with a configuration that turns the rule on (the engine
+defaults `getDefaultLintConfig({ engine: 'c7' | 'c8' })` and the automation
+preset do) passes the conventions of that same configuration, or its own
+lint reports bpmn-cli's new ids. Without the plugin, a table of your own works
+too ([bpmnlint](bpmnlint.md#id-conventions) has the rules):
+
+```ts
+const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));
+const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });
+const named = await applyToXml(xml, ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });
+named.result.conventions; // { ids: [...], source: 'our rules' }: the new ids that follow the rule, not the file's style
+await applyToXml(xml, ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });
+```
+
 Text preservation: `mutateDoc` returns the text to store as `result.xml`:
 the original text of everything the ops did not change (see [What a write
 changes](contract.md#what-a-write-changes)); `result.unchanged` is true when it equals
@@ -306,8 +337,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 899.2 KB | 285.2 KB | 910 / 289 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 641.2 KB | 203.8 KB | 643 / 204 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 925.7 KB | 294.5 KB | 935 / 298 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 653.3 KB | 208.0 KB | 660 / 210 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
@@ -319,7 +350,10 @@ byte-identical with or without them). The PNG
 rasteriser (`@resvg/resvg-wasm`, 2.5 MB of WebAssembly, and the 21 KB font)
 is only in `@miragon/bpmn-cli/node`, and so are bpmnlint and
 @miragon/bpmnlint-plugin-rules: the core's bpmnlint validator (about 7 KB
-of the whole entry) gets them injected.
+of the whole entry) gets them injected, and so does `idConventionsFromLint`
+(about 6 KB of the whole entry, with the view of `show --conventions`; not in
+the `applyToXml`-only bundle, which carries what applies declared
+conventions to new ids, about 12 KB).
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import. The guide is the exception:

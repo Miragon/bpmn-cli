@@ -8,14 +8,15 @@ has the rules and the tables; each section names the command that prints the ful
 Elements are addressed by id, never by name (names may repeat). A new id says what it names and
 follows the file it is written into: prefix, case and flow form are learned from the ids the file
 has (a rule needs two ids that follow it). A file without a convention gets the defaults below.
-Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
+Where the project's `.bpmnlintrc` runs `@miragon/rules/element-id-naming`, its prefixes and case
+decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
 
 | element | id | examples |
 | --- | --- | --- |
 | named | prefix + the name | `Activity_CheckInvoice`, `Gateway_InvoiceOk` |
 | unnamed | prefix + kind word and place (`After`, `Before`, `On`, `In`) | `Gateway_AfterArchive`, `Event_TimerOnArchive` |
 | sequence / message flow | its two ends | `Flow_CheckInvoiceToBookInvoice` |
-| join of a split | the split gateway's id + `_join` | `Gateway_InvoiceOk_join` |
+| join of a split | the split gateway's id + `_join` (camelCase: `Join`) | `Gateway_InvoiceOk_join` |
 | data object / store | reference and backing element, each with its own prefix | `DataObjectReference_Invoice` + `DataObject_Invoice` |
 | diagram (DI) | the form of the file's DI ids | `<id>_di`, `BPMNShape_<id>` |
 
@@ -43,6 +44,34 @@ Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
   `W_FLOW_ID_STALE` names it with the id its new ends give ([Limitations](contract.md#limitations)).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
+
+### Declared conventions
+
+A `.bpmnlintrc` that runs `@miragon/rules/element-id-naming` (the `recommended-for-automation`
+config turns it on) declares a prefix per BPMN type, the case of the rest and whether an event
+names its trigger. bpmn-cli reads it as the rule does, and the ids it generates pass the rule.
+`bpmn show <file> --conventions` lists what applies, also for a file that does not exist yet.
+
+| element | id |
+| --- | --- |
+| a type the rule names | its prefix + the body in the rule's case: `serviceTask_checkInvoice`, `gateway_approved` |
+| an event with a trigger | `eventDefinitionQualifier: "required"`: `timerStartEvent_monthly`; otherwise `startEvent_monthly` |
+| unnamed, or a number first | the kind word without what the prefix says: `endEvent_terminateAfterPaid`, `startEvent_timer1stOfMonth`; the whole word where the body would else be empty or begin with a number: `scriptTask_scriptTask`, `scriptTask_scriptTask4AugenPrinzip` |
+| sequence flow | the rule's prefix + its two ends: `flow_checkInvoiceToBookInvoice` |
+| message flow | an exact `bpmn:MessageFlow` prefix, else like the file's own message flows (two that agree), else like sequence flows |
+| a taken id, a join | glued under camelCase / PascalCase: `serviceTask_checkInvoice2`, `gateway_approvedJoin`; the join after an explicit split id the rule rejects: its prefix + the gateway, `gateway_checkJoin` |
+| what the rule does not name | the file's style (without the ids that already follow the rule); in a file without it, the rule's case and prefix shape: `lane_sales` |
+| process, definitions | bpmn-cli's (`Process_InvoiceHandling`, also the process of a new pool), unless the rule names `bpmn:Process` / `bpmn:Definitions` (`process_main` without a name) |
+
+- Existing ids are never renamed because of the rule. A `retype` or a trigger change that leaves a
+  prefix the rule rejects gives `W_ID_PREFIX_STALE` with the `bpmn set <file> <id> id=<newId>` that
+  renames it; an element the same `apply` batch created takes the new prefix instead, and the flows
+  the batch named after it follow.
+- A result names the new ids under a prefix the rule declares that differ from what the file's own
+  style would give (`conventions:`; JSON: `conventions.ids`).
+- A value the rule names that cannot start an id, or an unknown `case` or qualifier, is
+  `W_CONFIG_IGNORED`; that type follows the learned style. `--no-lint-config` leaves the
+  conventions out. Details: [bpmnlint](bpmnlint.md#id-conventions).
 
 ## Kinds
 
@@ -183,7 +212,9 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   `unchanged` is `true`. `importWarnings` lists what the parser reported while reading the input.
 - Present only when they apply: `aliases` (batch alias -> final id), `renamed` (old id -> new id),
   `view` (`--show`), `validation.validators` (the project's bpmnlint; in library use also a host's
-  validators, see [Validators](validators.md)). An incremental layout adds `placed`, `moved`,
+  validators, see [Validators](validators.md)), `conventions` (`{ids, source?}`: the new ids that
+  follow the `.bpmnlintrc`'s `element-id-naming` rather than the file's own id style; see
+  [Declared conventions](#declared-conventions)). An incremental layout adds `placed`, `moved`,
   `rerouted`, `pruned`, `notes` and `format` to `layout`.
 - A validator's findings carry `validator` and `severity`. The project's bpmnlint
   ([bpmnlint](bpmnlint.md)) is advisory (`blocks: false` in its `validation.validators` entry): an
@@ -193,8 +224,8 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   already had.
 - `--summary --json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed, renamed?,
   removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status,
-  mode, score}, format?}`; `preexistingCount` includes the project's bpmnlint findings the file
-  already had.
+  mode, score}, format?, conventions?}`; `preexistingCount` includes the project's bpmnlint findings
+  the file already had.
 - Errors go to stderr as `error E_CODE: message` with a hint and candidate ids; with `--json` as
   `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?"}}`
   (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room).

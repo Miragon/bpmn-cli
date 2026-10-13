@@ -33,6 +33,8 @@
  * severity error for category error (warn and info: warning), key = id +
  * the report's path without array indices + message (compareRuns renames the
  * ids in it; an earlier sibling removed does not change it). Besides:
+ *  - `notes`: the host's findings about the configuration (W_CONFIG_IGNORED),
+ *    in every run, so a write only counts them;
  *  - a rule that throws (its factory on the options, or its check on an
  *    element) is left out of that run: W_LINT_FAILED, nothing on stderr; so
  *    is an async check that rejects and a factory that returns a promise
@@ -291,6 +293,8 @@ export interface BpmnlintValidatorOptions {
   blocks?: boolean;
   /** what the host left out besides the configuration's own (moddle extensions) */
   unavailable?: BpmnlintUnavailable[];
+  /** findings about the configuration itself, reported in every run like W_LINT_UNAVAILABLE (W_CONFIG_IGNORED: values of element-id-naming new ids do not follow, src/conventions.ts) */
+  notes?: ValidatorFinding[];
 }
 
 /** The unavailable entries as findings: one W_LINT_UNAVAILABLE per package and reason (the same in every phase: a write only counts them). */
@@ -423,7 +427,7 @@ export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmn
   // the Linter gets the effective, resolvable, enabled rules: no extends to walk and no unresolvable name per run
   const rules: Record<string, unknown> = {};
   for (const [name, s] of Object.entries(resolved.rules)) if (s.severity !== 'off') rules[name] = [s.severity, s.config];
-  const notes = bpmnlintUnavailableFindings([...resolved.unavailable, ...(opts.unavailable ?? [])]);
+  const notes = [...bpmnlintUnavailableFindings([...resolved.unavailable, ...(opts.unavailable ?? [])]), ...(opts.notes ?? [])];
   let moddle: BpmnModdle | undefined;
   return {
     name: BPMNLINT_VALIDATOR,

@@ -11,8 +11,9 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
 import type { ChangeSet, Rename } from './result.js';
-import { editDistance, hasIdWords, IdRegistry, isValidId, transliterate, typoTolerance } from './ids.js';
-import { IdStyle, speakingStem, typeRequest, type IdRequest } from './idstyle.js';
+import { cutAt, editDistance, hasIdWords, IdRegistry, isValidId, MAX_ID, transliterate, typoTolerance } from './ids.js';
+import type { IdConventions } from './conventions.js';
+import { IdStyle, speakingStem, typeRequest, type IdRequest, type IdState } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from './platform/descriptor.js';
@@ -55,6 +56,13 @@ export interface NewDocOptions {
   executable?: boolean;
   /** declare vendor namespaces and the execution platform up front (and, for camunda7, the Modeler's process defaults) */
   target?: 'camunda8' | 'camunda7' | 'none';
+  /**
+   * the project's declared id conventions (src/conventions.ts; the node
+   * layer reads them from the .bpmnlintrc): the document keeps them
+   * (Doc.conventions); the process and definitions ids follow them only
+   * where they name bpmn:Process / bpmn:Definitions exactly
+   */
+  conventions?: IdConventions;
 }
 
 /** The values `new --target` (NewDocOptions.target) accepts. */
@@ -102,8 +110,10 @@ function stemOf(id: string): string {
 export interface BatchContext {
   /** ids the ops before created, in order */
   created: string[];
-  /** old id -> new id of the flows the ops before renamed (ops/flows.ts followEnds) */
+  /** old id -> new id of the flows the ops before renamed (ops/flows.ts followEnds), and of the elements they created and retyped (ops/set.ts recordIdState) */
   renamed: Map<string, string>;
+  /** the old ids in `renamed` of elements a retype or a trigger change gave a new prefix (Rename.regenerated) */
+  retyped?: Set<string>;
   /** the batch aliases defined so far -> current ids */
   aliases: () => Record<string, string>;
 }
@@ -117,10 +127,43 @@ export interface KeptFlow {
   id: string;
 }
 
+/** What an element was when a retype or a trigger change first kept its id (Doc.recordIdState): its type and trigger, and its kind label. */
+export interface KeptIdState {
+  before: IdState;
+  wasLabel: string;
+}
+
 /** True for elements somewhere below a bpmn:extensionElements container. */
 function insideExtension(el: El): boolean {
   for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
   return false;
+}
+
+/** Throws E_INVALID_ID unless `id` can be a new document's process id (NewDocOptions.processId; `bpmn new --id` checks it first). */
+export function assertProcessId(id: string): void {
+  if (!isValidId(id)) throw modelError('E_INVALID_ID', `"${id}" is not a valid id (XML NCName)`);
+}
+
+/**
+ * The ids of a new document's process and definitions (claimed in `ids`):
+ * the given process id, else from the name in `style`, else Process_1 (a
+ * process prefix the declared conventions name exactly: from it); the
+ * definitions speak like the process (Definitions_OrderToCash), a process
+ * without name or speaking id gives the tool default Definitions_1.
+ */
+function rootIds(opts: NewDocOptions, style: IdStyle, ids: IdRegistry): { processId: string; definitionsId: string } {
+  const declared = (type: string): boolean => style.explain(typeRequest(type)).source === 'lint';
+  const processId = opts.processId ?? (opts.processName || declared('bpmn:Process') ? style.next(typeRequest('bpmn:Process', opts.processName ? { name: opts.processName } : {}), ids).id : 'Process_1');
+  assertProcessId(processId);
+  ids.claim(processId);
+  const stem = speakingStem(processId);
+  const definitionsId = hasIdWords(opts.processName)
+    ? style.next(typeRequest('bpmn:Definitions', { name: opts.processName }), ids).id
+    : stem || declared('bpmn:Definitions')
+      ? style.next(typeRequest('bpmn:Definitions', stem ? { context: stem } : {}), ids).id
+      : 'Definitions_1';
+  ids.claim(definitionsId);
+  return { processId, definitionsId };
 }
 
 export class Doc {
@@ -134,6 +177,14 @@ export class Doc {
   private renamedIds: Rename[] = [];
   /** flows that kept an id naming their old ends since the last takeKeptFlows() -> those ends (`A -> B`) and that id, for W_FLOW_ID_STALE */
   private keptFlows = new Map<El, KeptFlow>();
+  /** the declared id conventions (see the conventions accessor) */
+  private declared: IdConventions | undefined;
+  /** generated ids under a declared prefix that the file's own style would give otherwise, since the last takeDeclaredIds() */
+  private declaredIds: string[] = [];
+  /** elements a retype or a trigger change kept the id of since the last takeIdStates() -> their type and trigger before the first, for W_ID_PREFIX_STALE */
+  private idStates = new Map<string, KeptIdState>();
+  /** the ids allocateId generated since the last forgetGeneratedIds() (the start of a batch or of an op on its own) -> the id each wanted: nobody's API yet */
+  private generatedIds = new Map<string, string>();
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
    * them (ops/flows.ts followEnds). False keeps the id of every flow the
@@ -192,24 +243,23 @@ export class Doc {
     assertTarget(opts.target);
     const moddle = createModdle();
     const ids = new IdRegistry();
-    const processId = opts.processId ?? (opts.processName ? IdStyle.DEFAULT.next(typeRequest('bpmn:Process', { name: opts.processName }), ids).id : 'Process_1');
-    if (!isValidId(processId)) throw modelError('E_INVALID_ID', `"${processId}" is not a valid id (XML NCName)`);
-    ids.claim(processId);
-    // the definitions speak like the process (Definitions_OrderToCash); a process without name or speaking id: the tool defaults
-    const stem = speakingStem(processId);
-    const definitionsId = hasIdWords(opts.processName)
-      ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { name: opts.processName }), ids).id
-      : stem
-        ? IdStyle.DEFAULT.next(typeRequest('bpmn:Definitions', { context: stem }), ids).id
-        : 'Definitions_1';
+    const style = IdStyle.of(opts.conventions);
+    const { processId, definitionsId } = rootIds(opts, style, ids);
     const definitions = createDefinitions(moddle, {
       definitionsId,
       processId,
       processName: opts.processName,
       executable: opts.executable ?? true,
     });
-    ids.claim(definitionsId);
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
+    if (opts.conventions) {
+      doc.conventions = opts.conventions;
+      // a process or definitions id the declared conventions made (a prefix they name exactly): the result's `conventions:` line
+      const own = rootIds(opts, IdStyle.DEFAULT, new IdRegistry());
+      const lint = (type: string): boolean => style.explain(typeRequest(type)).source === 'lint';
+      if (processId !== own.processId && lint('bpmn:Process')) doc.declaredIds.push(processId);
+      if (definitionsId !== own.definitionsId && lint('bpmn:Definitions')) doc.declaredIds.push(definitionsId);
+    }
     if (opts.target === 'camunda8') {
       doc.declareNamespace('zeebe');
       doc.declareNamespace('modeler');
@@ -328,7 +378,8 @@ export class Doc {
       const candidates = this.suggest(id);
       const alias = this.batch && Object.keys(this.batch.aliases()).find((a) => a.slice(1).toLowerCase() === id.toLowerCase());
       const recent = (this.batch?.created ?? []).filter((c) => this.has(c));
-      const why = renamed ? `: an op before this one renamed it to ${renamed} (its id named its old ends)` : candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : '';
+      const because = this.batch?.retyped?.has(id) ? 'a retype or a trigger change gave it the prefix of its new kind' : 'its id named its old ends';
+      const why = renamed ? `: an op before this one renamed it to ${renamed} (${because})` : candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : '';
       throw modelError('E_NOT_FOUND', `No ${what} with id "${id}"${why}`, {
         element: id,
         candidates,
@@ -418,27 +469,108 @@ export class Doc {
       .map((h) => h.id);
   }
 
-  /** The id conventions of this document, learned from its ids on first use (src/idstyle.ts). */
+  /**
+   * The project's declared id conventions (src/conventions.ts; the pipeline
+   * sets them for a call from MutationOptions.conventions): new ids follow
+   * them where they declare a prefix, the file's own style elsewhere
+   * (src/idstyle.ts). Setting other ones learns the style again.
+   */
+  get conventions(): IdConventions | undefined {
+    return this.declared;
+  }
+
+  set conventions(c: IdConventions | undefined) {
+    if (c === this.declared) return;
+    this.declared = c;
+    this.style = undefined;
+  }
+
+  /** The id conventions of this document, learned from its ids on first use (src/idstyle.ts), the declared ones over them. */
   get idStyle(): IdStyle {
-    return (this.style ??= IdStyle.infer(this.definitions));
+    return (this.style ??= IdStyle.infer(this.definitions, this.declared));
   }
 
   /**
    * A new id in the document's style (src/idstyle.ts) for a kindRequest /
    * typeRequest / connectionRequest / flowRequest; claims it. `base` is the
    * id the request wanted: when it was taken the id carries a suffix, which
-   * is recorded for W_ID_SUFFIXED (takeSuffixed).
+   * is recorded for W_ID_SUFFIXED (takeSuffixed). An id under a prefix the
+   * declared conventions name for the request (IdStyle.explain: `lint`;
+   * not one they only shaped, nor a message flow that borrows the sequence
+   * flows' prefix) that the file's own style would give otherwise is
+   * recorded for the result's `conventions:` line (takeDeclaredIds).
    */
   allocateId(req: IdRequest): { id: string; base: string } {
-    const out = this.idStyle.next(req, this.ids);
+    const style = this.idStyle;
+    const out = style.next(req, this.ids);
+    if (style.declared && style.explain(req).source === 'lint' && out.base !== style.learnedOnly().next(req, this.ids).base) this.declaredIds.push(out.id);
     this.ids.claim(out.id);
+    this.generatedIds.set(out.id, out.base);
     if (out.id !== out.base) this.suffixed.push(out);
+    return out;
+  }
+
+  /**
+   * The id `id` wanted (before a collision suffix) where allocateId (or
+   * markGenerated) generated it since the batch or the op on its own began
+   * and no explicit claim took it since (claimId): nobody's API yet
+   * (ops/set.ts recordIdState renames it where a retype leaves its prefix
+   * stale); undefined for every other id.
+   */
+  generatedBase(id: string): string | undefined {
+    return this.generatedIds.get(id);
+  }
+
+  /** Records `id` as generated from `base` outside allocateId (a split's join, an id recordIdState gave): generatedBase. */
+  markGenerated(id: string, base: string): void {
+    this.generatedIds.set(id, base);
+  }
+
+  /** Forgets the generated ids (generatedBase), at the start of a batch or of an op on its own. */
+  forgetGeneratedIds(): void {
+    this.generatedIds.clear();
+  }
+
+  /**
+   * A free id from `base` for an element whose generated id `old` a retype
+   * or a trigger change gave a stale prefix (ops/set.ts recordIdState): a
+   * taken one gets a collision suffix after `sep` (cut to stay within
+   * MAX_ID; W_ID_SUFFIXED); on the result's `conventions:` line where
+   * `old` was. Claims nothing (renameId does; markGenerated after it).
+   */
+  regeneratedId(old: string, base: string, sep: string): string {
+    let id = base;
+    for (let n = 2; this.has(id) || this.ids.has(id); n++) id = `${cutAt(base, MAX_ID - `${sep}${n}`.length)}${sep}${n}`;
+    if (id !== base) this.suffixed.push({ id, base });
+    if (this.declaredIds.includes(old)) this.declaredIds.push(id);
+    return id;
+  }
+
+  /** Records an id under a declared prefix that the file's own style would give otherwise, outside allocateId (a split's join). */
+  recordDeclaredId(id: string): void {
+    this.declaredIds.push(id);
+  }
+
+  /** The ids under a declared prefix recorded since the last call (allocateId; the pipeline keeps those still in the document). */
+  takeDeclaredIds(): string[] {
+    const out = this.declaredIds;
+    this.declaredIds = [];
     return out;
   }
 
   /** Records that an op renamed an element (ops/index.ts rewrites the op's change entries); `was`: what the old id named (a flow's old ends). */
   recordRename(from: string, to: string, was?: string): void {
     this.renamedIds.push({ from, to, ...(was ? { was } : {}) });
+  }
+
+  /**
+   * Records that an element the batch created took another id
+   * (regeneratedId), or a flow the batch named after it followed (`was`:
+   * the flow's ends before): the entries, their details, notes and
+   * warnings name it by the new one (Rename.regenerated).
+   */
+  recordRegenerated(from: string, to: string, was?: string): void {
+    this.renamedIds.push({ from, to, ...(was ? { was } : {}), regenerated: true });
   }
 
   /** The renames since the last call. */
@@ -467,6 +599,23 @@ export class Doc {
   recordKeptFlow(flow: El, was: string): void {
     const id = flow.get<string>('id');
     if (this.keptFlows.get(flow)?.id !== id) this.keptFlows.set(flow, { was, id });
+  }
+
+  /**
+   * Records what an element was (`before`, `wasLabel`) when a retype or a
+   * trigger change kept its id `id` (ops/set.ts recordIdState); the first
+   * record of an id stays, so a batch compares its state before the batch
+   * with the one after.
+   */
+  recordIdState(id: string, before: IdState, wasLabel: string): void {
+    if (!this.idStates.has(id)) this.idStates.set(id, { before, wasLabel });
+  }
+
+  /** The ids recorded since the last call, with what their elements were (reportStaleIdPrefixes turns them into W_ID_PREFIX_STALE). */
+  takeIdStates(): Map<string, KeptIdState> {
+    const out = this.idStates;
+    this.idStates = new Map();
+    return out;
   }
 
   /** The flows kept since the last call, with the ends their id named and that id (reportStaleFlows turns them into W_FLOW_ID_STALE). */
@@ -501,7 +650,7 @@ export class Doc {
     return this.allocateId({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
   }
 
-  /** Validates and claims an explicit id. */
+  /** Validates and claims an explicit id: the caller's, so no longer generated (generatedBase), also where an op before freed a generated one. */
   claimId(id: string): void {
     if (!isValidId(id)) {
       throw modelError('E_INVALID_ID', `"${id}" is not a valid id: must match [A-Za-z_][A-Za-z0-9_.-]*`, { element: id });
@@ -510,6 +659,7 @@ export class Doc {
       throw modelError('E_DUPLICATE_ID', `An element with id "${id}" already exists`, { element: id, hint: 'Choose another --id or omit it.' });
     }
     this.ids.claim(id);
+    this.generatedIds.delete(id);
   }
 
   /** moddle.create wrapper that claims the id. */

@@ -26,6 +26,10 @@
  *    of the old definition (W_PROPERTY_DROPPED, see events.ts).
  *    A trigger change that would leave a message flow at an event that can no
  *    longer send/receive it is refused (E_INVALID_TRIGGER), like `connect` would.
+ *    One that leaves the event an id whose prefix the declared id conventions
+ *    reject now keeps the id: W_ID_PREFIX_STALE names the `bpmn set` that
+ *    renames it (recordIdState, also for retype; reportStaleIdPrefixes
+ *    builds it against the final state).
  *  Activities: loop (none|standard|parallel|sequential), cardinality,
  *    completion (completionCondition). Removing or replacing a loop reports
  *    the vendor content that goes with it (W_PROPERTY_DROPPED).
@@ -76,6 +80,8 @@
  */
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
+import { cutAt, IdRegistry, MAX_ID } from '../ids.js';
+import { kindRequest, type IdRequest, type IdState } from '../idstyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
 import { diExpansionState } from '../layout.js';
 import { addTo, is, localType, many, walk, type El } from '../model.js';
@@ -86,7 +92,7 @@ import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { setCorrelationKey } from './ext.js';
-import { assertCondition, flowChange, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
+import { assertCondition, flowChange, flowsNamedAfter, followRenamedEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -1372,6 +1378,95 @@ export function warnNonInterruptingDropped(cs: ChangeSet, el: El, trigger: Trigg
   });
 }
 
+/** A kind with its article: `an endEvent`, `an intermediateCatchEvent:message`, `a userTask` (userTask is the one kind with a u, said like `you`). */
+const aKind = (kind: string): string => `${/^[aeio]/i.test(kind) ? 'an' : 'a'} ${kind}`;
+
+/** The type and trigger of an element (W_ID_PREFIX_STALE compares them before and after a retype or a trigger change). */
+export function idStateOf(el: El): IdState {
+  const trigger = triggerOf(el);
+  return { type: el.$type, ...(trigger ? { trigger } : {}) };
+}
+
+/** The id request for what an element is now (its kind, trigger and name): IdStyle.stalePrefix where no declared prefix fitted what it was. */
+function requestOf(el: El): IdRequest | undefined {
+  const def = kindOf(el);
+  if (!def) return undefined;
+  const trigger = triggerOf(el);
+  const name = el.get<string | undefined>('name');
+  return kindRequest(def, { ...(trigger && trigger !== 'none' ? { trigger } : {}), ...(name ? { name } : {}) });
+}
+
+/**
+ * Records what `el` was (`before`, `wasLabel`) when a retype or a trigger
+ * change kept its id, for W_ID_PREFIX_STALE (reportStaleIdPrefixes, at the
+ * end of the op on its own or of the batch). An id the batch generated
+ * (Doc.generatedBase) is nobody's API yet: where the change leaves it a
+ * prefix the declared conventions do not accept, the element takes the id
+ * of what it is now (IdStyle.stalePrefix on the id it wanted:
+ * serviceTask_checkInvoice, retyped to a user task, is
+ * userTask_checkInvoice; scriptTask_run of a type the rule switches off,
+ * retyped to a service task, serviceTask_run; a taken one gets a suffix),
+ * a rename the batch's entries, their details, notes and warnings follow
+ * (Rename.regenerated), and no warning. The flows the batch named after it
+ * follow too (flowsNamedAfter: SFGoToSTCheck becomes SFGoToUTCheck). Nothing
+ * without declared conventions.
+ */
+export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: string): void {
+  const style = doc.idStyle;
+  if (!style.declared) return;
+  const id = idOf(el);
+  const base = doc.generatedBase(id);
+  if (base === undefined) {
+    doc.recordIdState(id, before, wasLabel);
+    return;
+  }
+  // from the id it wanted: a collision suffix under the old prefix is not the new one's
+  const stale = style.stalePrefix(base, before, idStateOf(el), requestOf(el));
+  if (!stale) return;
+  const wanted = cutAt(stale.suggested, MAX_ID);
+  const next = doc.regeneratedId(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
+  // the ends before the rename: what the flows named
+  const flows = flowsNamedAfter(doc, el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
+  renameId(doc, el, next);
+  doc.markGenerated(next, wanted);
+  doc.recordRegenerated(id, next);
+  for (const { flow, was } of flows) followRenamedEnd(doc, flow, was);
+}
+
+/**
+ * W_ID_PREFIX_STALE on `cs` for each element a retype or a trigger change
+ * kept the id of (Doc.takeIdStates), whose prefix the declared id
+ * conventions (element-id-naming) accept for what it was before the first
+ * change, or that they did not check then (none declared for it), and not
+ * for what it is now, after the last: its prefix then, the prefixes for
+ * its final type and trigger, and the `bpmn set` that renames it (free in
+ * the file and among the hints). Ids are API, so it keeps the id. None for
+ * an element a later op renamed or removed, or that fits again.
+ */
+export function reportStaleIdPrefixes(doc: Doc, cs: ChangeSet): void {
+  const states = doc.takeIdStates();
+  if (!states.size) return;
+  const style = doc.idStyle;
+  const hinted = new IdRegistry(doc.ids.values());
+  for (const [id, { before, wasLabel }] of states) {
+    const el = doc.get(id);
+    const stale = el && style.stalePrefix(id, before, idStateOf(el), requestOf(el));
+    if (!el || !stale) continue;
+    let suggested = stale.suggested;
+    const sep = style.suffixSep(kindOf(el)?.kind ?? el.$type);
+    for (let n = 2; hinted.has(suggested); n++) suggested = `${stale.suggested}${sep}${n}`;
+    hinted.claim(suggested);
+    const rule = `element-id-naming (${doc.conventions?.source ?? 'the host'})`;
+    const expects = `${stale.heads.join(' or ')} for ${aKind(kindLabel(el))}`;
+    cs.warn({
+      code: 'W_ID_PREFIX_STALE',
+      message: stale.was !== undefined ? `${id} keeps its id, whose prefix ${stale.was} is that of ${aKind(wasLabel)}; ${rule} expects ${expects}` : `${id} keeps its id, which ${rule} did not check on ${aKind(wasLabel)}; it expects ${expects}`,
+      element: id,
+      hint: `Code, tests and links that use the id keep working; to follow the convention: \`bpmn set <file> ${id} id=${suggested}\`.`,
+    });
+  }
+}
+
 /** Throws unless `el` may be non-interrupting with the given trigger. */
 function assertNonInterruptingAllowed(doc: Doc, el: El, trigger: Trigger): void {
   if (is(el, 'bpmn:BoundaryEvent')) {
@@ -1504,9 +1599,12 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
   else delete merged.nonInterrupting;
   if (merged.nonInterrupting) assertNonInterruptingAllowed(doc, el, trigger);
   const conflictsBefore = new Set(messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
+  const before = idStateOf(el);
+  const wasLabel = kindLabel(el);
   for (const w of applyTrigger(doc, el, trigger, merged)) cs.warn(w);
   assertMessageFlowsFit(doc, el, conflictsBefore);
   if (dropNonInterrupting) warnNonInterruptingDropped(cs, el, trigger);
+  recordIdState(doc, el, before, wasLabel);
   const details = Object.entries(given)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}=${String(v)}`);

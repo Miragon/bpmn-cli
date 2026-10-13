@@ -143,6 +143,29 @@ temporary directory or the repository would run bpmnlint in every CLI test:
 `test/global-setup.ts` (vitest's globalSetup) stops the run and names it.
 The fuzzer, the benchmark and the layout regression pass
 `--no-lint-config`.
+The id conventions of a `.bpmnlintrc` (#34): `test/conventions-lint.test.ts`
+lints every id bpmn-cli generates under several `element-id-naming` settings
+(the bare flag, PascalCase with `Flow_`, snake_case with the qualifier
+required, exact prefixes for pools, lanes, messages and the process, prefixes
+without a separator, case any) with the real rule, in a new file and in files
+of six other id styles (also elements a batch creates and then retypes or
+gives another trigger, with the flows named after them, a split's join, the
+join after an explicit split id in another case), and expects no finding (a
+control without conventions has them); it also checks how
+`idConventionsFromLint` reads the options and the `W_CONFIG_IGNORED` notes.
+`test/conventions-declared.test.ts` checks the style around them (the rest of
+a file stable over many writes and learned from its own ids that do not
+follow the rule, single words (also under PascalCase), the kind word, glued
+suffixes and joins, also after an explicit split id, message flows and
+the processes of new pools over many writes, flows renamed into the declared
+form, `W_ID_PREFIX_STALE` alone and in a batch (also for a type the rule
+switched off), the new id of an element the batch created and of the flows
+named after it, an id freed and then claimed explicitly, the `conventions`
+of a result, the view of `show --conventions` with its reasons).
+`test/bpmnlint.test.ts` checks the lookup, the notes in validate and writes,
+`show --conventions` and `new` on the command line (its own errors before
+the `.bpmnlintrc`'s), and that a `.bpmnlintrc` without the rule, or
+with it off, writes every fixture byte for byte as without one.
 
 `test/step2-integration.test.ts` checks that the parts of step 2 work as one
 pipeline: the in-memory API keeps the text (a no-op is the input string

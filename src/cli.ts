@@ -10,14 +10,16 @@
  * environment. Mutating commands and `validate` run the project's
  * .bpmnlintrc (nearest above the file written (-o) or checked; a model from
  * stdin without -o: above the working directory; --lint-config,
- * --no-lint-config), project plugins included (lintProjectCode).
+ * --no-lint-config), project plugins included (lintProjectCode); its
+ * element-id-naming gives the id conventions new ids follow (`bpmn show
+ * <file> --conventions` shows them).
  *
  * `-` as the file reads the model from stdin; a mutating command then writes
  * its result to stdout (unless -o names a file), and `-o -` writes any
  * result to stdout. With the XML on stdout the report goes to stderr.
  * --json prints compact JSON (--pretty indents it).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
@@ -28,12 +30,14 @@ import { layoutProblems } from './diagram/metrics.js';
 import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './diagram/render.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './context.js';
-import { assertTarget, Doc } from './document.js';
+import { conventionsView, renderConventions, type Undeclared } from './conventions.js';
+import { assertProcessId, assertTarget, Doc } from './document.js';
 import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
-import { checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
+import { projectIdConventions } from './node/bpmnlint.js';
+import { assertNewFile, checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
 import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
@@ -240,7 +244,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
 function withLintOptions(cmd: CommandType): CommandType {
   return cmd
     .option('--lint-config <path>', "the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file written (-o) or checked, up to the repository root, whoever owns it; outside one only in the file's directory; stdin without -o: from the working directory)")
-    .option('--no-lint-config', "do not run the project's bpmnlint configuration");
+    .option('--no-lint-config', "do not read the project's bpmnlint configuration (no bpmnlint findings, no id conventions from element-id-naming)");
 }
 
 function withTriggerOptions(cmd: CommandType): CommandType {
@@ -433,7 +437,7 @@ withMutationOptions(
     .command('new <file>')
     .description('create a new .bpmn file with one empty process')
     .option('--name <text>', 'process name')
-    .option('--id <processId>', 'process id (default: Process_<Name> or Process_1)')
+    .option('--id <processId>', "process id (default: Process_<Name> or Process_1; a bpmn:Process prefix the .bpmnlintrc's element-id-naming names: that prefix and the name, process_main without one)")
     .option('--no-executable', 'isExecutable=false')
     .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (v: string) => {
       try {
@@ -448,12 +452,20 @@ withMutationOptions(
   await run(async () => {
     // `new -` (or -o -) writes the new model to stdout
     const stdout = file === '-' || opts.out === '-';
+    // what fails without a .bpmnlintrc fails first, as before one was read: an invalid --id, a file that exists
+    const processId = o['id'] as string | undefined;
+    if (processId !== undefined) assertProcessId(processId);
+    if (!stdout) await assertNewFile(opts.out ?? file, opts);
+    // the id conventions of the .bpmnlintrc that applies to the file written (the process id only where they name bpmn:Process)
+    const target = opts.out && opts.out !== '-' ? opts.out : file === '-' ? undefined : file;
+    const conventions = (await projectIdConventions(target, opts))?.conventions;
     const doc = Doc.create(
       {
         processName: o['name'] as string | undefined,
-        processId: o['id'] as string | undefined,
+        processId,
         executable: o['executable'] !== false,
         target: o['target'] as 'camunda8' | 'camunda7' | undefined,
+        ...(conventions ? { conventions } : {}),
       },
       file === '-' ? undefined : file,
     );
@@ -484,9 +496,36 @@ withJsonOptions(
     .option('--depth <n>', 'with --around: flow steps (default 2)', depthArg)
     .option('--inner', 'with --around: also enter sub-processes from outside')
     .option('--context', 'with an id: the element in its context (where, lane, before / after, what catches it, message flows)')
-    .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems'),
+    .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems')
+    .option('--conventions', "the id conventions new ids follow here: element-id-naming of the .bpmnlintrc (prefixes, case, qualifier) and the file's own style; a file that does not exist yet: those of a new model there")
+    // --lint-config before --no-lint-config: neither given leaves lintConfig undefined
+    .option('--lint-config <path>', "with --conventions: the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file, up to the repository root, whoever owns it; outside one only in the file's directory; stdin: from the working directory)")
+    .option('--no-lint-config', 'with --conventions: do not read the .bpmnlintrc (no id conventions from element-id-naming)'),
 ).action(async (file: string, id: string | undefined, o: RawOpts) => {
   await run(async () => {
+    if (o['conventions']) {
+      const extra = [...(id !== undefined ? ['the element id'] : []), ...['scope', 'around', 'depth', 'inner', 'context', 'layout'].filter((k) => o[k] !== undefined && o[k] !== false).map((k) => `--${k}`)];
+      if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
+      // a file that does not exist yet: the conventions a new model there gets (before `bpmn new`)
+      const doc = file === '-' || existsSync(file) ? await readDocArg(file) : undefined;
+      const found = await projectIdConventions(file === '-' ? undefined : file, lintOptions(o));
+      // why none are declared, where none are
+      const undeclared: Undeclared = o['lintConfig'] === false ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : !found.setting || found.setting.severity === 'off' ? 'off' : 'no prefixes';
+      const view = conventionsView(doc, found?.conventions, {
+        ...(file !== '-' ? { file } : {}),
+        ...(found?.setting ? { severity: found.setting.severity } : {}),
+        notes: found?.notes ?? [],
+        ...(found ? { where: found.where } : {}),
+        undeclared,
+      });
+      if (o['json']) printJson(view, !!o['pretty']);
+      else print(renderConventions(view));
+      return;
+    }
+    // the .bpmnlintrc only decides the id conventions here
+    if (o['lintConfig'] !== undefined) {
+      throw usageError(`${o['lintConfig'] === false ? '--no-lint-config' : '--lint-config'} goes only with --conventions`, { hint: 'Use `bpmn show <file> --conventions --lint-config <path>` (or --no-lint-config).' });
+    }
     const opts: ViewOptions = {
       ...(id !== undefined ? { id } : {}),
       ...(o['context'] ? { context: true } : {}),
