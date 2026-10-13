@@ -10,10 +10,10 @@
  *                or { error, counts: null, score: null } when the library throws;
  *      pr      = { score, sums, planes } | { error } | { skipped: true } (no BPMN_EDIT_MAIN);
  *      problems = the library's problem list (kept in memory, not in the records).
- *  - `hardDelta(before, after, ctx, groups)` -> { before, after, added,
- *    addedKinds: {kind: n}, addedGroup, examples } over the hard kinds: added
- *    problems are matched by the library's problem keys; problems that involve
- *    a bpmn:Group (groups count as overlaps) are counted in addedGroup only.
+ *  - `hardDelta(before, after, ctx)` -> { before, after, added,
+ *    addedKinds: {kind: n}, examples } over the hard kinds: added problems are
+ *    matched by the library's problem keys (a group is no leaf shape there, so
+ *    problems with a group count like any other).
  *  - `stability(before, after, exclude)` over flow nodes with DI in both models
  *    (same id): centre displacement { n, max, median, mean, moved5 } raw and
  *    `norm` after removing the median translation.
@@ -45,24 +45,23 @@ export async function quality(xml, ctx) {
   return { harness, pr, problems };
 }
 
-export function hardDelta(before, after, ctx, groups = new Set()) {
+export function hardDelta(before, after, ctx) {
   const hard = ctx.metrics.hard;
   const count = (q) => (q.harness.counts ? hard.reduce((s, k) => s + (q.harness.counts[k] ?? 0), 0) : null);
-  if (!before.problems || !after.problems) return { before: count(before), after: count(after), added: null, addedKinds: {}, addedGroup: null, examples: [] };
+  if (!before.problems || !after.problems) return { before: count(before), after: count(after), added: null, addedKinds: {}, examples: [] };
   const added = ctx.metrics.diff(before.problems, after.problems).added.filter((p) => hard.includes(p.kind));
-  const real = added.filter((p) => !p.ids.some((id) => groups.has(id)));
   const addedKinds = {};
-  for (const p of real) addedKinds[p.kind] = (addedKinds[p.kind] ?? 0) + 1;
-  return { before: count(before), after: count(after), added: real.length, addedKinds, addedGroup: added.length - real.length, examples: real.slice(0, 3).map((p) => `${p.kind}:${p.ids.join(',')}`) };
+  for (const p of added) addedKinds[p.kind] = (addedKinds[p.kind] ?? 0) + 1;
+  return { before: count(before), after: count(after), added: added.length, addedKinds, examples: added.slice(0, 3).map((p) => `${p.kind}:${p.ids.join(',')}`) };
 }
 
 /** The soft kinds bench --compare reports per edit (runs adding them) and holds E8 / E9 to (soft-budget.json). */
 export const SOFT_KINDS = ['crossings', 'backwardFlow'];
 
-/** Problems of the soft kinds a run added (problems involving a group excluded, like hardDelta). */
-export function softDelta(before, after, ctx, groups = new Set()) {
+/** Problems of the soft kinds a run added. */
+export function softDelta(before, after, ctx) {
   if (!before.problems || !after.problems) return { addedKinds: null };
-  const added = ctx.metrics.diff(before.problems, after.problems).added.filter((p) => SOFT_KINDS.includes(p.kind) && !p.ids.some((id) => groups.has(id)));
+  const added = ctx.metrics.diff(before.problems, after.problems).added.filter((p) => SOFT_KINDS.includes(p.kind));
   const addedKinds = Object.fromEntries(SOFT_KINDS.map((k) => [k, added.filter((p) => p.kind === k).length]));
   return { addedKinds };
 }

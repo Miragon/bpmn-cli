@@ -241,7 +241,8 @@ Details, every op key and worked batches: [reference/ops.md](reference/ops.md).
 - `--layout incremental`: always keep (fails with `E_LAYOUT_INCREMENTAL`
   instead of redrawing) - use it when keeping the drawing is a requirement.
 - `--relayout` (= `--layout full`, `bpmn layout <file>`): redraw everything;
-  colours survive, positions do not. Only when the user asks.
+  colours survive, positions do not, group boxes are drawn again around the
+  elements they held. Only when the user asks.
 
 ## Formatting without XML
 

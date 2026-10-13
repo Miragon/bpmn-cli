@@ -18,6 +18,16 @@
  *    events, their labels and the flows dropping from them
  *  - expanded / collapsed follows `opts.expanded` for every sub-process,
  *    event sub-processes included
+ *  - parts of a scope that no flow connects (each from its start event, then
+ *    from a node without incoming flow) go below one another in declaration
+ *    order, except that with `opts.groups` (layoutModel: the groups whose
+ *    box held a node) a part follows the first part of its group, the
+ *    groups inside a group likewise; a part's group is that of its first
+ *    node (declaration order, boundary events after their host) a group box
+ *    held, and the parts from a start event and from a node without
+ *    incoming flow are ordered as one list (start events first within a
+ *    group): a group is drawn around its members again, so they stay
+ *    together
  */
 import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { is, many, type El } from '../model.js';
@@ -50,6 +60,8 @@ export interface PlaceOptions {
   expanded: Set<string>;
   /** collects child planes of collapsed sub-processes */
   collapsedScopes: Map<string, ScopeLayout>;
+  /** element id -> the groups whose box held it, outermost first (keeps the unconnected parts of a group together) */
+  groups?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** Builds and lays out one scope (process or sub-process). */
@@ -123,7 +135,7 @@ export function layoutScope(scope: El, opts: PlaceOptions): ScopeLayout {
   }
   markBackEdges(layout);
   assignLayers(layout);
-  assignRows(layout);
+  assignRows(layout, opts.groups);
   buildArtifacts(layout, scope, byId);
   positionNodes(layout);
   placeAttachedArtifacts(layout);
@@ -283,7 +295,7 @@ function overlapsRange(a: { from: number; to: number }, b: { from: number; to: n
  * A split flow that goes straight to an already placed node on the same row
  * (an empty branch, a skip) reserves an empty band the same way.
  */
-function assignRows(layout: ScopeLayout): void {
+function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly string[]>): void {
   const { nodes } = layout;
   const placed = new Set<GNode>();
   const branches: Branch[] = [];
@@ -440,7 +452,7 @@ function assignRows(layout: ScopeLayout): void {
 
   const starts = nodes.filter((n) => n.kind === 'start');
   const sources = nodes.filter((n) => n.in.length === 0 && n.kind !== 'start');
-  const roots = [...starts, ...sources, ...nodes];
+  const roots = [...groupedOrder([...starts, ...sources], nodes, groups), ...nodes];
   const maxLayer = Math.max(0, ...nodes.map((n) => n.layer));
   let first = true;
   for (const root of roots) {
@@ -466,6 +478,71 @@ function assignRows(layout: ScopeLayout): void {
     }
   }
   for (const n of nodes) for (const b of n.boundary) b.row = n.row;
+}
+
+/**
+ * The groups of each part of the scope no flow connects to another (weakly
+ * connected over sequence flows, boundary events with their host, a
+ * compensation handler with its event): those of the part's first node
+ * (declaration order, boundary events after their host) a group box held.
+ */
+function partGroups(nodes: GNode[], groups: ReadonlyMap<string, readonly string[]>): Map<GNode, readonly string[]> {
+  const unit = (n: GNode): GNode => n.host ?? n;
+  const partOf = new Map<GNode, GNode[]>();
+  for (const n of nodes) {
+    if (partOf.has(n)) continue;
+    const part: GNode[] = [n];
+    partOf.set(n, part);
+    for (let i = 0; i < part.length; i++) {
+      const m = part[i]!;
+      const next = [...m.out.map((e) => e.target), ...m.in.map((e) => e.source)];
+      for (const b of m.boundary) next.push(...b.out.map((e) => e.target), ...(b.compensationHandler ? [b.compensationHandler] : []));
+      if (m.compensatedBy) next.push(m.compensatedBy);
+      for (const o of next.map(unit)) {
+        if (partOf.has(o)) continue;
+        partOf.set(o, part);
+        part.push(o);
+      }
+    }
+  }
+  const out = new Map<GNode, readonly string[]>();
+  const found = new Set<GNode[]>();
+  for (const n of nodes) {
+    const part = partOf.get(n)!;
+    if (found.has(part)) continue;
+    const path = [n, ...n.boundary].map((m) => groups.get(m.id)).find((p) => p?.length);
+    if (!path) continue;
+    found.add(part);
+    for (const m of part) out.set(m, path);
+  }
+  return out;
+}
+
+/**
+ * `list` (the roots of the parts) with the roots of one group moved up
+ * behind the group's first root (groups inside a group likewise, see the
+ * module conventions); stable, and `list` itself without groups.
+ */
+function groupedOrder(list: GNode[], nodes: GNode[], groups: ReadonlyMap<string, readonly string[]> | undefined): GNode[] {
+  if (!groups?.size || list.length < 2) return list;
+  const pathOf = partGroups(nodes, groups);
+  const first = new Map<string, number>();
+  const keys = new Map<GNode, number[]>();
+  list.forEach((n, i) => {
+    let path = '';
+    const key: number[] = [];
+    for (const g of pathOf.get(n.host ?? n) ?? []) {
+      path += `/${g}`;
+      if (!first.has(path)) first.set(path, i);
+      key.push(first.get(path)!);
+    }
+    keys.set(n, [...key, i]);
+  });
+  const compare = (a: number[], b: number[]): number => {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i]! - b[i]!;
+    return a.length - b.length;
+  };
+  return [...list].sort((a, b) => compare(keys.get(a)!, keys.get(b)!));
 }
 
 /* ------------------------------------------------------------------ */

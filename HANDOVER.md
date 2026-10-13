@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, and the .bpmnlintrc reloaded after later installs and found through linked directories)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, and group boxes drawn again by a full redraw)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2133 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2149 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,113 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Group boxes over a full redraw (2026-10-13, `fix/full-redraw-keeps-groups`)
+
+A full redraw (`bpmn layout`, `--relayout` / `--layout full`, an
+engine-owned drawing in `auto` mode, the `W_LAYOUT_INCREMENTAL_FAILED`
+fallback, `--engine auto`) dropped every group's BPMNShape without a word,
+and the quality line called the lost box resolved overlaps (gallery.bpmn:
+`score 182 -> 64; resolved: overlaps [Group_FirstTasks, Activity_UserTask],
+...`). Now a redraw draws each group again around what its box held.
+
+- **`src/diagram/groups.ts`** (new, browser-safe): `rememberGroups` records
+  every drawn group before an engine replaces the DI (plane, box, label,
+  members: shapes whose centre lay in the box, frames and groups inside
+  whole, elements referencing its category value). `redrawGroups` runs after
+  either engine, smallest group first (an inner group counts as a member of
+  the outer one), appended in the old DI order; the old DI id comes back
+  through `restoreDiIds`, colours through `applyColors`. The box: the
+  members' new bounds with their boundary events and the labels that pull
+  in no neighbour, 20 px around (40 above for a name), each side at most
+  half-way to a shape that is no member or to the frame around the members;
+  then whatever has its centre inside joins (a boundary event with its
+  host), until nothing joins. Other groups' boxes play no part in the
+  padding or the labels, so the order the groups are drawn in never changes
+  a box; a box that holds a group drawn after it is measured again with it.
+  So a redraw of the result changes nothing, and an edit to it finds the
+  drawing engine-owned. A group with nothing drawn inside comes after the
+  others and is no member of any: it keeps its box, or its size GROUP_PAD
+  below the drawing when the redraw put a shape or label on the old box,
+  and the layout block says so (`note: group <id> kept its box: ...` /
+  `moved below the drawing: ...`). A group bpmn-auto-layout drew itself
+  (members that reference its category value) is left alone;
+  `GROUP_MEMBERS_NOT_FOUND` goes for the groups drawn here.
+- **Clean engine**: the parts of a scope that no flow connects follow the
+  first part of their group (`place.ts` `groupedOrder`,
+  `PlaceOptions.groups` from `membersOf`). A part's group is that of the
+  first of its nodes (declaration order, boundary events after their host)
+  a box held, and the parts from a start event and from a node without
+  incoming flow are one list, so groups of independent chains no longer
+  swallow each other, also when a box held only the tasks or a chain has no
+  start event; without groups the order is the old one. A
+  collaboration-level group no longer reports `W_LAYOUT_DI_NOT_CREATED`; an
+  association to a group says `an end is a group: its box is drawn after
+  the layout` instead of "different diagrams".
+- **Metrics** (`src/diagram/metrics.ts` and `tools/layout-regress.mjs`
+  alike): a group is no leaf shape, so no overlaps, through or label on
+  shape with a group (a group's own label still counts). The bench no longer
+  excludes groups (`hardDelta` / `softDelta`, `addedGroup` gone); the
+  fuzzer keeps `group:*` as warnings (rare now: the gate campaign 4 -> 0).
+- **Review fixes** (before the PR): stacked groups (test/fixtures
+  incremental/groups.bpmn) came out differently on a second redraw, since
+  the padding stopped at a group box drawn earlier; an empty inner group
+  kept at its old box stretched the outer group to it; a kept empty box
+  could land on redrawn shapes (unstable, and the next edit found the
+  drawing hand-made); a box around tasks only, or a chain without a start
+  event, still let groups swallow each other; two overlapping groups needed
+  a second redraw to settle; a boundary event could join a box without its
+  host; `docs/migrating.md`, `docs/reference.md` (`notes` of a full
+  redraw), `docs/commands.md` and the guide's `layout` summary did not say
+  what changed. Each has a test now.
+- **Evidence**: 16 tests (test/layout.test.ts "groups over a full redraw",
+  15, and test/diagram-metrics.test.ts) fail on origin/main and pass.
+  Differential against origin/main, in process (layout, layout `--engine
+  auto`, a rename in `auto` mode, validate): the 159 repository files
+  without a group and the 347 files of the private corpus without one give
+  identical results; the 5 + 4 with a group differ by the redrawn boxes,
+  the metrics and the wording of an annotation-to-group `DI_NOT_CREATED`
+  only (their incremental edits write the same XML; every group they had is
+  drawn again by both engines, a second redraw is unchanged and an edit
+  after it runs `full`). layout-regress 444 -> 444 (BETTER 0, WORSE 0; no
+  scenario has a group, the budget stays), roundtrip identical. Runtime: no
+  measurable change. In process, warm (`layoutXml`, sum of per-file
+  medians, both builds interleaved): the 115 scenarios 1,156.1 -> 1,159.2
+  ms and 1,179.7 -> 1,183.1 ms in two runs (clean, +0.3 %, the noise of
+  swapping the order), 3,512.1 -> 3,477.1 ms (`--engine auto`), the 5
+  fixtures with a group 69.2 -> 69.8 ms; on gallery.bpmn remembering and
+  redrawing its group take 0.08 + 0.09 ms.
+- **Bundle** (measured after the rebase onto the merged follow-ups): whole
+  entry 942.0 -> 950.6 KB minified (300.3 -> 303.2 KB gzip), `applyToXml`
+  only 663.5 -> 671.8 KB (211.6 -> 214.4 KB gzip). `src/diagram/groups.ts`
+  and the grouped order are in every `applyToXml` (a full redraw can run in
+  any write), and both entries no longer fit main's budgets of 948 / 302 and
+  670 / 214, so they are raised to 960 / 306 and 679 / 217, the measured
+  size + 1.0 % (docs/library.md's table too).
+- **Left**: the engine does not keep the members of one connected flow
+  together, so a box around members the redraw spread out also takes in
+  what lies between them (and holds it from then on), and its border can
+  cut a shape that lies partly between them (a wide annotation; the padding
+  itself never crosses one); an association between a text annotation and
+  a group is still not drawn by a full redraw (the annotation goes above
+  the drawing). Groups still cannot be created.
+
+Left for later (low findings of the review, not fixed here):
+
+- Two groups that overlap without one inside the other: a part held by both
+  is keyed by the nested path of both, so the other group's parts do not
+  follow it and one box can take in the other (five chains in the rows 2, 4,
+  1, 5, 3 with Group_A on 2, 4, 1 and Group_B on 1, 5: Group_B ends up
+  around everything). The redraw is stable now (one pass settles it), but
+  keeping each group's parts consecutive needs an order in which every
+  group's parts are adjacent (a consecutive-ones ordering) rather than a
+  sort key, which is more than this fix; no repository or corpus file has
+  such groups.
+- A non-member that the members' own box overlaps (a wide annotation placed
+  between two members) is cut by the border. Letting such a shape join
+  would make the box grow over neighbours it never held, possibly in a
+  cascade; the docs now say that the padding never crosses a neighbour but
+  members spread apart can still overlap one.
 
 ## The .bpmnlintrc in long-running hosts and through linked directories (2026-10-13, `fix/lint-reload-and-linked-dirs`)
 
@@ -1352,7 +1459,8 @@ Open after #33:
   `miragon/element-id-naming`; the README's JSONC `.bpmnlintrc` examples are
   rejected by `npx bpmnlint`.
 - `bpmn layout` drops a group's BPMNShape (gallery.bpmn's
-  `Group_FirstTasks`): a separate bug, not #33.
+  `Group_FirstTasks`): a separate bug, not #33. Fixed in
+  `fix/full-redraw-keeps-groups` (see "Group boxes over a full redraw").
 - `src/node/find-up.ts` and `test/find-up.test.ts` came from #30's branch
   (`fix/30-designiq-yml`, PR #36, closed unmerged once #35 removed the
   design profile): they are new files of this branch, and only the
@@ -4132,7 +4240,7 @@ node tools/gen-camunda-descriptor.mjs          # after updating camunda-bpmn-mod
 ```
 
 Rule of thumb: render and look at what you touched; the metrics do not see
-everything (labels, aesthetics, groups count as overlaps). Lower the
+everything (labels, aesthetics). Lower the
 regression budget when the engine improves; raise it only with a reviewed
 reason. Keep fixtures synthetic: rebuild a private model's defect with a
 handful of elements (the fuzzer's minimiser tells you which ops matter).
@@ -4227,8 +4335,12 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
   empty across a pool or lane band): content spread over many rows shrinks
   less than with a full redraw; pools side by side are not compacted
   against each other.
-- Known residuals of the clean engine: complexGateway, choreographies and
-  groups unsupported (a full redraw drops group boxes); cross-scope
+- Known residuals of the clean engine: complexGateway and choreographies
+  unsupported, groups cannot be created (a full redraw draws an existing
+  group box again around its members; members of one connected flow and
+  two overlapping groups are not kept apart, and an annotation's
+  association to a group is not drawn, see "Group boxes over a full
+  redraw"); cross-scope
   associations are straight lines; boundary-handler paths can run through
   nested expanded sub-processes (#19); `order <collaboration> <pools...>` sets
   the pool order of a kept drawing, a full redraw orders pools by its own

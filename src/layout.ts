@@ -16,6 +16,11 @@
  * Both engines write new DI; the ids the file's DI had are given back to it
  * afterwards (diagram/write.ts restoreDiIds: same DI, plane and diagram ids,
  * new DI in the file's DI id style), so a redraw only changes geometry.
+ * Neither engine knows where a group's box goes: every drawn group is drawn
+ * again around the elements its box held (diagram/groups.ts; one without
+ * any of them drawn keeps its box, or its size below the drawing when the
+ * redraw put shapes on it; LayoutResult.notes says so). The clean engine
+ * keeps the unconnected parts of a group together.
  * Before they run, every element they draw that has no id gets one in the
  * file's id style (diagram/drawn-ids.ts; LayoutResult.givenIds), since DI
  * refers to elements by id.
@@ -34,6 +39,7 @@
  */
 import type { LayoutWarning } from 'bpmn-auto-layout';
 import { giveDrawnElementsIds, type GivenId } from './diagram/drawn-ids.js';
+import { membersOf, redrawGroups, rememberGroups, type RedrawnGroups } from './diagram/groups.js';
 import { rememberDiIds, restoreDiIds } from './diagram/write.js';
 import type { IdRequest } from './idstyle.js';
 import { layoutClean } from './layout/engine.js';
@@ -65,6 +71,8 @@ export interface LayoutResult {
   expanded: string[];
   /** elements without id that got one so that the diagram can refer to them (diagram/drawn-ids.ts) */
   givenIds?: GivenId[];
+  /** what the caller should know about the drawing (a group around nothing kept or moved) */
+  notes?: string[];
 }
 
 export const SUB_PROCESS_TYPES = ['bpmn:SubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction'];
@@ -451,11 +459,13 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
   const given = givenIds.length ? { givenIds } : {};
   const expanded = resolveExpanded(model, opts);
   const diIds = rememberDiIds(model.definitions);
+  const groups = rememberGroups(model.definitions);
   if ((opts.engine ?? 'clean') === 'clean') {
-    const { warnings } = layoutClean(model, expanded);
+    const { warnings } = layoutClean(model, expanded, membersOf(groups));
+    const redrawn = redrawGroups(model.moddle, model.definitions, groups);
     restoreDiIds(model.definitions, diIds);
     const { xml } = await model.moddle.toXML(model.definitions, { format: true });
-    return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given };
+    return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...groupNotes(redrawn) };
   }
   injectLayoutHints(model, expanded);
   const temporary = addTemporaryLaneMembers(model.definitions);
@@ -469,17 +479,29 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
   const missingDi = result.warnings.some((w) => w.code === 'DI_NOT_CREATED');
   if (!temporary.length && !missingDi && !diIds.diagrams.length) return { ...result, ...given };
 
-  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges, give the DI its ids back
+  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges and the groups, give the DI its ids back
   const laidOut = await parseXml(result.xml);
   removeTemporaryLaneMembers(laidOut.definitions, temporary);
   const fixed = new Set(missingDi ? synthesiseAssociationEdges(laidOut) : []);
+  const redrawn = redrawGroups(laidOut.moddle, laidOut.definitions, groups);
+  const placed = new Set([...redrawn.drawn, ...redrawn.kept]);
   restoreDiIds(laidOut.definitions, diIds);
   return {
     xml: await serialize(laidOut),
-    warnings: result.warnings.filter((w) => !(w.code === 'DI_NOT_CREATED' && fixed.has(w.elementId))),
+    warnings: result.warnings.filter((w) => !(w.code === 'DI_NOT_CREATED' && fixed.has(w.elementId)) && !(w.code === 'GROUP_MEMBERS_NOT_FOUND' && placed.has(w.elementId))),
     expanded: result.expanded,
     ...given,
+    ...groupNotes(redrawn),
   };
+}
+
+/** The notes of the groups around nothing a redraw kept at their old place or moved below the drawing (diagram/groups.ts). */
+function groupNotes({ kept, moved }: RedrawnGroups): { notes?: string[] } {
+  const stay = kept.filter((id) => !moved.includes(id));
+  const notes: string[] = [];
+  if (stay.length) notes.push(stay.length === 1 ? `group ${stay[0]} kept its box: no element inside it is drawn` : `groups ${stay.join(', ')} kept their boxes: no element inside them is drawn`);
+  if (moved.length) notes.push(moved.length === 1 ? `group ${moved[0]} moved below the drawing: no element inside it is drawn and the redraw put shapes on its box` : `groups ${moved.join(', ')} moved below the drawing: no element inside them is drawn and the redraw put shapes on their boxes`);
+  return notes.length ? { notes } : {};
 }
 
 /**

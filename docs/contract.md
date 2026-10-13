@@ -133,7 +133,19 @@ that syncs one text region per save (design-iq) sees only the change.
   `compact` and `space --by -<amount>` close only rows and columns that are empty across the whole
   pool or lane band, so a spread-out drawing shrinks less than a full redraw (`bpmn layout`) would.
 - **Groups** (`bpmn:Group` boxes) are not frames: shapes may be placed into or out of a group's
-  box, and a node placed next to an element inside a group goes into that group, which grows.
+  box, and a node placed next to an element inside a group goes into that group, which grows. A
+  full redraw (`bpmn layout`, `--relayout`, an engine-owned drawing in `auto` mode, `--engine auto`)
+  draws a group again around the elements its box held (a shape whose centre lay inside; a pool,
+  lane, expanded sub-process or group inside whole), 20 px around them (40 above for its name), the
+  padding at most half-way to a neighbour that is no member. A group around nothing keeps its box,
+  or its size below the drawing when the redraw put shapes on it, and the layout block has a note.
+  A second redraw of the result changes nothing. The built-in engine keeps the parts of a group
+  that no flow connects together; members of one connected flow stay where the flow puts them, so
+  a box around members the redraw spread out also takes in what lies between them, and its border
+  can cut a shape that lies partly between them (a wide annotation). Two groups that overlap
+  without one inside the other are not kept apart: one box can take in the other. An association
+  between a text annotation and a group is not drawn by a full redraw (`W_LAYOUT_DI_NOT_CREATED`).
+  The layout metrics never count a group as overlapping its members.
 - **Vertical pools and lanes** (`isHorizontal="false"`) are not supported by the incremental
   layout and the format commands. An edit that would place, move or route anything on such a
   diagram is redrawn in full in `auto` mode (`W_LAYOUT_INCREMENTAL_FAILED`) and refused with

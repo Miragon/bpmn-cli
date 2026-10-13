@@ -3,7 +3,7 @@
  *
  * Contract: `readModel(xml)` parses with plain bpmn-moddle (no vendor descriptors, like bpmn-cli) and returns
  *   { defs, warnings, lossy, nodes: Map<id, Node>, flows: Map<id, Flow>, lanes: Map<id, Lane>, shapes: Map<id, Box>,
- *     edges: Map<id, Point[]>, processes: Process[], pools, groups: Set<id> }
+ *     edges: Map<id, Point[]>, processes: Process[], pools }
  * where Node = { id, type, name, el, processId, scope (id of process / sub-process), laneId?, incoming: flowId[],
  * outgoing: flowId[], attachedTo? } and Box = { x, y, width, height }. Only the first DI shape per element counts.
  * Nothing here writes files.
@@ -23,9 +23,7 @@ export async function readModel(xml) {
   const lanes = new Map();
   const processes = [];
   const pools = [];
-  const groups = new Set();
   const laneOf = new Map();
-  const collectGroups = (owner) => { for (const a of owner.artifacts || []) if (is(a, 'bpmn:Group')) groups.add(a.id); };
 
   const walkLanes = (ls, processId) => {
     for (const lane of ls?.lanes || []) {
@@ -44,13 +42,11 @@ export async function readModel(xml) {
       }
     }
     for (const ls of scope.laneSets || []) walkLanes(ls, processId);
-    collectGroups(scope);
   };
   for (const root of defs.rootElements || []) {
     if (is(root, 'bpmn:Process')) { processes.push(root); walk(root, root.id); }
     if (is(root, 'bpmn:Collaboration')) {
       for (const p of root.participants || []) pools.push({ id: p.id, processId: p.processRef?.id });
-      collectGroups(root);
     }
   }
   for (const f of flows.values()) {
@@ -70,7 +66,7 @@ export async function readModel(xml) {
     }
   }
   const lossy = warnings.filter((w) => LOSSY.some((p) => p.test(w.message))).length;
-  return { defs, warnings, lossy, nodes, flows, lanes, shapes, edges, processes, pools, groups };
+  return { defs, warnings, lossy, nodes, flows, lanes, shapes, edges, processes, pools };
 }
 
 export const centre = (b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
