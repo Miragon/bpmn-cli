@@ -144,7 +144,7 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
 
   it('the design profile in memory: auto runs it for a content repository the host names, with its link checks', async () => {
     const xml = await designModel('billing');
-    // without a repository, auto runs no profile (in memory there is no bpmiq.yml to find)
+    // without a repository, auto runs no profile (in memory there is no designiq.yml to find)
     expect((await validateXml(xml)).profile).toEqual({ profile: 'none', source: 'none', detail: expect.any(String) });
     const repo = { processIds: ['payments'], decisionIds: [] };
     const report = await validateXml(xml, { contentRepo: repo, file: 'order.bpmn' });
@@ -159,7 +159,9 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
     expect((err.details['errors'] as Array<{ code: string; validator?: string }>).map((e) => `${e.validator} ${e.code}`)).toEqual(['design E_DESIGN_UNREACHABLE', 'design E_DESIGN_DEAD_END']);
     const ok = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', after: 'Start' }], { contentRepo: repo });
     expect(ok.result.validation.validators?.[0]).toMatchObject({ name: 'design', errors: [], counts: { errors: 0 } });
-    expect(await rejected(applyToXml(xml, [], { profile: 'strict' as never }))).toMatchObject({ code: 'E_USAGE' });
+    const usage = await rejected(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', after: 'Start' }], { profile: 'strict' as never }));
+    expect(usage).toMatchObject({ code: 'E_USAGE', message: 'Unknown profile "strict": expected auto, design, none' });
+    expect(usage.details.hint).toContain('designiq.yml, or the legacy bpmiq.yml');
   });
 });
 
@@ -169,10 +171,10 @@ function renderLines(findings: Array<{ code: string; validator?: string }>): str
 }
 
 describe('the node layer finds the content repository of the file it writes (validation + core)', () => {
-  it('auto: a model of a bpmiq.yml repository gets the design gate; the validators see the target of --out', async () => {
+  it('auto: a model of a designiq.yml repository gets the design gate; the validators see the target of --out', async () => {
     const repo = join(dir, 'repo');
     mkdirSync(join(repo, 'models'), { recursive: true });
-    writeFileSync(join(repo, 'bpmiq.yml'), 'models: models\n');
+    writeFileSync(join(repo, 'designiq.yml'), 'models: models\n');
     writeFileSync(join(repo, 'models', 'payments.bpmn'), await designModel('billing'));
     const model = join(repo, 'models', 'order.bpmn');
     writeFileSync(model, await designModel('payments'));
@@ -186,7 +188,7 @@ describe('the node layer finds the content repository of the file it writes (val
 
     // the call link resolves against the repository's models (payments.bpmn), so the file is clean
     const check = await checkFile(model);
-    expect(check.profile).toMatchObject({ profile: 'design', source: 'content-repo' });
+    expect(check.profile).toMatchObject({ profile: 'design', source: 'content-repo', repo: { root: repo, config: 'designiq.yml' } });
     expect(check.validation.warnings.filter((w) => w.code.startsWith('W_DESIGN'))).toEqual([]);
 
     // with --out the validators are told the file being written, and the repository is the target's

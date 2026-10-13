@@ -1,24 +1,28 @@
 /**
  * The design profile (src/platform/design.ts): design-iq's save gate as a
  * validation profile. Every model in CASES states what design-iq's own
- * validator (@bpmiq/validator checkBpmnXml, the save gate of the live host)
- * says about it: `fail` = at least one ERROR (the save is refused with 422).
- * The design profile must report an error exactly for those (all synthetic).
+ * validator (@miragon/design-iq-validator checkBpmnXml, the save gate of the
+ * live host) says about it: `fail` = at least one ERROR (the save is refused
+ * with 422). The design profile must report an error exactly for those (all
+ * synthetic).
  *
  * To check the verdicts against design-iq's validator itself, point
- * BPMN_DESIGN_IQ_VALIDATOR at its validate.ts (packages/validator/src of a
- * design-iq checkout with its dependencies installed; Node 22.6+ strips the
- * types):
+ * BPMN_DESIGN_IQ_VALIDATOR at dist/validate.js of the installed package, or
+ * at its validate.ts (packages/validator/src of a design-iq checkout with its
+ * dependencies installed; Node 22.6+ strips the types):
+ *   BPMN_DESIGN_IQ_VALIDATOR=<dir>/node_modules/@miragon/design-iq-validator/dist/validate.js npx vitest run test/design-profile.test.ts
  *   BPMN_DESIGN_IQ_VALIDATOR=<checkout>/packages/validator/src/validate.ts npx vitest run test/design-profile.test.ts
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
-import { checkFile } from '../src/node/files.js';
+import { guideTopic, kindsJson } from '../src/guide.js';
+import { CONTENT_CONFIG_FILE, CONTENT_CONFIG_FILES, resolveProfile } from '../src/index.js';
+import { checkFile, mutateFile } from '../src/node/files.js';
 import { findContentRepo, resolveFileProfile } from '../src/node/repo.js';
 import { mutateDoc } from '../src/pipeline.js';
 import { designFindings } from '../src/platform/design.js';
@@ -338,8 +342,8 @@ describe('design profile: validate', () => {
   });
 });
 
-describe('design profile: content repositories (bpmiq.yml)', () => {
-  it('reads the models folder like design-iq', () => {
+describe('design profile: content repositories (designiq.yml, legacy bpmiq.yml)', () => {
+  it('reads the models folder (design-iq\'s models ?? processes)', () => {
     expect(modelsFolderOf('models: processes\n')).toBe('processes');
     expect(modelsFolderOf('processes: "flows/" # legacy\n')).toBe('flows');
     expect(modelsFolderOf('processes: legacy\nmodels: ./m\n')).toBe('m');
@@ -347,14 +351,45 @@ describe('design profile: content repositories (bpmiq.yml)', () => {
     expect(modelsFolderOf('models: ../outside\n')).toBeUndefined();
     expect(modelsFolderOf('models: /abs\n')).toBeUndefined();
     expect(modelsFolderOf('name: x\n  models: nested\n')).toBeUndefined();
-    expect(modelsFolderOf('models:\nprocesses: p\n')).toBeUndefined();
+    // design-iq reads `models ?? processes`: an empty or null `models` is no key, a quoted empty one names no folder
+    expect(modelsFolderOf('models:\nprocesses: p\n')).toBe('p');
+    expect(modelsFolderOf('models: ~\nprocesses: p\n')).toBe('p');
+    expect(modelsFolderOf('models: null\nprocesses: p\n')).toBe('p');
+    expect(modelsFolderOf('models: NULL # later\nprocesses: p\n')).toBe('p');
+    expect(modelsFolderOf('models:   # later\nprocesses: p\n')).toBe('p');
+    expect(modelsFolderOf('models: ""\nprocesses: p\n')).toBeUndefined();
+    expect(modelsFolderOf('models: "~"\n')).toBe('~');
+    expect(modelsFolderOf('models:\n')).toBeUndefined();
+    expect(modelsFolderOf('models:\n  # later\nprocesses: p\n')).toBe('p');
+    // a value on the next lines (indented, or a `- ` list) is not read: the key is there and names no folder
+    expect(modelsFolderOf('models:\n  other\nprocesses: p\n')).toBeUndefined();
+    expect(modelsFolderOf('models:\n- other\nprocesses: p\n')).toBeUndefined();
+    expect(modelsFolderOf('models:\r\n  # c\r\n  - other\r\nprocesses: p\r\n')).toBeUndefined();
+    // a # inside quotes is part of the value
+    expect(modelsFolderOf("models: 'a # b' # c\n")).toBe('a # b');
+    // a byte order mark before the first key
+    expect(modelsFolderOf('\uFEFFmodels: processes\n')).toBe('processes');
+  });
+
+  it('the contract file names: designiq.yml, then the legacy bpmiq.yml', () => {
+    expect(CONTENT_CONFIG_FILES).toEqual(['designiq.yml', 'bpmiq.yml']);
+    expect(CONTENT_CONFIG_FILE).toBe('designiq.yml');
+    // a host that gives a root but no contract file name: the documented name
+    expect(resolveProfile('auto', { root: '/r' }).detail).toBe('designiq.yml in /r: a design-iq content repository');
+    expect(resolveProfile('auto', { root: '/r', config: 'bpmiq.yml' }).detail).toBe('bpmiq.yml in /r: a design-iq content repository');
+    expect(resolveProfile('design', { root: '/r', config: 'bpmiq.yml' }).detail).toBe('--profile design; links checked against the models of bpmiq.yml in /r');
+    expect(resolveProfile('auto', {}).detail).toBe('the content repository given by the host: a design-iq content repository');
+    expect(guideTopic('design')).toContain('designiq.yml');
+    expect(guideTopic('design')).not.toContain('@bpmiq/');
+    const auto = (kindsJson()['profiles'] as Array<{ profile: string; description: string }>).find((p) => p.profile === 'auto');
+    expect(auto?.description).toContain('designiq.yml');
   });
 
   it('auto runs the design profile for the models of a content repository only; links are checked against its .bpmn / .dmn stems', async () => {
     const repo = join(dir, 'repo');
     mkdirSync(join(repo, 'processes', 'sales'), { recursive: true });
     mkdirSync(join(repo, 'docs'), { recursive: true });
-    writeFileSync(join(repo, 'bpmiq.yml'), 'models: processes\n');
+    writeFileSync(join(repo, 'designiq.yml'), 'models: processes\n');
     writeFileSync(join(repo, 'processes', 'sales', 'billing.bpmn'), defs(proc('')));
     writeFileSync(join(repo, 'processes', 'risk.dmn'), '<definitions />');
     const xml = await withDi(defs(proc([n('startEvent', 'S'), n('callActivity', 'C', 'calledElement="billing"'), n('businessRuleTask', 'R', 'calledDecision="fraud"'), n('endEvent', 'E'), f('F1', 'S', 'C'), f('F2', 'C', 'R'), f('F3', 'R', 'E')].join('\n'))));
@@ -363,19 +398,124 @@ describe('design profile: content repositories (bpmiq.yml)', () => {
     writeFileSync(model, xml);
     writeFileSync(outside, xml);
 
-    expect(findContentRepo(model)).toEqual({ root: repo, models: join(repo, 'processes') });
+    expect(findContentRepo(model)).toEqual({ root: repo, models: join(repo, 'processes'), config: 'designiq.yml' });
     expect(findContentRepo(outside)).toBeUndefined();
-    expect(resolveFileProfile('auto', model)).toMatchObject({ profile: 'design', source: 'content-repo' });
+    expect(resolveFileProfile('auto', model)).toMatchObject({ profile: 'design', source: 'content-repo', repo: { config: 'designiq.yml' } });
     expect(resolveFileProfile('none', model)).toMatchObject({ profile: 'none', source: 'option' });
     expect(resolveFileProfile('auto', outside)).toMatchObject({ profile: 'none', source: 'none' });
 
     const inRepo = await checkFile(model);
     expect(inRepo.validation.warnings.map((w) => [w.code, w.element])).toEqual([['W_DESIGN_DECISION_LINK', 'R']]);
-    expect(inRepo.validation.validators?.[0]?.detail).toBe(`bpmiq.yml in ${repo}: a design-iq content repository`);
+    expect(inRepo.validation.validators?.[0]?.detail).toBe(`designiq.yml in ${repo}: a design-iq content repository`);
+    expect(inRepo.profile).toMatchObject({ profile: 'design', repo: { root: repo, config: 'designiq.yml' } });
     expect((await checkFile(outside)).validation.validators).toBeUndefined();
     expect((await checkFile(model, { profile: 'none' })).validation.validators).toBeUndefined();
     // --profile design outside a repository: no repository, no link check
     expect((await checkFile(outside, { profile: 'design' })).validation.warnings.map((w) => w.code)).toEqual([]);
+  });
+
+  /** A content repository at `dir/name` with the given contract files, holding a drawn model `processes/order.bpmn` (start -> A -> end) under `models`. */
+  async function contentRepo(name: string, files: Record<string, string>, models = 'processes'): Promise<{ repo: string; model: string }> {
+    const repo = join(dir, name);
+    mkdirSync(join(repo, models), { recursive: true });
+    for (const [file, text] of Object.entries(files)) writeFileSync(join(repo, file), text);
+    const model = join(repo, models, 'order.bpmn');
+    writeFileSync(model, await withDi(defs(proc(LINE))));
+    return { repo, model };
+  }
+  const DANGLING = [{ op: 'add' as const, kind: 'task', name: 'Dangling', in: 'P' }];
+  const NO_REPO = 'not a model of a design-iq content repository (no designiq.yml or legacy bpmiq.yml above the file, or the nearest one names no models folder that holds it)';
+
+  it('a designiq.yml repository gets the design gate: a dangling task is refused (issue #30)', async () => {
+    const { repo, model } = await contentRepo('gate', { 'designiq.yml': 'models: processes\n' });
+    const err = await mutateFile(model, DANGLING, { dryRun: true }).then(() => undefined, (e: unknown) => e as { code: string; details: Record<string, unknown> });
+    expect(err?.code).toBe('E_VALIDATION');
+    expect((err?.details['errors'] as Array<{ code: string; validator?: string }>).map((e) => `${e.validator} ${e.code}`)).toEqual(['design E_DESIGN_UNREACHABLE', 'design E_DESIGN_DEAD_END']);
+    const ok = await mutateFile(model, [{ op: 'add', kind: 'task', name: 'Check', after: 'A' }], { dryRun: true });
+    expect(ok.validation.validators?.[0]).toMatchObject({ name: 'design', detail: `designiq.yml in ${repo}: a design-iq content repository`, errors: [] });
+  });
+
+  it('the legacy bpmiq.yml alone is still a content repository, named as such', async () => {
+    const { repo, model } = await contentRepo('legacy', { 'bpmiq.yml': 'models: processes\n' });
+    expect(findContentRepo(model)).toEqual({ root: repo, models: join(repo, 'processes'), config: 'bpmiq.yml' });
+    expect(resolveFileProfile('auto', model)).toMatchObject({ profile: 'design', source: 'content-repo', detail: `bpmiq.yml in ${repo}: a design-iq content repository` });
+    expect((await checkFile(model)).validation.validators?.[0]?.detail).toBe(`bpmiq.yml in ${repo}: a design-iq content repository`);
+    await expect(mutateFile(model, DANGLING, { dryRun: true })).rejects.toMatchObject({ code: 'E_VALIDATION' });
+  });
+
+  it('with both names designiq.yml is read, also when the two disagree', async () => {
+    const agree = await contentRepo('both-agree', { 'designiq.yml': 'models: processes\n', 'bpmiq.yml': 'models: processes\n' });
+    expect(findContentRepo(agree.model)).toMatchObject({ root: agree.repo, config: 'designiq.yml' });
+    // designiq.yml names models/, bpmiq.yml processes/: a file in processes/ is no model
+    const disagree = await contentRepo('both-disagree', { 'designiq.yml': 'models: models\n', 'bpmiq.yml': 'models: processes\n' });
+    expect(findContentRepo(disagree.model)).toBeUndefined();
+    expect(resolveFileProfile('auto', disagree.model)).toMatchObject({ profile: 'none', source: 'none' });
+    await expect(mutateFile(disagree.model, DANGLING, { dryRun: true })).resolves.toMatchObject({ validation: { errors: [] } });
+    const other = join(disagree.repo, 'models', 'other.bpmn');
+    mkdirSync(join(disagree.repo, 'models'), { recursive: true });
+    writeFileSync(other, defs(proc(LINE)));
+    expect(findContentRepo(other)).toEqual({ root: disagree.repo, models: join(disagree.repo, 'models'), config: 'designiq.yml' });
+  });
+
+  it('a designiq.yml that names no usable folder makes no content repository: no fallback to bpmiq.yml, nothing above is read', async () => {
+    const broken: Array<[string, string]> = [
+      ['no-key', 'name: claims\n'],
+      ['outside', 'models: ../x\n'],
+      ['empty', 'models: ""\n'],
+      ['elsewhere', 'models: models\n'],
+    ];
+    // a valid contract one level up must not be consulted either
+    writeFileSync(join(dir, 'designiq.yml'), 'models: .\n');
+    try {
+      for (const [name, text] of broken) {
+        const { model } = await contentRepo(`broken-${name}`, { 'designiq.yml': text, 'bpmiq.yml': 'models: processes\n' });
+        expect(findContentRepo(model), name).toBeUndefined();
+        const info = resolveFileProfile('auto', model);
+        expect(info, name).toMatchObject({ profile: 'none', source: 'none' });
+        expect(info.detail).toBe(NO_REPO);
+        await expect(mutateFile(model, DANGLING, { dryRun: true }), name).resolves.toMatchObject({ validation: { errors: [] } });
+      }
+      // an unreadable designiq.yml (a superuser reads it anyway)
+      if (process.getuid?.() !== 0) {
+        const { repo, model } = await contentRepo('broken-unreadable', { 'designiq.yml': 'models: processes\n', 'bpmiq.yml': 'models: processes\n' });
+        chmodSync(join(repo, 'designiq.yml'), 0o000);
+        try {
+          expect(findContentRepo(model)).toBeUndefined();
+        } finally {
+          chmodSync(join(repo, 'designiq.yml'), 0o644);
+        }
+      }
+    } finally {
+      rmSync(join(dir, 'designiq.yml'));
+    }
+  });
+
+  it('a directory that carries a contract name is no contract file', async () => {
+    // a directory named designiq.yml beside a bpmiq.yml file: the bpmiq.yml is read
+    const { repo, model } = await contentRepo('dir-designiq', { 'bpmiq.yml': 'models: processes\n' });
+    mkdirSync(join(repo, 'designiq.yml'));
+    expect(findContentRepo(model)).toEqual({ root: repo, models: join(repo, 'processes'), config: 'bpmiq.yml' });
+    // a directory named bpmiq.yml in the models folder does not stop the walk: the contract file above is found
+    const nested = await contentRepo('dir-bpmiq', { 'designiq.yml': 'models: processes\n' });
+    mkdirSync(join(nested.repo, 'processes', 'bpmiq.yml'));
+    expect(findContentRepo(nested.model)).toEqual({ root: nested.repo, models: join(nested.repo, 'processes'), config: 'designiq.yml' });
+    expect(resolveFileProfile('auto', nested.model)).toMatchObject({ profile: 'design', source: 'content-repo' });
+  });
+
+  it('the nearest contract file above the file decides (a nested repository); an outer one is not read', async () => {
+    const outer = await contentRepo('outer', { 'designiq.yml': 'models: .\n' });
+    const inner = join(outer.repo, 'processes', 'inner');
+    mkdirSync(join(inner, 'models'), { recursive: true });
+    writeFileSync(join(inner, 'bpmiq.yml'), 'models: models\n');
+    const innerModel = join(inner, 'models', 'order.bpmn');
+    writeFileSync(innerModel, defs(proc(LINE)));
+    expect(findContentRepo(innerModel)).toEqual({ root: inner, models: join(inner, 'models'), config: 'bpmiq.yml' });
+    // a file of the inner repository outside its models folder: the outer designiq.yml (models: .) is not consulted
+    const stray = join(inner, 'stray.bpmn');
+    writeFileSync(stray, defs(proc(LINE)));
+    expect(findContentRepo(stray)).toBeUndefined();
+    expect(resolveFileProfile('auto', stray).detail).toBe(NO_REPO);
+    expect(findContentRepo(outer.model)).toEqual({ root: outer.repo, models: outer.repo, config: 'designiq.yml' });
   });
 });
 

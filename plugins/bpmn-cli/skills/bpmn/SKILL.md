@@ -149,8 +149,9 @@ installed version. Ask it instead of guessing:
    the file's platform, a layout dry run); `--strict` exits 5 on any warning -
    use it when the user wants a clean or deployable model. Fix findings with the
    command in their hint, then validate again. Inside a design-iq content
-   repository (a `bpmiq.yml` above the file) every write also passes design-iq's
-   save gate (`E_DESIGN_*`, see `bpmn guide design`).
+   repository (a `designiq.yml`, or the legacy `bpmiq.yml`, above the file)
+   every write also passes design-iq's save gate (`E_DESIGN_*`, see
+   `bpmn guide design`).
 6. **Confirm** with `bpmn show` (or `--around`) and report to the user what
    changed, naming the ids.
 

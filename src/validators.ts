@@ -77,7 +77,7 @@ export interface NamedValidator {
   validate?: ValidatorFn;
   /** an in-process validator may read the parsed document instead of the XML (saves a serialisation) */
   validateDoc?: (doc: Doc, ctx: ValidatorContext) => ValidatorFinding[] | Promise<ValidatorFinding[]>;
-  /** one line on why it runs, e.g. `bpmiq.yml in <dir>` (shown in results) */
+  /** one line on why it runs, e.g. `designiq.yml in <dir>` (shown in results) */
   detail?: string;
   /** finding code -> the lint warning code it says again about the same element (the lint warning is dropped) */
   covers?: Record<string, string>;

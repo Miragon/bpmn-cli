@@ -214,7 +214,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
   }
   return cmd
-    .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate: one start event, every node connected and in a lane, complete diagram) or none', profileArg)
+    .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a designiq.yml or legacy bpmiq.yml), design (the design-iq save gate: one start event, every node connected and in a lane, complete diagram) or none', profileArg)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
@@ -1178,7 +1178,7 @@ withJsonOptions(
     if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
     return v;
   })
-  .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a bpmiq.yml), design (the design-iq save gate) or none', profileArg)
+  .option('--profile <profile>', 'validation profile: auto (default: design for the models of a design-iq content repository, i.e. below a designiq.yml or legacy bpmiq.yml), design (the design-iq save gate) or none', profileArg)
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
       const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', profile: (o['profile'] as ProfileChoice | undefined) ?? 'auto' };

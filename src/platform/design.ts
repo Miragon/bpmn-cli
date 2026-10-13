@@ -1,9 +1,9 @@
 /**
  * The design profile: the hard modelling rules of Miragon's design-iq, which
- * refuses to save a model its validator (@bpmiq/validator checkBpmnXml,
- * called by the save gate with every write) reports an ERROR for. The rules
- * are mirrored as design-iq checks them, so that a write bpmn-cli lets
- * through is a save design-iq accepts:
+ * refuses to save a model its validator (@miragon/design-iq-validator
+ * checkBpmnXml, called by the save gate with every write) reports an ERROR
+ * for. The rules are mirrored as design-iq checks them, so that a write
+ * bpmn-cli lets through is a save design-iq accepts:
  *
  *  errors (E_DESIGN_*; a change that introduces one is refused, like a
  *  structural error, see src/validators.ts):
@@ -58,9 +58,9 @@
  * not repeated here.
  *
  * Which processes and decisions exist is only known inside a design-iq
- * content repository (a bpmiq.yml naming the models folder, see repo.ts):
- * there the links are checked against the file stems of its .bpmn / .dmn
- * files, like design-iq's refs/dangling rule.
+ * content repository (a designiq.yml or legacy bpmiq.yml naming the models
+ * folder, see repo.ts): there the links are checked against the file stems
+ * of its .bpmn / .dmn files, like design-iq's refs/dangling rule.
  */
 import type { Doc } from '../document.js';
 import { kindLabel, triggerOf } from '../kinds.js';
@@ -75,7 +75,7 @@ export interface DesignOptions {
   processIds?: Iterable<string>;
   /** the decisions of the content repository (file stems of its .dmn files); a business rule task's decision must be one */
   decisionIds?: Iterable<string>;
-  /** why the profile runs, for results (`--profile option`, `bpmiq.yml in <dir>`) */
+  /** why the profile runs, for results (`--profile option`, `designiq.yml in <dir>`) */
   detail?: string;
   /**
    * the XML text design-iq would read (default: the text the document was
@@ -95,14 +95,15 @@ export interface UndeclaredPrefix {
 }
 
 /**
- * design-iq's namespace check (@bpmiq/validator checkXmlNamespaces), on the
- * text exactly as design-iq runs it: its XML parser is not namespace-aware,
- * so it scans the raw text. A prefix is declared where `xmlns:<prefix>=`
- * appears; it is used where `<<prefix>:<name>` is followed by whitespace,
- * `/` or `>`, or where whitespace, `<prefix>:<name>` and `="` follow each
- * other: in the markup, but also in text, CDATA sections, comments and
- * attribute values (a documentation `Set app:mode="prod"` uses app:). `xml`
- * and `xmlns` count as declared. In the order design-iq reports them.
+ * design-iq's namespace check (@miragon/design-iq-validator
+ * checkXmlNamespaces), on the text exactly as design-iq runs it: its XML
+ * parser is not namespace-aware, so it scans the raw text. A prefix is
+ * declared where `xmlns:<prefix>=` appears; it is used where
+ * `<<prefix>:<name>` is followed by whitespace, `/` or `>`, or where
+ * whitespace, `<prefix>:<name>` and `="` follow each other: in the markup,
+ * but also in text, CDATA sections, comments and attribute values (a
+ * documentation `Set app:mode="prod"` uses app:). `xml` and `xmlns` count as
+ * declared. In the order design-iq reports them.
  */
 export function undeclaredPrefixes(text: string): UndeclaredPrefix[] {
   const declared = new Set([...text.matchAll(/xmlns:([\w.-]+)=/g)].map((m) => m[1]!));

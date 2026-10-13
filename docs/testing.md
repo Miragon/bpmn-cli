@@ -662,12 +662,15 @@ The design profile (`src/platform/design.ts`) mirrors the save gate of
 Miragon's design-iq. `test/design-profile.test.ts` holds one synthetic model
 per rule with design-iq's verdict (`designIq: 'pass' | 'fail'`, and the number
 of its errors where it differs from the profile's); by default it checks the
-profile only. To check the verdicts against design-iq's own validator, point
-`BPMN_DESIGN_IQ_VALIDATOR` at `packages/validator/src/validate.ts` of a
-design-iq checkout whose dependencies are installed (Node 22.6+ strips the
-types; the test runs it in a child process and never imports it):
+profile only. To check the verdicts against design-iq's own validator
+(`@miragon/design-iq-validator`), point `BPMN_DESIGN_IQ_VALIDATOR` at
+`dist/validate.js` of the installed package, or at
+`packages/validator/src/validate.ts` of a design-iq checkout whose
+dependencies are installed (Node 22.6+ strips the types; the test runs it in
+a child process and never imports it):
 
 ```
+BPMN_DESIGN_IQ_VALIDATOR=<dir>/node_modules/@miragon/design-iq-validator/dist/validate.js npx vitest run test/design-profile.test.ts
 BPMN_DESIGN_IQ_VALIDATOR=<checkout>/packages/validator/src/validate.ts npx vitest run test/design-profile.test.ts
 ```
 

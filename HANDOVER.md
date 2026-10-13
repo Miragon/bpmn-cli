@@ -1,4 +1,4 @@
-# Handover, 2026-10-12 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), and stages A and B of the incremental layout of edits to hand-drawn models (#18))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), and design-iq's contract file `designiq.yml` (#30))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -39,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1933 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1945 tests (+247 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -49,6 +49,94 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## design-iq's contract file `designiq.yml` (2026-10-13, `fix/30-designiq-yml`, issue #30)
+
+bpmn-cli knew design-iq only by its names before the rename. It looked up
+`bpmiq.yml` only, so in a repository with a `designiq.yml` (every new
+content repository, design-iq's `process-documentation`) `--profile auto`
+ran no profile without saying so, and an edit design-iq's save gate refuses
+was written. The user's decision: the minimal fix now (option a of the
+issue). Option (b), a generic project-validator mechanism with a bpmn-cli
+adapter shipped by design-iq, is the target and has its own issue (#35);
+the built-in copy gets no deprecation notice yet.
+
+- **Lookup** (`src/node/repo.ts`, new `src/node/find-up.ts`):
+  `findContentRepo` reads both names in design-iq's order
+  (`CONTENT_CONFIG_FILES`: `designiq.yml`, then `bpmiq.yml`). In a directory
+  the first name that is a regular file wins; a directory or a dangling link
+  with the name is skipped and the walk goes on (before: a directory named
+  `bpmiq.yml` ended the walk with no repository). The name is chosen by
+  existence only, like design-iq: a `designiq.yml` that cannot be read,
+  names no usable folder or does not contain the file makes no repository,
+  with no fallback to `bpmiq.yml` and no look further up. The walk still
+  goes to the filesystem root (design-iq reads the root only). It is
+  `findUp(startDir, names, { stopAtGitRoot })` (not exported);
+  `stopAtGitRoot` (a `.git` directory or file ends the walk after that
+  directory) is unused here and meant for the `.bpmnlintrc` and project
+  config lookups that come next.
+- **Names in results** (`src/platform/repo.ts`): `CONTENT_CONFIG_FILE` is
+  `'designiq.yml'` (no alias for the old value), `CONTENT_CONFIG_FILES` is
+  exported. `ContentRepo.config` is the contract file read (always set by
+  `findContentRepo`; optional on `ContentRepoOnDisk` too, so a host's own
+  literal still compiles); the detail says `designiq.yml in <root>` or
+  `bpmiq.yml in <root>`, and `CONTENT_CONFIG_FILE` when a host gives a root
+  without `config`. The detail without a repository covers every case: no
+  contract file above the file, or the nearest one names no models folder
+  that holds it (broken, unreadable, outside, or shadowing a `bpmiq.yml` or
+  an outer contract that would): `not a model of a design-iq content
+  repository (no designiq.yml or legacy bpmiq.yml above the file, or the
+  nearest one names no models folder that holds it)`. The `assertProfile`
+  hint names both files.
+- **`modelsFolderOf`** follows design-iq's `models ?? processes` (still a
+  line reader, not YAML; `docs/design-iq.md` lists what it does not
+  read): it skips a leading byte order mark, and an empty or null `models:`
+  (nothing, only a comment, `~`, `null`, `Null`, `NULL`) is no key, so
+  `processes:` applies. A quoted empty `models: ""`, and a `models:` whose
+  value sits on the next lines (indented, or a `- ` list), stay a key that
+  names no folder, as in 0.6 (falling through there would gate the legacy
+  folder where design-iq reads another). A `#` inside a quoted value is
+  part of it (0.6 cut `'a # b'` to `'a`). The pin in
+  `test/design-profile.test.ts` is flipped.
+- **No rename nudge, no new code.** design-iq's own validator warns about
+  the legacy name; a `W_` code would make `--strict` exit 5 in every legacy
+  repository. The detail shows which file was read.
+- **Old names** fixed in the sources, the CLI help, the guide (catalogue,
+  profiles, `--profile`, the DESIGN-IQ section with one line on the
+  lookup), the skill, `docs/design-iq.md` (the lookup rules),
+  `docs/library.md`, `docs/testing.md` (the verdict suite also runs against
+  `dist/validate.js` of `@miragon/design-iq-validator`; it passes with
+  5.2.0) and `docs/migrating.md` ("Changes from 0.6"). The validator is
+  `@miragon/design-iq-validator`, design-iq's notations package
+  `@designiq/notations`. Kept: the frozen sticky namespace
+  `https://bpmiq.io/schema/1.0/bpmiq`, the `@bpmiq/bpmn-edit` history, the
+  dated audit and the step 2 history below.
+- **Tests**: `test/find-up.test.ts` (order, nearest, directories and links,
+  `stopAtGitRoot` with a `.git` file and directory); in
+  `test/design-profile.test.ts` the issue's repro (a dangling task in a
+  `designiq.yml` repository is refused with `E_DESIGN_*`), `bpmiq.yml`
+  alone, both names (agreeing and disagreeing), a broken `designiq.yml` next
+  to a valid `bpmiq.yml` (four kinds and an unreadable one, with a valid
+  contract above), directories with a contract name, nested repositories and
+  `ContentRepo.config` in details. The CLI test of `test/validators.test.ts`
+  runs in a `designiq.yml` repository (with the issue's `add <file> task
+  "Dangling"`), the recipe test stays on `bpmiq.yml`. In
+  `test/step2-integration.test.ts` the E_USAGE check of an unknown profile
+  passed on the empty-ops error; it is dropped (empty ops have their own
+  test in `test/api.test.ts`), and a new check sends an op and pins the
+  message and the hint.
+- **Runtime**: up to two `stat` calls per directory level instead of one
+  `existsSync`, once per file write or check: about 33 instead of 16 µs for
+  a file 17 levels deep with no contract file. The in-memory and browser
+  path does no new work. The whole entry grows from 887.2 / 280.3 to
+  888.0 / 280.7 KB (mostly the guide text), `applyToXml` only from
+  642.6 / 204.0 to 642.8 / 204.1 KB (the contract names and the detail);
+  budgets unchanged. A model on stdin still gets no repository lookup.
+
+Left out: option (b) (#35), a CI guard that runs the verdict suite
+against the published validator (the copy goes with (b)), a hygiene test
+for old names, and a `profile: none (<reason>)` line in `validate`'s text
+output.
 
 ## Incremental layout of edits to hand-drawn models, stage B (2026-10-12, `feat/layout-room-making`, issue #18)
 
@@ -2317,7 +2405,12 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
    reports bpmn-js files that list both) and lane inheritance for nodes
    placed next to a node in no lane; the bundle size if design-iq needs it
    (the profile rules load on demand since #13; the next lever is splitting
-   `guide.ts`, see "Profile rules on demand").
+   `guide.ts`, see "Profile rules on demand"); and option (b) of issue #30:
+   the CLI runs the repository's own validator (named in the contract file
+   or a bpmn-cli config) through the validator hook, and the built-in design
+   profile and its verdict suite go away (#35). The project config (#34)
+   and a `.bpmnlintrc` in `validate` (#33) are the lookups
+   `findUp(..., { stopAtGitRoot })` was made for.
 6. **Let the agent see the result**: issue #12. Stages 1 (the renderer,
    `bpmn render`), 2 (crops, halos, numbered problems, tiles, `--render`)
    and 3 (the plugin skill's look step and its eval case) are done, see
@@ -2337,7 +2430,10 @@ deployment. See the "Still open" lists of the C7 audit and of step 3.)
   node next to a node in no lane inherits no lane and is refused
   (`--lane` in the same command). The CLI cannot pass host validators (only
   the library can); a host validator that needs repository context (design-iq's
-  `checkModel` with `modelIds`) gets it from the host.
+  `checkModel` with `modelIds`) gets it from the host. The profile is a copy
+  of design-iq's save gate and follows it by hand; the verdict suite against
+  `@miragon/design-iq-validator` (docs/testing.md) is a manual check that
+  no CI runs (left out until option (b) of #30).
 
 - Camunda 7: an Operaton-namespace file is checked the way Operaton reads it
   (operaton first, camunda as the fallback), so `operaton:historyTimeToLive`

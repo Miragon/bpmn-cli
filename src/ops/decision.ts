@@ -3,7 +3,7 @@
  * BPMN 2.0 has no attribute for it, so each platform has its own spelling;
  * `set <id> calledDecision=<decision>` writes the one of the file's platform
  * and `show` / `find` read all of them (the order is the one design-iq's
- * reader follows, `decisionRefOf` in @bpmiq/notations):
+ * reader follows, `decisionRefOf` in @designiq/notations):
  *
  *   camunda:decisionRef="x"                          Camunda 7 (operaton:decisionRef in an Operaton file)
  *   <zeebe:calledDecision decisionId="x" .../>       Camunda 8 (an extension element; keeps its resultVariable)

@@ -218,10 +218,10 @@ describe('host validators (MutationOptions.validators)', () => {
 });
 
 describe('design profile: auto in a content repository, and the CLI', () => {
-  it('auto turns it on for a model of a bpmiq.yml repository; --profile none turns it off; output names the validator', async () => {
+  it('auto turns it on for a model of a designiq.yml repository; --profile none turns it off; output names the validator', async () => {
     const repo = join(dir, 'repo');
     mkdirSync(join(repo, 'processes'), { recursive: true });
-    writeFileSync(join(repo, 'bpmiq.yml'), 'models: processes\n');
+    writeFileSync(join(repo, 'designiq.yml'), 'models: processes\n');
     const file = join(repo, 'processes', 'order.bpmn');
     writeFileSync(file, readFileSync(await drawn('repo-line.bpmn', LINE), 'utf8'));
     const before = readFileSync(file, 'utf8');
@@ -232,6 +232,11 @@ describe('design profile: auto in a content repository, and the CLI', () => {
     expect(refused.err).toContain('  [design] E_DESIGN_UNREACHABLE Activity_Loose: task Activity_Loose "Loose" has no incoming sequence flow');
     expect(refused.err).toContain('--profile none');
     expect(readFileSync(file, 'utf8')).toBe(before);
+    // the repro of issue #30: a task added without a place (the only process) is refused too
+    const dangling = cli('add', file, 'task', 'Dangling');
+    expect(dangling.code).toBe(2);
+    expect(dangling.err).toContain('  [design] E_DESIGN_UNREACHABLE Activity_Dangling');
+    expect(dangling.err).toContain('  [design] E_DESIGN_DEAD_END Activity_Dangling');
 
     const json = JSON.parse(cli('add', file, 'task', 'Loose', '--in', 'P', '--json').err);
     expect(json.error.errors[0]).toMatchObject({ code: 'E_DESIGN_UNREACHABLE', validator: 'design' });
@@ -242,7 +247,7 @@ describe('design profile: auto in a content repository, and the CLI', () => {
 
     const inserted = cli('add', file, 'task', 'Review', '--after', 'A');
     expect(inserted.code, inserted.err).toBe(0);
-    expect(inserted.out).toContain(`validator design (bpmiq.yml in ${repo}: a design-iq content repository): 0 error(s), 0 warning(s) in the result`);
+    expect(inserted.out).toContain(`validator design (designiq.yml in ${repo}: a design-iq content repository): 0 error(s), 0 warning(s) in the result`);
 
     const forced = cli('add', file, 'task', 'Loose', '--in', 'P', '--force');
     expect(forced.code).toBe(0);
@@ -260,6 +265,7 @@ describe('design profile: auto in a content repository, and the CLI', () => {
   }, 60000);
 
   it('the DESIGN-IQ recipe of the guide: a boundary event alone is refused, with its path in one transaction it is written', async () => {
+    // a repository with the legacy contract file name
     const repo = join(dir, 'recipe');
     mkdirSync(join(repo, 'models'), { recursive: true });
     writeFileSync(join(repo, 'bpmiq.yml'), 'models: models\n');
@@ -272,7 +278,7 @@ describe('design profile: auto in a content repository, and the CLI', () => {
     writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'boundary:timer', name: '2 days', on: 'Activity_Review', timer: 'PT2D' }, { op: 'add', kind: 'end', name: 'Escalated', after: 'Event_2Days' }]));
     const batch = cli('apply', file, ops);
     expect(batch.code, batch.err).toBe(0);
-    expect(batch.out).toContain('validator design');
+    expect(batch.out).toContain(`validator design (bpmiq.yml in ${repo}: a design-iq content repository)`);
   }, 60000);
 });
 

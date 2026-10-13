@@ -1,17 +1,36 @@
 # design-iq: the design profile and validators
 
-Miragon's design-iq validates every save of a model with its own validator (`@bpmiq/validator`)
-and refuses a model with an error. bpmn-cli has a built-in copy of those rules, the **design
-profile**, and a **validator hook** for a host that runs its own validator inside the write.
+Miragon's design-iq validates every save of a model with its own validator
+(`@miragon/design-iq-validator`) and refuses a model with an error. bpmn-cli has a built-in copy
+of those rules, the **design profile**, and a **validator hook** for a host that runs its own
+validator inside the write.
 
 ## The design profile
 
 The profile checks the result of every write, exactly as it would be written. `--profile auto`
-(the default) turns it on for the models of a design-iq content repository: a `bpmiq.yml` in the
+(the default) turns it on for the models of a design-iq content repository: a `designiq.yml` in the
 file's directory or above names (`models: <folder>`, legacy `processes:`) a folder that contains
-the file. `--profile design` applies it to any file, `--profile none` switches it off. Outside a
-content repository it is off by default, because it refuses every intermediate state of a model
-built step by step.
+the file. The legacy name `bpmiq.yml` is read too. `--profile design` applies it to any file,
+`--profile none` switches it off. Outside a content repository it is off by default, because it
+refuses every intermediate state of a model built step by step.
+
+The contract file is found like design-iq finds it, with two differences (the last two points):
+
+- In a directory `designiq.yml` wins over `bpmiq.yml`. Only a regular file counts: a directory
+  with one of the names is skipped.
+- The name is chosen by existence only. A `designiq.yml` that cannot be read, names no models
+  folder or names one that does not contain the file makes no content repository: the
+  `bpmiq.yml` beside it is not read, and nothing above is looked at.
+- design-iq reads the contract at the repository root only. bpmn-cli takes the nearest one above
+  the file, so it works on any path.
+- design-iq parses the file as YAML. bpmn-cli reads only the top-level `models:` and
+  `processes:` lines with a plain or quoted value. Other YAML forms are not understood, so a file
+  in such a form holds no model here: a flow mapping (`{models: m}`), a quoted key, a value on the
+  next lines or in a block scalar (`>-`, `|`), a tag or an anchor. A value that is no text in YAML
+  (`models: 123`, `models: [a]`) or a key written twice still names a folder here.
+
+The result names the file it read: `validator design (designiq.yml in <dir>: ...)`, or
+`bpmiq.yml in <dir>` in a repository with the legacy name.
 
 | code | rule |
 | --- | --- |
@@ -38,7 +57,7 @@ error E_VALIDATION: The change would introduce 1 error(s) reported by validator 
   hint: Fix the listed problems (each names its validator in brackets), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway. The design profile mirrors the design-iq save gate; `--profile none` switches it off.
 $ echo '[{"op":"add","kind":"boundary:timer","name":"2 days","on":"Activity_Review","timer":"P2D"},{"op":"add","kind":"end","name":"Escalated","after":"Event_2Days"}]' | bpmn apply claims/models/claim.bpmn -
 ...
-validator design (bpmiq.yml in /work/claims: a design-iq content repository): 0 error(s), 0 warning(s) in the result
+validator design (designiq.yml in /work/claims: a design-iq content repository): 0 error(s), 0 warning(s) in the result
 ```
 
 `bpmn validate <file> --profile design` lists what is left in a file. The full reference is
@@ -57,7 +76,7 @@ introduces block the write. A validator that throws fails it with `E_VALIDATOR_F
 reports are in `result.validation.validators`.
 
 ```js
-import { checkModel } from '@bpmiq/validator';
+import { checkModel } from '@miragon/design-iq-validator';
 import { applyToXml } from '@miragon/bpmn-cli';
 
 const edit = await applyToXml(xml, ops, {
@@ -68,6 +87,8 @@ const edit = await applyToXml(xml, ops, {
 await applyToXml(xml, ops, { contentRepo: { processIds: ['order', 'billing'], decisionIds: ['risk-rating'] } });
 ```
 
-In memory there is no `bpmiq.yml` to look up: `auto` runs the built-in profile only when the caller
-passes `contentRepo` as in the second call (the file stems of the repository's `.bpmn` and `.dmn`
-models). The file helpers of `@miragon/bpmn-cli/node` and the CLI find it on disk.
+In memory there is no `designiq.yml` to look up: `auto` runs the built-in profile only when the
+caller passes `contentRepo` as in the second call (the file stems of the repository's `.bpmn` and
+`.dmn` models). A `contentRepo` with a `root` is named `designiq.yml in <root>` in results; a host
+that read the legacy file passes `config: 'bpmiq.yml'` too. The file helpers of
+`@miragon/bpmn-cli/node` and the CLI find it on disk.

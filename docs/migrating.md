@@ -166,3 +166,27 @@
   never trades a crossing with a new flow for one between two drawn lines;
   a line along a new end event is routed again; a reroute that would still
   cross is not measured (faster writes on large models).
+
+## Changes from 0.6
+
+- `--profile auto` reads design-iq's contract file under both names, in
+  design-iq's order: `designiq.yml`, then the legacy `bpmiq.yml` (0.6 read
+  `bpmiq.yml` only, so a repository with a `designiq.yml` got no profile).
+  The models of such a repository now get the design profile: a write that
+  adds an `E_DESIGN_*` error is refused (exit 2). In a directory the first
+  name that is a regular file wins; a `designiq.yml` that names no usable
+  models folder makes no content repository (no fallback to `bpmiq.yml`)
+  ([design-iq](design-iq.md#the-design-profile)).
+- `CONTENT_CONFIG_FILE` is `'designiq.yml'` (0.6: `'bpmiq.yml'`), and
+  `CONTENT_CONFIG_FILES` lists both names in their order.
+- `ContentRepo.config` (set by `findContentRepo`) names the contract file
+  read; results say `designiq.yml in <root>` or `bpmiq.yml in <root>`.
+  A `ContentRepo` with a `root` but no `config` is named with
+  `CONTENT_CONFIG_FILE`.
+- `modelsFolderOf` follows design-iq's `models ?? processes`: it skips a
+  leading byte order mark, and an empty or null `models:` (`models:`,
+  `models: ~`, `models: null`) is no key, so the legacy `processes:` applies
+  (0.6: no folder, or a folder named `~`). A quoted empty `models: ""`
+  still names no folder, and so does a `models:` whose value sits on the
+  next lines (indented, or a `- ` list). A `#` inside a quoted value is part
+  of the folder name (0.6 cut it there).

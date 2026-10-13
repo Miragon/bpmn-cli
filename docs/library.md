@@ -146,10 +146,10 @@ result says `written: true` and names the file. A result equal to the file
 it was read from is not written back (`written: false`, `unchanged: true`;
 `out` to another file still writes the copy). For the validation profile
 the helpers look up the design-iq content repository of the file they write
-or check (`contentRepoOf(file)`: the nearest `bpmiq.yml`, the model ids of
-its models folder) unless `contentRepo` is given or the profile is `none`,
-and tell the validators that file (`ctx.file`, the `out` target with
-`out`).
+or check (`contentRepoOf(file)`: the nearest `designiq.yml` or legacy
+`bpmiq.yml`, the model ids of its models folder) unless `contentRepo` is
+given or the profile is `none`, and tell the validators that file
+(`ctx.file`, the `out` target with `out`).
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
 `renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
@@ -201,13 +201,16 @@ of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
 `ValidatorIssue`, `ValidatorReport`; `profile` (`'auto' | 'design' |
 'none'`, `PROFILE_CHOICES`, `resolveProfile`, `ProfileInfo`) and
 `contentRepo` (`ContentRepo`: the design-iq content repository the document
-is a model of, with its `processIds` / `decisionIds` for the link checks; in
-memory `auto` runs the design profile only when it is given; the file
-helpers find it on disk: `findContentRepo`, `contentRepoOf`,
-`resolveFileProfile` in `@miragon/bpmn-cli/node`), the design profile itself
-as `designFindings(doc, { processIds, decisionIds })` / `designValidator(...)`
-(`DESIGN_VALIDATOR` is its name), and `decisionLinkOf(element, doc)` (a
-business rule task's decision link in any spelling).
+is a model of, with its `processIds` / `decisionIds` for the link checks;
+`root` and `config`, the contract file read there, name it in results, and
+`config` defaults to `CONTENT_CONFIG_FILE`, `designiq.yml`; in memory `auto`
+runs the design profile only when it is given; the file helpers find it on
+disk under the names of `CONTENT_CONFIG_FILES`: `findContentRepo`,
+`contentRepoOf`, `resolveFileProfile` in `@miragon/bpmn-cli/node`), the
+design profile itself as `designFindings(doc, { processIds, decisionIds })`
+/ `designValidator(...)` (`DESIGN_VALIDATOR` is its name), and
+`decisionLinkOf(element, doc)` (a business rule task's decision link in any
+spelling).
 
 Text preservation: `mutateDoc` returns the text to store as `result.xml`:
 the original text of everything the ops did not change (see [What a write
@@ -254,8 +257,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 887.2 KB | 280.3 KB | 899 / 284 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 642.6 KB | 204.0 KB | 650 / 206 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 888.0 KB | 280.7 KB | 899 / 284 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 642.8 KB | 204.1 KB | 650 / 206 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |

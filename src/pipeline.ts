@@ -155,7 +155,8 @@ export interface MutationOptions {
   /**
    * the design-iq content repository the document is a model of (auto
    * profile; with model ids also the call / decision link checks). The node
-   * layer finds it for a file (bpmiq.yml, src/node/repo.ts); a host passes it.
+   * layer finds it for a file (designiq.yml or legacy bpmiq.yml,
+   * src/node/repo.ts); a host passes it.
    */
   contentRepo?: ContentRepo;
   /** validators run on the candidate XML inside the transaction (src/validators.ts); errors they find in the change block the write */

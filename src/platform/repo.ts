@@ -2,10 +2,11 @@
  * Validation profiles (`--profile`, MutationOptions.profile) and the
  * design-iq content repository they detect.
  *
- * A design-iq content repository is a directory with a bpmiq.yml that names
- * the folder its models live in (`models: <folder>`, legacy `processes:`);
- * every .bpmn file below that folder is a process whose id is its file stem,
- * every .dmn a decision. design-iq validates each of them on every save.
+ * A design-iq content repository is a directory with a contract file
+ * (designiq.yml, or the legacy bpmiq.yml) that names the folder its models
+ * live in (`models: <folder>`, legacy `processes:`); every .bpmn file below
+ * that folder is a process whose id is its file stem, every .dmn a decision.
+ * design-iq validates each of them on every save.
  *
  * Profile choices:
  *  - design: the design profile (platform/design.ts) runs; inside a content
@@ -13,13 +14,13 @@
  *  - none:   no profile;
  *  - auto (default): the design profile runs when the document is a model of
  *    a content repository (MutationOptions.contentRepo; for a file the node
- *    layer finds it: a bpmiq.yml in the file's directory or above names a
- *    models folder that contains it). Any other document gets no profile, so
+ *    layer finds it: a contract file in the file's directory or above names
+ *    a models folder that contains it). Any other document gets no profile, so
  *    plain BPMN files are edited step by step as before.
  *
  * This module is browser-safe: it decides from the ContentRepo the caller
- * gives. Finding a file's repository on disk (the bpmiq.yml lookup and the
- * model ids) is the node layer's: src/node/repo.ts.
+ * gives. Finding a file's repository on disk (the contract file lookup and
+ * the model ids) is the node layer's: src/node/repo.ts.
  */
 import { usageError } from '../errors.js';
 import { designValidator } from './design.js';
@@ -28,7 +29,18 @@ import type { NamedValidator } from '../validators.js';
 export type ProfileChoice = 'auto' | 'design' | 'none';
 export const PROFILE_CHOICES: readonly ProfileChoice[] = ['auto', 'design', 'none'];
 
-export const CONTENT_CONFIG_FILE = 'bpmiq.yml';
+/**
+ * The names design-iq reads its contract file under, in its order
+ * (CONTENT_CONFIG_FILES in design-iq's packages/notations/content.ts): in a
+ * directory the first one that is a regular file is the contract, and the
+ * other is not read, not even when the first names no models folder. The
+ * second is the legacy name (design-iq reads it and never writes it).
+ */
+export const CONTENT_CONFIG_FILES = ['designiq.yml', 'bpmiq.yml'] as const;
+/** The documented name of the contract file (the one a new content repository carries). */
+export const CONTENT_CONFIG_FILE = CONTENT_CONFIG_FILES[0];
+/** How messages name the contract file: the documented name and the legacy one. */
+const CONTENT_CONFIG_NAMES = `${CONTENT_CONFIG_FILES[0]} or legacy ${CONTENT_CONFIG_FILES[1]}`;
 
 /**
  * The design-iq content repository a document is a model of. The node layer
@@ -37,8 +49,10 @@ export const CONTENT_CONFIG_FILE = 'bpmiq.yml';
  * checks).
  */
 export interface ContentRepo {
-  /** the directory holding bpmiq.yml (shown in results) */
+  /** the directory holding the contract file (shown in results) */
   root?: string;
+  /** the contract file read in root, one of CONTENT_CONFIG_FILES (shown in results; CONTENT_CONFIG_FILE when not given) */
+  config?: string;
   /** the models folder */
   models?: string;
   /** the processes of the repository (file stems of its .bpmn models); a callActivity's calledElement must be one */
@@ -61,21 +75,31 @@ export interface ProfileInfo {
 export function assertProfile(choice: unknown): asserts choice is ProfileChoice | undefined {
   if (choice === undefined || (PROFILE_CHOICES as readonly unknown[]).includes(choice)) return;
   throw usageError(`Unknown profile "${String(choice)}": expected ${PROFILE_CHOICES.join(', ')}`, {
-    hint: 'design mirrors the design-iq save gate; auto runs it for the models of a design-iq content repository (bpmiq.yml); none switches it off.',
+    hint: 'design mirrors the design-iq save gate; auto runs it for the models of a design-iq content repository (designiq.yml, or the legacy bpmiq.yml); none switches it off.',
   });
 }
 
-/** The models folder a bpmiq.yml names (`models:` wins over the legacy `processes:`), undefined when it names none or an unsafe one. */
+/**
+ * The models folder a contract file (designiq.yml / bpmiq.yml) names
+ * (`models:` wins over the legacy `processes:` unless it is null: empty, `~`
+ * or `null`, like design-iq's `models ?? processes`), undefined when it names
+ * none or an unsafe one. It reads the top-level `models:` / `processes:`
+ * lines with a plain or quoted value, not YAML (docs/design-iq.md).
+ */
 export function modelsFolderOf(config: string): string | undefined {
   const keys: Record<string, string> = {};
-  for (const line of config.split(/\r?\n/)) {
+  const lines = config.replace(/^\uFEFF/, '').split(/\r?\n/);
+  for (const [i, line] of lines.entries()) {
     const m = /^(models|processes)\s*:\s*(.*?)\s*$/.exec(line);
     if (!m) continue;
-    let value = m[2]!.replace(/\s+#.*$/, '').trim();
-    if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1).trim();
+    const quoted = /^(['"])(.*?)\1\s*(#.*)?$/.exec(m[2]!);
+    const value = quoted ? quoted[2]!.trim() : m[2]!.replace(/(^|\s+)#.*$/, '').trim();
+    if (!quoted && /^(~|null|Null|NULL)$/.test(value)) continue;
+    // an empty value is null, unless the value sits on the next lines (indented, or a `- ` list): then the key is there and names no folder
+    if (!quoted && value === '' && !/^(\s|-(\s|$))/.test(lines.slice(i + 1).find((l) => !/^\s*(#.*)?$/.test(l)) ?? '')) continue;
     keys[m[1]!] = value;
   }
-  // like design-iq: `models` wins whenever it is there (an empty one makes the file no content config)
+  // like design-iq (`models ?? processes`): a null `models` is no key, so `processes` applies; a quoted empty one, or one with its value on the next lines, names no folder
   const folder = 'models' in keys ? keys['models'] : keys['processes'];
   if (!folder) return undefined;
   const parts = folder.replace(/\\/g, '/').split('/').filter((p) => p && p !== '.');
@@ -86,11 +110,11 @@ export function modelsFolderOf(config: string): string | undefined {
 /** The profile for a choice and the content repository of the document (see the module header). */
 export function resolveProfile(choice: ProfileChoice = 'auto', repo?: ContentRepo): ProfileInfo {
   assertProfile(choice);
-  const where = repo ? (repo.root !== undefined ? `${CONTENT_CONFIG_FILE} in ${repo.root}` : 'the content repository given by the host') : '';
+  const where = repo ? (repo.root !== undefined ? `${repo.config ?? CONTENT_CONFIG_FILE} in ${repo.root}` : 'the content repository given by the host') : '';
   if (choice === 'none') return { profile: 'none', source: 'option', detail: '--profile none' };
   if (choice === 'design') return { profile: 'design', source: 'option', detail: repo ? `--profile design; links checked against the models of ${where}` : '--profile design', ...(repo ? { repo } : {}) };
   if (repo) return { profile: 'design', source: 'content-repo', detail: `${where}: a design-iq content repository`, repo };
-  return { profile: 'none', source: 'none', detail: 'not a model of a design-iq content repository (no bpmiq.yml above the file)' };
+  return { profile: 'none', source: 'none', detail: `not a model of a design-iq content repository (no ${CONTENT_CONFIG_NAMES} above the file, or the nearest one names no models folder that holds it)` };
 }
 
 /** The file stem of a .bpmn path or name (`a/b/Order.bpmn` -> `Order`), else undefined. */

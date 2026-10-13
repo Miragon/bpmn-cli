@@ -238,7 +238,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_C8_JOB_WORKER_USER_TASK', meaning: '(practice) A user task without zeebe:userTask is a job worker user task: Camunda 8 creates a job of type io.camunda.zeebe:userTask instead of a user task, which the v2 user task API (/v2/user-tasks) and Tasklist in V2 mode do not list (engine-checked). `bpmn add` / `retype` give new user tasks of a Camunda 8 file zeebe:userTask, like Camunda Modeler.', fix: '`bpmn ext add <file> <id> zeebe:userTask` (a form then needs formId or externalReference instead of an embedded formKey).' },
   { code: 'W_DECISION_RESULT_VARIABLE', meaning: '`set <id> calledDecision=<decision>` in a Camunda 8 file wrote a zeebe:calledDecision without a resultVariable; Camunda 8 requires one to deploy.', fix: '`bpmn ext add <file> <id> zeebe:calledDecision decisionId=<decision> resultVariable=<variable> --replace`.' },
   // design profile (the design-iq save gate; `--profile design`, auto for the models of a content repository)
-  { code: 'E_DESIGN_*', meaning: 'An error of the design profile, which mirrors the save gate of Miragon\'s design-iq (@bpmiq/validator): design-iq refuses to save a model with such an error. The profile runs with `--profile design`, and by default (`--profile auto`) for the models of a design-iq content repository (a bpmiq.yml in the file\'s directory or above names a models folder that contains the file). It checks the result after the layout; like a structural error, one a change introduces blocks the write (E_VALIDATION) and one the file already had is W_PREEXISTING_ERROR. Findings carry `"validator": "design"` (`[design]` in text).', fix: 'Each finding\'s hint names the command. Make an edit that passes through an invalid state (a new start event before its path exists) in one transaction (`bpmn apply <file> ops.json`), or draft with `--profile none` and fix what `bpmn validate <file> --profile design` reports before saving.' },
+  { code: 'E_DESIGN_*', meaning: 'An error of the design profile, which mirrors the save gate of Miragon\'s design-iq (@miragon/design-iq-validator): design-iq refuses to save a model with such an error. The profile runs with `--profile design`, and by default (`--profile auto`) for the models of a design-iq content repository (a designiq.yml, or the legacy bpmiq.yml, in the file\'s directory or above names a models folder that contains the file). It checks the result after the layout; like a structural error, one a change introduces blocks the write (E_VALIDATION) and one the file already had is W_PREEXISTING_ERROR. Findings carry `"validator": "design"` (`[design]` in text).', fix: 'Each finding\'s hint names the command. Make an edit that passes through an invalid state (a new start event before its path exists) in one transaction (`bpmn apply <file> ops.json`), or draft with `--profile none` and fix what `bpmn validate <file> --profile design` reports before saving.' },
   { code: 'E_DESIGN_START_EVENTS', meaning: 'A process with flow nodes has no or more than one start event, or an embedded sub-process (not an event sub-process) has more than one; design-iq requires exactly one per process.', fix: 'None: `bpmn add <file> startEvent "<Name>" --before <firstNodeId>`. Several: keep one (`bpmn remove <file> <startId>`) and model the alternatives after it (an event-based gateway), or move a triggered start into an event sub-process.' },
   { code: 'E_DESIGN_UNREACHABLE', meaning: 'A flow node without incoming sequence flow (start events, boundary events and event sub-processes excepted), counted like design-iq: one sequence flow per id (flows without id, or sharing an id, count once). design-iq checks every node, also where BPMN allows it: a compensation handler, a catching link event and the content of an ad-hoc sub-process are errors there too (the message says so).', fix: '`bpmn connect <file> <fromId> <id>` or `bpmn move <file> <id> --after <nodeId>`, or remove it; a construct design-iq cannot save is removed or kept with --profile none.' },
   { code: 'E_DESIGN_DEAD_END', meaning: 'A flow node without outgoing sequence flow (end events and event sub-processes excepted), boundary events included, counted like design-iq: one sequence flow per id (flows without id, or sharing an id, count once). design-iq checks every node, also where BPMN allows it: a compensation handler or compensation boundary event, a throwing link event and the content of an ad-hoc sub-process are errors there too.', fix: '`bpmn add <file> endEvent "<Name>" --after <id>` or `bpmn connect <file> <id> <toId>`; a construct design-iq cannot save is removed or kept with --profile none.' },
@@ -389,10 +389,10 @@ export const COMMANDS: CommandDoc[] = [
 
 /** The validation profiles (`--profile`, MutationOptions.profile; `bpmn kinds --json` -> profiles). */
 export const PROFILE_DOCS: Array<{ profile: string; description: string; codes?: string[] }> = [
-  { profile: 'auto', description: 'Default: the design profile for the models of a design-iq content repository (a bpmiq.yml in the file\'s directory or above names a models folder that contains the file), no profile otherwise.' },
+  { profile: 'auto', description: 'Default: the design profile for the models of a design-iq content repository (a designiq.yml, or the legacy bpmiq.yml, in the file\'s directory or above names a models folder that contains the file; designiq.yml wins when both are there), no profile otherwise.' },
   {
     profile: 'design',
-    description: 'design-iq\'s save gate (@bpmiq/validator): errors a change introduces block the write (E_VALIDATION), errors the file had are W_PREEXISTING_ERROR, introduced warnings are reported; validate reports all of them. Inside a content repository call and decision links are checked against its .bpmn / .dmn file stems.',
+    description: 'design-iq\'s save gate (@miragon/design-iq-validator): errors a change introduces block the write (E_VALIDATION), errors the file had are W_PREEXISTING_ERROR, introduced warnings are reported; validate reports all of them. Inside a content repository call and decision links are checked against its .bpmn / .dmn file stems.',
     codes: ['E_DESIGN_START_EVENTS', 'E_DESIGN_UNREACHABLE', 'E_DESIGN_DEAD_END', 'E_DESIGN_NOT_IN_LANE', 'E_DESIGN_NO_DI', 'E_DESIGN_NAMESPACE', 'E_DESIGN_NO_PROCESS', 'E_DESIGN_XML', 'W_DESIGN_COMPLEXITY', 'W_DESIGN_CALL_LINK', 'W_DESIGN_DECISION_LINK'],
   },
   { profile: 'none', description: 'No validation profile (structural validation, lint and the engine profile still run).' },
@@ -409,7 +409,7 @@ export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
   { option: '--no-layout', description: 'write without updating the diagram (stale DI of removed elements is pruned, new elements have no shape until `bpmn layout`; format operations still apply to the existing drawing)' },
   { option: '--force', description: 'write although the import was lossy (E_IMPORT_LOSSY), the change introduces validation errors (E_VALIDATION; errors the file already had never block) or a retype would delete a sub-process\'s content (E_WOULD_DROP_CONTENT); for `new`: overwrite an existing file' },
-  { option: '--profile <auto|design|none>', description: 'validation profile: design checks the result against design-iq\'s save gate (one start event per process, every node with incoming and outgoing flow, every node in a lane, a complete diagram; E_DESIGN_* errors the change introduces block the write); auto (default) runs it for the models of a design-iq content repository (a bpmiq.yml above the file); none switches it off' },
+  { option: '--profile <auto|design|none>', description: 'validation profile: design checks the result against design-iq\'s save gate (one start event per process, every node with incoming and outgoing flow, every node in a lane, a complete diagram; E_DESIGN_* errors the change introduces block the write); auto (default) runs it for the models of a design-iq content repository (a designiq.yml or legacy bpmiq.yml above the file); none switches it off' },
   { option: '--backup', description: 'write <file>.bak before overwriting' },
   { option: '--show', description: 'append the full model view to the result' },
   { option: '--strict', description: 'exit 5 when the result has warnings' },
@@ -817,7 +817,7 @@ export function guideText(): string {
   );
   out.push(heading('CAMUNDA 8  (Zeebe: the zeebe: namespace; `bpmn validate` runs the Camunda 8 profile)'));
   out.push(CAMUNDA8.join('\n'));
-  out.push(heading('DESIGN-IQ  (content repositories with a bpmiq.yml; --profile design anywhere)'));
+  out.push(heading('DESIGN-IQ  (content repositories with a designiq.yml or legacy bpmiq.yml; --profile design anywhere)'));
   out.push(
     [
       '  Inside a design-iq content repository every write checks its result against design-iq\'s save gate (the design',
@@ -832,6 +832,9 @@ export function guideText(): string {
       '  its decision (`set <id> calledDecision=<file stem of the .dmn>`; written as calledDecision= in a design model,',
       '  camunda:decisionRef in Camunda 7, zeebe:calledDecision in Camunda 8). `bpmn validate f.bpmn` lists everything;',
       '  `--profile none` drafts without the gate, `--profile design` applies it outside a content repository.',
+      '  The repository is the nearest directory above the file with a designiq.yml or the legacy bpmiq.yml',
+      '  (designiq.yml wins when both are there). When that file names no models folder that holds the file, auto runs',
+      '  no profile: the other name is not read, nothing above is looked at.',
     ].join('\n'),
   );
   out.push(heading('OUTPUT  (results, warnings, JSON, stdin / stdout)'));

@@ -2,44 +2,50 @@
  * The design-iq content repository of a file, read from disk (Node only;
  * the profile decision itself is browser-safe: src/platform/repo.ts).
  *
- *   findContentRepo(file)   -> { root, models } of the nearest bpmiq.yml above the
- *                              file whose models folder contains it, else undefined
+ *   findContentRepo(file)   -> { root, models, config } of the nearest contract file
+ *                              (designiq.yml, legacy bpmiq.yml) above the file,
+ *                              when its models folder contains the file, else undefined
  *   contentModelIds(repo)   -> the process / decision ids (file stems of the
  *                              .bpmn / .dmn models; dot folders and node_modules skipped)
  *   contentRepoOf(file)     -> both together: what MutationOptions.contentRepo takes
  *   resolveFileProfile(choice, file) -> the ProfileInfo for a file (`--profile`)
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { CONTENT_CONFIG_FILE, modelsFolderOf, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from '../platform/repo.js';
+import { CONTENT_CONFIG_FILES, modelsFolderOf, resolveProfile, type ContentRepo, type ProfileChoice, type ProfileInfo } from '../platform/repo.js';
+import { findUp } from './find-up.js';
 
-/** A content repository found on disk: bpmiq.yml's directory and its models folder (absolute). */
+/** A content repository found on disk: the contract file's directory, its models folder (absolute) and the contract file read (always set by findContentRepo). */
 export interface ContentRepoOnDisk extends ContentRepo {
   root: string;
   models: string;
 }
 
-/** The content repository `file` is a model of (the nearest bpmiq.yml above it naming a models folder that contains it). */
+/**
+ * The content repository `file` is a model of: the nearest directory above it
+ * with a contract file (the first of CONTENT_CONFIG_FILES that is a regular
+ * file there), when that file names a models folder that contains `file`.
+ * Like design-iq the name is chosen by existence only: a designiq.yml that
+ * cannot be read, names no usable folder or does not contain the file makes
+ * no content repository; a bpmiq.yml beside it is not read, nothing above is
+ * looked at.
+ */
 export function findContentRepo(file: string): ContentRepoOnDisk | undefined {
   const path = resolve(file);
-  for (let dir = dirname(path); ; dir = dirname(dir)) {
-    const config = join(dir, CONTENT_CONFIG_FILE);
-    if (existsSync(config)) {
-      let text: string;
-      try {
-        text = readFileSync(config, 'utf8');
-      } catch {
-        return undefined;
-      }
-      const folder = modelsFolderOf(text);
-      if (folder === undefined) return undefined;
-      const models = resolve(dir, folder);
-      const rel = relative(models, path);
-      if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined;
-      return { root: dir, models };
-    }
-    if (dirname(dir) === dir) return undefined;
+  const found = findUp(dirname(path), CONTENT_CONFIG_FILES);
+  if (!found) return undefined;
+  let text: string;
+  try {
+    text = readFileSync(join(found.dir, found.name), 'utf8');
+  } catch {
+    return undefined;
   }
+  const folder = modelsFolderOf(text);
+  if (folder === undefined) return undefined;
+  const models = resolve(found.dir, folder);
+  const rel = relative(models, path);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined;
+  return { root: found.dir, models, config: found.name };
 }
 
 /** The process and decision ids of a content repository: the file stems of its .bpmn and .dmn models (dot folders and node_modules skipped). */

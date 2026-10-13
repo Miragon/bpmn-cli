@@ -28,10 +28,10 @@
  *
  * Validation profile: unless `contentRepo` is given (or the profile is
  * `none`), the design-iq content repository of the file being written or
- * checked is looked up on disk (src/node/repo.ts: bpmiq.yml and the
- * repository's model ids) and handed to the core, which runs the design
- * profile for its models (`--profile auto`); the validators see that file as
- * `ctx.file`.
+ * checked is looked up on disk (src/node/repo.ts: designiq.yml or legacy
+ * bpmiq.yml, and the repository's model ids) and handed to the core, which
+ * runs the design profile for its models (`--profile auto`); the validators
+ * see that file as `ctx.file`.
  */
 import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
