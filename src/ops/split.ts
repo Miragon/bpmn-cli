@@ -24,6 +24,7 @@ import { parseKind, KindError } from '../kinds.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
 import { anchorContext } from '../idstyle.js';
+import { cutAt, MAX_ID } from '../ids.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
@@ -71,14 +72,18 @@ function createdId(cs: ChangeSet): string {
 
 /**
  * The join gateway's id: op.joinId, else `<gatewayId>_join` (in the file's
- * case: camel `<gatewayId>Join`, pascalSnake `<gatewayId>_Join`).
+ * case: camel `<gatewayId>Join`, pascalSnake `<gatewayId>_Join`); a taken
+ * one gets `_2`, cut so that it stays within MAX_ID (the join kept).
  */
 function joinIdFor(doc: Doc, op: SplitOp, gatewayId: string, cs: ChangeSet): string {
   if (op.joinId) return op.joinId;
   const base = doc.idStyle.joinId(gatewayId);
   let id = base;
   let n = 2;
-  while (doc.has(id) || doc.ids.has(id)) id = `${base}_${n++}`;
+  while (doc.has(id) || doc.ids.has(id)) {
+    const suffix = `_${n++}`;
+    id = `${cutAt(base, MAX_ID - suffix.length)}${suffix}`;
+  }
   if (id !== base) {
     cs.warn({ code: 'W_ID_SUFFIXED', message: `Id ${base} is already taken; using ${id}`, element: id, hint: 'Pass joinId to choose the join id yourself.' });
   }

@@ -389,7 +389,8 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
   const old = idOf(flow);
   // the id a flow between the old ends gets, named by their names or (an end renamed since) by their ids, also as
-  // earlier versions named an unnamed end (by its kind: Flow_CheckToGateway) and before the length cap
+  // earlier versions named an unnamed end (by its kind: Flow_CheckToGateway), before the length cap and as 0.6 cut it
+  // (derivedBases)
   const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l))];
   const derived = (base: string): boolean => old === base || (old.startsWith(base) && /^_?\d+$/.test(old.slice(base.length)));
   const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;

@@ -216,3 +216,25 @@
   a change adds refuses the write (`E_VALIDATION`); one the file already had
   is a `W_PREEXISTING_ERROR` warning. design-iq's live host already passes
   its own check this way.
+- A generated id is no longer cut at 61 characters: the cap of 64 includes
+  a collision suffix (issue #31). 0.6 could cut a flow's end inside a word
+  (`Flow_ConsignationSynchronisierenToConsignationsProtokollieren`); now an
+  id within 64 characters is not cut again, and a longer one loses whole
+  words. A name still gives at most 40 characters of words, as in 0.6. A
+  flow's ends keep the most words that fit (0.6 shared the room by
+  characters), an end never shrinks to a number or to a bare Join, two
+  numbers never run into one (0.6: `Flow_2ToVertragsunterlagenarchivierung`,
+  `Flow_32024To...`), and the id never ends on a number a cut left that
+  reads like a collision suffix. A flow named by its ends' ids
+  (`Flow_<sourceId>_<targetId>`) keeps each id's prefix when it is cut,
+  where the prefixes leave room for the words after them. A scoped flow
+  (`Flow_KotO_ValidateToReserve`) cuts its two end words instead of losing
+  the target (0.6: `Flow_KotO_WarenwirtschaftssystemabgleichTo`), and a
+  number is no end word (0.6: `Flow_KotO_ReserveTo4`). A file prefix too
+  long to leave an id room gives way to the bpmn-cli prefix (0.6 went past
+  64 characters). A flow the length cap cut still counts for the file's
+  flow form, also one 0.6 cut (in 0.6, enough of them switched a file of
+  `Flow_<sourceId>_<targetId>` flows to `Flow_<Source>To<Target>`, and its
+  flows stopped following their ends). The same edit can therefore give a
+  long id that differs from the one 0.6 gave. Flows 0.6 named are still
+  renamed after their ends.

@@ -157,10 +157,21 @@ gateways named by their speaking ids (no `_2`), unnamed elements in a row
 (the nearest named anchor once; where the prefix says the kind, `Task_`,
 `task_`, the anchor's kind where an id would repeat the anchor's,
 `Task_AfterCheckGateway`; flow ends that begin alike keep their last word
-when cut), the 64-character cap, transliteration beyond German, the
-definitions id of `new`, and the warnings delta: platform findings counted,
-a shrinking `W_DUPLICATE_NAME`, a bridge that takes over a removed flow's
-id, warnings of a batch's final state, `new` with the platform's findings),
+when cut), the 64-character cap (no cut below it beyond a name's 40
+characters, whole words, the cut with the most words and then the most
+characters, each id's prefix in a flow named by its ends' ids, fitPair's
+tail and first-word rules, no end shrunk to a number or a bare Join, no id
+ending on a number that reads like a suffix (`Phase1To...` kept), a cut
+inside a word that keeps the numbers, a camelCase end without its first
+word, a suffix within the cap, none skipped, also on an id that names the
+anchor's kind, a file prefix or scope too long for the cap in every flow
+form, cut flows voting for their form, flows 0.6 cut still following their
+ends, also with `_100` and a leading separator, ends of any length cut
+fast: #31),
+transliteration beyond German, the definitions id of `new`, and the warnings
+delta: platform findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge
+that takes over a removed flow's id, warnings of a batch's final state, `new`
+with the platform's findings),
 `test/step3-c8-fixes.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
 `test/views-context.test.ts` (`show <id> --context` on a synthetic shop
 model: every boundary event of the sub-processes around an element, the

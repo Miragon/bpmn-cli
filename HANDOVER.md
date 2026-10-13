@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), and the removal of the design profile (#35))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), and ids up to 64 characters cut at whole words (#31))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -39,7 +39,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1888 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 1911 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -49,6 +49,177 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Ids up to 64 characters, cut at whole words (2026-10-13, `fix/31-flow-id-cut`, issue #31)
+
+A splice renamed `Flow_ConsignationsSynchronisierenToConsignationsAktualisiert`
+to `Flow_ConsignationSynchronisierenToConsignationsProtokollieren`: a letter
+short, although the full id has 62 characters. Two defects: every generated
+id was capped at 61 (`MAX_BASE = MAX_ID - 3`, room for a collision suffix
+`_99` on every id, needed or not), and `fitPair` shared the room by
+characters and cut the head of an end with `cutAt`, whose fallback for a
+first word longer than the room cut inside a word that could go whole.
+
+- **The cap** (`src/idstyle.ts`): `MAX_BASE` is gone; `derived` and `wanted`
+  take a `max` (default `MAX_ID`), so the cap no longer cuts an id within 64
+  characters (a name's 40-character slug, `MAX_SLUG`, is unchanged).
+  `next()` cuts a base again only when base and suffix pass 64: a flow
+  shares what is left between its ends (`wanted(req, 64 - suffix)`), an
+  anchor-qualified id keeps the anchor's kind, the suffix separator stays
+  (`2` for stemTo / scopedTo). `joinId` cuts at `MAX_ID - 5`; `joinIdFor`
+  (`src/ops/split.ts`) cuts a suffixed join so that `_join_2` stays within 64.
+- **Whole words** (`fitPair`, `endForms`; `idWords`, `keptTail` in
+  `src/ids.ts`; `cutAt` now keeps whole `idWords` too, one definition of a
+  word, so a slug that begins with `_` is no longer cut to nothing): each
+  end lists its forms (`endForms`), giving up its last word one at a time,
+  never its first word, its Join / number tail, its last word with a letter
+  before that tail (`Flow_2LieferantenbestellungsuebeTo...`, 0.6:
+  `Flow_2To...`; `Flow_LieferantenbestellungenJoinTo...`, never a bare
+  `Flow_JoinTo...`) or a word between two numbers (no `Stufe23`, nor
+  `stufe_2_2` for `stufe_2_pruefung_2`, which read like a suffixed id and
+  made `next()` skip `_2`); a number the given-up word leaves at the end of
+  the id goes too where it reads like a collision suffix (`closingNumber`:
+  a separated `_4` where the suffix is `_2`, any number before a glued `2`
+  in stemTo / scopedTo; a stemSnake `..._to_lieferantenbestellungen` for
+  `Task_lieferantenbestellungen_4_augen_ab`, never `..._4`), and stays
+  elsewhere (`Flow_Phase1To...` and `Flow_Phase2To...`, which an earlier cut
+  of this branch made one `Flow_PhaseTo...` and a `_2`; a default target
+  `...ToLieferantenbestellungen4`). Ends that begin with the same word
+  keep their last word and give up the word before it, down to the first
+  one (`Flow_SynchronisierenToLieferantenbestellungenProtokollieren`). Of the
+  pairs of forms that fit, fitPair takes the one with the most words, then
+  the most characters, then the more even one, then the one where the
+  source gave up more: a short word goes before a long one
+  (`Flow_SynchronisierenToRechnungLieferantenbestellungen`, not
+  `Flow_SynchronisierenAktualisierenToRechnung`), and
+  `Flow_NeueToZahlungseingaengePruefenUndAbgleichen` keeps its five words. A
+  word is cut inside only when even the shortest forms do not fit: in the
+  longer end, where the other fits whole and it keeps 8 characters
+  (`Flow_LieferantenbestellungsueberToZahlungseingangsbestaetigungen`), else
+  in both (`sharePair`); `cutInside` keeps the Join / number tail where the
+  head keeps a letter and does not run into it
+  (`Flow_3Zahlungseingangsbest2024To...`; before: `Flow_32024To...`, the word
+  between the numbers dropped). A camelCase end that loses its first word
+  starts as camelSlug writes it, from the label's words where it has them
+  (`Flow_urlPDFVersendenTo...`, not `urlpdf`, also where camelSlug cut the
+  name at 40). `endForms` lists only the forms that can fit (and the
+  shortest), so ends of any length are cut fast (`derivedBases` on ends of
+  1,600 words: 256 ms of CPU before, 5 ms). `cutAt` keeps a letter too:
+  where the whole words that fit have none or end in a number the kept one
+  would run into, it cuts the next word inside (`orderFulfilmentProcessTask_2URLAPI...abgleic2`,
+  0.6: `..._22`; `Flow_10Warenwirtschaftssyst10To...`, 0.6: `Flow_1010To...`);
+  `cutAt(slug, max, true)` cuts as 0.6 did (`legacyCutWords`, 0.6's loop:
+  a slug that begins with `_` and whose first word does not fit is cut to
+  nothing), for recognising its ids.
+- **Flows named by their ends' ids** (idPair `Flow_<sourceId>_<targetId>`,
+  as design-iq writes them, and idSnake): each end keeps its prefix, the
+  words after it share the room, and "ends that begin alike" compares those
+  words, not the prefixes
+  (`Flow_Task_lieferantenbestellungen_pruefen_Task_zahlungseingaenge`; 0.6:
+  `Flow_Task_pruefen_Task_zahlungseingaenge_abgleichen_und`). Below a room
+  of 16 (two long prefixes, also from a suffix) the whole ids share it, cut
+  by fitPair like any ends, so the words of a prefix can go too
+  (`Flow_intermediate_protokollieren_intermediateCatchEvent_gebucht` for two
+  `intermediateThrowEvent_` / `intermediateCatchEvent_` ids).
+- **Scoped flows** (`Flow_KotO_ValidateToReserve`): the two end words share
+  the room after the scope like any ends, so the target is no longer cut
+  away (`Flow_KotO_WarenwirtschaftssystemToKundenstammdatenaktualisierung`;
+  0.6: `Flow_KotO_WarenwirtschaftssystemabgleichTo`, which `SCOPED_TO` no
+  longer reads, so enough of them flipped the file's form); an end word is
+  the first word with a letter of the id (`Augen` for
+  `serviceTask_KotO_4AugenPruefen`, 0.6: `To4`, a second one `To42`).
+- **Long prefixes**: a file prefix that leaves an element's body fewer than
+  8 of the 64 characters gives way to the bpmn-cli prefix of the kind in
+  the file's case (`activity_auftrag`; 0.6 kept a body of 8 and went past
+  64), `withWord` cuts body and anchor word as one where the word leaves the
+  body fewer than 8; a flow prefix (with a scopedTo flow's scope) that
+  leaves its ends fewer than 16 gives way to a named flow with `Flow_` in
+  every flow form (a scoped one named by its end words:
+  `Flow_Validate_To_Ship` for a 57-character scope; before: stemTo
+  `<prefix>_To`, scopedTo `Flow_<scope>_To`, both ends empty and past 64),
+  and `pairEnds` never passes fitPair a negative room.
+  A glued flow named by its ends with a suffix
+  (`flowVertragsunterlagenarchivieToKundenstammdatenaktualisierung_2`,
+  `GLUED_SUFFIXED`) does not vote in `learn`: 0.6 read it as the prefix
+  `flowVertrags...` and a number, and three of them made that the flow
+  prefix (80-character ids, splices not followed).
+- **Cut flows vote for their form** (`cutOfForm` in `learn`): a flow whose
+  id matches no form uncut votes for a form built from its ends' ids
+  (stemTo, idPair, stemSnake, idSnake) when it is one of the cuts
+  `derivedBases` lists for that form (also 0.6's), with or without a
+  suffix; cheap tests first (the word between the ends, a stemTo source in
+  lower case, the start of a stem form's source). Before, enough cut flows
+  flipped an idPair / idSnake / stemSnake file to `named`: the 7th
+  long-named splice in an idPair file renamed nothing, and new flows
+  switched convention. In a file whose flows read as stemTo / stemSnake,
+  `derivedBases` also lists the `named` bases, so the `named` flows
+  bpmn-cli gave it before (a flow to a join is named by the join's label,
+  `CheckOrderJoin`) still follow their ends. Cost: `IdStyle.infer` on 300
+  flows of which 250 are cut, 2 to 6 ms of CPU (idPair) and 3 to 11 ms
+  (idSnake); a file of named flows is unchanged.
+- **Flows written by 0.6** (`derivedBases`, used by `followEnds`): the uncut
+  id when it has at most 60 characters, else also the ids at 64 to 60 (a
+  suffix of up to 4 characters, `_100`), the id 0.6 cut (`legacyFitPair`,
+  the old algorithm with 0.6's `cutAt` and scoped end words, kept only for
+  this) and that id cut again to 60, as 0.6 did for a suffix from `_100`,
+  so a flow 0.6 cut inside a word still follows its ends.
+- DI ids keep `MAX_DI` 61 and go through `cutAt`, so only its letter guard
+  changes them: a DI id 0.6 cut to a bare number or to two numbers in a row
+  is not recognised by `edgeStyleOf` and keeps its id when its flow is
+  renamed.
+
+Ids differ from 0.6 for the same edit where an id has 62 to 64 characters or
+has to be cut; one pinned id changed: the long-names test's flow keeps the
+most characters among its cuts of seven words,
+`Flow_PruefenObDieEingereichtenUnterlagenToBenachrichtigungUeber` (0.6:
+`...EingereichtenToBenachrichtigungUeberDen`, 7 characters shorter). Runtime: a splice write
+with long names is unchanged (4.6 to 4.7 ms median, as in 0.6), the
+layout-regression score (444) and the gate's fuzz campaign are identical; on
+long name pairs `derivedBase` takes about 10 instead of 7 microseconds and
+`derivedBases` about 50 instead of 12 (a few calls per renamed flow).
+Bundle (on top of #35): whole entry 865.8 / 273.2 -> 872.0 / 275.5 KB,
+`applyToXml` only 630.6 / 199.9 -> 635.6 / 201.8 KB (budgets unchanged,
+883 / 279 and 643 / 204; `docs/library.md` updated).
+Tests: `#31` cases in `test/step3-ids-report.test.ts` (the issue's ids,
+camelCase, a seeded check of 2,000 name pairs whose cut ends have no room
+for their next word, a cut inside a word in one end, fitPair's tie, tail
+and first-word rules, the cut with the most words and characters, ends
+with numbers (`Phase1To...` / `Phase2To...`, no suffix skipped after
+`stufe_2_pruefung_2`), never a bare `JoinTo`, a camelCase end without its
+first word, also from a name cut at 40, `cutAt`'s letter guard, 2,000
+random idPair / idSnake flows, a 0.6 flow, also with `_100` and a leading
+separator, suffixes up to `_101` and none skipped, stemTo `2`, a suffix on
+an id that names the anchor's kind, a 58-character file prefix, long flow
+prefixes and a long scope in every flow form, an idPair file through seven
+long-named splices, a stemTo file's `named` join flow, ends of 1,600 words,
+element ids of 62 to 64 characters with the `--if-absent` hint and a data
+object, joins), a
+design-iq splice, scoped flows with long and number-led end words and a
+glued file with suffixed flows in `test/conventions-ids.test.ts`, the
+issue's commands in `test/cli.test.ts`, doc pins in `test/batch.test.ts`
+and `test/conventions-ids.test.ts`. Left for later: a stop word left at the end of a cut
+(`Flow_Task_lieferung_versenden_und_Task_rechnung_eingegangen_und`: the
+most words win), the engine's `BPMNShape_<id>` / `BPMNEdge_<id>` over 64
+characters in a fresh drawing, the DI cap, a data object whose `Object`
+word a reference id of 63 or 64 characters cuts away again (it takes `_2`,
+as 0.6 did just below its cap), a cut inside a word where two one-word ends
+do not fit beside each other (one end loses its last letters,
+`Flow_Task_lieferantenbestellungsuebersich_Task_zahlungseingaenge`), a
+suffix glued to an end that ends in a digit (stemTo / scopedTo
+`...Pdf10` + `2`, as in 0.6), bpmn-cli's own glued flows without a suffix,
+which count against a numbered file's form without voting for it, scoped
+flows 0.6 cut to an empty end word (`Flow_KotO_...To`), which no longer
+match their form and can flip a 0.6 file's form, an end whose leading
+number fills a small room (`10202422024Rechnung` in 11 characters keeps no
+letter), an element prefix of 52 to 55 characters that a suffix leaves a
+body under 8 (the fallback to the bpmn-cli prefix counts no suffix:
+`<prefix>_2024_100`, a body without a letter), a target that already ends
+in a number before its number tail (`x_2_2`: its re-cut for `_2` gives the
+base again, so `_2` is skipped), and a count before a dropped word kept at
+the end of a target that has no separated suffix
+(`...ToLieferantenbestellungen4` for `Lieferantenbestellungen 4 Augen ab`:
+only a suffix's look is checked, not whether the number counts the next
+word).
 
 ## The design profile removed (2026-10-13, `feat/35-remove-design-profile`, issue #35)
 

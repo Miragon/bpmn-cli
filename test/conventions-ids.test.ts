@@ -142,6 +142,19 @@ describe('id style inference (edits follow the file)', () => {
     expect(ids).toEqual(['Task_pack_goods', 'Flow_Task_pack_goods_Gateway_risk_ok', 'Event_order_rejected', 'Flow_Gateway_risk_ok_Event_order_rejected']);
   });
 
+  it('#31: a flow between two long ids keeps both prefixes and cuts whole words after them, and still follows its ends', async () => {
+    const { doc, ids } = await created(SNAKE, [
+      { op: 'add', kind: 'userTask', name: 'Lieferantenbestellungen prüfen', after: 'Task_check_risk' },
+      { op: 'add', kind: 'userTask', name: 'Zahlungseingänge abgleichen und Rechnung archivieren', after: 'Task_lieferantenbestellungen_pruefen' },
+    ]);
+    expect(ids).toContain('Task_zahlungseingaenge_abgleichen_und');
+    // 0.6: Flow_Task_pruefen_Task_zahlungseingaenge_abgleichen_und
+    const cut = 'Flow_Task_lieferantenbestellungen_pruefen_Task_zahlungseingaenge';
+    expect(flowBetween(doc, 'Task_lieferantenbestellungen_pruefen', 'Task_zahlungseingaenge_abgleichen_und')).toBe(cut);
+    const cs = runOps(doc, [{ op: 'add', kind: 'userTask', name: 'Beleg scannen', after: 'Task_lieferantenbestellungen_pruefen' }]);
+    expect(cs.renames).toEqual([expect.objectContaining({ from: cut, to: 'Flow_Task_lieferantenbestellungen_pruefen_Task_beleg_scannen' })]);
+  });
+
   it('numbered files keep their prefixes, but the bodies speak (no running numbers)', async () => {
     const { ids } = await created(NUMBERED, [
       { op: 'add', kind: 'task', name: 'Third', after: 'Task_2' },
@@ -266,6 +279,22 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     expect(more.warnings).toEqual(['W_ID_SUFFIXED']);
   });
 
+  it("#31: bpmn-cli's own suffixed flows do not vote for a prefix: the file keeps flowAToB, a splice follows them, every id within 64", async () => {
+    const { doc } = await created(BARE, [
+      { op: 'add', kind: 'task', name: 'Vertragsunterlagenarchivierung an', after: 'shipOrder', as: '$a' },
+      { op: 'add', kind: 'task', name: 'Kundenstammdatenaktualisierung café', after: '$a', as: '$b' },
+      ...[1, 2, 3, 4].map((): Op => ({ op: 'connect', source: '$a', target: '$b' })),
+    ]);
+    const suffixed = 'flowVertragsunterlagenarchivieToKundenstammdatenaktualisierung_5';
+    expect(doc.ids.has(suffixed)).toBe(true);
+    // flowVertragsunterlagenarchivieToKundenstammdatenaktualisierung_2 is no prefix and a number (0.6 learned it: ..._ToKundenstammdatena, 82 characters)
+    const again = await Doc.fromXml(await doc.toXml());
+    expect(again.idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'flow', sep: '' });
+    const cs = runOps(again, [{ op: 'add', kind: 'task', name: 'Zwischenschritt', flow: suffixed }]);
+    expect(cs.renames).toEqual([expect.objectContaining({ from: suffixed, to: 'flowVertragsunterlagenarchivierungAnToZwischenschritt' })]);
+    expect([...again.ids.values()].filter((id) => id.length > 64)).toEqual([]);
+  });
+
   it('an unnamed element in such a file still gets a prefix (its kind and context need one)', async () => {
     const { ids } = await created(BARE, [{ op: 'add', kind: 'exclusiveGateway', after: 'packGoods' }]);
     expect(ids).toEqual(['Gateway_AfterPackGoods', 'flowAfterPackGoodsToShipOrder']);
@@ -336,6 +365,30 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       { op: 'connect', source: 'startEvent_KotOrder', target: 'userTask_KotO_ConfirmShipment' },
     ]);
     expect(ends.ids).toEqual(['endEvent_KotO_Failed', 'Flow_KotO_ValidateToEnd', 'Flow_KotO_StartToConfirm', 'Flow_KotO_StartToConfirm2']);
+  });
+
+  it('#31: long end words share the room like any flow\'s ends, and a number is no end word', async () => {
+    const scoped = chain(
+      [
+        ['startEvent', 'startEvent_KotOrder', 'Order placed'],
+        ['serviceTask', 'serviceTask_KotO_ValidatePayment', 'Validate payment'],
+        ['serviceTask', 'serviceTask_KotO_ReserveInventory', 'Reserve inventory'],
+        ['endEvent', 'endEvent_KotOrder', 'Order done'],
+      ],
+      ['Flow_KotO_StartToValidate', 'Flow_KotO_ValidateToReserve', 'Flow_KotO_ReserveToEnd'],
+    );
+    const { doc } = await created(scoped, [
+      { op: 'add', kind: 'serviceTask', id: 'serviceTask_KotO_Warenwirtschaftssystemabgleich', name: 'Warenwirtschaftssystemabgleich', after: 'serviceTask_KotO_ValidatePayment' },
+      { op: 'add', kind: 'serviceTask', id: 'serviceTask_KotO_Kundenstammdatenaktualisierung', name: 'Kundenstammdatenaktualisierung', after: 'serviceTask_KotO_Warenwirtschaftssystemabgleich' },
+      { op: 'add', kind: 'serviceTask', id: 'serviceTask_KotO_4AugenPruefen', name: '4 Augen prüfen', after: 'serviceTask_KotO_ReserveInventory' },
+      { op: 'connect', source: 'serviceTask_KotO_Warenwirtschaftssystemabgleich', target: 'serviceTask_KotO_Kundenstammdatenaktualisierung' },
+    ]);
+    // 0.6: Flow_KotO_WarenwirtschaftssystemabgleichTo, the target gone; then ...To2, which the form no longer reads
+    expect(flowBetween(doc, 'serviceTask_KotO_Warenwirtschaftssystemabgleich', 'serviceTask_KotO_Kundenstammdatenaktualisierung')).toBe('Flow_KotO_WarenwirtschaftssystemToKundenstammdatenaktualisierung');
+    expect(doc.ids.has('Flow_KotO_WarenwirtschaftssysteToKundenstammdatenaktualisierung2')).toBe(true);
+    // 0.6: Flow_KotO_ReserveTo4 (a second one: ...To42)
+    expect(flowBetween(doc, 'serviceTask_KotO_ReserveInventory', 'serviceTask_KotO_4AugenPruefen')).toBe('Flow_KotO_ReserveToAugen');
+    expect(IdStyle.infer(doc.definitions).info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
   });
 
   it('the scoped form is not read into other forms', async () => {
@@ -420,8 +473,9 @@ describe('German names', () => {
 
 describe('documentation', () => {
   it('bpmn kinds --json describes the id conventions', () => {
-    const ids = kindsJson()['ids'] as { bodies: Record<string, string>; flowForms: Record<string, string> };
+    const ids = kindsJson()['ids'] as { bodies: Record<string, string>; flowForms: Record<string, string>; length: string };
     expect(Object.keys(ids.bodies).sort()).toEqual(['camel', 'pascal', 'pascalSnake', 'snake']);
+    expect(ids.length).toMatch(/^at most 64 characters, a collision suffix included; a name gives at most 40 characters of words \(a single longer word is cut at 40\), and an id within 64 is not cut again; a longer one loses whole words/);
     expect(Object.keys(ids.flowForms).sort()).toEqual(['idPair', 'idSnake', 'named', 'scopedTo', 'stemSnake', 'stemTo']);
     expect(guideText()).toContain('Ids speak and follow the file');
     expect(JSON.stringify(kindsJson()['ids'])).not.toMatch(/hash of|base-36/);

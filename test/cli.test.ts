@@ -375,6 +375,18 @@ describe('bpmn cli contracts', () => {
     expect(bpmn('remove', f, 'BPMNPlane_P').code).toBe(2);
   });
 
+  it('renames a flow after its new ends without cutting an id that fits into 64 characters (#31)', () => {
+    const g = join(dir, 'sync.bpmn');
+    ok('new', g, '--name', 'Sync');
+    ok('add', g, 'start', 'Every minute');
+    ok('add', g, 'serviceTask', 'Consignations synchronisieren', '--after', 'Event_EveryMinute');
+    ok('add', g, 'end', 'Consignations aktualisiert', '--after', 'Activity_ConsignationsSynchronisieren');
+    const r = ok('add', g, 'serviceTask', 'Consignations protokollieren', '--after', 'Activity_ConsignationsSynchronisieren');
+    expect(r.out).toMatch(
+      /^changed sequenceFlow Flow_ConsignationsSynchronisierenToConsignationsProtokollieren - .* \(renamed from Flow_ConsignationsSynchronisierenToConsignationsAktualisiert: its id named its old ends\)$/m,
+    );
+  });
+
   it('does not write a result that equals the file, and says so', () => {
     const before = readFileSync(f, 'utf8');
     let r = ok('set', f, 'Event_S', 'name=S');

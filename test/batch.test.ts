@@ -5,7 +5,8 @@ import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/batch.js';
 import { Doc } from '../src/document.js';
 import { isCliError } from '../src/errors.js';
 import { renderView } from '../src/format.js';
-import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideText, kindsJson, kindsText } from '../src/guide.js';
+import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideText, kindsJson, kindsSectionText, kindsText } from '../src/guide.js';
+import { MAX_ID, MAX_SLUG } from '../src/ids.js';
 import { KINDS } from '../src/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline.js';
@@ -400,6 +401,22 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(blackBox).toBeGreaterThan(wrap);
     expect(DOCS).toMatch(/\$ bpmn add order\.bpmn participant "Order handling"\n[\s\S]*\$ bpmn add order\.bpmn participant "Customer" --black-box/);
     expect(DOCS).toMatch(/\| flow nodes \| `lane`.*`default`/);
+  });
+
+  it('states the id length cap the way ids are cut: a name\'s 40 characters, whole words, a suffix included (#31)', () => {
+    expect(DOCS).toMatch(new RegExp(`at most ${MAX_SLUG} characters\\s+of them: a longer name loses its last words, and a single longer word is cut at ${MAX_SLUG}\\.`));
+    expect(DOCS).toMatch(new RegExp(`An id has at\\s+most ${MAX_ID} characters, a collision suffix included\\. An id within that is not cut again\\. A longer one\\s+loses whole words`));
+    expect(DOCS).toMatch(/A word is cut inside only when no whole word is left to give up/);
+    expect(guideText()).toMatch(/at most 64 characters, cut at whole words/);
+    expect(kindsSectionText(['ids'])).toMatch(/a name gives at most 40 characters of words \(a single longer word is cut at 40\), and an id within 64 is not cut again; a longer one loses whole words/);
+    expect(kindsSectionText(['ids'])).toMatch(/a word is cut inside only when no whole word is left to give up/);
+    expect(kindsSectionText(['ids'])).toMatch(/of the cuts that fit, the one with the most words, then the most characters/);
+    expect(DOCS).toMatch(/of the cuts that fit, the one\s+with the most words is taken, then the longest/);
+    // a number a cut leaves goes only where it reads like a collision suffix; a long prefix gives way in every flow form
+    expect(DOCS).toMatch(/a number a cut would leave at the end of the id goes too where it would read\s+like a collision suffix/);
+    expect(kindsSectionText(['ids'])).toMatch(/a number left at the end of the id goes too where it reads like a collision suffix/);
+    expect(kindsSectionText(['ids'])).toMatch(/a flow prefix or scope that leaves a flow's ends fewer than 16 to a named flow with Flow_/);
+    for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/cut at a word\b|an id that fits is never cut/);
   });
 
   it('README quick start shows exactly what `bpmn show` prints', async () => {
