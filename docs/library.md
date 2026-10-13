@@ -256,9 +256,10 @@ too), `bpmnlintValidator(engine, resolved, { detail, blocks })`
 (`BPMNLINT_VALIDATOR` is its name, `BPMNLINT_COVERS` the lint warnings it
 replaces). The core does not import bpmnlint: `engine` is
 `{ Linter, resolver }`. In Node, `bpmnlintEngine()` from
-`@miragon/bpmn-cli/node` gives it (the plugin's ESM build does not load in
-plain Node; that function loads its CJS build); a browser host bundles
-`bpmnlint`'s `Linter` and the plugin's `createBundledResolver()` itself:
+`@miragon/bpmn-cli/node` gives it (it requires the plugin, and bpmnlint
+from the plugin's own location, so the `Linter` and the rules are one
+bpmnlint); a browser host bundles `bpmnlint`'s `Linter` and the plugin's
+`createBundledResolver()` itself:
 
 ```ts
 import { applyToXml, bpmnlintValidator, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
@@ -281,8 +282,11 @@ its `W_CONFIG_IGNORED` notes (pass them to `bpmnlintValidator` as `notes`). A
 host that lints with a configuration that turns the rule on (the engine
 defaults `getDefaultLintConfig({ engine: 'c7' | 'c8' })` and the automation
 preset do) passes the conventions of that same configuration, or its own
-lint reports bpmn-cli's new ids. Without the plugin, a table of your own works
-too ([bpmnlint](bpmnlint.md#id-conventions) has the rules):
+lint reports bpmn-cli's new ids. Helpers of a plugin before 0.12.1 work too,
+but that plugin's rule cannot check a `case` named after a property of
+JavaScript's Object (`toString`, `__proto__`): new ids take PascalCase, and
+the note says the rule cannot check it. Without the plugin, a table of your
+own works too ([bpmnlint](bpmnlint.md#id-conventions) has the rules):
 
 ```ts
 const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));

@@ -371,14 +371,30 @@ describe('idConventionsFromLint', () => {
     for (const config of [undefined, {}, { case: 'snake_case', eventDefinitionQualifier: 'off' }]) expect(idConventionsFromLint({ severity: 'warn', config }, naming).notes).toEqual([]);
   });
 
-  it('says why a value is ignored: a case the rule cannot check at all, a prefix outside ASCII', () => {
+  it('says why a value is ignored: a case named like a property of JavaScript\'s Object (unknown like any other; a plugin before 0.12.1 cannot check it), a prefix outside ASCII', async () => {
     const { conventions, notes } = idConventionsFromLint({ severity: 'warn', config: { case: 'toString', prefixes: { 'bpmn:UserTask': 'prüfung_' } } }, naming);
     expect(conventions).toMatchObject({ case: 'PascalCase', ignored: ['bpmn:UserTask'] });
     expect(notes.map((n) => n.message)).toEqual([
-      '.bpmnlintrc: @miragon/rules/element-id-naming case "toString" is unknown and the rule cannot check it: new ids take PascalCase, the fallback for an unknown case',
+      '.bpmnlintrc: @miragon/rules/element-id-naming case "toString" is unknown: the rule checks PascalCase, and new ids take it',
       '.bpmnlintrc: @miragon/rules/element-id-naming prefix of bpmn:UserTask "prüfung_" has a character outside ASCII, which bpmn-cli does not write in ids: new ids of the type follow the learned id style, and the rule reports them',
     ]);
     expect(conventionsOf({ severity: 'warn', config: { case: 'constructor' } })?.case).toBe('PascalCase');
+    // the rule checks PascalCase there (since @miragon/bpmnlint-plugin-rules 0.12.1; 0.12.0 could not: it reported
+    // <userTask_undefined> for an id without the prefix and threw on the first id with it), for __proto__ too
+    const ids = wrap('<bpmn:userTask id="userTask_checkInvoice"/><bpmn:userTask id="userTask_CheckInvoice"/>');
+    for (const name of ['toString', '__proto__']) {
+      expect((await lint(ids, { severity: 'warn', config: { case: name } })).map((f) => [f.id, f.message])).toEqual([['userTask_checkInvoice', 'Element id must match the naming convention <userTask_PascalCase>']]);
+      expect(idConventionsFromLint({ severity: 'warn', config: { case: name } }, naming).notes.map((n) => n.message)).toEqual([`.bpmnlintrc: @miragon/rules/element-id-naming case "${name}" is unknown: the rule checks PascalCase, and new ids take it`]);
+    }
+    // injected helpers of a plugin before 0.12.1 answer such a name with Object.prototype's property (a function, or
+    // Object.prototype itself), which has no label: new ids take the fallback, and the note says that rule cannot check it
+    const older = { ...naming, resolveCase: (c: string) => (({}) as Record<string, unknown>)[c] as ReturnType<typeof naming.resolveCase> ?? naming.resolveCase(c) };
+    for (const name of ['toString', '__proto__']) {
+      const old = idConventionsFromLint({ severity: 'warn', config: { case: name } }, older);
+      expect(old.conventions?.case).toBe('PascalCase');
+      expect(old.notes.map((n) => n.message)).toEqual([`.bpmnlintrc: @miragon/rules/element-id-naming case "${name}" is unknown, and the rule of a @miragon/bpmnlint-plugin-rules before 0.12.1 cannot check it: new ids take PascalCase, the fallback for an unknown case`]);
+    }
+    expect(idConventionsFromLint({ severity: 'warn', config: { case: 'snake_case' } }, older).notes).toEqual([]);
   });
 
   it('under required, a qualified prefix too long for new ids is one note; such events follow the learned style, no W_ID_PREFIX_STALE names the plain prefix', async () => {

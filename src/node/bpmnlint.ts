@@ -26,14 +26,17 @@
  * nowhere. No .bpmnlintrc: nothing is loaded.
  *
  * bpmnlint and @miragon/bpmnlint-plugin-rules (exact dependencies of
- * bpmn-cli) are required on the first .bpmnlintrc, with createRequire: the
- * plugin's ESM build cannot be imported by Node (extension-less bpmnlint
- * paths, JSON without import attributes), its CJS build loads. Linter and
- * NodeResolver come from the bpmnlint the plugin's bundle imports, so rules
- * and linter are one bpmnlint even when a project's hoisted bpmnlint is the
- * one the plugin finds (the detail line names a version other than the
- * pinned one). Loading fails (an old hoisted bpmnlint, a broken install):
- * W_LINT_UNAVAILABLE, the write goes ahead.
+ * bpmn-cli) are required on the first .bpmnlintrc, with createRequire (the
+ * plugin's CJS build): synchronously (bpmnlintEngine() is synchronous), and
+ * with Linter and NodeResolver required from the plugin's own location, so
+ * they come from the bpmnlint the plugin's rules import: rules and linter
+ * are one bpmnlint even when a project's hoisted bpmnlint is the one the
+ * plugin finds (the detail line names a version other than the pinned one),
+ * and NodeResolver resolves the shipped tier with CJS resolution from inside
+ * the plugin. Loading fails (a bpmnlint older than 11.14 next to the plugin,
+ * which npm avoids since the plugin's peer range `>=11.14.0` but an install
+ * with --legacy-peer-deps does not; a broken install): W_LINT_UNAVAILABLE,
+ * the write goes ahead.
  *
  * The resolver chain asks, per rule and config, until one answers (then it
  * remembers the answer; lint runs never ask the tiers again):

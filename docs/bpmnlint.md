@@ -191,10 +191,11 @@ style, and the rule reports them; `show --conventions` marks the type `checked; 
 (W_CONFIG_IGNORED)`. Under `eventDefinitionQualifier: "required"` a qualified prefix longer than 56
 characters (`escalation` before a long `bpmn:EndEvent` prefix) is one too: new ids of such events
 follow the learned id style, and `show --conventions` names those triggers on the type's row
-(`escalation, terminate, compensate: qualified prefix ignored`). An unknown case takes the rule's fallback (PascalCase; a name such as
-`toString`, which the rule cannot check at all, too), an unknown qualifier `optional`. Like `W_LINT_UNAVAILABLE`, `validate`,
-`new` and `show --conventions` list it, and a write only counts it in its validator line (`1
-element-id-naming value ignored (W_CONFIG_IGNORED; bpmn validate lists it)`).
+(`escalation, terminate, compensate: qualified prefix ignored`). An unknown case takes the rule's
+fallback (PascalCase, which the rule then checks), an unknown qualifier `optional`. Like
+`W_LINT_UNAVAILABLE`, `validate`, `new` and `show --conventions` list it, and a write only counts
+it in its validator line (`1 element-id-naming value ignored (W_CONFIG_IGNORED; bpmn validate lists
+it)`).
 
 `--no-lint-config`, no `.bpmnlintrc`, or the rule `off` (as in `recommended-for-modeling`): new ids
 follow the file's id style alone, byte for byte as before. DI ids (`bpmndi:`) are out of scope: they
@@ -202,7 +203,7 @@ follow their element (`<id>_di`).
 
 ## Which rules are available
 
-bpmn-cli ships bpmnlint 11.15.0 and @miragon/bpmnlint-plugin-rules 0.12.0. A rule or config
+bpmn-cli ships bpmnlint 11.15.0 and @miragon/bpmnlint-plugin-rules 0.12.1. A rule or config
 resolves from the first of:
 
 1. the plugin's bundled resolver: bpmnlint's rules and configs (`bpmnlint:recommended`, `all`,
@@ -303,10 +304,15 @@ node that really has no flow, or a gateway with one branch, is reported in both.
 ## A hoisted bpmnlint
 
 When a project has its own bpmnlint and installs bpmn-cli as a dependency, npm may hoist
-@miragon/bpmnlint-plugin-rules next to the project's bpmnlint, and the plugin uses that one. From
-11.14 on it works (the validator line names the version, `bpmnlint 11.14.0 from node_modules/bpmnlint
-(bpmn-cli pins 11.15.0)`); an older one cannot load the plugin, and bpmn-cli says so in one
-`W_LINT_UNAVAILABLE` and writes anyway. Update the project's bpmnlint, or run bpmn-cli with `npx`.
+@miragon/bpmnlint-plugin-rules next to the project's bpmnlint, and the plugin uses that one. npm
+does so only for a bpmnlint the plugin's peer range accepts (`>=11.14.0`, since 0.12.1), and that
+works (the validator line names the version, `bpmnlint 11.14.0 from node_modules/bpmnlint (bpmn-cli
+pins 11.15.0)`). For an older one npm keeps the plugin under bpmn-cli, next to bpmn-cli's own
+bpmnlint, and lint runs with the pinned version. Only an install that ignores peer dependencies
+(`npm install --legacy-peer-deps`, or a package manager that does not check them) still puts the
+plugin next to an older bpmnlint: that one cannot load the plugin, and bpmn-cli says so in one
+`W_LINT_UNAVAILABLE` and writes anyway. Update the project's bpmnlint, install without
+`--legacy-peer-deps`, or run bpmn-cli with `npx`.
 
 ## Library use
 

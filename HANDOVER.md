@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), and the id conventions of its element-id-naming (#34))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), and @miragon/bpmnlint-plugin-rules 0.12.1)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -52,6 +52,58 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## @miragon/bpmnlint-plugin-rules 0.12.1 (2026-10-13, `fix/bpmnlint-rules-0.12.1`)
+
+The plugin is pinned to 0.12.1 (was 0.12.0; bpmnlint stays 11.15.0). The
+lockfile changes only the plugin's own entry (version, tarball, integrity,
+its peer range `bpmnlint >=11.14.0`); its dependencies are the same.
+
+- **`case: "toString"`**: element-id-naming no longer throws on a case named
+  after a key of `Object.prototype` (upstream #79; `toString`, `__proto__`);
+  it checks the fallback, PascalCase, like any unknown case.
+  `idConventionsFromLint` gives that case the note of every unknown case
+  (`case "toString" is unknown: the rule checks PascalCase, and new ids take
+  it`). A `resolveCase` answer without a known label comes only from helpers
+  a host injects from a plugin before 0.12.1 (Object.prototype's property: a
+  function for `toString`, Object.prototype itself for `__proto__`); its rule
+  cannot check the case (`<prefix_undefined>`, or W_LINT_FAILED on an id with
+  the prefix), so that path keeps a note of its own: `is unknown, and the
+  rule of a @miragon/bpmnlint-plugin-rules before 0.12.1 cannot check it: new
+  ids take PascalCase, the fallback for an unknown case`. The guide
+  (`W_CONFIG_IGNORED`) and docs/bpmnlint.md give the unknown-case wording,
+  docs/library.md the older plugin's limit; `test/conventions-lint.test.ts` pins both notes (the older helpers by a
+  stub) and lints `userTask_checkInvoice` under `toString` and `__proto__`
+  with the real rule (one PascalCase finding each).
+- **ESM build**: it loads in plain Node now (upstream #78). bpmn-cli keeps
+  `createRequire` (the CJS build): `bpmnlintEngine()` is synchronous, and
+  Linter and NodeResolver are required from the plugin's own location, so
+  they are the bpmnlint the plugin's rules import, and the shipped tier
+  resolves from inside the plugin. The module header of
+  `src/node/bpmnlint.ts`, docs/library.md, docs/testing.md and the header of
+  `test/bpmnlint.test.ts` give that reason instead of the broken ESM build.
+- **Peer range `bpmnlint >=11.14.0`** changes where npm puts the plugin: with
+  a project bpmnlint older than 11.14, npm no longer hoists the plugin next
+  to it but keeps it under bpmn-cli, next to bpmn-cli's own bpmnlint 11.15.0,
+  and lint runs (checked with npm 12.0.2: project `bpmnlint 11.0.0`, packed
+  CLI; the 0.12.0 pin gave W_LINT_UNAVAILABLE, the 0.12.1 pin `4 error(s), 14
+  warning(s)`). The old hoisted bpmnlint, and its W_LINT_UNAVAILABLE, is left
+  for `--legacy-peer-deps` (the plugin is hoisted again) and package managers
+  that ignore peers. docs/bpmnlint.md ("A hoisted bpmnlint"), the guide's
+  `W_LINT_UNAVAILABLE` and the module header of `src/node/bpmnlint.ts` say
+  so; the tests that build such a layout by hand are unchanged.
+- Of the upstream items listed under #33 below, 0.12.1 settles the ESM
+  build, the peer range, the rule name in the doc comments and the README's
+  `.bpmnlintrc` examples (strict JSON now, `json` blocks that `JSON.parse`
+  reads). The bundle with only camunda-compat 7-24 / 8-10 is now documented
+  upstream as intended (README and `createBundledResolver`'s doc comment:
+  chain bpmnlint's NodeResolver behind it for older engines), which is what
+  bpmn-cli's shipped tier does; nothing of that list is open.
+- Version mentions: CONTRIBUTING.md, docs/bpmnlint.md, docs/migrating.md
+  (the 0.7 dependency line; the toString note was never released, so no
+  migration line of its own). The broken-plugin stub in
+  `test/bpmnlint.test.ts` keeps `version: '0.12.0'` (any version; it throws
+  on load).
 
 ## Id conventions of the .bpmnlintrc (2026-10-13, `feat/34-id-conventions`, issue #34)
 

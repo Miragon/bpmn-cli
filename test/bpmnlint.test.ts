@@ -9,8 +9,9 @@
  * project plugins), except the cases about a model outside a repository.
  * test/global-setup.ts makes sure no .bpmnlintrc above the temporary
  * directory changes them. The CLI cases run a build of src/ under
- * plain node (the plugin's ESM build does not load there, its CJS build does;
- * vitest would hide that), built into a temporary directory of their own.
+ * plain node (it loads bpmnlint and the plugin as the published package
+ * does; vitest's module loader would hide a load failure), built into a
+ * temporary directory of their own.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
