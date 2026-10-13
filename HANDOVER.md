@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, and a write's count of what bpmnlint leaves out)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, and the .bpmnlintrc reloaded after later installs and found through linked directories)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2126 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2133 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,127 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## The .bpmnlintrc in long-running hosts and through linked directories (2026-10-13, `fix/lint-reload-and-linked-dirs`)
+
+Follow-ups of #33. A library host (design-iq's live host) that followed the
+`W_LINT_UNAVAILABLE` hint and installed the plugin kept saying "is not
+installed" until it restarted; a model reached through a symbolic link from
+outside its repository got no `.bpmnlintrc`, while git finds the repository;
+and `bpmnlintEngine()` resolved none of the camunda-compat configs the
+plugin's bundle lacks, which a `.bpmnlintrc` gets offline.
+
+- **Reload** (`src/node/bpmnlint.ts`, `loadBpmnlint`): a cache entry keeps
+  what the load depended on in the project besides the `.bpmnlintrc`'s text
+  (`LoadDeps`, one `Dep` each): the packages the chain left out
+  (`ChainResolver.reason`, not bpmnlint), the project modules that failed to
+  load, and the moddle module paths the project answered or left out (not
+  the plugin's camunda / zeebe descriptors). Each `Dep` holds its `depState`
+  from before the load looked it up (`ChainResolver.first` before any tier,
+  `boundedRequire` before the require, `moddleExtensionsOf` before the
+  lookup), so a package that lands while the load runs is a change for the
+  next call. `depState` is where Node resolves the spellings, plus the files
+  Node's caches do not see: the nearest `node_modules/<package>` from the
+  `.bpmnlintrc`'s directory up, its `package.json` and the path inside it,
+  or a relative / absolute path itself, each as path, inode, size, mtime,
+  ctime (npm extracts with the tarball's fixed mtime, so the inode and ctime
+  count). Node remembers each resolution for the life of the process
+  (`Module._pathCache`, returned without looking at the disk), so a package
+  found above the repository stayed found there after the hint's install
+  inside it: a reload first drops those entries of the old load's deps
+  (`forgetResolutions`; the request and its subpaths). Node does not cache a
+  require that threw, so a fixed plugin loads. A hit with nothing left out
+  and no project descriptor checks nothing. Not seen: a fix inside a module
+  the failed plugin requires in turn (a reinstall is); a project plugin that
+  loaded stays in Node's require cache (restart, as before); a failed plugin
+  reinstalled as a version whose `main` moved stays "not installed" until a
+  restart, because Node keeps the `package.json` it read (in C++, not
+  reachable from JS).
+- **Linked directories** (`findBpmnlintConfig`): the path as given first, so
+  an in-repository link to a directory outside keeps the repository's
+  `.bpmnlintrc`; where that finds none and the start directory is reached
+  through a link, the physical directory, where git finds the repository
+  (`mlink -> repo/models` gets `repo`'s). `physicalOf` takes the deepest
+  existing ancestor of a directory a write is about to create (`bpmn new
+  mlink/sub/x.bpmn`), so a new subdirectory behind the link gets the same
+  `.bpmnlintrc` and id conventions. A linked model file counts by the
+  directory of the link, as git counts the working directory (the guide and
+  docs say "a model whose directory is reached through a symbolic link").
+  Trust is unchanged: the project tier decides on the physical root of the
+  repository of the `.bpmnlintrc` found. `shown()` puts a physical path
+  outside a linked `lintFrom` relative to where the link leads (`..`), not
+  across the two spellings; the CLI's working directory is physical, so its
+  paths do not change.
+- **`bpmnlintEngine()`**: its resolver is the offline part of the chain
+  (`offlineResolver`): the plugin's bundled resolver, then bpmnlint's
+  `NodeResolver` inside the plugin for the packages bpmn-cli ships. It stays
+  synchronous, and what neither knows throws the bundled resolver's error.
+  Library hosts get `camunda-cloud-8-5`, `camunda-platform-7-20` and the
+  other camunda-compat configs with the rules and findings a `.bpmnlintrc`
+  gets (test). The upstream half (Miragon/bpmnlint-rules: bundle every
+  camunda-compat config, or say that only the latest 7.x / 8.x one is
+  bundled; it matters for browser hosts, which have only the bundle) is not
+  filed.
+- **Bench** (chore): `tools/bench/lib/corpus.mjs` passes `--no-lint-config`
+  to the engine corpus's `layout --force` when the reference build has it
+  (detected once, only when a file is drawn), like `arms.mjs` and the fuzz
+  executor. The corpus does not change (115 of 115 files byte-identical).
+- Docs: docs/bpmnlint.md (Which configuration runs, Project code, Library
+  use, Limits), docs/library.md, one line in the guide's BPMNLINT, the
+  module header. This closes the cache and lookup items of #33's "Left for
+  later" and the bpmn-cli half of its camunda-compat bundle item.
+
+Evidence:
+
+- `npm run gate`: 2133 tests (+246 opt-in; +7 in test/bpmnlint.test.ts, each
+  fails on origin/main; the two added after the review, a package found
+  above the repository and one that appears during the load, and the new
+  subdirectory checks of the two link cases also fail on the branch's first
+  version), isomorphism check within budget (whole entry
+  941.8 / 300.2 -> 942.0 / 300.3 KB, the guide lines; `applyToXml` 663.5 /
+  211.6 unchanged), layout regression 444 (budget 444), fuzz 12 x 15 0
+  errors.
+- Differential against origin/main: the CLI on the 164 files of
+  tools/scenarios and test/fixtures (`validate`, `validate --json`, `add
+  --dry-run`) in a repository without a `.bpmnlintrc`, one with a project
+  plugin, a missing plugin and moddle descriptors, a link inside it to a
+  directory outside, and a directory outside any repository: 1968 of 1968
+  outputs identical. Through a link from outside the repository 477 of 492
+  differ, all by bpmnlint now running (the 15 others: an `add` both builds
+  refuse, `E_AMBIGUOUS_SCOPE`, before any lint), and every `validate` equals
+  the output inside the repository but the paths (328 of 328).
+  `layout-regress --compare` 0 better / 0 worse, `speaking-ids --baseline`
+  570 of 570, `roundtrip` identical.
+- The review's probes: a plugin and a moddle package found above the
+  repository and then installed inside it, and a descriptor written while
+  the load runs, are used by the next call in the same process (before: the
+  same message until a restart); the reinstall that moves `main` gives "is
+  not installed" until a restart (the documented limit).
+- Runtime: a cache hit with nothing left out makes the same file system
+  calls as main (one read, one exists, one realpath, two lstat, one stat, no
+  module resolution; about 30 us either way). One package left out and one
+  project descriptor: 11 stats (the walk to the nearest
+  `node_modules/<package>` up to `/`) and two resolutions, about 60 to 85 us
+  a hit against 25 to 30 us on main, which checked nothing. A load takes the
+  state of each package and descriptor before it looks it up (a resolution
+  and a few stats each, once per load). A lookup that finds no
+  `.bpmnlintrc` adds one realpath (about 20 us; through a link it walks
+  twice, about 0.12 ms). The CLI's `validate` with a `.bpmnlintrc` that has
+  a project plugin, a missing plugin and two moddle paths: median 167 ms
+  against 171 ms on main (30 runs each), within the noise.
+
+Left for later (low, not fixed here):
+
+- A failed plugin reinstalled as a version whose entry module moved is
+  reported as "not installed" until the host restarts (Node's package.json
+  cache). The reason could say that the package directory is there and Node
+  cannot resolve it, with a restart hint; that also changes the message of a
+  broken install in a fresh process, so it belongs in a PR of its own.
+- `test/global-setup.ts` checks only the path as given for a stray
+  `.bpmnlintrc` above the temporary directory. That is enough: outside a
+  repository only the start directory counts.
+- The upstream half of the camunda-compat bundle item (Miragon/bpmnlint-rules)
+  is not filed; it is a public issue and waits for the user's go.
 
 ## A write counts what bpmnlint leaves out (2026-10-13, `fix/lint-left-out-counted`)
 

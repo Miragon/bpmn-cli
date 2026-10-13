@@ -9,8 +9,10 @@
  *                 private corpora stay outside the repository and only their
  *                 results land in the git-ignored results directory
  *      engine     (with `engine: true`) the scenarios redrawn by `refBin layout
- *                 --force`, cached in <out>/corpus/engine: a corpus whose
- *                 diagrams are exactly engine-owned, so `auto` redraws in full
+ *                 --force` (and `--no-lint-config` when the build has it: a
+ *                 .bpmnlintrc above <out> never changes the corpus), cached in
+ *                 <out>/corpus/engine: a corpus whose diagrams are exactly
+ *                 engine-owned, so `auto` redraws in full
  *    `only` (names) filters; files are every *.bpmn below the directory, sorted.
  *  - `modelName(corpus, file)`: the path below the corpus directory without
  *    .bpmn, slashes as `__`.
@@ -55,11 +57,14 @@ function envCorpora(env) {
 function engineCorpus(scenarios, out, refBin) {
   const dir = join(out, 'corpus', 'engine');
   mkdirSync(dir, { recursive: true });
+  let noLint;
   for (const src of bpmnFiles(scenarios)) {
     const dst = join(dir, basename(src));
     if (existsSync(dst)) continue;
+    // as arms.mjs and fuzz/lib/exec.mjs: only a build that has the flag gets it (an older BASELINE_BIN)
+    noLint ??= /--no-lint-config/.test(spawnSync(process.execPath, [refBin, 'layout', '--help'], { encoding: 'utf8' }).stdout ?? '') ? ['--no-lint-config'] : [];
     copyFileSync(src, dst);
-    const r = spawnSync(process.execPath, [refBin, 'layout', dst, '--force'], { encoding: 'utf8', env: CLI_ENV });
+    const r = spawnSync(process.execPath, [refBin, 'layout', dst, '--force', ...noLint], { encoding: 'utf8', env: CLI_ENV });
     if (r.status !== 0) rmSync(dst);
   }
   return { name: 'engine', dir };

@@ -2,9 +2,12 @@
  * The project's .bpmnlintrc on disk (Node only): lookup, loading and the
  * resolver chain. The validator itself is the core's (src/bpmnlint.ts).
  *
- *   findBpmnlintConfig(dir)          -> the nearest .bpmnlintrc from dir up to the repository root, or undefined
- *   bpmnlintEngine()                 -> { Linter, resolver } with the plugin's bundled resolver (library hosts)
- *   loadBpmnlint(rcPath)             -> the resolved configuration with its resolver chain (cached on the file's text), or why bpmnlint cannot run
+ *   findBpmnlintConfig(dir)          -> the nearest .bpmnlintrc from dir up to the repository root (the path as given,
+ *                                       then the physical one), or undefined
+ *   bpmnlintEngine()                 -> { Linter, resolver } with the offline tiers of the chain (library hosts): the
+ *                                       plugin's bundled resolver, then the packages bpmn-cli ships
+ *   loadBpmnlint(rcPath)             -> the resolved configuration with its resolver chain (cached on the file's text and
+ *                                       on what it left out or read from the project), or why bpmnlint cannot run
  *   projectBpmnlint(file, opts)      -> the NamedValidator for a file, or undefined (no .bpmnlintrc, --no-lint-config)
  *   projectBpmnlintSettings(file)    -> the effective rule settings (same lookup, flags, cache and errors)
  *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/conventions.ts), the
@@ -23,7 +26,13 @@
  * the start directory counts (bpmnlint's CLI reads only its working
  * directory); a document without a file looks up from `lintFrom` (the CLI
  * passes the working directory: stdin without -o), and without `lintFrom`
- * nowhere. No .bpmnlintrc: nothing is loaded.
+ * nowhere. The walk takes the path as given; where it finds nothing and the
+ * start directory is reached through a symbolic link, it walks again from the
+ * physical directory, as git finds the repository (a model in a linked
+ * directory gets its repository's .bpmnlintrc, also in a subdirectory a
+ * write is about to create; an in-repository link to a directory outside
+ * keeps the repository's; a linked model file counts by the directory of the
+ * link). No .bpmnlintrc: nothing is loaded.
  *
  * bpmnlint and @miragon/bpmnlint-plugin-rules (exact dependencies of
  * bpmn-cli) are required on the first .bpmnlintrc, with createRequire (the
@@ -71,15 +80,25 @@
  * zeebe-bpmn-moddle/resources/zeebe(.json) are the plugin's descriptors
  * (offline); anything else is left out (W_LINT_UNAVAILABLE).
  *
- * Project plugin modules stay in Node's require cache: a long-running host
- * restarts after changing one. The load is cached on the .bpmnlintrc's text,
- * also what it could not resolve: after installing a missing plugin or moddle
- * package, or editing a moddle descriptor, a long-running host restarts too.
+ * The load is cached on the .bpmnlintrc's text and on what it depended on in
+ * the project besides it (LoadDeps): the packages it left out (a plugin
+ * installed after the hint), the modules that failed to load and the moddle
+ * descriptors it read or could not find, each as it was before the load
+ * looked it up (depState: where Node resolves it, the nearest
+ * node_modules/<package> on disk, and the files' path, inode, size, mtime,
+ * ctime). A cache hit with nothing left out and no descriptor of the project
+ * checks nothing; one with some checks those and loads again when one
+ * changed, after dropping Node's remembered resolutions of them (a package
+ * found above the repository stays found there for the life of the process
+ * otherwise). Project plugin modules that did load stay in Node's require
+ * cache, and so does the package.json Node read: a long-running host
+ * restarts after changing a plugin that loaded, or after a reinstall that
+ * moved a package's entry module.
  */
 import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import Module, { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../bpmnlint.js';
 import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../conventions.js';
 import { ioError } from '../errors.js';
@@ -201,10 +220,18 @@ function real(path: string): string {
   }
 }
 
-/** A path for messages: relative to `from` when given (also when one of them is reached through a symlink). */
+/**
+ * A path for messages: relative to `from` when given (also when one of them
+ * is reached through a symlink). A physical path (Node's, the lookup's second
+ * walk) that lies outside `from` either way, from a `from` reached through a
+ * link: relative to where the link leads, as `..` resolves there.
+ */
 function shown(path: string, from?: string): string {
   if (from === undefined) return path;
-  const r = inside(path, from) || !inside(real(path), real(from)) ? relative(from, path) : relative(real(from), real(path));
+  let r: string;
+  if (inside(path, from)) r = relative(from, path);
+  else if (inside(real(path), real(from))) r = relative(real(from), real(path));
+  else r = path === real(path) && from !== real(from) ? relative(real(from), path) : relative(from, path);
   return r === '' ? '.' : r;
 }
 
@@ -325,13 +352,42 @@ function engineUnavailable(failure: LoadFailure, from?: string): BpmnlintUnavail
  * The nearest .bpmnlintrc from `startDir` upwards, not above the repository
  * root (a `.git` directory or file), whoever owns the repository (repoOff
  * decides only about project code); outside a repository, also under a
- * `.git` file that names no git directory, only the one in `startDir`.
+ * `.git` file that names no git directory, only the one in `startDir`. The
+ * path as given first; where that finds none and `startDir` is reached
+ * through a symbolic link, the physical directory (git's start: a model
+ * linked from outside its repository gets the repository's .bpmnlintrc).
  */
 export function findBpmnlintConfig(startDir: string): string | undefined {
+  const given = resolve(startDir);
+  const found = findConfigFrom(given);
+  if (found !== undefined) return found;
+  const physical = physicalOf(given);
+  return physical !== given ? findConfigFrom(physical) : undefined;
+}
+
+/**
+ * `dir` without symlinks, also where it does not exist yet (a write into a
+ * new subdirectory): its deepest existing ancestor without symlinks, the
+ * rest as given.
+ */
+function physicalOf(dir: string): string {
+  const rest: string[] = [];
+  for (let d = dir; ; d = dirname(d)) {
+    try {
+      return join(realpathSync(d), ...rest.reverse());
+    } catch {
+      if (dirname(d) === d) return dir;
+      rest.push(basename(d));
+    }
+  }
+}
+
+/** findBpmnlintConfig on one spelling of the start directory. */
+function findConfigFrom(startDir: string): string | undefined {
   const found = findUp(startDir, [BPMNLINT_CONFIG_FILE], { stopAtGitRoot: true });
   if (!found) return undefined;
   // a parent directory counts only inside a repository: not ~ or /tmp for every model below them
-  if (found.dir !== resolve(startDir)) {
+  if (found.dir !== startDir) {
     const root = gitRoot(startDir);
     if (root === undefined || gitDirOf(real(root)) === null) return undefined;
   }
@@ -339,10 +395,12 @@ export function findBpmnlintConfig(startDir: string): string | undefined {
 }
 
 /**
- * bpmnlint's Linter with the plugin's bundled resolver, and the plugin
- * (`getDefaultLintConfig`, `naming`): what a library host builds a validator
- * from without a .bpmnlintrc. Throws an Error that names the bpmnlint
- * versions when the libraries cannot be loaded.
+ * bpmnlint's Linter with the offline tiers of the resolver chain
+ * (offlineResolver: every config and rule bpmn-cli ships, as a .bpmnlintrc
+ * gets them, no project code), and the plugin (`getDefaultLintConfig`,
+ * `naming`): what a library host builds a validator from without a
+ * .bpmnlintrc. Throws an Error that names the bpmnlint versions when the
+ * libraries cannot be loaded.
  */
 export function bpmnlintEngine(): BpmnlintEngine & { plugin: BpmnlintPlugin; bpmnlintVersion: string } {
   const l = loadLibs();
@@ -350,7 +408,34 @@ export function bpmnlintEngine(): BpmnlintEngine & { plugin: BpmnlintPlugin; bpm
     const u = engineUnavailable(l);
     throw new Error(`${u.reason} (${u.hint})`);
   }
-  return { Linter: l.Linter, resolver: l.plugin.createBundledResolver(), plugin: l.plugin, bpmnlintVersion: l.bpmnlint.version };
+  return { Linter: l.Linter, resolver: offlineResolver(l), plugin: l.plugin, bpmnlintVersion: l.bpmnlint.version };
+}
+
+/**
+ * Tiers 1 and 2 of the chain, synchronous like the bundled resolver: the
+ * plugin's bundled resolver, then, for the packages bpmn-cli ships, bpmnlint's
+ * NodeResolver from inside the plugin (every camunda-compat config and rule
+ * of the version it pins: camunda-cloud-8-5, camunda-platform-7-20). Offline,
+ * no project code. What neither answers throws the bundled resolver's error
+ * (`unknown config <pkg/name>`).
+ */
+function offlineResolver(l: Libs): BpmnlintResolver {
+  const bundled = l.plugin.createBundledResolver();
+  const shipped = lazy(() => new l.NodeResolver({ require: l.pluginRequire }));
+  const ask = (kind: 'rule' | 'config', pkg: string, name: string): unknown => {
+    const of = (r: BpmnlintResolver) => (kind === 'rule' ? r.resolveRule(pkg, name) : r.resolveConfig(pkg, name));
+    try {
+      return of(bundled);
+    } catch (err) {
+      if (!SHIPPED.has(pkg)) throw err;
+      try {
+        return of(shipped());
+      } catch {
+        throw err;
+      }
+    }
+  };
+  return { resolveRule: (pkg, name) => ask('rule', pkg, name), resolveConfig: (pkg, name) => ask('config', pkg, name) };
 }
 
 /** Which tier answered (BpmnlintChain.used). */
@@ -372,8 +457,14 @@ function lazy<T>(make: () => T): () => T {
   return () => (value ??= make());
 }
 
-/** A require that loads entry modules only from inside `root`, and records what failed to load. */
-function boundedRequire(fromDir: string, root: string, failures: Map<string, string>): Require {
+/** A module of the project that failed to load: the first line of its error, and its depState before the require. */
+interface LoadFailureOf {
+  message: string;
+  state: string;
+}
+
+/** A require that loads entry modules only from inside `root`, and records what failed to load (absolute path -> LoadFailureOf). */
+function boundedRequire(fromDir: string, root: string, failures: Map<string, LoadFailureOf>): Require {
   const req = createRequire(join(fromDir, '__bpmn-cli__.js')) as Require;
   const check = (id: string): string => {
     const path = req.resolve(id);
@@ -382,10 +473,12 @@ function boundedRequire(fromDir: string, root: string, failures: Map<string, str
   };
   const bounded = ((id: string) => {
     const path = check(id);
+    // before the require: a fix written while it runs is a change the cache sees
+    const state = depState(fromDir, [path]);
     try {
       return req(path);
     } catch (err) {
-      failures.set(path, firstLine(err));
+      failures.set(path, { message: firstLine(err), state });
       throw err;
     }
   }) as Require;
@@ -398,8 +491,12 @@ class ChainResolver implements BpmnlintChain {
   private readonly answers = new Map<string, unknown>();
   /** packages whose config the project tier answered: their rules come from there first */
   private readonly pinned = new Set<string>();
-  /** modules of the project that failed to load (absolute path -> first line of the error) */
-  private readonly loadFailures = new Map<string, string>();
+  /** modules of the project that failed to load (absolute path -> first line of the error, depState before the require) */
+  private readonly loadFailures = new Map<string, LoadFailureOf>();
+  /** packages a rule or config was left out for (reason), but bpmnlint */
+  private readonly leftOut = new Set<string>();
+  /** each package's depState before a tier first looked it up (the state of a package left out) */
+  private readonly before = new Map<string, string>();
   private readonly tiers: Tier[];
   private readonly root: string;
   /** why the project tier does not run although the host asked for it (no repository, one that is not the user's: offReason), or undefined */
@@ -441,9 +538,21 @@ class ChainResolver implements BpmnlintChain {
     return versionOf(boundedRequire(this.rcDir, this.root, new Map()), pkg)?.version;
   }
 
+  /**
+   * What the answers depended on in the project (LoadDeps): every package a
+   * rule or config was left out for (but bpmnlint, which is bpmn-cli's) and
+   * every module of the project that failed to load, each with its state
+   * before the tiers looked it up.
+   */
+  projectDeps(): Dep[] {
+    return [...[...this.leftOut].map((pkg) => ({ ids: [pkg], state: this.before.get(pkg)! })), ...[...this.loadFailures].map(([file, f]) => ({ ids: [file], state: f.state }))];
+  }
+
   private async first(kind: 'rule' | 'config', pkg: string, name: string): Promise<unknown> {
     const key = `${kind}:${pkg}/${name}`;
     if (this.answers.has(key)) return this.answers.get(key);
+    // before any tier looks: an install that lands while they do is a change the cache sees (only a package left out keeps it)
+    if (pkg !== 'bpmnlint' && !this.before.has(pkg)) this.before.set(pkg, depState(this.rcDir, [pkg]));
     const tiers = this.pinned.has(pkg) ? [...this.tiers.filter((t) => t.name === 'project'), ...this.tiers.filter((t) => t.name !== 'project')] : this.tiers;
     for (const tier of tiers) {
       if (!tier.accepts(pkg)) continue;
@@ -469,6 +578,8 @@ class ChainResolver implements BpmnlintChain {
       const v = this.libs.bpmnlint.version;
       return fail(`bpmnlint ${v} has no ${kind} ${name}`, `bpmn-cli runs bpmnlint ${v}; update bpmn-cli or remove the ${kind}.`);
     }
+    // an install, a removal or a fix of the package changes the answer: the cache checks it (LoadDeps)
+    this.leftOut.add(pkg);
     // where Node finds the package from the .bpmnlintrc (only to tell "not installed" from "outside the repository"; nothing is loaded)
     let path: string | undefined;
     try {
@@ -502,7 +613,7 @@ class ChainResolver implements BpmnlintChain {
     if (!inside(path, this.root)) return fail(`${pkg} resolves outside the repository (${path}); bpmn-cli loads project plugins only from inside ${this.root}`, `Install it inside the repository (npm i -D ${pkg}).`);
     if (!this.opts.projectCode) return fail(`${pkg} is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)`, this.repoOff ? `Remove it from the configuration; lintProjectCode: true would not run it either: ${this.repoOff.why}.` : 'Remove it from the configuration, or let the host pass lintProjectCode: true.');
     const failed = [...this.loadFailures].find(([file]) => file === path || file.includes(`${sep}node_modules${sep}${pkg.split('/').join(sep)}${sep}`));
-    if (failed) return fail(`${pkg} fails to load: ${failed[1]}`, `Fix or reinstall ${pkg}; ${SKIP_HINT}`);
+    if (failed) return fail(`${pkg} fails to load: ${failed[1].message}`, `Fix or reinstall ${pkg}; ${SKIP_HINT}`);
     return fail(`${pkg} has no ${kind} ${name}`, `Check the name and the installed version of ${pkg}.`);
   }
 
@@ -525,24 +636,25 @@ function offReason(rcDir: string, repo: Repo | undefined, from?: string): { why:
   return undefined;
 }
 
-/** The moddleExtensions that name a module path: JSON from the project, else the plugin's descriptors for camunda / zeebe. */
-function moddleExtensionsOf(config: BpmnlintConfig, rcDir: string, l: Libs, from?: string): { found: Record<string, object>; unavailable: BpmnlintUnavailable[] } {
+/**
+ * The moddleExtensions that name a module path: JSON from the project, else
+ * the plugin's descriptors for camunda / zeebe. `deps`: each path the
+ * project answered or left out, with its state before the lookup (LoadDeps),
+ * not those the plugin's descriptors answered.
+ */
+function moddleExtensionsOf(config: BpmnlintConfig, rcDir: string, l: Libs, from?: string): { found: Record<string, object>; unavailable: BpmnlintUnavailable[]; deps: Dep[] } {
   const found: Record<string, object> = {};
   const unavailable: BpmnlintUnavailable[] = [];
+  const deps: Dep[] = [];
   const root = rootOf(rcDir);
   const req = createRequire(join(rcDir, '__bpmn-cli__.js'));
   for (const [prefix, value] of moddleEntries(config)) {
     if (typeof value !== 'string') continue;
-    let path: string | undefined;
-    for (const id of extname(value) ? [value] : [value, `${value}.json`]) {
-      try {
-        path = req.resolve(id);
-        break;
-      } catch {
-        /* the next spelling */
-      }
-    }
+    const spellings = moddleSpellings(value);
+    const dep = { ids: spellings, state: depState(rcDir, spellings) };
+    const path = resolveFirst(req, spellings);
     if (path !== undefined && inside(path, root)) {
+      deps.push(dep);
       if (!path.endsWith('.json')) {
         unavailable.push({ kind: 'moddle', name: prefix, pkg: value, reason: `only JSON descriptors are loaded (${shown(path, from)})`, hint: 'Name the JSON descriptor (e.g. camunda-bpmn-moddle/resources/camunda.json); bpmn-cli runs no moddle modules.' });
         continue;
@@ -560,6 +672,7 @@ function moddleExtensionsOf(config: BpmnlintConfig, rcDir: string, l: Libs, from
       found[prefix] = descriptor;
       continue;
     }
+    deps.push(dep);
     unavailable.push({
       kind: 'moddle',
       name: prefix,
@@ -568,7 +681,24 @@ function moddleExtensionsOf(config: BpmnlintConfig, rcDir: string, l: Libs, from
       hint: 'Install its package next to the .bpmnlintrc, or remove the moddleExtensions entry.',
     });
   }
-  return { found, unavailable };
+  return { found, unavailable, deps };
+}
+
+/** How a moddleExtensions module path is looked up: as written, and with `.json` when it has no extension. */
+function moddleSpellings(value: string): string[] {
+  return extname(value) ? [value] : [value, `${value}.json`];
+}
+
+/** The first of `ids` that `req` resolves (a module id or an absolute path), or undefined. */
+function resolveFirst(req: { resolve(id: string): string }, ids: readonly string[]): string | undefined {
+  for (const id of ids) {
+    try {
+      return req.resolve(id);
+    } catch {
+      /* the next spelling */
+    }
+  }
+  return undefined;
 }
 
 /** A loaded .bpmnlintrc, or why bpmnlint cannot run with it (a broken file, bpmnlint or the plugin not loadable). */
@@ -590,13 +720,118 @@ export type LoadedBpmnlint =
     }
   | { ok: false; path: string; where: string; unavailable: BpmnlintUnavailable[]; detail: string };
 
-const cache = new Map<string, { text: string; loaded: Promise<LoadedBpmnlint> }>();
+/**
+ * One thing a load depended on in the project besides the .bpmnlintrc's text
+ * (LoadDeps): a package it left out, a module of the project that failed to
+ * load, a moddle descriptor it read from the project or could not find, as
+ * the spellings Node resolves from the .bpmnlintrc's directory (a module id,
+ * a relative or absolute path); `state`: its depState before the load looked
+ * it up (a change during the load is a change the next call sees).
+ */
+interface Dep {
+  ids: string[];
+  state: string;
+}
+
+/** What a load depended on in the project (Dep); empty: nothing, a hit checks nothing. */
+type LoadDeps = Dep[];
+
+interface CacheEntry {
+  text: string;
+  loaded: Promise<LoadedBpmnlint>;
+  /** absent: the load depended on nothing outside the .bpmnlintrc, a hit checks nothing */
+  deps?: LoadDeps;
+}
+
+const cache = new Map<string, CacheEntry>();
+
+/** A file's identity and version: path, inode, size, mtime, ctime (npm extracts with a fixed mtime: the inode and ctime count); `-` where it does not stat. */
+function fileState(path: string): string {
+  try {
+    const st = statSync(path);
+    return `${path}|${st.ino}|${st.size}|${st.mtimeMs}|${st.ctimeMs}`;
+  } catch {
+    return `${path}|-`;
+  }
+}
+
+/** A module id that names a package (`pkg`, `@scope/pkg/sub/path`), not a relative or absolute path. */
+function isBare(id: string): boolean {
+  return !isAbsolute(id) && !/^\.\.?(?:[/\\]|$)/.test(id);
+}
+
+/** The package of a bare module id (`@scope/pkg` of `@scope/pkg/resources/x`) and the path inside it. */
+function packageOf(id: string): { name: string; sub: string } {
+  const parts = id.split('/');
+  const n = id.startsWith('@') ? 2 : 1;
+  return { name: parts.slice(0, n).join('/'), sub: parts.slice(n).join('/') };
+}
+
+/** The files that tell whether `id` changed on disk, looked up without Node's caches: the nearest node_modules/<package> from `dir` up (where Node looks first), its package.json and the path inside it; a relative or absolute path itself. */
+function onDisk(dir: string, id: string): string[] {
+  if (!isBare(id)) return [resolve(dir, id)];
+  const { name, sub } = packageOf(id);
+  for (let d = dir; ; d = dirname(d)) {
+    const pkg = join(d, 'node_modules', name);
+    if (basename(d) !== 'node_modules' && exists(pkg)) return [pkg, join(pkg, 'package.json'), ...(sub ? [join(pkg, sub)] : [])];
+    if (dirname(d) === d) return [];
+  }
+}
+
+function exists(path: string): boolean {
+  try {
+    return statSync(path, { throwIfNoEntry: false }) !== undefined;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Reads and resolves a .bpmnlintrc (cached on its text). `explicit`
- * (--lint-config): a file that cannot be read or is not strict JSON is
- * E_LINT_CONFIG; a discovered one is W_LINT_UNAVAILABLE and bpmnlint does not
- * run. `projectCode`: the project tier; `from`: the base of shown paths.
+ * The state of one dependency (Dep) now: where Node resolves its spellings
+ * from `dir` (an absolute path is not resolved), and the files on disk that
+ * Node's caches do not see: the nearest package directory, its package.json
+ * and the spellings themselves (fileState). Node remembers a resolution for
+ * the life of the process (a package above the repository stays found there
+ * after an install inside it); the files on disk show the install.
+ */
+function depState(dir: string, ids: readonly string[]): string {
+  const node = ids.every((id) => isAbsolute(id)) ? undefined : resolveFirst(createRequire(join(dir, '__bpmn-cli__.js')), ids);
+  const files = new Set(node === undefined ? [] : [node]);
+  for (const id of ids) for (const file of onDisk(dir, id)) files.add(file);
+  return [`node:${node ?? '-'}`, ...[...files].map(fileState)].join('\n');
+}
+
+/**
+ * Drops what Node remembers about resolving `deps` (Module._pathCache: a
+ * request and its lookup paths -> the file, kept for the life of the process
+ * and returned without looking at the disk), so a load again finds a package
+ * installed inside the repository after one above it was found, and a
+ * descriptor that moved. A package's own package.json Node keeps all the same
+ * (a reinstall that moves its entry module needs a restart).
+ */
+function forgetResolutions(deps: LoadDeps): void {
+  const paths = (Module as unknown as { _pathCache?: Record<string, string> })._pathCache;
+  if (!paths || typeof paths !== 'object') return;
+  const requests = new Set<string>();
+  const packages: string[] = [];
+  for (const id of deps.flatMap((d) => d.ids)) {
+    if (isBare(id)) packages.push(`${packageOf(id).name}/`);
+    requests.add(isBare(id) ? packageOf(id).name : id);
+  }
+  for (const key of Object.keys(paths)) {
+    const end = key.indexOf('\x00');
+    const request = end < 0 ? key : key.slice(0, end);
+    if (requests.has(request) || packages.some((p) => request.startsWith(p))) delete paths[key];
+  }
+}
+
+/**
+ * Reads and resolves a .bpmnlintrc (cached on its text and on what the load
+ * depended on in the project: LoadDeps; a hit whose packages, failed modules
+ * or descriptors changed loads again). `explicit` (--lint-config): a file
+ * that cannot be read or is not strict JSON is E_LINT_CONFIG; a discovered
+ * one is W_LINT_UNAVAILABLE and bpmnlint does not run. `projectCode`: the
+ * project tier; `from`: the base of shown paths.
  */
 export async function loadBpmnlint(rcPath: string, opts: { explicit?: boolean; projectCode?: boolean; from?: string } = {}): Promise<LoadedBpmnlint> {
   const abs = resolve(rcPath);
@@ -622,17 +857,28 @@ export async function loadBpmnlint(rcPath: string, opts: { explicit?: boolean; p
   const repo = repoOf(dirname(abs));
   const key = [abs, !!opts.explicit, !!opts.projectCode, opts.from ?? '', repo ? `${repo.root}:${repo.off ?? ''}` : ''].join('|');
   const hit = cache.get(key);
-  if (hit && hit.text === text) return hit.loaded;
-  const loaded = load(abs, config, where, repo, opts);
-  cache.set(key, { text, loaded });
-  loaded.catch(() => cache.delete(key));
-  return loaded;
+  // nothing left out and no descriptor of the project (deps absent): no stat, no resolve
+  if (hit && hit.text === text && (!hit.deps || hit.deps.every((d) => depState(dirname(abs), d.ids) === d.state))) return hit.loaded;
+  // loaded again: Node would still answer with where it found these before
+  if (hit?.deps) forgetResolutions(hit.deps);
+  const entry: CacheEntry = {
+    text,
+    loaded: load(abs, config, where, repo, opts).then(({ loaded, deps }) => {
+      if (deps.length) entry.deps = deps;
+      return loaded;
+    }),
+  };
+  cache.set(key, entry);
+  entry.loaded.catch(() => {
+    if (cache.get(key) === entry) cache.delete(key);
+  });
+  return entry.loaded;
 }
 
-async function load(abs: string, config: BpmnlintConfig, where: string, repo: Repo | undefined, opts: { projectCode?: boolean; from?: string }): Promise<LoadedBpmnlint> {
+async function load(abs: string, config: BpmnlintConfig, where: string, repo: Repo | undefined, opts: { projectCode?: boolean; from?: string }): Promise<{ loaded: LoadedBpmnlint; deps: LoadDeps }> {
   const notRun = `${where}; bpmnlint did not run (bpmn validate lists why)`;
   const l = loadLibs();
-  if (isFailure(l)) return { ok: false, path: abs, where, unavailable: [engineUnavailable(l, opts.from)], detail: notRun };
+  if (isFailure(l)) return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(l, opts.from)], detail: notRun }, deps: [] };
   // everything that loads or resolves in one try: whatever throws, the write goes ahead with one W_LINT_UNAVAILABLE
   try {
     const rcDir = dirname(abs);
@@ -650,9 +896,9 @@ async function load(abs: string, config: BpmnlintConfig, where: string, repo: Re
     const left = bpmnlintUnavailableFindings([...resolved.unavailable, ...moddle.unavailable]).length;
     if (left) parts.push(`${left} left out (W_LINT_UNAVAILABLE; bpmn validate lists ${left === 1 ? 'it' : 'them'})`);
     if (l.bpmnlint.version !== l.pinned) parts.push(`bpmnlint ${l.bpmnlint.version} from ${shown(l.bpmnlint.dir, opts.from)} (bpmn-cli pins ${l.pinned})`);
-    return { ok: true, path: abs, where, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') };
+    return { loaded: { ok: true, path: abs, where, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') }, deps: [...chain.projectDeps(), ...moddle.deps] };
   } catch (err) {
-    return { ok: false, path: abs, where, unavailable: [engineUnavailable({ ...l, message: firstLine(err) }, opts.from)], detail: notRun };
+    return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable({ ...l, message: firstLine(err) }, opts.from)], detail: notRun }, deps: [] };
   }
 }
 
