@@ -6,12 +6,13 @@
  *   readXml(file)                  -> the file's text, decoded as the file declares (E_FILE_NOT_FOUND / E_IO)
  *   readDoc(file)                  -> Doc (no lossy-import guard: show, find, metrics)
  *   loadDoc(file, { force })       -> Doc, E_IMPORT_LOSSY unless force (every write)
- *   writeAtomic(file, text)        -> temp file in the same directory, renamed over the target
+ *   writeAtomic(file, text)        -> temp file in the same directory, renamed over the target (E_IO: no temp file left)
  *   mutateFile(file, ops, opts)    -> loadDoc + mutateDoc + write (every mutating command)
  *   mutateDocToFile(doc, ops, opts)-> mutateDoc + write to opts.out ?? doc.file (`new`)
  *   layoutFile(file, opts)         -> loadDoc + layoutDoc + write (`layout`)
  *   layoutDocToFile(doc, opts)     -> layoutDoc + write to opts.out ?? doc.file (`layout -`: a model read from stdin)
  *   checkFile(file, opts)          -> readDoc + checkDoc (`validate`)
+ *   checkLoadedDoc(doc, opts)      -> checkDoc on a document without a file (`validate -`)
  *
  * Writing (FileMutationOptions): nothing is written with `dryRun` or when a
  * stage fails; `out` writes elsewhere; `backup` copies the input to
@@ -29,14 +30,22 @@
  * Validators (MutationOptions.validators): they see the file being written
  * (the `out` target with `out`) or checked as `ctx.file`, unless `file` names
  * another.
+ *
+ * The project's bpmnlint (FileBpmnlintOptions, src/node/bpmnlint.ts): the
+ * nearest .bpmnlintrc above that file (up to the repository root, outside
+ * one only in its directory; a document without a file: from `lintFrom`),
+ * or `lintConfig`, runs as an advisory validator next to the host's
+ * (`lintBlocks`: a blocking one); without a .bpmnlintrc nothing is loaded.
  */
-import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../document.js';
 import { declaredEncoding, isUtf8 } from '../encoding.js';
 import { CliError, ioError } from '../errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
+import type { Validator } from '../validators.js';
+import { projectBpmnlint, type FileBpmnlintOptions } from './bpmnlint.js';
 
 /** Where and whether the node layer writes the result of the in-memory pipeline. */
 export interface FileWriteOptions {
@@ -50,9 +59,11 @@ export interface FileWriteOptions {
   mustNotExist?: boolean;
 }
 
-export interface FileMutationOptions extends MutationOptions, FileWriteOptions {}
+export interface FileMutationOptions extends MutationOptions, FileWriteOptions, FileBpmnlintOptions {}
 
-export interface FileLayoutOptions extends LayoutDocOptions, FileWriteOptions {}
+export interface FileLayoutOptions extends LayoutDocOptions, FileWriteOptions, FileBpmnlintOptions {}
+
+export interface FileCheckOptions extends CheckOptions, FileBpmnlintOptions {}
 
 /**
  * The text of an XML file's bytes, in the encoding the file declares: UTF-8
@@ -103,28 +114,41 @@ export async function loadDoc(file: string, opts: { force?: boolean } = {}): Pro
   return doc;
 }
 
-/** Atomic write: temp file in the same directory, then rename over the target. */
+/** Atomic write: temp file in the same directory, then rename over the target; a write that fails (a directory as the target) is E_IO and leaves no temp file. */
 export async function writeAtomic(file: string, content: string): Promise<void> {
   const dir = dirname(file);
-  await mkdir(dir, { recursive: true });
   const tmp = join(dir, `.${basename(file)}.${process.pid}.tmp`);
-  await writeFile(tmp, content, 'utf8');
-  await rename(tmp, file);
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(tmp, content, 'utf8');
+    await rename(tmp, file);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    const e = err as NodeJS.ErrnoException;
+    throw ioError('E_IO', `Cannot write ${file}: ${e.code === 'EISDIR' ? 'it is a directory' : e.message}`, { file, hint: 'Name a file (not a directory) in a directory you can write to.' });
+  }
 }
 
-/** What the core gets to know about the file (MutationOptions.file). */
+/** What the core gets to know about the file (MutationOptions.file / validators). */
 interface FileContext {
   file?: string;
+  validators?: Validator[];
 }
 
-/** The file the validators see (`ctx.file`): opts.file, else the file written or checked. */
-function fileContext(file: string | undefined, opts: { file?: string }): FileContext {
+/** The file the validators see (`ctx.file`: opts.file, else the file written or checked) and the project's bpmnlint. */
+async function fileContext(file: string | undefined, opts: FileBpmnlintOptions & { file?: string; validators?: Validator[] }): Promise<FileContext> {
   const named = opts.file ?? file;
-  return named ? { file: named } : {};
+  // the project's .bpmnlintrc: nothing is loaded without one
+  const lint = await projectBpmnlint(named, opts);
+  return { ...(named ? { file: named } : {}), ...(lint ? { validators: [...(opts.validators ?? []), lint] } : {}) };
 }
 
 /** Runs `compute` (an in-memory pipeline call) and writes its XML to opts.out ?? doc.file unless dryRun. */
-async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean; file?: string }, compute: (context: FileContext) => Promise<MutationResult>): Promise<MutationResult> {
+async function toFile(
+  doc: Doc,
+  opts: FileWriteOptions & FileBpmnlintOptions & { force?: boolean; file?: string; validators?: Validator[] },
+  compute: (context: FileContext) => Promise<MutationResult>,
+): Promise<MutationResult> {
   const target = opts.out ?? doc.file;
   if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
   if (opts.mustNotExist && target && !opts.force && !opts.dryRun) {
@@ -136,7 +160,7 @@ async function toFile(doc: Doc, opts: FileWriteOptions & { force?: boolean; file
       /* does not exist: fine */
     }
   }
-  const result = await compute(fileContext(target, opts));
+  const result = await compute(await fileContext(target, opts));
   // a result equal to the file is not written back over it; --out to another file still gets its copy
   const inPlace = !!target && !!doc.file && resolve(target) === resolve(doc.file);
   if (!opts.dryRun && target && !(result.unchanged && inPlace)) {
@@ -184,10 +208,15 @@ export async function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): P
 
 /**
  * `bpmn validate`: validation with the platform profile (auto-detected unless
- * `opts.platform`) and `opts.validators`, and a layout dry run; nothing is
- * written.
+ * `opts.platform`), `opts.validators` and the project's bpmnlint, and a
+ * layout dry run; nothing is written.
  */
-export async function checkFile(file: string, opts: CheckOptions = {}): Promise<CheckResult> {
+export async function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> {
   const doc = await readDoc(file);
-  return checkDoc(doc, { ...opts, ...fileContext(file, opts) });
+  return checkDoc(doc, { ...opts, ...(await fileContext(file, opts)) });
+}
+
+/** checkFile for a document read elsewhere (`bpmn validate -`): a document without a file looks up its .bpmnlintrc from `opts.lintFrom`. */
+export async function checkLoadedDoc(doc: Doc, opts: FileCheckOptions = {}): Promise<CheckResult> {
+  return checkDoc(doc, { ...opts, ...(await fileContext(doc.file, opts)) });
 }

@@ -21,7 +21,7 @@ step: `/plugin install bpmn-cli --marketplace Miragon/bpmn-cli`).
 marketplace under `/plugin` > Marketplaces.
 
 The skill runs `bpmn` when it is on `PATH`, else `npx -y @miragon/bpmn-cli@<version>` with the
-version of this plugin (Node 20+). It pre-approves only those two commands.
+version of this plugin (Node 22.12+). It pre-approves only those two commands.
 
 - `skills/bpmn/SKILL.md` - the standing rules and the core loop; `skills/bpmn/reference/` - batch
   format, formatting, Camunda 7, Camunda 8 and complete recipes, loaded when needed
@@ -30,7 +30,7 @@ version of this plugin (Node 20+). It pre-approves only those two commands.
 ## What the skill does
 
 - **Runs the CLI** - `bpmn` from `PATH`, else `npx -y @miragon/bpmn-cli@<version>` pinned to the
-  plugin's version (Node 20+); these two commands are the only ones it pre-approves. Batches are
+  plugin's version (Node 22.12+); these two commands are the only ones it pre-approves. Batches are
   piped in with `printf '%s' '<json>' | bpmn apply <file> -`, which runs under that
   pre-approval (a heredoc holding JSON makes Claude Code ask first).
 - **Standing rules** - never write or patch `.bpmn` XML or BPMNDI; address elements by id only;
@@ -44,10 +44,14 @@ version of this plugin (Node 20+). It pre-approves only those two commands.
   problems by their ids with the format commands, at most two more renders; `--around` /
   `--path` on large models); `validate` (`--strict` for deployable models); format with
   `show --layout`, dry runs and the format commands; Camunda 7 and Camunda 8 recipes; the
-  common errors and their fixes. `.bpmn-render/` in the working directory is scratch: delete it
+  common errors and their fixes. With a `.bpmnlintrc` in the repository the results list the
+  bpmnlint findings a change added (`warning [bpmnlint error] ...`), and Claude fixes them in the
+  same batch. A plugin of that configuration that bpmn-cli does not ship runs from the
+  repository's `node_modules` under the pre-approved `bpmn` command; the skill tells Claude to
+  pass `--no-lint-config` in a repository the user does not trust. `.bpmn-render/` in the working directory is scratch: delete it
   or add it to `.gitignore`.
 - **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
-  6.4k when it fires); `reference/` has the batch format, formatting and rendering, Camunda 7,
+  6.7k when it fires); `reference/` has the batch format, formatting and rendering, Camunda 7,
   Camunda 8 and complete recipes; for everything else the skill sends Claude to
   `bpmn guide <topic>` and `bpmn kinds`, so the CLI's own documentation stays the single source.
 

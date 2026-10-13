@@ -31,7 +31,7 @@ writes the XML and the drawing. What you get:
 
 ## Install
 
-Requires Node 20+.
+Requires Node 22.12+.
 
 ```
 npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
@@ -65,7 +65,7 @@ diagram. [A worked session](docs/walkthrough.md) builds a complete process step 
 | Change several things at once | `apply` (a batch of ops as JSON) |
 | Format the diagram | `place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`, `layout` |
 | Look at the diagram | `render` (PNG or SVG, no browser) |
-| Check before deploying | `validate` |
+| Check before deploying | `validate` (also runs the project's `.bpmnlintrc`) |
 | Ask the CLI itself | `guide`, `kinds`, `--help` |
 
 Details: [command reference](docs/commands.md).
@@ -90,6 +90,13 @@ platform's implementation details and validates them against its deploy rules.
 
 Details: [Camunda 7 and Camunda 8](docs/camunda.md).
 
+## bpmnlint
+
+A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate` and in every write: the
+agent sees the findings its change added and fixes them in the same batch, instead of in CI.
+
+Details: [bpmnlint](docs/bpmnlint.md).
+
 ## Library use
 
 The package is also a library that edits BPMN in memory, in Node and in the browser.
@@ -104,6 +111,7 @@ Details: [library use](docs/library.md), [validators](docs/validators.md), [migr
 - [Layout and formatting](docs/layout.md): layout modes and the diagram-only commands
 - [The contract and its limits](docs/contract.md): what the CLI guarantees, what a write changes, limitations
 - [Camunda 7 and Camunda 8](docs/camunda.md): platform settings with worked examples
+- [bpmnlint](docs/bpmnlint.md): the project's `.bpmnlintrc` in validate and every write
 - [A worked session](docs/walkthrough.md): one process from an empty file to a validated model
 - [Library use](docs/library.md) and [migrating](docs/migrating.md)
 - [Validators](docs/validators.md): a library host's own checks inside the write

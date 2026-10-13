@@ -27,7 +27,9 @@ prints the short form.
    the file untouched. Structural validation errors the change would introduce block the write
    (`--force` overrides). Errors the file already had are reported as `W_PREEXISTING_ERROR` and do
    not block, so a file with an old problem stays editable. The same holds for the validators a
-   library host passes ([Validators](validators.md)).
+   library host passes ([Validators](validators.md)). The project's bpmnlint configuration
+   ([bpmnlint.md](bpmnlint.md)) never blocks a write: the result lists the findings the change
+   added, errors included, and `bpmn validate` fails on its errors.
 5. **Conventions instead of coordinates.** Sub-processes are expanded by default; branches follow
    the rule under [The DI contract](#the-di-contract); exclusive gateways should be named as a
    question and their branches named; joins and parallel gateways stay unnamed. `bpmn validate`

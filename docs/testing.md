@@ -120,6 +120,30 @@ Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
 
+`test/bpmnlint.test.ts` checks the project's bpmnlint configuration (issue
+#33) with the real bpmnlint and @miragon/bpmnlint-plugin-rules, offline:
+each case writes a repository of its own into a temporary directory (a
+`.git` directory, a `.bpmnlintrc`, models, and a `node_modules` with
+project plugins where the case needs them), except the cases about a model
+outside a repository; the cases about a `.git` of another user (a
+directory, a link to `/`, a hard link to a gitfile or to `/etc/hosts` where
+the system allows one; the `.bpmnlintrc` applies, the plugin must not run)
+mock the uid (skipped as root and on Windows), and the case of a system
+without uids (Windows: only a repository inside the home directory runs
+plugins) mocks `process.getuid` away and sets `HOME`. Its CLI cases build
+`src/` with tsc into a temporary directory and run it under plain node,
+which is where the plugin's ESM build would fail (vitest hides that); they
+also run as root over the tester's checkout (a `--require` preload makes
+`process.getuid()` 0), build a broken install and a project whose own
+bpmnlint is hoisted next to the plugin, close the pipe after the first
+chunk (the exit code stays, no `EPIPE` trace), load a plugin that leaves a
+timer running (the command still ends) and run from a removed working
+directory. A `.bpmnlintrc` above the
+temporary directory or the repository would run bpmnlint in every CLI test:
+`test/global-setup.ts` (vitest's globalSetup) stops the run and names it.
+The fuzzer, the benchmark and the layout regression pass
+`--no-lint-config`.
+
 `test/step2-integration.test.ts` checks that the parts of step 2 work as one
 pipeline: the in-memory API keeps the text (a no-op is the input string
 itself, an insert gets ids in the file's style and changes only what it
@@ -131,9 +155,9 @@ helper writes (the `--out` target) or checks, unless `file` names another.
 `test/validators.test.ts` covers the validator hook of the pipeline
 (blocking, pre-existing errors through renames, findings counted one by one,
 a warning matched by its `key`, `covers`, the context, failing validators,
-the check of `validate`, and the CLI, which takes no validators: a refusal
-lists the structural errors under its message, and `validate` exits with 2
-on an error),
+the check of `validate`, and the CLI, which takes no host validators: a
+refusal lists the structural errors under its message, and `validate` exits
+with 2 on an error),
 `test/decision-link.test.ts` the decision link (`calledDecision`) in design
 models (no engine namespace), Camunda 7, Operaton and Camunda 8 files.
 `test/views.test.ts` checks the reading views (`show --around`, `show <id>

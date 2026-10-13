@@ -50,6 +50,10 @@
  *    (E_VALIDATION, each finding names its validator); errors the document
  *    already had are W_PREEXISTING_ERROR warnings; introduced warnings are
  *    reported (`validation.validators`).
+ *    An advisory validator (`blocks: false`: the project's bpmnlint, which
+ *    the node layer adds for a .bpmnlintrc) reports the errors the change
+ *    introduced among the warnings and never blocks; for a created document
+ *    (`new`) it reports everything it finds in the new model.
  *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none
@@ -352,14 +356,17 @@ function takeMatch<T>(pool: T[], match: (item: T) => boolean): boolean {
  * `final.warnings` was added. Resolved: the lint warnings and errors the
  * document had that `raw` no longer has (a group warning that still has one
  * of its elements is not), and the platform's and validators' resolved
- * findings.
+ * findings; a lint warning a resolved validator finding covers
+ * (`validatorCovered`: `<code>|<element>`, NamedValidator.covers) is listed
+ * once, as that finding.
  */
-export function validationDelta(doc: Doc, baseline: ErrorBaseline, raw: ValidationResult, final: ValidationResult, profile?: ProfileReport): ValidationDelta {
+export function validationDelta(doc: Doc, baseline: ErrorBaseline, raw: ValidationResult, final: ValidationResult, profile?: ProfileReport, validatorCovered: ReadonlySet<string> = new Set()): ValidationDelta {
   const before = baseline.warnings ?? [];
   const remaining = [...raw.warnings];
   // a lint warning the platform's resolved finding says again is reported once, as the platform finding (validate.ts withProfile)
   const platformResolved = final.platform?.resolved ?? [];
-  const covered = lintCoveredBy(platformResolved);
+  const coveredByPlatform = lintCoveredBy(platformResolved);
+  const covered = (w: Warning): boolean => coveredByPlatform(w) || validatorCovered.has(`${w.code}|${w.element ?? ''}`);
   const resolved = before.filter((b) => !takeMatch(remaining, (a) => sameWarning(doc, baseline, b, a)) && !raw.warnings.some((a) => stillAbout(doc, baseline, b, a)) && !covered(b));
   const errors = [...raw.errors];
   resolved.push(...baseline.errors.filter((b) => !takeMatch(errors, (a) => sameFinding(doc, baseline, b, a))));
@@ -817,14 +824,23 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
 
   xml = await outputText(doc, xml, asRead, changes);
 
+  // the lint warnings the validators' resolved findings say again (NamedValidator.covers): listed once, as those findings
+  const validatorCovered = new Set<string>();
   if (validators.length) {
     // the candidate: exactly what would be written (after the text-preserving post-pass)
     const candidate = xml;
     const after = await runValidators(validators, { xml: async () => candidate, doc: once(() => Doc.fromXml(candidate, file)) }, { ...vctx, phase: 'after' });
-    const reports = compareRuns(validatorsBefore, after, renamesOf(doc, baseline.index));
+    // a created document (`new`) has no file before: an advisory validator (bpmnlint) reports everything it finds in it
+    const reports = compareRuns(doc.source ? validatorsBefore : validatorsBefore.filter((r) => r.blocks !== false), after, renamesOf(doc, baseline.index));
     const introduced = reports.flatMap((r) => r.errors);
     if (introduced.length && !opts.force) throw validatorRefusal(introduced);
     validation = withValidatorReports(validation, reports, after);
+    reports.forEach((report, i) => {
+      for (const issue of report.resolved) {
+        const lint = after[i]!.covers?.[issue.code];
+        if (lint && issue.element) validatorCovered.add(`${lint}|${issue.element}`);
+      }
+    });
   }
 
   const unchanged = doc.source !== undefined && xml === doc.source.text;
@@ -840,7 +856,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     validation,
     importWarnings,
     // a document created in memory (`new`) has no file whose warnings were already there: everything is reported
-    ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation, profileAfter) } : {}),
+    ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation, profileAfter, validatorCovered) } : {}),
     xml,
   };
   if (opts.show) {
@@ -890,7 +906,7 @@ export async function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<
 export interface CheckOptions {
   /** platform profile: 'auto' (default) detects it */
   platform?: PlatformChoice;
-  /** validators (src/validators.ts), run on the document's XML */
+  /** validators (src/validators.ts), run on the document's XML; their errors fail the check (an advisory one's too) */
   validators?: Validator[];
   /** the file being checked, for the validators (default doc.file) */
   file?: string;

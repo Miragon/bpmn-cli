@@ -233,7 +233,7 @@ let score = 0;
 for (const { key, src } of sources) {
   const work = join(WORK, key);
   copyFileSync(src, work);
-  const run = spawnSync(process.execPath, [BIN, 'layout', work, '--force'], { encoding: 'utf8', timeout: 15000, env: CLI_ENV });
+  const run = spawnSync(process.execPath, [BIN, 'layout', work, '--force', '--no-lint-config'], { encoding: 'utf8', timeout: 15000, env: CLI_ENV });
   let r;
   if (run.status !== 0) {
     r = Object.fromEntries(KEYS.map((k) => [k, []]));

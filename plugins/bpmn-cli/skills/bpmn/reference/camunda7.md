@@ -85,3 +85,10 @@ two `camunda:inputOutput`, ...), other `W_C7_*` findings deploy but misbehave
 is the fixing command; every write reports the findings it introduced. The
 findings are warnings, so plain `validate` exits 0 - use `--strict` when the
 model must be clean.
+
+A project that runs bpmnlint in CI (a `.bpmnlintrc` with
+`plugin:camunda-compat/camunda-platform-7-24` and `"moddleExtensions": {
+"camunda": "camunda-bpmn-moddle/resources/camunda.json" }`) gets those
+findings too, as `[bpmnlint] camunda-compat/<rule> <id>` (an error as
+`[bpmnlint error] ...`, and `validate` exits 2 on it). `bpmn guide bpmnlint`
+has the details.

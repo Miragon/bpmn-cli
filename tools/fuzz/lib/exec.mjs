@@ -13,7 +13,9 @@
  *    default this process's environment): a one-op step
  *    with an equivalent command runs as that command (`via: 'commands'`,
  *    default), everything else as `apply <file> <ops.json>`; `via: 'apply'`
- *    always uses apply. Exit 1 = usage, 70 / signal / timeout = crash.
+ *    always uses apply. Exit 1 = usage, 70 / signal / timeout = crash. A build
+ *    that has `--no-lint-config` gets it: a .bpmnlintrc above the work
+ *    directory never changes a walk.
  *  - `libExecutor(api)` runs in-process: `api` = { Doc, parseOps, mutateDoc,
  *    CliError } from src/index.ts (tests) or dist/index.js (tool). A lossy
  *    import is refused like the CLI's loadDoc does (E_IMPORT_LOSSY); the ops go
@@ -44,6 +46,7 @@ function classify(res) {
 
 export function cliExecutor({ bin, workDir, via = 'commands', timeout = 300_000, env = process.env }) {
   mkdirSync(workDir, { recursive: true });
+  const noLint = /--no-lint-config/.test(spawnSync(process.execPath, [bin, 'apply', '--help'], { encoding: 'utf8' }).stdout ?? '') ? ['--no-lint-config'] : [];
   const file = join(workDir, 'work.bpmn');
   const opsFile = join(workDir, 'ops.json');
   const argvFor = (ops) => {
@@ -56,7 +59,7 @@ export function cliExecutor({ bin, workDir, via = 'commands', timeout = 300_000,
     label: `cli:${via}`,
     async run(xml, ops, { mode }) {
       writeFileSync(file, xml);
-      const argv = [bin, ...argvFor(ops), '--json', ...(mode === 'auto' ? [] : ['--layout', mode])];
+      const argv = [bin, ...argvFor(ops), '--json', ...noLint, ...(mode === 'auto' ? [] : ['--layout', mode])];
       const t0 = process.hrtime.bigint();
       const res = spawnSync(process.execPath, argv, { encoding: 'utf8', timeout, maxBuffer: 256 * 1024 * 1024, env });
       if (res.status === 0) {

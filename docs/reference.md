@@ -182,12 +182,19 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
 - Warnings are `{code, message, element, hint}`. `written` is `false` with `--dry-run` and when
   `unchanged` is `true`. `importWarnings` lists what the parser reported while reading the input.
 - Present only when they apply: `aliases` (batch alias -> final id), `renamed` (old id -> new id),
-  `view` (`--show`), `validation.validators` (in library use only: a host's validators, see
-  [Validators](validators.md)). An incremental layout adds `placed`, `moved`, `rerouted`,
-  `pruned`, `notes` and `format` to `layout`.
+  `view` (`--show`), `validation.validators` (the project's bpmnlint; in library use also a host's
+  validators, see [Validators](validators.md)). An incremental layout adds `placed`, `moved`,
+  `rerouted`, `pruned`, `notes` and `format` to `layout`.
+- A validator's findings carry `validator` and `severity`. The project's bpmnlint
+  ([bpmnlint](bpmnlint.md)) is advisory (`blocks: false` in its `validation.validators` entry): an
+  error it finds in the change is among `warnings.added` with `"severity": "error"` and reads
+  `warning [bpmnlint error] <rule> <id>: ...` in text (`validate`: `[bpmnlint error] <rule> <id>:
+  ...`); its line says how many findings the change added and resolved and how many the file
+  already had.
 - `--summary --json`: `{ok, file, written, unchanged, created: {<kind>: [ids]}, changed, renamed?,
   removed, aliases?, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status,
-  mode, score}, format?}`.
+  mode, score}, format?}`; `preexistingCount` includes the project's bpmnlint findings the file
+  already had.
 - Errors go to stderr as `error E_CODE: message` with a hint and candidate ids; with `--json` as
   `{"ok": false, "error": {"code", "message", "element?", "candidates?", "hint?", "op?", "command?", "ops?"}}`
   (`command` / `ops`: the checked space-tool run of an `E_NO_ROOM` that makes the room).
@@ -196,10 +203,10 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
 | --- | --- |
 | 0 | ok (warnings allowed) |
 | 1 | usage error: unknown command / option / kind, bad ops JSON, a `BPMN_KEEP_FLOW_IDS` that is no switch value (`E_USAGE`) |
-| 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...) |
+| 2 | model or validation error (`E_NOT_FOUND`, `E_CROSS_SCOPE`, `E_VALIDATION`, ...); `validate`: also an error of the project's bpmnlint |
 | 3 | layout error (`E_LAYOUT_*`) |
-| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`, `E_RENDER`) |
-| 5 | `--strict` and the result has warnings, also ones the file already had (`validate`: also import warnings) |
+| 4 | I/O or parse error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`, `E_FILE_EXISTS`, `E_RENDER`, `E_LINT_CONFIG`) |
+| 5 | `--strict` and the result has warnings, also ones the file already had (`validate`: also import warnings); a write leaves out the project's bpmnlint findings the file already had, which only its validator line counts |
 | 70 | internal error (`E_INTERNAL`; `BPMN_DEBUG=1` prints the stack) |
 
 The result format: `bpmn guide output`. Every code with its fix: `bpmn kinds --section errors`.
@@ -211,7 +218,8 @@ The result format: `bpmn guide output`. Every code with its fix: `bpmn kinds --s
 `-o <file>` names a file, and `-o -` sends the result of any mutating command (or the image of
 `render`) to stdout and leaves the input file as it was. With the XML on stdout the report goes to
 stderr and says `written: -`. stdin holds one input, so `apply - -` is `E_USAGE`: write `bpmn apply -
-ops.json < model.bpmn > new.bpmn`.
+ops.json < model.bpmn > new.bpmn`. A model from stdin has no file name: its `.bpmnlintrc` is looked
+up from the working directory, or from the file `-o` names.
 
 ### Environment
 

@@ -4,7 +4,7 @@
  * loadDoc, the atomic write with -o / --dry-run / --backup / new's
  * existing-file guard. The core's mutateDoc never writes.
  */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -55,6 +55,9 @@ describe('the node layer', () => {
     expect(typeof node.applyToXml).toBe('function');
     expect(typeof node.mutateFile).toBe('function');
     expect(node.mutateDoc).toBe(mutateDoc);
+    // the project's bpmnlint: the core's validator, the node layer's lookup and loading
+    for (const name of ['bpmnlintValidator', 'resolveBpmnlintConfig', 'checkLoadedDoc', 'findBpmnlintConfig', 'bpmnlintEngine', 'loadBpmnlint', 'projectBpmnlint', 'projectBpmnlintSettings'] as const) expect(typeof node[name], name).toBe('function');
+    expect(node.BPMNLINT_CONFIG_FILE).toBe('.bpmnlintrc');
   });
 
   it('reads with the documented codes', async () => {
@@ -80,6 +83,13 @@ describe('the node layer', () => {
     expect(r).toMatchObject({ written: true, file: f });
     expect(readFileSync(f, 'utf8')).toBe(r.xml);
     expect(readFileSync(`${f}.bak`, 'utf8')).toBe(LINEAR);
+    expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('writeAtomic onto a directory is E_IO and leaves no temp file', async () => {
+    const target = join(dir, 'is-a-dir.bpmn');
+    mkdirSync(target);
+    expect(await rejected(writeAtomic(target, LINEAR))).toMatchObject({ code: 'E_IO', category: 'io', message: `Cannot write ${target}: it is a directory`, details: { file: target } });
     expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([]);
   });
 

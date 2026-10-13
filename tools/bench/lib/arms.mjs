@@ -11,7 +11,8 @@
  * global: { variant: (file) -> argv }, error(stderr) -> {code, message},
  * info(stdout) -> {...}, forceable, features }. For bpmn-cli arms the options
  * are feature-detected from `--help`: `--layout <mode>` is passed only when the
- * build has it (key `<name>-<mode>`, else `<name>`), global variants are
+ * build has it (key `<name>-<mode>`, else `<name>`), `--no-lint-config` too (a
+ * .bpmnlintrc above the work directory never changes a run), global variants are
  * `layout` (full redraw) plus `tidy` and `engine-auto` when supported. A run
  * refused with a FORCEABLE code is repeated with --force by the runner.
  * Throws when a requested arm's variable is not set.
@@ -27,7 +28,8 @@ const help = (bin, cmd) => spawnSync(process.execPath, [bin, cmd, '--help'], { e
 
 function cliFeatures(bin) {
   const layout = help(bin, 'layout');
-  return { layoutModes: /--layout <mode>/.test(help(bin, 'apply')), tidy: /--tidy/.test(layout), engine: /--engine/.test(layout) };
+  const apply = help(bin, 'apply');
+  return { layoutModes: /--layout <mode>/.test(apply), noLint: /--no-lint-config/.test(apply), tidy: /--tidy/.test(layout), engine: /--engine/.test(layout) };
 }
 
 function cliError(stderr) {
@@ -53,12 +55,13 @@ function cliArm(name, bin, layout) {
   if (!existsSync(bin)) throw new Error(`${name}: ${bin} does not exist${name === 'new' ? ' (npm run build?)' : ''}`);
   const f = cliFeatures(bin);
   const mode = f.layoutModes ? ['--layout', layout] : [];
-  const global = { layout: (file) => [bin, 'layout', file, '--force', '--json'] };
-  if (f.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json'];
-  if (f.engine) global['engine-auto'] = (file) => [bin, 'layout', file, '--force', '--engine', 'auto', '--json'];
+  const noLint = f.noLint ? ['--no-lint-config'] : [];
+  const global = { layout: (file) => [bin, 'layout', file, '--force', '--json', ...noLint] };
+  if (f.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
+  if (f.engine) global['engine-auto'] = (file) => [bin, 'layout', file, '--force', '--engine', 'auto', '--json', ...noLint];
   return {
     name, key: f.layoutModes ? `${name}-${layout}` : name, path: bin, kind: 'cli', features: f, forceable: true, global,
-    edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...mode, ...(force ? ['--force'] : [])],
+    edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...mode, ...noLint, ...(force ? ['--force'] : [])],
     error: cliError, info: cliInfo,
   };
 }

@@ -11,9 +11,17 @@
  *   renderMutation(report, { dryRun })  its text (also of applyToXml's `result`)
  *   mutationSummary(report)   `--summary`: created ids by kind, batch aliases, changed / renamed / removed ids, the format ops,
  *                             the added warnings, the layout score and added problems
- *   renderSummary(summary, { dryRun })  its text
+ *   renderSummary(summary, { dryRun, advisory })  its text
  *   validationReport(check)   the JSON of `bpmn validate` (layout failures and warnings folded in)
  *   renderValidation(report)  its text
+ *
+ * An advisory validator's findings (`blocks: false`: the project's bpmnlint)
+ * group by code and message in the text of a result (one convention per
+ * line); an error among them reads `[bpmnlint error]` (in validate too), and
+ * its validator line says how many it added, resolved and found already in
+ * the file (`--summary` counts those among the warnings already in the
+ * file). validate's text folds one of its rules with FLOOD_MIN findings or
+ * more of one hint into one line (`--json` lists every finding).
  */
 import type { LayoutProblem } from './diagram/metrics.js';
 import type { FormatResult } from './diagram/ops.js';
@@ -73,7 +81,7 @@ export interface ValidationReport {
   /** lint, platform findings and the layout dry run's warnings (W_LAYOUT_<code>) */
   warnings: Warning[];
   platform?: PlatformSummary;
-  /** the validators that ran (a host's, `validators` in library use): every finding of each; they are among errors / warnings too */
+  /** the validators that ran (the project's bpmnlint; a host's `validators` in library use): every finding of each; they are among errors / warnings too */
   validators?: ValidatorReport[];
   layout: CheckResult['layout'];
   /** content the reader could not keep or understand */
@@ -166,6 +174,15 @@ function floodKey(w: Warning): string {
   return `${validatorTag(w)}${w.code}`;
 }
 
+function validatorOf(w: Warning): string | undefined {
+  return (w as Warning & { validator?: string }).validator;
+}
+
+/** The names of the advisory validators of a result (`blocks: false`). */
+function advisoryOf(reports: readonly ValidatorReport[] | undefined): Set<string> {
+  return new Set((reports ?? []).filter((r) => r.blocks === false).map((r) => r.name));
+}
+
 function idsText(ids: string[]): string {
   return ids.length > FLOOD_IDS ? `${ids.slice(0, FLOOD_IDS).join(', ')}, +${ids.length - FLOOD_IDS} more` : ids.join(', ');
 }
@@ -173,15 +190,20 @@ function idsText(ids: string[]): string {
 /**
  * One `warning ...` line per warning; FLOOD_MIN or more of one code become one
  * line at the place of the first: `warning W_UNREACHABLE x20 [A, B, ...]: <the
- * first one's message>  (<its hint>)`. The NEVER_FLOOD codes stay one line each.
+ * first one's message>  (<its hint>)`. The NEVER_FLOOD codes stay one line
+ * each; the findings of an `advisory` validator group by code and message.
  */
-export function warningLines(warnings: readonly Warning[]): string[] {
+export function warningLines(warnings: readonly Warning[], advisory: ReadonlySet<string> = new Set()): string[] {
+  const keyOf = (w: Warning): string => {
+    const v = validatorOf(w);
+    return v && advisory.has(v) ? `${warningTag(w)}${w.code}\n${w.message}` : floodKey(w);
+  };
   const groups = new Map<string, Warning[]>();
-  for (const w of warnings) groups.set(floodKey(w), [...(groups.get(floodKey(w)) ?? []), w]);
+  for (const w of warnings) groups.set(keyOf(w), [...(groups.get(keyOf(w)) ?? []), w]);
   const out: string[] = [];
   const done = new Set<string>();
   for (const w of warnings) {
-    const key = floodKey(w);
+    const key = keyOf(w);
     const group = groups.get(key)!;
     if (group.length < FLOOD_MIN || NEVER_FLOOD.has(w.code)) {
       out.push(warningLine(w));
@@ -190,9 +212,61 @@ export function warningLines(warnings: readonly Warning[]): string[] {
     if (done.has(key)) continue;
     done.add(key);
     const ids = group.map((g) => g.element ?? '?');
-    out.push(`warning ${key} x${group.length} [${idsText(ids)}]: ${w.message}${w.hint ? `  (${w.hint})` : ''}`);
+    out.push(`warning ${warningTag(w)}${w.code} x${group.length} [${idsText(ids)}]: ${w.message}${w.hint ? `  (${w.hint})` : ''}`);
   }
   return out;
+}
+
+/** What an advisory validator reports that is no rule of it: bpmn-cli's own codes about the validator, the lint parse's import warnings. */
+const NO_RULE = new Set(['W_LINT_UNAVAILABLE', 'W_LINT_FAILED', 'import-warning']);
+
+/**
+ * validate's text of errors or warnings: renderProblems, but an error of an
+ * `advisory` validator reads `[bpmnlint error]`, and FLOOD_MIN or more
+ * findings of one of its rules with one hint are one line at the place of
+ * the first: `[bpmnlint] <rule> x12 [ids]: <the most common message> (5 of
+ * 12; 7 others with 3 other messages, --json lists them)  (<the hint>)`, the
+ * ids those with that message. What bpmn-cli reports about the validator
+ * itself (W_LINT_UNAVAILABLE, W_LINT_FAILED) and import warnings are no rule:
+ * one line each.
+ */
+function problemLines(problems: readonly Warning[], advisory: ReadonlySet<string>): string {
+  const isAdvisory = (p: Warning): boolean => {
+    const v = validatorOf(p);
+    return !!v && advisory.has(v);
+  };
+  const keyOf = (p: Warning): string | undefined => {
+    if (!isAdvisory(p) || NO_RULE.has(p.code)) return undefined;
+    return `${validatorOf(p)}\n${p.code}\n${p.hint ?? ''}`;
+  };
+  const tag = (p: Warning): string => (isAdvisory(p) ? warningTag(p) : validatorTag(p));
+  const groups = new Map<string, Warning[]>();
+  for (const p of problems) {
+    const key = keyOf(p);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  const out: string[] = [];
+  const done = new Set<string>();
+  for (const p of problems) {
+    const key = keyOf(p);
+    const group = key ? groups.get(key)! : [p];
+    if (group.length < FLOOD_MIN) {
+      // `[bpmnlint error] <rule> ...` for an advisory validator's error: its rule names carry no E_ / W_
+      out.push(isAdvisory(p) ? renderProblems([p]).replace(validatorTag(p), tag(p)) : renderProblems([p]));
+      continue;
+    }
+    if (done.has(key!)) continue;
+    done.add(key!);
+    const byMessage = new Map<string, Warning[]>();
+    for (const g of group) byMessage.set(g.message, [...(byMessage.get(g.message) ?? []), g]);
+    const [message, same] = [...byMessage].reduce((a, b) => (b[1].length > a[1].length ? b : a));
+    const others = byMessage.size - 1;
+    const rest = group.length - same.length;
+    const note = others ? ` (${same.length} of ${group.length}; ${rest} other${rest === 1 ? '' : 's'} with ${others} other message${others === 1 ? '' : 's'}, --json lists them)` : '';
+    // one hint per group (the key): the line's hint is every finding's
+    out.push(`${tag(p)}${p.code} x${group.length} [${idsText(same.map((g) => g.element ?? '?'))}]: ${message}${note}${p.hint ? `  (${p.hint})` : ''}`);
+  }
+  return out.join('\n');
 }
 
 /** `W_DEAD_END Activity_A, W_UNREACHABLE x5 [A, B, C, D, E]`: findings by code, compact. */
@@ -211,17 +285,37 @@ function preexistingLine(count: number): string {
 
 /** `[<validator>] ` for a validator's finding (src/validators.ts), else ''. */
 export function validatorTag(w: Warning): string {
-  const name = (w as Warning & { validator?: string }).validator;
+  const name = validatorOf(w);
   return name ? `[${name}] ` : '';
 }
 
-function warningLine(w: Warning): string {
-  return `warning ${validatorTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+/** validatorTag, but `[bpmnlint error] ` for an error among a write's warnings (only an advisory validator's error is there) or of an advisory validator in validate. */
+function warningTag(w: Warning): string {
+  const name = validatorOf(w);
+  return name && (w as Warning & { severity?: string }).severity === 'error' ? `[${name} error] ` : validatorTag(w);
 }
 
-/** One line per validator that ran: its name, why it ran and the totals of the result (`what`: result / file). */
+function warningLine(w: Warning): string {
+  return `warning ${warningTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+}
+
+/** The findings of an advisory validator's report of a result that the change did not add: the file already had them. */
+function keptOf(r: ValidatorReport): number {
+  return r.counts.errors + r.counts.warnings - r.errors.length - r.warnings.length;
+}
+
+/**
+ * One line per validator that ran: its name, why it ran and the totals of the
+ * result (`what`: result / file); an advisory validator's line of a result
+ * adds how many findings the change added and resolved and how many the file
+ * already had.
+ */
 function validatorLines(reports: readonly ValidatorReport[] | undefined, what: string): string[] {
-  return (reports ?? []).map((r) => `validator ${r.name}${r.detail ? ` (${r.detail})` : ''}: ${r.counts.errors} error(s), ${r.counts.warnings} warning(s) in the ${what}`);
+  return (reports ?? []).map((r) => {
+    const line = `validator ${r.name}${r.detail ? ` (${r.detail})` : ''}: ${r.counts.errors} error(s), ${r.counts.warnings} warning(s) in the ${what}`;
+    if (r.blocks !== false || what !== 'result') return line;
+    return `${line} (${r.errors.length + r.warnings.length} added, ${r.resolved.length} resolved, ${keptOf(r)} already in the file)`;
+  });
 }
 
 /** A mutation report with or without the file it was written to (applyToXml's `result` has none). */
@@ -242,7 +336,7 @@ export function renderMutation(result: MutationReportLike, opts: { dryRun?: bool
   if (result.aliases && Object.keys(result.aliases).length) lines.push(aliasLine(result.aliases));
   // errors only remain in a result written with --force
   for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
-  lines.push(...warningLines(result.warnings.added));
+  lines.push(...warningLines(result.warnings.added, advisoryOf(result.validation.validators)));
   if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
   if (result.warnings.preexistingCount) lines.push(preexistingLine(result.warnings.preexistingCount));
   lines.push(...validatorLines(result.validation.validators, 'result'));
@@ -281,6 +375,7 @@ export interface MutationSummary {
   removed: string[];
   /** errors a forced write (--force) let through */
   forced?: Warning[];
+  /** preexistingCount: the warnings the file already had, and the findings of an advisory validator (bpmnlint) the file already had (the full result counts those in its validator line) */
   warnings: { added: Warning[]; resolvedCount: number; preexistingCount: number };
   /**
    * the layout that ran, the score before -> after, the layout problems the
@@ -316,7 +411,8 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
     ...(report.renamed ? { renamed: report.renamed } : {}),
     removed: uniqueIds(report.removed),
     ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
-    warnings: { added: report.warnings.added, resolvedCount: report.warnings.resolved.length, preexistingCount: report.warnings.preexistingCount },
+    // the summary prints no validator line: an advisory validator's old findings are counted here
+    warnings: { added: report.warnings.added, resolvedCount: report.warnings.resolved.length, preexistingCount: report.warnings.preexistingCount + (report.validation.validators ?? []).filter((r) => r.blocks === false).reduce((n, r) => n + keptOf(r), 0) },
     layout: {
       status: report.layout.status,
       ...(report.layout.mode ? { mode: report.layout.mode } : {}),
@@ -331,12 +427,13 @@ export function mutationSummary(report: MutationReportLike): MutationSummary {
 /**
  * The text of `--summary`: `created <kind>: ids` per kind, `aliases:`,
  * `changed:`, `renamed: old -> new` and `removed:` ids, one `format <op> #<i>: ...` line per format op, forced
- * errors, the added warnings (floods as one line),
+ * errors, the added warnings (floods as one line; `advisory`: the names of
+ * the advisory validators, whose findings group by code and message),
  * `warnings: n added, n resolved, n already in the file`, one layout line
  * (`layout: incremental, score 12 -> 14; added: crossings [Flow_1, Flow_3]`)
  * and the file line.
  */
-export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean } = {}): string {
+export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {}): string {
   const lines: string[] = [];
   for (const [kind, ids] of Object.entries(summary.created)) lines.push(`created ${kind}: ${ids.join(', ')}`);
   if (summary.aliases) lines.push(aliasLine(summary.aliases));
@@ -348,7 +445,7 @@ export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean
   for (const f of summary.format ?? []) lines.push(formatLine(f).trimStart());
   if (!lines.length) lines.push('no changes');
   for (const e of summary.forced ?? []) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
-  lines.push(...warningLines(summary.warnings.added));
+  lines.push(...warningLines(summary.warnings.added, opts.advisory));
   const w = summary.warnings;
   if (w.added.length || w.resolvedCount || w.preexistingCount) lines.push(`warnings: ${w.added.length} added, ${w.resolvedCount} resolved, ${w.preexistingCount} already in the file`);
   const l = summary.layout;
@@ -377,13 +474,19 @@ export function validationReport(check: CheckResult): ValidationReport {
   };
 }
 
+/** The names of the advisory validators of a mutation report (renderSummary's `advisory`). */
+export function advisoryValidators(report: Pick<MutationReportLike, 'validation'>): Set<string> {
+  return advisoryOf(report.validation.validators);
+}
+
 /** The text `bpmn validate` prints. */
 export function renderValidation(report: ValidationReport): string {
   const { errors, warnings, platform } = report;
   const lines: string[] = [];
   if (report.importWarnings.length) lines.push(...report.importWarnings.map((w) => `import: ${w}`));
-  if (errors.length) lines.push(renderProblems(errors).trimEnd());
-  if (warnings.length) lines.push(renderProblems(warnings).trimEnd());
+  const advisory = advisoryOf(report.validators);
+  if (errors.length) lines.push(problemLines(errors, advisory).trimEnd());
+  if (warnings.length) lines.push(problemLines(warnings, advisory).trimEnd());
   if (platform) {
     // plain BPMN has no engine rules: a count of 0 would read as "checked and fine"
     const counts = platform.platform === 'c7' || platform.platform === 'c8' ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)` : '';

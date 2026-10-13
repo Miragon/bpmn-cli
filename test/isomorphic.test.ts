@@ -204,6 +204,27 @@ describe('the browser bundle in a context without Node globals', () => {
     await expect(browser.applyToXml(styled, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Styled' }], { validators: [reached] })).rejects.toMatchObject({ code: 'E_VALIDATION', name: 'CliError' });
   });
 
+  it("runs the project's bpmnlint with an injected engine (the host's bpmnlint and bundled resolver) like Node", async () => {
+    const require = createRequire(join(ROOT, 'package.json'));
+    const { Linter } = require('bpmnlint') as { Linter: core.BpmnlintLinterClass };
+    const plugin = require('@miragon/bpmnlint-plugin-rules') as { createBundledResolver(): core.BpmnlintResolver };
+    const rc = { extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-modeling'] };
+    const validator = async (api: typeof core) => {
+      const engine = { Linter, resolver: plugin.createBundledResolver() };
+      return api.bpmnlintValidator(engine, await api.resolveBpmnlintConfig(engine, rc), { detail: 'host' });
+    };
+    const xml = fixture('orders.bpmn');
+    const ops = [{ op: 'add', kind: 'task', after: 'Task_A' }];
+    const there = await browser.applyToXml(xml, ops, { validators: [await validator(browser)] });
+    const here = await core.applyToXml(xml, ops, { validators: [await validator(core)] });
+    expect(there.result.warnings.added).toContainEqual(expect.objectContaining({ code: 'label-required', validator: 'bpmnlint', severity: 'error' }));
+    expect(there.xml).toBe(here.xml);
+    expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
+    const report = await browser.validateXml(here.xml, { validators: [await validator(browser)] });
+    expect(report.ok).toBe(false);
+    expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { validators: [await validator(core)] })));
+  });
+
   it('refuses like Node: CliError codes cross the realm boundary', async () => {
     await expect(browser.applyToXml(fixture('orders.bpmn'), [{ op: 'add', kind: 'userTask', after: 'Nope' }])).rejects.toMatchObject({ code: 'E_NOT_FOUND', name: 'CliError' });
     await expect(browser.applyToXml('<not-bpmn/>', [{ op: 'tidy' }])).rejects.toMatchObject({ code: 'E_PARSE' });
