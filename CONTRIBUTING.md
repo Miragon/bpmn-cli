@@ -38,7 +38,8 @@ them on a private corpus without copying it into the repository, are described i
   layout engine and the Camunda 7 / 8 rules (`platform/`). `src/guide.ts` is the source of
   `bpmn guide`, `bpmn kinds` and `--help`.
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
-  examples in `docs/` must match what the CLI prints.
+  examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
+  of your shell before every file, so the tests see the CLI's defaults.
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
   `node tools/demo/make-demo.mjs` redraws the README demo (`docs/assets/demo.gif`; needs
   [gifski](https://gif.ski/) on your PATH and network access for the Geist fonts).

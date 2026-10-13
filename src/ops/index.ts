@@ -1,7 +1,7 @@
 /**
  * Op dispatcher. Every CLI command and `apply` go through here.
  */
-import type { BatchContext, Doc } from '../document.js';
+import type { BatchContext, Doc, FlowEnds } from '../document.js';
 import { usageError, type Warning } from '../errors.js';
 import { is, type El } from '../model.js';
 import { ChangeSet } from '../result.js';
@@ -9,6 +9,7 @@ import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
+import { reportStaleFlows } from './flows.js';
 import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
 import { removeElements } from './remove.js';
@@ -18,13 +19,49 @@ import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
 
 export function runOp(doc: Doc, op: Op): ChangeSet {
-  doc.takeSuffixed();
-  doc.takeRenames();
-  const cs = dispatch(doc, op);
-  doc.reportSuffixed(cs);
-  // a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too)
-  cs.rename(doc.takeRenames());
-  return cs;
+  // a flow id kept although its ends changed: a batch takes the flows before it and reports it at its end (runBatch), an op on its own here
+  const alone = !doc.batch;
+  const outerFlows = doc.flowsBefore;
+  let before: ReadonlyMap<El, FlowEnds> | undefined;
+  if (alone) {
+    readIdStyle(doc);
+    doc.takeKeptFlows();
+    doc.flowsBefore = before = flowsNow(doc);
+  }
+  try {
+    doc.takeSuffixed();
+    doc.takeRenames();
+    const cs = dispatch(doc, op);
+    doc.reportSuffixed(cs);
+    // a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too)
+    cs.rename(doc.takeRenames());
+    if (alone) reportStaleFlows(doc, cs, before);
+    return cs;
+  } finally {
+    doc.flowsBefore = outerFlows;
+  }
+}
+
+/**
+ * Learns the document's id style (Doc.idStyle, learned once) before an op
+ * removes the elements it learns from: otherwise a batch whose first op
+ * removes flows could read another style from what is left, name new
+ * elements in it and miss a flow whose id names its old ends (no rename, no
+ * W_FLOW_ID_STALE).
+ */
+function readIdStyle(doc: Doc): void {
+  void doc.idStyle;
+}
+
+/**
+ * With flow ids kept (Doc.followFlowEnds false): the sequence flows the
+ * document has now, the only ones that keep their id (a flow the batch or op
+ * creates follows its ends), with their ends now.
+ */
+function flowsNow(doc: Doc): ReadonlyMap<El, FlowEnds> | undefined {
+  if (doc.followFlowEnds) return undefined;
+  const flows = [...doc.byId().values()].filter((el) => is(el, 'bpmn:SequenceFlow'));
+  return new Map(flows.map((f) => [f, [f.get<El | undefined>('sourceRef'), f.get<El | undefined>('targetRef')]] as const));
 }
 
 function dispatch(doc: Doc, op: Op): ChangeSet {
@@ -73,7 +110,12 @@ export interface BatchRun {
  * Runs a batch in order. Batch aliases (ops/aliases.ts): an op's aliases
  * are replaced by the current ids of their elements before it runs, the
  * aliases it defines are bound afterwards; the format ops (which run after
- * the layout) get the ids at the end of the batch.
+ * the layout) get the ids at the end of the batch. With flow ids kept
+ * (Doc.followFlowEnds false) the flows the document had keep their ids, and
+ * each one whose id no longer names its ends at the end of the batch is a
+ * W_FLOW_ID_STALE warning (one per flow, none for a flow a later op removed
+ * or put back between its old ends, or that ends where it did when the batch
+ * began: it was stale before).
  */
 export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const all = new ChangeSet();
@@ -82,8 +124,13 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const deferred: number[] = [];
   // what the batch did so far, for E_NOT_FOUND (document.ts require / suggest)
   const context: BatchContext = { created: [], renamed: new Map(), aliases: () => table.toRecord() };
+  readIdStyle(doc);
+  doc.takeKeptFlows();
   const outer = doc.batch;
+  const outerFlows = doc.flowsBefore;
+  const before = flowsNow(doc);
   doc.batch = context;
+  doc.flowsBefore = before;
   try {
     ops.forEach((op, i) =>
       atOp(i, () => {
@@ -116,10 +163,13 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
     }
   } finally {
     doc.batch = outer;
+    doc.flowsBefore = outerFlows;
   }
   all.bindings = [];
   // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
   all.warnings = all.warnings.filter((w) => stillHolds(doc, w));
+  // a kept flow id is stale against the flow's final ends
+  reportStaleFlows(doc, all, before);
   return { changes: all, ops: resolved, aliases: table.toRecord() };
 }
 

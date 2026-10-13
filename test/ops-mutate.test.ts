@@ -1186,7 +1186,7 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     }
     expect(isCliError(caught) && caught.code).toBe('E_INVALID_TRIGGER');
     expect(isCliError(caught) && caught.details['related']).toEqual(['MF']);
-    expect(isCliError(caught) && caught.details['hint']).toMatch(/bpmn remove MF/);
+    expect(isCliError(caught) && caught.details['hint']).toMatch(/bpmn remove <file> MF/);
 
     const doc2 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
     expect(errorCode(() => retypeElement(doc2, { op: 'retype', id: 'Recv', kind: 'startEvent:timer', timer: 'PT1H' }))).toBe('E_INVALID_TRIGGER');

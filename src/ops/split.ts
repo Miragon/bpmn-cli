@@ -198,7 +198,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const target = joinId ?? (successor ? idOf(successor) : undefined);
   for (const { end } of terminating) cs.note(`branch ending at ${end} terminates (end event)${target ? `; not connected to ${target}` : ''}`);
   if (successor && !continuing.length) {
-    cs.note(`${idOf(successor)} is no longer reached: every branch terminates (connect it with \`bpmn connect <id> ${idOf(successor)}\` or remove it)`);
+    cs.note(`${idOf(successor)} is no longer reached: every branch terminates (connect it with \`bpmn connect <file> <id> ${idOf(successor)}\` or remove it)`);
   }
   if (target) {
     for (const { end, flowOptions, direct } of continuing) {

@@ -21,7 +21,12 @@ interface Run {
 }
 
 function bpmn(...args: string[]): Run {
-  const r = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '' });
+  return bpmnWith({}, ...args);
+}
+
+/** bpmn with these environment variables on top of the test's (test/setup.ts cleared the shell's BPMN_KEEP_FLOW_IDS). */
+function bpmnWith(env: Record<string, string>, ...args: string[]): Run {
+  const r = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '', env: { ...process.env, ...env } });
   return {
     code: r.status ?? -1,
     out: r.stdout,
@@ -31,7 +36,11 @@ function bpmn(...args: string[]): Run {
 }
 
 function ok(...args: string[]): Run {
-  const r = bpmn(...args);
+  return okWith({}, ...args);
+}
+
+function okWith(env: Record<string, string>, ...args: string[]): Run {
+  const r = bpmnWith(env, ...args);
   if (r.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${r.code}):\n${r.err}\n${r.out}`);
   return r;
 }
@@ -402,3 +411,76 @@ describe('bpmn cli contracts', () => {
   });
 });
 
+describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
+  let base: string;
+  const splice = ['serviceTask', 'Book invoice', '--after', 'Activity_CheckInvoice'];
+  const STALE = 'warning W_FLOW_ID_STALE Flow_CheckInvoiceToInvoiceDone: Flow Flow_CheckInvoiceToInvoiceDone kept its id, which names its old ends Activity_CheckInvoice -> Event_InvoiceDone; it now runs Activity_CheckInvoice -> Activity_BookInvoice  (Code and tests that use the id keep working; to rename it together with them: `bpmn set <file> Flow_CheckInvoiceToInvoiceDone id=Flow_CheckInvoiceToBookInvoice`.)';
+
+  /** A copy of start -> Check invoice -> end. */
+  function fresh(name: string): string {
+    const f = join(dir, name);
+    writeFileSync(f, readFileSync(base, 'utf8'));
+    return f;
+  }
+
+  beforeAll(() => {
+    base = join(dir, 'invoice.bpmn');
+    ok('new', base, '--name', 'Invoice');
+    ok('add', base, 'startEvent', 'Invoice received');
+    ok('add', base, 'userTask', 'Check invoice', '--after', 'Event_InvoiceReceived');
+    ok('add', base, 'endEvent', 'Invoice done', '--after', 'Activity_CheckInvoice');
+  });
+
+  it('--keep-flow-ids keeps the id and names the stale flow with the command that renames it; the command works', () => {
+    const f = fresh('keep-flag.bpmn');
+    const r = ok('add', f, ...splice, '--keep-flow-ids');
+    expect(r.out).toContain(`${STALE}\n`);
+    expect(r.out).not.toMatch(/renamed/);
+    expect(readFileSync(f, 'utf8')).toContain('<bpmn:sequenceFlow id="Flow_CheckInvoiceToInvoiceDone" sourceRef="Activity_CheckInvoice" targetRef="Activity_BookInvoice" />');
+    const command = /`bpmn set <file> (\S+) (id=\S+)`/.exec(r.out)!;
+    expect(ok('set', f, command[1]!, command[2]!).out).toMatch(/^changed sequenceFlow Flow_CheckInvoiceToBookInvoice /m);
+  });
+
+  it('BPMN_KEEP_FLOW_IDS=1 makes it the default; --no-keep-flow-ids, 0 and an empty value rename', () => {
+    let r = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('env-on.bpmn'), ...splice, '--summary');
+    expect(r.out).toMatch(/^warning W_FLOW_ID_STALE Flow_CheckInvoiceToInvoiceDone: /m);
+    expect(r.out).not.toMatch(/^renamed:/m);
+    for (const [env, flag] of [['1', '--no-keep-flow-ids'], ['0', undefined], ['Off', undefined], ['', undefined]] as const) {
+      r = okWith({ BPMN_KEEP_FLOW_IDS: env }, 'add', fresh('env-off.bpmn'), ...splice, '--summary', ...(flag ? [flag] : []));
+      expect(r.out, `${env} ${flag ?? ''}`).toMatch(/^renamed: Flow_CheckInvoiceToInvoiceDone -> Flow_CheckInvoiceToBookInvoice$/m);
+      expect(r.out).not.toMatch(/W_FLOW_ID_STALE/);
+    }
+    r = okWith({ BPMN_KEEP_FLOW_IDS: 'yes' }, 'add', fresh('env-yes.bpmn'), ...splice, '--json');
+    expect(r.json()).not.toHaveProperty('renamed');
+    expect(r.json().warnings.added).toEqual([expect.objectContaining({ code: 'W_FLOW_ID_STALE', element: 'Flow_CheckInvoiceToInvoiceDone', related: ['Activity_CheckInvoice', 'Activity_BookInvoice'] })]);
+  });
+
+  it('apply, remove and set target= keep ids too; --strict exits 5 on the warning', () => {
+    const ops = join(dir, 'keep-ops.json');
+    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'Activity_CheckInvoice' }]));
+    expect(ok('apply', fresh('keep-apply.bpmn'), ops, '--keep-flow-ids').out).toContain(STALE);
+    const bridged = ok('remove', fresh('keep-remove.bpmn'), 'Activity_CheckInvoice', '--keep-flow-ids').out;
+    expect(bridged).toMatch(/^warning W_FLOW_ID_STALE Flow_InvoiceReceivedToCheckInvoice: .*`bpmn set <file> Flow_InvoiceReceivedToCheckInvoice id=Flow_InvoiceReceivedToInvoiceDone`/m);
+    const retargeted = ok('set', fresh('keep-set.bpmn'), 'Flow_InvoiceReceivedToCheckInvoice', 'target=Event_InvoiceDone', '--keep-flow-ids').out;
+    expect(retargeted).toMatch(/^warning W_FLOW_ID_STALE Flow_InvoiceReceivedToCheckInvoice: /m);
+    const strict = bpmn('add', fresh('keep-strict.bpmn'), ...splice, '--keep-flow-ids', '--strict');
+    expect(strict.code).toBe(5);
+    expect(strict.out).toContain(STALE);
+  });
+
+  it('another BPMN_KEEP_FLOW_IDS value is a usage error of a mutating command (unless a flag decides); show and validate ignore it', () => {
+    const f = fresh('env-bad.bpmn');
+    const before = readFileSync(f, 'utf8');
+    let r = bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', f, ...splice);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/^error E_USAGE: BPMN_KEEP_FLOW_IDS=maybe is not a switch value$/m);
+    expect(r.err).toMatch(/^ {2}hint: Set BPMN_KEEP_FLOW_IDS=1 \(true, yes, on\) to keep flow ids/m);
+    r = bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', f, ...splice, '--json');
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.err).error.code).toBe('E_USAGE');
+    expect(readFileSync(f, 'utf8')).toBe(before);
+    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', f, ...splice, '--keep-flow-ids', '--dry-run').code).toBe(0);
+    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'show', f).code).toBe(0);
+    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'validate', f).code).toBe(0);
+  });
+});

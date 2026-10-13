@@ -5,7 +5,9 @@
  * Every command works on one .bpmn file. Mutating commands run the pipeline
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
  * The file I/O is src/node/files.ts, everything else the browser-safe core;
- * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug).
+ * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug,
+ * BPMN_KEEP_FLOW_IDS to keepFlowIds) and is the only one that reads the
+ * environment.
  *
  * `-` as the file reads the model from stdin; a mutating command then writes
  * its result to stdout (unless -o names a file), and `-o -` writes any
@@ -212,6 +214,8 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
     .option('--strict', 'exit with code 5 when there are warnings')
+    .option('--keep-flow-ids', 'keep the id of every existing sequence flow the change gives other ends, instead of renaming a flow whose id names its old ends after its new ones; W_FLOW_ID_STALE names each flow whose id no longer names its ends. BPMN_KEEP_FLOW_IDS=1 makes keeping the default')
+    .option('--no-keep-flow-ids', 'rename such flows after their new ends, also when BPMN_KEEP_FLOW_IDS=1')
     .option('--engine <engine>', 'layout engine: clean (default) or auto (bpmn-auto-layout)', (v: string) => {
       if (v !== 'clean' && v !== 'auto') throw new InvalidArgumentError('expected clean or auto');
       return v;
@@ -250,7 +254,28 @@ function layoutOption(o: RawOpts): FileMutationOptions['layout'] {
   return (layout as LayoutMode | undefined) ?? 'auto';
 }
 
+/**
+ * A switch from the environment: unset or empty = undefined, 1 / true / yes / on = true, 0 / false / no / off = false
+ * (any case). Anything else is E_USAGE: a typo must not silently mean on or off.
+ */
+function envSwitch(name: string, hint: string): boolean | undefined {
+  const value = process.env[name]?.trim();
+  if (!value) return undefined;
+  if (/^(1|true|yes|on)$/i.test(value)) return true;
+  if (/^(0|false|no|off)$/i.test(value)) return false;
+  throw usageError(`${name}=${value} is not a switch value`, { hint });
+}
+
+/** --keep-flow-ids / --no-keep-flow-ids, else BPMN_KEEP_FLOW_IDS, else undefined (flows follow their ends). */
+function keepFlowIdsOption(o: RawOpts): boolean | undefined {
+  return (
+    (o['keepFlowIds'] as boolean | undefined) ??
+    envSwitch('BPMN_KEEP_FLOW_IDS', 'Set BPMN_KEEP_FLOW_IDS=1 (true, yes, on) to keep flow ids, BPMN_KEEP_FLOW_IDS=0 (false, no, off) or unset it to rename them after their new ends; --keep-flow-ids / --no-keep-flow-ids decide for one command.')
+  );
+}
+
 function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
+  const keepFlowIds = keepFlowIdsOption(o);
   return {
     json: !!o['json'],
     pretty: !!o['pretty'],
@@ -264,6 +289,7 @@ function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
     strict: !!o['strict'],
     ...(o['render'] !== undefined ? { render: String(o['render']) } : {}),
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
+    ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
   };
 }
 

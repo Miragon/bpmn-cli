@@ -3,7 +3,7 @@
  *
  * Exit codes (documented in docs/reference.md and `bpmn guide`):
  *   0  success (warnings allowed)
- *   1  usage error (unknown command/option, bad DSL or ops syntax)
+ *   1  usage error (unknown command/option, bad DSL or ops syntax, bad environment value)
  *   2  model error (unknown reference, invalid mutation, validation failure)
  *   3  layout error
  *   4  I/O or parse error (missing file, malformed XML, lossy import)

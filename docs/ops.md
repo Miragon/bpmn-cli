@@ -71,11 +71,27 @@ an end event stops there; with fewer than two branches left to join, no join gat
 
 **Aliases.** `"as": "$name"` names what an op creates (`add`, `connect`, `split`, split nodes), and
 later ops use `$name` wherever an id goes, so a batch never guesses a generated id
-([Ids](reference.md#ids)). `"flowAs"` names the flow into a new node, `"joinAs"` the join of a split,
+([Ids](reference.md#ids)). `"flowAs"` names the flow into a new node (on a prepend before a join or a
+node without incoming flow: the flow out of it), `"joinAs"` the join of a split,
 and `"refAs"` the message, error, signal or escalation the element references, for example to give a
 new message its `zeebe:subscription`. An alias is defined once and used only after its op
 (`E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`); it follows its element through a rename. The result lists
-alias and final id (`aliases: $ok = Gateway_InvoiceOk, ...`, `"aliases"` in `--json`).
+alias and final id (`aliases: $ok = Gateway_InvoiceOk, ...`, `"aliases"` in `--json`). With
+`apply --keep-flow-ids` a flow the file had keeps its id through the whole batch unless an op
+removes it (the flows of a removed node, the out-flow a bridge replaces; `removed:` lists them), so
+later ops can use it, and the result names the stale ones (`W_FLOW_ID_STALE`) instead of `renamed`.
+A `move` puts the moved node's out-flow back at its new place, so a flow between nodes moved
+together (`move B C` with B -> C) stays theirs, unless B has several out-flows. The put-back flow
+keeps its id, documentation and extensions; its name, condition and annotations stay with the bridge
+at the old place, and it is no longer a default flow (a node that is not bridged drops name and
+condition, `W_LABEL_DROPPED`, `W_CONDITION_DROPPED`, unless the flow is put back between its old
+ends). A `"flowId"` on a move that prepends (before a join or a node without incoming flow) names a
+new flow node -> anchor instead, and the old out-flow stays removed. A flow an earlier op of the
+batch created still follows its ends, so name it with an alias where an op creates it: `"flowAs"` on
+an add that appends or prepends (after a gateway or a node without successor, before a join or a
+node without incoming flow) and on split nodes, `"as"` on connect. On a splice `"flowAs"` names the
+flow the file had, now into the new node; the flow the splice creates (new node -> old successor)
+has no alias, so take its id from the result.
 
 **Checks.** Unknown ops and keys (with a suggestion for typos such as `colour`), wrong value types,
 conflicting placements, flow options without a flow-creating placement, `default` together with

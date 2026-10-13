@@ -70,6 +70,8 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--backup` | copy `<file>` to `<file>.bak` before overwriting |
 | `--show` | append the full model view (as `show` prints it) to the result |
 | `--strict` | exit with code 5 when the result has warnings |
+| `--keep-flow-ids` | keep the id of every existing sequence flow the change gives other ends; `W_FLOW_ID_STALE` names each flow whose id no longer names its ends. Default from `BPMN_KEEP_FLOW_IDS=1` ([Limitations](contract.md#limitations)) |
+| `--no-keep-flow-ids` | rename a flow whose id names its old ends after its new ones (the default), also when `BPMN_KEEP_FLOW_IDS=1` |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
 
 ## `new`
@@ -199,6 +201,16 @@ bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice Flow_Invo
 
 - `move --in` moves into another scope without connecting; flows that would cross scopes are
   removed and reported. Boundary events travel with their host, and a node keeps its lane.
+- With `--keep-flow-ids` the moved node's one out-flow becomes its out-flow at the new place and
+  the bridge keeps its in-flow, so both keep their ids (`W_FLOW_ID_STALE` when an id named the old
+  ends). The out-flow keeps its documentation and extensions; its name, condition and annotations
+  stay with the bridge at the old place, and it is no longer a default flow (a node that is not
+  bridged drops name and condition, `W_LABEL_DROPPED`, `W_CONDITION_DROPPED`, unless the flow is
+  put back between its old ends). Nodes moved together keep the flow between them, unless the
+  first has several out-flows. What cannot be put back is removed (`removed:`): the out-flow after
+  an append (after a gateway or a node without successor) or `--in`, and the other flows of a node
+  that is not bridged (several in- or out-flows, or none in or none out, like a start or end
+  event).
 - The flow order drives the picture: the default flow (else the first) continues straight, the
   others alternate below and above it. To pin a branch as the continuation, make it the default.
 - Ids that `order` does not list follow in their old order. A full redraw (`bpmn layout`) orders

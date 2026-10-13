@@ -413,6 +413,93 @@ describe('id style inference: ids without prefix, numbers without separator, sco
   });
 });
 
+describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow form', () => {
+  /** Flow_<scope>_<A>To<B> flows. */
+  const SCOPED = chain(
+    [
+      ['startEvent', 'startEvent_KotOrder', 'Order placed'],
+      ['serviceTask', 'serviceTask_KotO_ValidatePayment', 'Validate payment'],
+      ['serviceTask', 'serviceTask_KotO_ReserveInventory', 'Reserve inventory'],
+      ['userTask', 'userTask_KotO_ConfirmShipment', 'Confirm shipment'],
+      ['endEvent', 'endEvent_KotOrder', 'Order done'],
+    ],
+    ['Flow_KotO_StartToValidate', 'Flow_KotO_ValidateToReserve', 'Flow_KotO_ReserveToConfirm', 'Flow_KotO_ConfirmToEnd'],
+  );
+  /** The default named form, a second flow between the same pair with a collision suffix. */
+  const SUFFIXED = definitionsXml(`
+    <bpmn:startEvent id="Event_Start" name="Start"><bpmn:outgoing>Flow_StartToOk</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?"><bpmn:incoming>Flow_StartToOk</bpmn:incoming><bpmn:outgoing>Flow_OkToBook</bpmn:outgoing><bpmn:outgoing>Flow_OkToBook_2</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:task id="Activity_Book" name="Book"><bpmn:incoming>Flow_OkToBook</bpmn:incoming><bpmn:incoming>Flow_OkToBook_2</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_StartToOk" sourceRef="Event_Start" targetRef="Gateway_Ok" />
+    <bpmn:sequenceFlow id="Flow_OkToBook" sourceRef="Gateway_Ok" targetRef="Activity_Book" />
+    <bpmn:sequenceFlow id="Flow_OkToBook_2" sourceRef="Gateway_Ok" targetRef="Activity_Book" />`);
+
+  /** `old -> new` of the renames of the default, and `flow -> suggested id` of the W_FLOW_ID_STALE with ids kept. */
+  async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
+    const follow = await Doc.fromXml(xml);
+    const renamed = runOps(follow, ops).renames.map((r) => `${r.from} -> ${r.to}`);
+    const keep = await Doc.fromXml(xml);
+    keep.followFlowEnds = false;
+    const cs = runOps(keep, ops);
+    expect(cs.renames).toEqual([]);
+    const stale = cs.warnings.filter((w) => w.code === 'W_FLOW_ID_STALE').map((w) => `${w.element} -> ${/ id=(\S+)`/.exec(w.hint!)![1]}`);
+    return { renamed, stale };
+  }
+
+  it('the suggestion is the id the default rename gives, in the file\'s form (named, stemTo, idPair, scopedTo, a suffixed id)', async () => {
+    const cases: Array<[string, Op, string]> = [
+      [CAMEL, { op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_checkStock' }, 'flow_checkStockToApproveOrder -> flow_checkStockToPackGoods'],
+      [SNAKE, { op: 'add', kind: 'serviceTask', name: 'Pack goods', after: 'Task_check_risk' }, 'Flow_Task_check_risk_Gateway_risk_ok -> Flow_Task_check_risk_Task_pack_goods'],
+      [SCOPED, { op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', after: 'serviceTask_KotO_ReserveInventory' }, 'Flow_KotO_ReserveToConfirm -> Flow_KotO_ReserveToReview'],
+      [SUFFIXED, { op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook_2' }, 'Flow_OkToBook_2 -> Flow_OkToReview'],
+    ];
+    for (const [xml, op, line] of cases) {
+      const { renamed, stale } = await bothModes(xml, [op]);
+      expect(renamed, line).toEqual([line]);
+      expect(stale, line).toEqual([line]);
+    }
+  });
+
+  it('flow ids that do not name their ends neither follow nor go stale (hashes, numbers)', async () => {
+    for (const [xml, anchor] of [[MODELER, 'Activity_0k3x9qa'], [NUMBERED, 'Task_1'], [OLD_MODELER, 'Task_1bcd234']] as const) {
+      expect(await bothModes(xml, [{ op: 'add', kind: 'task', name: 'Pack', after: anchor }])).toEqual({ renamed: [], stale: [] });
+    }
+  });
+
+  it('two flows that end up between the same ends get the id and the _2 of the default rename, so every hint can be followed', async () => {
+    const joined = definitionsXml(`
+    <bpmn:startEvent id="Event_Start" name="Start"><bpmn:outgoing>Flow_StartToOk</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?"><bpmn:incoming>Flow_StartToOk</bpmn:incoming><bpmn:outgoing>Flow_OkToA</bpmn:outgoing><bpmn:outgoing>Flow_OkToB</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:task id="Activity_A" name="A"><bpmn:incoming>Flow_OkToA</bpmn:incoming><bpmn:outgoing>Flow_AToJoin</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_B" name="B"><bpmn:incoming>Flow_OkToB</bpmn:incoming><bpmn:outgoing>Flow_BToJoin</bpmn:outgoing></bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_Join" name="Join"><bpmn:incoming>Flow_AToJoin</bpmn:incoming><bpmn:incoming>Flow_BToJoin</bpmn:incoming></bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_StartToOk" sourceRef="Event_Start" targetRef="Gateway_Ok" />
+    <bpmn:sequenceFlow id="Flow_OkToA" sourceRef="Gateway_Ok" targetRef="Activity_A" />
+    <bpmn:sequenceFlow id="Flow_OkToB" sourceRef="Gateway_Ok" targetRef="Activity_B" />
+    <bpmn:sequenceFlow id="Flow_AToJoin" sourceRef="Activity_A" targetRef="Gateway_Join" />
+    <bpmn:sequenceFlow id="Flow_BToJoin" sourceRef="Activity_B" targetRef="Gateway_Join" />`);
+    const expected = ['Flow_OkToA -> Flow_OkToJoin', 'Flow_OkToB -> Flow_OkToJoin_2'];
+    for (const ops of [[{ op: 'remove', ids: ['Activity_A', 'Activity_B'] }], [{ op: 'remove', ids: ['Activity_A'] }, { op: 'remove', ids: ['Activity_B'] }]] as Op[][]) {
+      expect(await bothModes(joined, ops), JSON.stringify(ops)).toEqual({ renamed: expected, stale: expected });
+    }
+    const doc = await Doc.fromXml(joined);
+    doc.followFlowEnds = false;
+    runOps(doc, [{ op: 'remove', ids: ['Activity_A', 'Activity_B'] }]);
+    runOps(doc, expected.map((line) => ({ op: 'set', id: line.split(' -> ')[0]!, values: { id: line.split(' -> ')[1]! } })));
+    expect(flowBetween(doc, 'Gateway_Ok', 'Gateway_Join')).toMatch(/^Flow_OkToJoin(_2)?$/);
+  });
+
+  it('the id style is the file\'s as read, also when the first op removes flows it is learned from', async () => {
+    const xml = chain(
+      [['startEvent', 'Start', 'Start'], ['task', 'Check', 'Check'], ['task', 'Book', 'Book'], ['endEvent', 'Done', 'Done']],
+      ['F_StartToCheck', 'F_CheckToBook', 'F_BookToDone'],
+    );
+    for (const ops of [[{ op: 'remove', ids: ['Start', 'Book'] }], [{ op: 'remove', ids: ['F_StartToCheck'] }, { op: 'remove', ids: ['Book'] }]] as Op[][]) {
+      expect(await bothModes(xml, ops), JSON.stringify(ops)).toEqual({ renamed: ['F_CheckToBook -> F_CheckToDone'], stale: ['F_CheckToBook -> F_CheckToDone'] });
+    }
+  });
+});
+
 describe('speaking ids on two branches of a file (independent edits)', () => {
   const base = chain(
     [

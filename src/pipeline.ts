@@ -147,6 +147,14 @@ export interface MutationOptions {
   validators?: Validator[];
   /** the file being written, for the validators (`ctx.file`); default doc.file (the node layer passes its target) */
   file?: string;
+  /**
+   * true keeps the id of every sequence flow the document had when an op
+   * gives it other ends (where flow ids are API: generated code, process
+   * tests); W_FLOW_ID_STALE names each one whose id no longer names its
+   * ends. false renames a flow whose id names its old ends after its new
+   * ones (the CLI's default). Undefined: Doc.followFlowEnds decides.
+   */
+  keepFlowIds?: boolean;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -739,12 +747,16 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   let aliases: Record<string, string> = {};
   // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
   doc.platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
+  // keepFlowIds decides for this call; the document's own setting is back afterwards
+  const follow = doc.followFlowEnds;
+  if (opts.keepFlowIds !== undefined) doc.followFlowEnds = !opts.keepFlowIds;
   try {
     ({ changes, ops: ran, aliases } = runBatch(doc, ops));
   } catch (err) {
     throw toCliError(err);
   } finally {
     doc.platformChoice = undefined;
+    doc.followFlowEnds = follow;
   }
   if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
 

@@ -214,7 +214,7 @@ export function createLane(doc: Doc, op: AddOp, cs: ChangeSet): El {
       message: `--members ${op.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${idOf(parentLane)} (${extraIds.join(', ')}), because a lane with child lanes has no direct members`,
       element: id,
       related: extraIds,
-      hint: `Move them into a sibling lane: \`bpmn add lane "<name>" --in ${idOf(parentLane)} --members ${extraIds.join(',')}\`.`,
+      hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${idOf(parentLane)} --members ${extraIds.join(',')}\`.`,
     });
   }
   doc.invalidate();

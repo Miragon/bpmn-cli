@@ -21,6 +21,8 @@ prints the short form.
    kind and place (`Gateway_AfterCheckInvoice`), flows by their ends. Elements are addressed by id
    only (names may repeat); a taken id gets `_2`, `_3` (`W_ID_SUFFIXED`). Every result lists the
    ids it created; in an `apply` batch an alias (`"as": "$check"`) names what an op creates.
+   Existing ids stay, with one exception: a flow whose id names its ends follows them, unless flow
+   ids are kept with `--keep-flow-ids` ([Limitations](#limitations)).
 4. **Nothing is half done.** A command, or a whole `apply` batch, succeeds completely or leaves
    the file untouched. Structural validation errors the change would introduce block the write
    (`--force` overrides). Errors the file already had are reported as `W_PREEXISTING_ERROR` and do
@@ -146,9 +148,15 @@ that syncs one text region per save (design-iq) sees only the change.
   file (git, two agents) that each add an element of the same name, or an unnamed element next to
   anchors of the same name, get the same id. The next read refuses the merged file
   (`E_IMPORT_LOSSY`): rename one of them while resolving the merge.
-- **A flow id that names its ends is renamed** when an edit changes its ends, the one exception
-  to "existing ids never change". The library keeps every id with `Doc.followFlowEnds = false`;
-  the CLI has no switch.
+- **A flow id that names its ends is renamed** when an edit changes its ends (a splice, a bridge,
+  `move`, `set <flow> source=` / `target=`), so the id keeps naming what it connects. This is the
+  one exception to "existing ids never change". Where flow ids are API (generated code, process
+  tests), `--keep-flow-ids` on any mutating command or `apply` keeps them. `BPMN_KEEP_FLOW_IDS=1`
+  makes that the default of a shell or an agent session; the flag wins over the variable, and
+  `--no-keep-flow-ids` renames again. The change then names each flow whose id no longer names
+  its ends (`W_FLOW_ID_STALE`, with the `bpmn set <file> <flowId> id=<newId>` that renames it
+  deliberately, together with the code). A flow the same change created still follows its ends.
+  Library: `keepFlowIds: true`, or `Doc.followFlowEnds = false`.
 - **The Camunda 8 profile checks FEEL syntax, not meaning.** An unknown variable or function, a
   type error, or a FEEL value Camunda 8 parses only when the process runs is found by the engine
   only; where Camunda's grammar was not probed the check accepts. An event-based gateway in a

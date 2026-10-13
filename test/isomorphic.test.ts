@@ -103,6 +103,19 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(lines.some((l) => l.startsWith('[route] '))).toBe(true);
   });
 
+  it('keeps flow ids (keepFlowIds) and reports the stale one like Node', async () => {
+    const ops = [
+      { op: 'add', kind: 'start', name: 'Received' },
+      { op: 'add', kind: 'task', name: 'Check', after: 'Event_Received' },
+      { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Check' },
+    ];
+    const xml = (await core.applyToXml((await core.newXml({ processName: 'Order' })).xml, ops)).xml;
+    const splice = [{ op: 'add', kind: 'task', name: 'Book', after: 'Activity_Check' }];
+    const there = await browser.applyToXml(xml, splice, { keepFlowIds: true });
+    expect(there.result.warnings.added.map((w) => `${w.code} ${w.element}`)).toEqual(['W_FLOW_ID_STALE Flow_CheckToDone']);
+    expect(JSON.stringify(there.result)).toBe(JSON.stringify((await core.applyToXml(xml, splice, { keepFlowIds: true })).result));
+  });
+
   it('redraws with both engines (bpmn-auto-layout loaded on demand) and formats', async () => {
     const xml = fixture('orders.bpmn');
     for (const opts of [{ engine: 'clean' as const }, { engine: 'auto' as const }, { tidy: true }]) {

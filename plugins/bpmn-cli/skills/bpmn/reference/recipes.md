@@ -76,7 +76,8 @@ printf '%s' '[
 The dry run prints exactly what the write will do: the created ids, the flow
 that was split (`flow` splices into it; it keeps its name and condition, and a
 flow whose id named its old ends is renamed, here
-`Flow_CheckOrderToOrderOk -> Flow_CheckOrderToCheckCreditLimit`), what the
+`Flow_CheckOrderToOrderOk -> Flow_CheckOrderToCheckCreditLimit`, unless flow
+ids are kept with `--keep-flow-ids`), what the
 layout `placed` / `moved` / `rerouted`, and `layout quality: a -> b` with any
 `added:` problem. When it looks right, run the same batch without `--dry-run`:
 

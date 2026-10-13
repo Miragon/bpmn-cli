@@ -21,6 +21,7 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
+import { CLI_ENV } from '../../fuzz/lib/setup.mjs';
 import { generate } from '../gen-edits.mjs';
 import { ROOT } from './metrics.mjs';
 
@@ -58,7 +59,7 @@ function engineCorpus(scenarios, out, refBin) {
     const dst = join(dir, basename(src));
     if (existsSync(dst)) continue;
     copyFileSync(src, dst);
-    const r = spawnSync(process.execPath, [refBin, 'layout', dst, '--force'], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, [refBin, 'layout', dst, '--force'], { encoding: 'utf8', env: CLI_ENV });
     if (r.status !== 0) rmSync(dst);
   }
   return { name: 'engine', dir };

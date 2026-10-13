@@ -986,7 +986,7 @@ describe('add: option validation', () => {
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
     expect(cs.warnings[0]!.message).toContain('--flow-id Flow_custom');
     expect(cs.warnings[0]!.related).toEqual(['F1']);
-    expect(cs.warnings[0]!.hint).toContain('bpmn set F1 id=Flow_custom');
+    expect(cs.warnings[0]!.hint).toContain('bpmn set <file> F1 id=Flow_custom');
     // after a node with a successor splices too
     const cs2 = add(doc, { kind: 'task', name: 'Mid2', after: 'Activity_Mid', flowId: 'Flow_custom2' });
     expect(cs2.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
@@ -1038,7 +1038,7 @@ describe('connect: self-loops', () => {
     const doc = await linearDoc();
     const cs = connect(doc, { source: 'Task_A', target: 'Task_A', name: 'again' });
     expect(cs.created[0]).toMatchObject({ kind: 'sequenceFlow', name: 'again', detail: 'Task_A -> Task_A' });
-    expect(cs.notes.some((n) => n.includes('bpmn set Task_A loop=standard'))).toBe(true);
+    expect(cs.notes.some((n) => n.includes('bpmn set <file> Task_A loop=standard'))).toBe(true);
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_SPLIT', 'W_IMPLICIT_JOIN']);
     expect(connect(doc, { source: 'Task_A', target: 'Task_A', ifAbsent: true }).isEmpty).toBe(true);
     add(doc, { kind: 'exclusiveGateway', name: 'G', in: 'Process_1' });

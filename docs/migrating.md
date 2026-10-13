@@ -239,3 +239,30 @@
   long id that differs from the one 0.6 gave. Flows 0.6 named are still
   renamed after their ends, also as 0.6 cut them and in a file that now
   reads as another form (they then get that form's id).
+- Flow ids can be kept (issue #32): `--keep-flow-ids` on every mutating
+  command and `apply`, `BPMN_KEEP_FLOW_IDS=1` as the default of a shell or
+  an agent session, `keepFlowIds` in `EditOptions` / `MutationOptions`. A
+  flow the file had then keeps its id when an edit gives it other ends, and
+  the change names each one whose id no longer names its ends
+  (`W_FLOW_ID_STALE`, with the `bpmn set` that renames it;
+  [Limitations](contract.md#limitations)). A library caller that sets
+  `Doc.followFlowEnds = false` gets these warnings now too, and a `--strict`
+  run exits 5 on them. Only the flows the document had keep their ids: a
+  flow the same `runOp`, `runOps` or `mutateDoc` call created follows its
+  ends, `renames` lists it and `created` has its final id (0.6: every id
+  stayed). Name such a flow with an alias where an op creates it (`flowAs`
+  on an add that appends or prepends and on split nodes, `as` on connect)
+  instead of guessing its id; the flow a splice creates (new node -> old
+  successor) has none. With ids kept, `move` puts the moved node's out-flow
+  back at its new place (`changed`, keeping its id, documentation and
+  extensions; its name and condition stay with the bridge, and a node that
+  is not bridged drops them with `W_LABEL_DROPPED` / `W_CONDITION_DROPPED`
+  unless the flow is put back between its old ends) instead of removing it
+  and creating a new one (0.6), so a flow between nodes moved together stays
+  theirs.
+- A batch or an op learns the file's id style before its first op runs
+  (`Doc.idStyle`). Before, a batch whose first op removed flows could learn
+  another style from what was left: new elements were named in it, and a
+  flow whose id named its old ends was not renamed (with ids kept: not
+  reported as `W_FLOW_ID_STALE`). Such batches now name and rename in the
+  style of the file as read.

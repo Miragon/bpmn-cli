@@ -16,6 +16,26 @@
  *  - lane + placement may be combined.
  *  - ids of flows removed while moving stay claimed for the rest of the
  *    command, so a flow created by the placement never reuses one.
+ *  - with flow ids kept (Doc.keepsFlowId, `--keep-flow-ids`) a moved node's one
+ *    out-flow, which the detach takes out, is put back as the first flow the
+ *    placement creates out of that node (the flow node -> successor of a
+ *    splice, node -> anchor of a prepend, or node -> next node when the next
+ *    one of the chain is appended to it, as always to a gateway: a gateway with
+ *    a next node keeps it for that append), so it keeps its id, documentation
+ *    and extensions and is reported as changed (W_FLOW_ID_STALE when its id
+ *    named the old ends). Its name, condition and annotations stay with the
+ *    bridge at the old place, and it is no longer a default flow; a node that
+ *    is not bridged drops name and condition (W_LABEL_DROPPED /
+ *    W_CONDITION_DROPPED), unless the flow is put back between its old ends. A
+ *    flowId for the flow a prepend creates (node -> anchor) makes a new flow
+ *    instead. The chain runs through these flows, so a flow between moved nodes
+ *    that matches it (a -> b of `move a b`) ends where it was, unless a has
+ *    several out-flows; when the detach of b takes it out (b is not bridged: an
+ *    end event, a join), the append of b after a puts it back with its name,
+ *    condition and default marker. The flows nothing puts back stay removed:
+ *    the out-flow of the last node appended after a gateway or a node without
+ *    successor, the other flows of a node that is not bridged (several in- or
+ *    out-flows, or none in or none out), and with --in the group's out-flow.
  *
  * Conventions:
  *  - several ids with --after/--before/--flow are chained in the given order
@@ -59,11 +79,12 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   } else if (mode === 'on') {
     for (const node of nodes) moveOnto(doc, node, placement, cs);
   } else if (mode !== 'none') {
-    let prev: El | undefined;
-    for (const node of nodes) {
-      moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane);
-      prev = node;
-    }
+    // with flow ids kept: the flows the detach took out, by the moved node they leave, until a placement puts them back
+    const spare = new Map<El, SpareFlow>();
+    nodes.forEach((node, i) => {
+      const prev = nodes[i - 1];
+      moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1] });
+    });
   }
   if (hasLane) {
     const lane = op.lane ? doc.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
@@ -172,7 +193,7 @@ function fixFlows(doc: Doc, moved: El[], scope: El, cs: ChangeSet): void {
         message: `Sequence flow ${idOf(flow)} (${idOf(src)} -> ${idOf(tgt)}) was removed: it would cross scopes after the move`,
         element: idOf(flow),
         related: [idOf(src), idOf(tgt)],
-        hint: 'Connect the node again inside its new scope with `bpmn connect <source> <target>`.',
+        hint: 'Connect the node again inside its new scope with `bpmn connect <file> <source> <target>`.',
       });
     }
   }
@@ -243,8 +264,37 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
 
-/** --after / --before / --flow: detach, then place like a new node (`explicitLane`: op.lane assigns the lane afterwards). */
-function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean): void {
+/**
+ * A flow the detach took out (flow ids kept), filed under the moved node it
+ * leaves, and the target it had. `label`: the name, condition and default
+ * marker no bridge took (the node was not bridged; for the flow from the node
+ * moved before, the ones it has), given back when the flow is put back to
+ * `target`, else dropped with W_LABEL_DROPPED / W_CONDITION_DROPPED.
+ */
+interface SpareFlow {
+  flow: El;
+  target: El;
+  label?: FlowLabel;
+}
+
+interface FlowLabel {
+  name: string | undefined;
+  condition: El | undefined;
+  isDefault: boolean;
+}
+
+function labelOf(flow: El, source: El): FlowLabel {
+  return { name: flow.get<string | undefined>('name'), condition: flow.get<El | undefined>('conditionExpression'), isDefault: source.get<El | undefined>('default') === flow };
+}
+
+/**
+ * --after / --before / --flow: detach, then place like a new node
+ * (`explicitLane`: op.lane assigns the lane afterwards). `spare`: the flows
+ * this move took out, for the placement to put back; `chain`: the nodes moved
+ * before this one (it is placed after it) and after it.
+ */
+function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El } = {}): void {
+  const { prev, next } = chain;
   if (is(node, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_PLACEMENT', `Boundary event ${idOf(node)} is moved with --on <activityId>`, { element: idOf(node) });
   }
@@ -253,16 +303,32 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   const oldScope = doc.scopeOf(node);
   const targetScope = placementScope(doc, p);
   const boundaries = is(node, 'bpmn:Activity') ? doc.boundaryEventsOf(node) : [];
-  const flowIds = [...doc.incoming(node), ...doc.outgoing(node)].map(idOf);
-  detachWithBridge(doc, node, true, cs, undefined, 'move');
+  const incoming = doc.incoming(node);
+  const outgoing = doc.outgoing(node);
+  const flowIds = [...incoming, ...outgoing].map(idOf);
+  // with flow ids kept: the node's one out-flow, which the detach takes out, is put back at the new place
+  const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && doc.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
+  const oldTarget = oldOut?.get<El>('targetRef');
+  const outLabel = oldOut && labelOf(oldOut, node);
+  // ... and the flow from the node moved before (a -> b of `move a b`): when the detach takes it out (this node is not
+  // bridged: an end event, a join), the append after that node puts it back as it was
+  const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && doc.keepsFlowId(f));
+  const prevLabel = fromPrev && labelOf(fromPrev, prev!);
+  const bridged = detachWithBridge(doc, node, true, cs, undefined, 'move');
   reserveIds(doc, flowIds);
+  // a bridge took the out-flow's name and condition (or warned); without one nothing did
+  if (oldOut && oldTarget && !doc.has(idOf(oldOut))) spare.set(node, { flow: oldOut, target: oldTarget, ...(bridged ? {} : { label: outLabel }) });
+  if (fromPrev && !doc.has(idOf(fromPrev)) && !spare.has(prev!)) spare.set(prev!, { flow: fromPrev, target: node, label: prevLabel });
   const laneBefore = laneOf(doc, node);
   leaveScope(doc, [node, ...boundaries], oldScope, targetScope, cs);
   doc.invalidate();
   // the lane, decided before the placement (a splice may rename the flow): a node in a lane keeps it, one without inherits add's
   const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
   const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? inheritedLane(doc, p) : {};
-  placeNode(doc, node, p, cs);
+  // the next node of the chain is appended to a gateway (a new branch): the gateway's out-flow waits for that append
+  const holdOwn = !!next && is(node, 'bpmn:Gateway');
+  placeNode(doc, node, p, cs, (source) => (source === node && holdOwn ? undefined : spare.get(source)?.flow));
+  reportPutBack(doc, spare, cs);
   // the new place may give an event-based gateway a target BPMN 2.0 does not allow (like add / connect)
   for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) warnEventGatewayFlow(doc, f, cs);
   if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
@@ -278,6 +344,39 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   }
   cs.change(changeOf(node, `moved ${describePlacement(p)}`));
   doc.invalidate();
+}
+
+/**
+ * The spare flows a placement put back (flow ids kept): each is one changed
+ * entry, `<node> -> <new target> (was -> <old target>)`, instead of the
+ * removed entry of the detach and the created entry of the placement. A
+ * flow back between its old ends gets the name, condition and default
+ * marker no bridge took back (where the placement gave none); one with
+ * another target drops them: W_LABEL_DROPPED / W_CONDITION_DROPPED.
+ */
+function reportPutBack(doc: Doc, spare: Map<El, SpareFlow>, cs: ChangeSet): void {
+  for (const [node, { flow, target, label }] of spare) {
+    if (doc.get(idOf(flow)) !== flow) continue;
+    spare.delete(node);
+    const id = idOf(flow);
+    const back = flow.get<El>('targetRef') === target;
+    if (label && back) {
+      if (label.name && !flow.get<string | undefined>('name')) flow.set('name', label.name);
+      if (label.condition && !flow.get<El | undefined>('conditionExpression')) {
+        flow.set('conditionExpression', label.condition);
+        label.condition.$parent = flow;
+      }
+      if (label.isDefault && !flow.get<El | undefined>('conditionExpression')) node.set('default', flow);
+    }
+    cs.removed = cs.removed.filter((c) => c.id !== id);
+    cs.created = cs.created.filter((c) => c.id !== id);
+    const change = flowChange(flow);
+    cs.change(back ? change : { ...change, detail: `${change.detail} (was -> ${idOf(target)})` });
+    if (!label || back) continue;
+    const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
+    if (label.name) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${label.name}" of ${id} was dropped ${why}`, element: id });
+    if (label.condition) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id });
+  }
 }
 
 /** --in: append the nodes to the scope; the group is bridged, flows between its nodes survive, others are dropped. */

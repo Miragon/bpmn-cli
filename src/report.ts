@@ -56,7 +56,7 @@ export interface MutationReport {
   notes: string[];
   /** batch aliases -> the final id of their element (`bpmn apply` with `"as": "$name"`) */
   aliases?: Record<string, string>;
-  /** ids the change renamed (a flow whose id named its old ends, renamed after its new ones): old id -> new id */
+  /** ids the change renamed (a flow whose id named its old ends, renamed after its new ones; none with keepFlowIds: W_FLOW_ID_STALE instead): old id -> new id */
   renamed?: Record<string, string>;
   layout: LayoutStatus;
   /** errors a forced write let through, the platform summary and the validators that ran; the warnings are in `warnings` */
@@ -159,6 +159,9 @@ export const FLOOD_MIN = 3;
 /** How many element ids a flood line lists before `+n more`. */
 const FLOOD_IDS = 30;
 
+/** Codes whose every warning gets its own line: each hint is the command for that one element (a flood line keeps only the first). */
+const NEVER_FLOOD = new Set(['W_FLOW_ID_STALE']);
+
 function floodKey(w: Warning): string {
   return `${validatorTag(w)}${w.code}`;
 }
@@ -170,7 +173,7 @@ function idsText(ids: string[]): string {
 /**
  * One `warning ...` line per warning; FLOOD_MIN or more of one code become one
  * line at the place of the first: `warning W_UNREACHABLE x20 [A, B, ...]: <the
- * first one's message>  (<its hint>)`.
+ * first one's message>  (<its hint>)`. The NEVER_FLOOD codes stay one line each.
  */
 export function warningLines(warnings: readonly Warning[]): string[] {
   const groups = new Map<string, Warning[]>();
@@ -180,7 +183,7 @@ export function warningLines(warnings: readonly Warning[]): string[] {
   for (const w of warnings) {
     const key = floodKey(w);
     const group = groups.get(key)!;
-    if (group.length < FLOOD_MIN) {
+    if (group.length < FLOOD_MIN || NEVER_FLOOD.has(w.code)) {
       out.push(warningLine(w));
       continue;
     }

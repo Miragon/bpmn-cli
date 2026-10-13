@@ -24,10 +24,10 @@
  * lossy import (E_IMPORT_LOSSY), validation errors the ops would introduce
  * (E_VALIDATION) and content a retype would delete (E_WOULD_DROP_CONTENT)
  * are refused unless `force`; the layout modes, the format ops and the
- * platform profile's new findings work as in the CLI, and a host's own
- * validators (`validators`) run in the same transaction. The result keeps
- * the input's text wherever the ops changed nothing (the text-preserving
- * step).
+ * platform profile's new findings work as in the CLI, a host's own
+ * validators (`validators`) run in the same transaction, and `keepFlowIds`
+ * keeps flow ids like `--keep-flow-ids`. The result keeps the input's text
+ * wherever the ops changed nothing (the text-preserving step).
  *
  * Errors are CliError instances (code, category, details with element,
  * candidates, hint, op), exactly what the CLI prints with --json; the input
@@ -65,6 +65,11 @@ export interface EditOptions {
   validators?: Validator[];
   /** the document's file name, for the validators (`ctx.file`) */
   file?: string;
+  /**
+   * keep the id of every existing sequence flow when the ops give it other ends (`--keep-flow-ids`):
+   * W_FLOW_ID_STALE names each one whose id no longer names its ends; default false: such a flow is renamed after its new ends
+   */
+  keepFlowIds?: boolean;
   /** include the model view of the result (`--show`) */
   show?: boolean;
   /** receives the layout engines' diagnostic lines of this call (what BPMN_LAYOUT_DEBUG prints) */

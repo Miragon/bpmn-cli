@@ -149,7 +149,7 @@ function resolveTrigger(el: El, to: KindDef, requested: Trigger | undefined): Tr
   if (allowed.includes(current)) return current;
   throw modelError('E_INVALID_TRIGGER', `Trigger "${current}" is not allowed on ${to.kind}; say which trigger the ${to.kind} should have`, {
     element: idOf(el),
-    hint: `Use \`bpmn retype ${idOf(el)} ${to.kind}:<trigger>\` with one of: ${allowed.join(', ')}.`,
+    hint: `Use \`bpmn retype <file> ${idOf(el)} ${to.kind}:<trigger>\` with one of: ${allowed.join(', ')}.`,
   });
 }
 
@@ -177,7 +177,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   if (reason) {
     throw modelError('E_INVALID_RETYPE', `Cannot retype ${kindLabel(el)} ${id} to ${to.kind}: ${reason}`, {
       element: id,
-      hint: 'Remove the element and add a new one of the wanted kind instead (`bpmn remove <id>`, then `bpmn add <kind> ...`).',
+      hint: `Remove the element and add a new one of the wanted kind instead (\`bpmn remove <file> ${id}\`, then \`bpmn add <file> <kind> ...\`).`,
     });
   }
   const oldLabel = kindLabel(el);
@@ -205,7 +205,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     throw modelError('E_INVALID_RETYPE', `${id} has sequence flows; event sub-processes cannot be connected by sequence flows`, {
       element: id,
       candidates: [...doc.incoming(el), ...doc.outgoing(el)].map(idOf),
-      hint: `Remove its flows first: \`bpmn remove ${[...doc.incoming(el), ...doc.outgoing(el)].map(idOf).join(' ')}\`.`,
+      hint: `Remove its flows first: \`bpmn remove <file> ${[...doc.incoming(el), ...doc.outgoing(el)].map(idOf).join(' ')}\`.`,
     });
   }
 
