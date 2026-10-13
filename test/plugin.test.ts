@@ -49,7 +49,7 @@ beforeAll(async () => {
     bundle: true,
     platform: 'node',
     format: 'esm',
-    target: 'node20',
+    target: 'node22',
     outfile: cliFile,
     logLevel: 'error',
     banner: { js: "import { createRequire as __bpmnCreateRequire } from 'node:module'; const require = __bpmnCreateRequire(import.meta.url);" },

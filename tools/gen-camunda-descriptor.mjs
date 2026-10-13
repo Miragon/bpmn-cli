@@ -11,9 +11,10 @@
  *
  * Why a copy: src/platform/descriptor.ts used to read the JSON with
  * createRequire (node:module), which a browser bundle cannot resolve; a JSON
- * import attribute warns on Node 20 / 22. The constant needs neither. The
- * data stays exactly the package's (test/isomorphic.test.ts compares it with
- * the installed JSON), including the package's licence notice.
+ * import attribute warns on Node 22, the oldest Node the package supports.
+ * The constant needs neither. The data stays exactly the package's
+ * (test/isomorphic.test.ts compares it with the installed JSON), including
+ * the package's licence notice.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

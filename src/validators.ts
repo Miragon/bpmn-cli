@@ -17,6 +17,11 @@
  *  - warnings the change introduced are reported; old warnings are not
  *    repeated on every write (only counted).
  *
+ * An advisory validator (`blocks: false`, the project's bpmnlint in
+ * src/bpmnlint.ts) never blocks: errors the change introduced are reported
+ * among the warnings, severity kept; old errors are only counted. `bpmn
+ * validate` reports its errors as errors.
+ *
  * `validation.validators` has one report per validator (introduced errors and
  * warnings, pre-existing errors, resolved findings, totals); the reported
  * findings are also among `validation.errors` / `validation.warnings` with a
@@ -28,8 +33,10 @@
  * Findings are matched before / after by validator, code and element (an
  * element the ops renamed keeps its findings) or, without an element, by code
  * and message (the old ids in the message replaced by the renamed ones); a
- * finding's `key` replaces that identity. A finding of the shape
- * {severity: 'ERROR' | 'WARN', ruleId, message} is accepted as it is.
+ * finding's `key` replaces that identity. Two validators of one name are
+ * compared in order (the second run after with the second run before). A
+ * finding of the shape {severity: 'ERROR' | 'WARN', ruleId, message} is
+ * accepted as it is.
  */
 import type { Doc } from './document.js';
 import { modelError, type Warning } from './errors.js';
@@ -80,8 +87,10 @@ export interface NamedValidator {
   validateDoc?: (doc: Doc, ctx: ValidatorContext) => ValidatorFinding[] | Promise<ValidatorFinding[]>;
   /** one line on why it runs (shown in results) */
   detail?: string;
-  /** finding code -> the lint warning code it says again about the same element (the lint warning is dropped) */
+  /** finding code -> the lint warning code it says again about the same element (the lint warning is dropped; a finding without a hint takes its hint) */
   covers?: Record<string, string>;
+  /** false: advisory (the project's bpmnlint): errors the change introduced are reported among the warnings (severity kept) and never block, old errors are only counted; validate reports its errors as errors. Default true */
+  blocks?: boolean;
 }
 
 /** A validator as MutationOptions.validators takes it: a function (named by its function name) or a named one. */
@@ -97,6 +106,8 @@ export interface ValidatorIssue extends Warning {
 export interface ValidatorReport {
   name: string;
   detail?: string;
+  /** false: advisory (NamedValidator.blocks): the errors a change introduced are in `warnings`, the old ones only counted */
+  blocks?: false;
   /** mutation: error findings the change introduced (written only with force); validate: every error finding */
   errors: ValidatorIssue[];
   /** mutation: warnings the change introduced; validate: every warning */
@@ -113,6 +124,7 @@ export interface ValidatorReport {
 export interface ValidatorRun {
   name: string;
   detail?: string;
+  blocks?: false;
   issues: ValidatorIssue[];
   covers?: Record<string, string>;
 }
@@ -171,7 +183,7 @@ export async function runValidators(validators: readonly NamedValidator[], input
     if (!Array.isArray(found)) {
       throw modelError('E_VALIDATOR_FAILED', `Validator ${v.name} returned ${typeof found} instead of an array of findings; nothing was written`, { validator: v.name });
     }
-    runs.push({ name: v.name, ...(v.detail ? { detail: v.detail } : {}), issues: found.map((f) => toIssue(v.name, f)), ...(v.covers ? { covers: v.covers } : {}) });
+    runs.push({ name: v.name, ...(v.detail ? { detail: v.detail } : {}), ...(v.blocks === false ? { blocks: false as const } : {}), issues: found.map((f) => toIssue(v.name, f)), ...(v.covers ? { covers: v.covers } : {}) });
   }
   return runs;
 }
@@ -218,24 +230,30 @@ function counts(issues: ValidatorIssue[]): { errors: number; warnings: number } 
  * Compares each validator's findings before and after a change: what the
  * change introduced (errors, warnings), what the document already had
  * (pre-existing errors) and what it removed (resolved). Each finding before
- * matches at most one after.
+ * matches at most one after; the n-th run of a name after compares with the
+ * n-th run of that name before. An advisory run (`blocks: false`) reports
+ * the errors it introduced among the warnings and only counts its old ones.
  */
 export function compareRuns(before: ValidatorRun[], after: ValidatorRun[], renames: Map<string, string> = new Map()): ValidatorReport[] {
   const rename = renamer(renames);
   const none = new Map<string, string>();
+  const seen = new Map<string, number>();
   return after.map((run) => {
-    const old = before.find((b) => b.name === run.name)?.issues ?? [];
+    const nth = seen.get(run.name) ?? 0;
+    seen.set(run.name, nth + 1);
+    const old = before.filter((b) => b.name === run.name)[nth]?.issues ?? [];
     const left = old.map((issue) => ({ issue, id: identity(issue, rename, renames) }));
-    const report: ValidatorReport = { name: run.name, ...(run.detail ? { detail: run.detail } : {}), errors: [], warnings: [], preexisting: [], resolved: [], counts: counts(run.issues) };
+    const blocking = run.blocks !== false;
+    const report: ValidatorReport = { name: run.name, ...(run.detail ? { detail: run.detail } : {}), ...(blocking ? {} : { blocks: false as const }), errors: [], warnings: [], preexisting: [], resolved: [], counts: counts(run.issues) };
     for (const issue of run.issues) {
       const id = identity(issue, (text) => text, none);
       const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
       if (i !== -1) {
         left.splice(i, 1);
-        if (issue.severity === 'error') report.preexisting.push(issue);
+        if (issue.severity === 'error' && blocking) report.preexisting.push(issue);
         continue;
       }
-      if (issue.severity === 'error') report.errors.push(issue);
+      if (issue.severity === 'error' && blocking) report.errors.push(issue);
       else report.warnings.push(issue);
     }
     report.resolved = left.map((b) => b.issue);
@@ -248,6 +266,7 @@ export function checkReports(runs: ValidatorRun[]): ValidatorReport[] {
   return runs.map((run) => ({
     name: run.name,
     ...(run.detail ? { detail: run.detail } : {}),
+    ...(run.blocks === false ? { blocks: false as const } : {}),
     errors: run.issues.filter((i) => i.severity === 'error'),
     warnings: run.issues.filter((i) => i.severity === 'warning'),
     preexisting: [],
@@ -266,7 +285,7 @@ export function validatorRefusal(errors: ValidatorIssue[]) {
   const names = [...new Set(errors.map((e) => e.validator))];
   return modelError('E_VALIDATION', `The change would introduce ${errors.length} error(s) reported by ${names.map((n) => `validator ${n}`).join(', ')}; nothing was written`, {
     errors,
-    hint: 'Fix the listed problems (each names its validator in brackets), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.',
+    hint: `Fix the listed problems (each names its validator in brackets), make the edit in one transaction (\`bpmn apply <file> ops.json\`) so that it ends in a valid model, or pass --force to write anyway.${names.includes('bpmnlint') ? " The project's bpmnlint blocks here because the host asked for it (lintBlocks)." : ''}`,
   });
 }
 
@@ -275,18 +294,26 @@ export function validatorRefusal(errors: ValidatorIssue[]) {
  * (a mutation: only those it introduced, present when forced; validate:
  * all) among `errors`, the introduced warnings and the pre-existing errors
  * (as W_PREEXISTING_ERROR) among `warnings`. A lint warning a validator's
- * finding repeats about the same element (`covers`) is dropped.
+ * finding repeats about the same element (`covers`) is dropped; a finding
+ * without a hint of its own takes the dropped warning's hint.
  */
 export function withValidatorReports(result: ValidationResult, reports: ValidatorReport[], runs: ValidatorRun[]): ValidationResult {
   if (!reports.length) return result;
-  const covered = new Set<string>();
+  const covering = new Map<string, ValidatorIssue[]>();
   for (const run of runs) {
     for (const issue of run.issues) {
       const lint = run.covers?.[issue.code];
-      if (lint && issue.element) covered.add(`${lint}|${issue.element}`);
+      if (!lint || !issue.element) continue;
+      const key = `${lint}|${issue.element}`;
+      covering.set(key, [...(covering.get(key) ?? []), issue]);
     }
   }
-  const warnings = result.warnings.filter((w) => !covered.has(`${w.code}|${w.element ?? ''}`));
+  const warnings = result.warnings.filter((w) => {
+    const by = covering.get(`${w.code}|${w.element ?? ''}`);
+    if (!by) return true;
+    for (const issue of by) if (!issue.hint && w.hint) issue.hint = w.hint;
+    return false;
+  });
   return {
     ...result,
     errors: [...result.errors, ...reports.flatMap((r) => r.errors)],

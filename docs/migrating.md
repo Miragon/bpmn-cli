@@ -269,3 +269,39 @@
   flow whose id named its old ends was not renamed (with ids kept: not
   reported as `W_FLOW_ID_STALE`). Such batches and commands now name and
   rename in the style of the file as read.
+- Node 22.12 or later (`engines.node`; commander 15 and vitest 5 need it,
+  0.6 declared Node 20).
+- `bpmn validate` and every write run the project's bpmnlint configuration:
+  the nearest `.bpmnlintrc` above the file, up to the repository root,
+  whoever owns it (outside a git repository: the file's directory only;
+  [bpmnlint](bpmnlint.md)). `validate` exits 2 on its errors; a write lists
+  the findings the change added (`warning [bpmnlint error] ...`) and never
+  refuses because of them. `--no-lint-config` leaves bpmnlint out of the
+  output; without a `.bpmnlintrc` nothing of bpmnlint is loaded and bpmnlint
+  adds nothing.
+- `bpmnlint` 11.15.0 and `@miragon/bpmnlint-plugin-rules` 0.12.0 are
+  dependencies (exact versions); `bpmn-moddle` resolves to 10.3.
+- Library: `NamedValidator.blocks: false` makes a validator advisory
+  (`ValidatorReport.blocks`); the file helpers run the `.bpmnlintrc` too,
+  with only the rules bpmn-cli ships unless `lintProjectCode: true`
+  (project plugins then run only in a git repository of the host's user);
+  `checkFile` takes `FileCheckOptions` (`lintConfig`, `lintFrom`,
+  `lintBlocks`, `lintProjectCode`); `warningLines(warnings, advisory)` and
+  `renderSummary(summary, { advisory })` group an advisory validator's
+  findings by code and message (`advisoryValidators(report)` gives the
+  names; the CLI passes them); `--summary`'s `preexistingCount` counts an
+  advisory validator's old findings too.
+- Two validators of the same name are compared in order (0.6 compared every
+  run with the first one's baseline), and a lint warning that a resolved
+  validator finding says again (`covers`) is listed once in `resolved`, as
+  that finding (0.6 listed both: `W_DEAD_END` next to the validator's finding
+  about the same element).
+- A write that fails (`-o` naming a directory, a directory without write
+  permission) is `E_IO` (exit 4) and leaves no temp file; 0.6 reported
+  `E_INTERNAL` (exit 70) and left `.<name>.<pid>.tmp` behind. `writeAtomic`
+  throws that `CliError`.
+- Output piped into a reader that closes early (`| head`) ends without an
+  `EPIPE` trace and keeps the command's exit code (0.6 printed a Node stack
+  trace and exited 1 when the command succeeded), and a model piped in from
+  a slow writer (`curl ... | bpmn validate -`) is read whole (0.6 could fail
+  with `E_IO` `EAGAIN`).

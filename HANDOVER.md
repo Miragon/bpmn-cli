@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), and flow ids kept on request (#32))
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), and the project's bpmnlint configuration (#33))
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -41,7 +41,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 1942 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2008 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -51,6 +51,221 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## The project's bpmnlint configuration (2026-10-13, `feat/33-bpmnlint`, issue #33)
+
+A team that runs bpmnlint in CI and in a pre-commit hook (`bpmnlint:recommended`,
+camunda-compat, `@miragon/rules`, a plugin of its own) got its findings only
+after the agent's loop: a change could be valid for bpmn-cli and still fail
+the lint gate. Now `bpmn validate` and every write run the nearest
+`.bpmnlintrc` ([docs/bpmnlint.md](docs/bpmnlint.md)). The user's decisions
+hold: built on Miragon/bpmnlint-rules (`bpmnlint` 11.15.0 and
+`@miragon/bpmnlint-plugin-rules` 0.12.0, exact runtime dependencies), the
+findings a change adds are reported and never block (library hosts may opt
+into blocking, `lintBlocks`), validate exits 2 on bpmnlint errors, no
+`.bpmnlintrc` loads nothing, Node 22.12+, the lookup stops at the repository
+root (outside a repository it looks only in the model's directory).
+
+- **Core** (`src/bpmnlint.ts`, browser-safe: bpmnlint is injected as `{
+  Linter, resolver }`): `resolveBpmnlintConfig` flattens `extends` like
+  bpmnlint's Linter but leaves out and lists what it cannot resolve (a name
+  bpmnlint cannot parse costs only that entry; async resolvers are awaited;
+  an `extends` cycle is walked once, one `W_LINT_UNAVAILABLE` names the
+  configs that close it, where a cycle with fan-out ran out of memory
+  before; a moddle value that is neither a path nor an object is listed);
+  `bpmnlintValidator` lints with a new Linter per run (stateful rules) on the
+  XML parsed with the `.bpmnlintrc`'s moddle extensions only, keys findings
+  without array indices (an earlier sibling removed changes nothing), turns a
+  throwing rule or factory into one `W_LINT_FAILED` (nothing on stderr; an
+  async check that rejects and a factory that returns a promise too, never
+  an unhandled rejection), reports the lint parse's import warnings
+  bpmn-cli's reader does not (`import-warning`, with a hint; design-iq's
+  decision link has its own), and
+  checks the list rules (`no-implicit-end`, `no-implicit-start`,
+  `no-disconnected`, `event-based-gateway`, which counts the outgoing list)
+  against the flows: a finding the flows contradict (a file without incoming
+  / outgoing lists) is left out of a write and carries a hint in validate. A
+  moddle module path the host resolved nothing for is `W_LINT_UNAVAILABLE`,
+  not dropped. `BPMNLINT_COVERS`: `W_NO_START`, `W_NO_END`, `W_DEAD_END` are
+  dropped where the rule reports on the same element, the finding takes
+  their hint.
+- **Node** (`src/node/bpmnlint.ts`): the lookup is `findUp`
+  (`src/node/find-up.ts`, from #30's closed branch; `gitRoot` added); bpmnlint and the plugin load with `createRequire` (the plugin's ESM
+  build fails in plain Node), Linter and NodeResolver from the plugin's own
+  bpmnlint, a load failure is one `W_LINT_UNAVAILABLE` and the write goes
+  ahead; the chain asks the bundled resolver, then the camunda-compat 2.61.1
+  the plugin installs (decision Q1: every camunda-compat config offline),
+  then the repository's `node_modules` (only with `lintProjectCode`, which
+  the CLI passes; only inside a git repository of the user running
+  bpmn-cli, checked by owner as git checks it (`repoOff`: lstat of the
+  directory, of the `.git` itself and of a `.git` file's gitdir; root's
+  files only for root, the SUDO_UID sudo sets under sudo; git's
+  `safe.directory` is not read; a `.git` file that names no git directory
+  is no repository, and the message says so; where there are no uids
+  (Windows) only a repository inside the home directory and below no
+  filesystem root counts, so a planted `C:\.git` with `C:\node_modules`
+  runs nothing), so a planted `/tmp/.bpmnlintrc` and
+  `/tmp/node_modules`, with or without a `/tmp/.git` (also a link to `/` or
+  a hard link to a file of root), run no plugin; entry modules inside the
+  repository root only; a package whose config came from there gives its
+  rules from there); moddle paths are read as JSON, never executed. The
+  owner gates only this tier (decision after the third review): the lookup
+  goes up to the root of any git repository, whoever owns it (a `.git`
+  file that names no git directory makes none, as for git; a `.git` that
+  is no regular file or is over 1 MiB is not read, so a planted FIFO
+  cannot block it). Root over another uid's checkout (a CI `container:`
+  job, `docker run -v`, `sudo`) and on Windows a repository outside the
+  home directory (`C:\dev`) get the repository's `.bpmnlintrc` with the
+  bundled and shipped rules, and a project plugin there is left out with
+  the visible `W_LINT_UNAVAILABLE` that names the reason and the way out;
+  gating the lookup had made lint vanish silently there. A planted
+  `/tmp/.git` with `/tmp/.bpmnlintrc` now applies to models below `/tmp`
+  that lie in no repository of their own, but only with bpmn-cli's rules
+  (advisory) and moddle JSON read from inside `/tmp`. Outside a repository
+  the lookup takes only the model's own directory; a library host without
+  `lintProjectCode` is told when the setting would not help (no repository,
+  another user's), and is not told to install a package it would not run.
+  A string `moddleExtensions` is one `W_LINT_UNAVAILABLE`, not one per
+  character. A write's validator line says `N left out (W_LINT_UNAVAILABLE;
+  ...)`, since a write only counts those.
+  `projectBpmnlintSettings` (for #34) uses the same lookup, flags and errors,
+  so `--no-lint-config` switches off what #34 reads too (decision Q5). `bpmnlintEngine()` for library hosts; the chain
+  itself is not exported (`loadBpmnlint(...).engine.resolver` is it).
+- **Validator hook** (`src/validators.ts`, `src/pipeline.ts`):
+  `NamedValidator.blocks: false` (advisory: introduced errors among the
+  warnings with `severity: 'error'`, old errors only counted, `blocks: false`
+  in the report); two validators of one name compare in order; `new` lists
+  an advisory validator's findings of the new model; a resolved lint warning
+  a resolved validator finding covers is listed once (a host validator with
+  `covers`: `resolved:` no longer lists `W_DEAD_END` next to the finding
+  that covers it). docs/validators.md has all of it (Advisory validators).
+- **Output** (`src/report.ts`): `warning [bpmnlint error] <rule> <id>` for an
+  error a write added, `[bpmnlint error] <rule> <id>` in validate; an
+  advisory validator's findings group by code and message (decision Q3); its
+  line adds `(N added, M resolved, K already in the file)`, and `--summary`
+  counts K in its `warnings:` line; validate folds three or more findings of
+  a rule with one hint into one line that lists the ids with the message it
+  shows (a real dead end among list findings keeps its line;
+  `W_LINT_UNAVAILABLE`, `W_LINT_FAILED` and `import-warning` never fold;
+  gallery.bpmn: 142 findings in 16 lines; `--json` lists all).
+- **CLI**: `--lint-config <path>` / `--no-lint-config` on validate and every
+  mutating command; a write looks up from the file it writes (`-o`), a
+  model from stdin without `-o` from the working directory (a removed
+  working directory: no `lintFrom`, absolute paths still run). Exit codes
+  are set with `process.exitCode` (validate's 2 and 5, a write's `--strict`
+  5, every error), and the CLI exits once stdout and stderr took what was
+  written (`exitWhenWritten`): `process.exit` right away cut piped output
+  off at 64 KB on macOS, which a `.bpmnlintrc` made common (`validate
+  --json` exits 2 on its errors), and waiting for the event loop let a
+  project plugin's timer keep the process alive. `EPIPE` on stdout or
+  stderr (`| head`) is ignored, so the exit code stays and no trace is
+  printed (the audit's open `EPIPE`, now also on the success path).
+- **Pre-existing, fixed on the way** (the third review found them): stdin is
+  read as a stream (once commander's `node:process` import touched
+  `process.stdin`, a pipe was non-blocking and `readFileSync(0)` failed with
+  `EAGAIN` whenever its writer was slower than the start: `curl ... | bpmn
+  validate -`); `writeAtomic` turns a failed write into `E_IO` (`-o` naming
+  a directory: "it is a directory", exit 4, was `E_INTERNAL` 70) and leaves
+  no temp file.
+- **Docs and codes**: `W_LINT_UNAVAILABLE`, `W_LINT_FAILED`, `E_LINT_CONFIG`;
+  guide section and topic `bpmnlint` (not `lint`, which names bpmn-cli's own
+  `W_*` checks); docs/bpmnlint.md, and the advisory validators with the
+  library example of bpmnlint in docs/validators.md; SKILL.md tells the
+  agent to fix added findings in the same batch and to pass
+  `--no-lint-config` in a repository or folder the user does not trust (a
+  project plugin runs under the skill's pre-approved `bpmn` command); the
+  short guide's CONTRACT says bpmnlint only reports.
+- **Node floor**: `engines.node` `>=22.12.0` (commander 15 and vitest 5 need
+  it), a CI job builds and tests on 22.12, every Node 20 mention is updated.
+- **Tests and tools**: `test/bpmnlint.test.ts` (54 cases: a model outside a
+  repository, a `.git` of another uid (its `.bpmnlintrc` applies, its plugin
+  does not run), also a planted link to `/`, a hard link to a gitfile and
+  to `/etc/hosts` (skipped as root and on Windows), a `.git` file without
+  its git directory, a system without uids (Windows, simulated; also a
+  repository outside the home directory), async rules, extends cycles with
+  fan-out; the CLI cases run a tsc build of `src/` under plain node, also
+  root over another uid's checkout (a preload makes `process.getuid()` 0:
+  exit 2 on a bundled rule, the plugin named), a broken install, a hoisted
+  old bpmnlint, JSON beyond 64 KB through a pipe, a pipe closed after the
+  first chunk, a plugin that leaves a timer running, a removed working
+  directory and the `-o` lookup); `test/cli.test.ts` a slow stdin writer
+  and `-o` naming a directory; `test/global-setup.ts` stops the run when a
+  `.bpmnlintrc` lies above the temporary directory or the repository; fuzz,
+  bench (feature detected) and the layout regression pass
+  `--no-lint-config`.
+
+Rebased onto main after #35 (design profile removed), #31 (id cutting) and
+#32 (flow ids kept), squashed into one commit (the branch before:
+`pr39-before-rebase`):
+
+- #35's removal is final: no `--profile`, `profile` / `contentRepo`, design
+  validator or `docs/design-iq.md` came back. What #33 said about the design
+  profile went: `--profile none` keeping bpmnlint (docs/bpmnlint.md, the
+  guide's BPMNLINT section), the E_VALIDATION hint and catalogue text about
+  `--profile none`, the design line of the validator-findings note in the
+  guide's OUTPUT. The resolved-once behaviour stays as a rule of the hook
+  (`covers`), and its test uses the host validator `gate` of
+  test/validators.test.ts instead of the design profile.
+- The advisory validators (`blocks`, the same-name pairing, `covers`
+  passing its hint, `advisoryValidators` for `renderSummary`) are in
+  docs/validators.md, with the bpmnlint example that was in
+  docs/design-iq.md (test/bpmnlint.test.ts reads it there); docs/library.md
+  links to them.
+- The decision-link hint of an `import-warning` no longer names
+  `W_DESIGN_DECISION_LINK` (gone with #35); it says what the link is.
+- #32 stays as it is: `BPMN_KEEP_FLOW_IDS` / `envSwitch` in src/cli.ts next
+  to `lintOptions` / `workingDir`, `keepFlowIds` and the lint options in
+  `mutationOptions`; vitest has `setupFiles` (test/setup.ts) and
+  `globalSetup` (test/global-setup.ts); the layout regression passes
+  `--no-lint-config` and `CLI_ENV`, the fuzz and bench executors both.
+  The hints and catalogue entries #33 added name the file first or name no
+  command.
+
+Evidence:
+
+- `npm run gate` (on main after #35, #31 and #32): 2008 tests (+246
+  opt-in), isomorphism check, layout regression 444 (budget 444), fuzz 12 x
+  15 0 errors. The whole entry grows 880.9 / 278.6 (main) -> 899.2 / 285.2
+  KB (+18.3 / +6.6 KB, as before the rebase: the validator about 8 KB with
+  its hints, the guide's bpmnlint text and codes about 8 KB, bpmn-moddle
+  10.3 and the advisory output of the report the rest). Main's budget of
+  883 / 279 cannot hold that; it is raised to 910 / 289, the measured size
+  + about 1 %, as main keeps its budgets close. `applyToXml` only 640.4 /
+  203.5 -> 641.2 / 203.8 KB, within main's 643 / 204 (unchanged). The guide
+  adds 124 to 153 KB (38 to 47 KB gzip) to `applyToXml` (docs/library.md
+  said 116 to 140; main itself measures 121 to 146 with this lock file).
+- Runtime without a `.bpmnlintrc`: unchanged (one stat per directory up to
+  the repository root, or up to `/` outside one). The repository check of a
+  loaded `.bpmnlintrc` (the walk to `.git` and one stat) costs under 0.01 ms. With one (recommended, `@miragon/rules`
+  automation, camunda-compat 7-24, the camunda moddle): the CLI's validate
+  76 -> 103 ms (orders.bpmn), 92 -> 131 ms (gallery.bpmn), a write 101 ->
+  138 ms / 154 -> 198 ms (loading bpmnlint and the plugin is about 25 ms of
+  it); in process, warm, `mutateFile` +7.5 ms, `checkFile` +4 / +12 ms.
+- Findings equal bpmnlint's own Linter on orders.bpmn and gallery.bpmn
+  (test).
+
+Open after #33:
+
+- Upstream, for Miragon/bpmnlint-rules (not filed): the ESM build does not
+  load in plain Node; the bundle has only camunda-compat 7-24 / 8-10; the
+  peer range should be `bpmnlint >=11.14` (an older hoisted bpmnlint cannot
+  load the plugin); the element-id-naming doc comment names
+  `miragon/element-id-naming`; the README's JSONC `.bpmnlintrc` examples are
+  rejected by `npx bpmnlint`.
+- `bpmn layout` drops a group's BPMNShape (gallery.bpmn's
+  `Group_FirstTasks`): a separate bug, not #33.
+- `src/node/find-up.ts` and `test/find-up.test.ts` came from #30's branch
+  (`fix/30-designiq-yml`, PR #36, closed unmerged once #35 removed the
+  design profile): they are new files of this branch, and only the
+  `.bpmnlintrc` lookup uses them. #34 builds on `projectBpmnlintSettings`
+  and `bpmnlintEngine().plugin.naming`.
+
+Left for later (low findings of the third review, not fixed in #33):
+
+- `loadBpmnlint` caches what a `.bpmnlintrc` could not resolve: a long-running host keeps saying "is not installed" after the install, until it restarts or the file changes (documented now; a fix keys the cache on the involved package.json / descriptor mtimes, or does not cache project-side failures).
+- A whole-model `W_LINT_FAILED` (bpmnlint could not lint the model, e.g. moddle descriptors BpmnModdle rejects) is the same before and after, so a write only counts it and its validator line does not say that no rule ran (validate lists it; its hint and the catalogue are corrected); descriptor objects are not checked up front.
+- List-rule findings a write leaves out on a file without incoming / outgoing lists are not counted: the write's validator line can read `0 error(s)` while `bpmn validate` exits 2 (a `N left out (incoming / outgoing lists)` note needs a per-run count from the validator).
+- The lookup walks the path as written: a model reached through a symlinked directory from outside the repository (`mlink -> repo/models`, `bpmn validate mlink/x.bpmn`) gets no repository `.bpmnlintrc`, while git, which starts from the physical directory, finds the repository; a realpath start would flip the opposite case (an in-repository link to a directory outside it), so pick one rule and document it.
 
 ## Flow ids kept on request (2026-10-13, `feat/32-keep-flow-ids`, issue #32)
 

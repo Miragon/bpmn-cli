@@ -21,7 +21,7 @@ bpmn --version
 ```
 
 If that fails or prints a version older than the one pinned here, use this
-instead of `bpmn` in every command (Node 20+; the first call downloads it):
+instead of `bpmn` in every command (Node 22.12+; the first call downloads it):
 
 ```bash
 npx -y @miragon/bpmn-cli@0.6.0 --version   # x-release-please-version
@@ -37,7 +37,7 @@ installed version. Ask it instead of guessing:
 
 - `bpmn guide --short` - the core in 5 KB; `bpmn guide <topic>` - one section
   (contract, workflow, reading, output, layout, format, ops, placement,
-  triggers, errors, quoting, camunda7, camunda8, commands)
+  triggers, errors, quoting, camunda7, camunda8, bpmnlint, commands)
 - `bpmn kinds --section kinds,triggers,setKeys,nestedKeys,zeebeElements,ops,errors`
   (`--json` for the ops JSON schema), `bpmn <command> --help`
 
@@ -116,6 +116,11 @@ installed version. Ask it instead of guessing:
    - `warning ...` lines are only the warnings **this change added**, each with
      a hint that is the fixing command; `resolved:` what it fixed; old warnings
      are only counted
+   - `warning [bpmnlint error] <rule> <id>` / `warning [bpmnlint] <rule> <id>`:
+     a finding of the project's `.bpmnlintrc` this change added (the write went
+     through; CI would fail on an error). Fix it in the same batch, e.g. name
+     the element or follow the id convention the message names; an
+     `import-warning` is XML bpmnlint cannot parse: its hint says what to fix
    - `layout: ok - incremental (hand-made diagram: kept, changes placed locally)`
      with `placed:` / `moved:` / `rerouted:`, or `full` for a new / engine-drawn
      diagram; `layout quality: score a -> b; added: <problem> [ids]` - fix added
@@ -154,9 +159,18 @@ installed version. Ask it instead of guessing:
    at most twice. On a large model (the result notes small labels) render
    `--around <id>` or `--path <from> <to>` instead of the whole diagram.
 5. **Validate**: `bpmn validate <file>` (structure, lint, the engine profile of
-   the file's platform, a layout dry run); `--strict` exits 5 on any warning -
-   use it when the user wants a clean or deployable model. Fix findings with the
-   command in their hint, then validate again.
+   the file's platform, a layout dry run, and the project's `.bpmnlintrc` when
+   there is one above the file: `[bpmnlint error] <rule> <id>` / `[bpmnlint]
+   <rule> <id>` findings, an error exits 2); `--strict` exits 5 on any
+   warning - use it when the user wants a clean or deployable model. Fix
+   findings with the command in their hint, then validate again.
+   bpmnlint: `bpmn guide bpmnlint`. A `.bpmnlintrc` that names a plugin
+   bpmn-cli does not ship runs that plugin's code from the repository's
+   `node_modules` (the `validator bpmnlint` line names it; only inside a git
+   repository of the user running bpmn, elsewhere `W_LINT_UNAVAILABLE` names
+   it and the rest of the `.bpmnlintrc` runs); in a repository or folder the
+   user does not trust (a clone, an unpacked archive), add `--no-lint-config`
+   to every command and tell the user why.
 6. **Confirm** with `bpmn show` (or `--around`) and report to the user what
    changed, naming the ids.
 

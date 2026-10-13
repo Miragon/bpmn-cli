@@ -2,7 +2,8 @@
 
 A library host can run its own checks inside a write. They see exactly the XML that would be
 written, and an error a change adds refuses the write, like a structural error does. The CLI takes
-no validators: this is [library use](library.md) only.
+no validators of its own: it runs only the project's bpmnlint, as an advisory one (see [Advisory
+validators](#advisory-validators)). Passing validators is [library use](library.md).
 
 ## Passing validators
 
@@ -12,7 +13,7 @@ The `validators` option takes a list. These calls accept it:
 - the pipeline on a `Doc`: `mutateDoc`, `layoutDoc` (`MutationOptions`) and `checkDoc`
   (`CheckOptions`);
 - the file helpers of `@miragon/bpmn-cli/node`: `mutateFile`, `mutateDocToFile`, `layoutFile`,
-  `layoutDocToFile` and `checkFile`.
+  `layoutDocToFile`, `checkFile` and `checkLoadedDoc`.
 
 A validator is a function `(xml, ctx) => findings`, sync or async. It is named after the function,
 or `validator<n>` (1-based) when the function has no name. A `NamedValidator` object gives more:
@@ -24,6 +25,7 @@ or `validator<n>` (1-based) when the function has no name. A `NamedValidator` ob
 | `validateDoc` | `(doc, ctx) => findings`: reads the parsed `Doc` instead (see below); read it, never change it |
 | `detail` | one line on why it runs, shown in results |
 | `covers` | finding code -> the lint warning it says again (see [Covers](#covers)) |
+| `blocks` | `false`: advisory, its errors never block a write (see [Advisory validators](#advisory-validators)); default `true` |
 
 An object needs `validate` or `validateDoc`. Without either the call fails with
 `E_VALIDATOR_FAILED`.
@@ -123,15 +125,17 @@ and are about the same element. An element the ops renamed keeps its findings. A
 an element is matched by its code and message, with the old ids in the message replaced by the
 new ones. A `key` replaces that identity, for a message that changes with every write (`process
 Process_1 has 11 tasks`). Each finding before matches one finding after at most, so two equal
-findings count as two.
+findings count as two. Two validators of one name are compared in order: the second run after
+with the second run before.
 
 The structural check comes first: a change that adds a structural error is refused before the
 validators see the candidate.
 
-A check (`validateXml`, `checkDoc`, `checkFile`) runs each validator once, with phase `check`, on
-the document's own diagram (before the layout dry run). It reports every finding. An error makes
-`ok` false in the `validateXml` report (`validationReport(check)`). `checkDoc` and `checkFile`
-have no `ok`: they list the error in `validation.errors`.
+A check (`validateXml`, `checkDoc`, `checkFile`, `checkLoadedDoc`) runs each validator once, with
+phase `check`, on the document's own diagram (before the layout dry run). It reports every
+finding. An error makes `ok` false in the `validateXml` report (`validationReport(check)`).
+`checkDoc`, `checkFile` and `checkLoadedDoc` have no `ok`: they list the error in
+`validation.errors`.
 
 A validator that throws, or returns no array, fails the call with `E_VALIDATOR_FAILED`
 (`details.validator` names it). Nothing is written. For a validator that throws, the message says
@@ -143,7 +147,45 @@ broken returned undefined instead of an array of findings; nothing was written`.
 
 A validator may say again what a lint warning says, as `DEAD_END` above repeats `W_DEAD_END`.
 `covers: { DEAD_END: 'W_DEAD_END' }` drops the lint warning about the same element, so each
-problem is reported once. Only a finding with an `element` covers a lint warning.
+problem is reported once. Only a finding with an `element` covers a lint warning. A finding
+without a hint of its own takes the dropped warning's hint. When a change fixes both, the
+resolved list names the problem once too, as the validator's finding.
+
+## Advisory validators
+
+A validator with `blocks: false` reports and never refuses:
+
+- An error it finds in a change is among the added warnings (`result.warnings.added`) with
+  `severity: 'error'`, not among `result.validation.errors`. The write goes through without
+  `force`. In text it reads `warning [<name> error] <code> <element>: ...`.
+- An error the document already had is no `W_PREEXISTING_ERROR`: like an old warning, it only
+  shows in the validator's `counts`.
+- A check reports its errors as errors, so `ok` is false in the `validateXml` report.
+- A document created in memory (`newXml`) has no file before it: an advisory validator reports
+  everything it finds in the new model.
+- Its `ValidatorReport` says `blocks: false`. `renderMutation` adds to its validator line how many
+  findings the change added and resolved and how many the file already had (`validator bpmnlint
+  (.bpmnlintrc in models): 1 error(s), 10 warning(s) in the result (3 added, 1 resolved, 8 already
+  in the file)`), and folds three or more of its findings with one code and one message into one
+  line. `mutationSummary` counts the findings the file already had in
+  `warnings.preexistingCount`. The summary does not keep the validators, so pass their names to
+  `renderSummary(summary, { advisory: advisoryValidators(result) })` for the same folding.
+
+The project's bpmnlint is such a validator ([bpmnlint](bpmnlint.md)). A host can run it the same
+way, advisory or blocking: the engine's default configuration from the plugin bpmn-cli bundles,
+or the repository's own `.bpmnlintrc` through the file helpers ([library.md](library.md#building-blocks)).
+
+```js
+import { applyToXml, bpmnlintValidator, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
+import { bpmnlintEngine, mutateFile } from '@miragon/bpmn-cli/node';
+
+const engine = bpmnlintEngine();
+const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });
+const lint = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc), { detail: 'default rules' });
+await applyToXml(xml, ops, { validators: [lint] });
+// the repository's .bpmnlintrc (bundled rules only), its errors blocking
+await mutateFile('processes/order.bpmn', ops, { lintFrom: repoRoot, lintBlocks: true });
+```
 
 ## The file
 
@@ -158,14 +200,14 @@ problem is reported once. Only a finding with an `element` covers a lint warning
 ## Results
 
 - **A write** reports one `ValidatorReport` per validator in `result.validation.validators`:
-  `name`, `detail`, `errors` (the errors the change added; only in a forced write), `warnings`
-  (the warnings it added), `preexisting`, `resolved` and `counts` (the errors and warnings after
-  the change). The added warnings are also in `result.warnings.added`, and the errors of a forced
+  `name`, `detail`, `blocks` (only `false`, for an advisory one), `errors` (the errors the change
+  added; only in a forced write), `warnings` (the warnings it added), `preexisting`, `resolved`
+  and `counts` (the errors and warnings after the change). The added warnings are also in `result.warnings.added`, and the errors of a forced
   write in `result.validation.errors`, each with `validator`. `renderMutation` prints one line per validator: `validator house-rules (our
   modelling guideline): 0 error(s), 0 warning(s) in the result`.
 - **A check** reports every finding: `validators` of the `validateXml` report
-  (`validation.validators` of `checkDoc` and `checkFile`), with `preexisting` and `resolved`
-  empty. The findings are also among the report's `errors` and `warnings`. `renderValidation`
+  (`validation.validators` of `checkDoc`, `checkFile` and `checkLoadedDoc`), with `preexisting`
+  and `resolved` empty. The findings are also among the report's `errors` and `warnings`. `renderValidation`
   prints them as `[house-rules] DEAD_END Activity_Archive: ...` and adds `validator
   house-rules (our modelling guideline): 1 error(s), 0 warning(s) in the file` before the
   layout line and the totals.

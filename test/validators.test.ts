@@ -156,6 +156,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
       resolved: [expect.objectContaining({ code: 'E_GATE_DEAD_END', element: 'Activity_Check' }), expect.objectContaining({ code: 'E_GATE_UNREACHABLE', element: 'E' })],
       counts: { errors: 0, warnings: 0 },
     });
+    // the lint warnings the gate's findings say again (covers: W_DEAD_END, W_UNREACHABLE) are resolved once, as those findings
+    expect(codes(mutationReport(fixed).warnings.resolved)).toEqual(['[gate] E_GATE_DEAD_END Activity_Check', '[gate] E_GATE_UNREACHABLE E']);
   });
 
   it('a second start event is refused even with its path; a node and its flows in one transaction pass', async () => {
@@ -260,6 +262,31 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     // A.B is another id than A: renaming A leaves it alone
     const dotted = compareRuns(run(['task A.B has no name']), run(['task A.B has no name']), new Map([['A', 'X']]));
     expect(dotted[0]!.errors).toEqual([]);
+  });
+
+  it('an advisory validator (blocks: false) reports the errors a change introduced among the warnings and never blocks; old errors are only counted', async () => {
+    const file = await drawn('advisory.bpmn', LINE);
+    const advisory = { name: 'advice', blocks: false, validate: unnamedTasks };
+    const r = await mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [advisory], dryRun: true });
+    expect(r.validation.errors).toEqual([]);
+    expect(r.validation.warnings.at(-1)).toEqual({ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'advice', severity: 'error' });
+    expect(r.validation.validators).toEqual([{ name: 'advice', blocks: false, errors: [], warnings: [expect.objectContaining({ code: 'naming/task' })], preexisting: [], resolved: [], counts: { errors: 1, warnings: 0 } }]);
+    // an error the file already had: no W_PREEXISTING_ERROR, only the count
+    const unnamed = await drawn('advisory-unnamed.bpmn', LINE.replace(' name="Check"', ''));
+    const old = await mutateFile(unnamed, [{ op: 'set', id: 'E', values: { name: 'Done' } }], { validators: [advisory], dryRun: true });
+    expect(old.validation.warnings.filter((w) => (w as { validator?: string }).validator === 'advice')).toEqual([]);
+    expect(old.validation.validators?.[0]).toMatchObject({ blocks: false, preexisting: [], counts: { errors: 1, warnings: 0 } });
+    // the default stays blocking
+    await expect(mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [{ name: 'advice', validate: unnamedTasks }], dryRun: true })).rejects.toMatchObject({ code: 'E_VALIDATION' });
+  });
+
+  it('two validators of one name compare in order: the second run after with the second run before', () => {
+    const issue = (code: string) => ({ code, message: code, validator: 'host', severity: 'warning' as const });
+    const before: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO')] }];
+    const after: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO'), issue('W_THREE')] }];
+    const reports = compareRuns(before, after);
+    expect(reports.map((r) => r.warnings.map((w) => w.code))).toEqual([[], ['W_THREE']]);
+    expect(reports.map((r) => r.resolved.length)).toEqual([0, 0]);
   });
 
   it('in-memory documents (no file) run the host validators', async () => {

@@ -40,6 +40,7 @@ bpmn tidy <file> [<id>...] [SELECTORS]
 bpmn compact <file> [<poolId|laneId|subProcessId>...]
   SELECTORS: --path <fromId> <toId> [--via <flowId...>] | --kind <kind> | --branch <flowId>
 bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]
+              [--lint-config <path> | --no-lint-config]
 bpmn layout <file> [--expand <id,...>] [--collapse <id,...>]
 bpmn layout <file> --tidy
 bpmn metrics <file> [--json]
@@ -73,6 +74,8 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--keep-flow-ids` | keep the id of every existing sequence flow the change gives other ends; `W_FLOW_ID_STALE` names each flow whose id no longer names its ends. Default from `BPMN_KEEP_FLOW_IDS=1` ([Limitations](contract.md#limitations)) |
 | `--no-keep-flow-ids` | rename a flow whose id names its old ends after its new ones (the default), also when `BPMN_KEEP_FLOW_IDS=1` |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
+| `--lint-config <path>` | the project's bpmnlint configuration instead of the nearest `.bpmnlintrc`, see [bpmnlint](bpmnlint.md) |
+| `--no-lint-config` | do not run the project's bpmnlint configuration |
 
 ## `new`
 
@@ -260,6 +263,14 @@ and `valid, 2 warning(s)` or `1 error(s), 2 warning(s)`. Errors exit with code 2
 with 0, or with 5 under `--strict`. The platform is detected from `modeler:executionPlatform`, else
 from the vendor namespace in use, and `--platform` overrides it. Engine findings are warnings named
 `W_C7_*` or `W_C8_*`; a `W_C7_DEPLOY_*` or `W_C8_DEPLOY_*` one means the engine refuses the file.
+
+With a `.bpmnlintrc` in the file's directory or above (up to the repository root, whoever owns
+the repository; outside a git repository only in the file's directory), `validate` also runs the
+project's bpmnlint configuration and lists its findings as `[bpmnlint error] <rule> <id>:
+<message>` or `[bpmnlint] <rule> <id>: <message>`; a bpmnlint error fails the check (exit 2).
+Every write runs it too (the one above the file it writes, `-o`), but only lists the findings the
+change added and never refuses because of them. `--lint-config <path>` names another
+configuration, `--no-lint-config` switches it off. See [bpmnlint](bpmnlint.md).
 
 `layout` redraws the whole diagram from the model: a hand-made layout is replaced, colours and DI
 ids survive. `--expand` and `--collapse` change which sub-processes are drawn expanded.

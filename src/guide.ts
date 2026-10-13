@@ -115,7 +115,7 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'E_WOULD_DROP_CONTENT', meaning: '`retype` to a kind that cannot hold the element\'s content (a sub-process with nodes -> task / callActivity) would delete that content; nothing was written. The ids are listed.', fix: 'Move what should stay out first (`bpmn move <file> <ids> --in <scopeId>`), or pass --force to retype anyway (the listed elements are deleted).' },
   { code: 'E_INVALID_RETYPE', meaning: '`retype` between incompatible families (e.g. task -> gateway, start -> end event).', fix: 'Retype within a family (task <-> task/subProcess/callActivity, gateway <-> gateway, event <-> event of the same position); otherwise remove and add.' },
   // write-time
-  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (a host\'s validator in library use), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Run `bpmn validate <file>` and fix the listed problems (every finding has its own code and hint), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.' },
+  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (a host\'s validator in library use; the project\'s bpmnlint only when a library host asked for that, lintBlocks), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Run `bpmn validate <file>` and fix the listed problems (every finding has its own code and hint), make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.' },
   { code: 'E_VALIDATOR_FAILED', meaning: 'A validator (MutationOptions.validators / checkFile validators in library use) threw or did not return an array of findings; nothing was written.', fix: 'Fix the validator or the input it cannot read, or run without it.' },
   { code: 'E_LAYOUT_*', meaning: 'The layout engine could not draw the model (e.g. E_LAYOUT_ERROR); the suffix is the layouter\'s own code, the message names the element.', fix: 'Check the element named in the message (unsupported kind, broken flow graph), or write without DI using --no-layout and run `bpmn layout` later.' },
   { code: 'E_LAYOUT_INCREMENTAL', meaning: '`--layout incremental` was requested and the incremental layout (keep the drawing, place what is new) failed; nothing was written.', fix: 'Retry with --layout full (redraws the whole diagram) or --no-layout (writes without updating the diagram), and report the command and file.' },
@@ -238,6 +238,10 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
   { code: 'W_C8_UNSUPPORTED_IMPLEMENTATION', meaning: '(runtime) zeebe:publishMessage (on a send task or in a message event definition): Camunda 8.9 accepts it at deploy but does not run it: a send task gets an incident ("only job worker-based implementation is supported"), a message throw / end event completes without sending anything.', fix: 'Use a job worker: `bpmn ext remove <file> <id> zeebe:publishMessage` (definition.zeebe:publishMessage for an event), then `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType>`.' },
   { code: 'W_C8_JOB_WORKER_USER_TASK', meaning: '(practice) A user task without zeebe:userTask is a job worker user task: Camunda 8 creates a job of type io.camunda.zeebe:userTask instead of a user task, which the v2 user task API (/v2/user-tasks) and Tasklist in V2 mode do not list (engine-checked). `bpmn add` / `retype` give new user tasks of a Camunda 8 file zeebe:userTask, like Camunda Modeler.', fix: '`bpmn ext add <file> <id> zeebe:userTask` (a form then needs formId or externalReference instead of an embedded formKey).' },
   { code: 'W_DECISION_RESULT_VARIABLE', meaning: '`set <id> calledDecision=<decision>` in a Camunda 8 file wrote a zeebe:calledDecision without a resultVariable; Camunda 8 requires one to deploy.', fix: '`bpmn ext add <file> <id> zeebe:calledDecision decisionId=<decision> resultVariable=<variable> --replace`.' },
+  // the project's bpmnlint (a .bpmnlintrc; its findings carry the rule name as code, see BPMNLINT in `bpmn guide`)
+  { code: 'W_LINT_UNAVAILABLE', meaning: 'Something the project\'s .bpmnlintrc names is left out, the rest of it runs (`bpmn validate` and `bpmn new` list it, and `--strict` exits 5; a later write finds it before and after the change, only counts it, and its validator line says `N left out` or, when the whole file is left out, `bpmnlint did not run`): a config, rule or moddle extension that is neither bundled with bpmn-cli nor installed inside the repository next to the .bpmnlintrc, a package that fails to load, a project plugin the host does not run (library use without lintProjectCode; outside a git repository; in a repository of another user, by the owners of its directory and .git as git checks them, not git\'s safe.directory, on Windows one outside the home directory; a .git file that names no git directory; the rest of the .bpmnlintrc runs: root over another uid\'s checkout in a CI container gets the repository\'s .bpmnlintrc with the rules bpmn-cli ships), a moddle extension that is no JSON file, a config that extends itself (its rules apply once). Or bpmnlint did not run at all: a .bpmnlintrc found by the lookup that is not strict JSON, or bpmnlint / @miragon/bpmnlint-plugin-rules could not be loaded (e.g. a bpmnlint older than 11.14 hoisted into the project\'s node_modules). The message names what and why.', fix: 'Install the package inside the repository (`npm i -D <package>`), keep the .bpmnlintrc and its plugin in a git repository of your own (or run bpmn-cli as the repository\'s owner), correct the name (the hint names a bundled rule of that name), write the file as strict JSON, or update the project\'s bpmnlint to 11.14 or later; `--no-lint-config` skips bpmnlint.' },
+  { code: 'W_LINT_FAILED', meaning: 'A rule of the project\'s .bpmnlintrc threw (its factory on the options, or its check on an element; also an async check that rejects or a factory that returns a promise): that rule\'s findings are left out, the other rules\' are reported. Or bpmnlint could not lint the model at all (e.g. a moddleExtensions descriptor it cannot load): no rule ran; a later write finds it before and after the change and only counts it.', fix: 'Fix the rule or its options (the message names both), or the moddleExtensions; `--no-lint-config` skips bpmnlint.' },
+  { code: 'E_LINT_CONFIG', meaning: '`--lint-config <path>` (library: lintConfig) names a file that cannot be read or is not strict JSON (exit 4). A broken .bpmnlintrc found by the lookup is W_LINT_UNAVAILABLE instead.', fix: 'Pass an existing .bpmnlintrc in strict JSON (no comments, no trailing commas: bpmnlint reads it with JSON.parse), or `--no-lint-config`.' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -247,9 +251,9 @@ export const ERROR_CATALOGUE: ErrorDoc[] = [
 export const EXIT_CODE_DOCS: Array<{ code: number; meaning: string }> = [
   { code: 0, meaning: 'ok (warnings allowed)' },
   { code: EXIT_CODES.usage, meaning: 'usage error: unknown command/option, bad ops JSON or environment value (E_USAGE)' },
-  { code: EXIT_CODES.model, meaning: 'model or validation error (E_NOT_FOUND, E_CROSS_SCOPE, ...)' },
+  { code: EXIT_CODES.model, meaning: 'model or validation error (E_NOT_FOUND, E_CROSS_SCOPE, ...); validate: also an error of the project\'s bpmnlint' },
   { code: EXIT_CODES.layout, meaning: 'layout error (E_LAYOUT_*)' },
-  { code: EXIT_CODES.io, meaning: 'I/O or parse error (E_FILE_NOT_FOUND, E_PARSE, E_IMPORT_LOSSY, E_FILE_EXISTS, E_RENDER)' },
+  { code: EXIT_CODES.io, meaning: 'I/O or parse error (E_FILE_NOT_FOUND, E_PARSE, E_IMPORT_LOSSY, E_FILE_EXISTS, E_RENDER, E_LINT_CONFIG)' },
   { code: 5, meaning: '--strict and the result has warnings' },
   { code: EXIT_CODES.internal, meaning: 'internal error' },
 ];
@@ -366,7 +370,7 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'space', usage: 'bpmn space <file> (--after <id> | --below <id>) [--by column|row|<n>col|<n>row|<px>|-column|-<n>col|-row|-<px>]', summary: 'Diagram only: the modeler\'s space tool: everything right of (--after, within the pool) or below (--below) the element moves by one column / row (default), <n>col / <n>row of them, or <px> (a number, 80px; --by 2 is 2 px, --by 2col two columns; the result notes the distance); frames grow. On a lane or pool it makes that frame bigger. A negative amount closes up to that much empty space there instead (only as far as it is empty; on a lane / pool: its own bottom / right).', examples: ['bpmn space order.bpmn --after Activity_CheckInvoice', 'bpmn space order.bpmn --below Lane_Sales --by 80', 'bpmn space order.bpmn --after Activity_CheckInvoice --by 2col', 'bpmn space order.bpmn --after Activity_CheckInvoice --by -column'] },
   { name: 'tidy', usage: 'bpmn tidy <file> [<id>...] [SELECTORS]', summary: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape). Same as `bpmn layout <file> --tidy`.', examples: ['bpmn tidy order.bpmn'] },
   { name: 'compact', usage: 'bpmn compact <file> [<poolId|laneId|subProcessId>...]', summary: 'Diagram only: close empty rows and columns and shrink expanded sub-processes, lanes and pools to their content (default: the whole drawing), keeping the order and relative positions. A gap whose closing would add a layout problem stays open (noted).', examples: ['bpmn compact order.bpmn', 'bpmn compact order.bpmn Lane_Backoffice'] },
-  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings and the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict'] },
+  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--lint-config <path> | --no-lint-config]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file) and the project\'s .bpmnlintrc (bpmnlint: its errors fail the check; see BPMNLINT), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --no-lint-config'] },
   { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
   { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, flows running backwards, flows merging before their target, labels outside their pool, message labels far from their line, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
   { name: 'render', usage: 'bpmn render <file> [<id>...] [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--around <id> [--depth n] [--inner]] [--path <from> <to> [--via <flowId...>]] [--scope <id>] [--highlight <id,...>] [--problems] [--tiles] [--max-size <px>] [--scale <n>] [--json]', summary: 'Draw the diagram as an image to look at it (no browser; close to bpmn-js, not identical): a PNG (resvg with the bundled Arimo font) or SVG of one diagram plane. Without -o it writes bpmn-cli/<name>.png in the temp directory; `-o -` writes the image to stdout (the report to stderr); the format comes from --format or the -o extension. Prints the path, the size, the image tokens (width * height / 784), the scale, the plane and the other planes (collapsed sub-processes: --plane <id> draws one). Crops (one per call): --around <id> draws exactly the nodes of `show --around` with their flows, data and annotations, --path the nodes and flows of a sequence-flow path, --scope a pool, lane or sub-process, ids exactly these elements; flows to what is left out are drawn faded, pools and lanes as context. --highlight puts a halo around elements; --problems numbers the layout problems of `bpmn metrics` (with a crop: those of its elements) in the image at the defect and lists them with their ids. The long edge stays within --max-size (default 2000; --scale zooms); when labels shrink below 0.75 a note says so and names the crops, and --tiles splits such an image at the diagram columns (show --layout c<n>) into readable tiles <name>-1.png, <name>-2.png, ... --tiles writes only tiles with a shape, label or numbered problem (empty space and connections passing through are left out), at most 40 (more: one image and a note). A file without a diagram is drawn in memory (nothing written), and --problems lists what `bpmn metrics` reports for the file. Elements without a shape or with broken coordinates (not a number, beyond ±1,000,000 px) are named, not drawn. -o takes a .png or .svg name (another name needs --format). A rasteriser failure is E_RENDER. Every mutating command takes --render <file.png> to draw its result (see LOOKING AT THE DRAWING).', examples: ['bpmn render order.bpmn --problems -o order.png', 'bpmn render order.bpmn --around Gateway_Ok --depth 2 --problems -o ok.png', 'bpmn render order.bpmn --path Event_Start Event_Done --highlight Activity_Check -o path.png', 'bpmn render order.bpmn --scope Lane_Finance -o finance.png', 'bpmn render order.bpmn --tiles -o order.png', 'bpmn render order.bpmn --plane Activity_ReviewClaim -o review.png', 'bpmn render order.bpmn --format svg -o -'] },
@@ -385,6 +389,8 @@ export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
   { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
   { option: '--no-layout', description: 'write without updating the diagram (stale DI of removed elements is pruned, new elements have no shape until `bpmn layout`; format operations still apply to the existing drawing)' },
   { option: '--force', description: 'write although the import was lossy (E_IMPORT_LOSSY), the change introduces validation errors (E_VALIDATION; errors the file already had never block) or a retype would delete a sub-process\'s content (E_WOULD_DROP_CONTENT); for `new`: overwrite an existing file' },
+  { option: '--lint-config <path>', description: 'the project\'s bpmnlint configuration to run instead of the nearest .bpmnlintrc above the file written (-o) or checked (looked up to the repository root, whoever owns it; outside a git repository only in the file\'s directory; a model from stdin without -o: from the working directory); the result lists the bpmnlint findings the change added, see BPMNLINT' },
+  { option: '--no-lint-config', description: 'do not run the project\'s bpmnlint configuration (nothing of it is loaded)' },
   { option: '--backup', description: 'write <file>.bak before overwriting' },
   { option: '--show', description: 'append the full model view to the result' },
   { option: '--strict', description: 'exit 5 when the result has warnings' },
@@ -703,7 +709,8 @@ export function guideText(): string {
       '                                            show --around <id> / show <id> --context, see READING LARGE MODELS)',
       '  3. bpmn add / connect / set / remove ...  one change per command, or many in one `bpmn apply <file> ops.json`',
       '                                            (the split macro is an apply-only op; there is no split command)',
-      '  4. bpmn validate <file>                   new errors block a write anyway; warnings are lint hints',
+      '  4. bpmn validate <file>                   new errors block a write anyway; warnings are lint hints (with a',
+      '                                            .bpmnlintrc also bpmnlint, whose errors fail validate: see BPMNLINT)',
       '  5. bpmn show <file>                       confirm the result (add --show to any mutating command instead)',
       '  Prefer `apply` for more than two related changes: it is one transaction and one layout pass.',
     ].join('\n'),
@@ -805,6 +812,8 @@ export function guideText(): string {
   );
   out.push(heading('CAMUNDA 8  (Zeebe: the zeebe: namespace; `bpmn validate` runs the Camunda 8 profile)'));
   out.push(CAMUNDA8.join('\n'));
+  out.push(heading('BPMNLINT  (the project\'s .bpmnlintrc in validate and every write)'));
+  out.push(BPMNLINT.join('\n'));
   out.push(heading('OUTPUT  (results, warnings, JSON, stdin / stdout)'));
   out.push(OUTPUT.join('\n'));
   out.push(heading('COMMANDS'));
@@ -823,11 +832,12 @@ export function guideText(): string {
   out.push('  With --json: {ok, file, written, unchanged, created, changed, removed, warnings: {added, resolved, preexistingCount},');
   out.push('  notes, layout: {status, mode, reason, warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op,');
   out.push('  index, moved, rerouted, colored?, labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}},');
-  out.push('  validation: {errors, platform?, validators?: [{name, detail?, errors, warnings, preexisting, resolved, counts}]},');
+  out.push('  validation: {errors, platform?, validators?: [{name, detail?, blocks?, errors, warnings, preexisting, resolved, counts}]},');
   out.push('  importWarnings, view?}. With --summary --json: {ok, file, written, unchanged, created: {<kind>: [ids]}, changed, removed,');
   out.push('  forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status, mode?, score?: {before?, after}, added?}}.');
-  out.push('  A validator\'s findings (a host\'s validators, in library use) carry `validator` and `severity`; in text they read');
-  out.push('  "[<name>] <code> <element>: <message>".');
+  out.push('  A validator\'s findings (the project\'s bpmnlint; a host\'s validators in library use) carry `validator` and');
+  out.push('  `severity`; in text they read "[<name>] <code> <element>: <message>" ("[bpmnlint error] <rule> ..." for a bpmnlint');
+  out.push('  error, "warning [bpmnlint error] <rule> ..." when a write added it: bpmnlint is advisory, `blocks: false`).');
   out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates); with --json as');
   out.push('  {ok: false, error: {code, message, element?, related?, candidates?, hint?, op?}}.');
   out.push(placementSection());
@@ -928,16 +938,54 @@ const CAMUNDA8 = [
   '  gateway is never taken, camunda:* content is ignored, ...',
 ];
 
+/** BPMNLINT: the project's .bpmnlintrc in validate and every write (src/bpmnlint.ts, src/node/bpmnlint.ts). */
+const BPMNLINT = [
+  '  A .bpmnlintrc in the model\'s directory or above, up to the repository root (the directory with .git), runs in',
+  '  `bpmn validate` and in every write; --lint-config <path> names another one, --no-lint-config switches it off.',
+  '  A write looks it up from the file it writes (-o), a model from stdin without -o from the working directory.',
+  '  Outside a git repository only the model\'s own directory counts. Whose repository it is does not matter for the',
+  '  lookup (root over another uid\'s checkout in CI, on Windows one outside the home directory: the same .bpmnlintrc);',
+  '  only project plugins depend on the owner, see below. No .bpmnlintrc: nothing is loaded. Unlike bpmnlint\'s own',
+  '  CLI, which reads the .bpmnlintrc of the working directory, the nearest one above the model wins.',
+  '  Findings name the validator, the severity, the rule and the element id (a warning reads `[bpmnlint] <rule>`):',
+  '    [bpmnlint error] label-required Activity_Check: Element is missing label/name            (validate)',
+  '    warning [bpmnlint error] label-required Activity_Check: Element is missing label/name    (a write)',
+  '  validate reports every finding; an error fails the check (exit 2), and three or more of one rule with one hint',
+  '  are one line (its most common message with the ids that have it; --json lists every finding). A write lists',
+  '  only the findings the change added (three or more of one rule and message as one line; --strict exits 5 on',
+  '  them), never refuses because of them, and counts the rest: `validator bpmnlint (.bpmnlintrc in models): 1',
+  '  error(s), 10 warning(s) in the result (3 added, 1 resolved, 8 already in the file)`; --summary counts them in its',
+  '  `warnings:` line. Fix what the change added in the same batch. Where a rule says what a lint warning says',
+  '  (start-event-required: W_NO_START, end-event-required: W_NO_END, no-implicit-end: W_DEAD_END), only the',
+  '  bpmnlint finding is listed, with the hint.',
+  '  A new file from `bpmn new` lists its findings (an empty process: start-event-required, end-event-required).',
+  '  Rules: bpmnlint\'s own, camunda-compat\'s and @miragon/rules ship with bpmn-cli (offline, no install). A plugin',
+  '  bpmn-cli does not ship runs from the repository\'s node_modules: its code runs (the validator line names it); one',
+  '  installed outside the repository is not loaded, nor one outside a git repository of the user running bpmn-cli',
+  '  (by the owners of the directory and its .git, not git\'s safe.directory; root: also SUDO_UID\'s; on Windows only',
+  '  inside the home directory): W_LINT_UNAVAILABLE says why, and the rest of the .bpmnlintrc runs.',
+  '  moddleExtensions: JSON descriptors only; camunda-bpmn-moddle/resources/camunda.json and',
+  '  zeebe-bpmn-moddle/resources/zeebe.json work without an install.',
+  '  W_LINT_UNAVAILABLE: something the .bpmnlintrc names is left out (not installed, no such rule, not strict JSON,',
+  '  a project plugin outside a git repository of the user, ...); the hint says what to do; a write counts it (its',
+  '  validator line: `N left out`). W_LINT_FAILED: a rule threw; its findings are left out. import-warning: an error',
+  '  of bpmnlint\'s parse with the moddleExtensions (bpmnlint\'s CLI fails on it too, validate exits 2); the hint says',
+  '  what to fix. E_LINT_CONFIG (exit 4): --lint-config names a file that cannot be read or is not strict JSON.',
+];
+
 /** OUTPUT: what a result reports, JSON, stdin / stdout. */
 const OUTPUT = [
   '  A mutating command reports what changed, the warnings the change ADDED (three or more of one code as one line:',
   '  `warning W_UNREACHABLE x20 [ids]: ...`; W_FLOW_ID_STALE keeps one line each), `resolved:` what it fixed, and one',
   '  line counting the warnings the file already had (the platform profile\'s W_C7_* / W_C8_* among them; not repeated:',
   '  `bpmn validate <file>` lists them); then the layout block and the file line. A group warning (W_DUPLICATE_NAME)',
-  '  that only shrank is the old one; an apply batch reports the warnings of its final state.',
+  '  that only shrank is the old one; an apply batch reports the warnings of its final state. The project\'s bpmnlint',
+  '  (see BPMNLINT) is advisory: an error of it the change added is listed among the warnings',
+  '  (`warning [bpmnlint error] <rule> <id>: ...`).',
   '  --summary: `created <kind>: ids` per kind, `aliases:` (apply), `changed:`, `renamed: <old> -> <new>` (a flow whose id',
   '  named its old ends: use the new id; with --keep-flow-ids it keeps its id and W_FLOW_ID_STALE names it) and',
-  '  `removed:` ids, one `format <op> #<i>: ...` line per format op, the added warnings, one `warnings:` count line and',
+  '  `removed:` ids, one `format <op> #<i>: ...` line per format op, the added warnings, one `warnings:` count line (what',
+  '  is already in the file includes the project\'s bpmnlint findings) and',
   '  one layout line (`layout: incremental, score 12 -> 14; added: crossings [Flow_AToB, Flow_CToD]`).',
   '  --json is compact (one line; --pretty indents it): warnings: {added, resolved, preexistingCount}; with --summary the',
   '  summary as JSON. Errors go to stderr (`error E_CODE: message` + hint; with --json one JSON line).',
@@ -986,7 +1034,8 @@ export function guideShort(): string {
       '    Activity_CheckInvoice, Gateway_AfterCheckInvoice, Flow_CheckInvoiceToBookInvoice; an explicit id (--id, "id")',
       '    always wins; every result names the ids it created. In apply, "as": "$name" names what an op creates and',
       '    later ops use "$name" as an id (the result lists alias -> id).',
-      '  - Errors the file already had never block a write; a change that would add one is refused (E_VALIDATION).',
+      '  - Errors the file already had never block a write; a change that would add one is refused (E_VALIDATION). The',
+      '    project\'s bpmnlint only reports what a change adds (`warning [bpmnlint error] ...`); validate fails on its errors.',
     ].join('\n'),
   );
   out.push(heading('READ'));
@@ -1042,6 +1091,7 @@ export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string 
   quoting: { sections: ['QUOTING'], summary: 'shell quoting of expressions' },
   camunda7: { sections: ['CAMUNDA 7'], summary: 'camunda: attributes, extensions, the deploy profile' },
   camunda8: { sections: ['CAMUNDA 8'], summary: 'zeebe: extension elements, the Camunda 8 profile' },
+  bpmnlint: { sections: ['BPMNLINT'], summary: "the project's .bpmnlintrc in validate and writes" },
   commands: { sections: ['COMMANDS'], summary: 'every command with examples' },
 };
 

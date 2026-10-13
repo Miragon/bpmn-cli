@@ -15,7 +15,8 @@ bpmn guide             # the agent cheat sheet
 ```
 
 This is a single-package TypeScript CLI and library, built with `tsc` and tested with
-[Vitest](https://vitest.dev/). Node 20+ is required (developed on Node 24).
+[Vitest](https://vitest.dev/). Node 22.12+ is required (developed on Node 24; CI also runs the
+build and the tests on Node 22.12).
 
 ## Scripts (the quality gate)
 
@@ -50,7 +51,11 @@ them on a private corpus without copying it into the repository, are described i
 
 `bpmn-moddle` (the semantic model; `moddle` for its types), `bpmn-auto-layout` (pinned to
 `2.0.0-alpha.2`, loaded only for `--engine auto`), `@resvg/resvg-wasm` (the PNG rasteriser of
-`bpmn render`) and `commander` (the CLI only). Nothing else.
+`bpmn render`), `commander` (the CLI only), and `bpmnlint` (pinned to `11.15.0`) with
+`@miragon/bpmnlint-plugin-rules` (pinned to `0.12.0`: bpmnlint's rules, camunda-compat and
+Miragon's rules behind one resolver), loaded only when a `.bpmnlintrc` applies (see
+[bpmnlint](docs/bpmnlint.md)). Both are pinned exactly: they decide which findings an agent sees,
+the tests pin those findings, and bpmn-cli uses bpmnlint's `Linter` beyond its documented API.
 
 `camunda-bpmn-moddle` (pinned to `8.0.1`) is a development dependency: its Camunda 7 descriptor
 says which `camunda:` attributes and extension elements belong where (placement, `validate`), and

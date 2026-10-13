@@ -7,7 +7,10 @@
  * The file I/O is src/node/files.ts, everything else the browser-safe core;
  * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug,
  * BPMN_KEEP_FLOW_IDS to keepFlowIds) and is the only one that reads the
- * environment.
+ * environment. Mutating commands and `validate` run the project's
+ * .bpmnlintrc (nearest above the file written (-o) or checked; a model from
+ * stdin without -o: above the working directory; --lint-config,
+ * --no-lint-config), project plugins included (lintProjectCode).
  *
  * `-` as the file reads the model from stdin; a mutating command then writes
  * its result to stdout (unless -o names a file), and `-o -` writes any
@@ -30,13 +33,13 @@ import { CliError, ioError, isCliError, usageError, type Warning } from './error
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
 import { assertKindToken } from './kinds.js';
-import { checkFile, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
+import { checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
 import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
-import { assertLossless, checkDoc, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
+import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport } from './report.js';
+import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport } from './report.js';
 import { findElements } from './view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
@@ -74,7 +77,8 @@ function printJson(value: unknown, pretty?: boolean, out: Out = process.stdout):
 /**
  * The result of a mutation (src/report.ts: the same for the CLI and the
  * in-memory API); --render draws the result (its own block / `render` key);
- * --strict exits 5 on any warning.
+ * --strict exits 5 on any warning (process.exitCode, like every exit code:
+ * process.exit would cut off what a pipe has not taken yet, beyond 64 KB on macOS).
  */
 async function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: Out = process.stdout): Promise<void> {
   const report = mutationReport(result);
@@ -83,10 +87,10 @@ async function printMutation(result: MutationResult, opts: OutputOptions & { sho
   if (opts.summary) {
     const summary = mutationSummary(report);
     if (opts.json) printJson({ ...summary, ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-    else print(renderSummary(summary, { dryRun: opts.dryRun }) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
+    else print(renderSummary(summary, { dryRun: opts.dryRun, advisory: advisoryValidators(report) }) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
   } else if (opts.json) printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
   else print(renderMutation(report, { dryRun: opts.dryRun }).replace(/\n$/, '') + shotText, out);
-  if (opts.strict && mutationWarnings(result).length) process.exit(5);
+  if (opts.strict && mutationWarnings(result).length) process.exitCode = 5;
 }
 
 /* ------------------------------------------------------------------ */
@@ -95,12 +99,20 @@ async function printMutation(result: MutationResult, opts: OutputOptions & { sho
 
 let stdinUsed: string | undefined;
 
-/** The whole of stdin as text (decoded like a file); stdin can feed one input per call. */
-function readStdin(what: string): Buffer {
+/**
+ * The whole of stdin (the caller decodes it like a file); stdin can feed one
+ * input per call. Read as a stream: once anything touched process.stdin (an
+ * import of node:process does), a pipe is non-blocking, and a synchronous
+ * read fails with EAGAIN while its writer is slower than bpmn-cli's start
+ * (`curl ... | bpmn validate -`).
+ */
+async function readStdin(what: string): Promise<Buffer> {
   if (stdinUsed) throw usageError(`stdin already holds ${stdinUsed}; it cannot also hold ${what}`, { hint: 'Read one of them from a file, e.g. `bpmn apply - ops.json < model.bpmn`.' });
   stdinUsed = what;
   try {
-    return readFileSync(0);
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    return Buffer.concat(chunks);
   } catch (err) {
     throw ioError('E_IO', `Cannot read ${what} from stdin: ${(err as Error).message}`, { hint: 'Pipe the input in, e.g. `cat model.bpmn | bpmn show -`.' });
   }
@@ -109,7 +121,7 @@ function readStdin(what: string): Buffer {
 /** The document of a file argument: `-` reads it from stdin (it then has no file name). */
 async function readDocArg(file: string): Promise<Doc> {
   if (file !== '-') return readDoc(file);
-  return Doc.fromXml(decodeXmlBytes(readStdin('the model'), 'stdin'));
+  return Doc.fromXml(decodeXmlBytes(await readStdin('the model'), 'stdin'));
 }
 
 /**
@@ -161,7 +173,8 @@ function withFile(err: unknown, file: string): unknown {
   return err;
 }
 
-function printError(err: unknown, json: boolean | undefined): never {
+/** The error on stderr; the exit code is set, the command ends (run() is the last step of every action). */
+function printError(err: unknown, json: boolean | undefined): void {
   if (isCliError(err)) {
     if (json) {
       process.stderr.write(`${JSON.stringify({ ok: false, error: err.toJSON() })}\n`);
@@ -177,12 +190,13 @@ function printError(err: unknown, json: boolean | undefined): never {
       if (d.hint) lines.push(`  hint: ${String(d.hint)}`);
       process.stderr.write(`${lines.join('\n')}\n`);
     }
-    process.exit(err.exitCode);
+    process.exitCode = err.exitCode;
+    return;
   }
   const e = err as Error;
   if (json) process.stderr.write(`${JSON.stringify({ ok: false, error: { code: 'E_INTERNAL', message: e.message } })}\n`);
   else process.stderr.write(`error E_INTERNAL: ${e.message}\n${process.env['BPMN_DEBUG'] ? (e.stack ?? '') : ''}\n`);
-  process.exit(70);
+  process.exitCode = 70;
 }
 
 /* ------------------------------------------------------------------ */
@@ -209,7 +223,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       .option('--relayout', 'redraw the whole diagram (= --layout full)')
       .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
   }
-  return cmd
+  return withLintOptions(cmd)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
     .option('--backup', 'copy the input file to <file>.bak before writing')
     .option('--show', 'append the full model view to the result')
@@ -220,6 +234,13 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
       if (v !== 'clean' && v !== 'auto') throw new InvalidArgumentError('expected clean or auto');
       return v;
     });
+}
+
+/** --lint-config <path> / --no-lint-config (in this order, so that the default stays undefined, like --layout / --no-layout) */
+function withLintOptions(cmd: CommandType): CommandType {
+  return cmd
+    .option('--lint-config <path>', "the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file written (-o) or checked, up to the repository root, whoever owns it; outside one only in the file's directory; stdin without -o: from the working directory)")
+    .option('--no-lint-config', "do not run the project's bpmnlint configuration");
 }
 
 function withTriggerOptions(cmd: CommandType): CommandType {
@@ -274,6 +295,22 @@ function keepFlowIdsOption(o: RawOpts): boolean | undefined {
   );
 }
 
+/** The working directory, or undefined when it was removed (a command on absolute paths still runs there). */
+function workingDir(): string | undefined {
+  try {
+    return process.cwd();
+  } catch {
+    return undefined;
+  }
+}
+
+/** --lint-config / --no-lint-config -> FileBpmnlintOptions: paths and stdin from the working directory, project plugins run */
+function lintOptions(o: RawOpts): Pick<FileMutationOptions, 'lintConfig' | 'lintFrom' | 'lintProjectCode'> {
+  const config = o['lintConfig'] as string | false | undefined;
+  const cwd = config === false ? undefined : workingDir();
+  return { ...(config !== undefined ? { lintConfig: config } : {}), ...(cwd !== undefined ? { lintFrom: cwd } : {}), lintProjectCode: true };
+}
+
 function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
   const keepFlowIds = keepFlowIdsOption(o);
   return {
@@ -290,6 +327,7 @@ function mutationOptions(o: RawOpts): FileMutationOptions & OutputOptions {
     ...(o['render'] !== undefined ? { render: String(o['render']) } : {}),
     ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
     ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
+    ...lintOptions(o),
   };
 }
 
@@ -1140,7 +1178,7 @@ withJsonOptions(
             : ids.length
               ? `${ids.length} id${ids.length > 1 ? 's' : ''}`
               : undefined;
-    const xml = file === '-' ? decodeXmlBytes(readStdin('the model'), 'stdin') : await readXml(file);
+    const xml = file === '-' ? decodeXmlBytes(await readStdin('the model'), 'stdin') : await readXml(file);
     const stem = file === '-' ? 'stdin' : basename(file).replace(/\.(bpmn|xml)$/i, '');
     const shot = await writeRender(xml, opts, format, out, stem);
     const report = out === '-' ? process.stderr : process.stdout;
@@ -1162,7 +1200,7 @@ withMutationOptions(
     let text: string;
     if (!opsFile || opsFile === '-') {
       if (file === '-') throw usageError('the model and the ops cannot both come from stdin', { hint: 'Pass the ops as a file: `bpmn apply - ops.json < model.bpmn` (or the model as a file: `bpmn apply model.bpmn - < ops.json`).' });
-      text = readStdin('the ops').toString('utf8');
+      text = (await readStdin('the ops')).toString('utf8');
     } else {
       try {
         text = await readFile(opsFile, 'utf8');
@@ -1186,29 +1224,32 @@ withMutationOptions(
 });
 
 /* validate ----------------------------------------------------------- */
-withJsonOptions(
-  program
-    .command('validate <file>')
-    .description('structural validation, lint, the engine profile (Camunda 7) and a layout dry run (nothing is written; file - = stdin)'),
+withLintOptions(
+  withJsonOptions(
+    program
+      .command('validate <file>')
+      .description("structural validation, lint, the engine profile (Camunda 7 / 8), the project's .bpmnlintrc and a layout dry run (nothing is written; file - = stdin)"),
+  )
+    .option('--strict', 'exit with code 5 when there are warnings')
+    .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (v: string) => {
+      if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
+      return v;
+    }),
 )
-  .option('--strict', 'exit with code 5 when there are warnings')
-  .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (v: string) => {
-    if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
-    return v;
-  })
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
-      const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto' };
-      const report = validationReport(file === '-' ? await checkDoc(await readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
+      const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', ...lintOptions(o) };
+      const report = validationReport(file === '-' ? await checkLoadedDoc(await readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
       if (o['json']) {
         const { ok, ...rest } = report;
         printJson({ ok, file, ...rest }, !!o['pretty']);
       } else {
         print(renderValidation(report));
       }
-      if (report.errors.length) process.exit(2);
+      // exit codes through process.exitCode: process.exit would cut off a large report in a pipe
+      if (report.errors.length) process.exitCode = 2;
       // content the reader could not keep (duplicate elements, unknown elements, ...) fails --strict like a warning
-      if (o['strict'] && (report.warnings.length || report.importWarnings.length)) process.exit(5);
+      else if (o['strict'] && (report.warnings.length || report.importWarnings.length)) process.exitCode = 5;
     }, !!o['json']);
   });
 
@@ -1333,14 +1374,34 @@ export function positionalHint(root: CommandType, args: string[]): string | unde
   return `${listed} ${flags.length > 1 ? 'are not options' : 'is not an option'} of \`bpmn ${path.join(' ')}\` (${usage}): write ${flags.length > 1 ? 'them' : 'it'} as ${!pairs ? (flags.length > 1 ? 'arguments' : 'an argument') : pairs === flags.length ? (flags.length > 1 ? 'key=value pairs' : 'a key=value pair') : 'arguments and key=value pairs'}: \`bpmn ${[...path.map(shellWord), ...out, ...known.map(shellWord)].join(' ')}\`.`;
 }
 
-program.parseAsync(process.argv).catch((err: unknown) => {
-  const json = process.argv.includes('--json');
-  if (err instanceof CommanderError) {
-    // --help / --version / bare `bpmn`: commander printed what it wanted to
-    if (['commander.helpDisplayed', 'commander.help', 'commander.version'].includes(err.code)) process.exit(err.exitCode);
-    const message = err.message.replace(/^error:\s*/, '').replace(/\s*\n\s*/g, ' ').trim();
-    const positional = err.code === 'commander.unknownOption' ? positionalHint(program, process.argv.slice(2)) : undefined;
-    printError(usageError(message, { hint: positional ?? 'Run `bpmn <command> --help` for the options, or `bpmn guide` for the agent cheat sheet.' }), json);
-  }
-  printError(err, json);
-});
+// a reader that closes early (`bpmn validate x.bpmn | head`) ends the output, not the command: no EPIPE trace, the exit code stays
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EPIPE') throw err;
+  });
+}
+
+/**
+ * The end of every command: exit with the code it set (process.exitCode)
+ * once stdout and stderr took what was written. Not right away (that cut
+ * off a pipe beyond 64 KB on macOS), and not when the event loop runs dry
+ * (a timer a project plugin left would keep the process alive).
+ */
+function exitWhenWritten(): void {
+  process.stdout.write('', () => process.stderr.write('', () => process.exit()));
+}
+
+program
+  .parseAsync(process.argv)
+  .catch((err: unknown) => {
+    const json = process.argv.includes('--json');
+    if (err instanceof CommanderError) {
+      // --help / --version / bare `bpmn`: commander printed what it wanted to
+      if (['commander.helpDisplayed', 'commander.help', 'commander.version'].includes(err.code)) process.exit(err.exitCode);
+      const message = err.message.replace(/^error:\s*/, '').replace(/\s*\n\s*/g, ' ').trim();
+      const positional = err.code === 'commander.unknownOption' ? positionalHint(program, process.argv.slice(2)) : undefined;
+      return printError(usageError(message, { hint: positional ?? 'Run `bpmn <command> --help` for the options, or `bpmn guide` for the agent cheat sheet.' }), json);
+    }
+    printError(err, json);
+  })
+  .then(exitWhenWritten);

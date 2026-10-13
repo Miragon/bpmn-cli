@@ -2,7 +2,7 @@
  * End-to-end: builds the CLI once and drives it through a realistic session.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -408,6 +408,28 @@ describe('bpmn cli contracts', () => {
     expect(readFileSync(f, 'utf8')).toBe(before);
     r = ok('set', f, 'Event_S', 'name=Started', '--json');
     expect(r.json()).toMatchObject({ written: true, unchanged: false });
+  });
+
+  // a pipe is non-blocking once anything touched process.stdin: a synchronous read failed with EAGAIN
+  it.skipIf(process.platform === 'win32')('reads a model from a pipe whose writer is slower than the start or pauses (no EAGAIN)', () => {
+    const piped = (script: string) => spawnSync('/bin/sh', ['-c', script, 'sh', f, process.execPath, BIN], { encoding: 'utf8', cwd: dir });
+    let r = piped('(sleep 0.5; cat "$1") | "$2" "$3" validate - --json --no-lint-config');
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: true, file: '-' });
+    r = piped('(head -c 200 "$1"; sleep 0.5; tail -c +201 "$1") | "$2" "$3" show -');
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('Activity_Sub');
+    r = piped('(sleep 0.5; echo \'[{"op":"set","id":"Event_S","values":{"name":"Started late"}}]\') | "$2" "$3" apply "$1" - --dry-run --json');
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('a write to a directory (-o) is E_IO and leaves no temp file', () => {
+    const target = join(dir, 'adir.bpmn');
+    mkdirSync(target);
+    const r = bpmn('add', f, 'task', 'X', '--after', 'Event_S', '-o', target);
+    expect(r.code).toBe(4);
+    expect(r.err).toMatch(/^error E_IO: Cannot write .*adir\.bpmn: it is a directory\n/);
+    expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([]);
   });
 });
 

@@ -61,7 +61,7 @@ export interface EditOptions {
   force?: boolean;
   /** platform profile whose new findings are reported: 'auto' (default), 'c7', 'c8', 'none' */
   platform?: PlatformChoice;
-  /** validators run on the candidate XML inside the transaction: errors a change introduces refuse it (E_VALIDATION) */
+  /** validators run on the candidate XML inside the transaction: errors a change introduces refuse it (E_VALIDATION), unless the validator is advisory (`blocks: false`, e.g. bpmnlintValidator: reported among the warnings) */
   validators?: Validator[];
   /** the document's file name, for the validators (`ctx.file`) */
   file?: string;

@@ -195,3 +195,24 @@ valid, 1 warning(s)
 ```
 
 Full reference: `bpmn guide camunda8`.
+
+## bpmnlint and camunda-compat
+
+A project that checks its models with bpmnlint in CI keeps that configuration in a `.bpmnlintrc`;
+`bpmn validate` and every write run it too ([bpmnlint.md](bpmnlint.md)). Camunda's deployability
+rules (`plugin:camunda-compat/camunda-platform-7-24`, `camunda-cloud-8-10`, the older versions
+`camunda-platform-7-19` to `7-23` and `camunda-cloud-8-0` to `8-9`) come with bpmn-cli and work
+without an install. They read the `camunda:` / `zeebe:` properties only through a moddle extension,
+as bpmnlint does in CI:
+
+```json
+{
+  "extends": ["bpmnlint:recommended", "plugin:camunda-compat/camunda-platform-7-24"],
+  "moddleExtensions": { "camunda": "camunda-bpmn-moddle/resources/camunda.json" }
+}
+```
+
+`camunda-bpmn-moddle/resources/camunda.json` and `zeebe-bpmn-moddle/resources/zeebe.json` work
+without the package installed. Without the entry the rules see no `camunda:historyTimeToLive` and
+report it missing. camunda-compat and bpmn-cli's own `W_C7_*` / `W_C8_*` rules overlap in places
+(a service task without implementation); both are listed.

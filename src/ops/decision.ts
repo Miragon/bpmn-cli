@@ -199,6 +199,11 @@ export function setDecisionLink(doc: Doc, el: El, value: string, cs: ChangeSet):
   return parts.join('; ');
 }
 
+/** An import warning about an unprefixed calledDecision on a business rule task: design-iq's decision link in a design model. */
+export function isDecisionLinkWarning(w: ImportWarning): boolean {
+  return w.property === 'calledDecision' && is(w.element, 'bpmn:BusinessRuleTask');
+}
+
 /**
  * The import warnings worth reporting: in a design model (no engine
  * platform) an unprefixed calledDecision on a business rule task is
@@ -206,7 +211,6 @@ export function setDecisionLink(doc: Doc, el: El, value: string, cs: ChangeSet):
  * Camunda 7 / 8 file it stays a warning (the engines refuse it).
  */
 export function reportedImportWarnings(doc: Doc): ImportWarning[] {
-  const designLink = (w: ImportWarning): boolean => w.property === 'calledDecision' && is(w.element, 'bpmn:BusinessRuleTask');
-  if (!doc.importWarnings.some(designLink) || doc.platform() !== undefined) return doc.importWarnings;
-  return doc.importWarnings.filter((w) => !designLink(w));
+  if (!doc.importWarnings.some(isDecisionLinkWarning) || doc.platform() !== undefined) return doc.importWarnings;
+  return doc.importWarnings.filter((w) => !isDecisionLinkWarning(w));
 }

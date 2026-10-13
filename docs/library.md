@@ -69,8 +69,12 @@ Every function runs the code of the CLI command it names, without a file:
   XML: the warnings as a delta (`result.warnings.added`, `resolved`,
   `preexistingCount`; with batch aliases, `result.aliases` maps each to the
   final id of its element). `renderMutation(result)` gives the CLI's text for it,
-  `mutationSummary(result)` / `renderSummary(summary)` the `--summary`
-  form, `renderValidation(report)` the text of `validate`.
+  `mutationSummary(result)` / `renderSummary(summary, { advisory:
+  advisoryValidators(result) })` the `--summary` form (`advisory`: the names
+  of the advisory validators, whose findings group by code and message as on
+  the command line; the summary does not keep the validators, so
+  `renderSummary` cannot tell them itself), `renderValidation(report)` the
+  text of `validate`.
 - The CLI's guards apply: a lossy import (`E_IMPORT_LOSSY`), validation
   errors the ops would introduce (`E_VALIDATION`, also those of
   `validators`) and content a retype would delete
@@ -137,11 +141,13 @@ latter when `BPMN_LAYOUT_DEBUG=1` and writes them to stderr.
 
 `readXml(file)` and `readDoc(file)` (`E_FILE_NOT_FOUND`, `E_IO`, `E_PARSE`;
 no lossy-import guard), `loadDoc(file, { force })` (`E_IMPORT_LOSSY`),
-`writeAtomic(file, text)` (temp file, then rename), `mutateFile(file, ops,
+`writeAtomic(file, text)` (temp file, then rename; `E_IO` without a temp file
+left when it fails), `mutateFile(file, ops,
 opts)` (typed ops, what every mutating command runs), `mutateDocToFile(doc,
 ops, opts)` (`new`), `layoutFile(file, opts)` (`layout`), `layoutDocToFile(doc,
-opts)` (`layout` on a loaded document, e.g. one read from stdin) and
-`checkFile(file, { platform, validators })` (`validate`).
+opts)` (`layout` on a loaded document, e.g. one read from stdin),
+`checkFile(file, { platform, validators })` (`validate`) and
+`checkLoadedDoc(doc, opts)` (`validate -`: a document without a file).
 `FileMutationOptions` adds the file options to the core options: `out`,
 `dryRun`, `backup` and `mustNotExist` (`E_FILE_EXISTS` unless `force`); the
 result says `written: true` and names the file. A result equal to the file
@@ -149,6 +155,33 @@ it was read from is not written back (`written: false`, `unchanged: true`;
 `out` to another file still writes the copy). The helpers tell the
 validators the file they write or check (`ctx.file`, the `out` target with
 `out`) unless `file` names another.
+
+The project's bpmnlint ([bpmnlint](bpmnlint.md)): every file helper runs
+the nearest `.bpmnlintrc` above the file it writes or checks (up to the
+repository root, whoever owns it; outside a git repository only the file's
+directory) as an advisory validator, `FileBpmnlintOptions`:
+`lintConfig` (a path, relative to `lintFrom`; `false` runs nothing),
+`lintFrom` (where a document without a file looks it up, and the base of
+the paths in messages; without it such a document gets no lookup),
+`lintBlocks` (errors bpmnlint finds in the change block the write with
+`E_VALIDATION`; default false) and `lintProjectCode` (run plugins the
+project installed, inside a git repository of the user running the host,
+by owner as git checks it, not git's `safe.directory`, and on Windows only
+inside the home directory; elsewhere a plugin is left out with
+`W_LINT_UNAVAILABLE` and the rest of the `.bpmnlintrc` runs; default false,
+so a library host runs only what bpmn-cli ships; the CLI passes true). A
+host that passes its own validator named `bpmnlint` gets no second one. The
+parts: `findBpmnlintConfig(dir)`,
+`loadBpmnlint(path, { explicit, projectCode, from })` (cached on the file's
+text, also what it could not resolve: a long-running host restarts after
+installing a missing plugin or moddle package or editing a moddle
+descriptor; `engine.resolver` is the resolver chain, `used` says which tier
+answered what),
+`projectBpmnlint(file, opts)` (the validator, or undefined),
+`projectBpmnlintSettings(file, opts)` (the effective rule settings: the
+same lookup, flags and errors) and `bpmnlintEngine()` (bpmnlint's `Linter`
+with the plugin's bundled resolver, and the plugin: `getDefaultLintConfig`,
+`naming`).
 
 `renderPng(xml, opts)` is `bpmn render` without the file: the options of
 `renderSvg` (`maxSize` defaults to 2000) and `{ images: [{ png, width,
@@ -203,6 +236,31 @@ of `applyToXml`, `validateXml` and `checkFile`) with the types `Validator`,
 `ValidatorIssue`, `ValidatorReport`, `ValidatorSeverity`. `decisionLinkOf(element,
 doc)` reads a business rule task's decision link in any spelling.
 
+A bpmnlint configuration as an advisory validator (`blocks: false`, see
+[Advisory validators](validators.md#advisory-validators)):
+`resolveBpmnlintConfig(engine, config, { moddleExtensions })` (`extends`
+flattened, every rule resolved once; what cannot be resolved is in
+`unavailable`; a moddle extension the configuration names by module path
+needs its descriptor in `moddleExtensions`, else it is in `unavailable`
+too), `bpmnlintValidator(engine, resolved, { detail, blocks })`
+(`BPMNLINT_VALIDATOR` is its name, `BPMNLINT_COVERS` the lint warnings it
+replaces). The core does not import bpmnlint: `engine` is
+`{ Linter, resolver }`. In Node, `bpmnlintEngine()` from
+`@miragon/bpmn-cli/node` gives it (the plugin's ESM build does not load in
+plain Node; that function loads its CJS build); a browser host bundles
+`bpmnlint`'s `Linter` and the plugin's `createBundledResolver()` itself:
+
+```ts
+import { applyToXml, bpmnlintValidator, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
+import { bpmnlintEngine } from '@miragon/bpmn-cli/node';
+
+const engine = bpmnlintEngine();
+const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' });
+const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });
+const edit = await applyToXml(xml, ops, { validators: [lint] });
+edit.result.warnings.added; // the bpmnlint findings the change added, an error with severity 'error'
+```
+
 Text preservation: `mutateDoc` returns the text to store as `result.xml`:
 the original text of everything the ops did not change (see [What a write
 changes](contract.md#what-a-write-changes)); `result.unchanged` is true when it equals
@@ -222,8 +280,8 @@ import of a Node builtin or a reference to `process`, `Buffer`, `global`,
 also checks that both entries and their types resolve for a strict
 TypeScript consumer (`skipLibCheck: false`, no `@types/node`).
 `test/isomorphic.test.ts` runs the browser bundle in a vm context without any
-Node global and compares `applyToXml` (also with host validators),
-`layoutXml` (both engines), `validateXml`, `showXml`,
+Node global and compares `applyToXml` (also with host validators and
+bpmnlint with an injected engine), `layoutXml` (both engines), `validateXml`, `showXml`,
 `findXml`, `metricsXml` and `renderSvg` with Node, byte for byte; it also loads an ESM
 split bundle and checks which profile chunks a call loads.
 
@@ -248,8 +306,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 880.9 KB | 278.6 KB | 883 / 279 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 640.4 KB | 203.5 KB | 643 / 204 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 899.2 KB | 285.2 KB | 910 / 289 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 641.2 KB | 203.8 KB | 643 / 204 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
@@ -259,10 +317,12 @@ tiles) is about 31 KB minified of the whole entry, `locateProblems` 3.5 KB;
 a host that imports only `applyToXml` loads neither (that bundle is
 byte-identical with or without them). The PNG
 rasteriser (`@resvg/resvg-wasm`, 2.5 MB of WebAssembly, and the 21 KB font)
-is only in `@miragon/bpmn-cli/node`.
+is only in `@miragon/bpmn-cli/node`, and so are bpmnlint and
+@miragon/bpmnlint-plugin-rules: the core's bpmnlint validator (about 7 KB
+of the whole entry) gets them injected.
 
 `package.json` declares only the CLI files as having side effects, so a
 bundler drops what a host does not import. The guide is the exception:
 importing any one of `guideShort`, `ERROR_CATALOGUE`, `kindsJson`,
-`kindsText` or `guideText` adds 116 to 140 KB minified (35 to 43 KB gzip)
+`kindsText` or `guideText` adds 124 to 153 KB minified (38 to 47 KB gzip)
 to `applyToXml`.
