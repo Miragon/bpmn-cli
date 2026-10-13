@@ -122,7 +122,13 @@ installed version. Ask it instead of guessing:
      `BPMN_KEEP_FLOW_IDS=1 bpmn ...` is not pre-approved). Then
      `warning W_FLOW_ID_STALE <flowId>` names a flow whose id no longer names
      its ends: tell the user; rename it (the `bpmn set` of its hint) only
-     together with the code that uses it
+     together with the code that uses it. A result line
+     `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` means the user's
+     setting kept them although you passed no flag, and that made this
+     result differ: a `W_FLOW_ID_STALE` instead of `renamed:`, or a move
+     that put the node's old out-flow back instead of a new flow. An
+     `E_NOT_FOUND` in an `apply` batch whose hint names the variable: use
+     the flow's old id
    - `warning ...` lines are only the warnings **this change added**, each with
      a hint that is the fixing command; `resolved:` what it fixed; old warnings
      are only counted

@@ -556,6 +556,10 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     }
     // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
     expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);
+    // a result whose flow ids the variable kept says so (src/cli.ts keptByEnvNote): the reader may not see the variable
+    for (const [name, text] of Object.entries({ guide: guideText(), DOCS, skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') })) {
+      expect(text, name).toContain('`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (');
+    }
   });
 
   it('keeps usages, options and the result description in sync with the CLI', () => {

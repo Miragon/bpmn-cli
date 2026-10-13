@@ -161,7 +161,10 @@ that syncs one text region per save (design-iq) sees only the change.
   `--no-keep-flow-ids` renames again. The change then names each flow whose id no longer names
   its ends (`W_FLOW_ID_STALE`, with the `bpmn set <file> <flowId> id=<newId>` that renames it
   deliberately, together with the code). A flow the same change created still follows its ends.
-  Library: `keepFlowIds: true`, or `Doc.followFlowEnds = false`.
+  Where the variable kept the ids and that changed the result (a `W_FLOW_ID_STALE`, or a move
+  that put the node's old out-flow back), the result says so
+  (`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)`), and an `E_NOT_FOUND` of an `apply` batch
+  says it in its hint. Library: `keepFlowIds: true`, or `Doc.followFlowEnds = false`.
 - **The Camunda 8 profile checks FEEL syntax, not meaning.** An unknown variable or function, a
   type error, or a FEEL value Camunda 8 parses only when the process runs is found by the engine
   only; where Camunda's grammar was not probed the check accepts. An event-based gateway in a

@@ -843,7 +843,7 @@ export function guideText(): string {
   out.push('  validation: {errors, platform?, validators?: [{name, detail?, blocks?, errors, warnings, preexisting, resolved, counts}]},');
   out.push('  importWarnings, view?, conventions?: {ids, source}}. With --summary --json: {ok, file, written, unchanged, created: {<kind>:');
   out.push('  [ids]}, changed, removed, forced?, warnings: {added, resolvedCount, preexistingCount}, layout: {status, mode?, score?: {before?,');
-  out.push('  after}, added?}, conventions?}.');
+  out.push('  after}, added?}, conventions?, notes? (only the note of flow ids BPMN_KEEP_FLOW_IDS kept, see OUTPUT)}.');
   out.push('  A validator\'s findings (the project\'s bpmnlint; a host\'s validators in library use) carry `validator` and');
   out.push('  `severity`; in text they read "[<name>] <code> <element>: <message>" ("[bpmnlint error] <rule> ..." for a bpmnlint');
   out.push('  error, "warning [bpmnlint error] <rule> ..." when a write added it: bpmnlint is advisory, `blocks: false`).');
@@ -1022,7 +1022,10 @@ const OUTPUT = [
   '  that only shrank is the old one; an apply batch reports the warnings of its final state. The project\'s bpmnlint',
   '  (see BPMNLINT) is advisory: an error of it the change added is listed among the warnings',
   '  (`warning [bpmnlint error] <rule> <id>: ...`). `conventions:` names the new ids under a prefix its',
-  '  element-id-naming declares, where they differ from the file\'s own style (see CONVENTIONS).',
+  '  element-id-naming declares, where they differ from the file\'s own style (see CONVENTIONS). Where',
+  '  BPMN_KEEP_FLOW_IDS=1 kept the flow ids (no --keep-flow-ids / --no-keep-flow-ids given) and that changed the',
+  '  result (W_FLOW_ID_STALE, or a move put the node\'s old out-flow back), it says so, also with --summary:',
+  '  `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` (JSON: notes); an E_NOT_FOUND of an apply batch, in its hint.',
   '  --summary: `created <kind>: ids` per kind, `aliases:` (apply), `changed:`, `renamed: <old> -> <new>` (a flow whose id',
   '  named its old ends: use the new id; with --keep-flow-ids it keeps its id and W_FLOW_ID_STALE names it) and',
   '  `removed:` ids, one `format <op> #<i>: ...` line per format op, the added warnings, one `warnings:` count line (what',

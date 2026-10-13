@@ -72,7 +72,7 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--backup` | copy `<file>` to `<file>.bak` before overwriting |
 | `--show` | append the full model view (as `show` prints it) to the result |
 | `--strict` | exit with code 5 when the result has warnings |
-| `--keep-flow-ids` | keep the id of every existing sequence flow the change gives other ends; `W_FLOW_ID_STALE` names each flow whose id no longer names its ends. Default from `BPMN_KEEP_FLOW_IDS=1` ([Limitations](contract.md#limitations)) |
+| `--keep-flow-ids` | keep the id of every existing sequence flow the change gives other ends; `W_FLOW_ID_STALE` names each flow whose id no longer names its ends. Default from `BPMN_KEEP_FLOW_IDS=1` ([Limitations](contract.md#limitations)); where the variable kept ids and that changed the result (`W_FLOW_ID_STALE`, a move that put a flow back), the result says so (`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)`, [Environment](reference.md#environment)) |
 | `--no-keep-flow-ids` | rename a flow whose id names its old ends after its new ones (the default), also when `BPMN_KEEP_FLOW_IDS=1` |
 | `--engine <clean\|auto>` | layout engine: `clean` (built-in, default) or `auto` (bpmn-auto-layout) |
 | `--lint-config <path>` | the project's bpmnlint configuration instead of the nearest `.bpmnlintrc`, see [bpmnlint](bpmnlint.md) |
