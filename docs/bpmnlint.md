@@ -276,10 +276,11 @@ bpmnlint parses the file with the moddle extensions of the `.bpmnlintrc` only, a
 what that parse cannot read or resolve (`Import warning: unknown attribute <x>`). bpmn-cli reports
 such a warning as an `import-warning` error, and `validate` exits 2. The hint says what to fix. A
 warning bpmn-cli's own reader reports too is an `import:` line instead (only `--strict` fails on
-it), although bpmnlint's CLI fails on it as well. In a design model, design-iq's decision link
-(`calledDecision` on a business rule task) is such an error. Keep the link, and declare the
-attribute in a JSON descriptor that adds `calledDecision` (`isAttr`) to `bpmn:BusinessRuleTask`.
-Name the descriptor by file path in `moddleExtensions`: bpmnlint's CLI loads only paths.
+it), although bpmnlint's CLI fails on it as well. In a model without an engine, bpmn-cli's own
+decision link (an unprefixed `calledDecision` on a business rule task,
+[Set keys](reference.md#set-keys)) is such an error. Keep the link, and declare the attribute in a
+JSON descriptor that adds `calledDecision` (`isAttr`) to `bpmn:BusinessRuleTask`. Name the
+descriptor by file path in `moddleExtensions`: bpmnlint's CLI loads only paths.
 
 ## The file
 

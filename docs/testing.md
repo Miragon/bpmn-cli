@@ -182,8 +182,10 @@ a warning matched by its `key`, `covers`, the context, failing validators,
 the check of `validate`, and the CLI, which takes no host validators: a
 refusal lists the structural errors under its message, and `validate` exits
 with 2 on an error),
-`test/decision-link.test.ts` the decision link (`calledDecision`) in design
-models (no engine namespace), Camunda 7, Operaton and Camunda 8 files.
+`test/decision-link.test.ts` the decision link (`calledDecision`) in models
+without an engine (the unprefixed attribute; with `platform: 'none'` the
+spelling of the task's link or of the file's other links kept), Camunda 7,
+Operaton and Camunda 8 files.
 `test/views.test.ts` checks the reading views (`show --around`, `show <id>
 --context`, lanes and message-flow names in `show`, message flows and
 annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`

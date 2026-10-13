@@ -325,3 +325,17 @@
   passes `conventions` or a validator named bpmnlint of its own.
   `bpmnlintValidator` takes `notes` (W_CONFIG_IGNORED), and `LoadedBpmnlint`
   has `where`.
+- Library: with `platform: 'none'` (`MutationOptions.platform`), a `set`
+  op with `calledDecision` on a business rule task whose link has an engine
+  spelling updates it in that spelling (`camunda:decisionRef`,
+  `operaton:decisionRef`; a `zeebe:calledDecision` gets the `decisionId` and
+  keeps its `resultVariable`; issue #42). 0.6 replaced it with an unprefixed
+  `calledDecision` and dropped the `resultVariable`. A task without a link
+  takes the engine spelling of the file's other links when they all have
+  the same one, else the unprefixed `calledDecision` as before. The change's
+  `detail` names the spelling written (`calledDecision=risk
+  (camunda:decisionRef)`; 0.6: `calledDecision=risk (calledDecision);
+  removed camunda:decisionRef`). The CLI is unchanged: it detects the engine from
+  such a link, so `bpmn set <file> <id> calledDecision=<decision>` writes
+  the Camunda 7 / 8 spelling as in 0.6, and in a file without engine
+  content the unprefixed `calledDecision` ([Set keys](reference.md#set-keys)).

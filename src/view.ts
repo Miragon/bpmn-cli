@@ -382,7 +382,7 @@ export function nodeProps(el: El, opts: { zeebe?: boolean } = {}): Record<string
   }
   const called = peek<string>(el, 'calledElement');
   if (called) props['calledElement'] = called;
-  // the decision link of a business rule task, whatever the spelling (design: calledDecision, C7: camunda:decisionRef, C8: zeebe:calledDecision)
+  // the decision link of a business rule task, whatever the spelling (no engine: calledDecision, C7: camunda:decisionRef, C8: zeebe:calledDecision)
   const decision = decisionLinkOf(el);
   if (decision) props['calledDecision'] = decision.value;
   if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
