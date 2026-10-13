@@ -29,12 +29,16 @@
  *     ends' ids without prefix), `idPair` (Flow_Task_A_Task_B), `stemSnake`
  *     (Flow_check_stock_to_ship_goods), `idSnake` (Flow_Task_A_to_Task_B) or
  *     `scopedTo` (Flow_KotO_ValidateToReserve: a scope segment the flows
- *     share, then the first word of each end; a start / end event is Start /
- *     End), with the prefix those flows use; else `named`
+ *     share, then the first word with a letter of each end; a start / end
+ *     event is Start / End), with the prefix those flows use; else `named`
  *     (Flow_CheckInvoiceToBookInvoice: the labels of the ends in the body
  *     case) with the prefix and separator of the file's flows (hashed
  *     Flow_0k3x9qa, numbered SF_12 or flow12: `flowCheckOrderToShip`). A form
- *     needs at least half of the flows of its type.
+ *     needs at least half of the flows of its type; a flow the length cap
+ *     cut votes for its form too (cutOfForm: one of the cuts derivedBases
+ *     lists, also 0.6's), a glued flow named by its ends with a suffix
+ *     (`flowCheckOrderToShip_2`) lends no prefix and votes only for a
+ *     file's glued numbered flows (flow12).
  *  A document without ids to learn from gets the default style: pascal
  *  bodies, the bpmn-cli prefixes, `named` flows with the prefix Flow.
  *
@@ -50,8 +54,21 @@
  *  unnamed end's own context, AfterCheck, and CheckJoin for the join of the
  *  split after Check; else its name, else a word for its kind). Names and
  *  contexts are transliterated (ä -> ae, ø -> oe, å -> aa, src/ids.ts). A
- *  generated id has at most MAX_ID (64) characters: a long body is cut at a
- *  word boundary, a flow's two ends share the room.
+ *  name or context gives at most MAX_SLUG (40) characters of words (a single
+ *  longer word is cut at 40, src/ids.ts). A generated id has at most MAX_ID
+ *  (64) characters, a collision suffix included; an id within that is not
+ *  cut again. A longer one loses whole words: a long body its last words, a
+ *  flow's two ends share the room, each giving up its last words, and of
+ *  the cuts that fit the one with the most words, then the most characters
+ *  (fitPair); a flow named by its ends' ids (idPair, idSnake) keeps each
+ *  id's prefix where the prefixes leave 16 characters. A cut never leaves a
+ *  number alone, nor at the end of the id where it reads like a collision
+ *  suffix. A word is cut inside only where no whole word is left to give
+ *  up: a flow's ends keep their first word, or their last where they begin
+ *  alike. A file prefix that leaves fewer than 8 characters gives way to
+ *  the bpmn-cli prefix (an element); a flow prefix (with a scopedTo flow's
+ *  scope) that leaves the ends fewer than 16, to a named flow with Flow (a
+ *  scoped one named by its end words).
  *
  *  style.next(req, registry) returns a free id for a request (kindRequest /
  *  typeRequest / connectionRequest / flowRequest) and the id it wanted
@@ -64,14 +81,18 @@
  *  taken base gets `_2`, `_3` (the file-learned flow forms stemTo and
  *  scopedTo: `2`, `3`), so the same request on the same document always
  *  gives the same id; `id !== base` is W_ID_SUFFIXED (Doc.allocateId
- *  records it). A flow whose two ends begin with the same word (the unnamed
- *  elements after one anchor) keeps each end's last word when the length
- *  cap cuts it (fitPair), so the ends keep what tells them apart.
- *  style.derivedBase(req) is that base without allocating (derivedBases:
- *  also the uncut one, for ids written before the cut); style.joinId(gatewayId)
- *  the id of a split's join gateway.
+ *  records it); a base that leaves no room for the suffix is cut again so
+ *  that the id stays within MAX_ID. A flow whose two ends begin with the
+ *  same word (the unnamed elements after one anchor) keeps each end's last
+ *  word when the length cap cuts it (fitPair), so the ends keep what tells
+ *  them apart. style.derivedBase(req) is that base without allocating
+ *  (derivedBases: also the uncut one, the ones a suffix leaves room for,
+ *  the one 0.6 wanted and the ones it cut, also for a suffix from `_100`,
+ *  and in a file of another flow form the `named` ones, also as 0.6 cut
+ *  them, for ids written before);
+ *  style.joinId(gatewayId) the id of a split's join gateway.
  */
-import { camelSlug, cutAt, hasIdWords, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, type IdRegistry } from './ids.js';
+import { camelSlug, cutAt, hasIdWords, idWords, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, type IdRegistry } from './ids.js';
 import { kindOf, triggerOf, type KindDef } from './kinds.js';
 import { is, isBpmnElement, walk, type El } from './model.js';
 
@@ -205,8 +226,11 @@ export function kindWord(key: string, trigger: string | undefined, withContext =
 
 const CONNECTIONS = new Set(['bpmn:SequenceFlow', 'bpmn:MessageFlow']);
 
-/** The longest base id: MAX_ID less room for a collision suffix (`_99`), so that a suffix never has to cut it further. */
-const MAX_BASE = MAX_ID - 3;
+/** A request for a connection between two ends (its id names them: connectionBase). */
+const isConnection = (req: IdRequest): boolean => CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined;
+
+/** The longest base id 0.6 and earlier generated (MAX_ID less room for a collision suffix `_99`): followEnds still recognises the flows it cut. */
+const LEGACY_BASE = MAX_ID - 3;
 
 /* ------------------------------------------------------------------ */
 /* classification                                                       */
@@ -217,6 +241,8 @@ const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
 const GLUED = /^([A-Za-z]+)(\d+)$/;
 /** `<scope>_<A>To<B>` after a flow prefix: Flow_KotO_ValidateToReserve. */
 const SCOPED_TO = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To([A-Z][A-Za-z0-9]*)$/;
+/** A glued flow named by its ends with a collision suffix (`flowCheckOrderToShip_2`, a flow bpmn-cli named in a file of flow12 ids): not a prefix and a number. */
+const GLUED_SUFFIXED = /^[A-Za-z][A-Za-z0-9]*To[A-Z0-9][A-Za-z0-9]*_\d+$/;
 
 /**
  * One element is not a convention: a learned rule needs two ids that follow
@@ -524,6 +550,8 @@ interface Learned {
   strong: boolean;
   /** scopedTo flows: the scopes of a type's flows, most used first */
   scopes: Map<string, string[]>;
+  /** flows of another form than `named`: the prefix a type's flows took as `named` before (the most used one), where it is not the form's */
+  namedPrefixes: Map<string, string>;
   /** flow node ids without / with a prefix: a file whose flow nodes mostly have none gives a kind without own evidence none either */
   bareNodes: number;
   prefixedNodes: number;
@@ -584,6 +612,7 @@ function learn(defs: El | undefined): Learned {
     body: 'pascal',
     flows: new Map(),
     scopes: new Map(),
+    namedPrefixes: new Map(),
     bareNodes: 0,
     bareBody: 'camel',
     prefixedNodes: 0,
@@ -594,7 +623,7 @@ function learn(defs: El | undefined): Learned {
   const nodeBodies = new Tally<BodyClass>();
   const bareBodies = new Tally<BodyClass>();
   const otherBodies = new Tally<BodyClass>();
-  const flowVotes = new Map<string, { n: number; forms: Tally<SeenForm>; prefixes: Map<SeenForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
+  const flowVotes = new Map<string, { n: number; glued: number; forms: Tally<SeenForm>; prefixes: Map<SeenForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
 
   for (const el of defs ? walk(defs, { bpmnOnly: true }) : []) {
     if (!isBpmnElement(el) || /^(bpmndi|dc|di):/.test(el.$type)) continue;
@@ -604,12 +633,25 @@ function learn(defs: El | undefined): Learned {
       const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
       const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
       let v = flowVotes.get(el.$type);
-      if (!v) flowVotes.set(el.$type, (v = { n: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
+      if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
+      // a glued flow named by its ends with a suffix (flowCheckToShip_2) is not the prefix flowCheckToShip and a number: it
+      // lends no prefix, and counts only for a file's glued numbered flows (flow12, below)
+      if (GLUED_SUFFIXED.test(id)) {
+        v.glued++;
+        continue;
+      }
       v.n++;
       const p = PREFIXED.exec(id)?.[1];
       if (p) v.any.add(p);
       if (!source || !target) continue;
-      for (const f of flowForms(id, source, target)) {
+      const seen = flowForms(id, source, target);
+      // a flow the length cap cut votes for its form too (else enough of them would flip the file's form)
+      if (p) {
+        let req: IdRequest | undefined;
+        const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: labelOf(el.get<El>('sourceRef')), targetLabel: labelOf(el.get<El>('targetRef')) }));
+        for (const form of ID_FORMS) if (!seen.some((f) => f.form === form) && cutOfForm(id, form, p, request)) seen.push({ form, prefix: p });
+      }
+      for (const f of seen) {
         v.forms.add(f.form);
         let t = v.prefixes.get(f.form);
         if (!t) v.prefixes.set(f.form, (t = new Tally()));
@@ -678,16 +720,26 @@ function learn(defs: El | undefined): Learned {
   l.body = best[0];
 
   for (const [type, v] of flowVotes) {
+    // the glued flows bpmn-cli named with a suffix in a file of flow12 ids vote for that form, as 0.6 counted them
+    if (v.glued && [...v.seps.values()].includes('')) {
+      v.n += v.glued;
+      v.forms.add('numbered', v.glued);
+    }
+    // a type whose flows are all such glued flows has no style of its own (the sequence flows', else the default)
+    if (!v.n) continue;
     const form = v.forms.top();
     const prefix = form ? v.prefixes.get(form)!.top() : undefined;
     const scope = form === 'scopedTo' ? v.scopes.top() : undefined;
+    const any = v.any.top() ?? 'Flow';
     if (form && prefix && v.forms.get(form) * 2 >= v.n && (form !== 'scopedTo' || scope)) {
       const sep = v.seps.get(prefix);
       // hashed and numbered flows lend new flows their prefix (and a numbered prefix's separator: flow12 -> flowAToB)
       const named = form === 'hash' || form === 'numbered';
       l.flows.set(type, { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) });
       if (form === 'scopedTo') l.scopes.set(type, [...v.scopes.counts.keys()].sort((a, b) => v.scopes.get(b) - v.scopes.get(a)));
-    } else l.flows.set(type, { form: 'named', prefix: v.any.top() ?? 'Flow' });
+      // the prefix its flows took as `named` before the form had the majority (derivedBases)
+      if (!named && any !== prefix) l.namedPrefixes.set(type, any);
+    } else l.flows.set(type, { form: 'named', prefix: any });
   }
   return l;
 }
@@ -797,29 +849,32 @@ export class IdStyle {
 
   /**
    * The id an element request wants (before collision handling): its name,
-   * else its kind and context, after the file's prefix; at most MAX_BASE
-   * characters. `qualified`: the context ends with the anchor's kind
+   * else its kind and context, after the file's prefix; at most `max`
+   * characters (a prefix that leaves the body fewer than 8 of the 64 gives
+   * way to the bpmn-cli prefix of the kind, in the case of the file's
+   * prefix). `qualified`: the context ends with the anchor's kind
    * (IdRequest.anchorKind), which a cut of a long context leaves in place.
    */
-  private derived(req: IdRequest, spelled = false, qualified = false): string {
+  private derived(req: IdRequest, spelled = false, qualified = false, max = MAX_ID): string {
     const named = hasIdWords(req.name);
     const prefix = this.prefixFor(req);
     if (prefix === '' && named) {
       const bare = this.bareBody(req.name);
-      if (bare) return cutAt(bare, MAX_BASE);
+      if (bare) return cutAt(bare, max);
     }
     // an unnamed element keeps a prefix in a file whose named ids have none
-    const p = prefix === '' ? this.prefixFor(req, false) : prefix;
-    const room = Math.max(MAX_BASE - p.length - 1, 8);
+    let p = prefix === '' ? this.prefixFor(req, false) : prefix;
+    if (MAX_ID - p.length - 1 < 8) p = this.caseLike(req.prefix, /^[a-z]/.test(p));
+    const room = max - p.length - 1;
     const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled)) || this.bodyOf(kindWord(req.key, req.trigger));
     if (qualified && !named && req.anchorKind) return `${p}_${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG))}`;
     return `${p}_${cutAt(body, room)}`;
   }
 
-  /** A body with a word appended in the file's case (`AfterCheck` + Gateway -> `AfterCheckGateway`, `after_check_gateway`), the body cut so that the word stays within `max`. */
+  /** A body with a word appended in the file's case (`AfterCheck` + Gateway -> `AfterCheckGateway`, `after_check_gateway`), the body cut so that the word stays within `max` (where that leaves the body fewer than 8 characters, body and word are cut as one). */
   private withWord(body: string, word: string, max: number): string {
     const tail = this.l.body === 'snake' ? `_${snakeSlug(word)}` : this.l.body === 'pascalSnake' ? `_${pascalSnakeSlug(word)}` : slugify(word);
-    return `${cutAt(body, Math.max(max - tail.length, 8))}${tail}`;
+    return max - tail.length >= 8 ? `${cutAt(body, max - tail.length)}${tail}` : cutAt(`${body}${tail}`, max);
   }
 
   /**
@@ -856,23 +911,52 @@ export class IdStyle {
   }
 
   /**
-   * The ids a request wants: derivedBase, and for a flow between ends with
-   * long ids also the id before the length cap (a flow a file got before
-   * the cut still names its ends: ops/flows.ts followEnds).
+   * The ids a request wants: derivedBase, and for a request with a long id
+   * also the id before the length cap, the ids cut to leave room for a
+   * collision suffix of up to 4 characters (`_100`, see next) and, for a
+   * flow, the id 0.6 and earlier wanted before their cap (a head that now
+   * gives way to Flow_ included) and the ids they cut it to (legacyFitPair;
+   * cut again for a suffix from `_100`) and, in a file whose flows have
+   * another form, the `named` ones bpmn-cli gave it before they did (also
+   * as 0.6 cut them), so that a flow a file got before still names its ends
+   * (ops/flows.ts followEnds).
    */
   derivedBases(req: IdRequest): string[] {
-    return [...new Set([this.wanted(req).base, this.wanted(req, Infinity).base])];
+    const uncut = this.wanted(req, Infinity).base;
+    // short enough for every suffix: no cut can differ from it
+    const bases = uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => this.wanted(req, MAX_ID - suffix).base);
+    if (isConnection(req)) {
+      // also a short one: a scopedTo end word 0.6 took (Flow_KotO_ReserveTo4); cut again for a suffix of 4 characters
+      // and more (`_100`; stemTo / scopedTo: `1000`); and the id 0.6 wanted before its cap, with a head that now leaves
+      // the ends too little room (connectionBase)
+      const legacy = this.connectionBase(req, LEGACY_BASE, true).base;
+      bases.push(legacy, cutAt(legacy, MAX_ID - 4, true), this.connectionBase(req, Infinity, true).base);
+      // a file whose flows have another form got `named` flows from bpmn-cli until enough of them voted for that form
+      // (0.6 read a file of cut flows as `named`), with the file's most used flow prefix; a flow to the join of a split
+      // is named by its label, CheckJoin, not by its id stem
+      const { form, prefix, sep } = this.flowOf(req.key);
+      if (form !== 'named') {
+        for (const p of new Set([prefix, this.l.namedPrefixes.get(this.l.flows.has(req.key) ? req.key : 'bpmn:SequenceFlow') ?? prefix])) {
+          const whole = this.namedBase(req, Infinity, p, sep, false);
+          bases.push(whole);
+          if (whole.length > MAX_ID - 4) for (const max of [MAX_ID, MAX_ID - 1, MAX_ID - 2, MAX_ID - 3, MAX_ID - 4]) bases.push(this.namedBase(req, max, p, sep, false));
+          const old = this.namedBase(req, LEGACY_BASE, p, sep, true);
+          bases.push(old, cutAt(old, MAX_ID - 4, true));
+        }
+      }
+    }
+    return [...new Set([...bases, uncut])];
   }
 
-  /** The id the request wants and the separator of its collision suffix (`_2`; the file-learned stemTo and scopedTo flows: `2`). */
-  private wanted(req: IdRequest, max = MAX_BASE): { base: string; sep: string } {
-    if (CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined) return this.connectionBase(req, max);
-    return { base: this.derived(req), sep: '_' };
+  /** The id the request wants, at most `max` characters, and the separator of its collision suffix (`_2`; the file-learned stemTo and scopedTo flows: `2`). */
+  private wanted(req: IdRequest, max = MAX_ID): { base: string; sep: string } {
+    if (isConnection(req)) return this.connectionBase(req, max);
+    return { base: this.derived(req, false, false, max), sep: '_' };
   }
 
   /** The id of the join gateway of a split whose gateway is `gatewayId` (`<id>_join`, camel `<id>Join`, pascalSnake `<id>_Join`; a bare id `<id>Join`). */
   joinId(gatewayId: string): string {
-    const base = cutAt(gatewayId, MAX_BASE - '_join'.length);
+    const base = cutAt(gatewayId, MAX_ID - '_join'.length);
     if (!gatewayId.includes('_') && this.l.bareNodes) return `${base}Join`;
     switch (this.l.body) {
       case 'camel':
@@ -893,7 +977,10 @@ export class IdStyle {
    * whose context it repeats, names that anchor's kind (qualifiedBase:
    * Task_AfterCheckGateway): the first of them whose id and body are free,
    * else the first whose id is free, else a suffix (on the anchor-qualified
-   * id when the base's own id is free but another id has its body).
+   * id when the base's own id is free but another id has its body). A base
+   * that leaves no room for the suffix is cut again to `MAX_ID - suffix`:
+   * a flow's ends share what is left (fitPair), an anchor-qualified id
+   * keeps the anchor's kind.
    */
   next(req: IdRequest, ids: IdRegistry): { id: string; base: string } {
     const wanted = this.wanted(req);
@@ -911,62 +998,158 @@ export class IdStyle {
     let id = base;
     for (let n = 2; ids.has(id); n++) {
       const suffix = `${sep}${n}`;
-      id = `${cutAt(base, MAX_ID - suffix.length)}${suffix}`;
+      const max = MAX_ID - suffix.length;
+      id = `${base.length <= max ? base : base === qualified ? this.derived(req, false, true, max) : this.wanted(req, max).base}${suffix}`;
     }
     return { id, base };
   }
 
-  /** The ends of a `named` flow in the file's case and the word between them (`CheckInvoice`, `To`, `BookInvoice`). */
-  private flowParts(source: string, target: string, glued: boolean): [string, string, string] {
+  /** The ends of a `named` flow in the file's case and the word between them (`CheckInvoice`, `To`, `BookInvoice`; `legacy`: slugs cut as 0.6 cut them). */
+  private flowParts(source: string, target: string, glued: boolean, legacy = false): [string, string, string] {
     switch (this.l.body) {
       case 'camel': {
-        const a = camelSlug(source);
-        return [glued ? ucfirst(a) : a, 'To', slugify(target)];
+        const a = camelSlug(source, legacy);
+        return [glued ? ucfirst(a) : a, 'To', slugify(target, legacy)];
       }
       case 'snake':
-        return [snakeSlug(source), '_to_', snakeSlug(target)];
+        return [snakeSlug(source, legacy), '_to_', snakeSlug(target, legacy)];
       case 'pascalSnake':
-        return [pascalSnakeSlug(source), '_To_', pascalSnakeSlug(target)];
+        return [pascalSnakeSlug(source, legacy), '_To_', pascalSnakeSlug(target, legacy)];
       default:
-        return [slugify(source), 'To', slugify(target)];
+        return [slugify(source, legacy), 'To', slugify(target, legacy)];
     }
   }
 
-  private connectionBase(req: IdRequest, max: number): { base: string; sep: string } {
+  /**
+   * `legacy`: the ends cut as 0.6 and earlier cut them (legacyFitPair;
+   * derivedBases). A head (the flow prefix, and a scopedTo flow's scope) that
+   * leaves the ends fewer than 16 of the 64 characters gives way to a named
+   * flow with the default prefix Flow_, a scopedTo flow's ends named by
+   * their end words (not `legacy`: 0.6 kept the head).
+   */
+  private connectionBase(req: IdRequest, max: number, legacy = false): { base: string; sep: string } {
     const { form, prefix, sep, scope } = this.flowOf(req.key);
-    const s = req.source!;
-    const t = req.target!;
-    /** an end in a form built from id stems: its stem when that says something, else its label */
-    const endStem = (id: string, label: string | undefined, slug: (text: string) => string): string => speakingStem(id) ?? (label && slug(label) ? slug(label) : stem(id));
-    /** `<head><a><join><b>`, the two ends sharing the room up to `max` */
-    const pair = (head: string, a: string, join: string, b: string): string => {
-      const [x, y] = fitPair(a, b, max - head.length - join.length);
-      return `${head}${x}${join}${y}`;
-    };
-    switch (form) {
-      case 'scopedTo': {
-        // the scope one of the ends names as a segment of its id (KotO in serviceTask_KotO_ValidatePayment), else the most used one
-        const scopes = this.l.scopes.get(req.key) ?? this.l.scopes.get('bpmn:SequenceFlow') ?? [scope!];
-        const own = scopes.find((x) => s.split('_').includes(x) || t.split('_').includes(x)) ?? scope!;
-        return { base: cutAt(`${prefix}_${own}_${endWord(s, own, 'Start')}To${endWord(t, own, 'End')}`, max), sep: '' };
-      }
-      case 'stemTo':
-        return { base: pair(`${prefix}_`, lcfirst(endStem(s, req.sourceLabel, camelSlug)), 'To', ucfirst(endStem(t, req.targetLabel, camelSlug))), sep: '' };
-      case 'idPair':
-        return { base: pair(`${prefix}_`, s, '_', t), sep: '_' };
-      case 'stemSnake':
-        return { base: pair(`${prefix}_`, endStem(s, req.sourceLabel, snakeSlug), '_to_', endStem(t, req.targetLabel, snakeSlug)), sep: '_' };
-      case 'idSnake':
-        return { base: pair(`${prefix}_`, s, '_to_', t), sep: '_' };
-      default: {
-        const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
-        // a number glued to a lower-case prefix (flow12) glues the words too (flowCheckToShip); an upper-case one reads apart (F12 -> F_CheckToShip)
-        const glued = sep === '' && /[a-z]/.test(prefix);
-        const [a, join, b] = this.flowParts(label(s, req.sourceLabel), label(t, req.targetLabel), glued);
-        return { base: pair(`${prefix}${glued ? '' : '_'}`, a, join, b), sep: '_' };
-      }
+    if (form === 'named') return { base: this.namedBase(req, max, prefix, sep, legacy), sep: '_' };
+    const short = (head: string, join: string): boolean => !legacy && MAX_ID - head.length - join.length < 16;
+    if (form === 'scopedTo') {
+      const s = req.source!;
+      const t = req.target!;
+      // the scope one of the ends names as a segment of its id (KotO in serviceTask_KotO_ValidatePayment), else the most used one
+      const scopes = this.l.scopes.get(req.key) ?? this.l.scopes.get('bpmn:SequenceFlow') ?? [scope!];
+      const own = scopes.find((x) => s.split('_').includes(x) || t.split('_').includes(x)) ?? scope!;
+      const head = `${prefix}_${own}_`;
+      const [a, b] = [endWord(s, own, 'Start', legacy), endWord(t, own, 'End', legacy)];
+      // a long head: a named flow whose ends are named by their end words (Flow_ValidateToReserve)
+      if (short(head, 'To')) return { base: this.namedBase({ ...req, sourceLabel: a, targetLabel: b }, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
+      // the two words share the room after the scope like any flow's ends (0.6 cut the whole id: Flow_KotO_ValidateTo)
+      return { base: legacy ? cutAt(`${head}${a}To${b}`, max, true) : pairEnds(head, a, 'To', b, max, false, closingNumber('')), sep: '' };
     }
+    if (short(`${prefix}_`, FORM_JOIN[form])) return { base: this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
+    return { base: idFormBase(form, prefix, req, max, legacy), sep: form === 'stemTo' ? '' : '_' };
   }
+
+  /** The base of a `named` flow with the prefix and separator of the file's flows (`legacy`: connectionBase). */
+  private namedBase(req: IdRequest, max: number, prefix: string, sep: string | undefined, legacy: boolean): string {
+    const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
+    // a number glued to a lower-case prefix (flow12) glues the words too (flowCheckToShip); an upper-case one reads apart (F12 -> F_CheckToShip)
+    let p = prefix;
+    let glued = sep === '' && /[a-z]/.test(p);
+    // a prefix that leaves the ends fewer than 16 of the 64 characters gives way to the default Flow_
+    const joined = this.l.body === 'snake' || this.l.body === 'pascalSnake' ? 4 : 2;
+    if (!legacy && MAX_ID - p.length - (glued ? 0 : 1) - joined < 16) [p, glued] = [DEFAULT_FLOW.prefix, false];
+    const source = label(req.source!, req.sourceLabel);
+    const [a, join, b] = this.flowParts(source, label(req.target!, req.targetLabel), glued, legacy);
+    return pairEnds(`${p}${glued ? '' : '_'}`, a, join, b, max, legacy, closingNumber('_'), [this.l.body === 'camel' && !glued ? nameWords(source) : undefined]);
+  }
+}
+
+/** The flow forms built from the ends' ids or id stems, and the word between the ends. */
+type IdForm = 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';
+const FORM_JOIN: Record<IdForm, string> = { stemTo: 'To', idPair: '_', stemSnake: '_to_', idSnake: '_to_' };
+const ID_FORMS = Object.keys(FORM_JOIN) as IdForm[];
+
+/** `<head><a><join><b>`, the two ends sharing the room up to `max` (`legacy`: as 0.6 cut, legacyFitPair; `closes`, `names`: fitPair). */
+function pairEnds(head: string, a: string, join: string, b: string, max: number, legacy: boolean, closes: RegExp, names: [string[]?, string[]?] = []): string {
+  const room = max - head.length - join.length;
+  const [x, y] = legacy ? legacyFitPair(a, b, room) : fitPair(a, b, Math.max(room, 0), names, closes);
+  return `${head}${x}${join}${y}`;
+}
+
+/**
+ * The base of a flow in a form built from its ends' ids (stemTo, idPair,
+ * stemSnake, idSnake) after `<prefix>_`, at most `max` characters
+ * (`legacy`: cut as 0.6 cut). The stem forms write an end whose id says
+ * nothing from its label; idPair and idSnake keep each id's prefix
+ * (`Task_`) and share the room among the words after it (0.6, and a room
+ * under 16: the whole ids share it, so the words of a prefix can go too).
+ */
+function idFormBase(form: IdForm, prefix: string, req: IdRequest, max: number, legacy: boolean): string {
+  const s = req.source!;
+  const t = req.target!;
+  const head = `${prefix}_`;
+  const join = FORM_JOIN[form];
+  const closes = closingNumber(form === 'stemTo' ? '' : '_');
+  if (form === 'idPair' || form === 'idSnake') {
+    const pa = s.length - stem(s).length;
+    const pb = t.length - stem(t).length;
+    const room = max - head.length - join.length - pa - pb;
+    if (legacy || room < 16) return pairEnds(head, s, join, t, max, legacy, closes);
+    const [x, y] = fitPair(stem(s), stem(t), room, [], closes);
+    return `${head}${s.slice(0, pa)}${x}${join}${t.slice(0, pb)}${y}`;
+  }
+  const { a, b, names } = stemEnds(form, req, legacy);
+  return pairEnds(head, a, join, b, max, legacy, closes, [names]);
+}
+
+/**
+ * The ends of a stem form (stemTo: camelCase, the source in lower case;
+ * stemSnake: snake_case): an end's id stem when that says something, else
+ * its label (`names`: the source's name words, where it is written from
+ * its label in camelCase).
+ */
+function stemEnds(form: 'stemTo' | 'stemSnake', req: IdRequest, legacy: boolean): { a: string; b: string; names?: string[] } {
+  const slug = (text: string): string => (form === 'stemTo' ? camelSlug(text, legacy) : snakeSlug(text, legacy));
+  /** whether an end is written from its label (its id says nothing) */
+  const byLabel = (id: string, label: string | undefined): label is string => speakingStem(id) === undefined && !!label && !!slug(label);
+  const end = (id: string, label: string | undefined): string => speakingStem(id) ?? (byLabel(id, label) ? slug(label) : stem(id));
+  const [a, b] = [end(req.source!, req.sourceLabel), end(req.target!, req.targetLabel)];
+  if (form === 'stemSnake') return { a, b };
+  return { a: lcfirst(a), b: ucfirst(b), ...(byLabel(req.source!, req.sourceLabel) ? { names: nameWords(req.sourceLabel) } : {}) };
+}
+
+/**
+ * Whether a flow id is a cut of a form built from its ends' ids with the
+ * prefix `prefix`: one of the bases derivedBases lists for the form (cut to
+ * leave room for a suffix of up to 4 characters, or as 0.6 cut it, also
+ * again for `_100`), with or without a suffix, so that a flow the length
+ * cap cut still votes for its form (learn). Only for an id the form's
+ * uncut base would not give (flowForms has those).
+ */
+function cutOfForm(id: string, form: IdForm, prefix: string, request: () => IdRequest): boolean {
+  const rest = id.slice(prefix.length + 1);
+  const join = FORM_JOIN[form];
+  // cheap tests first: a cut keeps the word between the ends, and a stemTo source begins in lower case
+  if (id.length > MAX_ID || !rest.includes(join) || (form === 'stemTo' && /^[A-Z]/.test(rest) && !rest.startsWith(join))) return false;
+  const req = request();
+  if (form === 'stemTo' || form === 'stemSnake') {
+    // and the start of the source (an empty one: the join), unless the ends begin alike (a source without its first word)
+    const { a, b } = stemEnds(form, req, false);
+    if (!beginAlike(a, b) && rest.charAt(0) !== a.charAt(0) && !rest.startsWith(join)) return false;
+  }
+  if (idFormBase(form, prefix, req, Infinity, false).length <= MAX_ID - 4) return false;
+  const sep = form === 'stemTo' ? '' : '_';
+  const suffixed = (base: string): boolean => id.startsWith(base) && new RegExp(`^${sep}\\d+$`).test(id.slice(base.length));
+  const legacy = idFormBase(form, prefix, req, LEGACY_BASE, true);
+  if (id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true))) return true;
+  if (id === idFormBase(form, prefix, req, MAX_ID, false)) return true;
+  // a suffix of up to 4 characters cut the base to leave it room (next); a glued one can take any of the last digits
+  const digits = (sep === '' ? /\d+$/ : /_\d+$/).exec(id)?.[0] ?? '';
+  for (let k = sep === '' ? 1 : digits.length; k <= Math.min(digits.length, 4); k++) {
+    const suffix = id.slice(id.length - k);
+    if (/^_?0/.test(suffix)) continue;
+    if (id.slice(0, -k) === idFormBase(form, prefix, req, MAX_ID - k, false)) return true;
+  }
+  return false;
 }
 
 /** The kinds whose prefix says the kind, so that an unnamed one's id leaves it out (Gateway_AfterCheck, Activity_AfterCheck): spelledBase. */
@@ -999,43 +1182,189 @@ function bodyTaken(id: string, ids: IdRegistry): boolean {
 }
 
 /**
- * Two ends that share `room` characters, each cut at a word boundary
- * (cutAt): the first gets at least half, the second what is left, the
- * first what the second leaves over.
+ * Two ends that share `room` characters, cut at whole words. Each end can
+ * give up its words one after the other (endForms): the last word before
+ * the join or number it ends with (keptTail), never its first word, never
+ * its last word with a letter before that join or number
+ * (`2Lieferantenbestellungen` keeps both, `LieferantenbestellungenJoin`
+ * never shrinks to `Join`), never a word between two numbers (the two would
+ * read as one: `Stufe2Freigabe3` gives up the 2 first, never `Stufe23`; nor
+ * `stufe_2_2` for `stufe_2_pruefung_2`, which reads like a suffixed id); a
+ * number the given-up word leaves at the end of the id goes with it where it
+ * reads like a collision suffix (`closes`, the target's: a separated `_4`
+ * where the suffix is `_2`, `archivieren` for `archivieren_100_4_augen`,
+ * never `archivieren_100`; any number where the suffix is glued, stemTo and
+ * scopedTo), and stays elsewhere (`Phase1To...`, `V2To...`). Ends that begin
+ * with the same word (the unnamed elements after one anchor:
+ * after_check_gateway, after_check_gateway_task) differ at their ends: each
+ * keeps its last word (a join with a number: both) and gives up the word
+ * before it, down to its first (`SynchronisierenTo...` for
+ * `LieferantenbestellungenSynchronisieren`). Of the forms of the two ends
+ * that fit beside each other, the pair with the most words is taken, then
+ * the one with the most characters, then the more even one, then the one
+ * where the source gave up more (`SynchronisierenToRechnungLieferantenbestellungen`
+ * for `Synchronisieren aktualisieren` and `Rechnung Lieferantenbestellungen`:
+ * the short word goes, not the long one). Only when even the shortest forms
+ * do not fit, a word is cut inside (cutInside, which keeps the join or
+ * number at the end): in the longer end where the other fits whole and it
+ * keeps 8 characters, else in both (sharePair). `names`: the name words an
+ * end was written from with camelSlug, so that an end without its first
+ * word starts as camelSlug writes it (`urlPDFVersenden` for URL PDF
+ * versenden). Deterministic.
  */
-function fitPair(a: string, b: string, room: number): [string, string] {
+function fitPair(a: string, b: string, room: number, names: [string[]?, string[]?] = [], closes?: RegExp): [string, string] {
+  if (a.length + b.length <= room) return [a, b];
+  const keepLast = beginAlike(a, b);
+  const [fa, fb] = [endForms(a, keepLast, room, names[0]), endForms(b, keepLast, room, names[1], closes)];
+  /** most words, most characters, the more even pair; later pairs win a full tie (the source has given up more) */
+  const score = (x: EndForm, y: EndForm): number[] => [x.words + y.words, x.text.length + y.text.length, -Math.abs(x.text.length - y.text.length)];
+  let best: { x: EndForm; y: EndForm; score: number[] } | undefined;
+  for (const x of fa) {
+    for (const y of fb) {
+      if (x.text.length + y.text.length > room) continue;
+      const s = score(x, y);
+      const n = best ? s.findIndex((v, i) => v !== best!.score[i]) : 0;
+      if (!best || n === -1 || s[n]! > best.score[n]!) best = { x, y, score: s };
+    }
+  }
+  if (best) return [best.x.text, best.y.text];
+  // even the shortest forms do not fit: a word is cut inside, in the longer end where the other fits whole
+  const [x, y] = [fa[fa.length - 1]!.text, fb[fb.length - 1]!.text];
+  const long = x.length >= y.length ? 0 : 1;
+  const keep = room - (long ? x : y).length;
+  if (keep < 8) return sharePair(x, y, room, cutInside);
+  const cut = cutInside(long ? y : x, keep);
+  // the other end takes back what fits beside the cut (more than its shortest form only where the cut ends short of `keep`)
+  const other = (long ? fa : fb).find((f) => f.text.length + cut.length <= room)!.text;
+  return long ? [other, cut] : [cut, other];
+}
+
+/** An end as fitPair cuts it: its text and the number of its words (idWords as it gave them up). */
+interface EndForm {
+  text: string;
+  words: number;
+}
+
+/**
+ * An end as it is and after each word it gives up, the shortest last (the
+ * rules: fitPair; `closes`: the numbers that would read like a collision
+ * suffix at the end of the id, for the end that closes it). Of the forms
+ * longer than `room`, which fit beside no other, only the shortest is
+ * listed (a long id's end lists only what can fit).
+ */
+function endForms(x: string, keepLast: boolean, room: number, names?: string[], closes?: RegExp): EndForm[] {
+  const words = idWords(x);
+  const tail = idWords(keptTail(x)).length;
+  const kept = keepLast ? Math.max(tail, 1) : tail;
+  const letter = (w: string): boolean => /[A-Za-z]/.test(w);
+  /** the index of the word given up next, -1 for none */
+  const victim = (): number => {
+    const head = words.length - tail;
+    for (let i = words.length - 1 - kept; i >= (keepLast ? 0 : 1); i--) {
+      // the last word with a letter before the Join / number tail stays
+      if (letter(words[i]!) && !words.some((w, n) => n !== i && n < head && letter(w))) continue;
+      if (i === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[i - 1]!) && /^[_.-]*\d/.test(words[i + 1] ?? ''))) return i;
+    }
+    return -1;
+  };
+  const out: EndForm[] = x.length <= room ? [{ text: x, words: words.length }] : [];
+  let length = x.length;
+  for (let i = victim(); i >= 0; i = victim()) {
+    const [dropped] = words.splice(i, 1);
+    length -= dropped!.length;
+    if (i === 0) {
+      // without its first word an end starts with the next one, without a separator and in the case the end began with
+      // (a camel stemTo end: synchronisierenTo..., urlCheckTo... as camelSlug writes it)
+      const next = words[0]!.replace(/^[_.-]+/, '');
+      length -= words[0]!.length - next.length;
+      words[0] = /^[a-z]/.test(dropped!) ? lowerFirst(next, words.slice(1).join(''), names) : next;
+    }
+    // a number the given-up word leaves at the end of the id goes too where it reads like a collision suffix
+    while (closes && !kept && words.length > 1 && closes.test(words[words.length - 1]!)) length -= words.pop()!.length;
+    if (length <= room) out.push({ text: words.join(''), words: words.length });
+  }
+  if (length > room) out.push({ text: words.join(''), words: words.length });
+  return out;
+}
+
+/** The numbers fitPair's closing end does not end on (a collision suffix's look): any where the suffix is glued (`2`: stemTo, scopedTo), a separated one where it is `_2`. */
+const closingNumber = (sep: string): RegExp => (sep === '' ? /^[_.-]*\d+$/ : /^_\d+$/);
+
+/**
+ * The first word of an end that lost its first one, lower-cased as camelSlug
+ * writes a first word (`Versenden` -> versenden, `URLCheck` -> urlCheck).
+ * `names`: the words the end was written from, which tell where a run of
+ * capitals ends (`URLPDFVersenden` + URL PDF versenden -> urlPDFVersenden;
+ * also where camelSlug cut the name at 40 and the end is a run of its middle
+ * words); without them the run is lowered whole (urlpdfVersenden, as
+ * camelSlug writes the slug).
+ */
+function lowerFirst(word: string, rest: string, names?: string[]): string {
+  const end = `${word}${rest}`.toLowerCase();
+  const tails = (names ?? []).map((_, k) => camelSlug(names!.slice(k).join(' '))).reverse();
+  const own = tails.find((t) => t.toLowerCase() === end) ?? tails.find((t) => t.toLowerCase().startsWith(end));
+  if (own) return own.slice(0, word.length);
+  return word.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (m) => m.toLowerCase());
+}
+
+/**
+ * An end cut inside a word to at most `max` characters (fitPair, once no
+ * end has a whole word left to give up): its first characters and the join
+ * or number it ends with (`3Zahlungseingangsbest2024`), where the two read
+ * apart (readsApart: never `32024`), else its first `max` characters.
+ */
+function cutInside(slug: string, max: number): string {
+  if (slug.length <= max) return slug;
+  const tail = keptTail(slug);
+  const head = slug.slice(0, Math.max(max - tail.length, 0)).replace(/[_.-]+$/, '');
+  if (tail && readsApart(head, tail)) return `${head}${tail}`;
+  return slug.slice(0, Math.max(max, 0)).replace(/[_.-]+$/, '');
+}
+
+/** fitPair as 0.6 and earlier cut the ends (inside a word where a kept last word left no room for a whole one); only derivedBases uses it, to recognise the flows it named. */
+function legacyFitPair(a: string, b: string, room: number): [string, string] {
   if (a.length + b.length <= room) return [a, b];
   // ends that begin alike (the unnamed elements after one anchor: after_check_gateway, after_check_gateway_task) differ
   // at their ends: a cut there would make them read alike, so it cuts inside and keeps each end's last word
-  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
-  return sharePair(a, b, room, first(a) === first(b) ? cutKeepingLast : cutAt);
+  return sharePair(a, b, room, beginAlike(a, b) ? cutKeepingLast : legacyCut);
 }
 
-/** fitPair's share of the room: the first end at least half, the second what is left, the first what the second leaves over. */
+/** Whether two ends begin with the same word (the unnamed elements after one anchor), which fitPair keeps apart at their ends. */
+function beginAlike(a: string, b: string): boolean {
+  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
+  return first(a) === first(b);
+}
+
+/** cutAt as 0.6 cut (legacyFitPair, derivedBases). */
+const legacyCut = (slug: string, max: number): string => cutAt(slug, max, true);
+
+/** Two ends that share the room by characters (legacyFitPair; fitPair once even the shortest forms do not fit and the shorter end leaves the longer under 8 characters): the first end at least half, the second what is left, the first what the second leaves over. */
 function sharePair(a: string, b: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
   const first = cut(a, Math.max(Math.floor(room / 2), room - b.length));
   const second = cut(b, room - first.length);
   return [cut(a, room - second.length), second];
 }
 
-/** cutAt that keeps the slug's last word (`after_check_order_gateway_task`, 25 -> `after_check_order_task`). */
+/** cutAt that keeps the slug's last word (`after_check_order_gateway_task`, 25 -> `after_check_order_task`), as 0.6 cut (legacyFitPair). */
 function cutKeepingLast(slug: string, max: number): string {
   if (slug.length <= max) return slug;
   const m = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
-  if (!m || m[2]!.length + 8 > max) return cutAt(slug, max);
-  return `${cutAt(m[1]!, max - m[2]!.length)}${m[2]}`;
+  if (!m || m[2]!.length + 8 > max) return legacyCut(slug, max);
+  return `${legacyCut(m[1]!, max - m[2]!.length)}${m[2]}`;
 }
 
 /**
  * The word a scopedTo flow uses for one of its ends: Start / End for a start
  * / end event (`startEvent_KotOrder`, `EndEvent_Failed`), else the first word
- * of the id after its prefix and the scope (`serviceTask_KotO_ValidatePayment`
- * -> Validate).
+ * with a letter of the id after its prefix and the scope
+ * (`serviceTask_KotO_ValidatePayment` -> Validate, `task_KotO_4AugenPruefen`
+ * -> Augen: a number would end the flow's id like a collision suffix, `To4`).
+ * `legacy`: the first word, as 0.6 took it (derivedBases).
  */
-function endWord(id: string, scope: string, terminal: 'Start' | 'End'): string {
+function endWord(id: string, scope: string, terminal: 'Start' | 'End', legacy = false): string {
   const segments = id.split('_');
   if (segments.length > 1 && new RegExp(`^${terminal}(Event)?$`, 'i').test(segments[0]!)) return terminal;
   const rest = segments.length > 1 ? segments.slice(1).filter((x) => x !== scope) : segments;
-  const word = nameWords(rest.join(' '))[0] ?? nameWords(id)[0] ?? terminal;
-  return ucfirst(word);
+  const word = (words: string[]): string | undefined => (legacy ? words[0] : words.find((w) => /[A-Za-z]/.test(w)));
+  return ucfirst(word(nameWords(rest.join(' '))) ?? word(nameWords(id)) ?? terminal);
 }

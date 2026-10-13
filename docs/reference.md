@@ -21,10 +21,24 @@ Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
 
 - In a file with other conventions the same elements become `serviceTask_checkStock`,
   `Task_check_stock` or a bare `reviewOrder`. Hashes and running numbers are never copied.
-- Names become ASCII words (`Prüfung buchen` gives `Activity_PruefungBuchen`), at most 64
-  characters. A taken id gets `_2`, `_3` and a `W_ID_SUFFIXED` warning.
+- Names become ASCII words (`Prüfung buchen` gives `Activity_PruefungBuchen`), at most 40 characters
+  of them: a longer name loses its last words, and a single longer word is cut at 40. An id has at
+  most 64 characters, a collision suffix included. An id within that is not cut again. A longer one
+  loses whole words: a flow's two ends give up their last words, and of the cuts that fit, the one
+  with the most words is taken, then the longest. An end keeps its first word (its last where the
+  ends begin alike), its last word with a letter before the Join or number it ends with, and that
+  Join or number; a number a cut would leave at the end of the id goes too where it would read
+  like a collision suffix (`_4`). A flow named by its ends' ids keeps each id's prefix, unless
+  the prefixes leave fewer than 16 characters (then the whole ids share the room).
+  A word is cut inside only when no whole word is left to give up, and then in the longer end,
+  which keeps its Join or number (in both ends where the longer would keep fewer than 8
+  characters). A file prefix too long to leave room gives way to the bpmn-cli prefix (for a flow,
+  in every flow form: `Flow_` and the flow's ends). A taken id gets `_2`, `_3` and a
+  `W_ID_SUFFIXED` warning.
 - A flow whose id names its ends is renamed when an edit changes them, and the result says so
-  (`renamed:`). In a batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
+  (`renamed:`): the id the file's flow form gives it, and in a file of another form also
+  `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. In a
+  batch, use aliases instead of guessing ids: [Ops JSON](ops.md#ops-json-bpmn-apply).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
 

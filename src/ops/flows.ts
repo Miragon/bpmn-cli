@@ -378,9 +378,11 @@ export function removeSequenceFlow(doc: Doc, flow: El, cs?: ChangeSet): void {
 
 /**
  * Renames a flow whose id named its old ends (the id the file's style gives
- * a flow between them, or that id with a collision suffix) after its new
- * ends, together with a DI edge id derived from it; returns the old id when
- * it renamed the flow. A flow with any other id keeps it.
+ * a flow between them, in a file of another flow form also the `named` one
+ * earlier versions gave it, or such an id with a collision suffix:
+ * IdStyle.derivedBases) after its new ends, together with a DI edge id
+ * derived from it; returns the old id when it renamed the flow. A flow with
+ * any other id keeps it.
  */
 export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTarget: El | undefined): string | undefined {
   if (!doc.followFlowEnds || !is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;
@@ -389,7 +391,8 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
   const old = idOf(flow);
   // the id a flow between the old ends gets, named by their names or (an end renamed since) by their ids, also as
-  // earlier versions named an unnamed end (by its kind: Flow_CheckToGateway) and before the length cap
+  // earlier versions named an unnamed end (by its kind: Flow_CheckToGateway), before the length cap and as 0.6 cut it
+  // (derivedBases)
   const labels = (el: El): string[] => [...new Set([labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l))];
   const derived = (base: string): boolean => old === base || (old.startsWith(base) && /^_?\d+$/.test(old.slice(base.length)));
   const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
