@@ -98,6 +98,12 @@ function everyKind(processId: string): Op[] {
     { op: 'add', kind: 'participant', name: 'Customer', as: '$cust' },
     { op: 'add', kind: 'lane', name: 'Accounting', in: processId },
     { op: 'connect', source: '$th2', target: '$cust' },
+    // a taken id whose body ends in a digit: the collision number after the word No under camelCase / PascalCase
+    { op: 'add', kind: 'serviceTask', name: 'Step 1', in: processId, as: '$n1' },
+    { op: 'add', kind: 'serviceTask', name: 'Step 1', in: processId, as: '$n2' },
+    { op: 'add', kind: 'serviceTask', name: 'Step 12', in: processId },
+    { op: 'connect', source: '$n1', target: '$n2' },
+    { op: 'connect', source: '$n1', target: '$n2' },
   ];
   return ops as Op[];
 }
@@ -125,6 +131,28 @@ describe('the ids of a new file pass element-id-naming (the real rule)', () => {
       expect(await lint(result.xml, setting)).toEqual([]);
     });
   }
+
+  it('a taken id whose body ends in a digit passes it with the word No before the number: serviceTask_step1No2, ServiceTask_Phase2No2', async () => {
+    const cases: Array<[BpmnlintRuleSetting, string, string[]]> = [
+      [{ severity: 'warn', config: {} }, 'Step 1', ['serviceTask_step1', 'serviceTask_step1No2', 'serviceTask_step1No3', 'flow_step1ToStep1No2', 'flow_step1ToStep1No2No2']],
+      [{ severity: 'warn', config: { case: 'PascalCase', prefixes: { 'bpmn:ServiceTask': 'ServiceTask_', 'bpmn:SequenceFlow': 'Flow_' } } }, 'Phase 2', ['ServiceTask_Phase2', 'ServiceTask_Phase2No2', 'ServiceTask_Phase2No3', 'Flow_Phase2ToPhase2No2', 'Flow_Phase2ToPhase2No2No2']],
+    ];
+    for (const [setting, name, ids] of cases) {
+      const conventions = conventionsOf(setting);
+      const doc = Doc.create({ processName: 'Steps', conventions });
+      const processId = doc.processes()[0]!.get<string>('id');
+      const ops = [
+        { op: 'add', kind: 'serviceTask', name, in: processId, as: '$a' },
+        { op: 'add', kind: 'serviceTask', name, in: processId, as: '$b' },
+        { op: 'add', kind: 'serviceTask', name, in: processId },
+        { op: 'connect', source: '$a', target: '$b' },
+        { op: 'connect', source: '$a', target: '$b' },
+      ] as unknown as Op[];
+      const result = await mutateDoc(doc, ops, { layout: false, conventions });
+      expect(result.changes.created.map((c) => c.id)).toEqual(ids);
+      expect(await lint(result.xml, setting)).toEqual([]);
+    }
+  });
 
   it('without declared conventions the same batch gives ids the rule reports (the control)', async () => {
     const doc = Doc.create({ processName: 'Invoice handling' }, 'invoice-handling.bpmn');

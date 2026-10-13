@@ -207,6 +207,40 @@ describe('new ids take the declared prefix and case', () => {
     expect(createdIds(snake)).toEqual(expect.arrayContaining(['serviceTask_check_order', 'serviceTask_check_order_2', 'gateway_after_check_order', 'gateway_after_check_order_join_2']));
   });
 
+  it('a glued suffix after a body that ends in a digit takes the word No: step1No2, never step12 (the id Step 12 gets)', async () => {
+    // before: serviceTask_step12 for the second Step 1, serviceTask_step122 for Step 12, serviceTask_step13 for the third
+    const camel = await run(definitionsXml(''), [
+      { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1', as: '$a' },
+      { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', name: 'Step 12', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', name: 'Check order', in: 'Process_1', as: '$c' },
+      { op: 'connect', source: '$c', target: '$a' },
+      { op: 'connect', source: '$c', target: '$a' },
+      { op: 'add', kind: 'serviceTask', name: 'Check order', in: 'Process_1' },
+    ]);
+    expect(createdIds(camel)).toEqual(['serviceTask_step1', 'serviceTask_step1No2', 'serviceTask_step12', 'serviceTask_step1No3', 'serviceTask_checkOrder', 'flow_checkOrderToStep1', 'flow_checkOrderToStep1No2', 'serviceTask_checkOrder2']);
+    expect(camel.changes.warnings.filter((w) => w.code === 'W_ID_SUFFIXED').map((w) => w.message)).toEqual([
+      'Id serviceTask_step1 is already taken; using serviceTask_step1No2',
+      'Id serviceTask_step1 is already taken; using serviceTask_step1No3',
+      'Id flow_checkOrderToStep1 is already taken; using flow_checkOrderToStep1No2',
+      'Id serviceTask_checkOrder is already taken; using serviceTask_checkOrder2',
+    ]);
+    const pascal = await run(definitionsXml(''), [
+      { op: 'add', kind: 'serviceTask', name: 'Phase 2', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', name: 'Phase 2', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', name: 'Phase 22', in: 'Process_1' },
+    ], declared({ prefixes: { 'bpmn:ServiceTask': 'ServiceTask_' }, case: 'PascalCase' }));
+    expect(createdIds(pascal)).toEqual(['ServiceTask_Phase2', 'ServiceTask_Phase2No2', 'ServiceTask_Phase22']);
+    // snake_case keeps `_2`; the id a retype in the batch gives (Doc.regeneratedId) and the W_ID_PREFIX_STALE hint take No too
+    const snake = await run(definitionsXml(''), [{ op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }, { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }], declared({ case: 'snake_case' }));
+    expect(createdIds(snake)).toEqual(['serviceTask_step_1', 'serviceTask_step_1_2']);
+    const retyped = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/>'), [{ op: 'add', kind: 'task', name: 'Step 1', in: 'Process_1', as: '$t' }, { op: 'retype', id: '$t', kind: 'serviceTask' }]);
+    expect(createdIds(retyped)).toEqual(['serviceTask_step1No2']);
+    const hinted = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/><bpmn:userTask id="userTask_step1" name="Step 1"/>'), [{ op: 'retype', id: 'serviceTask_step1', kind: 'userTask' }]);
+    expect(hinted.changes.warnings.find((w) => w.code === 'W_ID_PREFIX_STALE')?.hint).toContain('`bpmn set <file> serviceTask_step1 id=userTask_step1No2`');
+  });
+
   it('the join follows the declared case also in a file of bare ids, and the declared prefix after a split id without it', async () => {
     const bare = definitionsXml(`
     <bpmn:startEvent id="start" name="Start"><bpmn:outgoing>startToCheckInvoice</bpmn:outgoing></bpmn:startEvent>
@@ -737,7 +771,7 @@ describe('bpmn show --conventions (the view)', () => {
     expect(renderConventions(long)).toContain(') required, new ids take it (not the triggers marked above)');
   });
 
-  it('the flow pattern is the head new flows get: F_ after numbered F1..F12, flow glued after flow1..flow12, Flow_ after a prefix that leaves no room', async () => {
+  it('the flow pattern is the head new flows get: F_ after numbered F1..F12, flow glued after flow1..flow12, a long prefix where the ends fit, Flow_ after one that leaves no room', async () => {
     const numbered = (ids: string[]) => definitionsXml(`
     <bpmn:startEvent id="StartEvent_Start" name="Start"/>
     <bpmn:task id="Activity_PackGoods" name="Pack goods"/>
@@ -749,11 +783,19 @@ describe('bpmn show --conventions (the view)', () => {
     for (const [ids, pattern, id] of [
       [['F1', 'F2', 'F3'], 'F_{source}To{target}', 'F_PackGoodsToEnd'],
       [['flow1', 'flow2', 'flow3'], 'flow{source}To{target}', 'flowPackGoodsToEnd'],
-      [['Q'.repeat(47) + '_1', 'Q'.repeat(47) + '_2', 'Q'.repeat(47) + '_3'], 'Flow_{source}To{target}', 'Flow_PackGoodsToEnd'],
+      // a prefix that leaves the ends fewer than 16 characters stays where they fit (before: Flow_PackGoodsToEnd)
+      [['Q'.repeat(47) + '_1', 'Q'.repeat(47) + '_2', 'Q'.repeat(47) + '_3'], `${'Q'.repeat(47)}_{source}To{target}`, `${'Q'.repeat(47)}_PackGoodsToEnd`],
+      [['Q'.repeat(60) + '_1', 'Q'.repeat(60) + '_2', 'Q'.repeat(60) + '_3'], 'Flow_{source}To{target}', 'Flow_PackGoodsToEnd'],
     ] as const) {
       const xml = numbered([...ids]);
-      expect(conventionsView(await Doc.fromXml(xml), undefined).rows.find((r) => r.kinds.includes('sequenceFlow'))?.pattern, ids[0]).toBe(pattern);
+      const row = conventionsView(await Doc.fromXml(xml), undefined).rows.find((r) => r.kinds.includes('sequenceFlow'));
+      expect(row?.pattern, ids[0]).toBe(pattern);
+      expect(row?.note, ids[0]).toBe(ids[0].length === 49 ? 'Flow_ where the ends do not fit' : undefined);
       expect(createdIds(await run(xml, [{ op: 'connect', source: 'Activity_PackGoods', target: 'EndEvent_End' }], null))).toEqual([id]);
     }
+    // beside the long prefix the ends give up whole words; where their first words do not fit: Flow_
+    const q47 = numbered(['Q'.repeat(47) + '_1', 'Q'.repeat(47) + '_2', 'Q'.repeat(47) + '_3']);
+    expect(createdIds(await run(q47, [{ op: 'connect', source: 'Activity_ShipGoods', target: 'Activity_PackGoods' }], null))).toEqual([`${'Q'.repeat(47)}_ShipToPackGoods`]);
+    expect(createdIds(await run(q47, [{ op: 'add', kind: 'task', name: 'Warenwirtschaftssystemabgleich', after: 'Activity_ShipGoods' }], null))).toEqual(['Activity_Warenwirtschaftssystemabgleich', 'Flow_WarenwirtschaftssystemabgleichToEnd']);
   });
 });

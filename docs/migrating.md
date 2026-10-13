@@ -220,7 +220,10 @@
   a collision suffix (issue #31). 0.6 could cut a flow's end inside a word
   (`Flow_ConsignationSynchronisierenToConsignationsProtokollieren`); now an
   id within 64 characters is not cut again, and a longer one loses whole
-  words. A name still gives at most 40 characters of words, as in 0.6. A
+  words. A name still gives at most 40 characters of words, as in 0.6, but
+  a cut no longer ends on a filler word such as `und` or `an`
+  (`Activity_LieferantenbestellungVersenden`, 0.6:
+  `Activity_LieferantenbestellungVersendenUnd`), nor does a cut flow end. A
   flow's ends keep the most words that fit (0.6 shared the room by
   characters), an end never shrinks to a number or to a bare Join, two
   numbers never run into one (0.6: `Flow_2ToVertragsunterlagenarchivierung`,
@@ -231,14 +234,25 @@
   (`Flow_KotO_ValidateToReserve`) cuts its two end words instead of losing
   the target (0.6: `Flow_KotO_WarenwirtschaftssystemabgleichTo`), and a
   number is no end word (0.6: `Flow_KotO_ReserveTo4`). A file prefix too
-  long to leave an id room gives way to the bpmn-cli prefix (0.6 went past
-  64 characters). A flow the length cap cut still counts for the file's
-  flow form, also one 0.6 cut (in 0.6, enough of them switched a file of
-  `Flow_<sourceId>_<targetId>` flows to `Flow_<Source>To<Target>`, and its
-  flows stopped following their ends). The same edit can therefore give a
-  long id that differs from the one 0.6 gave. Flows 0.6 named are still
-  renamed after their ends, also as 0.6 cut them and in a file that now
-  reads as another form (they then get that form's id).
+  long to leave an id room gives way to the bpmn-cli prefix where the id
+  would not fit with it (0.6 went past 64 characters), and so does a flow
+  prefix or scope that leaves the ends fewer than 16 characters where they
+  do not fit beside it at whole words (0.6 kept it and cut them). A taken
+  id whose glued suffix (stemTo and scopedTo flows) follows a digit gets
+  `No` before the number (`flow_checkOrderToSendPdf10No2`; 0.6:
+  `...Pdf102`); 0.6's glued ids still follow their ends. Where a file's
+  data object references and data objects share one prefix (bare ids
+  too), the backing `bpmn:DataObject` / `bpmn:DataStore` of a long name
+  keeps its `Object` / `Store` word after the cut body
+  (`processDataArtefactItem_lieferung_vollstaendig_object`; 0.6:
+  `..._eingegangen_2` with `W_ID_SUFFIXED`). A flow the length cap cut still
+  counts for the file's flow form, also one 0.6 cut (in 0.6, enough of them
+  switched a file of `Flow_<sourceId>_<targetId>` flows to
+  `Flow_<Source>To<Target>`, and its flows stopped following their ends).
+  The same edit can therefore give a long id that differs from the one 0.6
+  gave. Flows 0.6 named are still renamed after their ends, also as 0.6 cut
+  them and in a file that now reads as another form (they then get that
+  form's id).
 - Flow ids can be kept (issue #32): `--keep-flow-ids` on every mutating
   command and `apply`, `BPMN_KEEP_FLOW_IDS=1` as the default of a shell or
   an agent session, `keepFlowIds` in `EditOptions` / `MutationOptions`. A
@@ -341,7 +355,8 @@
   of `new` change only where the rule names `bpmn:Process` /
   `bpmn:Definitions` exactly (`process_orderHandling`, `process_main`
   without a name); no id the file has changes. Under camelCase or
-  PascalCase a taken id gets a glued `2` (`serviceTask_checkInvoice2`) and a
+  PascalCase a taken id gets a glued `2` (`serviceTask_checkInvoice2`; after
+  a digit `No2`: `serviceTask_step1No2`) and a
   split's join is `<gatewayId>Join`. A result names such ids
   (`conventions:`; `MutationResult.conventions`). `--no-lint-config` gives
   the ids of before.

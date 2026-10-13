@@ -595,10 +595,10 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(kindsSectionText(['ids'])).toMatch(/a word is cut inside only when no whole word is left to give up/);
     expect(kindsSectionText(['ids'])).toMatch(/of the cuts that fit, the one with the most words, then the most characters/);
     expect(DOCS).toMatch(/of the cuts that fit, the one\s+with the most words is taken, then the longest/);
-    // a number a cut leaves goes only where it reads like a collision suffix; a long prefix gives way in every flow form
+    // a number a cut leaves goes only where it reads like a collision suffix; a long prefix gives way in every flow form where the ends do not fit
     expect(DOCS).toMatch(/a number a cut would leave at the end of the id goes too where it would read\s+like a collision suffix/);
     expect(kindsSectionText(['ids'])).toMatch(/a number left at the end of the id goes too where it reads like a collision suffix/);
-    expect(kindsSectionText(['ids'])).toMatch(/a flow prefix or scope that leaves a flow's ends fewer than 16 to a named flow with Flow_/);
+    expect(kindsSectionText(['ids'])).toMatch(/a flow prefix or scope that leaves a flow's ends fewer than 16 stays where the ends fit beside it at whole words, else a named flow with Flow_/);
     for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/cut at a word\b|an id that fits is never cut/);
   });
 

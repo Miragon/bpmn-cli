@@ -17,25 +17,39 @@ decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken 
 | unnamed | prefix + kind word and place (`After`, `Before`, `On`, `In`) | `Gateway_AfterArchive`, `Event_TimerOnArchive` |
 | sequence / message flow | its two ends | `Flow_CheckInvoiceToBookInvoice` |
 | join of a split | the split gateway's id + `_join` (camelCase: `Join`) | `Gateway_InvoiceOk_join` |
-| data object / store | reference and backing element, each with its own prefix | `DataObjectReference_Invoice` + `DataObject_Invoice` |
+| data object / store | reference and backing element, each with its own prefix (one prefix for both: the backing element ends in `Object` / `Store`, kept after a long name too) | `DataObjectReference_Invoice` + `DataObject_Invoice`, `data_invoice` + `data_invoiceObject` |
 | diagram (DI) | the form of the file's DI ids | `<id>_di`, `BPMNShape_<id>` |
 
 - In a file with other conventions the same elements become `serviceTask_checkStock`,
   `Task_check_stock` or a bare `reviewOrder`. Hashes and running numbers are never copied.
 - Names become ASCII words (`Prüfung buchen` gives `Activity_PruefungBuchen`), at most 40 characters
-  of them: a longer name loses its last words, and a single longer word is cut at 40. An id has at
+  of them: a longer name loses its last words, and a single longer word is cut at 40. A cut never
+  ends on a filler word (`und`, `an`, `die`, `the`, `of`, ...; the first word stays, and so does one
+  between two numbers, `StartAfter2Und2`):
+  `Activity_LieferantenbestellungVersenden` for "Lieferantenbestellung versenden und
+  Zahlungseingang prüfen". An id has at
   most 64 characters, a collision suffix included. An id within that is not cut again. A longer one
   loses whole words: a flow's two ends give up their last words, and of the cuts that fit, the one
   with the most words is taken, then the longest. An end keeps its first word (its last where the
   ends begin alike), its last word with a letter before the Join or number it ends with, and that
-  Join or number; a number a cut would leave at the end of the id goes too where it would read
+  Join or number with the numbers right before it (`zahlungseingang_2_2` never names
+  `zahlungseingang_2`); a number a cut would leave at the end of the id goes too where it would read
   like a collision suffix (`_4`). A flow named by its ends' ids keeps each id's prefix, unless
   the prefixes leave fewer than 16 characters (then the whole ids share the room).
   A word is cut inside only when no whole word is left to give up, and then in the longer end,
   which keeps its Join or number (in both ends where the longer would keep fewer than 8
-  characters). A file prefix too long to leave room gives way to the bpmn-cli prefix (for a flow,
-  in every flow form: `Flow_` and the flow's ends). A taken id gets `_2`, `_3` and a
-  `W_ID_SUFFIXED` warning.
+  characters). A cut keeps a letter: where the room ends inside a leading number, it starts at the
+  first word with a letter. A file prefix too long to leave a body 8 characters beside a suffix
+  (more than 52 characters) stays where the body's words up to its first word with a letter that
+  is no filler word fit beside it whole (`derAuftrag`, `2024Rechnung`; an unnamed element's up to
+  its anchor's first word, `afterCheck`), and gives way to the bpmn-cli prefix elsewhere
+  (`activity_auftrag`, `activity_afterCheckOrder`); a flow prefix or scope that leaves the
+  ends fewer than 16 characters stays where they fit beside it at whole words, and gives way to
+  `Flow_` and the flow's ends elsewhere, in every flow form. One file can hold both forms. A taken
+  id gets `_2`, `_3` (glued `2`, `3` in stemTo and scopedTo flows and under a declared camelCase /
+  PascalCase, after a digit `No2`: `flow_checkOrderToSendPdf10No2`) and a `W_ID_SUFFIXED` warning;
+  where the suffix leaves a long head's ends no room, the id takes the `Flow_` form with its `_2`
+  (`Flow_Validate_To_Step1_2`).
 - A flow whose id names its ends is renamed when an edit changes them, and the result says so
   (`renamed:`): the id the file's flow form gives it, and in a file of another form also
   `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. An end
@@ -65,7 +79,7 @@ names its trigger. bpmn-cli reads it as the rule does, and the ids it generates 
 | unnamed, or a number first | the kind word without what the prefix says: `endEvent_terminateAfterPaid`, `startEvent_timer1stOfMonth`; the whole word where the body would else be empty or begin with a number: `scriptTask_scriptTask`, `scriptTask_scriptTask4AugenPrinzip` |
 | sequence flow | the rule's prefix + its two ends: `flow_checkInvoiceToBookInvoice` |
 | message flow | an exact `bpmn:MessageFlow` prefix, else like the file's own message flows (two that agree), else like sequence flows |
-| a taken id, a join | glued under camelCase / PascalCase: `serviceTask_checkInvoice2`, `gateway_approvedJoin`; the join after an explicit split id the rule rejects: its prefix + the gateway, `gateway_checkJoin` |
+| a taken id, a join | glued under camelCase / PascalCase: `serviceTask_checkInvoice2`, after a digit with `No` before the number (`serviceTask_step1No2`, never `serviceTask_step12`), `gateway_approvedJoin`; the join after an explicit split id the rule rejects: its prefix + the gateway, `gateway_checkJoin` |
 | what the rule does not name | the file's style (without the ids that already follow the rule); in a file without it, the rule's case and prefix shape: `lane_sales` |
 | process, definitions | bpmn-cli's (`Process_InvoiceHandling`, also the process of a new pool), unless the rule names `bpmn:Process` / `bpmn:Definitions` (`process_main` without a name) |
 

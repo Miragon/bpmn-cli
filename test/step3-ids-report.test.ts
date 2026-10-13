@@ -10,8 +10,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, validateXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
+import { conventionsView } from '../src/conventions.js';
 import { ID_CONVENTIONS } from '../src/guide.js';
-import { cutAt, IdRegistry, idWords, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids.js';
+import { cutAt, cutName, IdRegistry, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids.js';
 import { connectionRequest, IdStyle, kindRequest } from '../src/idstyle.js';
 import { kindByName } from '../src/kinds.js';
 import { runOps } from '../src/ops/index.js';
@@ -255,8 +256,9 @@ describe('id quality: context once, length cap, transliteration', () => {
     const base = await newXml({ processName: 'Long' });
     const r = await applyToXml(base.xml, ops);
     for (const id of ids(r.xml)) expect(id.length).toBeLessThanOrEqual(MAX_ID);
-    // a name gives at most 40 characters of words, although Activity_BenachrichtigungUeberDenBearbeitungsstand fits into 64
-    expect(r.result.aliases).toMatchObject({ $a: 'Activity_PruefenObDieEingereichtenUnterlagen', $b: 'Activity_BenachrichtigungUeberDen' });
+    // a name gives at most 40 characters of words, although Activity_BenachrichtigungUeberDenBearbeitungsstand fits into 64,
+    // and they never end on a filler word (before: Activity_BenachrichtigungUeberDen)
+    expect(r.result.aliases).toMatchObject({ $a: 'Activity_PruefenObDieEingereichtenUnterlagen', $b: 'Activity_BenachrichtigungUeber' });
     // a flow's two ends share the room: of the cuts with the most words the longest, the target gives up Den, not the
     // source Unterlagen (0.6 and the first cut of #31: Flow_PruefenObDieEingereichtenToBenachrichtigungUeberDen)
     expect(flowIds(r.xml)).toContain('Flow_PruefenObDieEingereichtenUnterlagenToBenachrichtigungUeber');
@@ -371,8 +373,11 @@ describe('id quality: context once, length cap, transliteration', () => {
         if (full[0] !== other[0]) {
           const at = words.indexOf('To');
           for (const [cut, whole] of [[words.slice(0, at), full], [words.slice(at + 1), other]] as const) {
-            // a number goes with the word after it (an end never ends on a number it did not end with)
-            const next = whole.slice(cut.length, /^\d+$/.test(whole[cut.length]!) ? cut.length + 2 : cut.length + 1).join('');
+            // a number goes with the word after it (an end never ends on a number it did not end with), so does a filler
+            // word (und, an: a cut never ends on one)
+            let k = cut.length;
+            while (k < whole.length - 1 && (/^\d+$/.test(whole[k]!) || isFiller(whole[k]!))) k++;
+            const next = whole.slice(cut.length, k + 1).join('');
             if (cut.length < whole.length && cut.every((w, n) => w === whole[n])) expect(id.length + next.length, `${next} after ${id}`).toBeGreaterThan(MAX_ID);
           }
         }
@@ -481,6 +486,57 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(pair.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task_zahlungseingangsbestaetigungen_pruefen', 'Task_freigabe_stufe_2_pruefung_2'))).toBe('Flow_Task_zahlungseingangsbestaetigungen_pruefen_Task_freigabe_2');
   });
 
+  it('a cut flow to a target that ends in two numbers keeps both: x_2_2 never names x_2, and a flow skips no suffix', async () => {
+    const pair = await idFlows('_');
+    const source = 'Task_zahlungseingangsbestaetigungen_pruefen_und_buchen';
+    const registry = new IdRegistry();
+    const flows = ['Task_zahlungseingang_2', 'Task_zahlungseingang_2_2', 'Task_zahlungseingang_2_2'].map((target) => {
+      const req = connectionRequest('bpmn:SequenceFlow', source, target);
+      const out = pair.next(req, registry);
+      registry.claim(out.id);
+      return { ...out, req };
+    });
+    // before: the flow to _2_2 wanted the id of the flow to _2 (its inner _2 given up) and took _2_2, the next _2_3,
+    // each with W_ID_SUFFIXED; now the source gives up more, inside its one word where nothing else is left
+    expect(flows.map((f) => f.id)).toEqual([
+      'Flow_Task_zahlungseingangsbestaetigungen_Task_zahlungseingang_2',
+      'Flow_Task_zahlungseingangsbestaetigunge_Task_zahlungseingang_2_2',
+      'Flow_Task_zahlungseingangsbestaetigun_Task_zahlungseingang_2_2_2',
+    ]);
+    expect(flows.map((f) => f.id === f.base)).toEqual([true, true, false]);
+    for (const f of flows) expect(pair.derivedBases(f.req).some((b) => f.id === b || (f.id.startsWith(b) && /^_\d+$/.test(f.id.slice(b.length)))), f.id).toBe(true);
+    // a target x_2_2 behind a long source: _2 follows the base (before: the base was ..._und_Task_x_2_2, whose cut for
+    // _2 gave the base back, so the flows took _2_3, _2_4)
+    const ids = new IdRegistry();
+    const given: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const { id } = pair.next(connectionRequest('bpmn:SequenceFlow', source, 'Task_x_2_2'), ids);
+      ids.claim(id);
+      given.push(id);
+    }
+    expect(given).toEqual(['Flow_Task_zahlungseingangsbestaetigungen_pruefen_Task_x_2_2', 'Flow_Task_zahlungseingangsbestaetigungen_pruefen_Task_x_2_2_2', 'Flow_Task_zahlungseingangsbestaetigungen_pruefen_Task_x_2_2_3']);
+    // only numbers before a number tail stay: a number a cut leaves at the end of an end without one still goes (as before)
+    expect(pair.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task_synchronisieren_10_of_und_protokollieren_bestellungen_eingegangen', 'Task_lieferantenbestellungsuebersicht_x'))).toBe('Flow_Task_synchronisieren_Task_lieferantenbestellungsuebersicht');
+    expect(pair.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task_versenden_versenden_2_10_auftrag', 'Task_kunde_und_the_of_pruefen_rechnung_eingegangen'))).toBe('Flow_Task_versenden_versenden_2_10_Task_kunde_und_the_of_pruefen');
+    // an element body that the 64-character cap ends on a number skips the suffix its cut gives back: a shorter cut would
+    // read as another name's id (never <prefix>_auftrag_2 for the second Auftrag 2 2, which pushed Auftrag 2 to _2_4,
+    // nor <prefix>_step_kunde_2 for the second Step Kunde Kunde 2 freigeben)
+    const task = kindByName('task')!;
+    const long = 'orderFulfilmentProcessTaskWithAVeryLongPrefixNameForTestingXYZ';
+    const repeated = async (prefix: string, names: string[]): Promise<string[]> => {
+      const style = IdStyle.infer((await Doc.fromXml(definitionsXml(['check_order', 'ship_order', 'bill_order'].map((b) => `<bpmn:task id="${prefix}_${b}" name="${b.replace('_', ' ')}" />`).join('\n')))).definitions);
+      const registry = new IdRegistry();
+      return names.map((name) => {
+        const { id } = style.next(kindRequest(task, { name }), registry);
+        registry.claim(id);
+        expect(id.length, id).toBeLessThanOrEqual(MAX_ID);
+        return id.slice(prefix.length);
+      });
+    };
+    expect(await repeated(long.slice(0, 52), ['Auftrag 2 2', 'Auftrag 2 2', 'Auftrag 2 2', 'Auftrag 2', 'Auftrag'])).toEqual(['_auftrag_2_2', '_auftrag_2_3', '_auftrag_2_4', '_auftrag_2', '_auftrag']);
+    expect(await repeated(long.slice(0, 45), Array(3).fill('Step Kunde Kunde 2 freigeben'))).toEqual(['_step_kunde_kunde_2', '_step_kunde_kunde_3', '_step_kunde_kunde_4']);
+  });
+
   it('#31: a camelCase end without its first word starts as camelSlug writes it', async () => {
     // camel bodies, hashed flows: named flows with camelCase sources
     const xml = definitionsXml(`
@@ -493,9 +549,10 @@ describe('id quality: context once, length cap, transliteration', () => {
     const flow = (sourceLabel: string, targetLabel: string): string => style.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Activity_A', 'Activity_B', { sourceLabel, targetLabel }));
     expect(flow('URL PDF versenden', 'Ship')).toBe('Flow_urlPDFVersendenToShip');
     // the ends begin alike: the source gives up its first word, and the rest reads as above (not urlpdfVersenden)
-    expect(flow('Lieferantenbestellungen URL PDF versenden', 'Lieferantenbestellungen prüfen und abschließen')).toBe('Flow_urlPDFVersendenToLieferantenbestellungenPruefenUnd');
+    // (the target's 40 characters end before the filler word: before ...PruefenUnd)
+    expect(flow('Lieferantenbestellungen URL PDF versenden', 'Lieferantenbestellungen prüfen und abschließen')).toBe('Flow_urlPDFVersendenToLieferantenbestellungenPruefen');
     // also where camelSlug cut the name at 40 characters, so that the end is a run of its middle words
-    expect(flow('Lieferantenbestellungen URL PDF versenden und archivieren', 'Lieferantenbestellungen prüfen und abschließen')).toBe('Flow_urlPDFVersendenToLieferantenbestellungenPruefenUnd');
+    expect(flow('Lieferantenbestellungen URL PDF versenden und archivieren', 'Lieferantenbestellungen prüfen und abschließen')).toBe('Flow_urlPDFVersendenToLieferantenbestellungenPruefen');
   });
 
   it('#31: a very long file prefix gives way to the bpmn-cli prefix rather than pass 64 characters', async () => {
@@ -544,6 +601,11 @@ describe('id quality: context once, length cap, transliteration', () => {
         const id = long.derivedBase(req);
         expect(id, `${form} ${n}`).toMatch(/^Flow_(validate|Validate)/);
         expect(id.length).toBeLessThanOrEqual(MAX_ID);
+        // short ends fit beside a prefix of 48 characters at whole words: the prefix stays (before: Flow_ for every flow)
+        const short = long.derivedBase(connectionRequest('bpmn:SequenceFlow', `Task_${body('pack_it')}`, `Task_${body('ship_it')}`));
+        // (idPair / idSnake: the ends' own prefixes leave their words no room)
+        const kept: Record<string, string> = { stemTo: `${p}_packItToShipIt`, stemSnake: `${p}_pack_to_ship_it` };
+        expect(short, `${form} ${n}`).toBe((n === 48 && kept[form]) || (form === 'stemTo' ? 'Flow_packItToShipIt' : 'Flow_pack_it_to_ship_it'));
       }
     }
     const scope = 'KundenauftragsabwicklungUndLieferantenbestellungsprozessX';
@@ -557,6 +619,53 @@ describe('id quality: context once, length cap, transliteration', () => {
     const s = await applyToXml(scoped, [{ op: 'connect', source: scopedTask('Validate'), target: scopedTask('Ship') }, { op: 'connect', source: scopedTask('Validate'), target: scopedTask('Ship') }], { layout: false });
     // named by the end words in the case of the file's bodies (Pascal_Snake: <scope>_Validate)
     expect(flowIds(s.xml).filter((id) => !id.includes(scope))).toEqual(['Flow_Validate_To_Ship', 'Flow_Validate_To_Ship_2']);
+  });
+
+  it('a body keeps a letter in a small room; a file prefix over 52 characters stays where the body\'s first word with a letter fits whole beside it', async () => {
+    // a room that ends inside a leading number: the cut starts at the first word with a letter (before: 10202422024)
+    expect(cutAt('10202422024Rechnung', 11)).toBe('Rechnung');
+    expect(cutAt('10202422024Rechnung', 6)).toBe('Rechnu');
+    expect(cutAt('2024_100_rechnung_pruefen', 9)).toBe('rechnung');
+    // a cut that keeps a letter is unchanged
+    expect(cutAt('10202422024Rechnung', 12)).toBe('10202422024R');
+    const task = kindByName('task')!;
+    const names = ['10202422024 Rechnung', '2024 100 Rechnung', '2024 100 Rechnung', 'Auftrag', 'Auftrag', 'Gh'];
+    const idsUnder = async (prefix: string): Promise<string[]> => {
+      const style = IdStyle.infer((await Doc.fromXml(definitionsXml(['checkOrder', 'shipOrder', 'billOrder'].map((b) => `<bpmn:task id="${prefix}_${b}" name="${b}" />`).join('\n')))).definitions);
+      const registry = new IdRegistry();
+      return names.map((name) => {
+        const { id } = style.next(kindRequest(task, { name }), registry);
+        registry.claim(id);
+        expect(id.length, id).toBeLessThanOrEqual(MAX_ID);
+        return id.startsWith(prefix) ? `<prefix>${id.slice(prefix.length)}` : id;
+      });
+    };
+    const long = 'orderFulfilmentProcessTaskWithAVeryLongPrefixNameForTestingXYZ';
+    // 52 characters (before: <prefix>_10202422024, no letter); a camelCase body that lost its number begins in lower case
+    expect(await idsUnder(long.slice(0, 52))).toEqual(['<prefix>_rechnung', '<prefix>_2024100Rech', '<prefix>_2024100Re_2', '<prefix>_auftrag', '<prefix>_auftrag_2', '<prefix>_gh']);
+    // 53 (before: <prefix>_1020242202, <prefix>_2024100Rec, <prefix>_2024100R_2)
+    expect(await idsUnder(long.slice(0, 53))).toEqual(['activity_10202422024Rechnung', 'activity_2024100Rechnung', 'activity_2024100Rechnung_2', '<prefix>_auftrag', '<prefix>_auftrag_2', '<prefix>_gh']);
+    // 55 (before: <prefix>_202410_2 without a letter, <prefix>_auftra_2): the suffix leaves Auftrag no room beside the prefix
+    expect(await idsUnder(long.slice(0, 55))).toEqual(['activity_10202422024Rechnung', 'activity_2024100Rechnung', 'activity_2024100Rechnung_2', '<prefix>_auftrag', 'activity_auftrag_2', '<prefix>_gh']);
+    // 56 and more (before: activity_ for every id): the file's prefix where the id fits (Gh, 59 characters)
+    expect(await idsUnder(long.slice(0, 56))).toEqual(['activity_10202422024Rechnung', 'activity_2024100Rechnung', 'activity_2024100Rechnung_2', '<prefix>_auftrag', 'activity_auftrag_2', '<prefix>_gh']);
+    expect(await idsUnder(long.slice(0, 62))).toEqual(['activity_10202422024Rechnung', 'activity_2024100Rechnung', 'activity_2024100Rechnung_2', 'activity_auftrag', 'activity_auftrag_2', 'activity_gh']);
+    // a filler word is no first word to keep the prefix for (not <prefix>_the)
+    const style = IdStyle.infer((await Doc.fromXml(definitionsXml(['checkOrder', 'shipOrder'].map((b) => `<bpmn:task id="${long.slice(0, 56)}_${b}" name="${b}" />`).join('\n')))).definitions);
+    expect(style.derivedBase(kindRequest(task, { name: 'The archive' }))).toBe('activity_theArchive');
+    // nor is the context word of an unnamed element: its id names the anchor (not <prefix>_after, <prefix>_after_2, ...
+    // with W_ID_SUFFIXED, from 56 characters on; before the bpmn-cli prefix also <prefix>_after at 54 and 55)
+    const unnamed = async (n: number): Promise<{ ids: string[]; suffixed: number }> => {
+      const p = long.slice(0, n);
+      const xml = definitionsXml(['checkOrder', 'shipOrder', 'billOrder'].map((b) => `<bpmn:task id="${p}_${b}" name="${b}" />`).join('\n'));
+      const r = await applyToXml(xml, ['checkOrder', 'shipOrder', 'billOrder'].map((b) => ({ op: 'add', kind: 'task', after: `${p}_${b}` })), { layout: false });
+      const ids = r.result.created.filter((c) => c.kind === 'task').map((c) => (c.id.startsWith(p) ? `<prefix>${c.id.slice(p.length)}` : c.id));
+      return { ids, suffixed: r.result.warnings.added.filter((w) => w.code === 'W_ID_SUFFIXED').length };
+    };
+    for (const n of [55, 56, 58]) expect(await unnamed(n), String(n)).toEqual({ ids: ['activity_afterCheckOrder', 'activity_afterShipOrder', 'activity_afterBillOrder'], suffixed: 0 });
+    // where the anchor's first word fits, the prefix stays, per id
+    expect(await unnamed(54)).toEqual({ ids: ['activity_afterCheckOrder', '<prefix>_afterShip', '<prefix>_afterBill'], suffixed: 0 });
+    expect(await unnamed(53)).toEqual({ ids: ['<prefix>_afterCheck', '<prefix>_afterShip', '<prefix>_afterBill'], suffixed: 0 });
   });
 
   /** A style learned from a file whose flows are `Flow_<sourceId><join><targetId>` (idPair `_`, idSnake `_to_`). */
@@ -577,9 +686,10 @@ describe('id quality: context once, length cap, transliteration', () => {
       { op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_J', as: '$s' },
       { op: 'add', kind: 'task', name: 'Lieferantenbestellungen prüfen', after: '$s', as: '$t' },
       { op: 'split', after: '$t', kind: 'parallelGateway', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { nodes: [{ kind: 'task', name: 'B' }] }], joinAs: '$j' },
-      { op: 'add', kind: 'task', name: 'Lieferantenbestellungen buchen und an die Buchhaltung melden', after: '$j' },
+      { op: 'add', kind: 'task', name: 'Lieferantenbestellungen buchen lassen und melden', after: '$j' },
     ]);
-    expect(flowIds(joined.xml)).toContain('Flow_LieferantenbestellungenJoinToLieferantenbestellungenDie');
+    // (the target's 40 characters end before the filler word: LieferantenbestellungenBuchenLassen, before ...LassenUnd)
+    expect(flowIds(joined.xml)).toContain('Flow_LieferantenbestellungenJoinToLieferantenbestellungenLassen');
     expect(flow('Activity_A', 'Activity_B', { sourceLabel: '2 Lieferantenbestellungen Join', targetLabel: 'Warenwirtschaftssystemabgleich' })).toBe('Flow_2LieferantenbestellungenJoinToWarenwirtschaftssystemabgleic');
     // an end never shrinks to a number: its first word stays, the other end gives up its own
     expect(flow('Activity_A', 'Activity_B', { sourceLabel: 'Lieferantenbestellungsabwicklung 10', targetLabel: 'Lieferantenbestellungsabwicklung ok' })).toBe('Flow_Lieferantenbestellungsabwicklung10ToOk');
@@ -589,6 +699,35 @@ describe('id quality: context once, length cap, transliteration', () => {
     const style = await idFlows('_');
     expect(style.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task_a1', 'Task_a2'))).toBe('Flow_Task_a1_Task_a2');
     expect(style.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task__eingangsrechnung_pruefen_lassen', 'Task__lieferschein_scannen_ablegen'))).toBe('Flow_Task__eingangsrechnung_pruefen_Task__lieferschein_scannen');
+  });
+
+  it('a cut never ends on a filler word (und, an, die): the ends of a flow and the 40 characters of a name give it up too, never the first word', async () => {
+    const flow = (sourceLabel: string, targetLabel: string): string => IdStyle.DEFAULT.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Activity_A', 'Activity_B', { sourceLabel, targetLabel }));
+    // before: Flow_LieferungVersendenUndToRechnungEingegangenUndZahlungPruefen
+    expect(flow('Lieferung versenden und Kunde informieren', 'Rechnung eingegangen und Zahlung prüfen')).toBe('Flow_LieferungVersendenUndKundeToRechnungEingegangenUndZahlung');
+    // before: Flow_LieferungAnKundenToRechnungAnBuchhaltungWeiterleitenUnd
+    expect(flow('Lieferung an Kunden versenden', 'Rechnung an Buchhaltung weiterleiten und prüfen')).toBe('Flow_LieferungAnKundenToRechnungAnBuchhaltungWeiterleiten');
+    // a name that ends on one is the author's: an end that is not cut keeps it
+    expect(flow('Ware prüfen und', 'Lieferantenbestellungsübersicht aktualisieren oder abschließen')).toBe('Flow_WarePruefenUndToLieferantenbestellungsuebersicht');
+    // idPair (before: Flow_Task_lieferung_versenden_und_Task_rechnung_eingegangen_und): of the cuts that fit, the most words
+    const pair = await idFlows('_');
+    expect(pair.derivedBase(connectionRequest('bpmn:SequenceFlow', 'Task_lieferung_versenden_und_pruefen', 'Task_rechnung_eingegangen_und_abgleichen'))).toBe('Flow_Task_lieferung_Task_rechnung_eingegangen_und_abgleichen');
+    // the 40 characters of a name (before: LieferantenbestellungVersendenUnd), also before a number tail, in every case
+    expect(slugify('Lieferantenbestellung versenden und Zahlungseingang prüfen')).toBe('LieferantenbestellungVersenden');
+    expect(slugify('Lieferantenbestellungen prüfen und an Buchhaltung 2')).toBe('LieferantenbestellungenPruefen2');
+    expect(snakeSlug('Die Lieferantenbestellungen und Zahlungseingangsbestätigungen')).toBe('die_lieferantenbestellungen');
+    // between a number and the number tail a filler word stays: it keeps them apart (before this fix a word was cut
+    // inside instead: StartAfter2UndLieferantenbestellungsueb2)
+    expect(slugify('Start After 2 und Lieferantenbestellungsübersicht 2')).toBe('StartAfter2Und2');
+    // the first word stays, and a cut of an id (a DI id) is no name
+    expect(cutName('UndLieferantenbestellungsuebersichtsseiten', 10)).toBe('Und');
+    expect(cutAt('Lieferantenbestellungen_pruefen_und_buchen', 35)).toBe('Lieferantenbestellungen_pruefen_und');
+    const r = await applyToXml((await newXml({ processName: 'Filler' })).xml, [
+      { op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_Filler', as: '$s' },
+      { op: 'add', kind: 'task', name: 'Lieferantenbestellung versenden und Zahlungseingang prüfen', after: '$s', as: '$t' },
+    ], { layout: false });
+    expect(r.result.aliases).toMatchObject({ $t: 'Activity_LieferantenbestellungVersenden' });
+    expect(flowIds(r.xml)).toEqual(['Flow_GoToLieferantenbestellungVersenden']);
   });
 
   it("#31: a flow named by its ends' ids keeps each id's prefix, the words after it share the room", async () => {
@@ -748,9 +887,10 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(ID_CONVENTIONS.renames).toMatch(/in a file of another flow form also the named Flow_<Source>To<Target> id in the file's case, which earlier versions gave its flows, whoever wrote it/);
   });
 
-  it('#31: a flow whose head now gives way to Flow_ still follows its ends, as in 0.6', async () => {
-    // a scope of 41 characters leaves the ends fewer than 16: new flows are Flow_<Source>_To_<Target>, but a flow with the
-    // scope still names its ends (before: the 65-character flow below kept its id on the flow to Pack)
+  it('#31: a long head stays where the ends fit beside it at whole words, Flow_ elsewhere; a flow 0.6 named with it still follows its ends', async () => {
+    // a scope of 41 characters leaves the ends fewer than 16: new flows keep it where the end words fit beside it (before:
+    // Flow_Validate_To_Pack for every new flow), else Flow_<Source>_To_<Target>; a flow with the scope still names its ends
+    // (before #31: the 65-character flow below kept its id on the flow to Pack)
     const scope = 'KundenauftragsabwicklungLieferantenpflege';
     const task = (w: string): string => `serviceTask_${scope}_${w}`;
     const xml = definitionsXml(`
@@ -761,7 +901,52 @@ describe('id quality: context once, length cap, transliteration', () => {
     <bpmn:sequenceFlow id="Flow_${scope}_ShippingToInvoicing" sourceRef="${task('Shipping')}" targetRef="${task('Invoicing')}" />`);
     expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope });
     const r = await applyToXml(xml, [{ op: 'add', kind: 'serviceTask', name: 'Pack', after: task('Validate') }], { layout: false });
-    expect(r.result.renamed).toEqual({ [`Flow_${scope}_ValidateToShipping`]: 'Flow_Validate_To_Pack' });
+    expect(r.result.renamed).toEqual({ [`Flow_${scope}_ValidateToShipping`]: `Flow_${scope}_ValidateToPack` });
+    expect(flowIds(r.xml)).toContain(`Flow_${scope}_PackToShipping`);
+    // end words that do not fit beside the scope: a named flow with Flow_, by its end words
+    const long = await applyToXml(r.xml, [
+      { op: 'add', kind: 'serviceTask', id: task('Warenwirtschaftssystemabgleich'), name: 'Warenwirtschaftssystemabgleich', in: 'Process_1' },
+      { op: 'connect', source: task('Validate'), target: task('Warenwirtschaftssystemabgleich') },
+    ], { layout: false });
+    expect(flowIds(long.xml)).toContain('Flow_Validate_To_Warenwirtschaftssystemabgleich');
+    // both follow their ends
+    const spliced = await applyToXml(long.xml, [
+      { op: 'add', kind: 'serviceTask', name: 'Weigh', flow: `Flow_${scope}_PackToShipping` },
+      { op: 'add', kind: 'serviceTask', name: 'Check', flow: 'Flow_Validate_To_Warenwirtschaftssystemabgleich' },
+    ], { layout: false });
+    expect(spliced.result.renamed).toEqual({ [`Flow_${scope}_PackToShipping`]: `Flow_${scope}_PackToWeigh`, Flow_Validate_To_Warenwirtschaftssystemabgleich: `Flow_${scope}_ValidateToCheck` });
+    // the conventions view names the fallback
+    const view = conventionsView(await Doc.fromXml(xml), undefined).rows.find((row) => row.kinds.includes('sequenceFlow'));
+    expect(view).toMatchObject({ pattern: `Flow_${scope}_{SourceWord}To{TargetWord}`, note: 'Flow_ where the ends do not fit' });
+    // a suffix that leaves the end words no room beside a 48-character scope: the named flow's `_2`, not the scoped glued 2
+    const wide = `${scope}Abcdefg`;
+    const style = IdStyle.infer((await Doc.fromXml(xml.replaceAll(scope, wide))).definitions);
+    const registry = new IdRegistry();
+    const given = [0, 1, 2].map(() => {
+      const { id } = style.next(connectionRequest('bpmn:SequenceFlow', `serviceTask_${wide}_Pack`, `serviceTask_${wide}_Ship`), registry);
+      registry.claim(id);
+      return id;
+    });
+    expect(given).toEqual([`Flow_${wide}_PackToShip`, 'Flow_Pack_To_Ship_2', 'Flow_Pack_To_Ship_3']);
+    expect(given[0]).toHaveLength(MAX_ID);
+    // a base that ends in a digit, whose No2 leaves the end words no room beside the 41-character scope: the whole id
+    // takes the named flow's form with its _2 (before: Flow_<scope>_ValidateToStep1_2, a form no file reads back)
+    const steps = await applyToXml(xml, [
+      { op: 'add', kind: 'serviceTask', id: task('Step1_Check'), name: 'Step 1 check', in: 'Process_1' },
+      { op: 'add', kind: 'serviceTask', id: task('Step1_Ship'), name: 'Step 1 ship', in: 'Process_1' },
+      { op: 'connect', source: task('Validate'), target: task('Step1_Check') },
+      { op: 'connect', source: task('Validate'), target: task('Step1_Ship') },
+    ], { layout: false });
+    expect(flowIds(steps.xml).filter((id) => id.includes('Step1'))).toEqual([`Flow_${scope}_ValidateToStep1`, 'Flow_Validate_To_Step1_2']);
+    // the same in a stemTo file with a 46-character prefix (before: <prefix>_stepToRechnung9_2)
+    const lp = 'sequenceFlowOfTheKundenauftragsabwicklungUndLi';
+    const stem = definitionsXml(
+      ['checkOrder', 'shipOrder', 'billOrder', 'step', 'rechnung9'].map((id) => `<bpmn:task id="task_${id}" name="${id}" />`).join('\n') +
+        `<bpmn:sequenceFlow id="${lp}_checkOrderToShipOrder" sourceRef="task_checkOrder" targetRef="task_shipOrder" />` +
+        `<bpmn:sequenceFlow id="${lp}_shipOrderToBillOrder" sourceRef="task_shipOrder" targetRef="task_billOrder" />`,
+    );
+    const stemmed = await applyToXml(stem, [0, 1, 2].map(() => ({ op: 'connect', source: 'task_step', target: 'task_rechnung9' })), { layout: false });
+    expect(flowIds(stemmed.xml).filter((id) => id.includes('Rechnung9'))).toEqual([`${lp}_stepToRechnung9`, 'Flow_stepToRechnung9_2', 'Flow_stepToRechnung9_3']);
   });
 
   it('#31: a suffix that cuts an anchor-qualified id again keeps the anchor kind', async () => {
@@ -900,6 +1085,28 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(r2.result.renamed).toEqual({ flow_synchronisierenToDeliveriesabcdProtokollieren2: 'flow_deliveriesabcdSynchronisierenToPruefen' });
   });
 
+  it('a cut stemTo flow to an end that ends in a digit takes No before its suffix, still votes for the form and follows its ends', async () => {
+    const g = 'exclusiveGateway_lieferantenbestellungSynchronisieren';
+    const t = 'serviceTask_zahlungseingangProtokollieren10';
+    const xml = definitionsXml(`
+    <bpmn:startEvent id="startEvent_go" name="Go"><bpmn:outgoing>flow_goToCheckOrder</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="task_checkOrder" name="Check order"><bpmn:incoming>flow_goToCheckOrder</bpmn:incoming><bpmn:outgoing>flow_checkOrderToShipOrder</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="task_shipOrder" name="Ship order"><bpmn:incoming>flow_checkOrderToShipOrder</bpmn:incoming></bpmn:task>
+    <bpmn:exclusiveGateway id="${g}" name="Lieferantenbestellung synchronisieren"/>
+    <bpmn:serviceTask id="${t}" name="Zahlungseingang protokollieren 10"/>
+    <bpmn:sequenceFlow id="flow_goToCheckOrder" sourceRef="startEvent_go" targetRef="task_checkOrder" />
+    <bpmn:sequenceFlow id="flow_checkOrderToShipOrder" sourceRef="task_checkOrder" targetRef="task_shipOrder" />`);
+    const r = await applyToXml(xml, [1, 2, 3, 4].map((i) => ({ op: 'connect', source: g, target: t, as: `$f${i}` })), { layout: false });
+    // before: ...Zahlungseingang102, ...103, which read like flows to a task 102
+    const base = 'flow_lieferantenbestellungSynchronisierenToZahlungseingang10';
+    expect(Object.values(r.result.aliases!)).toEqual([base, `${base}No2`, `${base}No3`, `${base}No4`]);
+    expect(`${base}No2`).toHaveLength(63);
+    // four of the six flows are cut: they vote for stemTo (cutOfForm), and a splice renames the suffixed one
+    expect((await Doc.fromXml(r.xml)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
+    const r2 = await applyToXml(r.xml, [{ op: 'add', kind: 'task', name: 'Pruefen', flow: `${base}No3` }], { layout: false });
+    expect(r2.result.renamed).toEqual({ [`${base}No3`]: 'flow_lieferantenbestellungSynchronisierenToPruefen' });
+  });
+
   it('#31: element ids of 62 to 64 characters are not cut; the --if-absent hint and a data object get the same cap', async () => {
     const typed = definitionsXml(`
     <bpmn:startEvent id="startEvent_go" name="Go"><bpmn:outgoing>flow_goToCheckOrder</bpmn:outgoing></bpmn:startEvent>
@@ -939,6 +1146,60 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(d.xml).toContain(`dataObjectRef="${prefix}_lieferungVollstaendigEingegangenObject"`);
     expect(`${prefix}_lieferungVollstaendigEingegangenObject`).toHaveLength(62);
     expect(d.result.warnings.added.map((w) => w.code)).not.toContain('W_ID_SUFFIXED');
+  });
+
+  it('a data object or store whose reference has a long body keeps its Object / Store word after the body: no _2, no W_ID_SUFFIXED', async () => {
+    // references and backing elements under one prefix (snake bodies): the name's 40 characters had no room for the word
+    const prefix = 'processDataArtefactItem';
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="D" targetNamespace="x">
+<bpmn:dataStore id="${prefix}_archive_store" name="Archive" /><bpmn:dataStore id="${prefix}_ledger_store" name="Ledger" />
+<bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:dataObjectReference id="${prefix}_order" name="Order" dataObjectRef="${prefix}_order_object" />
+    <bpmn:dataObject id="${prefix}_order_object" />
+    <bpmn:dataObjectReference id="${prefix}_article" name="Article" dataObjectRef="${prefix}_article_object" />
+    <bpmn:dataObject id="${prefix}_article_object" />
+    <bpmn:dataStoreReference id="${prefix}_archive" name="Archive" dataStoreRef="${prefix}_archive_store" />
+    <bpmn:dataStoreReference id="${prefix}_ledger" name="Ledger" dataStoreRef="${prefix}_ledger_store" />
+</bpmn:process></bpmn:definitions>`;
+    const cases: Array<[string, string, string, string]> = [
+      // before: ..._lieferung_vollstaendig_eingegangen_2 (W_ID_SUFFIXED), from a body of 34 characters on
+      ['dataObjectReference', 'Lieferung vollständig eingegangen', 'lieferung_vollstaendig_eingegangen', 'lieferung_vollstaendig_object'],
+      ['dataObjectReference', 'Lieferantenbestellungen vollständig', 'lieferantenbestellungen_vollstaendig', 'lieferantenbestellungen_object'],
+      ['dataStoreReference', 'Lieferantenbestellungen vollständig', 'lieferantenbestellungen_vollstaendig', 'lieferantenbestellungen_store'],
+      // a short name: the word as before
+      ['dataObjectReference', 'Rechnung', 'rechnung', 'rechnung_object'],
+      ['dataStoreReference', 'Belege', 'belege', 'belege_store'],
+    ];
+    for (const [kind, name, ref, backing] of cases) {
+      const r = await applyToXml(xml, [{ op: 'add', kind, name, in: 'Process_1', as: '$d' }], { layout: false });
+      expect(r.result.aliases).toEqual({ $d: `${prefix}_${ref}` });
+      expect(r.xml).toMatch(new RegExp(`id="${prefix}_${ref}"[^>]*data(Object|Store)Ref="${prefix}_${backing}"`));
+      expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_ID_SUFFIXED');
+    }
+    // a name that ends on a filler word: the cut of `<name> Object` drops both, so the word goes after the body (before:
+    // ..._zahlungseingangsbestaetigung_variante without its word, and the next reference named without the filler word
+    // took ..._variante_2 with W_ID_SUFFIXED)
+    for (const [first, second, ref, backing] of [
+      ['Zahlungseingangsbestätigung Variante A', 'Zahlungseingangsbestätigung Variante', 'zahlungseingangsbestaetigung_variante', 'zahlungseingangsbestaetigung_object'],
+      ['Lieferung vollständig eingegangen und', 'Lieferung vollständig eingegangen', 'lieferung_vollstaendig_eingegangen', 'lieferung_vollstaendig_object'],
+    ]) {
+      const r = await applyToXml(xml, [{ op: 'add', kind: 'dataObjectReference', name: first, in: 'Process_1', as: '$a' }, { op: 'add', kind: 'dataObjectReference', name: second, in: 'Process_1', as: '$b' }], { layout: false });
+      expect(r.result.aliases?.['$b']).toBe(`${prefix}_${ref}`);
+      expect(r.xml).toMatch(new RegExp(`id="${r.result.aliases?.['$a']}"[^>]*dataObjectRef="${prefix}_${backing}"`));
+      // the two backing objects are a real collision of one id
+      expect(r.xml).toMatch(new RegExp(`id="${prefix}_${ref}"[^>]*dataObjectRef="${prefix}_${backing}_2"`));
+      expect(r.result.warnings.added.filter((w) => w.code === 'W_ID_SUFFIXED').map((w) => w.message)).toEqual([`Id ${prefix}_${backing} is already taken; using ${prefix}_${backing}_2`]);
+    }
+    // bare ids: the same (before: lieferantenbestellungenVollstaendig_2)
+    const bare = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="D" targetNamespace="x"><bpmn:process id="Process_1" isExecutable="true">
+<bpmn:startEvent id="start" name="Start"/><bpmn:task id="checkInvoice" name="Check invoice"/><bpmn:task id="book" name="Book"/><bpmn:endEvent id="done" name="Done"/>
+</bpmn:process></bpmn:definitions>`;
+    const b = await applyToXml(bare, [{ op: 'add', kind: 'dataObjectReference', name: 'Lieferantenbestellungen vollständig abgeglichen', in: 'Process_1', as: '$d' }], { layout: false });
+    expect(b.result.aliases).toEqual({ $d: 'lieferantenbestellungenVollstaendig' });
+    expect(b.xml).toContain('dataObjectRef="lieferantenbestellungenVollstaendigObject"');
+    expect(b.result.warnings.added.map((w) => w.code)).not.toContain('W_ID_SUFFIXED');
   });
 
   it('#31: the join of a split stays within 64 characters, a suffixed one too', async () => {

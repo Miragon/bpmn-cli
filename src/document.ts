@@ -11,7 +11,7 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './errors.js';
 import { about, replaced, type ChangeSet, type Rename } from './result.js';
-import { cutAt, editDistance, hasIdWords, IdRegistry, isValidId, MAX_ID, transliterate, typoTolerance } from './ids.js';
+import { editDistance, hasIdWords, IdRegistry, isValidId, transliterate, typoTolerance, withSuffix } from './ids.js';
 import type { IdConventions } from './conventions.js';
 import { IdStyle, speakingStem, typeRequest, type IdRequest, type IdState } from './idstyle.js';
 import { kindLabel, suggestKinds } from './kinds.js';
@@ -558,7 +558,7 @@ export class Doc {
    */
   regeneratedId(old: string, base: string, sep: string): string {
     let id = base;
-    for (let n = 2; this.has(id) || this.ids.has(id); n++) id = `${cutAt(base, MAX_ID - `${sep}${n}`.length)}${sep}${n}`;
+    for (let n = 2; this.has(id) || this.ids.has(id); n++) id = withSuffix(base, sep, n);
     if (id !== base) this.suffixed.push({ id, base });
     if (this.declaredIds.includes(old)) this.declaredIds.push(id);
     return id;

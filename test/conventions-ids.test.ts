@@ -147,10 +147,11 @@ describe('id style inference (edits follow the file)', () => {
       { op: 'add', kind: 'userTask', name: 'Lieferantenbestellungen prüfen', after: 'Task_check_risk' },
       { op: 'add', kind: 'userTask', name: 'Zahlungseingänge abgleichen und Rechnung archivieren', after: 'Task_lieferantenbestellungen_pruefen' },
     ]);
-    expect(ids).toContain('Task_zahlungseingaenge_abgleichen_und');
+    // the name's 40 characters end before a filler word (before: Task_zahlungseingaenge_abgleichen_und)
+    expect(ids).toContain('Task_zahlungseingaenge_abgleichen');
     // 0.6: Flow_Task_pruefen_Task_zahlungseingaenge_abgleichen_und
     const cut = 'Flow_Task_lieferantenbestellungen_pruefen_Task_zahlungseingaenge';
-    expect(flowBetween(doc, 'Task_lieferantenbestellungen_pruefen', 'Task_zahlungseingaenge_abgleichen_und')).toBe(cut);
+    expect(flowBetween(doc, 'Task_lieferantenbestellungen_pruefen', 'Task_zahlungseingaenge_abgleichen')).toBe(cut);
     const cs = runOps(doc, [{ op: 'add', kind: 'userTask', name: 'Beleg scannen', after: 'Task_lieferantenbestellungen_pruefen' }]);
     expect(cs.renames).toEqual([expect.objectContaining({ from: cut, to: 'Flow_Task_lieferantenbestellungen_pruefen_Task_beleg_scannen' })]);
   });
@@ -408,6 +409,57 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     expect(IdStyle.infer(doc.definitions).info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
   });
 
+  it('a glued suffix after an end that ends in a digit takes the word No (stemTo, scopedTo); such flows and 0.6\'s glued ones follow their ends', async () => {
+    // before: flow_checkStockToSendPdf102 (a flow to Send PDF 102?), flow_checkStockToSend_22
+    const { doc, ids } = await created(CAMEL, [
+      { op: 'add', kind: 'serviceTask', id: 'serviceTask_sendPdf10', name: 'Send PDF 10', in: 'Process_1' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'serviceTask_sendPdf10' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'serviceTask_sendPdf10' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'serviceTask_sendPdf10' },
+      { op: 'add', kind: 'serviceTask', id: 'serviceTask_send_2', name: 'Send', in: 'Process_1' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'serviceTask_send_2' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'serviceTask_send_2' },
+      { op: 'connect', source: 'serviceTask_checkStock', target: 'userTask_approveOrder' },
+    ]);
+    expect(ids).toEqual([
+      'serviceTask_sendPdf10',
+      'flow_checkStockToSendPdf10',
+      'flow_checkStockToSendPdf10No2',
+      'flow_checkStockToSendPdf10No3',
+      'serviceTask_send_2',
+      'flow_checkStockToSend_2',
+      'flow_checkStockToSend_2No2',
+      // an end that ends in a letter keeps the glued 2
+      'flow_checkStockToApproveOrder2',
+    ]);
+    // they vote for the file's form, and a splice renames them after their new ends
+    expect(IdStyle.infer(doc.definitions).info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
+    const spliced = runOps(doc, [{ op: 'add', kind: 'serviceTask', id: 'serviceTask_pack', name: 'Pack', flow: 'flow_checkStockToSendPdf10No2' }]);
+    expect(spliced.renames).toEqual([expect.objectContaining({ from: 'flow_checkStockToSendPdf10No2', to: 'flow_checkStockToPack' })]);
+    // a scoped flow whose end word ends in a digit
+    const scoped = chain(
+      [
+        ['serviceTask', 'serviceTask_KotO_ValidatePayment', 'Validate payment'],
+        ['serviceTask', 'serviceTask_KotO_ReserveInventory', 'Reserve inventory'],
+        ['serviceTask', 'serviceTask_KotO_Pdf10Senden', 'PDF 10 senden'],
+      ],
+      ['Flow_KotO_ValidateToReserve', 'Flow_KotO_ReserveToPdf10'],
+    );
+    const s = await created(scoped, [{ op: 'connect', source: 'serviceTask_KotO_ReserveInventory', target: 'serviceTask_KotO_Pdf10Senden' }]);
+    expect(s.ids).toEqual(['Flow_KotO_ReserveToPdf10No2']);
+    // 0.6 glued the number to the digit: its flows still follow their ends
+    const old = chain(
+      [
+        ['startEvent', 'startEvent_orderReceived', 'Order received'],
+        ['serviceTask', 'serviceTask_checkStock', 'Check stock'],
+        ['serviceTask', 'serviceTask_sendPdf10', 'Send PDF 10'],
+      ],
+      ['flow_orderReceivedToCheckStock', 'flow_checkStockToSendPdf102'],
+    );
+    const followed = runOps(await Doc.fromXml(old), [{ op: 'add', kind: 'serviceTask', id: 'serviceTask_pack', name: 'Pack', flow: 'flow_checkStockToSendPdf102' }]);
+    expect(followed.renames).toEqual([expect.objectContaining({ from: 'flow_checkStockToSendPdf102', to: 'flow_checkStockToPack' })]);
+  });
+
   it('the scoped form is not read into other forms', async () => {
     for (const xml of [CAMEL, SNAKE, MODELER]) expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow.form).not.toBe('scopedTo');
   });
@@ -471,6 +523,23 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
       expect(renamed, line).toEqual([line]);
       expect(stale, line).toEqual([line]);
     }
+  });
+
+  it('a glued suffix with No after a digit still names an end `set` renamed earlier in the batch (flow_approveToStep1No2)', async () => {
+    const xml = definitionsXml(`
+    <bpmn:startEvent id="startEvent_go" name="Go"><bpmn:outgoing>flow_goToApprove</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="userTask_approve" name="Approve"><bpmn:incoming>flow_goToApprove</bpmn:incoming><bpmn:outgoing>flow_approveToStep1</bpmn:outgoing><bpmn:outgoing>flow_approveToStep1No2</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="serviceTask_step1" name="Step 1"><bpmn:incoming>flow_approveToStep1</bpmn:incoming><bpmn:incoming>flow_approveToStep1No2</bpmn:incoming><bpmn:outgoing>flow_step1ToDone</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:endEvent id="endEvent_done" name="Done"><bpmn:incoming>flow_step1ToDone</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_goToApprove" sourceRef="startEvent_go" targetRef="userTask_approve" />
+    <bpmn:sequenceFlow id="flow_approveToStep1" sourceRef="userTask_approve" targetRef="serviceTask_step1" />
+    <bpmn:sequenceFlow id="flow_approveToStep1No2" sourceRef="userTask_approve" targetRef="serviceTask_step1" />
+    <bpmn:sequenceFlow id="flow_step1ToDone" sourceRef="serviceTask_step1" targetRef="endEvent_done" />`);
+    const ops: Op[] = [
+      { op: 'set', id: 'userTask_approve', values: { id: 'userTask_review', name: 'Review' } },
+      { op: 'add', kind: 'task', name: 'Check', flow: 'flow_approveToStep1No2' },
+    ];
+    expect(await bothModes(xml, ops)).toEqual({ renamed: ['flow_approveToStep1No2 -> flow_reviewToCheck'], stale: ['flow_approveToStep1No2 -> flow_reviewToCheck'] });
   });
 
   it('flow ids that do not name their ends neither follow nor go stale (hashes, numbers)', async () => {

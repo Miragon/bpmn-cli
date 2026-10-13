@@ -27,7 +27,7 @@ import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../document.js';
 import { edgeStyleOf, styledId } from '../diagram/write.js';
 import { modelError, type Warning } from '../errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../idstyle.js';
-import { hasIdWords, IdRegistry, isValidId, slugify } from '../ids.js';
+import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids.js';
 import { kindLabel, triggerOf } from '../kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
 import { about, renamedNote, type ChangeSet } from '../result.js';
@@ -455,7 +455,7 @@ export function recordFormerEnd(doc: Doc, node: El): void {
  */
 export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target: El): boolean {
   if (!id) return false;
-  const derived = (base: string): boolean => id === base || (id.startsWith(base) && /^_?\d+$/.test(id.slice(base.length)));
+  const derived = (base: string): boolean => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), 'either'));
   const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: endLabels(el) }, ...doc.formerEndsOf(el)];
   const targets = names(target);
   return names(source).some((s) =>
