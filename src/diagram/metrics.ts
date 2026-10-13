@@ -50,6 +50,9 @@
  *  - `through` uses a real segment-rectangle test (an axis-parallel segment:
  *    the same as its bounding box); labelOnLine and msgThroughPool keep the
  *    harness's bounding-box test.
+ *  - Leaf shapes (overlaps, through, label on shape) are every shape but
+ *    pools, lanes, expanded sub-processes and groups: a group box is drawn
+ *    around its members, so it overlaps them by design (the harness alike).
  *  - Every problem names the elements involved (`ids`), problems are listed in
  *    KEYS order and, within a kind, in the order the harness finds them:
  *      crossings      [edgeA, edgeB]           overlaps     [shapeA, shapeB]
@@ -881,7 +884,8 @@ function analysePlane(plane: unknown, sem: Semantics, seen: Set<string>, add: Ad
     sem,
     shapes,
     edges,
-    leaf: shapes.filter((s) => !s.container),
+    // a group is a frame drawn around its members: never an overlap, a line through it or a label on it
+    leaf: shapes.filter((s) => !s.container && !is(s.el, 'bpmn:Group')),
     byId: new Map(shapes.map((s) => [s.id, s])),
     pools: shapes.filter((s) => is(s.el, 'bpmn:Participant')),
     add,

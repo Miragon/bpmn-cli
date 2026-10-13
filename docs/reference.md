@@ -250,7 +250,8 @@ userTask: Activity_Archive`, `changed:`, `renamed: <old> -> <new>`, `removed:`) 
   validators, see [Validators](validators.md)), `conventions` (`{ids, source?}`: the new ids that
   follow the `.bpmnlintrc`'s `element-id-naming` rather than the file's own id style; see
   [Declared conventions](#declared-conventions)). An incremental layout adds `placed`, `moved`,
-  `rerouted`, `pruned`, `notes` and `format` to `layout`.
+  `rerouted`, `pruned` and `format` to `layout`; `notes` comes from an incremental layout, or from
+  a full redraw that kept a group's box or moved it below the drawing.
 - A validator's findings carry `validator` and `severity`. The project's bpmnlint
   ([bpmnlint](bpmnlint.md)) is advisory (`blocks: false` in its `validation.validators` entry): an
   error it finds in the change is among `warnings.added` with `"severity": "error"` and reads

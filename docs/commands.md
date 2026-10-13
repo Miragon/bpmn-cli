@@ -297,7 +297,8 @@ case of the ids a write generates. `--lint-config <path>` names another configur
 `--no-lint-config` switches it off. See [bpmnlint](bpmnlint.md).
 
 `layout` redraws the whole diagram from the model: a hand-made layout is replaced, colours and DI
-ids survive. `--expand` and `--collapse` change which sub-processes are drawn expanded.
+ids survive, and group boxes are drawn again around the elements they held. `--expand` and
+`--collapse` change which sub-processes are drawn expanded.
 `layout --tidy` keeps the drawing and only removes overlaps, like `bpmn tidy`.
 
 ## `metrics`

@@ -402,3 +402,23 @@
   places only the nodes a move relocated (0.6: every node a move named, so a
   move in place could rearrange a hand-made drawing). Library:
   `ChangeSet.relocated` lists them.
+- A full redraw (`bpmn layout`, `--relayout` / `--layout full`, an
+  engine-owned drawing redrawn in `auto` mode, the
+  `W_LAYOUT_INCREMENTAL_FAILED` fallback, `--engine auto`) draws group boxes
+  again around the elements they held, with their DI id and colour; 0.6
+  dropped every group's shape. A group with nothing drawn inside keeps its
+  box, or its size below the drawing when the redraw put shapes on it, and
+  the layout block has a note (`LayoutStatus.notes` and
+  `LayoutResult.notes` can now come from a full redraw). The built-in
+  engine keeps the parts of a group that no flow connects together, so
+  files with groups can get another order of such parts; without groups
+  the order is unchanged.
+- The layout metrics (`bpmn metrics`, `layoutProblems`, `layout.metrics` of
+  every write, `render --problems`) no longer treat a group as a leaf
+  shape: a group never overlaps, lies on a line or has a label on it (its
+  own label still counts). Scores of drawings with a group are lower than
+  in 0.6 for the same file: gallery.bpmn 182 -> 64.
+- A group of the collaboration no longer gives `W_LAYOUT_DI_NOT_CREATED`.
+  An association between a text annotation and a group still has no line
+  after a full redraw; its warning now reads `No DI created for <id> (an end
+  is a group: its box is drawn after the layout)`.

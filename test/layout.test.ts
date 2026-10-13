@@ -29,15 +29,18 @@
  * Set BPMN_LAYOUT_TEST_OUT=<dir> to get every scenario written as <dir>/<name>.bpmn
  * (render with bpmn-to-image to look at them).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { layoutProblems } from '../src/diagram/metrics.js';
+import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { Doc } from '../src/document.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout.js';
 import { is, many, type El } from '../src/model.js';
 import { collapsedIds } from '../src/ops/add.js';
 import { runOps } from '../src/ops/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
+import { layoutDoc, mutateDoc } from '../src/pipeline.js';
 
 /* ------------------------------------------------------------------ */
 /* DI reading                                                           */
@@ -1076,5 +1079,299 @@ describe('clean layout engine', () => {
     // the loops go around the nodes they span and enter Ship from below or above
     expectRoutedAround(L, flowBetween(L, 'Track', 'Ship'), ['Ship', 'G3'], 'Ship');
     expectRoutedAround(L, flowBetween(L, 'FixShipment', 'Ship'), ['Ship'], 'Ship');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* groups over a full redraw                                            */
+/* ------------------------------------------------------------------ */
+
+const GALLERY = readFileSync(join(import.meta.dirname, 'fixtures', 'render', 'gallery.bpmn'), 'utf8');
+/** the shapes whose centre lies in gallery.bpmn's Group_FirstTasks box */
+const FIRST_TASKS = ['Activity_UserTask', 'Activity_ServiceTask', 'Event_TwoDays', 'Event_Reminder'];
+
+const DI_NS = 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
+const diShape = (id: string, [x, y, w, h]: number[], extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;
+const diEdge = (id: string, pts: number[][]): string => `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${pts.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
+const seq = (id: string, from: string, to: string): string => `<bpmn:sequenceFlow id="${id}" sourceRef="${from}" targetRef="${to}" />`;
+const groupXml = (root: string, body: string, di: string[], categories = ''): string =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" ${DI_NS} id="Defs" targetNamespace="http://bpmn.io/schema/bpmn">
+${body}
+${categories}
+  <bpmndi:BPMNDiagram id="Diagram"><bpmndi:BPMNPlane id="Plane" bpmnElement="${root}">${di.join('')}</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+/** Every shape of the drawing by element id (all planes). */
+async function shapesOf(xml: string): Promise<Map<string, DShape>> {
+  const doc = await Doc.fromXml(xml);
+  return new Map(diagramPlanes(doc.definitions).flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
+}
+
+/** The group's box holds the members whole and cuts no other leaf shape. */
+function expectGroupAround(shapes: Map<string, DShape>, groupId: string, members: string[]): Box {
+  const g = shapes.get(groupId);
+  expect(g, `${groupId} is drawn`).toBeDefined();
+  for (const id of members) expect(contains(g!.bounds, shapes.get(id)!.bounds), `${id} inside ${groupId}`).toBe(true);
+  for (const s of shapes.values()) {
+    if (s.id === groupId || s.container || s.kind === 'group' || members.includes(s.id)) continue;
+    expect(boxesOverlap(g!.bounds, s.bounds) && !contains(g!.bounds, s.bounds), `${groupId}'s border cuts ${s.id}`).toBe(false);
+  }
+  return g!.bounds;
+}
+
+describe('groups over a full redraw', () => {
+  it('`layout` draws gallery.bpmn\'s group around the elements it held, with its DI id, and a second redraw changes nothing', async () => {
+    const r = await layoutDoc(await Doc.fromXml(GALLERY));
+    const before = await shapesOf(GALLERY);
+    const after = await shapesOf(r.xml);
+    expect(after.size).toBe(before.size);
+    expectGroupAround(after, 'Group_FirstTasks', FIRST_TASKS);
+    expect(r.xml).toContain('<bpmndi:BPMNShape id="BPMNShape_Group_FirstTasks" bpmnElement="Group_FirstTasks">');
+    // the quality line no longer presents the group as overlaps it resolved
+    expect(JSON.stringify(r.layout.metrics)).not.toContain('Group_FirstTasks');
+    expect(r.layout.notes).toBeUndefined();
+    const again = await layoutDoc(await Doc.fromXml(r.xml));
+    expect(again.unchanged).toBe(true);
+  });
+
+  it('an edit to the redrawn file finds it engine-owned and keeps the group (layout auto)', async () => {
+    const drawn = await layoutDoc(await Doc.fromXml(GALLERY));
+    const r = await mutateDoc(await Doc.fromXml(drawn.xml), [{ op: 'set', id: 'Activity_UserTask', values: { name: 'User task, renamed' } }]);
+    expect(r.layout.mode).toBe('full');
+    expect(r.layout.reason).toMatch(/engine-owned/);
+    expectGroupAround(await shapesOf(r.xml), 'Group_FirstTasks', FIRST_TASKS);
+  });
+
+  it('--relayout (an edit with layout full) keeps the group around its members', async () => {
+    const r = await mutateDoc(await Doc.fromXml(GALLERY), [{ op: 'set', id: 'Activity_ServiceTask', values: { name: 'Service task with a longer name' } }], { layout: 'full' });
+    expectGroupAround(await shapesOf(r.xml), 'Group_FirstTasks', FIRST_TASKS);
+  });
+
+  it('--engine auto keeps the group around its members, without GROUP_MEMBERS_NOT_FOUND', async () => {
+    const r = await layoutDoc(await Doc.fromXml(GALLERY), { engine: 'auto' });
+    expectGroupAround(await shapesOf(r.xml), 'Group_FirstTasks', FIRST_TASKS);
+    expect(r.layout.warnings.map((w) => w.code)).not.toContain('GROUP_MEMBERS_NOT_FOUND');
+    expect(r.xml).toContain('<bpmndi:BPMNShape id="BPMNShape_Group_FirstTasks" bpmnElement="Group_FirstTasks">');
+  });
+
+  it('a group around nothing keeps its box and the result says so', async () => {
+    const xml = groupXml(
+      'P',
+      `<bpmn:process id="P"><bpmn:startEvent id="S" /><bpmn:task id="T" name="Do it" /><bpmn:endEvent id="E" />${seq('F1', 'S', 'T')}${seq('F2', 'T', 'E')}<bpmn:group id="Group_Empty" /></bpmn:process>`,
+      [diShape('S', [100, 100, 36, 36]), diShape('T', [200, 78, 100, 80]), diShape('E', [360, 100, 36, 36]), diEdge('F1', [[136, 118], [200, 118]]), diEdge('F2', [[300, 118], [360, 118]]), diShape('Group_Empty', [600, 300, 120, 90])],
+    );
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    expect((await shapesOf(r.xml)).get('Group_Empty')!.bounds).toEqual({ x: 600, y: 300, width: 120, height: 90 });
+    expect(r.xml).toContain('<bpmndi:BPMNShape id="Group_Empty_di" bpmnElement="Group_Empty">');
+    expect(r.layout.notes).toEqual(['group Group_Empty kept its box: no element inside it is drawn']);
+  });
+
+  it('a group of the collaboration is drawn around its members in two pools, without DI_NOT_CREATED', async () => {
+    const proc = (p: string, s: string, t: string, e: string): string => `<bpmn:process id="${p}"><bpmn:startEvent id="${s}" /><bpmn:task id="${t}" name="${t}" /><bpmn:endEvent id="${e}" />${seq(`${p}_F1`, s, t)}${seq(`${p}_F2`, t, e)}</bpmn:process>`;
+    const xml = groupXml(
+      'Collab',
+      `<bpmn:collaboration id="Collab"><bpmn:participant id="Pool_A" name="A" processRef="PA" /><bpmn:participant id="Pool_B" name="B" processRef="PB" /><bpmn:group id="Group_Both" categoryValueRef="CV_Both" /></bpmn:collaboration>${proc('PA', 'SA', 'Task_A', 'EA')}${proc('PB', 'SB', 'Task_B', 'EB')}`,
+      [
+        diShape('Pool_A', [100, 50, 600, 200], ' isHorizontal="true"'), diShape('SA', [180, 132, 36, 36]), diShape('Task_A', [280, 110, 100, 80]), diShape('EA', [452, 132, 36, 36]),
+        diEdge('PA_F1', [[216, 150], [280, 150]]), diEdge('PA_F2', [[380, 150], [452, 150]]),
+        diShape('Pool_B', [100, 300, 600, 200], ' isHorizontal="true"'), diShape('SB', [180, 382, 36, 36]), diShape('Task_B', [280, 360, 100, 80]), diShape('EB', [452, 382, 36, 36]),
+        diEdge('PB_F1', [[216, 400], [280, 400]]), diEdge('PB_F2', [[380, 400], [452, 400]]),
+        diShape('Group_Both', [260, 90, 140, 370]),
+      ],
+      '<bpmn:category id="Cat"><bpmn:categoryValue id="CV_Both" value="Both sides" /></bpmn:category>',
+    );
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    expect(r.layout.warnings).toEqual([]);
+    const box = expectGroupAround(await shapesOf(r.xml), 'Group_Both', ['Task_A', 'Task_B']);
+    const shapes = await shapesOf(r.xml);
+    // room above the members for the group's name
+    expect(Math.min(shapes.get('Task_A')!.bounds.y, shapes.get('Task_B')!.bounds.y) - box.y).toBeGreaterThan(20);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+  });
+
+  it('the parts of a group no flow connects stay together, so the boxes of two groups do not overlap', async () => {
+    const chain = (n: number): string => `<bpmn:startEvent id="Start_${n}" /><bpmn:task id="Task_${n}" name="Task ${n}" /><bpmn:endEvent id="End_${n}" />${seq(`Flow_${n}a`, `Start_${n}`, `Task_${n}`)}${seq(`Flow_${n}b`, `Task_${n}`, `End_${n}`)}`;
+    const chainDi = (n: number, x: number, y: number): string[] => [diShape(`Start_${n}`, [x, y + 22, 36, 36]), diShape(`Task_${n}`, [x + 100, y, 100, 80]), diShape(`End_${n}`, [x + 260, y + 22, 36, 36])];
+    // declared 1, 2, 3; drawn as two columns: Group_Left holds 1 and 3, Group_Right holds 2
+    const xml = groupXml(
+      'P',
+      `<bpmn:process id="P">${chain(1)}${chain(2)}${chain(3)}<bpmn:group id="Group_Left" /><bpmn:group id="Group_Right" /></bpmn:process>`,
+      [...chainDi(1, 100, 100), ...chainDi(3, 100, 240), ...chainDi(2, 500, 100), diShape('Group_Left', [80, 80, 340, 260]), diShape('Group_Right', [480, 80, 340, 120])],
+    );
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    const shapes = await shapesOf(r.xml);
+    const left = expectGroupAround(shapes, 'Group_Left', ['Start_1', 'Task_1', 'End_1', 'Start_3', 'Task_3', 'End_3']);
+    const right = expectGroupAround(shapes, 'Group_Right', ['Start_2', 'Task_2', 'End_2']);
+    expect(boxesOverlap(left, right)).toBe(false);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+  });
+
+  it('a group inside a group stays inside it; two groups side by side do not overlap', async () => {
+    const xml = groupXml(
+      'P',
+      `<bpmn:process id="P"><bpmn:startEvent id="S" /><bpmn:task id="A" name="A" /><bpmn:task id="B" name="B" /><bpmn:task id="C" name="C" /><bpmn:endEvent id="E" />${seq('F1', 'S', 'A')}${seq('F2', 'A', 'B')}${seq('F3', 'B', 'C')}${seq('F4', 'C', 'E')}<bpmn:group id="Group_Outer" /><bpmn:group id="Group_Inner" /><bpmn:group id="Group_Last" /></bpmn:process>`,
+      [
+        diShape('S', [100, 122, 36, 36]), diShape('A', [200, 100, 100, 80]), diShape('B', [360, 100, 100, 80]), diShape('C', [520, 100, 100, 80]), diShape('E', [680, 122, 36, 36]),
+        diEdge('F1', [[136, 140], [200, 140]]), diEdge('F2', [[300, 140], [360, 140]]), diEdge('F3', [[460, 140], [520, 140]]), diEdge('F4', [[620, 140], [680, 140]]),
+        diShape('Group_Outer', [180, 60, 300, 140]), diShape('Group_Inner', [190, 80, 120, 110]), diShape('Group_Last', [500, 80, 140, 120]),
+      ],
+    );
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    const shapes = await shapesOf(r.xml);
+    const outer = expectGroupAround(shapes, 'Group_Outer', ['A', 'B']);
+    const inner = expectGroupAround(shapes, 'Group_Inner', ['A']);
+    const last = expectGroupAround(shapes, 'Group_Last', ['C']);
+    expect(contains(outer, inner)).toBe(true);
+    expect(boxesOverlap(outer, last)).toBe(false);
+    expect(contains(inner, shapes.get('B')!.bounds)).toBe(false);
+    // the old DI order
+    expect(r.xml.indexOf('bpmnElement="Group_Outer"')).toBeLessThan(r.xml.indexOf('bpmnElement="Group_Inner"'));
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+    expect(layoutProblems((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
+  });
+
+  it('two stacked groups come back the same on a second redraw, and an edit to the first result finds it engine-owned', async () => {
+    const xml = readFileSync(join(import.meta.dirname, 'fixtures', 'incremental', 'groups.bpmn'), 'utf8');
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    const shapes = await shapesOf(r.xml);
+    const g1 = expectGroupAround(shapes, 'G1', ['S1', 'A', 'E1', 'S2', 'B', 'E2']);
+    const g2 = expectGroupAround(shapes, 'G2', ['S3', 'C', 'E3', 'D']);
+    expect(boxesOverlap(g1, g2)).toBe(false);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+    const edit = await mutateDoc(await Doc.fromXml(r.xml), [{ op: 'set', id: 'A', values: { name: 'Renamed' } }]);
+    expect(edit.layout.mode).toBe('full');
+    expect(edit.layout.reason).toMatch(/engine-owned/);
+  });
+
+  const LINE = (ids: string[]): { body: string; di: string[] } => {
+    const flows = ids.slice(1).map((id, i) => seq(`F${i + 1}`, ids[i]!, id));
+    const kinds = ids.map((id, i) => (i === 0 ? `<bpmn:startEvent id="${id}" />` : i === ids.length - 1 ? `<bpmn:endEvent id="${id}" />` : `<bpmn:task id="${id}" name="${id}" />`));
+    const di: string[] = [];
+    let x = 100;
+    ids.forEach((id, i) => {
+      const event = i === 0 || i === ids.length - 1;
+      di.push(diShape(id, event ? [x, 122, 36, 36] : [x, 100, 100, 80]));
+      if (i < ids.length - 1) di.push(diEdge(`F${i + 1}`, [[x + (event ? 36 : 100), 140], [x + (event ? 36 : 100) + 60, 140]]));
+      x += (event ? 36 : 100) + 60;
+    });
+    return { body: kinds.join('') + flows.join(''), di };
+  };
+
+  it('a group inside a group that loses its last member is no member of the outer group (remove with --relayout)', async () => {
+    const line = LINE(['S', 'A', 'B', 'C', 'D', 'E']);
+    // B at 292, C at 452, D at 612: Group_Outer around B..D, Group_Inner around D
+    const xml = groupXml('P', `<bpmn:process id="P">${line.body}<bpmn:group id="Group_Outer" /><bpmn:group id="Group_Inner" /></bpmn:process>`, [...line.di, diShape('Group_Outer', [272, 60, 460, 140]), diShape('Group_Inner', [592, 80, 140, 110])]);
+    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'remove', ids: ['D'] }], { layout: 'full' });
+    const shapes = await shapesOf(r.xml);
+    const outer = expectGroupAround(shapes, 'Group_Outer', ['B', 'C']);
+    expect(contains(outer, shapes.get('E')!.bounds)).toBe(false);
+    expect(contains(outer, shapes.get('Group_Inner')!.bounds)).toBe(false);
+    const inner = shapes.get('Group_Inner')!.bounds;
+    expect([...shapes.values()].filter((s) => s.id !== 'Group_Inner' && boxesOverlap(inner, s.bounds)).map((s) => s.id)).toEqual([]);
+    expect(r.layout.notes).toEqual(['group Group_Inner moved below the drawing: no element inside it is drawn and the redraw put shapes on its box']);
+  });
+
+  it('a group around nothing whose box the redraw covers moves below the drawing at its size; a second redraw keeps it, an edit finds the drawing engine-owned', async () => {
+    const line = LINE(['Start', 'Prepare', 'Print', 'Hand', 'Shipped']);
+    // in the gap between Prepare (196..296) and Print (356..456), where the redraw puts Print
+    const xml = groupXml('P', `<bpmn:process id="P">${line.body}<bpmn:group id="Group_Handover" /></bpmn:process>`, [...line.di, diShape('Group_Handover', [300, 95, 50, 90])]);
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    const shapes = await shapesOf(r.xml);
+    const g = shapes.get('Group_Handover')!.bounds;
+    expect([g.width, g.height]).toEqual([50, 90]);
+    expect([...shapes.values()].filter((s) => s.id !== 'Group_Handover' && boxesOverlap(g, s.bounds)).map((s) => s.id)).toEqual([]);
+    expect(g.y).toBeGreaterThan(Math.max(...[...shapes.values()].filter((s) => s.id !== 'Group_Handover').map((s) => s.bounds.y + s.bounds.height)));
+    expect(r.layout.notes).toEqual(['group Group_Handover moved below the drawing: no element inside it is drawn and the redraw put shapes on its box']);
+    const again = await layoutDoc(await Doc.fromXml(r.xml));
+    expect(again.unchanged).toBe(true);
+    expect(again.layout.notes).toEqual(['group Group_Handover kept its box: no element inside it is drawn']);
+    const edit = await mutateDoc(await Doc.fromXml(r.xml), [{ op: 'set', id: 'Hand', values: { name: 'Hand over' } }]);
+    expect(edit.layout.mode).toBe('full');
+  });
+
+  const CHAIN = (n: number, start = true): string =>
+    `${start ? `<bpmn:startEvent id="Start_${n}" />` : ''}<bpmn:task id="Task_${n}" name="Task ${n}" /><bpmn:endEvent id="End_${n}" />${start ? seq(`Flow_${n}a`, `Start_${n}`, `Task_${n}`) : ''}${seq(`Flow_${n}b`, `Task_${n}`, `End_${n}`)}`;
+  const CHAIN_DI = (n: number, x: number, y: number, start = true): string[] => [...(start ? [diShape(`Start_${n}`, [x, y + 22, 36, 36])] : []), diShape(`Task_${n}`, [x + 100, y, 100, 80]), diShape(`End_${n}`, [x + 260, y + 22, 36, 36])];
+
+  it('the parts of a group stay together when its box held only their tasks, and when a part has no start event', async () => {
+    // declared 1, 2, 3; drawn as two columns: Group_Left around the tasks of 1 and 3, Group_Right around the task of 2
+    const tasksOnly = groupXml(
+      'P',
+      `<bpmn:process id="P">${CHAIN(1)}${CHAIN(2)}${CHAIN(3)}<bpmn:group id="Group_Left" /><bpmn:group id="Group_Right" /></bpmn:process>`,
+      [...CHAIN_DI(1, 100, 100), ...CHAIN_DI(3, 100, 240), ...CHAIN_DI(2, 500, 100), diShape('Group_Left', [180, 80, 140, 260]), diShape('Group_Right', [580, 80, 140, 120])],
+    );
+    let r = await layoutDoc(await Doc.fromXml(tasksOnly));
+    let shapes = await shapesOf(r.xml);
+    let left = expectGroupAround(shapes, 'Group_Left', ['Task_1', 'Task_3']);
+    let right = expectGroupAround(shapes, 'Group_Right', ['Task_2']);
+    expect(boxesOverlap(left, right)).toBe(false);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+    // chain 3 starts at its task: it still goes next to chain 1
+    const noStart = groupXml(
+      'P',
+      `<bpmn:process id="P">${CHAIN(1)}${CHAIN(2)}${CHAIN(3, false)}<bpmn:group id="Group_Left" /><bpmn:group id="Group_Right" /></bpmn:process>`,
+      [...CHAIN_DI(1, 100, 100), ...CHAIN_DI(3, 100, 240, false), ...CHAIN_DI(2, 500, 100), diShape('Group_Left', [80, 80, 340, 260]), diShape('Group_Right', [480, 80, 340, 120])],
+    );
+    r = await layoutDoc(await Doc.fromXml(noStart));
+    shapes = await shapesOf(r.xml);
+    left = expectGroupAround(shapes, 'Group_Left', ['Start_1', 'Task_1', 'End_1', 'Task_3', 'End_3']);
+    right = expectGroupAround(shapes, 'Group_Right', ['Start_2', 'Task_2', 'End_2']);
+    expect(boxesOverlap(left, right)).toBe(false);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+  });
+
+  it('two groups that overlap without nesting come back the same on a second redraw', async () => {
+    // five chains drawn in the rows 2, 4, 1, 5, 3; Group_A holds rows 2, 4, 1 and Group_B rows 1, 5
+    const order = [2, 4, 1, 5, 3];
+    const xml = groupXml(
+      'P',
+      `<bpmn:process id="P">${[1, 2, 3, 4, 5].map((n) => CHAIN(n)).join('')}<bpmn:group id="Group_A" /><bpmn:group id="Group_B" /></bpmn:process>`,
+      [...order.flatMap((n, i) => CHAIN_DI(n, 100, 100 + i * 140)), diShape('Group_A', [80, 80, 340, 400]), diShape('Group_B', [60, 340, 380, 240])],
+    );
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    const shapes = await shapesOf(r.xml);
+    expectGroupAround(shapes, 'Group_A', ['Task_2', 'Task_4', 'Task_1']);
+    expectGroupAround(shapes, 'Group_B', ['Task_1', 'Task_5']);
+    expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
+    const edit = await mutateDoc(await Doc.fromXml(r.xml), [{ op: 'set', id: 'Task_1', values: { name: 'Task one' } }]);
+    expect(edit.layout.mode).toBe('full');
+  });
+
+  it('a boundary event joins a group only together with its host', async () => {
+    // as an engine left it: members M1 and M2 one above the other, a wide host beside them, its event's centre on their right edge
+    const xml = groupXml(
+      'P',
+      `<bpmn:process id="P"><bpmn:task id="M1" /><bpmn:task id="M2" /><bpmn:task id="Host" /><bpmn:boundaryEvent id="Event_Late" attachedToRef="Host" /><bpmn:group id="Group_M" /></bpmn:process>`,
+      [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
+    );
+    const doc = await Doc.fromXml(xml);
+    const { redrawGroups } = await import('../src/diagram/groups.js');
+    const out = redrawGroups(doc.moddle, doc.definitions, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
+    expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
+    expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);
+  });
+
+  it('the group keeps a DI id of its own and its colour; an association to it says why it is not drawn; empty groups share one note', async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" ${DI_NS} xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Defs" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:category id="Cat"><bpmn:categoryValue id="CV_Work" value="Work" /></bpmn:category>
+  <bpmn:process id="P"><bpmn:startEvent id="S" /><bpmn:task id="T" name="Do it" /><bpmn:endEvent id="E" />${seq('F1', 'S', 'T')}${seq('F2', 'T', 'E')}
+    <bpmn:group id="Group_Work" categoryValueRef="CV_Work" /><bpmn:group id="Group_Empty1" /><bpmn:group id="Group_Empty2" />
+    <bpmn:textAnnotation id="TextAnnotation_Work"><bpmn:text>About the work</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="Association_Work" sourceRef="TextAnnotation_Work" targetRef="Group_Work" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram"><bpmndi:BPMNPlane id="Plane" bpmnElement="P">
+    ${diShape('S', [100, 122, 36, 36])}${diShape('T', [200, 100, 100, 80])}${diShape('E', [360, 122, 36, 36])}${diEdge('F1', [[136, 140], [200, 140]])}${diEdge('F2', [[300, 140], [360, 140]])}
+    <bpmndi:BPMNShape id="Shape_0xyz" bpmnElement="Group_Work" bioc:stroke="#e53935" color:border-color="#e53935"><dc:Bounds x="180" y="60" width="140" height="140" /><bpmndi:BPMNLabel><dc:Bounds x="220" y="64" width="60" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+    ${diShape('Group_Empty1', [600, 400, 120, 90])}${diShape('Group_Empty2', [800, 400, 120, 90])}
+    ${diShape('TextAnnotation_Work', [360, 20, 120, 30])}${diEdge('Association_Work', [[360, 35], [320, 70]])}
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+    const r = await layoutDoc(await Doc.fromXml(xml));
+    expect(r.xml).toMatch(/<bpmndi:BPMNShape id="Shape_0xyz" bpmnElement="Group_Work" bioc:stroke="#e53935" color:border-color="#e53935">/);
+    expectGroupAround(await shapesOf(r.xml), 'Group_Work', ['T']);
+    expect(r.layout.warnings).toEqual([{ code: 'DI_NOT_CREATED', elementId: 'Association_Work', message: 'No DI created for Association_Work (an end is a group: its box is drawn after the layout)', relatedElementIds: [] }]);
+    expect(r.layout.notes).toEqual(['groups Group_Empty1, Group_Empty2 kept their boxes: no element inside them is drawn']);
   });
 });

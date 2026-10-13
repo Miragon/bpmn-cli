@@ -16,7 +16,8 @@
  *
  * Metrics (weight in the score):
  *   crossings 5      two edges crossing properly
- *   overlaps 10      two leaf shapes overlapping (a boundary event may overlap its host)
+ *   overlaps 10      two leaf shapes overlapping (a boundary event may overlap its host;
+ *                    pools, lanes, expanded sub-processes and groups are no leaves)
  *   through 8        an edge segment cutting a shape it does not connect (a real
  *                    segment-rectangle test, so a diagonal passing a shape does not count)
  *   diagonal 3       a non-orthogonal sequence or message flow
@@ -149,7 +150,7 @@ async function analyse(xml) {
       }
     }
     const box = new Map(shapes.map((s) => [s.id, s]));
-    const leaf = shapes.filter((s) => !s.container);
+    const leaf = shapes.filter((s) => !s.container && !is(s.el, 'bpmn:Group'));
     const att = (el) => el.attachedToRef?.id;
     for (let i = 0; i < leaf.length; i++) for (let j = i + 1; j < leaf.length; j++) {
       const a = leaf[i], b = leaf[j];

@@ -14,6 +14,8 @@
  *    element (notes.ts), their associations as straight lines; links between
  *    scope levels are drawn when both ends are on the same plane, otherwise
  *    reported as DI_NOT_CREATED
+ *  - groups are not drawn here (no warning either): layoutModel draws them
+ *    again around what their boxes held (diagram/groups.ts)
  */
 import { addTo, is, many, type El, type Model } from '../model.js';
 import { layoutRoot } from '../model.js';
@@ -250,14 +252,14 @@ function applyLanes(scope: ScopeLayout, process: El): void {
 /* engine                                                               */
 /* ------------------------------------------------------------------ */
 
-export function layoutClean(model: Model, expanded: Set<string>): { warnings: EngineWarning[] } {
+export function layoutClean(model: Model, expanded: Set<string>, groups?: ReadonlyMap<string, readonly string[]>): { warnings: EngineWarning[] } {
   const { moddle, definitions } = model;
   const warnings: EngineWarning[] = [];
   const root = layoutRoot(definitions);
   definitions.set('diagrams', []);
   if (!root) return { warnings };
   const collapsedScopes = new Map<string, ScopeLayout>();
-  const placeOpts: PlaceOptions = { expanded, collapsedScopes };
+  const placeOpts: PlaceOptions = { expanded, collapsedScopes, ...(groups?.size ? { groups } : {}) };
   const di: El[] = [];
   const absBoxes = new Map<string, Box>();
   const lanesOf = new Map<string, number>(); // scope id -> lane header width (for content offset)
@@ -428,7 +430,8 @@ export function layoutClean(model: Model, expanded: Set<string>): { warnings: En
       const sb = here.has(link.sourceId) ? absBoxes.get(link.sourceId) : undefined;
       const tb = here.has(link.targetId) ? absBoxes.get(link.targetId) : undefined;
       if (!sb || !tb) {
-        warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(link.el), message: `No DI created for ${idOf(link.el)} (its ends are on different diagrams)` });
+        const toGroup = [link.el.get<El | undefined>('sourceRef'), link.el.get<El | undefined>('targetRef')].some((end) => is(end, 'bpmn:Group'));
+        warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(link.el), message: `No DI created for ${idOf(link.el)} (${toGroup ? 'an end is a group: its box is drawn after the layout' : 'its ends are on different diagrams'})` });
         continue;
       }
       edge(link.el, [borderPoint(sb, center(tb)), borderPoint(tb, center(sb))]);
@@ -684,8 +687,8 @@ function drawnWorld(di: El[], absBoxes: Map<string, Box>): { obstacles: Box[]; l
 
 /**
  * Boxes for the text annotations owned by the collaboration, next to the
- * first element an association ties them to (see notes.ts). Other
- * collaboration artifacts (groups) get no box.
+ * first element an association ties them to (see notes.ts). Groups are left
+ * out: layoutModel draws them around what they held (diagram/groups.ts).
  */
 function collaborationNotes(root: El, pools: PoolLayout[], di: El[], absBoxes: Map<string, Box>): Array<{ el: El; box?: Box }> {
   const artifacts = many(root, 'artifacts');
@@ -708,7 +711,7 @@ function collaborationNotes(root: El, pools: PoolLayout[], di: El[], absBoxes: M
   });
   const world = { ...drawnWorld(di, absBoxes), pools: pools.map((p) => p.box) };
   const boxes = placeCollaborationNotes(jobs, world);
-  return [...notes.map((el, i) => ({ el, box: boxes[i] })), ...artifacts.filter((a) => !is(a, 'bpmn:Association') && !is(a, 'bpmn:TextAnnotation')).map((el) => ({ el }))];
+  return [...notes.map((el, i) => ({ el, box: boxes[i] })), ...artifacts.filter((a) => !is(a, 'bpmn:Association') && !is(a, 'bpmn:TextAnnotation') && !is(a, 'bpmn:Group')).map((el) => ({ el }))];
 }
 
 /** Straight association lines of the collaboration (both ends drawn), border to border. */

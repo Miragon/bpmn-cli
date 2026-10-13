@@ -95,6 +95,18 @@ describe('layoutProblems', () => {
     expect(m.score).toBe(WEIGHTS.overlaps);
   });
 
+  it('a group is no leaf: it never overlaps its members, lies on a line or has a label on it; its own label still clashes', async () => {
+    const body = `${LINEAR_BODY}<bpmn:task id="Task_B" name="Task_B" /><bpmn:group id="Group_1" categoryValueRef="CV_1" />`;
+    const di = [
+      ...Object.values(LINEAR_DI),
+      shape('Task_B', [240, 240, 100, 80]),
+      shape('Group_1', [130, 80, 250, 120], { label: [200, 250, 90, 20] }),
+    ];
+    const m = await measure(processXml(body, di, '<bpmn:category id="Cat_1"><bpmn:categoryValue id="CV_1" value="Group" /></bpmn:category>'));
+    expect(m.problems).toEqual([{ kind: 'labelClash', ids: ['Group_1', 'Task_B'], detail: 'label on shape' }]);
+    expect(m.score).toBe(WEIGHTS.labelClash);
+  });
+
   it('finds crossing flows', async () => {
     const body = `${task('A')}${task('B')}${task('C')}${task('D')}${flow('F1', 'A', 'B')}${flow('F2', 'C', 'D')}`;
     const di = [

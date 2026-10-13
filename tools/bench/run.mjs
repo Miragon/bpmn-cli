@@ -124,8 +124,8 @@ function measurer(ctx) {
       stability: stability(base.model, model),
       stabilityOthers: stability(base.model, model, exclude),
       before: strip(base.quality), after: strip(after), delta: deltaOf(base.quality, after),
-      hard: hardDelta(base.quality, after, ctx, new Set([...base.model.groups, ...model.groups])),
-      soft: softDelta(base.quality, after, ctx, new Set([...base.model.groups, ...model.groups])),
+      hard: hardDelta(base.quality, after, ctx),
+      soft: softDelta(base.quality, after, ctx),
       validity: validity(model),
     };
   };

@@ -10,7 +10,7 @@ short form of this page, `bpmn <command> --help` lists every option.
 | --- | --- |
 | `auto` (default) | A file without a diagram is drawn from scratch. A drawing the engine made and nobody changed since is redrawn in full (re-running the engine on the model as it was before the command reproduces every shape, label and connection within 2 px; flow nodes added with `--no-layout` are left out of that check). Any other drawing, made in a modeler or changed by a format command that moved a shape, rerouted a flow or moved a label, is kept: `incremental`. |
 | `incremental` | Untouched shapes keep their exact bounds, untouched connections their waypoints. New elements are placed next to their neighbours (a splice between predecessor and successor, a new branch one row below the existing branches, a boundary event on the host's bottom border). Room is made like the modeler's space tool: what lies right of or below the spot moves, the pools, lanes and sub-processes holding it grow. DI of removed elements is pruned and an empty column closed. A lane change moves the node into its new lane, an activity whose new name does not fit grows (wider up to 200 px, then higher, never smaller), and only the connections that need it are rerouted. A batch places its new nodes like the same ops sent one by one: a chain of new nodes spliced into one flow stays in its row also when one of them branches, and the exception path of a new boundary event waits for the new nodes of the normal flow. A new flow that would enter a merge gateway backwards places the merge again right of its rightmost source. The row of a new branch or boundary path is chosen so that it crosses no existing line: when every free row below would cross one, the row right under the anchor is opened or the branch goes above its anchor (a boundary path above its host, with the event on the host's top border; an event drawn by hand keeps its border). A crossing left between a new and an existing connection is repaired once more (at most 8 trials per write): the new connection is routed again, else the existing one around the new shapes, else the branch starts at its next row. A trial is kept only when it lowers the score and adds neither a hard layout problem nor a crossing between two connections drawn before the write; an existing connection kept rerouted is listed in `rerouted`. A line that runs along the border of a node placed at the end of a chain is routed again. If it fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`); an explicit `--layout incremental` fails with `E_LAYOUT_INCREMENTAL`. |
-| `full` | Redraw everything with the engine (`--engine clean`, the default, or `auto`). Colours and DI ids are carried over by element id, positions are not. `bpmn layout <file>` always does this. |
+| `full` | Redraw everything with the engine (`--engine clean`, the default, or `auto`). Colours and DI ids are carried over by element id, positions are not; group boxes are drawn again around the elements they held. `bpmn layout <file>` always does this. |
 
 The result says which mode ran and why, lists what was placed, moved, rerouted and pruned, and
 compares the layout quality before and after (`bpmn metrics` measures the same). A format command
@@ -103,6 +103,13 @@ reported as `W_LAYOUT_DI_NOT_CREATED`.
 - Text annotations go above their element, data objects and stores below; annotations of the
   collaboration go beside a pool or into the gap between pools for a message flow. Associations
   are routed orthogonally around shapes, or straight when that line is free.
+- A group box is drawn again around the elements it held, 20 px around them and 40 above for its
+  name; the padding stops half-way to a neighbour, but members the redraw spread apart can still
+  overlap one that lies between them. A group around nothing keeps its box, or its size below the
+  drawing when the redraw put shapes on it (both engines, [contract](contract.md#limitations)).
+  Parts of a process that no flow connects go below one another in declared order, except that
+  the parts of one group stay together (a part belongs to the group of the first of its nodes a
+  box held).
 - Pools stack vertically in the declared order, unless another order lets fewer message flows cut
   through shapes (up to six pools). Lanes are horizontal bands that fill their pool. Message flows
   leave and enter vertically, run in the gap between two pools, and around the right of all pools

@@ -22,7 +22,8 @@
  *     stale DI, finite sizes, >= 2 waypoints, no frame intrusion) -> `di:<kind>`
  *   - no new problem of a hard kind (metric-kinds.mjs, so kinds added to the
  *     metrics library are included) -> `hard:<kind>`; problems involving a
- *     bpmn:Group are reported as `group:<kind>` (groups count as overlaps)
+ *     bpmn:Group are reported as `group:<kind>` (a group is no leaf shape for
+ *     the metrics, so what is left is rare, e.g. a group outside its pool)
  *   - the result's layout.metrics equals a standalone measurement
  *     (`metricsMismatch`) and reports the same added hard problems (`addedMismatch`)
  *   - incremental / format-only steps: every shape whose bounds changed is

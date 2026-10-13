@@ -9,8 +9,8 @@
  *  - EDITS per edit type (E1..E7 and E1-6 pooled) x arm: n applicable, ok %
  *    (primary run exit 0), forced (bpmn-cli runs that needed --force and then
  *    succeeded), sem ok % (intended change present and the file re-imports
- *    cleanly), runs adding hard defects and the hard defects added (groups
- *    excluded), stability over the flow nodes not moved on purpose (max centre
+ *    cleanly), runs adding hard defects and the hard defects added,
+ *    stability over the flow nodes not moved on purpose (max centre
  *    displacement median / mean, median share moved > 5 px, both also after
  *    removing the median translation), Δ harness score (the metrics library's
  *    score = tools/layout-regress.mjs score) and Δ PR #218 score (only when the
@@ -154,7 +154,7 @@ export function summarize(dir, armsOpt) {
   const keys = meta.metricKeys ?? Object.keys(all.find((r) => r.after?.harness.counts)?.after.harness.counts ?? {});
   const ctx = { arms, load, corpora, keys, hard: meta.hardKinds ?? [], withPr: !!meta.prScore || all.some((r) => Number.isFinite(r.after?.pr?.score)) };
   const legend = `Arms: ${arms.join(', ')}. Corpora: ${corpora.map((c) => `${c} (${meta.corpora?.[c] ?? '?'} files)`).join(', ')}. Hard kinds: ${ctx.hard.join(', ')}${meta.newKinds?.length ? ` (kinds new since the audit: ${meta.newKinds.join(', ')})` : ''}.
-Stability over flow nodes present before and after (edits: without the task E5 moves on purpose): per run the max centre displacement and the share of nodes moved > 5 px; "norm." after removing the median translation. Δ = after - before (lower is better; harness = the metrics library's score, the tools/layout-regress.mjs score${ctx.withPr ? '; PR = the PR #218 tool\'s plane score summed over planes' : ''}). sem ok = intended change present and the result re-imports without warnings. +hard = hard problems added (groups excluded). invalid = result with import warnings, flow nodes without DI, edges without waypoints or a crashing metrics run. *E4: bpmn-cli adds a timer boundary event + end event, the PR tool an error boundary + end event (it has no timer op).`;
+Stability over flow nodes present before and after (edits: without the task E5 moves on purpose): per run the max centre displacement and the share of nodes moved > 5 px; "norm." after removing the median translation. Δ = after - before (lower is better; harness = the metrics library's score, the tools/layout-regress.mjs score${ctx.withPr ? '; PR = the PR #218 tool\'s plane score summed over planes' : ''}). sem ok = intended change present and the result re-imports without warnings. +hard = hard problems added. invalid = result with import warnings, flow nodes without DI, edges without waypoints or a crashing metrics run. *E4: bpmn-cli adds a timer boundary event + end event, the PR tool an error boundary + end event (it has no timer op).`;
   return ['## Bench summary', '', legend, '', ...corpora.flatMap((c) => [editsSection(ctx, c), '', globalSection(ctx, c), '']), problemsSection(ctx), '', validitySection(ctx), ''].join('\n');
 }
 

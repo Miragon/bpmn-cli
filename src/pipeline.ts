@@ -70,7 +70,11 @@
  *    diagram ids by root; new DI gets the file's DI id style). An element
  *    the redraw draws that has no id (a hand-written message flow, pool,
  *    process, collaboration) first gets one in the file's id style and
- *    registry (diagram/drawn-ids.ts), reported as a change and a note
+ *    registry (diagram/drawn-ids.ts), reported as a change and a note.
+ *    A group box is drawn again around the elements it held
+ *    (diagram/groups.ts); one with none of them drawn keeps its box (or
+ *    its size below the drawing when the redraw put shapes on it), a
+ *    layout note says so
  *  - 'incremental': keep every existing shape and connection, place what is
  *    new, prune what is gone, reroute only affected connections
  *    (src/diagram/incremental.ts); a file without any diagram is drawn in full
@@ -199,6 +203,7 @@ export interface LayoutStatus {
   reshaped?: string[];
   /** DI of removed elements that was deleted */
   pruned?: string[];
+  /** incremental: what else the placement did or could not do; full: a group around nothing kept or moved below the drawing */
   notes?: string[];
   /** layout problems before (when a diagram existed) / after, and the difference */
   metrics?: MetricsDelta;
@@ -672,7 +677,8 @@ async function decideMode(requested: LayoutMode, before: Before, opts: MutationO
 
 /**
  * Full redraw with the engine; colours survive by element id (the DI ids
- * survive inside layoutModel, diagram/write.ts restoreDiIds).
+ * survive inside layoutModel, diagram/write.ts restoreDiIds; so do group
+ * boxes, drawn again around what they held, diagram/groups.ts).
  */
 async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] }> {
   const colors = colorsOf(doc.definitions);
@@ -689,7 +695,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   } else if (applyColors(doc.moddle, defs, colors)) {
     xml = await doc.toXml();
   }
-  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
+  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {

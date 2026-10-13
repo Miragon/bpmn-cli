@@ -48,7 +48,8 @@ The fuzzer and the property test check after every step
   sibling frames;
 - **no new hard layout defect**: no problem of a hard kind that was not there
   before the step (see *Metric kinds* below); problems involving a group are
-  reported separately as warnings, because groups count as overlaps;
+  reported separately as warnings (a group is no leaf shape for the metrics,
+  so they are rare, e.g. a group outside its pool);
 - **honest results**: the `layout.metrics` block of the result equals a
   standalone measurement, and its `added` list equals the measured difference;
 - **no unreported moves**: in incremental and format-only steps every shape
@@ -87,6 +88,10 @@ kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
    The drawing-quality kinds (`QUALITY_KEYS`: backwardFlow, segmentOverlap,
    labelOutsideFrame, messageLabelFar) weigh less than 6: soft, reported
    with the score but never counted as hard defects.
+
+Leaf shapes (`overlaps`, `through`, a label on a shape) are every shape but
+pools, lanes, expanded sub-processes and groups, in the library and the
+harness alike: a group box is drawn around its members.
 
 Give a new kind a weight of 6 or more when it is a defect that must never be
 introduced (or export `HARD_KEYS`).
@@ -546,9 +551,9 @@ without `--layout` still runs as a baseline.
   and after removing the median translation; share of nodes moved > 5 px;
 - *harness score*: the metrics library's score before / after (the
   layout-regress score), with counts of every kind the library knows;
-- *hard defects added*: hard problems the run introduced, groups excluded;
+- *hard defects added*: hard problems the run introduced;
 - *soft kinds added*: the crossings and backward flows the run introduced
-  (`soft.addedKinds`), groups excluded;
+  (`soft.addedKinds`);
 - *PR score* (only with `BPMN_EDIT_MAIN`);
 - *validity*: import warnings, flow nodes without DI, edges without waypoints.
 
