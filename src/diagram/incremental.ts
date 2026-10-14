@@ -79,7 +79,13 @@
  *      `rerouted` and a note, a chain placed again in a note
  *  A further BPMNDiagram showing a root another diagram already shows (a
  *  second view of the same process) is left untouched, except that DI of
- *  removed elements is pruned there too.
+ *  removed elements is pruned there too, and so is the edge of a flow whose
+ *  ends changed (pruneReEnded: it would show the old ends; a note names
+ *  them). A kept connection that does not reach an end of its own
+ *  (reroute.ts detachedEnds: left at the end's old place by another tool or
+ *  an older --no-layout write) counts as broken in step 8 and is rerouted,
+ *  whatever it looked like before; not on a plane with vertical pools /
+ *  lanes, where nothing is routed (it stays as drawn there).
  *  Invariants checked before returning: no element gets a second DI element
  *  on a plane (an internal error otherwise), and nothing is placed, moved or
  *  routed on a plane with vertical pools / lanes (unsupported: an error, so
@@ -100,18 +106,19 @@ import { resolveExpanded } from '../layout.js';
 import { layoutClean } from '../layout/engine.js';
 import { SIZES } from '../layout/types.js';
 import { is, layoutRoot, parseXml, type El } from '../model.js';
+import { successorOf } from '../result.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from './containers.js';
-import { bottom, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
+import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
 import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
 import { layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
-import { boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
+import { boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
+import { brokenEdge, DETACHED_GAP, detachedEnds, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { separate } from './separate.js';
 import { attachedSide } from './router.js';
 import { closeStrip, fitInFrame, makeSpace } from './space.js';
 import { activitySize, BOTTOM_ROOM } from './text.js';
-import { pruneDi, writePlanes } from './write.js';
+import { pruneDi, pruneEdges, writePlanes } from './write.js';
 
 /* ------------------------------------------------------------------ */
 /* snapshot                                                             */
@@ -222,6 +229,82 @@ export function takeSnapshot(defs: El): Snapshot {
     }
   }
   return snap;
+}
+
+/* ------------------------------------------------------------------ */
+/* edges of flows whose ends changed                                    */
+/* ------------------------------------------------------------------ */
+
+/** An end a flow got since the snapshot: which end, and its id now ('' when the flow lost it). */
+export interface ChangedEnd {
+  end: 'source' | 'target';
+  id: string;
+}
+
+/**
+ * The ends the sequence or message flow a BPMNEdge shows got since the
+ * snapshot, compared by the ids its ends have now: a renamed end is the same
+ * end (`set id=`), and so is a retyped one, also when the batch renamed it
+ * after the retype (endNow follows the element that took its place). Empty
+ * for an unchanged flow and for DI the snapshot does not know.
+ */
+export function changedEnds(snap: Snapshot, edge: El): ChangedEnd[] {
+  const old = snap.byDi.get(edge);
+  if (!old || (old.kind !== 'sequenceFlow' && old.kind !== 'messageFlow')) return [];
+  const el = raw<El>(edge, 'bpmnElement');
+  if (!el) return [];
+  const now = edgeEnds(el);
+  const out: ChangedEnd[] = [];
+  if (endNow(snap, old.sourceId) !== now.sourceId) out.push({ end: 'source', id: now.sourceId ?? '' });
+  if (endNow(snap, old.targetId) !== now.targetId) out.push({ end: 'target', id: now.targetId ?? '' });
+  return out;
+}
+
+/** The id now of an end known by its id before the ops: follows `set id=` and a retype (result.ts successorOf), so a retyped and renamed end is still the same end. */
+function endNow(snap: Snapshot, oldId: string | undefined): string | undefined {
+  const el = oldId === undefined ? undefined : snap.els.get(oldId);
+  return (el && idOf(successorOf(el))) ?? oldId;
+}
+
+/**
+ * Deletes the BPMNEdge of every flow whose ends the ops changed (changedEnds)
+ * when it shows the old ends: an edge whose end points already reach the
+ * shapes of the new ends on its plane (within DETACHED_GAP, the detachedEnds
+ * rule) stays. `further: true` only in the further views of a root (a second
+ * BPMNDiagram of it, which the incremental layout never draws); else in every
+ * diagram, where on the first diagram of a root an edge also stays when a new
+ * end of its flow has no shape there (a node added with --no-layout: the next
+ * write places it and routes the flow again, and an engine drawing stays
+ * engine-owned). Returns the flows' ids.
+ */
+export function pruneReEnded(defs: El, snap: Snapshot, opts: { further?: boolean } = {}): string[] {
+  const drawn = new Map<El, Map<string, Box>>();
+  const boundsOn = (plane: El): Map<string, Box> => {
+    let shapes = drawn.get(plane);
+    if (!shapes) {
+      drawn.set(plane, (shapes = new Map()));
+      for (const pe of rawList(plane, 'planeElement')) {
+        const id = is(pe, 'bpmndi:BPMNShape') ? idOf(raw(pe, 'bpmnElement')) : undefined;
+        const b = id ? boxOf(raw(pe, 'bounds')) : undefined;
+        if (id && b && !shapes.has(id)) shapes.set(id, b);
+      }
+    }
+    return shapes;
+  };
+  return pruneEdges(defs, (edge, plane, further) => {
+    if (opts.further && !further) return false;
+    const ends = changedEnds(snap, edge);
+    if (!ends.length) return false;
+    const shapes = boundsOn(plane);
+    if (!further && ends.some((c) => c.id && !shapes.has(c.id))) return false;
+    const pts = rawList(edge, 'waypoint').map((w) => ({ x: raw<number>(w, 'x') ?? 0, y: raw<number>(w, 'y') ?? 0 }));
+    const reached = (c: ChangedEnd): boolean => {
+      const b = c.id ? shapes.get(c.id) : undefined;
+      const p = c.end === 'source' ? pts[0] : pts[pts.length - 1];
+      return !!b && !!p && pts.length >= 2 && containsPoint(b, p, DETACHED_GAP);
+    };
+    return !ends.every(reached);
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -952,13 +1035,14 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
     routeKept(ctx, plane, e);
   }
   // what the placement broke (the space tool, a new shape on a line) is routed again now, like at the end of a single command
+  const detached = !verticalBand(plane);
   for (const e of plane.edges.values()) {
     if (e.kind === 'messageFlow' || e.points.length < 2 || e.sourceId === id || e.targetId === id || !e.sourceId || !e.targetId) continue;
     const ends = edgeEnds(e.el);
     // an end that changes later (a flow into a node still to be placed) is routed when that node is placed
     if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
     const was = ctx.routedNow.get(e.id) ?? ctx.edgesBefore.get(e);
-    if (!was || (!brokenEdge(plane, e, was) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
+    if (!was || (!brokenEdge(plane, e, was, { detached }) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
     if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken when ${id} was placed`);
     routeKept(ctx, plane, e);
   }
@@ -1089,13 +1173,15 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
     }
   }
   for (const plane of ctx.planes) {
+    // a line that does not reach its ends is routed again, except where nothing may be routed (vertical pools / lanes: it stays, as drawn)
+    const detached = !verticalBand(plane);
     for (const e of plane.edges.values()) {
       if (ctx.fromEngine.has(e.id)) continue;
       // routed when its second end was placed: kept unless it broke since
       const now = ctx.routedNow.get(e.id);
       if (now) {
         const ends = edgeEnds(e.el);
-        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now) && !grazes(plane, e, ctx.place.continued)) continue;
+        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now, { detached }) && !grazes(plane, e, ctx.place.continued)) continue;
         ctx.reroute.add(e.id);
         if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken after it was routed`);
         continue;
@@ -1114,7 +1200,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
           ? 'ends changed'
           : (e.sourceId && ctx.place.placed.has(e.sourceId)) || (e.targetId && ctx.place.placed.has(e.targetId))
             ? 'end placed'
-            : brokenEdge(plane, e, before.get(e))
+            : brokenEdge(plane, e, before.get(e), { detached })
               ? 'broken'
               : grazes(plane, e, ctx.place.continued)
                 ? 'runs along a new shape'
@@ -1570,11 +1656,16 @@ function movedShapes(ctx: Ctx): string[] {
 function assertHorizontal(ctx: Ctx, rerouted: readonly string[]): void {
   const changed = new Set([...ctx.place.placed, ...ctx.place.moved, ...rerouted, ...ctx.newEdges]);
   for (const plane of ctx.planes) {
-    const vertical = [...plane.shapes.values()].find((s) => (s.kind === 'participant' || s.kind === 'lane') && s.di && raw<boolean>(s.di, 'isHorizontal') === false);
+    const vertical = verticalBand(plane);
     if (!vertical) continue;
     const touched = [...changed].filter((id) => plane.shapes.has(id) || plane.edges.has(id));
     if (touched.length) throw new Error(`${vertical.kind === 'lane' ? 'lane' : 'pool'} ${vertical.id} is drawn vertically (isHorizontal=false); the incremental layout only edits horizontal pools and lanes (it would have changed ${touched.slice(0, 3).join(', ')})`);
   }
+}
+
+/** A pool or lane of the plane drawn vertically (isHorizontal=false): the incremental layout routes nothing there (assertHorizontal). */
+function verticalBand(plane: Plane): DShape | undefined {
+  return [...plane.shapes.values()].find((s) => (s.kind === 'participant' || s.kind === 'lane') && s.di && raw<boolean>(s.di, 'isHorizontal') === false);
 }
 
 /** Number of BPMNShapes / BPMNEdges per plane and element (`plane id|element id`). */
@@ -1604,6 +1695,8 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   const defs = doc.definitions;
   const sem = semantics(defs);
   const prunedNow = pruneDi(defs, sem);
+  // a further view is not drawn: the edge of a flow whose ends changed would show the old ends there
+  const stale = pruneReEnded(defs, snap, { further: true });
   const counts = diCounts(defs);
   // a further diagram showing an element another diagram already shows is a second view of it: left as it is
   const planes = readPlanes(defs, sem).filter((p, i, all) => all.findIndex((q) => q.rootId === p.rootId) === i);
@@ -1622,6 +1715,7 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
     if (target && now.targetId !== target) oldTarget.set(id, target);
   }
   const notes: string[] = [];
+  if (stale.length) notes.push(`edge(s) of ${[...new Set(stale)].join(', ')} removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out`);
   const ctx: Ctx = {
     doc,
     sem,
@@ -1657,7 +1751,16 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   const blocks = (): Promise<{ planes: Plane[]; sem: Semantics }> => (engine ??= enginePlanes(doc, opts));
 
   const before = ctx.edgesBefore;
-  for (const plane of planes) for (const e of plane.edges.values()) before.set(e, edgeBefore(plane, e));
+  // connections the file has that do not reach an end of theirs (detachedEnds; not one whose ends the ops changed) are broken whatever they were before: routed again, a note says why
+  const detached = new Map<string, string[]>();
+  for (const plane of planes) {
+    const vertical = !!verticalBand(plane);
+    for (const e of plane.edges.values()) {
+      before.set(e, edgeBefore(plane, e));
+      const ends = vertical ? [] : detachedEnds(plane, e);
+      if (ends.length && !(e.di && changedEnds(snap, e.di).length)) detached.set(e.id, ends);
+    }
+  }
 
   const wrapped = followRoot(ctx);
   const strips = removedAndRelocated(ctx, new Set(opts.relocated ?? []));
@@ -1682,6 +1785,10 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
     return r;
   };
   const rerouted = await repairCrossings(ctx, await draw(), start, draw);
+  for (const id of new Set(rerouted)) {
+    const ends = detached.get(id);
+    if (ends) notes.push(`${id} routed again: it did not reach ${ends.join(' and ')}`);
+  }
   writePlanes(doc.moddle, defs, ctx.planes);
   doc.invalidate();
   assertNoNewDuplicates(counts, defs);

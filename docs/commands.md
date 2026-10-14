@@ -67,7 +67,7 @@ Common options of every mutating command (all but `show`, `find`, `validate`, `m
 | `--dry-run` | run everything, layout included, and write nothing |
 | `--render <file.png\|file.svg>` | also draw the result, with what the change touched marked (see [`render`](#render)) |
 | `--layout <auto\|incremental\|full>` | how the diagram is updated, default `auto` (see [Layout and formatting](layout.md)); `--relayout` = `full` |
-| `--no-layout` | write without updating the diagram; new elements have no shape until `bpmn layout` |
+| `--no-layout` | write without updating the diagram; new elements have no shape until the next write that updates the layout or `bpmn layout <file>`, and a flow whose ends changed loses its edge with its colour (the note `removed N stale diagram element(s)` names it; the next write that updates the layout, not a format command, draws it like a new flow, and `route` draws it on its own) |
 | `--force` | write although the import was lossy, the change adds validation errors, or (`new`) the file exists |
 | `--backup` | copy `<file>` to `<file>.bak` before overwriting |
 | `--show` | append the full model view (as `show` prints it) to the result |
@@ -308,7 +308,9 @@ Measures the drawing: `score 0: no layout problems`, or a score and one line per
 ids of the elements involved, such as `crossings [Flow_1, Flow_7]` or `outsideLane [Activity_A,
 Lane_Sales]`. `--json` gives `{file, score, counts, problems: [{kind, ids, detail?}]}`. Every
 mutating command reports the same measurement before and after (`layout quality: score 0 -> 0`)
-with the problems the change added and resolved. [Testing](testing.md) lists the problem kinds.
+with the problems the change added and resolved. [Testing](testing.md) lists the problem kinds;
+`detachedEdge [Flow_7, Activity_B]` is a line that does not reach the shapes it names (the next
+write that keeps the drawing routes it again).
 
 ## `render`
 

@@ -64,8 +64,8 @@ export function replaced(old: El, next: El): void {
   if (old !== next) successors.set(old, next);
 }
 
-/** The element `el` is now: the last one that took its place (replaced), or itself. */
-function current(el: El): El {
+/** The element `el` is now: the last one that took its place (replaced), or itself (also read by diagram/incremental.ts changedEnds). */
+export function successorOf(el: El): El {
   const seen = new Set<El>([el]);
   for (let next = successors.get(el); next && !seen.has(next); next = successors.get(el)) {
     seen.add(next);
@@ -144,9 +144,9 @@ export class ChangeSet {
   rename(renames: Rename[]): this {
     for (const r of renames) {
       const el = elements.get(r);
-      const renamed = el && current(el);
+      const renamed = el && successorOf(el);
       const created = this.created.some((c) => c.id === r.from || c.id === r.to);
-      for (const c of [...this.created, ...this.changed]) if (c.id === r.from && (!renamed || current(elements.get(c) ?? renamed) === renamed)) c.id = r.to;
+      for (const c of [...this.created, ...this.changed]) if (c.id === r.from && (!renamed || successorOf(elements.get(c) ?? renamed) === renamed)) c.id = r.to;
       if (r.regenerated) {
         const old = new RegExp(`(?<![A-Za-z0-9_.-])${r.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
         for (const c of [...this.created, ...this.changed]) if (c.detail) c.detail = c.detail.replace(old, r.to);

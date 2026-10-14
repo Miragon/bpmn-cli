@@ -30,6 +30,13 @@
  *                      semantically, overlapping by more than 1 px both ways
  *      degenerateEdge  a BPMNEdge with fewer than 2 waypoints or of zero
  *                      length
+ *      detachedEdge    a BPMNEdge whose first or last waypoint lies more
+ *                      than DETACHED_GAP (10) px outside the bounds of the
+ *                      shape of that end on its plane (an end without a
+ *                      shape there, or docked on a connection, is not
+ *                      checked): a line left at its end's old place, which
+ *                      the incremental layout reroutes (reroute.ts
+ *                      detachedEnds, the same rule)
  *  - QUALITY_KEYS are soft drawing-quality kinds the harness does not
  *    measure either (weights below 6, so the bench and the fuzzer never count
  *    them as hard):
@@ -58,7 +65,7 @@
  *      crossings      [edgeA, edgeB]           overlaps     [shapeA, shapeB]
  *      frameIntrusion [shape, frame]           frameOverlap [frameA, frameB]
  *      through        [edge, shape]            diagonal     [edge]
- *      degenerateEdge [edge]
+ *      degenerateEdge [edge]                   detachedEdge [edge, end shape(s) it does not reach]
  *      missing        [element]                labelClash   [labelOwner, shape | other labelOwner]
  *      labelOnLine    [labelOwner, edge]       inOut        [incoming, outgoing, node]
  *      parallelRun    [edgeA, edgeB]           outsideLane  [node, lane]
@@ -86,6 +93,7 @@
  *      through, msgThroughPool  the middle of the segment's part inside the shape / pool
  *      diagonal       the middle of the first diagonal segment
  *      degenerateEdge its first waypoint (none without waypoints)
+ *      detachedEdge   the end point of the first end it does not reach
  *      labelClash     the centre of the label's overlap with the shape / other label
  *      labelOnLine    the middle of the segment's part in the label text
  *      inOut, parallelRun, segmentOverlap  the middle of the first shared run
@@ -108,7 +116,7 @@ import { is, parseXml, type El } from '../model.js';
 import type { Box, Point } from '../layout/types.js';
 
 /** structural defects the regression harness does not measure (see contract) */
-export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge'] as const;
+export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge', 'detachedEdge'] as const;
 
 /** soft drawing-quality kinds the regression harness does not measure (see contract) */
 export const QUALITY_KEYS = ['backwardFlow', 'segmentOverlap', 'labelOutsideFrame', 'messageLabelFar'] as const;
@@ -121,6 +129,7 @@ export const KEYS = [
   'through',
   'diagonal',
   'degenerateEdge',
+  'detachedEdge',
   'missing',
   'labelClash',
   'labelOnLine',
@@ -153,6 +162,7 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   through: 8,
   diagonal: 3,
   degenerateEdge: 10,
+  detachedEdge: 10,
   missing: 10,
   labelClash: 2,
   labelOnLine: 1,
@@ -762,6 +772,33 @@ function checkDegenerate({ edges, add }: PlaneCtx): void {
   }
 }
 
+/** how far (px) an edge's end point may lie outside its end's shape (reroute.ts DETACHED_GAP alike) */
+const DETACHED_GAP = 10;
+
+/** The source and target an edge is drawn between (a data association: its activity and the data object / store). */
+function drawnEnds(el: El): [string | undefined, string | undefined] {
+  if (is(el, 'bpmn:DataInputAssociation')) return [idOf(elsOf(el, 'sourceRef')[0]), idOf(el.$parent)];
+  if (is(el, 'bpmn:DataOutputAssociation')) return [idOf(el.$parent), idOf(raw(el, 'targetRef'))];
+  return [idOf(raw(el, 'sourceRef')), idOf(raw(el, 'targetRef'))];
+}
+
+/** edges whose first or last waypoint lies far outside the shape of that end on the plane */
+function checkDetached({ edges, byId, add }: PlaneCtx): void {
+  for (const e of edges) {
+    if (e.pts.length < 2) continue;
+    const [sid, tid] = drawnEnds(e.el);
+    const missed: string[] = [];
+    for (const [id, p] of [
+      [sid, e.pts[0]!],
+      [tid, e.pts[e.pts.length - 1]!],
+    ] as const) {
+      const s = lookup(byId, id);
+      if (s && (p.x < s.b.x - DETACHED_GAP || p.x > s.b.x + s.b.width + DETACHED_GAP || p.y < s.b.y - DETACHED_GAP || p.y > s.b.y + s.b.height + DETACHED_GAP)) missed.push(s.id);
+    }
+    if (missed.length) add('detachedEdge', e.id, [e.id, ...missed]);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* drawing quality (QUALITY_KEYS)                                       */
 /* ------------------------------------------------------------------ */
@@ -901,6 +938,7 @@ function analysePlane(plane: unknown, sem: Semantics, seen: Set<string>, add: Ad
   checkIntrusions(ctx);
   checkFrameOverlaps(ctx);
   checkDegenerate(ctx);
+  checkDetached(ctx);
   checkBackwardFlows(ctx);
   checkSegmentOverlaps(ctx);
   checkLabelFrames(ctx);
@@ -1056,6 +1094,11 @@ function locate(p: LayoutProblem, pl: LocPlane): Point | undefined {
     }
     case 'degenerateEdge':
       return ea?.pts[0];
+    case 'detachedEdge': {
+      // the first end it does not reach: the source's when that is it, else the target's
+      if (!ea || ea.pts.length < 2) return undefined;
+      return drawnEnds(ea.el)[0] === b ? ea.pts[0] : ea.pts[ea.pts.length - 1];
+    }
     case 'labelClash': {
       const own = labelOf(a);
       const other = p.detail === 'label on label' ? labelOf(b) : sb?.b;

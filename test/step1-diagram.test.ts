@@ -7,9 +7,10 @@
  *    (space.ts frame mode): nested sub-processes, branch rows, expansion
  *  - an unconnected node is placed below its own container's content
  *  - place / align never push a reference's frames away (E_NO_ROOM)
- *  - metrics: frameIntrusion, frameOverlap, degenerateEdge, a real
- *    segment-rectangle test for `through` (and the same test where the
+ *  - metrics: frameIntrusion, frameOverlap, degenerateEdge, detachedEdge, a
+ *    real segment-rectangle test for `through` (and the same test where the
  *    engine decides whether a kept connection now cuts a shape)
+ *  - brokenEdge: an edge that does not reach its ends (detachedEnds)
  *  - no connection is written with fewer than two waypoints or zero length
  *
  * The fixtures in test/fixtures/step1/ are small synthetic hand drawings.
@@ -20,9 +21,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
-import { diffProblems, layoutProblems, layoutProblemsOfXml, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
+import { diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
-import { brokenEdge } from '../src/diagram/reroute.js';
+import { brokenEdge, detachedEnds, edgeBefore } from '../src/diagram/reroute.js';
 import { makeSpace } from '../src/diagram/space.js';
 import { writePlanes } from '../src/diagram/write.js';
 import { isCliError } from '../src/errors.js';
@@ -313,6 +314,23 @@ function diagramXml(body: string, planeOf: string, di: string[], extraRoots = ''
 
 const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await layoutProblemsOfXml(xml)).problems.filter((p) => kinds.includes(p.kind));
 
+/** Edges near and far from their ends: A 100..200, B 300..400 (y 100..180); Near ends 10 px left of B (still attached), Far 60 px left of it, Both starts 50 px right of A and ends below-left of B, Undrawn ends at a node without a shape, DOA 64 px left of its data object. */
+const DETACHED_BODY = `
+      <bpmn:task id="A"><bpmn:dataOutputAssociation id="DOA"><bpmn:targetRef>DO</bpmn:targetRef></bpmn:dataOutputAssociation></bpmn:task>
+      <bpmn:task id="B" /><bpmn:dataObjectReference id="DO" dataObjectRef="D" /><bpmn:dataObject id="D" /><bpmn:task id="N" />
+      <bpmn:sequenceFlow id="Near" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="Far" sourceRef="A" targetRef="B" />
+      <bpmn:sequenceFlow id="Both" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="Undrawn" sourceRef="A" targetRef="N" />`;
+const DETACHED_DI = [
+  shape('A', [100, 100, 100, 80]),
+  shape('B', [300, 100, 100, 80]),
+  shape('DO', [330, 300, 36, 50]),
+  edge('Near', [[200, 120], [290, 120]]),
+  edge('Far', [[200, 140], [240, 140]]),
+  edge('Both', [[250, 160], [260, 160], [260, 250]]),
+  edge('Undrawn', [[200, 170], [500, 170]]),
+  edge('DOA', [[150, 180], [150, 325], [250, 325]]),
+];
+
 describe('metrics: frame defects and real segment tests', () => {
   const SUBS = `
     <bpmn:subProcess id="SubA"><bpmn:task id="InA" /><bpmn:subProcess id="Nested"><bpmn:task id="Deep" /></bpmn:subProcess></bpmn:subProcess>
@@ -387,6 +405,42 @@ describe('metrics: frame defects and real segment tests', () => {
       { kind: 'degenerateEdge', ids: ['F2'] },
     ]);
     expect(m.score).toBeGreaterThanOrEqual(20);
+  });
+
+  it('brokenEdge: an end point more than 10 px outside its end is broken whatever it was before (detachedEnds)', async () => {
+    const doc = await Doc.fromXml(diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI));
+    const plane = readPlanes(doc.definitions)[0]!;
+    const broken = [...plane.edges.values()].filter((e) => brokenEdge(plane, e, edgeBefore(plane, e))).map((e) => e.id);
+    expect(broken).toEqual(['Far', 'Both', 'DOA']);
+    expect([...plane.edges.values()].map((e) => [e.id, detachedEnds(plane, e)])).toEqual([
+      ['Near', []],
+      ['Far', ['B']],
+      ['Both', ['A', 'B']],
+      ['Undrawn', []],
+      ['DOA', ['DO']],
+    ]);
+  });
+
+  it('detachedEdge: an edge that does not reach its ends, with the ends it misses, located at that end point; a write that reroutes it resolves it', async () => {
+    const xml = diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI);
+    const m = await layoutProblemsOfXml(xml);
+    const found = m.problems.filter((p) => p.kind === 'detachedEdge');
+    expect(found).toEqual([
+      { kind: 'detachedEdge', ids: ['Far', 'B'] },
+      { kind: 'detachedEdge', ids: ['Both', 'A', 'B'] },
+      { kind: 'detachedEdge', ids: ['DOA', 'DO'] },
+    ]);
+    expect(WEIGHTS.detachedEdge).toBe(WEIGHTS.degenerateEdge);
+    expect(locateProblems((await Doc.fromXml(xml)).definitions, found).map((p) => p.at)).toEqual([
+      { plane: 'Process_1', x: 240, y: 140 },
+      { plane: 'Process_1', x: 250, y: 160 },
+      { plane: 'Process_1', x: 250, y: 325 },
+    ]);
+    const { r, after } = await run(xml, [{ op: 'set', id: 'B', values: { name: 'Book' } }]);
+    // Undrawn: its end N is placed now
+    expect(r.layout.rerouted).toEqual(['Far', 'Both', 'Undrawn', 'DOA']);
+    expect(r.layout.metrics!.resolved.filter((p) => p.kind === 'detachedEdge')).toEqual(found);
+    expect(layoutProblems(after.definitions).counts.detachedEdge).toBe(0);
   });
 
   it('through: a diagonal line passing beside a shape is not through it; one crossing it is', async () => {

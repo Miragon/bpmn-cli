@@ -65,7 +65,22 @@ prints the short form.
   <id>`); `layout --expand <id>` expands it again. In a kept drawing collapsing moves the content
   to its own diagram and closes the gap, expanding makes room.
 - **`--no-layout`** writes the model with the old DI left in place (DI of removed elements is
-  pruned): new elements have no shape until the next write or `bpmn layout`.
+  pruned): new elements have no shape until the next write that updates the layout or `bpmn
+  layout <file>`. A flow whose ends changed (a bridge, a splice, a move, `set source=` /
+  `target=`) loses its edge, which showed the old ends, also with `--keep-flow-ids`; the edge's
+  colour, label position and DI id go with it. The note `removed N stale diagram element(s), among
+  them the edge(s) of ...` names those flows. The next write that updates the layout (not
+  `--no-layout`, not a format command) draws them like new ones, plain; `bpmn route <file>
+  <flowId>` draws one on its own, while `color` and `label` refuse it (`E_NO_SHAPE`) until it has a
+  line. An edge that already reaches the new ends stays, and so does a flow's edge into a node that
+  has no shape yet (one added with `--no-layout`) until the next write places the node and routes
+  the flow again.
+- **A line that does not reach its ends** (an edge whose first or last waypoint lies more than
+  10 px outside its end's shape, left at an old place by another tool or an older bpmn-cli) is
+  routed again by the next write that keeps the drawing, and by the format commands that change
+  the geometry; it is listed as rerouted, with a note. On a plane with vertical pools or lanes,
+  where the incremental layout routes nothing, it stays as drawn. The metrics call it
+  `detachedEdge`.
 - **Branches.** At a split the layouter draws one outgoing flow straight (the "spine"): the
   default flow, or without one the first declared flow that leads to an end event (else the
   first). The other branches are placed alternately below and above the spine in declaration
@@ -117,8 +132,9 @@ that syncs one text region per save (design-iq) sees only the change.
   on `E_IMPORT_LOSSY`) is always written that way and drops what bpmn-moddle could not read.
 - **The layout still changes the drawing** where it acts: in `auto` mode a file without a diagram
   is drawn on its first write, missing DI (an edge without a `BPMNEdge`, a plane without
-  `bpmnElement`) is completed, and a task grows when its name no longer fits. `--no-layout` only
-  removes the DI of removed elements. A full redraw rewrites the geometry of the DI section.
+  `bpmnElement`) is completed, a task grows when its name no longer fits, and a line that does not
+  reach its ends is routed again. `--no-layout` only removes the DI of removed elements and the
+  edges of flows whose ends changed. A full redraw rewrites the geometry of the DI section.
 
 `npm run roundtrip` measures this on a corpus of no-ops, renames and inserts
 ([testing.md](testing.md#roundtrip-fidelity)).
@@ -156,7 +172,10 @@ that syncs one text region per save (design-iq) sees only the change.
   diagram is redrawn in full in `auto` mode (`W_LAYOUT_INCREMENTAL_FAILED`) and refused with
   `--layout incremental` (`E_LAYOUT_INCREMENTAL`); renames and property changes keep the drawing.
 - **A second `BPMNDiagram`** of a process or collaboration that another diagram already shows is
-  a read-only view for the incremental layout: DI of removed elements is pruned, nothing else.
+  a read-only view for the incremental layout: DI of removed elements is pruned, and so is the edge
+  of a flow whose ends changed (a layout note names those flows); nothing is placed or routed
+  there, so an edge another tool left detached in such a view stays (`detachedEdge`). A full
+  redraw draws one diagram per root and does not keep the second one.
 - **Lossy imports**: a file with content bpmn-moddle cannot represent (unknown elements,
   unresolved references, duplicate ids, an element the schema allows once appearing twice, such as
   two `loopCharacteristics` on one task) is refused with `E_IMPORT_LOSSY`; `show` and `validate`

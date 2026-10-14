@@ -8,7 +8,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
+import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
+import { detachedEnds } from '../src/diagram/reroute.js';
 import { is, type El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
@@ -227,6 +229,29 @@ describe('several diagrams, partial and unusual DI', () => {
     expect(duplicates(after)).toEqual([]);
   });
 
+  it('a second view loses the edges of the flows whose ends changed and keeps the rest; with --no-layout both views do', async () => {
+    const xml = fixture('twoviews.bpmn');
+    const viewEdges = (doc: Doc): string[][] => readPlanes(doc.definitions).map((p) => [...p.edges.keys()].sort());
+    // C after D: the bridge F2 (A -> D) and D -> C (F4) get other ends, C -> D (F3) goes, C -> E is new
+    const { r, after } = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: 'incremental' });
+    expect(viewEdges(after)).toEqual([
+      ['F1', 'F2', 'F4', 'F5', 'F_TaskCToE'],
+      ['F1', 'F5'],
+    ]);
+    expect(r.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);
+    expect(readPlanes(after.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length))).toEqual([]);
+    expect(duplicates(after)).toEqual([]);
+    // a rename of an end is no end change: both views keep every edge
+    const renamed = await run(xml, [{ op: 'set', id: 'C', values: { id: 'Activity_C' } }], { layout: 'incremental' });
+    expect(viewEdges(renamed.after).map((v) => v.length)).toEqual([5, 5]);
+    const skipped = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: false });
+    expect(viewEdges(skipped.after)).toEqual([
+      ['F1', 'F5'],
+      ['F1', 'F5'],
+    ]);
+    expect(skipped.r.changes.notes).toContain('removed 6 stale diagram element(s), among them the edge(s) of F2, F4 (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)');
+  });
+
   it('a shape without bounds gets bounds on its own DI (colour kept), no second shape', async () => {
     for (const name of ['nobounds.bpmn', 'nan.bpmn']) {
       const { r, after } = await run(fixture(name), [{ op: 'set', id: 'E2', values: { name: 'x' } }]);
@@ -266,6 +291,37 @@ describe('several diagrams, partial and unusual DI', () => {
     // nothing to place or move: the drawing is kept
     const rename = await run(xml, [{ op: 'set', id: 'A', values: { name: 'Renamed' } }]);
     expect(rename.r.layout.mode).toBe('incremental');
+  });
+
+  it('a line that does not reach its end on a plane with vertical pools stays as drawn: a rename keeps the drawing, the metric still reports it', async () => {
+    // F3 ends 22 px left of End E (x 182..218)
+    const xml = fixture('vertical.bpmn').replace('<di:waypoint x="218" y="550"/>', '<di:waypoint x="160" y="550"/>');
+    const ops: Op[] = [{ op: 'set', id: 'A', values: { name: 'Task A2' } }];
+    for (const layout of ['auto', 'incremental'] as const) {
+      const { r, after } = await run(xml, ops, { layout });
+      expect(r.layout.mode, layout).toBe('incremental');
+      expect(r.layout.rerouted ?? [], layout).toEqual([]);
+      expect(r.layout.notes ?? [], layout).toEqual([]);
+      expect(edges(after).get('F3')!.points.at(-1), layout).toEqual({ x: 160, y: 550 });
+      expect(layoutProblems(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
+    }
+  });
+
+  it('a retype and a rename of the same node in one batch are no end change: both views keep its edges, with and without layout', async () => {
+    const xml = fixture('twoviews.bpmn');
+    const viewEdges = (doc: Doc): string[][] => readPlanes(doc.definitions).map((p) => [...p.edges.keys()].sort());
+    const ops: Op[] = [
+      { op: 'retype', id: 'C', kind: 'userTask' },
+      { op: 'set', id: 'C', values: { id: 'Activity_C' } },
+    ];
+    for (const layout of ['incremental', false] as const) {
+      const { r, after } = await run(xml, ops, { layout });
+      expect(viewEdges(after), String(layout)).toEqual([
+        ['F1', 'F2', 'F3', 'F4', 'F5'],
+        ['F1', 'F2', 'F3', 'F4', 'F5'],
+      ]);
+      expect([...(r.layout.notes ?? []), ...r.changes.notes].filter((n) => n.includes('ends changed')), String(layout)).toEqual([]);
+    }
   });
 });
 

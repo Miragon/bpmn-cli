@@ -35,7 +35,9 @@
  *     labelOnSide: off lines and other labels where possible; flows:
  *     edgeLabelAt), keeping the label's size.
  *   - route: one flow routed again (reroute.ts routeEdge), `exit` / `entry`
- *     forcing the side it leaves / enters by.
+ *     forcing the side it leaves / enters by. A sequence or message flow
+ *     without a connection whose two ends are drawn on one plane (added, or
+ *     its ends changed, with --no-layout) gets one there.
  *   - space: the space tool (space.ts makeSpace) at the far edge of an
  *     element: `after` moves everything starting right of it (within its
  *     pool), `below` everything starting below it; pools, lanes and the
@@ -96,7 +98,7 @@ import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, ove
 import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
 import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { spacingOf } from './place.js';
-import { frameInterior, frameOf, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
+import { edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { attachedSide, type Side } from './router.js';
 import { separate, tidy } from './separate.js';
@@ -149,8 +151,10 @@ function noDiagram(): CliError {
 }
 
 function noShape(ctx: Ctx, el: El, id: string, what = 'shape'): CliError {
-  const details: ErrorDetails = { element: id, hint: 'It is not drawn (written with --no-layout, or outside the drawn root). Run `bpmn layout <file>` to draw it.' };
-  if (is(el, 'bpmn:Process')) {
+  const details: ErrorDetails = { element: id, hint: 'It is not drawn (written with --no-layout, or outside the drawn root): the next model edit without --no-layout places it, `bpmn layout <file>` redraws all.' };
+  if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) {
+    details.hint = `It has no line (added, or its ends changed, with --no-layout): \`bpmn route <file> ${id}\` draws it, and so does the next model edit without --no-layout.`;
+  } else if (is(el, 'bpmn:Process')) {
     const pool = rawList(ctx.sem.collaboration, 'participants').find((p) => raw(p, 'processRef') === el);
     if (pool) details.hint = `A process is drawn as its pool: use the participant id ${idOf(pool)}.`;
     else details.hint = 'A process without pool is the diagram itself; name the shapes inside it.';
@@ -169,12 +173,21 @@ function drawnShape(ctx: Ctx, id: string): { plane: Plane; shape: DShape } {
   throw noShape(ctx, el, id);
 }
 
-function drawnEdge(ctx: Ctx, id: string): { plane: Plane; edge: DEdge } {
+/** The connection of a flow; with `draw`, a flow without one whose two ends are drawn on one plane gets a new, unrouted one there (route). */
+function drawnEdge(ctx: Ctx, id: string, draw = false): { plane: Plane; edge: DEdge } {
   const el = ctx.doc.require(id, ['bpmn:SequenceFlow', 'bpmn:MessageFlow'], 'sequence or message flow');
   if (!ctx.planes.length) throw noDiagram();
   for (const plane of ctx.planes) {
     const edge = plane.edges.get(id);
     if (edge) return { plane, edge };
+  }
+  const ends = edgeEnds(el);
+  const drawsBoth = (p: Plane | undefined): p is Plane => !!p && !!ends.sourceId && !!ends.targetId && p.shapes.has(ends.sourceId) && p.shapes.has(ends.targetId);
+  const plane = !draw ? undefined : is(el, 'bpmn:MessageFlow') ? homePlane(ctx.planes, ctx.sem, id) : ctx.planes.find(drawsBoth);
+  if (drawsBoth(plane)) {
+    const edge: DEdge = { id, el, kind: edgeKind(el), ...ends, points: [] };
+    plane.edges.set(id, edge);
+    return { plane, edge };
   }
   throw noShape(ctx, el, id, 'connection');
 }
@@ -951,12 +964,15 @@ function intoHost(plane: Plane, endId: string | undefined, side: Side | undefine
 }
 
 function routeOp(ctx: Ctx, op: RouteOp): string[] {
-  const { plane, edge } = drawnEdge(ctx, op.id);
+  const { plane, edge } = drawnEdge(ctx, op.id, true);
   intoHost(plane, edge.sourceId, op.exit, 'exit', op.id);
   intoHost(plane, edge.targetId, op.entry, 'entry', op.id);
   const before = copyPoints(edge.points);
   const ok = reroute(plane, edge, { ...(op.exit ? { sourceSides: [op.exit] } : {}), ...(op.entry ? { targetSides: [op.entry] } : {}) });
-  if (!ok) throw modelError('E_NO_SHAPE', `${op.id} cannot be routed: an end has no shape in its diagram`, { element: op.id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });
+  if (!ok) {
+    if (!edge.di) plane.edges.delete(op.id);
+    throw modelError('E_NO_SHAPE', `${op.id} cannot be routed: an end has no shape in its diagram`, { element: op.id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });
+  }
   clearLabels(plane, [edge]);
   return samePoints(before, edge.points) ? [] : [op.id];
 }

@@ -75,7 +75,7 @@ with `--hard warn`) are reported but only fail with `--strict`.
 The layout problems come from one library, `src/diagram/metrics.ts` (built to
 `dist/diagram/metrics.js`). `tools/layout-regress.mjs` has its own copy of the
 harness kinds; the library adds kinds the harness does not measure (for
-example `frameIntrusion`, `frameOverlap`, `degenerateEdge`). The bench, the
+example `frameIntrusion`, `frameOverlap`, `degenerateEdge`, `detachedEdge`). The bench, the
 fuzzer and the property test read the kinds from the library at run time, so a
 kind added there shows up in every report without touching the tools. Which
 kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
@@ -84,7 +84,8 @@ kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
 2. else a list the library exports as `HARD_KEYS` (or `HARD_KINDS`);
 3. else every kind with weight >= 6 except `failed`. For the harness kinds
    this is overlaps, through, missing, outsideLane, outsidePool and
-   outsideSub; the frame and degenerate-edge kinds weigh 10 and are hard too.
+   outsideSub; the frame, degenerate-edge and detached-edge kinds weigh 10
+   and are hard too.
    The drawing-quality kinds (`QUALITY_KEYS`: backwardFlow, segmentOverlap,
    labelOutsideFrame, messageLabelFar) weigh less than 6: soft, reported
    with the score but never counted as hard defects.
@@ -619,8 +620,9 @@ node tools/roundtrip.mjs --baseline <old>/dist/index.js ~/corpora/hand   # again
 ```
 
 A no-op that is not byte-identical in layout auto comes from the layout,
-not from the writer: a file without a diagram is drawn, and the incremental
-layout completes missing DI (an edge, a shape, the plane's `bpmnElement`).
+not from the writer: a file without a diagram is drawn, the incremental
+layout completes missing DI (an edge, a shape, the plane's `bpmnElement`)
+and routes a line that does not reach its ends again (`detachedEdge`).
 With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
 above zero means preserve.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.

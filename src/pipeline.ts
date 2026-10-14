@@ -63,7 +63,11 @@
  * (`conventions`). Without them nothing changes.
  *
  * Layout modes (MutationOptions.layout):
- *  - false: skip; the DI of removed elements is pruned, new elements have none
+ *  - false: skip; the DI of removed elements is pruned, new elements have none,
+ *    and a flow whose ends changed loses its edge (diagram/incremental.ts
+ *    pruneReEnded; kept when it already reaches its new ends, and on the
+ *    root's first diagram while a new end has no shape: the next write places
+ *    that end and routes the flow); a note counts what was removed
  *  - 'full': redraw everything with the engine (clean or auto); bpmn-js
  *    colours (bioc:/color:) and the drawing's DI ids are carried over by
  *    element id (layoutModel, diagram/write.ts restoreDiIds; plane and
@@ -113,7 +117,7 @@ import { Doc } from './document.js';
 import { CliError, ioError, modelError, usageError, type Warning } from './errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from './layout.js';
 import type { GivenId } from './diagram/drawn-ids.js';
-import { diagramGeometry, engineOwned, layoutIncremental, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
+import { diagramGeometry, engineOwned, layoutIncremental, pruneReEnded, takeSnapshot, type IncrementalReport, type Snapshot } from './diagram/incremental.js';
 import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from './diagram/metrics.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from './diagram/ops.js';
 import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from './diagram/stickies.js';
@@ -436,6 +440,15 @@ export function separatePreexisting(doc: Doc, after: ValidationResult, baseline:
     preexisting.push({ ...f, code: 'W_PREEXISTING_ERROR', message: `${f.code}: ${f.message} (already in the model before this change)` });
   }
   return { errors, warnings: [...preexisting, ...after.warnings] };
+}
+
+/** The note of a --no-layout write that removed stale DI: `pruned` of removed elements, the edges of the flows `reEnded` (their ends changed). */
+function staleDiNote(pruned: number, reEnded: string[]): string {
+  const removed = `removed ${pruned + reEnded.length} stale diagram element(s)`;
+  const flows = [...new Set(reEnded)];
+  if (!flows.length) return `${removed}; run \`bpmn layout <file>\` to redraw`;
+  const shown = flows.slice(0, 8).join(', ') + (flows.length > 8 ? ` and ${flows.length - 8} more` : '');
+  return `${removed}, among them the edge(s) of ${shown} (their ends changed; the next model edit without --no-layout draws them, or \`bpmn route <file> <flowId>\`)`;
 }
 
 /** Removes DI shapes/edges whose semantic element no longer exists (used with --no-layout). */
@@ -840,7 +853,9 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   let fileDrawing = false;
   if (requested === 'skip') {
     const pruned = pruneDanglingDi(doc);
-    if (pruned) changes.note(`removed ${pruned} stale diagram element(s); run \`bpmn layout\` to redraw`);
+    // the edge of a flow whose ends changed shows the old ends: removed too, the next write draws the flow like a new one
+    const reEnded = pruneReEnded(doc.definitions, before.snapshot);
+    if (pruned || reEnded.length) changes.note(staleDiNote(pruned, reEnded));
     persistExpansionHints(doc, collectExpansion(doc, opts));
     xml = await doc.toXml();
     layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(before.metrics, layoutProblems(doc.definitions)) };

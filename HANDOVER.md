@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, and DI ids within 64 characters that follow `set id=`)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, and the stale edges of flows whose ends changed)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2190 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2201 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,144 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Stale edges of flows whose ends changed (2026-10-13, `fix/stale-edges-of-re-ended-flows`, follow-ups of #32)
+
+Under `--no-layout` a flow whose ends an op changed (a bridge, the flows of
+a move, a `set source=`) kept its BPMNEdge at the old ends, with
+`--keep-flow-ids` without any note; a second BPMNDiagram of the same
+process kept such edges after every write; and no later write repaired
+them: `brokenEdge` tolerated the end gap an edge had before, so an edge
+already off its ends never counted as broken, and no metric showed it.
+
+- **`--no-layout`** (`src/pipeline.ts` skip path; `changedEnds` /
+  `pruneReEnded` in `src/diagram/incremental.ts`; `pruneEdges` in the prune
+  section of `src/diagram/write.ts`, nothing else there, so the rebase onto
+  the DI-id PR stays local): the BPMNEdge of a sequence or message flow
+  whose ends differ from the snapshot goes, in every diagram and both
+  modes. Ends are compared by the id they have now: `set id=` and a retype
+  (also retype + `set id=` in one batch: `successorOf` in `src/result.ts`)
+  are no end change. An edge stays when its end points already reach the
+  shapes of the new ends (within 10 px: a node added and removed again
+  under `--no-layout` gives the input's DI back, and an engine drawing
+  stays engine-owned), and on the root's first diagram while a new end has
+  no shape (a splice of a node the same write added: the next write places
+  it and routes the flow). The note counts and names the flows:
+  `removed 3 stale diagram element(s), among them the edge(s) of Flow_AToB,
+  Flow_BToC, Flow_CToDone (their ends changed; the next model edit without
+  --no-layout draws them, or \`bpmn route <file> <flowId>\`)`.
+- **`route` draws a missing line** (`drawnEdge(..., draw)` in
+  `src/diagram/ops.ts`): a sequence or message flow without a BPMNEdge
+  whose two ends are drawn on one plane gets one (before: `E_NO_SHAPE`, the
+  same for a flow added with `--no-layout`). The `E_NO_SHAPE` hint of a
+  flow, the catalogue entry and the note name `route` and the next model
+  edit before `bpmn layout <file>`. `color` / `label` on such a flow still
+  refuse (`E_NO_SHAPE`); format-only writes do not draw missing edges.
+- **Further views** (incremental step 1): the same edges go from a second
+  BPMNDiagram of a root (it is never drawn), with a layout note.
+- **Detached edges heal** (`detachedEnds`, `DETACHED_GAP` = 10 in
+  `src/diagram/reroute.ts`): a connection whose first or last waypoint lies
+  more than 10 px outside its end's shape counts as broken whatever it was
+  before. The incremental layout reroutes it with a note (`Flow_X routed
+  again: it did not reach Activity_C`), and so do the format commands that
+  change the geometry; that also catches flows a `tidy` / `place` left 11
+  to 30 px off an event or gateway (`endGaps` tolerates half a round
+  shape's width). Not on a plane with vertical pools or lanes:
+  `brokenEdge(..., { detached: false })` there, since the incremental
+  layout may route nothing on such a plane and a rename would otherwise be
+  a full horizontal redraw (auto) or `E_LAYOUT_INCREMENTAL`.
+- **Metric `detachedEdge`** (`src/diagram/metrics.ts`): the same rule as
+  an EXTRA kind of weight 10 (hard), ids `[edge, end shape(s) it misses]`,
+  located at the missed end point. The harness has no such kind: SCORE
+  stays 444.
+- Bundle budgets (`tools/iso/budget.json`, measured after the rebase onto
+  #58 and #59): the PR adds about 4 KB minified / 1.3 KB gzip (pruning,
+  `route` drawing a line, the metric, hints). The whole entry goes
+  958.7 / 306.1 -> 962.7 / 307.4 KB, within #58's gzip budget of 309 but
+  over its 960 KB minified; `applyToXml` only goes 678.3 / 216.8 ->
+  681.8 / 218.0 KB, over 679 / 217. Raised to measured + 1 %: the whole
+  entry's minified budget 960 -> 972 KB (gzip stays 309), `applyToXml`
+  only 679 / 217 -> 689 / 220 KB.
+
+Evidence (origin/main ef14c4d as the baseline):
+
+- 11 new tests; 9 fail on origin/main (the splice test only because
+  `detachedEnds` is new), and the retype + `set id=` and add + remove tests
+  pin origin/main's behaviour, which the first version of this change broke
+  (found in review): `test/keep-flow-ids.test.ts`
+  (keep-mode move under `--no-layout`, the next write),
+  `test/diagram-incremental.test.ts` (a bridge; `route` after and within a
+  `--no-layout` batch, `color`'s refusal naming route; add + remove under
+  `--no-layout` gives the input back; a splice to a new node; an edge
+  150 px off its ends healed, tidied, kept by `--no-layout`),
+  `test/diagram-incremental-robustness.test.ts` (a second view; vertical
+  pool with a detached edge keeps the drawing on a rename; retype + `set
+  id=` keeps both views' edges), `test/step1-diagram.test.ts`
+  (`detachedEnds`, the metric).
+- Differential (same edits in process on both builds, 159 repository files
+  with a task: rename, add, timer path, split, remove, move, tidy, retype +
+  `set id=`, and `--no-layout` add / remove / move / retype + `set id=`):
+  every difference is in one class. The 14 scenarios whose edges are already
+  off their ends (agent__anno*, agent__claim*, artifacts__*) heal on every
+  write; `--no-layout` remove / move drop re-ended edges (143 / 114 files);
+  14 runs differ only in the note's `<file>`; twoviews.bpmn loses re-ended
+  edges in its second view; two `tidy` runs (gallery.bpmn,
+  lanes__complaint-t1) reroute an edge the tidy left 14 / 18 px off an
+  event. Retype + `set id=` is identical on every file without a detached
+  edge, with and without layout. `route` on 634 drawn flows: identical.
+  Private corpus (325 files, counts only): identical on the 324 files
+  without a detached edge for every layout edit; the one with a detached
+  association heals; one `tidy` reroutes a flow it left 30 px off a
+  gateway; `--no-layout` drops re-ended edges (323 removes, 268 moves);
+  `route` draws the line of 3 flows that had none (origin/main:
+  `E_NO_SHAPE`).
+- `layout-regress --compare`: SCORE 444, 0 better, 0 worse.
+  `speaking-ids --baseline`: 570 / 570. `roundtrip`: no-op identical
+  155 -> 142 of 164 and rename (layout auto) p90 2 -> 18 lines, all on the
+  14 stale scenarios (a no-op heals them, like missing DI is completed);
+  `--no-layout` no-ops 164 / 164.
+- Bench against the baseline: `RESULT: no regression`; the 101 models
+  without a detached edge give the same records; the 14 stale ones heal
+  (mean harness delta -1.9 -> -14.1, tidy hard 55 -> 47).
+- Fuzz, 80 walks x 25 steps, seed 11, auto and incremental: 0 errors; the
+  baseline gives 4 `hard:detachedEdge` (`place` leaving flows off a gateway
+  or event), this build none; the 2 `hard:frameIntrusion` are the same.
+- Write time, interleaved medians: 15 incremental and `--no-layout` writes
+  on 5 repository models 215.7 -> 213.4 ms (a second run 219.6 -> 221.2);
+  generated 120 / 300 node models 691.4 -> 693.6 ms (+0.3 %): noise.
+- After the rebase onto #58 and #59 (origin/main f492f7c as the baseline):
+  2201 tests; the same edits on 166 repository files with a task (rename,
+  add, remove, move, tidy; `--no-layout` add / remove / move) fall into the
+  same classes: 15 files with lines off their ends heal on every layout
+  write (the 14 stale scenarios and #59's fixture pool-branch-7922.bpmn,
+  whose F5 misses G); `--no-layout` remove / move drop re-ended edges and
+  nothing else (159 / 143 files); twoviews.bpmn loses re-ended edges in its
+  second view; nan.bpmn and nobounds.bpmn differ only in the note's
+  `<file>`; the two `tidy` runs reroute the one edge they left off an event.
+  `roundtrip`: no-op identical 159 -> 145 of 169, all 14 on those files;
+  `--no-layout` no-ops 169 / 169. `layout-regress --compare`: 0 better, 0
+  worse. Write time, interleaved medians of 25 rounds, two runs: 15 writes
+  on 5 repository models 156.0 -> 152.6 and 160.5 -> 165.9 ms; 6
+  incremental and `--no-layout` writes on generated 120 / 300 node models
+  681.0 -> 684.3 and 683.8 -> 668.5 ms: noise (within 3.5 % either way).
+
+Left for later:
+
+- A pruned edge's colour, label position and DI id are not carried to the
+  line the next write draws (documented in contract.md and migrating.md);
+  carrying them would need the old DI kept somewhere across writes.
+- `color` / `label` on a flow without a line refuse with a hint to `route`
+  first; a format-only write does not draw missing edges.
+- An edge another tool left detached in a further view, or on a plane with
+  vertical pools / lanes, stays (`detachedEdge` reports it).
+- `endGaps`' half-width tolerance for round ends is unchanged below 10 px.
+- On the first diagram, retype + `set id=` in one batch still reroutes the
+  node's flows ('ends changed' in `collectEdges` compares through
+  `currentId`, which does not follow a retype); harmless, as on origin/main.
+  Following `successorOf` in `currentId` would touch every pool / lane /
+  host check there, so it was left out.
+- The 14 stale scenario files are not redrawn: they are inputs as other
+  tools write them.
 
 ## DI ids within 64 characters, and they follow `set id=` (2026-10-13, `fix/di-ids-within-64-follow-renames`)
 
@@ -2073,7 +2211,8 @@ Left out, for later:
   mode removes that flow's edge and says so); the next incremental write
   leaves it stale too. Default mode keeps bridged and spliced edges stale
   the same way; a fix would drop the edge of a flow whose ends changed, or
-  reroute edges that no longer touch their ends.
+  reroute edges that no longer touch their ends. Both done since
+  2026-10-13 ("Stale edges of flows whose ends changed" at the top).
 - In a file of mixed id styles, following `W_FLOW_ID_STALE` hints can tip
   the learned style (`IdStyle` takes the first prefix seen on a tie: a move
   declares a put-back `F3` before `G1`), so the next read no longer sees the

@@ -109,7 +109,8 @@ export const rawList = (el: unknown, prop: string): El[] => raw<El[]>(el, prop) 
 
 export const idOf = (el: unknown): string | undefined => raw<string>(el, 'id');
 
-function boxOf(bounds: unknown): Box | undefined {
+/** The Box of a dc:Bounds; undefined when a coordinate is missing or not finite. */
+export function boxOf(bounds: unknown): Box | undefined {
   if (!bounds) return undefined;
   const b = { x: raw<number>(bounds, 'x'), y: raw<number>(bounds, 'y'), width: raw<number>(bounds, 'width'), height: raw<number>(bounds, 'height') };
   if ([b.x, b.y, b.width, b.height].some((v) => typeof v !== 'number' || !Number.isFinite(v))) return undefined;

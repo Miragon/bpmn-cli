@@ -5,12 +5,15 @@
  *
  * A hand-drawn fixture is a model laid out by the clean engine whose DI is
  * then moved by a few pixels, so it is NOT engine-owned any more and `auto`
- * keeps it.
+ * keeps it. The last block covers stale edges: a flow whose ends changed
+ * under --no-layout loses its edge, an edge that does not reach its ends is
+ * rerouted by the next write.
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
+import { detachedEnds } from '../src/diagram/reroute.js';
 import { is, type El } from '../src/model.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
@@ -464,5 +467,112 @@ describe('incremental placement', () => {
     expect(shapes(after).get('Activity_Clarify')!.bounds).toEqual(before.get('C')!.bounds);
     expect(r.layout.placed).toEqual([]);
     expect(r.layout.moved).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* stale edges: flows whose ends changed, edges that miss their ends    */
+/* ------------------------------------------------------------------ */
+
+/** The id of the sequence flow from `source` to `target`. */
+function flowFrom(doc: Doc, source: string, target: string): string {
+  for (const [id, el] of doc.byId()) {
+    if (is(el, 'bpmn:SequenceFlow') && el.get<El>('sourceRef').get('id') === source && el.get<El>('targetRef').get('id') === target) return id;
+  }
+  throw new Error(`no flow ${source} -> ${target}`);
+}
+
+/** The edges that do not reach their ends (reroute.ts detachedEnds), with the ends they miss. */
+function detached(doc: Doc): string[] {
+  return readPlanes(doc.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length).map((e) => `${e.id}->${detachedEnds(p, e).join(',')}`));
+}
+
+/** `xml` with the waypoints of the edge of `flow` moved by (dx, dy): the line no longer reaches its ends. */
+async function detach(xml: string, flow: string, dx: number, dy: number): Promise<string> {
+  const doc = await Doc.fromXml(xml);
+  for (const w of edges(doc).get(flow)!.di!.get<El[]>('waypoint')) {
+    w.set('x', w.get<number>('x') + dx);
+    w.set('y', w.get<number>('y') + dy);
+  }
+  return doc.toXml();
+}
+
+describe('stale edges: flows whose ends changed, edges that do not reach their ends', () => {
+  it('--no-layout: a bridge loses its stale edge, the note counts it with the removed DI; the next write draws it like a new flow', async () => {
+    const xml = await handXml(BASE);
+    const { r, after } = await run(xml, [{ op: 'remove', ids: ['A'] }], { layout: false });
+    const bridge = flowFrom(after, 'S', 'G');
+    expect(r.layout.status).toBe('skipped');
+    expect(edges(after).has(bridge)).toBe(false);
+    expect(r.changes.notes).toContain(`removed 2 stale diagram element(s), among them the edge(s) of ${bridge} (their ends changed; the next model edit without --no-layout draws them, or \`bpmn route <file> <flowId>\`)`);
+    expect(r.layout.metrics!.added).toContainEqual({ kind: 'missing', ids: [bridge] });
+    const next = await run(r.xml, [{ op: 'set', id: 'C', values: { name: 'Clarify it' } }]);
+    expect(next.r.layout.mode).toBe('incremental');
+    expect(next.r.layout.placed).toContain(bridge);
+    expect(edges(next.after).get(bridge)!.points[0]!.x).toBe(right(shapes(next.after).get('S')!));
+    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(detached(next.after)).toEqual([]);
+  });
+
+  it('--no-layout: route draws the line of a flow whose ends changed, also in the same batch; colour needs the line and its refusal names route', async () => {
+    const xml = await handXml(BASE);
+    const { r, after } = await run(xml, [{ op: 'remove', ids: ['A'] }], { layout: false });
+    const bridge = flowFrom(after, 'S', 'G');
+    const routed = await run(r.xml, [{ op: 'route', id: bridge, entry: 'left' }]);
+    expect(routed.r.layout.reason).toBe('format operations only: drawing kept');
+    expect(routed.r.layout.format?.[0]?.rerouted).toEqual([bridge]);
+    expect(edges(routed.after).get(bridge)!.points[0]!.x).toBe(right(shapes(routed.after).get('S')!));
+    expect(layoutProblems(routed.after.definitions).counts.missing).toBe(0);
+    for (const [id, s] of shapes(after)) expect(shapes(routed.after).get(id)!.bounds, id).toEqual(s.bounds);
+    const batch = await run(xml, [{ op: 'remove', ids: ['A'] }, { op: 'route', id: bridge }], { layout: false });
+    expect(edges(batch.after).has(bridge)).toBe(true);
+    expect(detached(batch.after)).toEqual([]);
+    const refused = await run(r.xml, [{ op: 'color', ids: [bridge], color: 'green' }]).catch((err: unknown) => err);
+    expect(refused).toMatchObject({ code: 'E_NO_SHAPE', details: { hint: expect.stringContaining(`\`bpmn route <file> ${bridge}\` draws it`) } });
+  });
+
+  it('--no-layout: an edge that already reaches the new ends of its flow stays (a node added and removed again gives the input back)', async () => {
+    const xml = await engineXml(BASE);
+    const added = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { layout: false });
+    const removed = await run(added.r.xml, [{ op: 'remove', ids: ['N'] }], { layout: false });
+    expect(removed.r.changes.notes.filter((n) => n.includes('stale diagram'))).toEqual([]);
+    const di = (x: string): string => x.slice(x.indexOf('<bpmndi:BPMNDiagram'));
+    expect(di(removed.r.xml)).toBe(di(xml));
+    // still the engine's drawing: the next write redraws it
+    const next = await run(removed.r.xml, [{ op: 'set', id: 'C', values: { name: 'Clarify it' } }]);
+    expect(next.r.layout.reason).toMatch(/^engine-owned diagram/);
+  });
+
+  it('--no-layout: a flow spliced to a new node keeps its edge while the node has no shape, and the next write places the node and routes it again', async () => {
+    const xml = await handXml(BASE);
+    const before = edges(await Doc.fromXml(xml));
+    const old = flowFrom(await Doc.fromXml(xml), 'A', 'G');
+    const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { layout: false });
+    const spliced = flowFrom(after, 'A', 'N');
+    expect(edges(after).get(spliced)!.points).toEqual(before.get(old)!.points);
+    expect(r.changes.notes.filter((n) => n.includes('stale diagram'))).toEqual([]);
+    const next = await run(r.xml, [{ op: 'set', id: 'C', values: { name: 'Clarify it' } }]);
+    expect(next.r.layout.placed).toContain('N');
+    expect(next.r.layout.rerouted).toContain(spliced);
+    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(detached(next.after)).toEqual([]);
+  });
+
+  it('an edge that does not reach its end (left at an old place) is rerouted by the next write and named in a note; the other edges keep their waypoints', async () => {
+    const hand = await handXml(BASE);
+    const flow = flowFrom(await Doc.fromXml(hand), 'B', 'E');
+    const xml = await detach(hand, flow, 0, 150);
+    const before = edges(await Doc.fromXml(xml));
+    expect(detached(await Doc.fromXml(xml))).toEqual([`${flow}->B,E`]);
+    const { r, after } = await run(xml, [{ op: 'set', id: 'C', values: { name: 'Clarify' } }]);
+    expect(r.layout.rerouted).toEqual([flow]);
+    expect(r.layout.notes).toContain(`${flow} routed again: it did not reach B and E`);
+    expect(detached(after)).toEqual([]);
+    for (const [id, e] of edges(after)) if (id !== flow) expect(e.points, id).toEqual(before.get(id)!.points);
+    // a format command reroutes it too; --no-layout leaves it as it is
+    const tidied = await run(xml, [{ op: 'tidy' }]);
+    expect(detached(tidied.after)).toEqual([]);
+    const skipped = await run(xml, [{ op: 'set', id: 'C', values: { name: 'Clarify' } }], { layout: false });
+    expect(edges(skipped.after).get(flow)!.points).toEqual(before.get(flow)!.points);
   });
 });
