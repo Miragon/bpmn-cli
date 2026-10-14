@@ -75,7 +75,11 @@ an end event stops there; with fewer than two branches left to join, no join gat
 **Aliases.** `"as": "$name"` names what an op creates (`add`, `connect`, `split`, split nodes), and
 later ops use `$name` wherever an id goes, so a batch never guesses a generated id
 ([Ids](reference.md#ids)). `"flowAs"` names the flow into a new node (on a prepend before a join or a
-node without incoming flow: the flow out of it), `"joinAs"` the join of a split,
+node without incoming flow: the flow out of it), `"outAs"` the one flow an `add` creates out of the
+new node (on a splice the flow to the old successor, on a prepend the flow to the anchor, else the
+flow to `"to"`; `E_USAGE` when the add creates none, as an append does, or two, a splice or prepend
+together with `"to"`; with `"ifAbsent"` and an existing node: the one flow out of it, `E_USAGE` when
+none or several leave it), `"joinAs"` the join of a split,
 and `"refAs"` the message, error, signal or escalation the element references, for example to give a
 new message its `zeebe:subscription`. An alias is defined once and used only after its op
 (`E_UNKNOWN_ALIAS`, `E_DUPLICATE_ALIAS`); it follows its element through a rename and a retype (also
@@ -96,11 +100,15 @@ that prepends (before a join or a node without incoming flow) names a new flow n
 instead, and the old out-flow stays removed. A flow an earlier op of the batch created still follows
 its ends, so name it with an alias where an op creates it: `"flowAs"` on an add that appends or
 prepends (after a gateway or a node without successor, before a join or a node without incoming
-flow) and on split nodes, `"as"` on connect. On a splice `"flowAs"` names the flow the file had, now
-into the new node; the flow the splice creates (new node -> old successor) has no alias, so take
-its id from the result. An end that a `set` earlier in the batch gave another id or name still
-counts by the id and name it had, so a flow named after them follows (or, with ids kept, is
-reported) when a later op changes its ends.
+flow) and on split nodes, `"outAs"` on an add that splices, prepends or has `"to"`, `"as"` on
+connect. On a splice `"flowAs"` names the flow the file had, now into the new node, and `"outAs"`
+the flow the splice creates (new node -> old successor), so the batch that splices a gateway in can
+set that flow's condition or make it the default:
+`{"op": "add", "kind": "exclusiveGateway", "name": "Valid?", "flow": "Flow_CheckToOk", "as": "$valid", "outAs": "$yes"}`,
+then `{"op": "set", "id": "$yes", "values": {"name": "yes", "condition": "${valid}"}}`.
+An end that a `set` earlier in the batch gave another id or name still counts by the id and name it
+had, so a flow named after them follows (or, with ids kept, is reported) when a later op changes its
+ends.
 
 **`move`** chains several `ids` (the first takes the placement, each next one goes after the one
 before); the node the chain starts after (`after`, the source of `flow`) must lie outside the chain

@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, and the stale edges of flows whose ends changed)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, the stale edges of flows whose ends changed, and `outAs`, the alias of the flow a splice creates)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2201 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2207 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,117 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## `outAs`: the alias of the flow a splice creates (2026-10-13, `feat/out-as-alias`)
+
+A gap #32 left ("Left out, for later" below): on a splice `flowAs` names the
+kept flow into the new node, and the flow the splice creates (new node ->
+old successor) had no alias, so a one-shot batch (design-iq sends one per
+edit) that splices a gateway in and sets a condition or a default on that flow
+had to guess its id. The user chose a new public key (option a of the
+follow-up plan's Q4): documented in the full guide and docs/ops.md, the
+short guide unchanged.
+
+- **`outAs` on `add`** (`src/ops/add.ts` `bindOutAs`, `src/ops/types.ts`,
+  `src/batch.ts` `ADD_FIELDS`, `src/ops/aliases.ts` `DEF_KEYS`). It binds the
+  one sequence flow the add creates out of the new node: on a splice
+  (`after` a node with one out-flow, `before` a node with one in-flow,
+  `after` + `before`, `flow`) the flow to the old successor, on a prepend
+  the flow to the anchor (the flow `flowAs` names there too), else the flow
+  to `to` (an append after a gateway, `in`, `on` or no placement with
+  `to`). The new node was unconnected before its placement, so its
+  out-flows after it are exactly those. `E_USAGE` where there is none
+  (`outAs $o: Activity_X gets no flow out of it from this placement
+  (--after Gateway_G appends it)`) or two, a splice or prepend together
+  with `to` (the message names both; the hint says to connect the `to`
+  target with a connect op that has `as`): no guessing which one was
+  meant. parseOps refuses it up front on a kind that is no flow node (data
+  object, annotation, lane, pool: `"outAs": add dataObject creates no
+  sequence flow out of it`, so it never suggests `to` there; `checkKind`
+  now returns the family, `FLOW_NODE_FAMILIES` moved to `src/kinds.ts`)
+  and where no key can create such a flow (no `after`, `before`, `flow` or
+  `to`); the add's own check stays for typed library ops. With
+  `--if-absent` and an existing element (`bindExistingOutAs`) it binds the
+  one flow out of it and refuses none, several or no flow node (`outAs
+  $yes: Gateway_Valid already exists and has 2 flows out of it (...)`,
+  the flows as candidates): the idempotent gateway batch run again after
+  a second branch was put first would otherwise have bound that branch
+  and put the condition on both, and an existing node without out-flow
+  left the alias unbound, so the next op said no op defines it. Split
+  nodes take no `outAs` (the split creates a node's
+  out-flow with the next node; `SplitBranch.nodes` omits it, so parseOps
+  says `unknown key`). The alias follows a later rename of the flow like
+  every alias. The `E_UNKNOWN_ALIAS` hint and its catalogue entry name it.
+- Docs: the full guide's alias paragraph of OPS JSON and the CONTRACT's
+  alias sentence, [docs/ops.md](docs/ops.md) (Aliases: what `outAs` names,
+  with the gateway example; "has no alias, so take its id from the result"
+  is gone; `ifAbsent` with an existing node), [docs/reference.md](docs/reference.md)
+  (one bullet under Placement; on a prepend `flowAs` and `outAs` name the
+  same flow), [docs/migrating.md](docs/migrating.md) (the 0.7 sentence
+  that said the splice's flow has no alias), the skill's
+  `reference/ops.md` (keys table and the alias sentence), SKILL.md (rule 4
+  and the `E_UNKNOWN_ALIAS` row, like the catalogue),
+  [docs/library.md](docs/library.md) (bundle table). `guide --short` is
+  byte-identical (4644 bytes): its generated ops key list leaves out the
+  keys in `FULL_GUIDE_ONLY_KEYS` (`src/guide.ts`, only `outAs`).
+- Tests: `test/batch-aliases.test.ts` (a gateway spliced into a flow, its
+  new flow given a name and condition and the other branch made the
+  default in the same batch, also through `bpmn apply` with the `aliases:`
+  line and `--json`; `after` and `before` splices; `to` after a gateway,
+  with `in` and on a boundary event; a prepend; a later splice into the
+  aliased flow renames it and the alias follows; `--if-absent` on a node
+  with one out-flow; the refusals: parse time, an append, a splice with `to`, a data object,
+  annotation, lane and pool at parse time and as a typed op, a split node,
+  a typed op of `mutateDoc`, an alias used before its op; `--if-absent`:
+  the gateway batch run again binds the one flow, refused once a second
+  branch is put first, and on an existing node without out-flow or a pool;
+  the schema, the full guide, the catalogue, and the short guide without
+  it), and `test/batch.test.ts` (the allowed keys of add now list `outAs`;
+  guide and docs/ops.md say `"outAs"` names the splice's new flow and no
+  longer "has no alias"). All eight fail on main.
+- Evidence against a build of main: batches through `applyToXml` on
+  test/fixtures and tools/scenarios (164 files, 2573 batches). Without
+  `outAs` (adds with `as` / `flowAs`, splits, prepends with `to`, the
+  `flowAs` refusal, a typo on connect) byte-identical, xml and result: 815.
+  A typo on add: the message differs only by `outAs` in the allowed keys
+  (163). `E_UNKNOWN_ALIAS`: the message is the same, the hint names
+  `outAs` (163). With `outAs`, main refuses the key; the branch writes the
+  xml that main and the branch write for the same batch with the alias
+  replaced by the flow's id, and the result differs only by the alias:
+  830 (163 of them an `ifAbsent` add of an existing task with one
+  out-flow). 80 more fail on both builds with the same error (a placement
+  the file refuses), 2 are the new `E_USAGE` (the file's first task ends
+  its path, so the gateway after it appends), and 520 refusals are the new
+  `E_USAGE`: 260 placements without such a flow, 163 data objects at parse
+  time, 97 `ifAbsent` adds of an existing node with several or no
+  out-flows. A private corpus (635 files, 9825 batches, counts only):
+  3065 / 613 / 613 / 3409 / 176 / 2 / 1027 + 613 + 307 in the same
+  classes, nothing else. The CLI's
+  `guide --short` is byte-identical, `guide` and `kinds` differ by the
+  alias text, the add keys line and the catalogue fix, `kinds --json` by
+  `outAs` in the add schema and that fix. `layout-regress --compare`: 0
+  better, 0 worse; `speaking-ids --baseline` and `roundtrip --baseline`
+  are unchanged.
+- Bundle (rebased on main with #58, #59 and #60): whole entry 962.7 ->
+  965.5 KB minified (307.4 -> 308.2 KB gzip), `applyToXml` 681.8 -> 684.1 KB
+  (218.0 -> 218.6 KB gzip), for the key's schema text, its parse checks and
+  the add's refusals (the texts were shortened first). Main's budgets in
+  `tools/iso/budget.json` hold (972 / 309 and 689 / 220 KB), so they stay:
+  6.5 KB minified and 0.8 KB gzip are left under the whole entry's, 4.9 and
+  1.4 KB under `applyToXml`'s; the gzip margin of the whole entry is the
+  tight one. Runtime:
+  one `doc.outgoing` call for an add with `outAs`, none without; a splice
+  batch takes about 9 ms on both builds (median of 40).
+- Left for later: the flow out of the last node of a split branch (to the
+  join or the old successor) has no alias either; a split node with
+  `outAs` would need the split to bind it after the join is made. A typed
+  `add` with `flowAs` on a data object or pool still ignores it silently
+  (parseOps refuses it); `outAs` there is `E_USAGE`. `flowAs` with
+  `--if-absent` still binds the existing node's first in-flow, and without
+  one leaves the alias unbound (a later use says no op defines it); a
+  change of `flowAs` was out of scope here. The alias list of
+  docs/migrating.md under "Changes from 0.3" stays without `outAs`: it
+  lists what 0.4 brought, and the 0.7 section names `outAs`.
 
 ## Stale edges of flows whose ends changed (2026-10-13, `fix/stale-edges-of-re-ended-flows`, follow-ups of #32)
 
@@ -2204,7 +2315,8 @@ Left out, for later:
   those too.
 - The flow a splice creates (new node -> old successor) has no alias:
   `flowAs` on a splicing `add` names the kept flow into the node. The docs
-  say so; an `outAs` key would be new syntax.
+  say so; an `outAs` key would be new syntax. Done in `feat/out-as-alias`
+  (above): `outAs` on add names it.
 - With ids kept and no layout (`--no-layout`, or a second `BPMNDiagram` the
   incremental layout leaves alone), a put-back flow keeps its BPMNEdge with
   the old waypoints and the result has no `run bpmn layout` note (default

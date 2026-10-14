@@ -16,7 +16,7 @@
  */
 import { usageError, type CliError } from './errors.js';
 import { editDistance } from './ids.js';
-import { KindError, kindByName, normalizeTrigger, parseKind } from './kinds.js';
+import { FLOW_NODE_FAMILIES, KindError, kindByName, normalizeTrigger, parseKind, type Family } from './kinds.js';
 import { ALIAS, checkAliases } from './ops/aliases.js';
 import {
   OP_NAMES,
@@ -137,6 +137,7 @@ export const ADD_FIELDS: FieldsOf<AddOp> = {
   id: NODE_FIELDS.id,
   as: NODE_FIELDS.as,
   flowAs: NODE_FIELDS.flowAs,
+  outAs: alias('Batch alias of the flow the add creates out of the new node (a splice: to the old successor; a prepend: to the anchor; else to `to`); E_USAGE when it creates none or two.'),
   refAs: NODE_FIELDS.refAs,
   ...PLACEMENT_FIELDS,
   to: ref('Also connect the new node to this target (a branch that re-joins).'),
@@ -578,11 +579,11 @@ function checkFlowOptions(ctx: Ctx, obj: Record<string, unknown>, needsPlacement
   }
 }
 
-/** Parses the kind; trigger options are only meaningful on events. */
-function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string): void {
+/** Parses the kind; trigger options are only meaningful on events. Returns its family (undefined without a string kind). */
+function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string): Family | undefined {
   const kind = obj['kind'];
   if (typeof kind !== 'string') return;
-  let family: string;
+  let family: Family;
   // `eventSubProcess:<trigger>` creates the event sub-process together with its start event (see ops/add.ts)
   const eventSub = /^(eventSubProcess|eventSub|bpmn:eventSubProcess):(.+)$/i.exec(kind);
   if (eventSub) {
@@ -591,7 +592,7 @@ function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string
     if (!trigger || !allowed.includes(trigger)) {
       throw fail(ctx, `Trigger "${eventSub[2]}" is not allowed on eventSubProcess. Allowed: ${allowed.join(', ')}`, 'eventSubProcess:<trigger> creates the event sub-process with a startEvent:<trigger> inside, e.g. eventSubProcess:error with "error": "PaymentFailed".', allowed);
     }
-    return; // trigger options are meaningful here (they configure the start event)
+    return 'subProcess'; // trigger options are meaningful here (they configure the start event)
   }
   try {
     family = parseKind(kind).def.family;
@@ -607,6 +608,18 @@ function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string
   const triggers = presentKeys(obj, TRIGGER_KEYS).filter((k) => !(messageTask && k === 'message'));
   if (triggers.length && family !== 'event') {
     throw fail(ctx, `${triggers.map((k) => `"${k}"`).join(', ')} only apply to events, but "${kind}" is a ${family}`, 'Use an event kind such as startEvent:timer or boundaryEvent:message, or drop the trigger options.');
+  }
+  return family;
+}
+
+/** add's outAs names a sequence flow out of the new node: refused up front where neither the kind nor the keys can create one. */
+function checkOutAs(ctx: Ctx, out: Record<string, unknown>, family: Family | undefined): void {
+  if (out['outAs'] === undefined) return;
+  if (family && !FLOW_NODE_FAMILIES.has(family)) {
+    throw fail(ctx, `"outAs": add ${out['kind']} creates no sequence flow out of it`, 'Drop "outAs"; name a connection with a connect op that has "as".');
+  }
+  if (out['after'] === undefined && out['before'] === undefined && out['flow'] === undefined && out['to'] === undefined) {
+    throw fail(ctx, '"outAs" names the flow out of the node and needs "after", "before", "flow" or "to"', 'With "in" or "on" alone no sequence flow leaves the node; give "to", or connect the node with a connect op that has "as".');
   }
 }
 
@@ -670,7 +683,7 @@ function checkOp(ctx: Ctx, name: Op['op'], raw: Record<string, unknown>): Op {
   const out = checkFields(ctx, raw, OP_FIELDS[name]);
   switch (name) {
     case 'add':
-      checkKind(ctx, out);
+      checkOutAs(ctx, out, checkKind(ctx, out));
       checkPlacement(ctx, out);
       checkFlowOptions(ctx, out, true);
       if (out['ifAbsent'] === true && out['id'] === undefined) throw fail(ctx, '"ifAbsent" needs an explicit "id" to check for', 'Add "id": "<Prefix>_<Name>" or drop ifAbsent.');

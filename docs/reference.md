@@ -178,6 +178,10 @@ Without a placement the node goes into the only process, unconnected (several pr
   the existing one: `--flow-id` is ignored (`W_OPTION_IGNORED`, whose hint renames it; with
   `--keep-flow-ids`, where `W_FLOW_ID_STALE` reports that flow, that warning suggests the
   `--flow-id` instead, one command for one flow). A flow without id takes the `--flow-id`.
+- In an `apply` batch `"flowAs"` names the flow into the new node (on a prepend: the flow out of it,
+  the same flow as `"outAs"`) and `"outAs"` the flow the add creates out of it (on a splice the flow
+  to the old successor, on a prepend the flow to the anchor, else the flow to `"to"`), so later ops
+  of the batch can configure it ([Ops JSON](ops.md#ops-json-bpmn-apply)).
 - `move` chains several ids: the first takes the placement, each next one goes after the one before.
   The node the chain starts after (`--after`, the source of `--flow`) must lie outside the chain,
   boundary events of its nodes included (`E_INVALID_PLACEMENT`). Nodes already where the placement

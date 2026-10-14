@@ -24,7 +24,7 @@ The examples build `invoice.bpmn` from scratch and run in order.
 
 | op | keys (required in bold) |
 | --- | --- |
-| add | **kind**, name, id, as, flowAs, after, before, flow, in, on, to, lane, flowName, flowId, condition, language, default, trigger keys, collapsed, ifAbsent, doc, set, process, blackBox, text, members |
+| add | **kind**, name, id, as, flowAs, outAs, after, before, flow, in, on, to, lane, flowName, flowId, condition, language, default, trigger keys, collapsed, ifAbsent, doc, set, process, blackBox, text, members |
 | connect | **source**, **target**, name, id, as, condition, language, default, message, ifAbsent |
 | set | **id**, values (map), unset (list) |
 | remove | **ids**, bridge, bridgeAll, withBranch, ifExists |
@@ -48,7 +48,9 @@ CLI derives speak too (`Flow_CheckInvoiceToBookInvoice`). In a repository whose
 `.bpmnlintrc` declares id conventions (`bpmn show <file> --conventions`), use
 its patterns instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoice`). For an element you do
 not name, set an alias - `"as"` on add / connect / split and split nodes,
-`"flowAs"` for the flow into a new node, `"joinAs"` for a split's join - and use
+`"flowAs"` for the flow into a new node, `"outAs"` for the flow an add creates
+out of it (on a splice: to the old successor, so the same batch can set its
+condition), `"joinAs"` for a split's join - and use
 `"$alias"` wherever an id goes (also inside `values` for `default`, `source`,
 `target`, `lane`). The result prints `aliases: $x = <id>`. An alias follows
 its element through a rename and a retype, so create, retype, then configure

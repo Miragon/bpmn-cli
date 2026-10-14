@@ -42,7 +42,13 @@
  *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
  *    --if-absent and an existing one: that one), op.flowAs the flow the flow
  *    options describe (into the node; a prepend before a join / unconnected
- *    node: out of it); flowAs without such a flow is E_USAGE.
+ *    node: out of it); flowAs without such a flow is E_USAGE. op.outAs binds
+ *    the one sequence flow the add creates out of the node (a splice: to
+ *    the old successor; a prepend: to the anchor; else: to op.to); none
+ *    (an append, --in / --on / no placement without --to, a node that is
+ *    no flow node) or two (a splice or prepend with --to) is E_USAGE. With
+ *    --if-absent and an existing node it binds the one flow out of it; none
+ *    or several (a gateway's branches) is E_USAGE too, never a guess.
  *  - a new flow out of an event-based gateway (--after, --flow, --before,
  *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
  *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
@@ -57,7 +63,7 @@
 import type { Doc } from '../document.js';
 import { CliError, modelError, usageError } from '../errors.js';
 import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../idstyle.js';
-import { KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
+import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
 import { addTo, is, localType, many, type El } from '../model.js';
 import { ChangeSet, renamedNote, type Change } from '../result.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
@@ -190,7 +196,56 @@ function elementRequest(doc: Doc, def: KindDef, trigger: Trigger | undefined, op
   });
 }
 
-const FLOW_NODE_FAMILIES: ReadonlySet<KindDef['family']> = new Set(['task', 'subProcess', 'callActivity', 'gateway', 'event']);
+/**
+ * Binds `alias` (op.outAs) to the one sequence flow the placement created
+ * out of `node`, which was unconnected before it: on a splice the flow to
+ * the old successor, on a prepend the flow to the anchor, else the flow to
+ * op.to. None or two (a splice or prepend together with `to`) is E_USAGE.
+ */
+function bindOutAs(doc: Doc, op: AddOp, alias: string, node: El, cs: ChangeSet): void {
+  const id = idOf(node);
+  const out = doc.outgoing(node);
+  if (out.length === 1) {
+    cs.bind(alias, out[0]);
+    return;
+  }
+  const mode = placementMode(op);
+  if (!out.length) {
+    const why = mode === 'after' ? `--after ${op.after} appends it` : mode === 'none' ? 'no placement' : `--${mode}`;
+    throw usageError(`outAs ${alias}: ${id} gets no flow out of it from this placement (${why})`, {
+      element: id,
+      hint: 'outAs names the flow an add creates out of the new node: a splice, a prepend or "to" creates one. Otherwise connect the node with a connect op that has "as".',
+    });
+  }
+  const ends = out.map((f) => `${idOf(f)} to ${idOf(f.get<El>('targetRef'))}`).join(', ');
+  throw usageError(`outAs ${alias}: ${id} gets ${out.length} flows out of it from this placement (${ends})`, {
+    element: id,
+    related: out.map(idOf),
+    hint: `outAs names one flow: drop "to" and connect ${id} to ${op.to} with a connect op that has "as" (outAs then names the other flow).`,
+  });
+}
+
+/**
+ * --if-absent with an existing element: binds `alias` (op.outAs) to its out-flow
+ * only when exactly one leaves it, so a re-run never guesses (a spliced gateway
+ * gets more branches later, in any order). None, several or no flow node is E_USAGE.
+ */
+function bindExistingOutAs(doc: Doc, alias: string, existing: El, cs: ChangeSet): void {
+  const id = idOf(existing);
+  const flowNode = is(existing, 'bpmn:FlowNode');
+  const out = flowNode ? doc.outgoing(existing) : [];
+  if (out.length === 1) {
+    cs.bind(alias, out[0]);
+    return;
+  }
+  const ids = out.map(idOf);
+  const what = !flowNode ? `is a ${kindLabel(existing)}, no flow node` : out.length ? `has ${out.length} flows out of it (${ids.join(', ')})` : 'has no flow out of it';
+  throw usageError(`outAs ${alias}: ${id} already exists and ${what}`, {
+    element: id,
+    ...(ids.length ? { related: ids, candidates: ids } : {}),
+    hint: 'With ifAbsent, outAs binds the flow out of an existing node only when exactly one leaves it: drop "outAs" there and use the flow\'s id.',
+  });
+}
 
 const PLACEMENT_KEYS = ['after', 'before', 'flow', 'on', 'in'] as const;
 
@@ -384,6 +439,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     }
     cs.bind(op.flowAs, flow);
   }
+  if (op.outAs) bindOutAs(doc, op, op.outAs, el, cs);
 
   if (isEvent) {
     let resolved = trigger ?? inferTrigger(op);
@@ -457,6 +513,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
     cs.note(`${op.id} already exists (${kindLabel(existing)}); nothing to do`);
     cs.bind(op.as, existing);
     if (op.flowAs) cs.bind(op.flowAs, doc.incoming(existing)[0]);
+    if (op.outAs) bindExistingOutAs(doc, op.outAs, existing, cs);
     bindRefAs(cs, op.refAs, existing);
     if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
       cs.warn({
@@ -469,6 +526,11 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
     return cs;
   }
 
+  if (op.outAs && !FLOW_NODE_FAMILIES.has(def.family)) {
+    throw usageError(`outAs ${op.outAs}: add ${def.kind} creates no sequence flow out of it`, {
+      hint: 'outAs names the sequence flow an add creates out of a new flow node; drop it, and name a connection with a connect op that has "as".',
+    });
+  }
   let el: El;
   switch (def.family) {
     case 'participant': {

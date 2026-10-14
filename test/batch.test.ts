@@ -313,7 +313,7 @@ describe('parseOps: rejections name the op index', () => {
 
   it('rejects unknown keys with the allowed keys and a spelling hint', () => {
     const e = failure([{ op: 'remove', ids: ['a'] }, { op: 'add', kind: 'task', 'flow-name': 'x' }]);
-    expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, as, flowAs, refAs, after/);
+    expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, as, flowAs, outAs, refAs, after/);
     expect(e.op).toBe(1);
     expect(failure([{ op: 'connect', source: 'a', target: 'b', ifabsent: true }]).message).toMatch(/did you mean "ifAbsent"/);
     expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes, pools$/);
@@ -547,12 +547,13 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     // the first variable that can fail a command: the code an agent looks up names it
     expect(catalogue('E_USAGE').meaning).toContain('BPMN_KEEP_FLOW_IDS');
     expect(DOCS).not.toMatch(/the CLI has no switch/);
-    // a batch keeps the ids of the flows it does not remove; a move puts the node's out-flow back; a splice's new flow has no alias
+    // a batch keeps the ids of the flows it does not remove; a move puts the node's out-flow back; outAs names a splice's new flow
     for (const [name, text] of Object.entries({ guide: guideText(), ops: repoFile('docs/ops.md') })) {
       expect(text, name).not.toMatch(/every flow the file had keeps its id/);
       expect(text, name).toMatch(/unless an op\s+removes it/);
       expect(text, name).toMatch(/move`? puts the moved\s+node's\s+out-flow back/);
-      expect(text, name).toMatch(/node -> old\s+successor\)?\s+has no alias/);
+      expect(text, name).toMatch(/"outAs"`?\s+the\s+(new\s+)?flow\s+(the\s+splice\s+creates\s+\(new\s+)?node -> old\s+successor/);
+      expect(text, name).not.toMatch(/has no alias/);
     }
     // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
     expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);

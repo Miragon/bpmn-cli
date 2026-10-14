@@ -56,6 +56,8 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   as?: string;
   /** batch alias of the flow into the new node (the flow the flow options describe) */
   flowAs?: string;
+  /** batch alias of the one sequence flow the add creates out of the new node (a splice: to the old successor; a prepend: to the anchor; `to`: to its target) */
+  outAs?: string;
   /** batch alias of the bpmn:Message / Error / Signal / Escalation the new element references (created or found by name) */
   refAs?: string;
   /** also connect the new node to this target (branch that re-joins) */
@@ -166,8 +168,8 @@ export interface ExtOp {
 }
 
 export interface SplitBranch extends FlowOptions {
-  /** nodes of the branch, in order (each like an AddOp without placement) */
-  nodes: Array<Omit<AddOp, 'op' | keyof Placement | 'to' | 'ifAbsent'>>;
+  /** nodes of the branch, in order (each like an AddOp without placement; no outAs: the split creates the flow out of a node with the next one) */
+  nodes: Array<Omit<AddOp, 'op' | keyof Placement | 'to' | 'outAs' | 'ifAbsent'>>;
 }
 
 export interface SplitOp {
