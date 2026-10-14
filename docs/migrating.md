@@ -296,6 +296,27 @@
   by the ends' names (`Flow_CheckToOk` between `Activity_Verify` "Check" and
   `Event_Ok`) sees more renames. An end without a name renamed in a command
   before is still missed: nothing records its old id across commands.
+- A file's flow form stays put. The flows bpmn-cli names by their ends in a
+  file of `flow12` / `f3` ids (`fPackToWeigh`, in snake_case
+  `fpack_to_weigh`) count for that prefix: 0.6 counted them against it, and
+  after a few edits such a file read as `Flow_`, named new flows
+  `Flow_ArchiveToShip` and no longer renamed its own `fBillTo...` flows. A
+  tie between two flow prefixes goes to the one more flows use (`f3` counts
+  for `f`), then to the alphabetically first (0.6: the one declared first,
+  so a move that declared a flow elsewhere could flip it); a tie between two
+  forms under one prefix (two hashes and two `Flow_Task_A_Task_B` flows) to
+  the one that names the ends, so new flows there take that form instead of
+  `Flow_<Source>To<Target>`. A tie between scopes stays as in 0.6. 0.6's
+  scoped flows cut to an empty target word
+  (`Flow_KotO_WarenwirtschaftssystemabgleichTo`) count for the scopedTo
+  form, so enough of them no longer switch a 0.6 file to
+  `Flow_<Source>To<Target>`. A flow named after its ends under any flow
+  prefix or form the file's flows use (a `SequenceFlow_` and a `Flow_`
+  prefix from two modeler versions, `F_` next to `G_`, a second scope) is
+  renamed after its new ends (with ids kept: `W_FLOW_ID_STALE`); 0.6
+  recognised only the winning one, so a followed hint could stop naming its
+  ends on the next read. Such files see more renames, and in a few the
+  learned flow prefix changes (`show --conventions`).
 - A sequence flow without id (valid BPMN, written by hand) no longer makes
   `add`, `split` or `apply` fail with `E_INTERNAL` (exit 70) when they splice
   into it, nor a bridge into it: it gets an id from its new ends (or the

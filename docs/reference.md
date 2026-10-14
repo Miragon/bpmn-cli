@@ -50,8 +50,17 @@ decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken 
   PascalCase, after a digit `No2`: `flow_checkOrderToSendPdf10No2`) and a `W_ID_SUFFIXED` warning;
   where the suffix leaves a long head's ends no room, the id takes the `Flow_` form with its `_2`
   (`Flow_Validate_To_Step1_2`).
+- The flow form needs at least half of a file's flows (a cut flow counts for its form, also one
+  0.6 cut, and so do the flows bpmn-cli named by their ends after a `flow12` / `f3` prefix,
+  `fPackToWeigh`, in snake_case `fpack_to_weigh`). A tie goes to the form that names the ends, a
+  tie between prefixes to the one more flows use (`f3` and `fPackToWeigh` count for `f`), then to
+  the alphabetically first: never to the one declared first, so a move does not change it. A tie
+  between the scopes of scopedTo flows (`Flow_Ord_...`, `Flow_Bil_...`) still goes to the one
+  counted first.
 - A flow whose id names its ends is renamed when an edit changes them, and the result says so
-  (`renamed:`): the id the file's flow form gives it, and in a file of another form also
+  (`renamed:`): the id the file's flow form gives it, or the one any other flow prefix or form
+  the file's flows use gives it (a `SequenceFlow_` and a `Flow_` prefix, `F_` next to `G_`, a
+  second scope: it takes the one new flows there get), also
   `Flow_<Source>To<Target>`, which earlier versions gave flows there, whoever wrote it. An end
   counts by its name too, also where its id speaks (after `set Activity_Check id=Activity_Verify`,
   `Flow_CheckToOk` still names Verify, which is named Check), and in a batch by the id and name it

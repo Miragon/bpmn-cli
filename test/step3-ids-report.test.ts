@@ -884,7 +884,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect((await Doc.fromXml(handWritten)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
     const gate = await applyToXml(handWritten, [{ op: 'add', kind: 'serviceTask', name: 'Check gate', after: 'start_event_order_received' }], { layout: false });
     expect(gate.result.renamed).toEqual({ flow_eventOrderReceivedToCheckOrder: 'flow_event_order_receivedToCheckGate' });
-    expect(ID_CONVENTIONS.renames).toMatch(/in a file of another flow form also the named Flow_<Source>To<Target> id in the file's case, which earlier versions gave its flows, whoever wrote it/);
+    expect(ID_CONVENTIONS.renames).toMatch(/or the one any other flow prefix or form the file's flows use gives it, also the named Flow_<Source>To<Target> id in the file's case, which earlier versions gave its flows, whoever wrote it/);
   });
 
   it('#31: a long head stays where the ends fit beside it at whole words, Flow_ elsewhere; a flow 0.6 named with it still follows its ends', async () => {
