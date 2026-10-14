@@ -381,6 +381,28 @@ describe('idConventionsFromLint', () => {
     expect(notes.map((n) => n.message.split(' "')[0])).toContain('.bpmnlintrc in models: @miragon/rules/element-id-naming prefix of bpmn:Gateway');
   });
 
+  it('a prefix declared for a DI type is one W_CONFIG_IGNORED each: DI ids follow their element, and the rule reports the new ones', async () => {
+    const setting: BpmnlintRuleSetting = { severity: 'warn', config: { prefixes: { 'bpmndi:BPMNShape': 'shape_', 'bpmndi:BPMNEdge': 'edge_', 'bpmndi:BPMNPlane': false, 'bpmndi:BPMNDiagram': null } } };
+    const { conventions, notes } = idConventionsFromLint(setting, naming, { source: '.bpmnlintrc in models' });
+    const message = (type: string, prefix: string): string => `.bpmnlintrc in models: @miragon/rules/element-id-naming prefix of ${type} "${prefix}" is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids`;
+    expect(notes.map((n) => [n.code, n.message, n.hint])).toEqual([
+      ['W_CONFIG_IGNORED', message('bpmndi:BPMNShape', 'shape_'), 'Set it to false or remove it; bpmn-js names DI <id>_di too.'],
+      ['W_CONFIG_IGNORED', message('bpmndi:BPMNEdge', 'edge_'), 'Set it to false or remove it; bpmn-js names DI <id>_di too.'],
+    ]);
+    // the element types are declared as before; the DI types are in no table
+    expect(conventions).toEqual({ ...conventionsOf({ severity: 'warn', config: {} })!, source: '.bpmnlintrc in models' });
+    expect(Object.keys(conventions!.prefixes).filter((k) => k.startsWith('bpmndi:'))).toEqual([]);
+    // the rule checks DI ids indeed: the DI bpmn-cli writes for a new element is reported
+    const doc = Doc.create({ conventions });
+    const r = await mutateDoc(doc, [{ op: 'add', kind: 'startEvent', name: 'Order received', in: 'Process_1' }] as Op[], { conventions });
+    expect((await lint(r.xml, setting)).map((f) => f.id)).toEqual(['BPMNShape_startEvent_orderReceived']);
+    expect(idConventionsFromLint({ severity: 'warn', config: { prefixes: { 'bpmndi:BPMNShape': false } } }, naming).notes).toEqual([]);
+    // only the DI types bpmn-cli writes ids for: not BPMNLabel (written without an id, which the rule skips), nor a key
+    // that names no type (as for an unknown bpmn: key); a plane's prefix is one
+    const others = idConventionsFromLint({ severity: 'warn', config: { prefixes: { 'bpmndi:BPMNLabel': 'label_', 'bpmndi:Nope': 'x_', 'bpmn:Nope': 'y_', 'bpmndi:BPMNPlane': 'plane_' } } }, naming, { source: '.bpmnlintrc in models' }).notes;
+    expect(others.map((n) => n.message)).toEqual([message('bpmndi:BPMNPlane', 'plane_')]);
+  });
+
   it('an unknown case or qualifier is one note naming the fallback the rule applies', () => {
     const { conventions, notes } = idConventionsFromLint({ severity: 'warn', config: { case: 'camelcase', eventDefinitionQualifier: 'requried' } }, naming);
     expect(conventions).toMatchObject({ case: 'PascalCase', qualifier: 'optional' });

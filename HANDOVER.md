@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, the stale edges of flows whose ends changed, and `outAs`, the alias of the flow a splice creates)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, the stale edges of flows whose ends changed, `outAs`, the alias of the flow a splice creates, and the follow-ups of the id conventions: the conventions line, the stale-prefix hint, the process ids of new pools, declared DI prefixes)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2207 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2211 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,194 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## Follow-ups of the id conventions (2026-10-13, `fix/conventions-followups`, follow-ups of #34)
+
+Four follow-ups of #34 ("Open after #34", "Left for later"). All but the
+process ids change only output under a `.bpmnlintrc` that runs
+element-id-naming; the process ids follow the file in both modes (the
+user's decision, Q2 a).
+
+- **The `conventions:` line only where the file has a style of its own**
+  (`IdStyle.ownStyleDiffers`, `Learned.unconforming`, `passes`): `learn`
+  notes whether the file has an id the declared conventions check that
+  does not follow them (a prefix they do not accept, a body not in their
+  case; a sequence flow under an exact entry too; any id of a type whose
+  prefix is a `W_CONFIG_IGNORED`, and under `required` of an event whose
+  qualified prefix is too long: no id passes a prefix new ids cannot have,
+  `rejects`, `Declared.ignored`; not `StartEvent_1`, the process or the
+  definitions). `Doc.allocateId` and `recordDeclaredId` record ids for
+  the line only then, and `Doc.create` no longer records
+  the process / definitions id of a new file. A new file and a file whose
+  checked ids all follow the rule get no line and no `conventions.ids`;
+  before, `bpmn new` and the first adds said `startEvent_orderReceived
+  follows element-id-naming ..., not the file's own id style`, and so did
+  a kind the file had no id of (`gateway_approved`: `learnedOnly()`
+  extrapolates `exclusiveGateway_` without evidence). A file of both styles
+  keeps the line, also for a kind it has no id of. `conforms` became
+  `passes` (a head and, under a declared case, the body), which
+  `declaredCaseId` shares; the check stops at the first such id, so
+  `IdStyle.infer` costs the same.
+- **W_ID_PREFIX_STALE suggests an id the rule accepts** (`stalePrefix`): it
+  swaps the head only of an id that passed the rule for what the element
+  was (`declaredCaseId`); for one that did not it suggests the id of what
+  the element is now (`derivedBase(now)`, an unnamed one with its id's
+  words as the context), as for an id the rule did not check, and keeps
+  `was` in the message. The context of an unnamed one is the rest after
+  `was`, never the whole id (`speakingStem` reads `serviceTask_1` as the
+  stem `serviceTask` with a collision suffix and would put the old kind's
+  words into the new id, `userTask_serviceTask1`). After a `was` without
+  separator, a rest whose own prefix completes `was` into the old type's
+  name (`Task_checkOrder` after `user`: `userTask`) means the id starts
+  with `was` by accident: that path too, under every case (also `any`,
+  where every body passes), with what follows that prefix as the context;
+  a rest like `check_order` after `ut` is a body and keeps the head swap. `serviceTask_shipGoods` under PascalCase, retyped to a
+  script task: `scriptTask_ShipGoods` (was `scriptTask_shipGoods`, which
+  the rule rejects too); `userTask_checkOrder` under a prefix `user`:
+  `manualTask_checkOrder` (was `manualTask_Task_checkOrder`); an unnamed
+  `serviceTask_1`, retyped to a user task: `userTask_userTask1` (camelCase;
+  PascalCase `userTask_UserTask1`; was `userTask_1`, which the rule rejects:
+  a body begins with a letter). The guide's fix text says so.
+  `recordIdState` passes generated bases, which pass the rule: unchanged.
+- **A new pool's process follows the file's process ids**
+  (`Learned.processes` / `processBodies`, `processStyle`, `fileLevel`):
+  `learn` tallies the prefixes of the process ids on their own (they vote
+  on nothing else; participant ids never on them). Where at least two
+  share one (a tie: the alphabetically first), a new process takes it,
+  with and without a `.bpmnlintrc` (unless it names `bpmn:Process`
+  exactly), in the case their bodies show (a tie between two cases: the
+  file's where it is one of them, else the first of pascal, camel, snake,
+  Pascal_Snake), else the file's: the case a kind the rule does not name
+  gets (`caseFor()`; without a `.bpmnlintrc` the file's over every id), so
+  the process matches the pool made with it (Camunda Modeler's `Process_1`
+  and `Process_0k3x9qa` next to hashed participants give
+  `Process_BankAccount` with `Participant_BankAccount` under the rule, as
+  before, not the rule's camelCase of the ids that follow it). Single
+  lower-case words, `process_customer`, show no case and are no
+  PascalCase: camel, snake where that case is snake_case / Pascal_Snake (a
+  snake_case file under the camelCase rule: camel, like its pool; never
+  the declared prefixes' shape): `process_customer` and `process_shop`
+  give `process_bankAccount` next to `participant_`, `Participant_` and
+  `Pool_` pools alike (before: `Process_BankAccount` under the rule, and without
+  it `process_bankAccount` or `Process_bankAccount` after the shape of the
+  file's other prefixes). Files bpmn-cli made keep `Process_<Name>`: their
+  process ids vote for it. Where no two share a prefix nothing changes
+  (under the rule `Process_<Name>`, without it the learned prefix chain).
+  `show --conventions` gives the process row the source `file` there.
+- **A prefix declared for a DI type is a W_CONFIG_IGNORED**
+  (`idConventionsFromLint`, `DI_WITH_IDS`): one note per DI type bpmn-cli
+  writes ids for (`BPMNShape`, `BPMNEdge`, `BPMNPlane`, `BPMNDiagram`) that
+  the rule resolves to a prefix (its exact entry, not false or null); not
+  `BPMNLabel` (written without an id, which the rule skips) and not a key
+  that names no type (`bpmndi:Nope`, no more than `bpmn:Nope`) (`prefix of
+  bpmndi:BPMNShape "shape_" is not followed:
+  bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the
+  rule reports new DI ids`; hint: set it to false), listed by `new`,
+  `validate` and `show --conventions` and counted by a write like the
+  other notes. DI ids do not follow the prefix: that would touch the DI id
+  style, the layout engine, `restoreDiIds` and the DI rename recognition,
+  and bpmn-js writes `<id>_di` anyway. `src/diagram/write.ts` is untouched
+  (#58 changed it since: a long id is cut in a new DI id, and DI ids follow
+  `set id=`; the note's forms still hold).
+- Docs: `src/guide.ts` (CONVENTIONS, the W_ID_PREFIX_STALE fix, the
+  W_CONFIG_IGNORED meaning, `ID_CONVENTIONS.prefixes` / `declared`; `guide
+  --short` unchanged, 4644 bytes), docs/bpmnlint.md (the process ids, the
+  stale hint, the paragraph on the line that said the file's own style
+  needs two ids per rule, the DI note), docs/reference.md, docs/library.md,
+  docs/migrating.md (the process ids without a `.bpmnlintrc`, the one
+  change against 0.6), docs/testing.md.
+- Tests: `test/conventions-declared.test.ts` (a new file and five writes
+  without the line, also for a process id the rule names exactly; a
+  conforming file's first gateway without it, and with it once the file
+  has `Activity_Legacy` or `serviceTask_Legacy` under camelCase, a receive
+  task under a prefix the rule cannot use, or an escalation end event whose
+  required qualified prefix is too long; the two
+  batch-regeneration tests now on a file of both styles, and without the
+  line on a conforming one; `scriptTask_ShipGoods`,
+  `scriptTask_AfterStart`, `manualTask_checkOrder` and `manualTask_review`
+  for ids that did not pass, `userTask_userTask1` / `userTask_UserTask1`
+  for an unnamed `serviceTask_1`, `manualTask_checkOrder` and
+  `manualTask_reviewIt` under the case any, the head swapped for ids that
+  did, also `utcheck_order` under a prefix `ut` and snake_case; process ids with and without the rule after three pool prefixes, in
+  a snake_case file (with and without the rule, under a snake_case one),
+  after `Process_*` ids, a tie between prefixes and one between body cases,
+  Camunda Modeler's `Process_1` and a hash next to hashed participants,
+  processes that share no prefix and an exact `bpmn:Process` entry, the
+  view's process row),
+  `test/conventions-lint.test.ts` (the DI notes of `idConventionsFromLint`,
+  none for false / null, `BPMNLabel` or a key that names no type, one for
+  `BPMNPlane`, the real rule reporting `BPMNShape_<id>`),
+  `test/bpmnlint.test.ts` (the DI notes in `new`, `validate`, `show
+  --conventions`, counted by a write). The 7 new or changed tests fail on
+  main with #57 to #60 (checked after the rebase).
+- Differential against `fix/flow-style-vote` (b2de40d, merged as #59;
+  #57, #58 and #60 touch none of `src/idstyle.ts`, `src/conventions.ts`
+  and `src/document.ts`, so the classes below hold on main): the same batches (fuzz steps and an `add participant`, two
+  retypes, an `add xor` per file) on both builds without conventions and
+  under three element-id-naming settings (the defaults, PascalCase,
+  snake_case with the qualifier required), run again after the review
+  fixes. Fixtures and scenarios (163 files, 10,408 comparisons, 52 refused
+  by both): 24 differ, all a new pool's process in the three
+  `incremental/orders*.bpmn` files, whose processes are `Proc_*`
+  (`Proc_BankAccount`, was `Process_BankAccount`), 6 without conventions
+  and 18 with; the 72 `add participant` runs in files whose processes are
+  all `Process_*` gave `Process_*`. `show --conventions --json` differs in
+  the process row alone: in those three files (`Proc_{name:pascal}`, 3
+  without, 9 with conventions) and, under the conventions, in 9 scenarios
+  whose processes are `Process_*` (the same pattern, now `file` instead of
+  `default`: 27). A private corpus (counts only; 351 files, 10,872
+  comparisons, 112 refused by both): 745 differ: 12 process ids (1
+  without conventions), 50 dropped `conventions:` lines (files whose
+  checked ids all follow the rule), 683 W_ID_PREFIX_STALE suggestions
+  (ids whose body is not in the declared case, mostly under PascalCase
+  and snake_case); 0 unexplained, no `conventions:` line differs in a
+  file of both styles, the 56 `add participant` runs in files whose
+  processes are all `Process_*` gave `Process_*`; `show --conventions
+  --json` differs in the process row of 50 of 1,404 views. A new file and
+  five adds under each setting: 24 of 30 steps differ, each a dropped
+  line. Without conventions only the 7 runs with process evidence differ.
+  `tools/speaking-ids.mjs --baseline` (scenarios and fixtures), `npm run
+  roundtrip` identical; `layout-regress --compare` 0 better, 0 worse.
+- Runtime (CPU medians, interleaved rounds, 300 tasks and 299 flows,
+  b2de40d / this branch): `IdStyle.infer` unchanged (a mixed file 1.39 /
+  1.38 ms, under the conventions 2.64 / 2.74; a conforming file 2.55 /
+  2.52, under the conventions 4.52 / 4.64); 20 adds in one batch within
+  noise (110-127 ms on both).
+- Bundle (rebased on main with #57, #58, #59 and #60): whole entry 965.5 /
+  308.2 -> 968.1 / 309.2 KB, `applyToXml` only 684.1 / 218.6 -> 685.4 /
+  219.0 KB (minified / gzip). The whole entry's gzip budget is raised
+  309 -> 312 KB (measured + 1 %): main left 0.8 KB under it, and this
+  change's +1.0 KB (the guide text of the four changes, about 1 KB of text,
+  and the process / conformance code, with the review fixes: the ignored
+  types counted, the stale context, the process case, the DI types bpmn-cli
+  writes ids for) passes 309. The other budgets hold: 972 KB minified (3.9
+  KB to spare), 689 / 220 KB for `applyToXml` only (3.6 / 1.0 KB to
+  spare). `docs/library.md` updated.
+
+Left for later:
+
+- The body case of a new process under a shared prefix comes from the
+  process ids, else the file's; a file whose processes mix cases (one
+  `process_Customer`, one `process_shop`) takes the case they show, a tie
+  between cases the file's. Nothing smarter is needed until a file shows
+  it.
+- The DI note does not name what bpmn-cli writes for a plane or a diagram
+  (`BPMNPlane_<id>`, `BPMNDiagram_<id>`); the rule checks those only where
+  a prefix names their type.
+- `rejects` counts every id of a type whose prefix is ignored as one the
+  rule rejects. That is exact for a prefix that cannot start an id or
+  leaves no room, and close for one with a character outside ASCII (an id
+  could start with it and pass the rule). An exact check needs the raw
+  prefix, which `IdConventions` does not carry (a change of the library
+  API, for a case no file has shown).
+- W_ID_PREFIX_STALE for an id the rule did not check before (a type
+  switched off) still takes an unnamed element's context from
+  `speakingStem` of the whole id, which reads `scriptTask_1` as the stem
+  `scriptTask` with a collision suffix: retyped to a service task it
+  suggests `serviceTask_scriptTask1` (also before this change). Such
+  an id has no `was` to cut at, and `speakingStem` reads a bare
+  `reviewOrder_2` the same way on purpose; telling the two apart needs the
+  type names of the id's own prefix.
 
 ## `outAs`: the alias of the flow a splice creates (2026-10-13, `feat/out-as-alias`)
 
@@ -1861,26 +2049,29 @@ Open after #34:
 
 - Topic and message names: Miragon/bpmnlint-rules#68.
 - DI ids (`bpmndi:*`) follow their element, also where the rule names a DI
-  type.
+  type. A prefix declared for one is a `W_CONFIG_IGNORED` since
+  `fix/conventions-followups` (above).
 - `mutateDoc` accepts a split's `branches` without `nodes` silently (the CLI
   refuses them): a library input check, not #34. Fixed in
   `fix/batch-alias-retype-split-input` (above).
 - The `conventions:` line compares with the file's own style, which needs
   two ids per rule: a file that follows the rule gets it for its first ids
   and for a kind it has no id of yet. Leaving such ids out would need the
-  learned style to say where it has no evidence of its own.
+  learned style to say where it has no evidence of its own. Fixed in
+  `fix/conventions-followups` (above): only a file with ids the rule
+  rejects gets the line.
 
 Left for later (low findings of the second review, not fixed in #34):
 
 - A glued collision suffix after a body that ends in a number reads as another number (`serviceTask_step1` + `2` = `serviceTask_step12`, which then pushes the real "Step 12" to `serviceTask_step122`); unique and passes the rule, needs a letter word before the number (`step1No2`) with derivedBases / idNamesEnds following it.
-- W_ID_PREFIX_STALE keeps the old id's body as it is: an id that never passed the declared case (`serviceTask_shipGoods` under PascalCase) gets a suggestion the rule still rejects, and a prefix without separator matched by accident (`user` on `userTask_checkOrder`) a garbled one (`manualTask_Task_checkOrder`); fire only for ids that fully passed the rule, or re-case the body.
+- W_ID_PREFIX_STALE keeps the old id's body as it is: an id that never passed the declared case (`serviceTask_shipGoods` under PascalCase) gets a suggestion the rule still rejects, and a prefix without separator matched by accident (`user` on `userTask_checkOrder`) a garbled one (`manualTask_Task_checkOrder`); fire only for ids that fully passed the rule, or re-case the body. Fixed in `fix/conventions-followups` (above): such an id gets the id of what the element is now.
 - Pre-existing (also on main): an op that touches a sequence flow without id crashes with E_INTERNAL (`idNamesEnds` on `undefined`); the change report names a created flow by the id its spliced flow just freed (`ChangeSet.rename` renames every entry with that id); a batch alias used after `retype` of its element is E_NOT_FOUND (swapType makes a new element; fixed in `fix/batch-alias-retype-split-input`, above). Separate issue.
 
 Left for later (low findings of the review after the rebase onto main, not fixed in #34):
 
 - Ids the batch built from a regenerated element's id other than flows keep its old stem: an unnamed element after it (`task_AfterSTCheck` after `UTCheck`), a boundary event on it (`event_TimerOnSTCheck`). Only the flows named after it follow; the rest would need the requests (context, anchor) of what the batch created.
 - Message flows that follow the file's own `stemTo` / `stemSnake` form copy the ends' id stems as they are, so one id can mix cases (`mf_askQuestion_to_getQuestion` in a snake file under camelCase). The rule does not check message flow ids; re-casing the stems needs the form learner (`flowForms`) to read the re-cased ids as that form too, or the file's form flips.
-- A new pool's process takes `Process_<Name>` as specified, also where the file's processes show a convention of their own (`process_customer`, `process_shop`: `Process_BankAccount`, `process_bankAccount` without a `.bpmnlintrc`). Following the file's process ids where at least two share a prefix would keep such files consistent; the rule does not check processes.
+- A new pool's process takes `Process_<Name>` as specified, also where the file's processes show a convention of their own (`process_customer`, `process_shop`: `Process_BankAccount`, `process_bankAccount` without a `.bpmnlintrc`). Following the file's process ids where at least two share a prefix would keep such files consistent; the rule does not check processes. Fixed in `fix/conventions-followups` (above), in both modes.
 - The batch alias after a type-changing `retype` (above, also on main): a fix (rebind the alias to the element `swapType` makes) changes the output without a `.bpmnlintrc`, so it belongs in a PR of its own. Fixed in `fix/batch-alias-retype-split-input` (above).
 
 ## The project's bpmnlint configuration (2026-10-13, `feat/33-bpmnlint`, issue #33)

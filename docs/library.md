@@ -41,7 +41,8 @@ Every function runs the code of the CLI command it names, without a file:
   `result.warnings.added` names each one whose id no longer names its
   ends), `conventions` (declared id conventions, see
   [Building blocks](#building-blocks); `result.conventions` names the new ids
-  under a prefix they declare that differ from the file's style), `show`
+  under a prefix they declare that differ from the file's style, in a file
+  with ids of its own they reject), `show`
   (add the model view) and `debug` (below). `layoutXml` takes `expand`,
   `collapse` and `tidy` instead of `layout`; `newXml` takes `processName`,
   `processId`, `executable`, `target` and `conventions`; `conventionsXml(xml,
@@ -367,8 +368,8 @@ table):
 
 | bundle | minified | gzip | budget (tools/iso/budget.json) | loads |
 | --- | ---: | ---: | ---: | --- |
-| everything `@miragon/bpmn-cli` exports | 965.5 KB | 308.2 KB | 972 / 309 KB | with the entry |
-| `applyToXml` only (tree-shaken) | 684.1 KB | 218.6 KB | 689 / 220 KB | with the entry |
+| everything `@miragon/bpmn-cli` exports | 968.1 KB | 309.2 KB | 972 / 312 KB | with the entry |
+| `applyToXml` only (tree-shaken) | 685.4 KB | 219.0 KB | 689 / 220 KB | with the entry |
 | Camunda 7 rules (`platform/c7`) | 56.3 KB | 17.0 KB | 58 / 18 KB | on demand: the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it) |
 | Camunda 8 rules (`platform/c8`, `platform/feel`, `platform/schema-text`) | 78.8 KB | 23.1 KB | 80 / 24 KB | on demand: the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it) |
 | bpmn-auto-layout | 82.1 KB | 28.0 KB | none | on demand: only for `engine: 'auto'` |
