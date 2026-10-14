@@ -1,0 +1,60 @@
+# The docs site (docs/, VitePress) on GitHub Pages: https://miragon.github.io/bpmn-cli/
+# A pull request that touches docs/ builds the site, so a dead link fails it; main deploys it.
+# One-time repo setting: Settings > Pages > Build and deployment > Source: GitHub Actions.
+name: docs
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm ci --prefix docs
+      - run: npm run docs:build
+        env:
+          # Project pages are served under /<repo>/; the VitePress config reads this to set
+          # `base` (local dev and preview keep "/").
+          DOCS_BASE: /bpmn-cli/
+      - if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/configure-pages@v6
+      - if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    needs: build
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # One deploy at a time; a queued deploy finishes instead of being cancelled.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

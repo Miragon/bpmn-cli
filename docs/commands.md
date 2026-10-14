@@ -290,8 +290,9 @@ from the vendor namespace in use, and `--platform` overrides it. Engine findings
 
 With a `.bpmnlintrc` in the file's directory or above (up to the repository root, whoever owns
 the repository; outside a git repository only in the file's directory), `validate` also runs the
-project's bpmnlint configuration and lists its findings as `[bpmnlint error] <rule> <id>:
-<message>` or `[bpmnlint] <rule> <id>: <message>`; a bpmnlint error fails the check (exit 2).
+project's bpmnlint configuration and lists its findings as
+`[bpmnlint error] <rule> <id>: <message>` or `[bpmnlint] <rule> <id>: <message>`; a bpmnlint
+error fails the check (exit 2).
 Every write runs it too (the one above the file it writes, `-o`), but only lists the findings the
 change added and never refuses because of them. Its `element-id-naming` decides the prefix and
 case of the ids a write generates. `--lint-config <path>` names another configuration,
@@ -308,7 +309,8 @@ Measures the drawing: `score 0: no layout problems`, or a score and one line per
 ids of the elements involved, such as `crossings [Flow_1, Flow_7]` or `outsideLane [Activity_A,
 Lane_Sales]`. `--json` gives `{file, score, counts, problems: [{kind, ids, detail?}]}`. Every
 mutating command reports the same measurement before and after (`layout quality: score 0 -> 0`)
-with the problems the change added and resolved. [Testing](testing.md) lists the problem kinds;
+with the problems the change added and resolved.
+[Testing](https://github.com/Miragon/bpmn-cli/blob/main/docs/testing.md#metric-kinds) lists the problem kinds;
 `detachedEdge [Flow_7, Activity_B]` is a line that does not reach the shapes it names (the next
 write that keeps the drawing routes it again).
 

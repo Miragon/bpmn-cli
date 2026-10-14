@@ -8,7 +8,8 @@
  * corpora").
  *
  * Git-ignored output (node_modules, dist, bench results, fuzz output, the
- * regression harness's work directory) is not scanned.
+ * regression harness's work directory, the docs site's dev cache in
+ * docs/.vitepress/cache) is not scanned.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -16,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.regress-work', 'results', 'out']);
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.regress-work', 'results', 'out', 'cache']);
 const TEXT = /\.(ts|mts|mjs|js|json|md|bpmn|sh|txt|yml|yaml)$|^(LICENSE.*|\.gitignore)$/;
 
 function files(dir: string): string[] {

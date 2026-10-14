@@ -61,17 +61,18 @@ prints the short form.
   the sticky moves by the same shift; a write that moves no node never touches it. The result
   lists them (`stickies moved: Sticky_1 (with Activity_Check)`, JSON `layout.stickies`).
 - **Expanded / collapsed** is kept from the existing DI. A sub-process is collapsed only when the
-  DI says so or you ask (`add ... --collapsed`, `set <id> expanded=false`, `layout --collapse
-  <id>`); `layout --expand <id>` expands it again. In a kept drawing collapsing moves the content
-  to its own diagram and closes the gap, expanding makes room.
+  DI says so or you ask (`add ... --collapsed`, `set <id> expanded=false`,
+  `layout --collapse <id>`); `layout --expand <id>` expands it again. In a kept drawing collapsing
+  moves the content to its own diagram and closes the gap, expanding makes room.
 - **`--no-layout`** writes the model with the old DI left in place (DI of removed elements is
   pruned): new elements have no shape until the next write that updates the layout or `bpmn
   layout <file>`. A flow whose ends changed (a bridge, a splice, a move, `set source=` /
   `target=`) loses its edge, which showed the old ends, also with `--keep-flow-ids`; the edge's
   colour, label position and DI id go with it. The note `removed N stale diagram element(s), among
   them the edge(s) of ...` names those flows. The next write that updates the layout (not
-  `--no-layout`, not a format command) draws them like new ones, plain; `bpmn route <file>
-  <flowId>` draws one on its own, while `color` and `label` refuse it (`E_NO_SHAPE`) until it has a
+  `--no-layout`, not a format command) draws them like new ones, plain;
+  `bpmn route <file> <flowId>` draws one on its own, while `color` and `label` refuse it
+  (`E_NO_SHAPE`) until it has a
   line. An edge that already reaches the new ends stays, and so does a flow's edge into a node that
   has no shape yet (one added with `--no-layout`) until the next write places the node and routes
   the flow again.
@@ -137,7 +138,7 @@ that syncs one text region per save (design-iq) sees only the change.
   edges of flows whose ends changed. A full redraw rewrites the geometry of the DI section.
 
 `npm run roundtrip` measures this on a corpus of no-ops, renames and inserts
-([testing.md](testing.md#roundtrip-fidelity)).
+([testing.md](https://github.com/Miragon/bpmn-cli/blob/main/docs/testing.md#roundtrip-fidelity)).
 
 ## Limitations
 

@@ -44,7 +44,14 @@ them on a private corpus without copying it into the repository, are described i
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
   `node tools/demo/make-demo.mjs` redraws the README demo (`docs/assets/demo.gif`; needs
   [gifski](https://gif.ski/) on your PATH and network access for the Geist fonts).
-- `docs/`: the reference the README links to.
+- `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
+  VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
+  `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
+  fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
+  deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
+  maintainer notes (`testing.md`, `releasing.md`, the audit) stay out of the site via `srcExclude`.
+  The theme in `docs/.vitepress/theme/` and the logos in `docs/public/logo/` are copied unchanged
+  from Miragon/mcp-toolkit's docs site: do not edit them here.
 - `plugins/bpmn-cli/`: the Claude Code plugin (see its [README](plugins/bpmn-cli/README.md)).
 
 ### Dependencies
