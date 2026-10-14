@@ -479,3 +479,30 @@
   comment inside it is dropped (the result's note counts it). In a batch, a
   DI id of an element removed earlier in it is free for a later `set id=`,
   as it is for a command of its own.
+- Under `--no-layout` a flow whose ends an op changed (a bridge, a splice, a
+  move, `set source=` / `target=`) loses its BPMNEdge in both flow-id
+  modes, and with it the line's colour, label position and DI id. 0.6 kept
+  the line at the old ends, and with `--keep-flow-ids` said nothing. A line
+  that already reaches the new ends stays, and so does one into a node the
+  same write added (it has no shape yet). The note counts and names those
+  flows: `removed 2 stale diagram element(s), among them the edge(s) of
+  Flow_AToC (their ends changed; the next model edit without --no-layout
+  draws them, or \`bpmn route <file> <flowId>\`)` (0.6: `removed 1 stale
+  diagram element(s); run \`bpmn layout\` to redraw`; without such flows
+  the command now names `<file>`). The
+  quality line lists them as `missing` until a write that updates the
+  layout draws them, plain. `route` draws such a flow on its own (0.6:
+  `E_NO_SHAPE` for a flow without a line, which is also what `color` and
+  `label` give on it until then). A second BPMNDiagram of the same process
+  loses those edges on every write.
+- A line whose end lies more than 10 px outside its end's shape (left there
+  by another tool or an older `--no-layout` write) is routed again by every
+  write that keeps the drawing and by the format commands that change the
+  geometry (`tidy`, `place`, `compact`, ...), and listed in `rerouted` with
+  a note (`Flow_X routed again: it did not reach Activity_C`); not on a
+  plane with vertical pools or lanes, where nothing is routed. A no-op on
+  such a file is no longer byte-identical. The layout metrics have a new
+  hard kind for such a line, `detachedEdge` (weight 10, ids `[edge, the
+  end(s) it misses]`, a new key in `counts` and in `METRIC_KEYS`), so the
+  score of a file that has one is higher than in 0.6 (a scenario with 9 such
+  lines: 42 -> 132).

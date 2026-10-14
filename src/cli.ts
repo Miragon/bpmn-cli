@@ -288,7 +288,7 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
         return v;
       })
       .option('--relayout', 'redraw the whole diagram (= --layout full)')
-      .option('--no-layout', 'do not update the diagram (new elements get no shape; format operations still apply)');
+      .option('--no-layout', 'do not update the diagram (new elements get no shape, a flow whose ends changed loses its edge; format operations still apply)');
   }
   return withLintOptions(cmd)
     .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
@@ -1003,7 +1003,7 @@ withMutationOptions(
 withMutationOptions(
   program
     .command('route <file> <flowId>')
-    .description('diagram only: route a sequence / message flow again, optionally forcing the side it leaves and enters by')
+    .description('diagram only: route a sequence / message flow again, optionally forcing the side it leaves and enters by (a flow without a line whose ends are drawn gets one)')
     .addOption(new Option('--exit <side>', `side it leaves its source by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES]))
     .addOption(new Option('--entry <side>', `side it enters its target by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES])),
 ).action(async (file: string, flowId: string, o: RawOpts) => {

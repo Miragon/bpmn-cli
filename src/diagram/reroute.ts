@@ -26,18 +26,27 @@
  *    shape, else it is routed around the shapes to the middle of the
  *    flow's segment nearest to its shape, entering across it. Undefined
  *    when an end has no shape on the plane.
- *  - brokenEdge(plane, edge, before) says whether a kept connection must be
- *    rerouted: it has fewer than two distinct waypoints (zero length, e.g.
- *    both ends were pushed onto one point), an end lost its shape's border,
- *    it became diagonal (it was orthogonal before), or it now cuts a shape it
- *    did not cut before (a leaf shape, an expanded sub-process holding
- *    neither end, for a message flow a pool other than its ends' pools). An
- *    end docked on a connection lost it when it is off that connection's
- *    line. routeRank orders the rerouting: sequence flows, message flows,
- *    then connections docked on a connection (they follow its final line).
+ *  - brokenEdge(plane, edge, before, { detached }) says whether a kept
+ *    connection must be rerouted: it has fewer than two distinct waypoints
+ *    (zero length, e.g. both ends were pushed onto one point), an end lost
+ *    its shape's border, it is detached (detachedEnds, whatever it was
+ *    before; left out with `detached: false`, which the incremental layout
+ *    passes on a plane it may not route on: vertical pools / lanes), it became
+ *    diagonal (it was orthogonal before), or it now cuts a shape it did not
+ *    cut before (a leaf shape, an expanded sub-process holding neither end,
+ *    for a message flow a pool other than its ends' pools). An end docked on
+ *    a connection lost it when it is off that connection's line. routeRank
+ *    orders the rerouting: sequence flows, message flows, then connections
+ *    docked on a connection (they follow its final line).
+ *  - detachedEnds(plane, edge): the ends whose shape on the plane the
+ *    connection's first / last waypoint lies more than DETACHED_GAP px
+ *    outside of (the edge another tool or an older --no-layout write left
+ *    at the old place of its end); an end without a shape on the plane or
+ *    docked on a connection never is. The metric `detachedEdge`
+ *    (metrics.ts) applies the same rule.
  */
 import { attachedSide, defaultSides, routeOrthogonal, type Side } from './router.js';
-import { borderDistance, borderPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './geom.js';
+import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './geom.js';
 import { isLeaf, type DEdge, type DShape, type Plane } from './plane.js';
 
 export interface RouteOptions {
@@ -346,10 +355,29 @@ export function edgeBefore(plane: Plane, e: DEdge): EdgeBefore {
   return { points: e.points.map((p) => ({ ...p })), cut: cutShapes(plane, e, e.points), ...endGaps(plane, e) };
 }
 
-/** Whether a kept connection has to be rerouted (see module contract). */
-export function brokenEdge(plane: Plane, e: DEdge, before: EdgeBefore | undefined): boolean {
+/** How far (px) the first / last waypoint of a connection may lie outside its end's shape before the connection is detached (detachedEnds; metrics.ts DETACHED_GAP alike). */
+export const DETACHED_GAP = 10;
+
+/** The ends (source first) whose shape on the plane the connection's end point lies more than DETACHED_GAP outside of (see module contract). */
+export function detachedEnds(plane: Plane, e: DEdge): string[] {
+  if (e.points.length < 2) return [];
+  const out: string[] = [];
+  for (const [id, p] of [
+    [e.sourceId, e.points[0]!],
+    [e.targetId, e.points[e.points.length - 1]!],
+  ] as const) {
+    const s = id ? plane.shapes.get(id) : undefined;
+    if (s && !containsPoint(s.bounds, p, DETACHED_GAP)) out.push(s.id);
+  }
+  return out;
+}
+
+/** Whether a kept connection has to be rerouted (see module contract); `detached: false` leaves out the detachedEnds rule. */
+export function brokenEdge(plane: Plane, e: DEdge, before: EdgeBefore | undefined, { detached = true }: { detached?: boolean } = {}): boolean {
   // fewer than two distinct waypoints (both ends pushed onto one point): no line at all
   if (degenerate(e.points)) return true;
+  // it does not reach an end at all (left at the end's old place): broken also when it was like that before
+  if (detached && detachedEnds(plane, e).length) return true;
   const tol = 3;
   const now = endGaps(plane, e);
   if (now.sourceGap > Math.max(tol, (before?.sourceGap ?? 0) + 1)) return true;

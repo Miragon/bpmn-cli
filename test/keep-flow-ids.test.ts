@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { applyToXml, newXml } from '../src/api.js';
+import { applyToXml, layoutXml, newXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
 import type { El } from '../src/model.js';
 import type { Warning } from '../src/errors.js';
@@ -950,5 +950,27 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
       expect(diOf(followed.xml).get('Flow_OkToReview')).toBe(style === 'suffix' ? 'Flow_OkToReview_di' : 'BPMNEdge_Flow_OkToReview');
       expect(followed.xml).toBe(renamed.xml);
     }
+  });
+});
+
+describe('--no-layout with ids kept: a flow whose ends changed loses its stale edge', () => {
+  /** The flows a drawing has a BPMNEdge for. */
+  const drawnFlows = (xml: string): string[] => [...xml.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((m) => m[1]!).sort();
+
+  it('a move: every flow whose ends changed loses its edge and the note names them, like in the default mode; the next write draws them at their new ends', async () => {
+    const drawn = (await layoutXml(LINE)).xml;
+    expect(drawnFlows(drawn)).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone', 'Flow_StartToA']);
+    const r = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
+    expect(drawnFlows(r.xml)).toEqual(['Flow_StartToA']);
+    expect(r.result.notes.filter((n) => n.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToB, Flow_BToC, Flow_CToDone (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
+    expect(r.result.layout?.metrics?.added.filter((p) => p.kind === 'missing').map((p) => p.ids[0]).sort()).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone']);
+    // the default mode: the bridge and the flow into B lose theirs, the removed flow's edge goes with it
+    const followed = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { layout: false });
+    expect(drawnFlows(followed.xml)).toEqual(['Flow_StartToA']);
+    expect(followed.result.notes.filter((n) => n.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToC, Flow_CToB (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
+    const next = await applyToXml(r.xml, [{ op: 'set', id: 'Activity_A', values: { name: 'A2' } }], { keepFlowIds: true });
+    expect(next.result.layout?.mode).toBe('incremental');
+    expect([...(next.result.layout?.placed ?? [])].sort()).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone']);
+    expect(next.result.layout?.metrics?.after.counts.missing).toBe(0);
   });
 });

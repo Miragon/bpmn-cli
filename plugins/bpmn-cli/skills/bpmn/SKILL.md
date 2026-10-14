@@ -237,12 +237,17 @@ Details, every op key and worked batches: [reference/ops.md](reference/ops.md).
 - `auto` (default): a new file or a drawing exactly as the engine would draw it
   is redrawn in full; anything hand-made or formatted is **kept** - new
   elements are placed locally, room is made like the modeler's space tool,
-  only affected flows are rerouted.
+  only affected flows are rerouted (and a line that does not reach its ends,
+  `detachedEdge`, is routed again).
 - `--layout incremental`: always keep (fails with `E_LAYOUT_INCREMENTAL`
   instead of redrawing) - use it when keeping the drawing is a requirement.
 - `--relayout` (= `--layout full`, `bpmn layout <file>`): redraw everything;
   colours survive, positions do not, group boxes are drawn again around the
   elements they held. Only when the user asks.
+- `--no-layout`: the model only; new elements get no shape and a flow whose
+  ends changed loses its edge (`note: removed N stale diagram element(s)`),
+  until the next write without `--no-layout` that is not a format command
+  draws them; `bpmn route <file> <flowId>` draws one such line on its own.
 
 ## Formatting without XML
 
