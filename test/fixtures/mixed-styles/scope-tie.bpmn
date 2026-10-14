@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:task id="Activity_Receive" name="Receive"><bpmn:outgoing>Flow_Ord_ReceiveToCheck</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_Check" name="Check"><bpmn:incoming>Flow_Ord_ReceiveToCheck</bpmn:incoming><bpmn:outgoing>Flow_Ord_CheckToShip</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_Ship" name="Ship"><bpmn:incoming>Flow_Ord_CheckToShip</bpmn:incoming></bpmn:task>
+    <bpmn:task id="Activity_Invoice" name="Invoice"><bpmn:outgoing>Flow_Bil_InvoiceToBook</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_Book" name="Book"><bpmn:incoming>Flow_Bil_InvoiceToBook</bpmn:incoming><bpmn:outgoing>Flow_Bil_BookToClose</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Activity_Close" name="Close"><bpmn:incoming>Flow_Bil_BookToClose</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_Ord_ReceiveToCheck" sourceRef="Activity_Receive" targetRef="Activity_Check" />
+    <bpmn:sequenceFlow id="Flow_Ord_CheckToShip" sourceRef="Activity_Check" targetRef="Activity_Ship" />
+    <bpmn:sequenceFlow id="Flow_Bil_InvoiceToBook" sourceRef="Activity_Invoice" targetRef="Activity_Book" />
+    <bpmn:sequenceFlow id="Flow_Bil_BookToClose" sourceRef="Activity_Book" targetRef="Activity_Close" />
+  </bpmn:process>
+</bpmn:definitions>

@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, and the id forms fixed before 0.7)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, and a file's flow form that stays put)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2158 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2177 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,131 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## A file's flow form stays put (2026-10-13, `fix/flow-style-vote`, follow-ups of #31 and #32)
+
+Four follow-ups of #31 ("Left for later") and #32 ("Left out, for later"):
+in files whose flows mix prefixes, or number them glued (`f3`, `flow12`),
+the learned flow style tipped after a few edits or a move, and flows named
+under the losing prefix stopped following their ends, by default and with
+ids kept (where a followed `W_FLOW_ID_STALE` hint then named its ends no
+more). All in `src/idstyle.ts` (`learn`, `basesOf`); `idNamesEnds` only
+passes the flow id to `derivedBases`.
+
+- **bpmn-cli's glued flows vote** (`GLUED_NAMED`, `FlowVotes.gluedNamed`):
+  a flow without `_` named by its ends after a glued numbered prefix
+  (`fPackToWeigh` next to `f1`; the longest such prefix followed by an
+  upper-case letter or a digit) votes `numbered` for that prefix; with a
+  suffix (`GLUED_SUFFIXED`) it now votes for the prefix too, and still
+  counts only where the file has glued numbered flows. In a snake_case or
+  Pascal_Snake body bpmn-cli's glued flows have a `_`
+  (`fweigh_parcel_to_label_parcel`, `fWeigh_Parcel_To_Label_Parcel`):
+  a flow with `_to_` / `_To_` (`GLUED_JOINED`, `FlowVotes.joined`) waits
+  until the glued prefixes are known and votes for one where it is the id
+  bpmn-cli gives its ends after it (`gluedJoinedOf`: uncut, cut, as 0.6
+  cut it, with `_2`, or naming its source whole, so a spliced flow whose
+  id was kept still votes); every other one counts as before. Before, such
+  flows counted against the form: polish-rename.bpmn read as `Flow_` after
+  five adds, and the sixth named `Flow_ArchiveTo...` and kept
+  `fBillToShipTheGoodsToTheCustomer` on Archive -> C (the snake_case file:
+  the sixth renamed `farchive_order_to_event` to
+  `Flow_archive_order_to_close_case`).
+- **Ties between forms and prefixes never go by document order**
+  (`Tally.top(min, prefers)`, `FORM_ORDER`): a tie between forms goes to
+  the one that names the ends, between a form's prefixes to the one more
+  flows use (`uses`: `any` plus the glued numbered flows and the glued
+  flows that voted for a prefix, so `f1, f2` against `sf_1, sf_2` is a
+  tie), then to the alphabetically first; `any` alphabetically. Before, the
+  first one counted won, so a move that declared a flow elsewhere flipped
+  F / G (seeds 9473, 7922). A tie between the scopes of scopedTo flows and
+  the element prefix tallies keep the first one counted, as before (a
+  scope tie is a file of one prefix and one form, whose conventions must
+  not change).
+- **Flows follow under every prefix and form the file's flows use**
+  (`Learned.flowStyles`, `otherStyles`, `connectionBases`, `mayBeOf`):
+  `derivedBases` lists the bases of the winning style and of every other
+  one (`named` under each flow prefix with its separator, each form built
+  from the ends under the prefixes that voted for it, scopedTo per scope;
+  replaces `namedPrefixes`). Given the flow id, it computes only the styles
+  the id can be of (it starts with their head, prefix and a scopedTo
+  flow's scope, or with `Flow_` where the head is 40+ characters), so a
+  file of many prefixes or scopes costs a string test per style. A renamed
+  flow takes the winning style's id (a flow under another scope: the scope
+  new flows there take).
+- **0.6's scoped flows cut to an empty target word vote** (`SCOPED_CUT`,
+  `legacyScopedCut`): `Flow_KotO_WarenwirtschaftssystemabgleichTo` (with a
+  glued suffix or none) votes scopedTo where it is the base 0.6 wanted for
+  its ends; four of them no longer switch a file of three uncut ones to
+  named `Flow_`.
+- Tests: `test/conventions-ids.test.ts` (polish-rename's six adds; the
+  same walk in a snake_case and a Pascal_Snake body, also eight adds with
+  ids kept; the flow12 test tightened by three more commands and a splice;
+  glued votes only for a matching glued prefix, also with `_`; ties both
+  ways, with SequenceFlow_ / Flow_ hashes, a glued against a `_` prefix and
+  two forms under one prefix; a flow under the outvoted prefix and an
+  idPair flow under an outvoted form renamed, with ids kept
+  `W_FLOW_ID_STALE`; the 0.6 scoped file and a look-alike that does not
+  vote; a scope tie that keeps the first scope, and a flow under the other
+  scope that follows its ends), `test/keep-flow-ids.test.ts` (the five
+  recorded follow-hint seeds 1003, 9456, 9473, 7392, 7922 as fixtures in
+  `test/fixtures/mixed-styles/`, and 9456's default-mode drift); the guide
+  pin in `test/step3-ids-report.test.ts`. 14 of them fail on origin/main,
+  and so does the guide pin; the scope-tie test pins origin/main's scope
+  (fixture `mixed-styles/scope-tie.bpmn`).
+- Differential against origin/main (ef14c4d): `show --conventions --json`
+  on the 163 distinct fixtures and scenarios differs in one file
+  (`step1/nested.bpmn`: H1, H2, G1-G3, F1-F3, G and F tied, G declared
+  first: now F); no file whose flows use one prefix and one form differs.
+  3,226 single-op batches (both modes): 22 differ, 16 on nested.bpmn and 6
+  on scope-tie.bpmn (a flow under the scope that lost the tie is renamed
+  after its new ends, with ids kept `W_FLOW_ID_STALE`; main left it naming
+  its old ends). 648 walks of eight adds each: 26 differ, 20 in five glued
+  files (the three `polish-*.bpmn`, two of the new fixtures), where the
+  branch keeps `f` (main switched to `Flow_` after five to seven adds), 4
+  on nested.bpmn and 2 on scope-tie.bpmn (as above). The classes that may
+  differ: mixed-prefix files with tied prefixes, glued numbered files,
+  files with two tied forms under one prefix (now the form that names the
+  ends: two hashes and two idPair flows give idPair new flows instead of
+  `Flow_<A>To<B>`; no fixture has one), and scopedTo files with several
+  scopes (renames only). `tools/speaking-ids.mjs --baseline`: the same 20
+  renames on both builds, 2 flow prefixes differ (nested.bpmn);
+  `tools/roundtrip.mjs` identical; `layout-regress --compare` 0 better, 0
+  worse. The recorded hint cases: 0 'NOT NAMING after follow' (5 on main).
+  A keep-mode campaign (4,832 random ops on fixtures and scenarios, every
+  hint followed): 0 followed ids that stop naming their ends (11 on main),
+  2,120 hints (2,072).
+- Runtime (CPU medians, interleaved rounds): `IdStyle.infer` on 300 flows
+  unchanged (stemTo 6.1 / 6.3 ms, named 13.5 / 13.5, glued 1.8 / 1.7,
+  mixed 1.9 / 2.1; a snake_case glued file 3.7 -> 1.9, snake_case
+  `flow_a_to_b` flows next to `f1`, each one checked, 2.0 -> 3.2, snake_case
+  without glued flows 2.0 / 2.1); `derivedBases` per flow on single-style
+  files unchanged (named 44 / 42 us, glued 41 / 40), stemTo 79 -> 87 us
+  (one more 0.6 base for the `named` style), three flow prefixes 44 -> 64
+  us, a scopedTo chain with 3 / 12 / 30 scopes 37 -> 53, 44 -> 69, 53 -> 81
+  us (each scope tested by its head: before that filter 629 us at 30); 60
+  splices on a 200-flow chain 147 -> 149 ms (ids kept 155 -> 151), within
+  noise.
+- Bundle: whole entry 955.0 / 304.7 -> 957.7 / 305.7 KB, `applyToXml` only
+  675.0 / 215.5 -> 677.6 / 216.6 KB (minified / gzip); within the budgets
+  (960 / 306, 679 / 217), unchanged, but the gzip headroom is now 0.3 and
+  0.4 KB: the next PR that adds code to the entry will likely have to raise
+  them; `docs/library.md` updated.
+
+Left for later:
+
+- A file whose glued numbered flows were all renamed away (no `f3` left)
+  has no prefix for its `fAToB` flows to vote for: they count for nothing
+  and the file reads as `Flow_` (the vote needs the numbered evidence; a
+  run of lower-case letters alone would read bare camelCase flow ids as
+  prefixes).
+- A tie between element prefixes (per kind and family), and one between
+  the scopes of scopedTo flows, still goes to the first one counted, so a
+  move that declares flows elsewhere can change the scope of new flows
+  where two scopes tie (kept: such a file's conventions must not change).
+- A glued flow in a snake_case / Pascal_Snake body votes only where it
+  names its ends or its source (`gluedJoinedOf`); one whose source a move
+  or a bridge changed while its id was kept counts for nothing, where a
+  camelCase one votes by its shape alone (`GLUED_NAMED`).
 
 ## Id forms before 0.7 (2026-10-13, `fix/id-forms-before-0.7`, follow-ups of #31 and #34)
 
@@ -1849,7 +1974,8 @@ Left out, for later:
   followed ids as naming their ends: a later end change neither renames nor
   reports them. The drift is older than #32 (origin/main switches `fX` to
   `Flow_X` after a few adds to polish-rename.bpmn); a fix belongs in
-  `idNamesEnds`, accepting the forms of every flow prefix in use.
+  `idNamesEnds`, accepting the forms of every flow prefix in use. Fixed
+  since 2026-10-13 (see "A file's flow form stays put" at the top).
 
 ## Ids up to 64 characters, cut at whole words (2026-10-13, `fix/31-flow-id-cut`, issue #31)
 
@@ -2037,7 +2163,8 @@ suffix glued to an end that ends in a digit (stemTo / scopedTo
 `...Pdf10` + `2`, as in 0.6), bpmn-cli's own glued flows without a suffix,
 which count against a numbered file's form without voting for it, scoped
 flows 0.6 cut to an empty end word (`Flow_KotO_...To`), which no longer
-match their form and can flip a 0.6 file's form, an end whose leading
+match their form and can flip a 0.6 file's form (these two fixed since
+2026-10-13, "A file's flow form stays put" at the top), an end whose leading
 number fills a small room (`10202422024Rechnung` in 11 characters keeps no
 letter), an element prefix of 52 to 55 characters that a suffix leaves a
 body under 8 (the fallback to the bpmn-cli prefix counts no suffix:

@@ -36,9 +36,18 @@
  *     Flow_0k3x9qa, numbered SF_12 or flow12: `flowCheckOrderToShip`). A form
  *     needs at least half of the flows of its type; a flow the length cap
  *     cut votes for its form too (cutOfForm: one of the cuts derivedBases
- *     lists, also 0.6's), a glued flow named by its ends with a suffix
- *     (`flowCheckOrderToShip_2`) lends no prefix and votes only for a
- *     file's glued numbered flows (flow12).
+ *     lists, also 0.6's; legacyScopedCut: a scopedTo flow 0.6 cut to an
+ *     empty target word), a glued flow named by its ends lends no prefix of
+ *     its own and votes for the file's glued numbered flows (flow12) of the
+ *     prefix it starts with (`flowCheckOrderToShip`; with a suffix,
+ *     `flowCheckOrderToShip_2`, it counts only in such a file; in a
+ *     snake_case / Pascal_Snake body `fweigh_parcel_to_label_parcel` where
+ *     it is the id bpmn-cli gives its ends: gluedJoinedOf). Ties between
+ *     forms and prefixes never go by document order (a move that declares a
+ *     flow elsewhere changes nothing): between forms to the one that names
+ *     the ends (FORM_ORDER), between a form's prefixes to the one more flows
+ *     use (glued ones too), then to the alphabetically first; a tie between
+ *     the scopes of one prefix and form keeps the first one counted.
  *  A document without ids to learn from gets the default style: pascal
  *  bodies, the bpmn-cli prefixes, `named` flows with the prefix Flow.
  *
@@ -100,8 +109,9 @@
  *  them apart. style.derivedBase(req) is that base without allocating
  *  (derivedBases: also the uncut one, the ones a suffix leaves room for,
  *  the one 0.6 wanted and the ones it cut, also for a suffix from `_100`,
- *  and in a file of another flow form the `named` ones, also as 0.6 cut
- *  them, for ids written before);
+ *  and the same under every other flow prefix and form the file's flows
+ *  use, the `named` ones bpmn-cli gave before another form or prefix won
+ *  among them, for ids written before);
  *  style.joinId(gatewayId) the id of a split's join gateway.
  *
  * DECLARED CONVENTIONS
@@ -314,6 +324,12 @@ const GLUED = /^([A-Za-z]+)(\d+)$/;
 const SCOPED_TO = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To([A-Z][A-Za-z0-9]*)$/;
 /** A glued flow named by its ends with a collision suffix (`flowCheckOrderToShip_2`, a flow bpmn-cli named in a file of flow12 ids): not a prefix and a number. */
 const GLUED_SUFFIXED = /^[A-Za-z][A-Za-z0-9]*To[A-Z0-9][A-Za-z0-9]*_\d+$/;
+/** The same without a suffix (`flowCheckOrderToShip`, `fPackToWeigh`; a cut one may end on `To`): no `_`, a `To` before an upper-case letter, a digit or the end. */
+const GLUED_NAMED = /^[A-Za-z][A-Za-z0-9]*To(?![a-z])[A-Za-z0-9]*$/;
+/** A flow id that may be a glued flow named by its ends in a snake_case / Pascal_Snake body (`fweigh_parcel_to_label_parcel`, `fWeigh_Parcel_To_Label_Parcel`, also with `_2`): a lower-case start and `_to_` / `_To_` (gluedJoinedOf decides). */
+const GLUED_JOINED = /^[a-z]\w*_[tT]o_\w*$/;
+/** `<scope>_<A>To` after a flow prefix, with a glued suffix or none: a scopedTo flow 0.6 cut to an empty target word (Flow_KotO_WarenwirtschaftssystemabgleichTo; legacyScopedCut). */
+const SCOPED_CUT = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To\d*$/;
 
 /**
  * One element is not a convention: a learned rule needs two ids that follow
@@ -585,12 +601,17 @@ class Tally<K> {
     for (const v of this.counts.values()) t += v;
     return t;
   }
-  /** The most frequent key with at least `min` occurrences (ties: the first one counted). */
-  top(min = MIN_EVIDENCE): K | undefined {
+  /**
+   * The most frequent key with at least `min` occurrences. A tie goes to the
+   * key `prefers` puts before the other (the flow votes: never document
+   * order, so a flow a move declares elsewhere tips nothing), else to the
+   * first one counted.
+   */
+  top(min = MIN_EVIDENCE, prefers?: (a: K, b: K) => boolean): K | undefined {
     let best: K | undefined;
     let n = 0;
     for (const [k, v] of this.counts) {
-      if (v > n) {
+      if (v > n || (v === n && best !== undefined && prefers?.(k, best))) {
         best = k;
         n = v;
       }
@@ -598,6 +619,16 @@ class Tally<K> {
     return n >= min ? best : undefined;
   }
 }
+
+/** Alphabetical order (code units, the same everywhere): the last tie-break of the flow votes. */
+const alphabetical = (a: string, b: string): boolean => a < b;
+
+/**
+ * The flow forms in the order a tie between them goes (learn): a form that
+ * names the ends before numbers and hashes, so a file of half speaking
+ * flows gets speaking ones.
+ */
+const FORM_ORDER: SeenForm[] = ['scopedTo', 'stemTo', 'idPair', 'stemSnake', 'idSnake', 'named', 'numbered', 'hash'];
 
 interface FamilyStats {
   kindish: Tally<string>;
@@ -625,13 +656,41 @@ interface Learned {
   strong: boolean;
   /** scopedTo flows: the scopes of a type's flows, most used first */
   scopes: Map<string, string[]>;
-  /** flows of another form than `named`: the prefix a type's flows took as `named` before (the most used one), where it is not the form's */
-  namedPrefixes: Map<string, string>;
+  /**
+   * every style a type's flows show besides the one new flows take (`flows`):
+   * `named` under each flow prefix with its separator (the flows bpmn-cli
+   * named before another form or prefix had the majority, and those of a
+   * prefix a tie or a few more flows outvoted), each form built from the
+   * ends with the prefixes that voted for it (scopedTo: with each scope).
+   * derivedBases lists their ids too, so a flow named in one of them still
+   * names its ends
+   */
+  flowStyles: Map<string, FlowStyle[]>;
   /** flow node ids without / with a prefix: a file whose flow nodes mostly have none gives a kind without own evidence none either */
   bareNodes: number;
   prefixedNodes: number;
   /** the case of bare ids (voted by the bare ids that spell their names; prefixed ids vote `body`) */
   bareBody: 'pascal' | 'camel';
+}
+
+/** The votes of one type's flows (learn). */
+interface FlowVotes {
+  /** flows that count (all but the glued ones with a suffix, which count only for glued numbered flows) */
+  n: number;
+  /** glued flows named by their ends with a suffix (GLUED_SUFFIXED) and without (GLUED_NAMED) */
+  glued: string[];
+  gluedNamed: string[];
+  /** flows with `_to_` / `_To_` that may be glued flows in a snake_case / Pascal_Snake body (fweigh_parcel_to_label_parcel): decided once the glued prefixes are known */
+  joined: Array<{ el: El; id: string; source: string; target: string }>;
+  forms: Tally<SeenForm>;
+  prefixes: Map<SeenForm, Tally<string>>;
+  /** the prefix before `_` of every flow that has one */
+  any: Tally<string>;
+  /** every flow of a prefix: `any`, the glued numbered flows and the glued flows that voted for one (a tie between a form's prefixes) */
+  uses: Tally<string>;
+  /** the separator of a numbered prefix ('' of flow12) */
+  seps: Map<string, string>;
+  scopes: Tally<string>;
 }
 
 function tallyOf<K>(map: Map<string, Tally<K>>, key: string): Tally<K> {
@@ -695,7 +754,7 @@ function learn(defs: El | undefined, d?: Declared): Learned {
     flows: new Map(),
     flowVoted: new Set(),
     scopes: new Map(),
-    namedPrefixes: new Map(),
+    flowStyles: new Map(),
     bareNodes: 0,
     bareBody: 'camel',
     prefixedNodes: 0,
@@ -706,7 +765,33 @@ function learn(defs: El | undefined, d?: Declared): Learned {
   const nodeBodies = new Tally<BodyClass>();
   const bareBodies = new Tally<BodyClass>();
   const otherBodies = new Tally<BodyClass>();
-  const flowVotes = new Map<string, { n: number; glued: number; forms: Tally<SeenForm>; prefixes: Map<SeenForm, Tally<string>>; any: Tally<string>; seps: Map<string, string>; scopes: Tally<string> }>();
+  const flowVotes = new Map<string, FlowVotes>();
+  /** The votes of a flow that is none of bpmn-cli's glued flows: its prefix, and the forms it matches given its ends. */
+  const countFlow = (v: FlowVotes, el: El, id: string, source: string | undefined, target: string | undefined): void => {
+    const p = PREFIXED.exec(id)?.[1];
+    if (p) v.any.add(p);
+    const own = p ?? GLUED.exec(id)?.[1];
+    if (own) v.uses.add(own);
+    if (!source || !target) return;
+    const seen = flowForms(id, source, target);
+    // a flow the length cap cut votes for its form too (else enough of them would flip the file's form), also a
+    // scopedTo flow 0.6 cut to an empty target word (Flow_KotO_WarenwirtschaftssystemabgleichTo)
+    if (p) {
+      let req: IdRequest | undefined;
+      const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: labelOf(el.get<El>('sourceRef')), targetLabel: labelOf(el.get<El>('targetRef')) }));
+      for (const form of ID_FORMS) if (!seen.some((f) => f.form === form) && cutOfForm(id, form, p, request)) seen.push({ form, prefix: p });
+      const scope = seen.some((f) => f.form === 'scopedTo') ? undefined : legacyScopedCut(id, p, source, target);
+      if (scope) seen.push({ form: 'scopedTo', prefix: p, scope });
+    }
+    for (const f of seen) {
+      v.forms.add(f.form);
+      let t = v.prefixes.get(f.form);
+      if (!t) v.prefixes.set(f.form, (t = new Tally()));
+      t.add(f.prefix);
+      if (f.sep !== undefined && !v.seps.has(f.prefix)) v.seps.set(f.prefix, f.sep);
+      if (f.scope) v.scopes.add(f.scope);
+    }
+  };
 
   for (const el of defs ? walk(defs, { bpmnOnly: true }) : []) {
     if (!isBpmnElement(el) || /^(bpmndi|dc|di):/.test(el.$type)) continue;
@@ -720,32 +805,27 @@ function learn(defs: El | undefined, d?: Declared): Learned {
       const borrowed = d && el.$type === 'bpmn:MessageFlow' ? borrowedHead(d, el.$type) : undefined;
       if (borrowed !== undefined && id.startsWith(borrowed)) continue;
       let v = flowVotes.get(el.$type);
-      if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: 0, forms: new Tally(), prefixes: new Map(), any: new Tally(), seps: new Map(), scopes: new Tally() }));
+      if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: [], gluedNamed: [], joined: [], forms: new Tally(), prefixes: new Map(), any: new Tally(), uses: new Tally(), seps: new Map(), scopes: new Tally() }));
       // a glued flow named by its ends with a suffix (flowCheckToShip_2) is not the prefix flowCheckToShip and a number: it
       // lends no prefix, and counts only for a file's glued numbered flows (flow12, below)
       if (GLUED_SUFFIXED.test(id)) {
-        v.glued++;
+        v.glued.push(id);
         continue;
       }
       v.n++;
-      const p = PREFIXED.exec(id)?.[1];
-      if (p) v.any.add(p);
-      if (!source || !target) continue;
-      const seen = flowForms(id, source, target);
-      // a flow the length cap cut votes for its form too (else enough of them would flip the file's form)
-      if (p) {
-        let req: IdRequest | undefined;
-        const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: labelOf(el.get<El>('sourceRef')), targetLabel: labelOf(el.get<El>('targetRef')) }));
-        for (const form of ID_FORMS) if (!seen.some((f) => f.form === form) && cutOfForm(id, form, p, request)) seen.push({ form, prefix: p });
+      // one without a suffix (flowCheckToShip, fPackToWeigh) votes for the glued numbered flows of its prefix (below)
+      if (!id.includes('_') && GLUED_NAMED.test(id) && !GLUED.test(id)) {
+        v.gluedNamed.push(id);
+        continue;
       }
-      for (const f of seen) {
-        v.forms.add(f.form);
-        let t = v.prefixes.get(f.form);
-        if (!t) v.prefixes.set(f.form, (t = new Tally()));
-        t.add(f.prefix);
-        if (f.sep !== undefined && !v.seps.has(f.prefix)) v.seps.set(f.prefix, f.sep);
-        if (f.scope) v.scopes.add(f.scope);
+      // one in a snake_case / Pascal_Snake body (fweigh_parcel_to_label_parcel, also with `_2`) has a `_` and reads like
+      // the prefix fweigh: it waits until the glued numbered prefixes are known (below), then votes for one or counts
+      // like any other flow
+      if (source && target && GLUED_JOINED.test(id)) {
+        v.joined.push({ el, id, source, target });
+        continue;
       }
+      countFlow(v, el, id, source, target);
       continue;
     }
     if (TOOL_DEFAULTS.has(id) || (d && conforms(d, el, id))) continue;
@@ -811,32 +891,129 @@ function learn(defs: El | undefined, d?: Declared): Learned {
   l.bodyVoted = best[1] >= MIN_EVIDENCE;
 
   for (const [type, v] of flowVotes) {
-    // the glued flows bpmn-cli named with a suffix in a file of flow12 ids vote for that form, as 0.6 counted them
-    if (v.glued && [...v.seps.values()].includes('')) {
-      v.n += v.glued;
-      v.forms.add('numbered', v.glued);
+    // the glued flows bpmn-cli named by their ends in a file of flow12 ids vote for that form and for the glued prefix
+    // they start with (flowCheckToShip: flow; the longest that is followed by an upper-case letter or a digit); with a
+    // suffix they count only there, as 0.6 counted them; without one they count anyway and vote where a prefix matches
+    const glued = [...v.seps].filter(([p, sep]) => sep === '' && /[a-z]/.test(p)).map(([p]) => p).sort((a, b) => b.length - a.length);
+    const gluedTo = (id: string): string | undefined => glued.find((p) => id.startsWith(p) && /^[A-Z0-9]/.test(id.charAt(p.length)));
+    const voteNumbered = (p: string | undefined): void => {
+      v.forms.add('numbered');
+      if (p) {
+        tallyOf(v.prefixes, 'numbered').add(p);
+        v.uses.add(p);
+      }
+    };
+    if (v.glued.length && [...v.seps.values()].includes('')) {
+      v.n += v.glued.length;
+      for (const id of v.glued) voteNumbered(gluedTo(id));
+    }
+    for (const id of v.gluedNamed) {
+      const p = gluedTo(id);
+      if (p) voteNumbered(p);
+    }
+    // in a snake_case / Pascal_Snake body the glued prefix is followed by the source's words (fweigh_parcel_to_...,
+    // fWeigh_Parcel_To_...): such a flow votes where it is the id bpmn-cli gives its ends after the prefix
+    for (const { el, id, source, target } of v.joined) {
+      let a: string | undefined;
+      let b: string | undefined;
+      const ends = { source: (): string => (a ??= labelOf(el.get<El>('sourceRef'))), target: (): string => (b ??= labelOf(el.get<El>('targetRef'))) };
+      const p = glued.find((p) => id.startsWith(p) && gluedJoinedOf(id, p, ends));
+      if (p) voteNumbered(p);
+      else countFlow(v, el, id, source, target);
     }
     // a type whose flows are all such glued flows has no style of its own (the sequence flows', else the default)
     if (!v.n) continue;
-    const form = v.forms.top();
-    const prefix = form ? v.prefixes.get(form)!.top() : undefined;
+    // ties between forms and prefixes never go by document order: forms by FORM_ORDER, a form's prefixes by how many
+    // flows use them (`uses`), then alphabetically, as does `any`; a tie between scopes (one prefix and one form) keeps
+    // the first one counted, as before
+    const form = v.forms.top(MIN_EVIDENCE, (a, b) => FORM_ORDER.indexOf(a) < FORM_ORDER.indexOf(b));
+    const prefix = form ? v.prefixes.get(form)!.top(MIN_EVIDENCE, (a, b) => v.uses.get(a) > v.uses.get(b) || (v.uses.get(a) === v.uses.get(b) && a < b)) : undefined;
     const scope = form === 'scopedTo' ? v.scopes.top() : undefined;
-    const any = v.any.top() ?? 'Flow';
+    const any = v.any.top(MIN_EVIDENCE, alphabetical);
+    let style: FlowStyle;
     if (form && prefix && v.forms.get(form) * 2 >= v.n && (form !== 'scopedTo' || scope)) {
       const sep = v.seps.get(prefix);
       // hashed and numbered flows lend new flows their prefix (and a numbered prefix's separator: flow12 -> flowAToB)
       const named = form === 'hash' || form === 'numbered';
-      l.flows.set(type, { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) });
+      style = { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) };
       if (form === 'scopedTo') l.scopes.set(type, [...v.scopes.counts.keys()].sort((a, b) => v.scopes.get(b) - v.scopes.get(a)));
-      // the prefix its flows took as `named` before the form had the majority (derivedBases)
-      if (!named && any !== prefix) l.namedPrefixes.set(type, any);
       l.flowVoted.add(type);
     } else {
-      l.flows.set(type, { form: 'named', prefix: any });
-      if (v.any.top() !== undefined) l.flowVoted.add(type);
+      style = { form: 'named', prefix: any ?? 'Flow' };
+      if (any !== undefined) l.flowVoted.add(type);
     }
+    l.flows.set(type, style);
+    l.flowStyles.set(type, otherStyles(v, style));
   }
   return l;
+}
+
+/**
+ * Whether `id` can be one of the ids a flow style gives (derivedBases): they
+ * start with its head (the prefix, a scopedTo flow's with its scope; the
+ * first 32 characters: a cut never reaches past them), or with Flow_ where
+ * the head is long enough to give way to it (namedHead, connectionBase: from
+ * 44 characters; 40 here). A scopedTo flow whose end names another learned
+ * scope takes that one (scopeOf), as does that scope's own style, which
+ * passes.
+ */
+function mayBeOf(id: string, style: FlowStyle): boolean {
+  const head = style.form === 'scopedTo' && style.scope !== undefined ? `${style.prefix}_${style.scope}_` : style.prefix;
+  return id.startsWith(head.slice(0, 32)) || (style.prefix.length + (style.scope?.length ?? 0) >= 40 && id.startsWith(`${DEFAULT_FLOW.prefix}_`));
+}
+
+/**
+ * Whether `id` is a flow bpmn-cli named by its ends (their labels, labelOf,
+ * read when needed) after the glued prefix `prefix` in a snake_case or
+ * Pascal_Snake body (namedBase with a glued head:
+ * `fweigh_parcel_to_label_parcel`, `fWeigh_Parcel_To_Label_Parcel`): before
+ * the length cap, cut for a suffix of up to 4 characters or as 0.6 cut it,
+ * with a collision suffix `_2` or none, or one that names its source whole
+ * (its target changed since, the id kept: `fweigh_parcel_to_event` on Weigh
+ * parcel -> Label parcel), as a glued flow in a camelCase body votes
+ * whatever its ends (GLUED_NAMED). Learn: such a flow votes for the prefix.
+ */
+function gluedJoinedOf(id: string, prefix: string, ends: { source: () => string; target: () => string }): boolean {
+  const fits = (base: string): boolean => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), '_'));
+  for (const [join, slug] of [['_to_', snakeSlug], ['_To_', pascalSnakeSlug]] as const) {
+    // cheap test first: every cut keeps the source's first letter after the prefix (a short glued prefix leaves the
+    // source half of the room at least)
+    if (!id.includes(join) || id.charAt(prefix.length) !== slug(ends.source()).charAt(0)) continue;
+    // its source whole and the join: also one whose target a splice changed while its id was kept (W_FLOW_ID_STALE)
+    if (id.startsWith(`${prefix}${slug(ends.source())}${join}`)) return true;
+    const at = (max: number, legacy = false): string => pairEnds(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max, legacy, closingNumber('_'));
+    const uncut = at(Infinity);
+    if (fits(uncut) || (uncut.length > MAX_ID - 4 && [0, 1, 2, 3, 4].some((k) => fits(at(MAX_ID - k))))) return true;
+    const legacy = at(LEGACY_BASE, true);
+    if (fits(legacy) || fits(cutAt(legacy, MAX_ID - 4, true))) return true;
+  }
+  return false;
+}
+
+/**
+ * The styles a type's flows show besides `style` (Learned.flowStyles):
+ * `named` under every prefix (with `_`, and glued after a numbered prefix
+ * without separator), each form built from the ends under the prefixes that
+ * voted for it, scopedTo with each scope. One per head.
+ */
+function otherStyles(v: FlowVotes, style: FlowStyle): FlowStyle[] {
+  const out = new Map<string, FlowStyle>();
+  const key = (s: FlowStyle): string => (s.form === 'named' ? `named|${namedHead(s.prefix, s.sep, 'pascal', true).head}` : `${s.form}|${s.prefix}|${s.scope ?? ''}`);
+  const add = (s: FlowStyle): void => {
+    if (!out.has(key(s))) out.set(key(s), s);
+  };
+  add(style);
+  for (const prefix of v.any.counts.keys()) add({ form: 'named', prefix });
+  for (const [prefix, sep] of v.seps) add({ form: 'named', prefix, sep });
+  for (const [form, t] of v.prefixes) {
+    if (form === 'hash' || form === 'numbered' || form === 'named') continue;
+    for (const prefix of t.counts.keys()) {
+      if (form === 'scopedTo') for (const scope of v.scopes.counts.keys()) add({ form, prefix, scope });
+      else add({ form, prefix });
+    }
+  }
+  out.delete(key(style));
+  return [...out.values()];
 }
 
 /* ------------------------------------------------------------------ */
@@ -1280,45 +1457,52 @@ export class IdStyle {
    * collision suffix of up to 4 characters (`_100`, see next) and, for a
    * flow, the id 0.6 and earlier wanted before their cap (a head that now
    * gives way to Flow_ included) and the ids they cut it to (legacyFitPair;
-   * cut again for a suffix from `_100`) and, in a file whose flows have
-   * another form, the `named` ones bpmn-cli gave it before they did (also
-   * as 0.6 cut them), so that a flow a file got before still names its ends
-   * (ops/flows.ts followEnds). With declared conventions also the ids of the
-   * file's own style (learnedOnly): a flow named before they applied still
-   * names its ends.
+   * cut again for a suffix from `_100`), and the same in every other style
+   * the file's flows show (Learned.flowStyles: the `named` ones under each
+   * flow prefix, which bpmn-cli gave them before another form or prefix had
+   * the majority, and each form built from the ends under the prefixes that
+   * voted for it), so that a flow a file got before still names its ends
+   * (ops/flows.ts followEnds), whichever way the vote goes. With declared
+   * conventions also the ids of the file's own style (learnedOnly): a flow
+   * named before they applied still names its ends. `id`: only the other
+   * styles whose ids it can be (it starts with their head, prefix and a
+   * scopedTo flow's scope, or with Flow_ where their head is long enough to
+   * give way to it): a file whose flows show many prefixes or scopes costs a
+   * string test per style, not its bases.
    */
-  derivedBases(req: IdRequest): string[] {
-    const own = this.basesOf(req);
-    return this.d ? [...new Set([...own, ...this.learnedOnly().basesOf(req)])] : own;
+  derivedBases(req: IdRequest, id?: string): string[] {
+    const own = this.basesOf(req, id);
+    return this.d ? [...new Set([...own, ...this.learnedOnly().basesOf(req, id)])] : own;
   }
 
   /** derivedBases in this style alone. */
-  private basesOf(req: IdRequest): string[] {
-    const uncut = this.wanted(req, Infinity).base;
-    // short enough for every suffix: no cut can differ from it
-    const bases = uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => this.wanted(req, MAX_ID - suffix).base);
-    if (isConnection(req)) {
-      // also a short one: a scopedTo end word 0.6 took (Flow_KotO_ReserveTo4); cut again for a suffix of 4 characters
-      // and more (`_100`; stemTo / scopedTo: `1000`); and the id 0.6 wanted before its cap, with a head that now leaves
-      // the ends too little room (connectionBase)
-      const legacy = this.connectionBase(req, LEGACY_BASE, true).base;
-      bases.push(legacy, cutAt(legacy, MAX_ID - 4, true), this.connectionBase(req, Infinity, true).base);
-      // a file whose flows have another form got `named` flows from bpmn-cli until enough of them voted for that form
-      // (0.6 read a file of cut flows as `named`), with the file's most used flow prefix; a flow to the join of a split
-      // is named by its label, CheckJoin, not by its id stem. Under a declared prefix the file's own style lists them
-      // (derivedBases: learnedOnly)
-      const { form, prefix, sep, head } = this.flowOf(req.key);
-      if (head === undefined && form !== 'named') {
-        for (const p of new Set([prefix, this.l.namedPrefixes.get(this.l.flows.has(req.key) ? req.key : 'bpmn:SequenceFlow') ?? prefix])) {
-          const whole = this.namedBase(req, Infinity, p, sep, false);
-          bases.push(whole);
-          if (whole.length > MAX_ID - 4) for (const max of [MAX_ID, MAX_ID - 1, MAX_ID - 2, MAX_ID - 3, MAX_ID - 4]) bases.push(this.namedBase(req, max, p, sep, false));
-          const old = this.namedBase(req, LEGACY_BASE, p, sep, true);
-          bases.push(old, cutAt(old, MAX_ID - 4, true));
-        }
-      }
+  private basesOf(req: IdRequest, id?: string): string[] {
+    if (!isConnection(req)) {
+      const uncut = this.wanted(req, Infinity).base;
+      // short enough for every suffix: no cut can differ from it
+      return uncut.length <= MAX_ID - 4 ? [uncut] : [...new Set([...[0, 1, 2, 3, 4].map((suffix) => this.wanted(req, MAX_ID - suffix).base), uncut])];
     }
-    return [...new Set([...bases, uncut])];
+    const style = this.flowOf(req.key);
+    const bases = this.connectionBases(req, style);
+    // the file's other flow styles (a flow to the join of a split is named by its label, CheckJoin, not by its id stem);
+    // under a declared prefix the file's own style lists them (derivedBases: learnedOnly)
+    if (style.head === undefined) for (const other of this.l.flowStyles.get(this.l.flows.has(req.key) ? req.key : 'bpmn:SequenceFlow') ?? []) if (id === undefined || mayBeOf(id, other)) bases.push(...this.connectionBases(req, other));
+    return [...new Set(bases)];
+  }
+
+  /**
+   * The ids a flow style gives a connection (basesOf): before the length
+   * cap, cut for a suffix of up to 4 characters, and as 0.6 wanted and cut
+   * it, also a short one (a scopedTo end word 0.6 took: Flow_KotO_ReserveTo4),
+   * cut again for a suffix of 4 characters and more (`_100`; stemTo /
+   * scopedTo: `1000`), and the id 0.6 wanted before its cap, with a head
+   * that now leaves the ends too little room (connectionBase).
+   */
+  private connectionBases(req: IdRequest, style: FlowStyle): string[] {
+    const at = (max: number, legacy = false): string => this.connectionBase(req, max, legacy, style).base;
+    const uncut = at(Infinity);
+    const legacy = at(LEGACY_BASE, true);
+    return [...(uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => at(MAX_ID - suffix))), legacy, cutAt(legacy, MAX_ID - 4, true), at(Infinity, true), uncut];
   }
 
   /** The id the request wants, at most `max` characters, and the separator of its collision suffix (`_2`; the file-learned stemTo and scopedTo flows and a declared camelCase / PascalCase: `2`). */
@@ -1520,8 +1704,8 @@ export class IdStyle {
    * so one file can hold both forms (not `legacy`: 0.6 kept the head and
    * cut the ends).
    */
-  private connectionBase(req: IdRequest, max: number, legacy = false): { base: string; sep: string } {
-    const { form, prefix, sep, scope, head } = this.flowOf(req.key);
+  private connectionBase(req: IdRequest, max: number, legacy = false, style = this.flowOf(req.key)): { base: string; sep: string } {
+    const { form, prefix, sep, scope, head } = style;
     if (head !== undefined) return this.declaredFlowBase(req, max, form, head, legacy);
     if (form === 'named') return { base: this.namedBase(req, max, prefix, sep, legacy), sep: '_' };
     const long = (head: string, join: string): boolean => !legacy && MAX_ID - head.length - join.length < 16;
@@ -1757,6 +1941,26 @@ function cutOfForm(id: string, form: IdForm, prefix: string, request: () => IdRe
     if (id.slice(0, -k) === idFormBase(form, `${prefix}_`, req, MAX_ID - k, false)) return true;
   }
   return false;
+}
+
+/**
+ * The scope of a scopedTo flow 0.6 cut to an empty target word under the
+ * prefix `prefix` (`Flow_KotO_WarenwirtschaftssystemabgleichTo`, with a
+ * glued suffix or none), which SCOPED_TO does not read: the base 0.6 wanted
+ * for its ends (connectionBase `legacy`; derivedBases lists it), so that
+ * enough of them do not flip a 0.6 file's form (learn). Undefined for any
+ * other id.
+ */
+function legacyScopedCut(id: string, prefix: string, source: string, target: string): string | undefined {
+  const m = SCOPED_CUT.exec(id.slice(prefix.length + 1));
+  if (!m) return undefined;
+  const scope = m[1]!;
+  // cheap test first: the source's end word as 0.6 took it
+  const a = endWord(source, scope, 'Start', true);
+  if (!m[2]!.startsWith(a)) return undefined;
+  const legacy = cutAt(`${prefix}_${scope}_${a}To${endWord(target, scope, 'End', true)}`, LEGACY_BASE, true);
+  const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), '');
+  return id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true)) ? scope : undefined;
 }
 
 /** A body cut to `max` (cutName) in case `c`: a camelCase body that lost its leading number to the cut (withLetter) begins in lower case (`rechnung`, not `Rechnung`). */

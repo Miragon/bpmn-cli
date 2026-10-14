@@ -444,11 +444,13 @@ export function recordFormerEnd(doc: Doc, node: El): void {
 
 /**
  * Whether `id` is the id the file's style gives a sequence flow between
- * `source` and `target` (in a file of another flow form also the `named` one
- * earlier versions gave it), or such an id with a collision suffix: the ends
- * named by their names or (an end renamed since) by their ids, also as
- * earlier versions named an unnamed end (by its kind: Flow_CheckToGateway),
- * before the length cap and as 0.6 cut it (IdStyle.derivedBases); an end
+ * `source` and `target` (or the one any other flow prefix or form of the
+ * file's flows gives it: also the `named` one earlier versions gave it, and
+ * one under a prefix a tie outvoted), or such an id with a collision
+ * suffix: the ends named by their names or (an end renamed since) by their
+ * ids, also as earlier versions named an unnamed end (by its kind:
+ * Flow_CheckToGateway), before the length cap and as 0.6 cut it
+ * (IdStyle.derivedBases, given `id`: only the styles it can be of); an end
  * `set` renamed or named earlier in the batch also as it was called then
  * (its id and labels, Doc.formerEndsOf). False for a flow without id. The
  * one test behind a rename (followEnds) and a stale id (staleFlowWarning).
@@ -459,7 +461,7 @@ export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target
   const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: endLabels(el) }, ...doc.formerEndsOf(el)];
   const targets = names(target);
   return names(source).some((s) =>
-    targets.some((t) => s.labels.some((a) => t.labels.some((b) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b })).some(derived)))),
+    targets.some((t) => s.labels.some((a) => t.labels.some((b) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b }), id).some(derived)))),
   );
 }
 

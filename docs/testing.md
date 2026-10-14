@@ -644,10 +644,13 @@ node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
 
 The regression tests: `test/speaking-ids.test.ts` and
 `test/conventions-ids.test.ts` (ids in every file style, renamed flows and
-their DI, also after an end got another id earlier in the batch),
+their DI, also after an end got another id earlier in the batch; a flow
+form that stays put over many edits, also in snake_case and Pascal_Snake
+bodies, ties, flows under an outvoted prefix or scope),
 `test/keep-flow-ids.test.ts` (flow ids kept with `--keep-flow-ids`,
 `W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a
-splice), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
+splice, followed hints in files of mixed flow prefixes:
+`test/fixtures/mixed-styles/`), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
 line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
 `test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
 `test/lane-splice.test.ts` (the lane and the geometry of a node added into a

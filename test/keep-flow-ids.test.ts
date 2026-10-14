@@ -14,6 +14,7 @@ import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/document.js';
 import type { El } from '../src/model.js';
 import type { Warning } from '../src/errors.js';
+import { idNamesEnds } from '../src/ops/flows.js';
 import { runOp, runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline.js';
@@ -798,5 +799,72 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
       'Flow_AToB: Activity_A -> Activity_C',
     ]);
     expect(swap.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_A">\s*<bpmn:conditionExpression/);
+  });
+});
+
+describe('mixed id styles: a followed hint still names its ends on the next read, and the flow form stays put', () => {
+  const fixture = (...path: string[]): string => readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', ...path), 'utf8');
+
+  /** Follows every W_FLOW_ID_STALE hint of `res` (`bpmn set <file> <flow> id=<suggested>`) and reads the result again. */
+  async function follow(xml: string, warnings: readonly Warning[]): Promise<{ followed: string[]; naming: string[]; before: unknown; after: unknown }> {
+    const ops: Op[] = stale(warnings).map((w) => ({ op: 'set', id: w.element!, values: { id: / id=(\S+)`/.exec(w.hint!)![1]! } }));
+    const done = await applyToXml(xml, ops, { keepFlowIds: true, layout: false });
+    const doc = await Doc.fromXml(done.xml);
+    const naming = ops.flatMap((o) => {
+      const id = (o as { values: { id: string } }).values.id;
+      const flow = doc.get(id)!;
+      return idNamesEnds(doc, id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
+    });
+    return { followed: ops.map((o) => (o as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).idStyle.info().sequenceFlow, after: doc.idStyle.info().sequenceFlow };
+  }
+
+  // the five 'follow hints' violations of the keep-mode fuzz campaigns (seeds 1003, 9456, 9473, 7392, 7922): each followed
+  // id named its ends no more on the next read, because the file's flow prefix flipped (f -> Flow_: bpmn-cli's glued flows
+  // did not vote; G or F, tied: the first declared won)
+  const CASES: Array<[string, string, Op]> = [
+    ['polish-remove-9456.bpmn', 'fHandleTicketToFz6Archive', { op: 'add', kind: 'subProcess', name: 'Fz6 archive', before: 'Activity_Fz3Pay' }],
+    ['expand-sibling-9473.bpmn', 'G_Fz6ArchiveToFz3Check G_Fz3CheckToThen', { op: 'move', ids: ['Activity_Fz3Check', 'T', 'P'], before: 'E' }],
+    ['polish-lanes-7392.bpmn', 'fFz5CheckToReviewLarge', { op: 'move', ids: ['Gateway_Fz5Check', 'T2'], after: 'G1' }],
+    ['pool-branch-7922.bpmn', 'F_CarrierToParcel', { op: 'move', ids: ['T_UP', 'T_LOW'], before: 'E1', flowName: 'fn4', default: true }],
+  ];
+  it.each(CASES)('%s: the followed ids (%s) name their ends on the next read', async (file, ids, op) => {
+    const xml = fixture('mixed-styles', file);
+    const res = await applyToXml(xml, [op], { keepFlowIds: true, layout: false });
+    const { followed, naming, before, after } = await follow(res.xml, res.result.warnings.added);
+    expect(followed.join(' ')).toBe(ids);
+    expect(naming).toEqual(followed);
+    expect(after).toEqual(before);
+  });
+
+  it('seed 1003: six commands on polish-remove.bpmn, the split hint followed, still names its ends', async () => {
+    const ops: Op[] = [
+      { op: 'move', ids: ['H'], after: 'M' },
+      { op: 'add', kind: 'task', name: 'Fz2 check', after: 'S' },
+      { op: 'move', ids: ['H'], before: 'E2' },
+      { op: 'add', kind: 'userTask', name: 'Fz4 notify', before: 'H' },
+      { op: 'add', kind: 'serviceTask', name: 'Fz5 review', after: 'S' },
+      { op: 'split', after: 'Activity_Fz5Review', branches: [{ nodes: [{ kind: 'task', name: 'Fz6 a' }] }, { nodes: [{ kind: 'task', name: 'Fz6 b' }] }] },
+    ];
+    let xml = fixture('incremental', 'polish-remove.bpmn');
+    let warnings: readonly Warning[] = [];
+    for (const op of ops) {
+      const res = await applyToXml(xml, [op], { keepFlowIds: true, layout: false });
+      xml = res.xml;
+      warnings = res.result.warnings.added;
+    }
+    const { followed, naming, after } = await follow(xml, warnings);
+    expect(followed).toEqual(['fFz5ReviewToAfterFz5Review']);
+    expect(naming).toEqual(followed);
+    expect(after).toEqual({ form: 'named', prefix: 'f', sep: '' });
+  });
+
+  it('by default too: the flows of an f1 file keep f after a splice, and the next splice renames the flow it splits', async () => {
+    const xml = fixture('mixed-styles', 'polish-remove-9456.bpmn');
+    const first = await applyToXml(xml, [{ op: 'add', kind: 'subProcess', name: 'Fz6 archive', before: 'Activity_Fz3Pay' }], { layout: false });
+    expect(first.result.renamed).toEqual({ fHandleTicketToFz3Pay: 'fHandleTicketToFz6Archive' });
+    // before: the next read learned Flow_, created Flow_Fz7FileToFz3Pay and kept fFz6ArchiveToFz3Pay on Fz6Archive -> Fz7File
+    const second = await applyToXml(first.xml, [{ op: 'add', kind: 'task', name: 'Fz7 file', after: 'Activity_Fz6Archive' }], { layout: false });
+    expect(second.result.renamed).toEqual({ fFz6ArchiveToFz3Pay: 'fFz6ArchiveToFz7File' });
+    expect(second.result.created.map((c) => c.id)).toEqual(['Activity_Fz7File', 'fFz7FileToFz3Pay']);
   });
 });
