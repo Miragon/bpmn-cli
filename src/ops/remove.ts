@@ -7,7 +7,7 @@
  *    message flows touching it, lane flowNodeRefs, gateway.default refs,
  *    sub-process children (their ids released), the element itself; DI is
  *    left to the layouter (shapes/edges of removed elements are dropped so
- *    the file never carries dangling DI references).
+ *    the file never carries dangling DI references; their ids released).
  *  - sequence flow / message flow / association / data association: just that.
  *  - lane: members are un-assigned (laneSet removed when empty).
  *  - participant: participant + its process (unless another participant
@@ -544,7 +544,13 @@ function cleanupReferences(doc: Doc, removed: Set<El>, cs: ChangeSet): void {
     if (!isAttached(doc, holder)) continue;
     const targetId = idOf(target);
     if (holder.$type.startsWith('bpmndi:')) {
-      detachFromParent(is(holder, 'bpmndi:BPMNPlane') ? (holder.$parent as El) : holder);
+      const gone = is(holder, 'bpmndi:BPMNPlane') ? (holder.$parent as El) : holder;
+      detachFromParent(gone);
+      // its ids are free again: a later `set id=` of the batch takes the derived DI id along as a command of its own does (diagram/write.ts followDiIds)
+      for (const e of walk(gone, { bpmnOnly: true })) {
+        const id = idOf(e);
+        if (id) doc.ids.release(id);
+      }
       continue;
     }
     if (is(holder, 'bpmn:SequenceFlow') || is(holder, 'bpmn:MessageFlow') || is(holder, 'bpmn:Association') || is(holder, 'bpmn:DataAssociation')) {

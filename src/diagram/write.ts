@@ -21,9 +21,19 @@
  *    BPMNPlane / BPMNDiagram the ids of the old diagram of the same root (a
  *    main diagram whose root changed, e.g. to a new collaboration, keeps the
  *    old ids unless they were derived from the old root's id like
- *    `BPMNPlane_<processId>`); DI of elements that had none follows the
- *    file's DI id style (diIds). A file without DI (or without shapes and
- *    edges showing a style) keeps the engine's ids for new DI.
+ *    `BPMNPlane_<processId>`, also cut); DI of elements that had none
+ *    follows the file's DI id style (diIds). A file without DI (or without
+ *    shapes and edges showing a style) gets the engine's form, `BPMNShape_<id>` /
+ *    `BPMNEdge_<id>` / `BPMNPlane_<root>` / `BPMNDiagram_<root>`, with a
+ *    long element id cut like styledId (every DI id within 64 characters;
+ *    a taken one gets `_2`, after the ids that need no cut). An old id is
+ *    never cut: an old DI id over 64 characters stays.
+ *  - followDiIds(defs, el, old, id, ids): an element renamed `old` -> `id`
+ *    (`set id=`, a flow that follows its ends) takes its BPMNShape /
+ *    BPMNEdge ids along where they were derived from `old` (diStyleOf:
+ *    `<old>_di`, `BPMNShape_<old>`, `Edge_<old>`, also cut, also as 0.6
+ *    cut them, also with a collision suffix `_2`), `_2` when the new one
+ *    is taken; any other DI id stays.
  *  - pruneDi(defs, sem): deletes DI whose semantic element is gone (or is not
  *    the element registered under its id) and diagrams whose root is gone;
  *    returns the ids of the deleted DI's elements.
@@ -122,17 +132,77 @@ const MAX_DI = MAX_ID - 3;
  * The DI id of an element in a style (`<id>_di`, `BPMNShape_<id>`,
  * `Edge_<id>`), at most MAX_ID characters less room for a collision suffix:
  * a long element id is cut at a word boundary (src/ids.ts cutAt), like the
- * element ids themselves.
+ * element ids themselves. `legacy`: cut as 0.6 cut (recognising the DI ids
+ * it wrote).
  */
-export function styledId(style: Style, kind: 'Shape' | 'Edge', id: string): string {
+export function styledId(style: Style, kind: 'Shape' | 'Edge', id: string, legacy = false): string {
   const [head, tail] = style === 'suffix' ? ['', '_di'] : style === 'bpmn' ? [`BPMN${kind}_`, ''] : [`${kind}_`, ''];
   const room = MAX_DI - head.length - tail.length;
-  return `${head}${id.length > room ? cutAt(id, room) : id}${tail}`;
+  return `${head}${id.length > room ? cutAt(id, room, legacy) : id}${tail}`;
 }
 
-/** The DI style of an edge's id (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`, also cut by styledId); undefined for any other id. */
-export function edgeStyleOf(diId: string, elId: string): Style | undefined {
-  return styleOf(diId, elId, 'Edge') ?? (['suffix', 'bpmn', 'short'] as Style[]).find((s) => styledId(s, 'Edge', elId) === diId);
+/** Whether `diId` is `base` or `base` with the collision suffix claimUnique gives (`_2`, `_3`, ...). */
+function isOrSuffixed(diId: string, base: string): boolean {
+  return diId === base || (diId.startsWith(`${base}_`) && /^\d+$/.test(diId.slice(base.length + 1)));
+}
+
+/** The DI style of a shape's or an edge's id (`<id>_di`, `BPMNShape_<id>`, `Edge_<id>`, also cut by styledId, now or as 0.6 cut, also with a collision suffix `_2`); undefined for any other id. */
+export function diStyleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | undefined {
+  return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((s) => isOrSuffixed(diId, styledId(s, kind, elId)) || isOrSuffixed(diId, styledId(s, kind, elId, true)));
+}
+
+/** The id of the BPMNPlane / BPMNDiagram that shows `root`: `BPMNPlane_<root>`, a long root id cut like styledId (`legacy`: as 0.6 cut it). */
+function rootDiId(kind: 'Plane' | 'Diagram', root: string, legacy = false): string {
+  const head = `BPMN${kind}_`;
+  return `${head}${cutAt(root, MAX_DI - head.length, legacy)}`;
+}
+
+/** Whether `diId` was derived from `root` as the id of its plane / diagram: `BPMNPlane_<root>` uncut (0.6 and the layouter), cut (rootDiId) or as 0.6 cut it. */
+function namesRoot(kind: 'Plane' | 'Diagram', diId: string | undefined, root: string): boolean {
+  return diId === `BPMN${kind}_${root}` || diId === rootDiId(kind, root) || diId === rootDiId(kind, root, true);
+}
+
+/** Whether every DI id derived from an id of `defs` fits uncut (no id is longer than the room `BPMNDiagram_` leaves): restoreDiIds then keeps the engine's ids of a drawing without old DI. */
+export function diIdsFit(defs: El): boolean {
+  for (const id of allIds(defs)) if (id.length > MAX_DI - 'BPMNDiagram_'.length) return false;
+  return true;
+}
+
+/** What followDiIds asks and changes: the document's id registry (src/ids.ts IdRegistry). */
+export interface IdClaims {
+  has(id: string): boolean;
+  claim(id: string): void;
+  release(id: string): void;
+}
+
+/**
+ * The DI of an element renamed `old` -> `id`: each BPMNShape / BPMNEdge of
+ * `el` whose id was derived from `old` (diStyleOf, a collision suffix
+ * included) takes the id derived from `id` in the same style (styledId),
+ * `_2`, `_3`, ... when that one is taken in `ids`, which it updates (as new
+ * DI gets its id: claimUnique). A DI id already derived from `id` stays, and
+ * so does any other DI id. True when one changed.
+ */
+export function followDiIds(defs: El, el: El, old: string, id: string, ids: IdClaims): boolean {
+  let changed = false;
+  for (const diagram of rawList(defs, 'diagrams')) {
+    for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
+      if (raw(pe, 'bpmnElement') !== el) continue;
+      const kind = is(pe, 'bpmndi:BPMNShape') ? 'Shape' : is(pe, 'bpmndi:BPMNEdge') ? 'Edge' : undefined;
+      const diId = idOf(pe);
+      const style = kind && diId ? diStyleOf(diId, old, kind) : undefined;
+      if (!kind || !diId || !style) continue;
+      const base = styledId(style, kind, id);
+      if (isOrSuffixed(diId, base)) continue;
+      let next = base;
+      for (let i = 2; ids.has(next); i++) next = `${base}_${i}`;
+      ids.release(diId);
+      ids.claim(next);
+      pe.set('id', next);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /** `base`, else `base_2`, `base_3`, ... whichever is not taken; claims it. */
@@ -150,8 +220,8 @@ export function diIds(defs: El): DiIds {
   return {
     shape: (id) => claimUnique(taken, styledId(styles.shape ?? 'suffix', 'Shape', id)),
     edge: (id) => claimUnique(taken, styledId(styles.edge ?? 'suffix', 'Edge', id)),
-    plane: (id) => claimUnique(taken, `BPMNPlane_${cutAt(id, MAX_DI - 'BPMNPlane_'.length)}`),
-    diagram: (id) => claimUnique(taken, `BPMNDiagram_${cutAt(id, MAX_DI - 'BPMNDiagram_'.length)}`),
+    plane: (id) => claimUnique(taken, rootDiId('Plane', id)),
+    diagram: (id) => claimUnique(taken, rootDiId('Diagram', id)),
   };
 }
 
@@ -166,7 +236,7 @@ export interface DiIdMemo {
   edges: Map<string, string>;
   /** per BPMNDiagram in document order: the id of the element its plane shows, the plane's and the diagram's id */
   diagrams: Array<{ root?: string; plane?: string; diagram?: string }>;
-  /** the file's DI id styles (none: new DI keeps the engine's ids) */
+  /** the file's DI id styles (none: new DI takes the engine's form, `BPMNShape_<id>`) */
   styles: { shape?: Style; edge?: Style };
 }
 
@@ -189,7 +259,6 @@ export function rememberDiIds(defs: El): DiIdMemo {
 
 /** Gives the DI the engine wrote the ids the document had before (see the module contract). */
 export function restoreDiIds(defs: El, memo: DiIdMemo): void {
-  if (!memo.diagrams.length) return;
   const diagrams = rawList(defs, 'diagrams');
   const di = new Set<El>();
   for (const diagram of diagrams) {
@@ -204,16 +273,18 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
     const id = idOf(el);
     if (id) taken.delete(id);
   }
-  const pending: Array<() => void> = [];
-  const claim = (el: El, wanted: string | undefined, fallback: () => string): void => {
+  // DI without an old id that is free: the id of its style (`base`), given once every old id is
+  const fresh: Array<{ el: El; base: string }> = [];
+  const claim = (el: El, wanted: string | undefined, base: string): void => {
     if (wanted && !taken.has(wanted)) {
       taken.add(wanted);
       el.set('id', wanted);
-    } else pending.push(() => el.set('id', fallback()));
+    } else fresh.push({ el, base });
   };
+  const rootId = (kind: 'Plane' | 'Diagram', el: El, root: string | undefined): string => (root ? rootDiId(kind, root) : (idOf(el) ?? `BPMN${kind}_1`));
   const old = [...memo.diagrams];
   const main = old[0];
-  const derived = (o: { root?: string; plane?: string; diagram?: string }): boolean => !!o.root && (o.plane === `BPMNPlane_${o.root}` || o.diagram === `BPMNDiagram_${o.root}`);
+  const derived = (o: { root?: string; plane?: string; diagram?: string }): boolean => !!o.root && (namesRoot('Plane', o.plane, o.root) || namesRoot('Diagram', o.diagram, o.root));
   const unmatched: El[] = [];
   for (const diagram of diagrams) {
     const plane = raw<El>(diagram, 'plane');
@@ -224,8 +295,8 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
       continue;
     }
     const [o] = old.splice(i, 1);
-    if (plane) claim(plane, o!.plane, () => claimUnique(taken, idOf(plane) ?? `BPMNPlane_${root}`));
-    claim(diagram, o!.diagram, () => claimUnique(taken, idOf(diagram) ?? `BPMNDiagram_${root}`));
+    if (plane) claim(plane, o!.plane, rootId('Plane', plane, root));
+    claim(diagram, o!.diagram, rootId('Diagram', diagram, root));
   }
   for (const diagram of unmatched) {
     const plane = raw<El>(diagram, 'plane');
@@ -233,8 +304,8 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
     // only the main diagram takes over the ids of the old main diagram (its root changed, e.g. to a new collaboration)
     const o = diagram === diagrams[0] && main && old.includes(main) && !derived(main) ? main : undefined;
     if (o) old.splice(old.indexOf(o), 1);
-    if (plane) claim(plane, o?.plane, () => claimUnique(taken, idOf(plane) ?? `BPMNPlane_${root}`));
-    claim(diagram, o?.diagram, () => claimUnique(taken, idOf(diagram) ?? `BPMNDiagram_${root}`));
+    if (plane) claim(plane, o?.plane, rootId('Plane', plane, root));
+    claim(diagram, o?.diagram, rootId('Diagram', diagram, root));
   }
   for (const diagram of diagrams) {
     for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
@@ -244,10 +315,12 @@ export function restoreDiIds(defs: El, memo: DiIdMemo): void {
       if (!kind) continue;
       const wanted = (kind === 'Shape' ? memo.shapes : memo.edges).get(elId);
       const style = kind === 'Shape' ? memo.styles.shape : memo.styles.edge;
-      claim(pe, wanted, () => claimUnique(taken, style ? styledId(style, kind, elId) : (idOf(pe) ?? styledId('bpmn', kind, elId))));
+      claim(pe, wanted, styledId(style ?? 'bpmn', kind, elId));
     }
   }
-  for (const give of pending) give();
+  // the engine's ids that already are what their style gives first: a cut id never pushes one that needs no cut to `_2`
+  const uncut = (f: { el: El; base: string }): boolean => idOf(f.el) === f.base;
+  for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((f) => !uncut(f))]) el.set('id', claimUnique(taken, base));
 }
 
 /* ------------------------------------------------------------------ */

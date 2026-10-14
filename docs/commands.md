@@ -158,7 +158,8 @@ warns `W_IMPLICIT_SPLIT`, a second incoming flow `W_IMPLICIT_JOIN`.
 ## `set`
 
 Changes properties of one element; `key=` (empty) or `--unset key` removes one, `id=New_Id` renames
-the element and re-points every reference. `bpmn kinds --section setKeys,nestedKeys` lists the keys.
+the element and re-points every reference (a DI id derived from the old id, such as
+`BPMNShape_<id>` or `<id>_di`, follows). `bpmn kinds --section setKeys,nestedKeys` lists the keys.
 
 ```
 bpmn set order.bpmn Activity_CheckInvoice name="Check the invoice" camunda:asyncBefore=true

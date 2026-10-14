@@ -15,7 +15,8 @@
  *
  * Both engines write new DI; the ids the file's DI had are given back to it
  * afterwards (diagram/write.ts restoreDiIds: same DI, plane and diagram ids,
- * new DI in the file's DI id style), so a redraw only changes geometry.
+ * new DI in the file's DI id style, a long element id cut so that every DI
+ * id stays within 64 characters), so a redraw only changes geometry.
  * Neither engine knows where a group's box goes: every drawn group is drawn
  * again around the elements its box held (diagram/groups.ts; one without
  * any of them drawn keeps its box, or its size below the drawing when the
@@ -40,7 +41,7 @@
 import type { LayoutWarning } from 'bpmn-auto-layout';
 import { giveDrawnElementsIds, type GivenId } from './diagram/drawn-ids.js';
 import { membersOf, redrawGroups, rememberGroups, type RedrawnGroups } from './diagram/groups.js';
-import { rememberDiIds, restoreDiIds } from './diagram/write.js';
+import { diIdsFit, rememberDiIds, restoreDiIds } from './diagram/write.js';
 import type { IdRequest } from './idstyle.js';
 import { layoutClean } from './layout/engine.js';
 import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, ModelError } from './model.js';
@@ -467,6 +468,8 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
     const { xml } = await model.moddle.toXML(model.definitions, { format: true });
     return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...groupNotes(redrawn) };
   }
+  // without old DI the layouter's ids stand unless an element id is long enough to need a cut (restoreDiIds)
+  const cut = !diIds.diagrams.length && !diIdsFit(model.definitions);
   injectLayoutHints(model, expanded);
   const temporary = addTemporaryLaneMembers(model.definitions);
   let result: LayoutResult;
@@ -477,9 +480,9 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
     removeTemporaryLaneMembers(model.definitions, temporary);
   }
   const missingDi = result.warnings.some((w) => w.code === 'DI_NOT_CREATED');
-  if (!temporary.length && !missingDi && !diIds.diagrams.length) return { ...result, ...given };
+  if (!temporary.length && !missingDi && !diIds.diagrams.length && !cut) return { ...result, ...given };
 
-  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges and the groups, give the DI its ids back
+  // second pass over the layouter's output: strip the temporary lane members, draw missing association edges and the groups, give the DI its ids back (DI ids within 64 characters)
   const laidOut = await parseXml(result.xml);
   removeTemporaryLaneMembers(laidOut.definitions, temporary);
   const fixed = new Set(missingDi ? synthesiseAssociationEdges(laidOut) : []);

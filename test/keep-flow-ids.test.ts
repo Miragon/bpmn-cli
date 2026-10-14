@@ -22,8 +22,8 @@ import { renderMutation } from '../src/report.js';
 import type { ChangeSet } from '../src/result.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
-/** A file of the default style with `<id>_di` DI: start -> Check -> Ok? -> Book (default) -> Done. */
-async function drawnDefault(): Promise<string> {
+/** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
+async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {
   const ops: Op[] = [
     { op: 'add', kind: 'startEvent', name: 'Start' },
     { op: 'add', kind: 'task', name: 'Check', after: 'Event_Start' },
@@ -31,7 +31,8 @@ async function drawnDefault(): Promise<string> {
     { op: 'add', kind: 'task', name: 'Book', after: 'Gateway_Ok', default: true },
     { op: 'add', kind: 'endEvent', name: 'Done', after: 'Activity_Book' },
   ];
-  return (await applyToXml((await newXml({ processName: 'P' })).xml, ops)).xml.replace(/BPMN(Shape|Edge)_([A-Za-z0-9_]+)/g, '$2_di');
+  const xml = (await applyToXml((await newXml({ processName: 'P' })).xml, ops)).xml;
+  return style === 'bpmn' ? xml : xml.replace(/BPMN(Shape|Edge)_([A-Za-z0-9_]+)/g, '$2_di');
 }
 
 /** The same chain without DI, for the ops alone. */
@@ -866,5 +867,88 @@ describe('mixed id styles: a followed hint still names its ends on the next read
     const second = await applyToXml(first.xml, [{ op: 'add', kind: 'task', name: 'Fz7 file', after: 'Activity_Fz6Archive' }], { layout: false });
     expect(second.result.renamed).toEqual({ fFz6ArchiveToFz3Pay: 'fFz6ArchiveToFz7File' });
     expect(second.result.created.map((c) => c.id)).toEqual(['Activity_Fz7File', 'fFz7FileToFz3Pay']);
+  });
+});
+
+describe('`set id=` takes a DI id derived from the old id along', () => {
+  /** DI id by element id. */
+  const diOf = (xml: string): Map<string, string> => new Map([...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)].map((m) => [m[2]!, m[1]!]));
+  const RENAMES: Op[] = [
+    { op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_CheckToAudit' } },
+    { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } },
+  ];
+
+  it('on a flow and a task, in the `<id>_di` and `BPMN<Kind>_` styles, with ids kept too; the result is unchanged', async () => {
+    for (const style of ['suffix', 'bpmn'] as const) {
+      for (const keepFlowIds of [false, true]) {
+        const r = await applyToXml(await drawnDefault(style), RENAMES, { keepFlowIds });
+        const di = diOf(r.xml);
+        expect(di.get('Flow_CheckToAudit')).toBe(style === 'suffix' ? 'Flow_CheckToAudit_di' : 'BPMNEdge_Flow_CheckToAudit');
+        expect(di.get('Activity_Audit')).toBe(style === 'suffix' ? 'Activity_Audit_di' : 'BPMNShape_Activity_Audit');
+        expect(r.xml).not.toMatch(/Activity_Check|Flow_CheckToOk/);
+        expect(r.result.changed.map((c) => `${c.id}: ${c.detail}`)).toEqual(['Flow_CheckToAudit: renamed from Flow_CheckToOk', 'Activity_Audit: renamed from Activity_Check']);
+      }
+    }
+  });
+
+  it('a DI id not derived from the old id stays; one whose new id is taken gets _2', async () => {
+    const xml = (await drawnDefault()).replace('id="Activity_Check_di"', 'id="Shape_0abc123"').replace('id="Activity_Book_di"', 'id="Event_Archive_di"');
+    const r = await applyToXml(xml, [
+      { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } },
+      { op: 'set', id: 'Event_Done', values: { id: 'Event_Archive' } },
+    ]);
+    const di = diOf(r.xml);
+    expect(di.get('Activity_Audit')).toBe('Shape_0abc123');
+    expect(di.get('Event_Archive')).toBe('Event_Archive_di_2');
+    expect(di.get('Activity_Book')).toBe('Event_Archive_di');
+  });
+
+  it('a derived DI id with a collision suffix (_2) follows too', async () => {
+    const xml = (await drawnDefault('bpmn')).replace('id="BPMNShape_Activity_Book"', 'id="BPMNShape_Activity_Book_2"').replace('id="BPMNEdge_Flow_CheckToOk"', 'id="BPMNEdge_Flow_CheckToOk_3"');
+    const r = await applyToXml(xml, RENAMES);
+    expect(diOf(r.xml).get('Activity_Audit')).toBe('BPMNShape_Activity_Audit');
+    expect(diOf(r.xml).get('Flow_CheckToAudit')).toBe('BPMNEdge_Flow_CheckToAudit');
+    const book = await applyToXml(xml, [{ op: 'set', id: 'Activity_Book', values: { id: 'Activity_Post' } }]);
+    expect(diOf(book.xml).get('Activity_Post')).toBe('BPMNShape_Activity_Post');
+  });
+
+  it('in a batch, a DI id of an element removed before is free for the rename, as in two commands', async () => {
+    const ops: Op[] = [
+      { op: 'remove', ids: ['Activity_Book'] },
+      { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Book' } },
+    ];
+    for (const style of ['suffix', 'bpmn'] as const) {
+      for (const layout of [undefined, false] as const) {
+        const opts = layout === false ? { layout } : {};
+        const batch = await applyToXml(await drawnDefault(style), ops, opts);
+        const first = await applyToXml(await drawnDefault(style), [ops[0]!], opts);
+        const second = await applyToXml(first.xml, [ops[1]!], opts);
+        expect(diOf(batch.xml).get('Activity_Book')).toBe(style === 'suffix' ? 'Activity_Book_di' : 'BPMNShape_Activity_Book');
+        expect(batch.xml).toBe(second.xml);
+      }
+    }
+  });
+
+  it('the renamed element\'s DI element is written anew: a comment inside it is dropped, and the result says so', async () => {
+    const xml = (await drawnDefault()).replace(/(<bpmndi:BPMNShape id="Activity_Check_di" bpmnElement="Activity_Check">)/, '$1\n        <!-- reviewed -->');
+    expect(xml).toContain('<!-- reviewed -->');
+    for (const layout of [undefined, false] as const) {
+      const r = await applyToXml(xml, [{ op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } }], layout === false ? { layout } : {});
+      expect(diOf(r.xml).get('Activity_Audit')).toBe('Activity_Audit_di');
+      expect(r.xml).not.toContain('<!-- reviewed -->');
+      expect(r.result.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
+    }
+  });
+
+  it('following W_FLOW_ID_STALE with its `bpmn set` gives the file the default rename gives', async () => {
+    const splice: Op[] = [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }];
+    for (const style of ['suffix', 'bpmn'] as const) {
+      const renamed = await applyToXml(await drawnDefault(style), splice);
+      const keptIds = await applyToXml(await drawnDefault(style), splice, { keepFlowIds: true });
+      const command = /`bpmn set <file> (\S+) id=(\S+)`/.exec(stale(keptIds.result.warnings.added)[0]!.hint!)!;
+      const followed = await applyToXml(keptIds.xml, [{ op: 'set', id: command[1]!, values: { id: command[2]! } }], { keepFlowIds: true });
+      expect(diOf(followed.xml).get('Flow_OkToReview')).toBe(style === 'suffix' ? 'Flow_OkToReview_di' : 'BPMNEdge_Flow_OkToReview');
+      expect(followed.xml).toBe(renamed.xml);
+    }
   });
 });
