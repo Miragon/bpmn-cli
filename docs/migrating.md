@@ -458,3 +458,24 @@
   An association between a text annotation and a group still has no line
   after a full redraw; its warning now reads `No DI created for <id> (an end
   is a group: its box is drawn after the layout)`.
+- DI ids stay within 64 characters, a collision suffix included, also in a
+  new drawing (a new file, a file without DI, or DI whose ids show no form)
+  and its full redraws: where `BPMNShape_<id>`, `BPMNEdge_<id>`,
+  `BPMNPlane_<id>` or `BPMNDiagram_<id>` would pass 61 characters (room for
+  a `_99`), the id in it is cut at whole words, and a cut id that is taken
+  gets `_2`; 0.6 wrote them uncut there. Element ids up to 49 characters
+  give the same DI ids as before. DI ids a file already has are never cut.
+  Element ids, the CLI's output and the library's results do not change.
+- `bpmn set <file> <id> id=<new>` (and an `apply` batch's `set`) takes a DI
+  id derived from the old id along (`<id>_di`, `BPMNShape_<id>`,
+  `BPMNEdge_<id>`, `Edge_<id>`, also cut, also with a `_2`), as a flow
+  renamed after its ends always did; 0.6 left `BPMNShape_<old>`. So
+  following a `W_FLOW_ID_STALE` hint gives the file the default rename
+  gives. A DI edge id 0.6 cut to numbers (`BPMNEdge_Flow_Pruefung10To2030`)
+  now follows its flow too. When the new DI id is taken, a renamed element
+  (or a flow renamed after its ends) gets it with `_2`; 0.6 left the old
+  one. The renamed element's DI element is written anew, as the renamed
+  element itself already was: its attributes in bpmn-moddle's order, and a
+  comment inside it is dropped (the result's note counts it). In a batch, a
+  DI id of an element removed earlier in it is free for a later `set id=`,
+  as it is for a command of its own.

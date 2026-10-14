@@ -71,6 +71,15 @@ decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken 
   With `--keep-flow-ids` (or `BPMN_KEEP_FLOW_IDS=1`) a flow the file had keeps its id instead, and
   `W_FLOW_ID_STALE` names it with the id its new ends give, or the `--flow-id` a splice into it
   was given ([Limitations](contract.md#limitations)).
+- A DI id follows its element: new DI takes the form of the file's DI ids (`BPMNShape_<id>` /
+  `BPMNEdge_<id>` in a new drawing and in a full redraw of a file whose DI ids show no form; an
+  incremental write there gives `<id>_di`), a long element id cut at whole words so that every DI
+  id has at most 64 characters (`_2` when the cut one is taken). An existing DI id is never cut.
+  `set <id> id=<new>` takes a DI id derived from the old id along (`<id>_di`, `BPMNShape_<id>`,
+  `Edge_<id>`, also cut, also with a `_2`), as a flow renamed after its ends does, with a `_2` when
+  the new one is taken; any other DI id, and plane and diagram ids, stay. The renamed element's DI
+  element is then written anew, like the element itself: a comment inside it is dropped (the
+  result says so).
 - An unknown id (`E_NOT_FOUND`) comes with the ids that were probably meant, best first.
 - Every rule and form: `bpmn kinds --section ids`.
 

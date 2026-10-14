@@ -506,8 +506,10 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
     if (!rootPlane) {
       const root = layoutRoot(doc.definitions);
       if (!root) continue;
-      rootPlane = doc.moddle.create('bpmndi:BPMNPlane', { id: `BPMNPlane_${root.get<string>('id')}`, bpmnElement: root });
-      const diagram = doc.moddle.create('bpmndi:BPMNDiagram', { id: `BPMNDiagram_${root.get<string>('id')}`, plane: rootPlane });
+      // the engine's plane and diagram ids, a long root id cut (diagram/write.ts diIds)
+      newDi ??= diIds(doc.definitions);
+      rootPlane = doc.moddle.create('bpmndi:BPMNPlane', { id: newDi.plane(root.get<string>('id')), bpmnElement: root });
+      const diagram = doc.moddle.create('bpmndi:BPMNDiagram', { id: newDi.diagram(root.get<string>('id')), plane: rootPlane });
       rootPlane.$parent = diagram;
       addTo(doc.definitions, 'diagrams', diagram);
     }

@@ -50,7 +50,12 @@ prints the short form.
   element id, manual positions are not.
 - **DI ids stay.** A redraw changes coordinates, not ids: every `BPMNShape`, `BPMNEdge`, plane and
   diagram keeps its id (a plane named after the old root, `BPMNPlane_<processId>`, follows a new
-  collaboration root). New DI takes the file's style (`<id>_di`, `BPMNShape_<id>`, `Shape_<id>`).
+  collaboration root, also when it was cut). New DI takes the file's style (`<id>_di`,
+  `BPMNShape_<id>`, `Shape_<id>`): `BPMNShape_<id>` in a new drawing and in a full redraw of a file
+  whose DI ids show no form, `<id>_di` in an incremental write there. It is cut at whole words like
+  an element id so that every DI id bpmn-cli writes has at most 64 characters. A DI id derived
+  from an element's id (also with a `_2`) follows `set <id> id=` and a flow renamed after its ends
+  (`_2` when the new one is taken); any other DI id stays.
 - **design-iq stickies follow their node.** A `bpmiq:sticky` extension element of a process
   (absolute `x` / `y`, no DI) belongs to the flow node nearest to it. When a write moves that node
   the sticky moves by the same shift; a write that moves no node never touches it. The result

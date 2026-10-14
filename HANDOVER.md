@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, and a file's flow form that stays put)
+# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, and DI ids within 64 characters that follow `set id=`)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2177 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2190 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -52,6 +52,110 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## DI ids within 64 characters, and they follow `set id=` (2026-10-13, `fix/di-ids-within-64-follow-renames`)
+
+Follow-ups of #31 and #32. A new drawing (a new file, a file without DI, DI
+whose ids show no form) and its full redraws kept both engines'
+`BPMNShape_<id>` / `BPMNEdge_<id>` / `BPMNPlane_<id>` / `BPMNDiagram_<id>`
+uncut (73 to 76 characters for ids of 63 to 64), although #31 promised 64
+for every id and docs/audit-2026-10.md said derived DI ids were cut; and
+`bpmn set <file> <id> id=<new>`, the command `W_FLOW_ID_STALE` and
+`W_ID_PREFIX_STALE` suggest, left `BPMNShape_<old>` / `BPMNEdge_<old>` /
+`<old>_di`, which the automatic flow rename moves.
+
+- **`src/diagram/write.ts`**: `restoreDiIds` no longer returns early
+  without old DI. DI without an old id that is free gets
+  `styledId(<file's style> ?? 'bpmn', kind, id)` (a plane or diagram
+  `BPMNPlane_` / `BPMNDiagram_` + the root id cut, as `diIds()` already
+  did), through `claimUnique`, given after every old id and with the ids
+  that need no cut first, so a cut id never pushes an uncut one to `_2`.
+  Old ids still win and are never cut. `styledId` has a `legacy` flag
+  (passed to `cutAt`); `diStyleOf(diId, elId, kind)` (was `edgeStyleOf`,
+  edges only) also compares the cut, the 0.6 cut and either with a
+  collision suffix `_2`. `followDiIds(defs, el, old, id, ids)` moves each
+  BPMNShape / BPMNEdge id of `el` derived from `old` to the one derived
+  from `id` in the same style, `_2`, `_3`, ... when that is taken (as new
+  DI gets its id); one already derived from `id` stays. A main diagram
+  whose root changed (a pool added) counts its old ids as derived from the
+  old root also when they were cut, now or as 0.6 cut them (`namesRoot`),
+  so `BPMNPlane_<long processId, cut>` still follows the new collaboration.
+  `MAX_DI` stays 61.
+- **`src/layout.ts`**: the auto engine runs its second pass (parse,
+  `restoreDiIds`, serialize) also without old DI when an id of the model
+  is longer than 49 characters (`diIdsFit`); otherwise its XML is returned
+  untouched as before.
+- **`src/ops/set.ts`** `renameId` and **`src/ops/flows.ts`** `followEnds` /
+  `followRenamedEnd` call `followDiIds`; the plane and diagram of a
+  sub-process collapsed without a drawing (`src/pipeline.ts`
+  `persistExpansionHints`) take `diIds()` ids. Planes and diagrams do not
+  follow a rename (`set <process> id=` keeps `BPMNPlane_<old>`).
+- **`src/ops/remove.ts`**: the DI a remove detaches gives its ids back to
+  `doc.ids`, so in a batch `remove X` + `set Y id=X` takes `BPMNShape_X` /
+  `X_di` as two commands do (before, the id still counted as taken and Y
+  kept `BPMNShape_Y`).
+- **Evidence**: 12 tests fail on origin/main and pass (test/conventions-di.test.ts:
+  a fresh drawing with 52 to 64 character ids, flows named after long
+  names, a collapsed sub-process and a 54-character process id under both
+  engines, `_2` for two cut ids alike, the uncut id first, a pool added to
+  a drawing of a 54- and a 61-character process id under both engines and
+  both layout modes, a plane 0.6 cut, the collapse placeholder, the 0.6
+  `BPMNEdge_Flow_Pruefung10To2030` after a splice and a `set id=`;
+  test/keep-flow-ids.test.ts: `set id=` on a flow and a task in `_di` and
+  `BPMN<Kind>_` files, with ids kept too, following the `W_FLOW_ID_STALE`
+  hint now writes the very file the default rename writes, a DI id not
+  derived stays and one whose new id is taken gets `_2`, a derived id with
+  `_2` / `_3` follows, `remove` + `set id=` in one batch writes what two
+  commands write (with and without `--no-layout`), and the comment inside
+  the renamed element's DI element is dropped with the result's note); 1
+  guard passes on both (an old DI id over 64 stays). Differential against
+  origin/main, in process (layout, layout `--engine auto`, the file
+  without DI drawn by both engines, `set name=`, `set id=` of a task and
+  of a flow, also `--no-layout`, a splice, validate): the 164 repository
+  files and the 635 files of the private corpus give the same JSON
+  everywhere and the same XML except two classes: DI ids of ids too long
+  for their room in a fresh drawing (repository 1 file, corpus 433, all
+  cut, each new id within 64), and the renamed element's DI id after
+  `set id=` (that DI element is then rewritten as bpmn-moddle writes it,
+  as the renamed element itself already was; the text around it is
+  byte-identical). Redraws of files with DI, `set name=`, splices and
+  validate are identical (run again after the review fixes and after the
+  rebase onto #56, against that main: the same counts). layout-regress
+  444 -> 444 (BETTER 0, WORSE 0), roundtrip identical per file,
+  speaking-ids identical.
+- **Runtime**: in process, warm, both builds interleaved, sum of per-file
+  medians of 9 runs over the 115 scenarios, against main after #56: fresh
+  drawing clean 719.5 -> 726.8 ms, auto 2,678.3 -> 2,681.5 ms, `set id=`
+  1,499.5 -> 1,498.1 ms (noise); with every id lengthened to 52 to 63
+  characters the clean engine 823.2 -> 838.5 ms and the auto engine
+  2,794.2 -> 2,958.1 ms (+6 %, the second pass, about 1.4 ms a file, only
+  without old DI and with an id over 49).
+- **Bundle**: whole entry 957.7 -> 958.7 KB minified (305.7 -> 306.1 KB
+  gzip), `applyToXml` only 677.6 -> 678.3 KB (216.6 -> 216.8 KB), measured
+  after the rebase onto #59 (docs/library.md's table has the new sizes).
+  The whole entry's gzip budget is raised 306 -> 309 KB (measured + 1 %):
+  #59 brought it to 305.7 KB, and this change's +0.4 KB (`followDiIds`, the
+  cut of new DI ids, the auto engine's second pass) passes 306. The other
+  budgets stay (960 KB minified; 679 / 217 KB for `applyToXml` only).
+- **Left**: DI ids a file already has over 64 characters stay (an id is
+  never renamed by a redraw); planes and diagrams do not follow `set id=`
+  of their root.
+
+Left for later (low finding of the review, not fixed here):
+
+- `set id=` writes the renamed element's DI element anew, as bpmn-moddle
+  writes it (attribute order, `/>`, numbers such as `240.0` -> `240`), and
+  drops a comment inside it (the result's note counts it), as the renamed
+  element itself already was on main: `src/preserve.ts` pairs elements by
+  id, so a renamed one counts as removed and added. docs/migrating.md and
+  docs/reference.md say so, a test pins the note. Pairing the one unpaired
+  sibling of the same tag on each side would keep both texts, but
+  preserve.ts sees text only: a `remove` plus an `add` of the same kind
+  among the same siblings would pair as well and carry the removed
+  element's comments into the new one. Doing it right needs the batch's
+  renames (element and DI ids) handed to `preserveText`, which runs through
+  `src/document.ts` and the pipeline; a change of its own, with a
+  differential over every `set id=`.
 
 ## A file's flow form stays put (2026-10-13, `fix/flow-style-vote`, follow-ups of #31 and #32)
 
@@ -1943,7 +2047,9 @@ Left out, for later:
 
 - `bpmn set <flow> id=`, the hint's command, does not move a derived DI edge
   id the way the automatic rename does (`BPMNEdge_<old>` stays): a cosmetic
-  mismatch, a follow-up of its own.
+  mismatch, a follow-up of its own. Fixed in
+  `fix/di-ids-within-64-follow-renames` (see the section at the top), for
+  shapes too.
 - There is no repository default in a project file; the flag and the
   variable set it. A result does not say why ids were kept (flag or
   variable): for the variable it does since 2026-10-13 (see the section at
@@ -2109,7 +2215,8 @@ first word longer than the room cut inside a word that could go whole.
 - DI ids keep `MAX_DI` 61 and go through `cutAt`, so only its letter guard
   changes them: a DI id 0.6 cut to a bare number or to two numbers in a row
   is not recognised by `edgeStyleOf` and keeps its id when its flow is
-  renamed.
+  renamed. Fixed in `fix/di-ids-within-64-follow-renames` (`diStyleOf`
+  also compares the 0.6 cut; see the section at the top).
 
 Ids differ from 0.6 for the same edit where an id has 62 to 64 characters or
 has to be cut; one pinned id changed: the long-names test's flow keeps the
@@ -2154,7 +2261,9 @@ issue's commands in `test/cli.test.ts`, doc pins in `test/batch.test.ts`
 and `test/conventions-ids.test.ts`. Left for later: a stop word left at the end of a cut
 (`Flow_Task_lieferung_versenden_und_Task_rechnung_eingegangen_und`: the
 most words win), the engine's `BPMNShape_<id>` / `BPMNEdge_<id>` over 64
-characters in a fresh drawing, the DI cap, a data object whose `Object`
+characters in a fresh drawing, the DI cap (both fixed in
+`fix/di-ids-within-64-follow-renames`, see the section at the top; `MAX_DI`
+stays 61), a data object whose `Object`
 word a reference id of 63 or 64 characters cuts away again (it takes `_2`,
 as 0.6 did just below its cap), a cut inside a word where two one-word ends
 do not fit beside each other (one end loses its last letters,

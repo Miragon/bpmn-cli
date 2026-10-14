@@ -14,7 +14,8 @@
  * with a collision suffix: idNamesEnds) is renamed after its new ends when a
  * splice, a bridge, a move or `set source= / target=` changes them
  * (followEnds; its DI edge id follows when it was `<id>_di`, `BPMNEdge_<id>`
- * or `Edge_<id>`). Every other id stays. With Doc.followFlowEnds false
+ * or `Edge_<id>`, also cut: diagram/write.ts followDiIds, which `set id=`
+ * uses too). Every other id stays. With Doc.followFlowEnds false
  * (`--keep-flow-ids`, where flow ids are API) a flow the document had keeps
  * its id, and the batch reports each one whose id no longer names its ends
  * (W_FLOW_ID_STALE, reportStaleFlows). An end `set` gave another id or
@@ -24,7 +25,7 @@
  * gets an id from its new ends.
  */
 import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../document.js';
-import { edgeStyleOf, styledId } from '../diagram/write.js';
+import { followDiIds } from '../diagram/write.js';
 import { modelError, type Warning } from '../errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../idstyle.js';
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids.js';
@@ -505,21 +506,9 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   return old;
 }
 
-/** The DI edge of a flow renamed `old` -> `id` follows where its id was derived from the flow's (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`). */
+/** The DI edge of a flow renamed `old` -> `id` follows where its id was derived from the flow's (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`; diagram/write.ts followDiIds). */
 function followEdgeId(doc: Doc, flow: El, old: string, id: string): void {
-  for (const diagram of many(doc.definitions, 'diagrams')) {
-    const plane = diagram.get<El | undefined>('plane');
-    for (const di of plane ? many(plane, 'planeElement') : []) {
-      if (di.get<El | undefined>('bpmnElement') !== flow) continue;
-      const diId = di.get<string | undefined>('id');
-      const style = diId ? edgeStyleOf(diId, old) : undefined;
-      const next = style ? styledId(style, 'Edge', id) : undefined;
-      if (!diId || !next || doc.ids.has(next)) continue;
-      doc.ids.release(diId);
-      doc.ids.claim(next);
-      di.set('id', next);
-    }
-  }
+  followDiIds(doc.definitions, flow, old, id, doc.ids);
   doc.invalidate();
 }
 

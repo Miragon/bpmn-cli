@@ -71,7 +71,11 @@
  *  Rename (id=): every BPMN reference follows, plus string references
  *    (calledElement, zeebe:calledElement processId) and the id-valued
  *    attributes of camunda extension elements the descriptor knows
- *    (camunda:errorEventDefinition errorRef).
+ *    (camunda:errorEventDefinition errorRef); a DI shape or edge id derived
+ *    from the old id (`BPMNShape_<old>`, `<old>_di`, `Edge_<old>`, also
+ *    cut, also `_2`) takes the new one, `_2` when it is taken
+ *    (diagram/write.ts followDiIds), as on a flow that follows its ends;
+ *    any other DI id, and plane and diagram ids, stay.
  *  Text annotations: text.
  *  `key=` (empty value) and --unset remove the property.
  *  Unknown keys -> E_UNKNOWN_KEY listing the settable keys for that element.
@@ -81,6 +85,7 @@
  * This module also hosts the small helpers every mutation shares
  * (`changeOf`, `descriptorOf`, `ownValue`, `idOf`).
  */
+import { followDiIds } from '../diagram/write.js';
 import type { Doc } from '../document.js';
 import { modelError, usageError } from '../errors.js';
 import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids.js';
@@ -204,7 +209,7 @@ const APPLIES_TO: Record<string, (el: El) => boolean> = {
 };
 
 export const SET_KEYS: SetKeyDoc[] = [
-  { key: 'id', appliesTo: 'any', description: 'Rename the element; every reference (flows, lanes, boundary hosts, calledElement) follows' },
+  { key: 'id', appliesTo: 'any', description: 'Rename the element; every reference (flows, lanes, boundary hosts, calledElement) follows, and so does a DI id derived from the old id (BPMNShape_<id>, <id>_di)' },
   { key: 'name', appliesTo: 'any', description: 'Display name (empty value removes it)' },
   { key: 'doc', appliesTo: 'any', description: 'Documentation text (alias: documentation; empty removes it)' },
   { key: '<prefix>:<attr>', appliesTo: 'any', description: 'Vendor attribute, e.g. camunda:assignee=alice or zeebe:modelerTemplate=x (xmlns declared automatically for known prefixes)' },
@@ -1621,13 +1626,20 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
 /* rename                                                               */
 /* ------------------------------------------------------------------ */
 
-/** Renames an element id, re-pointing every reference (incl. string refs like calledElement). */
+/**
+ * Renames an element id, re-pointing every reference (incl. string refs
+ * like calledElement); a DI shape or edge id derived from the old id
+ * follows (diagram/write.ts followDiIds: `BPMNShape_<old>`, `<old>_di`).
+ */
 export function renameId(doc: Doc, el: El, newId: string): void {
   const old = idOf(el);
   if (old === newId) return;
   doc.claimId(newId);
   el.set('id', newId);
-  if (old) doc.ids.release(old);
+  if (old) {
+    doc.ids.release(old);
+    followDiIds(doc.definitions, el, old, newId, doc.ids);
+  }
   // id-valued attributes of vendor extension elements are plain strings in the model
   const vendorRefs = idReferenceAttrs().filter((r) => is(el, r.target));
   for (const e of walk(doc.definitions)) {
