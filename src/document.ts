@@ -270,14 +270,9 @@ export class Doc {
       executable: opts.executable ?? true,
     });
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
-    if (opts.conventions) {
-      doc.conventions = opts.conventions;
-      // a process or definitions id the declared conventions made (a prefix they name exactly): the result's `conventions:` line
-      const own = rootIds(opts, IdStyle.DEFAULT, new IdRegistry());
-      const lint = (type: string): boolean => style.explain(typeRequest(type)).source === 'lint';
-      if (processId !== own.processId && lint('bpmn:Process')) doc.declaredIds.push(processId);
-      if (definitionsId !== own.definitionsId && lint('bpmn:Definitions')) doc.declaredIds.push(definitionsId);
-    }
+    // a new file has no id style of its own for the declared conventions to differ from: no `conventions:` line
+    // (IdStyle.ownStyleDiffers), also for a process or definitions id under a prefix they name exactly
+    if (opts.conventions) doc.conventions = opts.conventions;
     if (opts.target === 'camunda8') {
       doc.declareNamespace('zeebe');
       doc.declareNamespace('modeler');
@@ -516,12 +511,15 @@ export class Doc {
    * declared conventions name for the request (IdStyle.explain: `lint`;
    * not one they only shaped, nor a message flow that borrows the sequence
    * flows' prefix) that the file's own style would give otherwise is
-   * recorded for the result's `conventions:` line (takeDeclaredIds).
+   * recorded for the result's `conventions:` line (takeDeclaredIds), in a
+   * file that has a style of its own there (IdStyle.ownStyleDiffers: ids
+   * the conventions check that do not follow them; not a new file, nor one
+   * whose checked ids all follow them).
    */
   allocateId(req: IdRequest): { id: string; base: string } {
     const style = this.idStyle;
     const out = style.next(req, this.ids);
-    if (style.declared && style.explain(req).source === 'lint' && out.base !== style.learnedOnly().next(req, this.ids).base) this.declaredIds.push(out.id);
+    if (style.ownStyleDiffers && style.explain(req).source === 'lint' && out.base !== style.learnedOnly().next(req, this.ids).base) this.declaredIds.push(out.id);
     this.ids.claim(out.id);
     this.generatedIds.set(out.id, out.base);
     if (out.id !== out.base) this.suffixed.push(out);
@@ -564,9 +562,9 @@ export class Doc {
     return id;
   }
 
-  /** Records an id under a declared prefix that the file's own style would give otherwise, outside allocateId (a split's join). */
+  /** Records an id under a declared prefix that the file's own style would give otherwise, outside allocateId (a split's join), where the file has a style of its own there (IdStyle.ownStyleDiffers). */
   recordDeclaredId(id: string): void {
-    this.declaredIds.push(id);
+    if (this.idStyle.ownStyleDiffers) this.declaredIds.push(id);
   }
 
   /** The ids under a declared prefix recorded since the last call (allocateId; the pipeline keeps those still in the document). */

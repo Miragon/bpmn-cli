@@ -1674,6 +1674,25 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     const piped = bpmn(odd, ['validate', '-'], readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8'));
     expect(piped.out).toContain('[bpmnlint] W_CONFIG_IGNORED: .bpmnlintrc in .: @miragon/rules/element-id-naming eventDefinitionQualifier "requried" is unknown: the rule and new ids take optional  (Write one of off, optional, required in the .bpmnlintrc. Did you mean required?)\n');
   });
+
+  it('a prefix the .bpmnlintrc declares for a DI type: `new`, validate and show --conventions list one W_CONFIG_IGNORED each, a write counts them', async () => {
+    const dir = repo({ rules: { '@miragon/rules/element-id-naming': ['warn', { prefixes: { 'bpmndi:BPMNShape': 'shape_', 'bpmndi:BPMNEdge': 'edge_' } }] } });
+    const line = (type: string, prefix: string): string => `W_CONFIG_IGNORED: .bpmnlintrc in .: @miragon/rules/element-id-naming prefix of ${type} "${prefix}" is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids  (Set it to false or remove it; bpmn-js names DI <id>_di too.)`;
+    const created = bpmn(dir, ['new', 'a.bpmn']);
+    expect(created.code, created.err).toBe(0);
+    expect(created.out).toContain(`warning [bpmnlint] ${line('bpmndi:BPMNShape', 'shape_')}\nwarning [bpmnlint] ${line('bpmndi:BPMNEdge', 'edge_')}\n`);
+    // a write: the DI of the new element is reported (bpmn-cli names it after the element), the notes only counted
+    const added = bpmn(dir, ['add', 'a.bpmn', 'startEvent', 'Order received']);
+    expect(added.out).toContain('warning [bpmnlint] @miragon/rules/element-id-naming BPMNShape_startEvent_orderReceived: Element id must match the naming convention <shape_camelCase>');
+    expect(added.out).toContain('validator bpmnlint (.bpmnlintrc in .; 2 element-id-naming values ignored (W_CONFIG_IGNORED; bpmn validate lists them)): ');
+    expect(added.out).not.toContain('warning [bpmnlint] W_CONFIG_IGNORED');
+    const checked = bpmn(dir, ['validate', 'a.bpmn']);
+    expect(checked.out).toContain(`[bpmnlint] ${line('bpmndi:BPMNShape', 'shape_')}\n[bpmnlint] ${line('bpmndi:BPMNEdge', 'edge_')}\n`);
+    const shown = bpmn(dir, ['show', 'a.bpmn', '--conventions']);
+    expect(shown.out.split('\n').filter((l) => l.startsWith('warning '))).toEqual([`warning ${line('bpmndi:BPMNShape', 'shape_')}`, `warning ${line('bpmndi:BPMNEdge', 'edge_')}`]);
+    // DI ids stay bpmn-cli's: no row of the view names them
+    expect(shown.out.split('\n').filter((l) => l.startsWith('  ') && /shape_|edge_|BPMN/.test(l))).toEqual([]);
+  });
 });
 
 describe('the library examples (docs/library.md, docs/validators.md)', () => {

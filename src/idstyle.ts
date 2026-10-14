@@ -47,7 +47,15 @@
  *     flow elsewhere changes nothing): between forms to the one that names
  *     the ends (FORM_ORDER), between a form's prefixes to the one more flows
  *     use (glued ones too), then to the alphabetically first; a tie between
- *     the scopes of one prefix and form keeps the first one counted.
+ *     the scopes of one prefix and form keeps the first one counted;
+ *   - the PREFIX of new processes (a new pool's): the one at least two of
+ *     the file's process ids share (a tie: the alphabetically first), with
+ *     the case their bodies show (a tie: the file's), else the file's
+ *     (single lower-case words: camel, snake in a snake_case / Pascal_Snake
+ *     file): process_customer and process_shop give process_bankAccount.
+ *     Process ids vote on nothing else, and participant ids never on them;
+ *     where they share no prefix a process follows the rules above
+ *     (bpmn-cli's Process_<Name> ids vote for Process_).
  *  A document without ids to learn from gets the default style: pascal
  *  bodies, the bpmn-cli prefixes, `named` flows with the prefix Flow.
  *
@@ -150,18 +158,31 @@
  *  next to serviceTask_: bpmn-cli's PascalCase); where they show no prefix
  *  shape, the declared prefixes' shape (type-named, first letter) is. The
  *  process and the definitions take bpmn-cli's style (Process_<Name>, also
- *  a new pool's process) unless the table names their type exactly. Under
- *  the qualifier `required` an event whose qualified prefix is too long for
- *  new ids (IdConventions.ignored) follows the file like an ignored type.
- *  learnedOnly() is the file's own style over every id: a flow it named
- *  still names its ends (derivedBases), and Doc.allocateId compares a new
- *  id under a declared prefix with it (the result's `conventions:` line).
- *  Existing ids are never renamed for the conventions: stalePrefix() names
- *  the one a retype or a trigger change leaves (W_ID_PREFIX_STALE; also one
- *  the rule did not check before, a type switched off), and gives an
- *  element the batch created (a split's join too) its new id, which the
- *  flows the batch named after it follow (ops/set.ts recordIdState).
- *  Without declared conventions nothing of this runs.
+ *  a new pool's process) unless the table names their type exactly; a new
+ *  process takes the prefix the file's process ids share (two at least,
+ *  in their case, else the case of a kind the table does not name, so it
+ *  matches its pool: Process_BankAccount next to Camunda Modeler's
+ *  Process_1 and hashed participants; never the declared prefixes'
+ *  shape). Under the qualifier `required` an event whose qualified prefix
+ *  is too long for new ids (IdConventions.ignored) follows the file like
+ *  an ignored type. learnedOnly() is the file's own style over every id: a
+ *  flow it named still names its ends (derivedBases), and Doc.allocateId
+ *  compares a new id under a declared prefix with it (the result's
+ *  `conventions:` line) where the file has ids the conventions check that
+ *  do not follow them (ownStyleDiffers; any id of an ignored type or event
+ *  counts: no id passes a prefix new ids cannot have; a new file, and one
+ *  whose checked ids all follow them, have no style of their own to differ
+ *  from). Existing ids are never renamed for the conventions:
+ *  stalePrefix() names the one a retype or a trigger change leaves
+ *  (W_ID_PREFIX_STALE; also one the rule did not check before, a type
+ *  switched off; the suggested id keeps the rest of an id that passed the
+ *  rule, else it is the id of what the element is now, an unnamed one with
+ *  the words after the old prefix: scriptTask_ShipGoods for
+ *  serviceTask_shipGoods under PascalCase, userTask_userTask1 for
+ *  serviceTask_1), and gives an element the batch created (a split's join
+ *  too) its new id, which the flows the batch named after it follow
+ *  (ops/set.ts recordIdState). Without declared conventions nothing of
+ *  this runs.
  */
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, SUFFIX_WORD, withLetter, withSuffix, type IdRegistry } from './ids.js';
 import type { IdConventions } from './conventions.js';
@@ -671,6 +692,11 @@ interface Learned {
   prefixedNodes: number;
   /** the case of bare ids (voted by the bare ids that spell their names; prefixed ids vote `body`) */
   bareBody: 'pascal' | 'camel';
+  /** the prefixes of the process ids (no vote on anything else: processStyle), and the classes of their bodies per prefix */
+  processes: Tally<string>;
+  processBodies: Map<string, Tally<BodyClass>>;
+  /** with declared conventions: the file has an id they check that does not follow them (a prefix they do not accept, a body not in their case, an ignored type's: rejects; ownStyleDiffers) */
+  unconforming: boolean;
 }
 
 /** The votes of one type's flows (learn). */
@@ -759,6 +785,9 @@ function learn(defs: El | undefined, d?: Declared): Learned {
     bareBody: 'camel',
     prefixedNodes: 0,
     strong: false,
+    processes: new Tally(),
+    processBodies: new Map(),
+    unconforming: false,
   };
   let samples = 0;
   let prefixed = 0;
@@ -798,6 +827,8 @@ function learn(defs: El | undefined, d?: Declared): Learned {
     const id = el.get<string | undefined>('id');
     if (!id) continue;
     if (CONNECTIONS.has(el.$type)) {
+      // a flow of a type the conventions check that does not follow them: the file has a style of its own there
+      if (d && !l.unconforming && rejects(d, { type: el.$type }, id)) l.unconforming = true;
       const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
       const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
       // a message flow under the prefix it borrows from the sequence flows (flowOf) does not vote: bpmn-cli wrote it
@@ -828,7 +859,24 @@ function learn(defs: El | undefined, d?: Declared): Learned {
       countFlow(v, el, id, source, target);
       continue;
     }
-    if (TOOL_DEFAULTS.has(id) || (d && conforms(d, el, id))) continue;
+    if (TOOL_DEFAULTS.has(id)) continue;
+    // a process id votes only on the ids of new processes (processStyle), never on anything else
+    if (el.$type === 'bpmn:Process') {
+      const m = PREFIXED.exec(id);
+      if (m) {
+        l.processes.add(m[1]!);
+        tallyOf(l.processBodies, m[1]!).add(bodyClass(m[2]!));
+      }
+      continue;
+    }
+    if (d) {
+      const trigger = triggerOf(el);
+      const state = { type: el.$type, ...(trigger ? { trigger } : {}) };
+      const heads = headsOf(d, state);
+      if (!l.unconforming && !IGNORED.some((t) => is(el, t)) && rejects(d, state, id, heads)) l.unconforming = true;
+      // an id that already starts with a prefix the conventions accept for its element does not vote
+      if (heads.some((h) => id.startsWith(h))) continue;
+    }
     const s = sampleOf(el, id);
     if (!s) continue;
     samples++;
@@ -1036,8 +1084,8 @@ interface Declared {
   prefixes: Record<string, string>;
   qualifier: 'off' | 'optional' | 'required';
   case?: Body;
-  /** event types and triggers whose qualified prefix the rule requires and new ids cannot have (IdConventions.ignored: `bpmn:EndEvent:escalation`) */
-  unqualified: Set<string>;
+  /** IdConventions.ignored: the types the rule checks with a prefix new ids cannot have (`bpmn:ReceiveTask`), and the event types and triggers whose qualified prefix it requires and new ids cannot have (`bpmn:EndEvent:escalation`) */
+  ignored: Set<string>;
 }
 
 const BODY_OF_CASE: Record<string, Body> = { camelCase: 'camel', PascalCase: 'pascal', snake_case: 'snake' };
@@ -1046,11 +1094,13 @@ const BODY_OF_CASE: Record<string, Body> = { camelCase: 'camel', PascalCase: 'pa
 const CASE_BODY: Partial<Record<Body, RegExp>> = { camel: /^[a-z][A-Za-z0-9]*$/, pascal: /^[A-Z][A-Za-z0-9]*$/, snake: /^[a-z0-9]+(_[a-z0-9]+)*$/ };
 
 /**
- * The process and the definitions: their ids are bpmn-cli's own
- * (Process_<Name>, Definitions_<Name>) unless the declared prefixes name
- * their type exactly; never learned from a file whose ids bpmn-cli shapes
- * after the declared prefixes (participant_customer would make the next
- * pool's process process_supplier, then process_back_office).
+ * The process and the definitions under declared conventions: their ids are
+ * bpmn-cli's own (Process_<Name>, Definitions_<Name>) unless the declared
+ * prefixes name their type exactly, or (a process) the file's own process
+ * ids share a prefix (processStyle); never learned from the rest of a file
+ * whose ids bpmn-cli shapes after the declared prefixes (participant_customer
+ * would make the next pool's process process_supplier, then
+ * process_back_office).
  */
 const FILE_LEVEL = new Set(['bpmn:Process', 'bpmn:Definitions']);
 
@@ -1069,8 +1119,7 @@ function declaredOf(c: IdConventions | undefined): Declared | undefined {
   for (const [key, prefix] of Object.entries(c?.prefixes ?? {})) if (isUsablePrefix(prefix)) prefixes[key] = prefix;
   if (!Object.keys(prefixes).length) return undefined;
   const body = c?.case ? BODY_OF_CASE[c.case] : undefined;
-  const unqualified = new Set((c?.ignored ?? []).filter((key) => key.split(':').length === 3));
-  return { prefixes, qualifier: c?.qualifier ?? 'optional', ...(body ? { case: body } : {}), unqualified };
+  return { prefixes, qualifier: c?.qualifier ?? 'optional', ...(body ? { case: body } : {}), ignored: new Set(c?.ignored) };
 }
 
 /**
@@ -1078,7 +1127,7 @@ function declaredOf(c: IdConventions | undefined): Declared | undefined {
  * trigger, as element-id-naming does: the type's entry, the qualified one of
  * its trigger too (`required`: only that one; `off`: never). [] where
  * nothing is declared for the type, and under `required` where the
- * qualified one is too long for new ids (Declared.unqualified: the rule
+ * qualified one is too long for new ids (Declared.ignored: the rule
  * accepts no prefix they can have).
  */
 function headsOf(d: Declared, { type, trigger }: IdState): string[] {
@@ -1086,7 +1135,7 @@ function headsOf(d: Declared, { type, trigger }: IdState): string[] {
   if (plain === undefined) return [];
   const key = `${type}:${trigger}`;
   const qualified = trigger && trigger !== 'none' && d.qualifier !== 'off' ? d.prefixes[key] : undefined;
-  if (!qualified) return d.qualifier === 'required' && d.unqualified.has(key) ? [] : [plain];
+  if (!qualified) return d.qualifier === 'required' && d.ignored.has(key) ? [] : [plain];
   return d.qualifier === 'required' ? [qualified] : [plain, qualified];
 }
 
@@ -1095,10 +1144,32 @@ function borrowedHead(d: Declared, type: string): string | undefined {
   return type !== 'bpmn:SequenceFlow' && d.prefixes[type] === undefined ? d.prefixes['bpmn:SequenceFlow'] : undefined;
 }
 
-/** Whether an element's id starts with a prefix the declared conventions accept for it (headsOf): it does not vote on the style of the rest (learn). */
-function conforms(d: Declared, el: El, id: string): boolean {
-  const trigger = triggerOf(el);
-  return headsOf(d, { type: el.$type, ...(trigger ? { trigger } : {}) }).some((h) => id.startsWith(h));
+/**
+ * Whether an id passes element-id-naming with the prefixes `heads` the
+ * declared conventions accept for its element: it starts with one, and its
+ * body after the longest of them is in the declared case (CASE_BODY; none
+ * declared: any body).
+ */
+function passes(d: Declared, heads: string[], id: string): boolean {
+  const head = heads.filter((h) => id.startsWith(h)).sort((a, b) => b.length - a.length)[0];
+  if (head === undefined) return false;
+  const pattern = d.case && CASE_BODY[d.case];
+  return !pattern || pattern.test(id.slice(head.length));
+}
+
+/**
+ * Whether element-id-naming rejects an id under the declared conventions
+ * (learn: Learned.unconforming): with the prefixes `heads` they accept for
+ * its element, one it does not pass; where the rule checks the element with
+ * a prefix new ids cannot have (Declared.ignored: a type whose prefix is
+ * ignored; a type with an entry but no heads: under `required` an event
+ * whose qualified prefix is too long), every id (no id starts with a prefix
+ * that cannot start one or leaves no room, in practice); false where it
+ * does not check the element.
+ */
+function rejects(d: Declared, state: IdState, id: string, heads = headsOf(d, state)): boolean {
+  if (heads.length) return !passes(d, heads, id);
+  return d.ignored.has(state.type) || d.prefixes[state.type] !== undefined;
 }
 
 /** The BPMN type of a request's key (a kind of `bpmn kinds`: its type, eventSubProcess bpmn:SubProcess). */
@@ -1144,6 +1215,57 @@ export class IdStyle {
     return this.d !== undefined;
   }
 
+  /**
+   * Whether the file has ids of its own the declared conventions check that
+   * do not follow them (a prefix they do not accept, a body not in their
+   * case, any id of a type or event whose prefix they ignore: rejects; not
+   * the tool default StartEvent_1, the process, the definitions):
+   * only then is a new id under a declared prefix one the file's own style
+   * would give otherwise (Doc.allocateId, the result's `conventions:` line).
+   * A new file, and one whose checked ids all follow them, have none, even
+   * where learnedOnly() shows no style of their own yet (its first ids, a
+   * kind it has no id of). False without declared conventions.
+   */
+  get ownStyleDiffers(): boolean {
+    return this.l.unconforming;
+  }
+
+  private processMemo: { prefix: string; body: Body } | null | undefined;
+
+  /**
+   * The style of new process ids where the file's own process ids show one
+   * (Learned.processes; participant ids never vote): the prefix at least two
+   * of them share (bpmn-cli's own Process_<Name> ids vote for Process_), and
+   * the case their bodies show (a tie: the file's case where it is one of
+   * them, else the first of pascal, camel, snake, pascalSnake), else the
+   * file's case: the one a kind the declared conventions do not name gets
+   * (caseFor(), so the process matches the pool made with it; without them
+   * the file's), also for bodies that show none (hashes, numbers:
+   * Process_1, Process_0k3x9qa); single lower-case words (process_customer)
+   * are no PascalCase: camel, snake where the file's case is snake_case /
+   * Pascal_Snake. Undefined where they share none.
+   */
+  private processStyle(): { prefix: string; body: Body } | undefined {
+    if (this.processMemo === undefined) {
+      const prefix = this.l.processes.top(MIN_EVIDENCE, alphabetical);
+      if (prefix === undefined) this.processMemo = null;
+      else {
+        const t = this.l.processBodies.get(prefix)!;
+        const file = this.caseFor();
+        let best: [Body, number] = [file, 0];
+        for (const c of ['pascal', 'camel', 'snake', 'pascalSnake'] as const) if (t.get(c) > best[1] || (t.get(c) === best[1] && best[1] > 0 && c === file)) best = [c, t.get(c)];
+        const body = best[1] || !t.get('lower') ? best[0] : file === 'snake' || file === 'pascalSnake' ? 'snake' : 'camel';
+        this.processMemo = { prefix, body };
+      }
+    }
+    return this.processMemo ?? undefined;
+  }
+
+  /** Whether a request takes bpmn-cli's own style under declared conventions (FILE_LEVEL: no declared prefix names its type, no process style of the file's). */
+  private fileLevel(req: IdRequest): boolean {
+    return !!this.d && FILE_LEVEL.has(req.key) && this.declaredHead(req) === undefined && !(req.key === 'bpmn:Process' && this.processStyle());
+  }
+
   private own: IdStyle | undefined;
 
   /** This style without the declared conventions: the file's own over every id (itself without declared conventions). */
@@ -1183,7 +1305,7 @@ export class IdStyle {
    * its BPMN type; under the qualifier `required` an event with a trigger
    * takes the qualified one (timerStartEvent_); undefined where nothing is
    * declared, and where the required qualified prefix is too long for new
-   * ids (Declared.unqualified: such events follow the learned style, like
+   * ids (Declared.ignored: such events follow the learned style, like
    * a type whose prefix is ignored).
    */
   private declaredHead(req: IdRequest): string | undefined {
@@ -1194,7 +1316,7 @@ export class IdStyle {
     if (plain === undefined) return undefined;
     if (d.qualifier === 'required' && req.trigger && req.trigger !== 'none') {
       const key = `${type}:${req.trigger}`;
-      return d.prefixes[key] ?? (d.unqualified.has(key) ? undefined : plain);
+      return d.prefixes[key] ?? (d.ignored.has(key) ? undefined : plain);
     }
     return plain;
   }
@@ -1211,8 +1333,11 @@ export class IdStyle {
    * own (the ids that do not follow the conventions), where those show
    * none the declared case, unless their prefixes show the other first
    * letter (otherShape: bpmn-cli's). Without declared conventions the file's.
+   * A new process the case of the file's process ids (processStyle).
    */
   private caseFor(req?: IdRequest): Body {
+    const own = req?.key === 'bpmn:Process' && !this.declares(req) ? this.processStyle() : undefined;
+    if (own) return own.body;
     if (!this.d) return this.l.body;
     if (req && this.declares(req)) return this.d.case ?? this.all.body;
     if (this.l.bodyVoted) return this.l.body;
@@ -1274,6 +1399,9 @@ export class IdStyle {
     const withTrigger = (lowerFirst: boolean): string => this.caseLike(req.trigger ? `${req.trigger}${ucfirst(typeName)}` : typeName, lowerFirst);
     const usable = (p: string | undefined): p is string => p !== undefined && (bare || p !== '');
     const file = (prefix: string): { prefix: string; source: PrefixSource } => ({ prefix, source: 'file' });
+    // a new process: the prefix the file's process ids share
+    const processes = req.key === 'bpmn:Process' ? this.processStyle() : undefined;
+    if (processes) return file(processes.prefix);
     if (req.trigger) {
       const exact = l.byKeyTrigger.get(`${req.key}|${req.trigger}`)?.top(min);
       if (usable(exact)) return file(exact);
@@ -1508,8 +1636,9 @@ export class IdStyle {
   /** The id the request wants, at most `max` characters, and the separator of its collision suffix (`_2`; the file-learned stemTo and scopedTo flows and a declared camelCase / PascalCase: `2`). */
   private wanted(req: IdRequest, max = MAX_ID): { base: string; sep: string } {
     if (isConnection(req)) return this.connectionBase(req, max);
-    // the process and the definitions are bpmn-cli's (Process_<Name>) unless a declared prefix names their type exactly
-    if (this.d && FILE_LEVEL.has(req.key) && this.declaredHead(req) === undefined) return IdStyle.DEFAULT.wanted(req, max);
+    // the process and the definitions are bpmn-cli's (Process_<Name>) unless a declared prefix names their type exactly,
+    // or the file's process ids share a prefix (a process)
+    if (this.fileLevel(req)) return IdStyle.DEFAULT.wanted(req, max);
     return { base: this.derived(req, false, false, max), sep: this.sepFor(req) };
   }
 
@@ -1521,7 +1650,7 @@ export class IdStyle {
   explain(req: IdRequest): { head: string; source: PrefixSource; body: Body } {
     const head = this.declaredHead(req);
     if (head !== undefined) return { head, source: 'lint', body: this.caseFor(req) };
-    if (this.d && FILE_LEVEL.has(req.key)) return IdStyle.DEFAULT.explain(req);
+    if (this.fileLevel(req)) return IdStyle.DEFAULT.explain(req);
     const { prefix, source } = this.learnedPrefix(req);
     return { head: prefix ? `${prefix}_` : '', source, body: this.caseFor(req) };
   }
@@ -1558,12 +1687,10 @@ export class IdStyle {
       .sort((a, b) => b.length - a.length)[0];
   }
 
-  /** acceptsId, and under a declared case its body after the prefix is in that case too (element-id-naming's pattern), so `<id>Join` / `<id>_join` is. */
+  /** acceptsId, and under a declared case its body after the prefix is in that case too (element-id-naming's pattern: passes), so `<id>Join` / `<id>_join` is. */
   private declaredCaseId(id: string, state: IdState): boolean {
-    if (!this.acceptsId(id, state)) return false;
-    const pattern = this.d?.case && CASE_BODY[this.d.case];
-    const head = this.headOf(id, state);
-    return !pattern || head === undefined || pattern.test(id.slice(head.length));
+    const heads = this.acceptedHeads(state);
+    return !heads.length || passes(this.d!, heads, id);
   }
 
   /**
@@ -1571,7 +1698,17 @@ export class IdStyle {
    * or trigger (`from` -> `to`), and the id starts with none of the
    * prefixes the declared conventions accept for `to`, but with one they
    * accept for `from`: that prefix (`was`) and the id with the prefix new
-   * ids of `to` get (`suggested`, not claimed); or they accept none for
+   * ids of `to` get and the rest of the id (`suggested`, not claimed), where
+   * the id passed the rule for `from` (declaredCaseId: its body in the
+   * declared case too); one that did not (serviceTask_shipGoods under
+   * PascalCase), or that starts with a `was` without separator by accident
+   * (userTask_checkOrder under a prefix `user`, also under the case any:
+   * the rest has a prefix of its own that completes `was` into the old
+   * type's name), suggests the id `now` wants, an
+   * unnamed one with the words of the rest after `was` (after that prefix)
+   * as the context: scriptTask_ShipGoods, manualTask_checkOrder, and
+   * userTask_userTask1 for an unnamed serviceTask_1 under camelCase, never
+   * the old kind's words. Or they accept none for
    * `from` (a type switched off or ignored, an event whose qualified prefix
    * is too long: the rule did not check the id, the change makes it):
    * no `was`, and the id `now` (the request for what the element is now:
@@ -1582,11 +1719,21 @@ export class IdStyle {
     const heads = this.acceptedHeads(to);
     if (!heads.length || this.acceptsId(id, to)) return undefined;
     const was = this.headOf(id, from);
-    if (was === undefined) {
-      if (this.acceptedHeads(from).length || !now) return undefined;
-      const suggested = this.derivedBase(hasIdWords(now.name) ? now : { ...now, context: stemWords(speakingStem(id) ?? '').join(' ') });
-      return isValidId(suggested) ? { heads, suggested } : undefined;
+    if (was === undefined && this.acceptedHeads(from).length) return undefined;
+    // the rest after `was`; after a `was` without separator, a prefix of its own that completes it into the old type's
+    // name (Task_ of userTask_checkOrder under `user`) says the id starts with it by accident: what follows that
+    // prefix is its body, whatever the case
+    const rest = was === undefined ? undefined : id.slice(was.length);
+    const own = rest !== undefined && /[A-Za-z0-9]$/.test(was!) ? PREFIXED.exec(rest) : null;
+    const accidental = own && `${was}${own[1]}`.toLowerCase() === from.type.slice(from.type.indexOf(':') + 1).toLowerCase() ? own : null;
+    if (now && (rest === undefined || accidental || !this.declaredCaseId(id, from))) {
+      // an unnamed one: the words of its id after `was` as the context (serviceTask_1: 1, never the old kind's words),
+      // of its speaking part where the rule did not check it
+      const words = rest === undefined ? (speakingStem(id) ?? '') : accidental ? accidental[2]! : rest;
+      const suggested = this.derivedBase(hasIdWords(now.name) ? now : { ...now, context: stemWords(words).join(' ') });
+      return isValidId(suggested) ? { ...(was !== undefined ? { was } : {}), heads, suggested } : undefined;
     }
+    if (was === undefined) return undefined;
     const head = this.declaredHead({ key: to.type, prefix: '', typeNames: [], ...(to.trigger ? { trigger: to.trigger } : {}) })!;
     const suggested = `${head}${id.slice(was.length)}`;
     return isValidId(suggested) ? { was, heads, suggested } : undefined;

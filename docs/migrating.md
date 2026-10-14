@@ -506,3 +506,10 @@
   end(s) it misses]`, a new key in `counts` and in `METRIC_KEYS`), so the
   score of a file that has one is higher than in 0.6 (a scenario with 9 such
   lines: 42 -> 132).
+- A new pool's process takes the prefix two of the file's process ids share,
+  in the case their bodies show, else the file's: `process_customer` and
+  `process_shop` give `process_bankAccount` also next to `Participant_`
+  pools (0.6: `Process_bankAccount`, from the shape of the file's other
+  prefixes); the pools' ids never count. Where no two process ids share a
+  prefix, the process id is the one of 0.6, and files bpmn-cli made keep
+  `Process_<Name>`.

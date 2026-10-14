@@ -27,9 +27,12 @@
  * `ignored` names the type, which the view marks as checked), an unknown
  * case (new ids take the rule's fallback, PascalCase) or qualifier
  * (optional). DI types (bpmndi:) are out of scope: bpmn-cli names DI after
- * its element (`<id>_di`, BPMNShape_<id>). Where none are declared the view
- * says why (Undeclared: --no-lint-config, no .bpmnlintrc, one that could
- * not be loaded, the rule off, no usable prefix).
+ * its element (`<id>_di`, BPMNShape_<id>), so a prefix declared for one it
+ * writes ids for (not BPMNLabel; an unknown key no more than an unknown
+ * bpmn: one) is a W_CONFIG_IGNORED too (the rule checks DI ids). Where none
+ * are declared the view says why (Undeclared: --no-lint-config, no
+ * .bpmnlintrc, one that could not be loaded, the rule off, no usable
+ * prefix).
  */
 import type { BpmnlintRuleSetting, BpmnlintSeverity } from './bpmnlint.js';
 import { closestKey } from './batch.js';
@@ -79,6 +82,9 @@ export interface IdNamingHelpers {
 }
 
 const CASES = ['camelCase', 'PascalCase', 'snake_case', 'any'];
+
+/** The DI types bpmn-cli writes ids for (BPMNShape_<id>, BPMNEdge_<id>, BPMNPlane_<id>, BPMNDiagram_<id>; a BPMNLabel has none). */
+const DI_WITH_IDS = ['bpmndi:BPMNDiagram', 'bpmndi:BPMNPlane', 'bpmndi:BPMNShape', 'bpmndi:BPMNEdge'];
 const QUALIFIERS = ['off', 'optional', 'required'];
 
 /** ` Did you mean X?` for a value close to one of `known` (closestKey: any case, - or _, a prefix, a small typo), else ''. */
@@ -163,6 +169,13 @@ export function idConventionsFromLint(setting: BpmnlintRuleSetting | undefined, 
         }
       }
     }
+  }
+  // a DI type bpmn-cli writes ids for (DI_WITH_IDS), as the rule resolves it (its exact entry): bpmn-cli names DI after
+  // its element, never after a declared prefix, and the rule checks DI ids too (bpmnlint walks the diagrams), so it
+  // reports the new ones; not BPMNLabel (written without an id, which the rule skips), nor a key that names no type
+  for (const type of DI_WITH_IDS) {
+    const hit = naming.resolvePrefix(moddle.create(type, { id: 'x' }), prefixes);
+    if (hit) note(`prefix of ${type}`, hit.prefix, 'is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids', 'Set it to false or remove it; bpmn-js names DI <id>_di too.');
   }
   if (!Object.keys(table).length) return { notes };
   const conventions: IdConventions = {

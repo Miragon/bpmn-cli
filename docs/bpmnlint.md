@@ -156,11 +156,22 @@ defaults) with the rule's own helpers.
   leaves `bpmn:Process` out on purpose: a process id is a deployment key), also the process of a new
   pool in a file whose pools follow the rule's prefix shape (`participant_customer` with
   `Process_Customer`), unless the `.bpmnlintrc` names `bpmn:Process` or `bpmn:Definitions` exactly
-  (`process_orderHandling`; `process_main` and `definitions_main` without a name).
+  (`process_orderHandling`; `process_main` and `definitions_main` without a name). Where two of the
+  file's own process ids share a prefix, a new pool's process takes it, in the case their bodies show
+  (a tie: the file's), else in the case of the pool made with it, a kind the rule does not name
+  (`process_customer` and `process_shop` give `process_bankAccount`, as without a `.bpmnlintrc`;
+  Camunda Modeler's `Process_1` and `Process_0k3x9qa` give `Process_BankAccount` next to
+  `Participant_BankAccount`); the pools' ids never count. Files bpmn-cli made keep `Process_`: their
+  process ids vote for it.
 - Explicit ids (`--id`, `"id"`, `--flow-id`, `"joinId"`) are taken as given. Existing ids are never
   renamed for the conventions. After a `retype` or a trigger change, `W_ID_PREFIX_STALE` names an id
   whose prefix no longer fits (or that the rule checks only now: a type it switched off), with the
-  `bpmn set <file> <id> id=<newId>` that renames it. In an `apply` batch it compares the element before
+  `bpmn set <file> <id> id=<newId>` that renames it: the new prefix and the rest of the id, where the
+  id passed the rule before; else the id of what the element is now (`serviceTask_shipGoods` under
+  PascalCase, retyped to a script task: `scriptTask_ShipGoods`, not `scriptTask_shipGoods`, which the
+  rule rejects too; an unnamed `serviceTask_1`, retyped to a user task: `userTask_userTask1`), also for
+  an id that starts with a prefix without separator by accident (`userTask_checkOrder` under a prefix
+  `user`: `manualTask_checkOrder`). In an `apply` batch it compares the element before
   the batch with the element after it, once per element. An element the same batch created (a split's
   join too) is nobody's API yet: a retype or a trigger change gives it the new prefix
   (`serviceTask_checkInvoice`, retyped to a user task, is `userTask_checkInvoice`), and the flows the
@@ -168,9 +179,12 @@ defaults) with the rule's own helpers.
 - A result names the new ids under a prefix the rule declares that differ from what the file's own
   style would give (`conventions: ... follow element-id-naming (.bpmnlintrc in .), not the file's own
   id style`; JSON: `conventions.ids`). Ids the rule does not check (a lane, a pool, a message flow)
-  are never on it. The file's own style needs two ids per rule (one in a file whose ids are mostly
-  prefixed), so a file that follows the rule gets the line too while its ids do not show the style
-  yet: its first ids, or a kind it has no id of (`gateway_approved` in a file without gateways).
+  are never on it. Only a file with ids of its own that the rule checks and rejects (a prefix it does
+  not accept, a body in another case, any id of a type whose prefix is a `W_CONFIG_IGNORED`; not
+  `StartEvent_1`) has a style that can differ: a new file
+  and a file whose checked ids all follow the rule get no line, also for their first ids and for a
+  kind they have no id of (`gateway_approved` in a file without gateways). A file of both styles
+  (`Activity_CheckOrder` next to `serviceTask_bookOrder`) gets it, also for a kind it has no id of.
 
 `bpmn show <file> --conventions` lists the patterns new ids follow, the kinds of each and where each
 comes from: `lint` (the rule), `file` (the file's ids), `lint shape` (shaped like the rule's prefixes,
@@ -220,7 +234,11 @@ it)`).
 
 `--no-lint-config`, no `.bpmnlintrc`, or the rule `off` (as in `recommended-for-modeling`): new ids
 follow the file's id style alone, byte for byte as before. DI ids (`bpmndi:`) are out of scope: they
-follow their element (`<id>_di`).
+follow their element (`BPMNShape_<id>`, `<id>_di`). The rule checks them too, so a prefix the
+`.bpmnlintrc` declares for a DI type bpmn-cli writes ids for (`bpmndi:BPMNShape`, `bpmndi:BPMNEdge`,
+`bpmndi:BPMNPlane`, `bpmndi:BPMNDiagram`) is one `W_CONFIG_IGNORED` each, and the rule reports the DI
+ids of new elements; set it to `false` (bpmn-js names DI `<id>_di` too). `bpmndi:BPMNLabel` has no
+id, and a key that names no type gets no note, as for `bpmn:` keys.
 
 ## Which rules are available
 

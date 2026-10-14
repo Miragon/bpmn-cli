@@ -164,13 +164,17 @@ control without conventions has them); it also checks how
 a file stable over many writes and learned from its own ids that do not
 follow the rule, single words (also under PascalCase), the kind word, glued
 suffixes and joins, also after an explicit split id, message flows and
-the processes of new pools over many writes, flows renamed into the declared
+the processes of new pools over many writes and after the file's own
+process ids where two share a prefix, flows renamed into the declared
 form, `W_ID_PREFIX_STALE` alone and in a batch (also for a type the rule
-switched off), the new id of an element the batch created and of the flows
+switched off, and the id of what the element is now for an id that did not
+pass the rule), the new id of an element the batch created and of the flows
 named after it (also in the entries of an op before its retype), an id
 freed and then claimed explicitly, the `conventions`
-of a result, the view of `show --conventions` with its reasons).
-`test/bpmnlint.test.ts` checks the lookup, the notes in validate and writes,
+of a result (none in a new file or one that follows the rule), the view of
+`show --conventions` with its reasons).
+`test/bpmnlint.test.ts` checks the lookup, the notes in validate and writes
+(also the one for a prefix declared for a DI type),
 `show --conventions` and `new` on the command line (its own errors before
 the `.bpmnlintrc`'s), and that a `.bpmnlintrc` without the rule, or
 with it off, writes every fixture byte for byte as without one.

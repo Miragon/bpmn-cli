@@ -22,6 +22,8 @@ decide instead (see below). Explicit ids (`--id`, `"id"` in ops JSON) are taken 
 
 - In a file with other conventions the same elements become `serviceTask_checkStock`,
   `Task_check_stock` or a bare `reviewOrder`. Hashes and running numbers are never copied.
+- A new pool's process takes the prefix two of the file's process ids share, in their case
+  (`process_customer` and `process_shop` give `process_bankAccount`); the pools' ids never count.
 - Names become ASCII words (`Prüfung buchen` gives `Activity_PruefungBuchen`), at most 40 characters
   of them: a longer name loses its last words, and a single longer word is cut at 40. A cut never
   ends on a filler word (`und`, `an`, `die`, `the`, `of`, ...; the first word stays, and so does one
@@ -99,16 +101,19 @@ names its trigger. bpmn-cli reads it as the rule does, and the ids it generates 
 | message flow | an exact `bpmn:MessageFlow` prefix, else like the file's own message flows (two that agree), else like sequence flows |
 | a taken id, a join | glued under camelCase / PascalCase: `serviceTask_checkInvoice2`, after a digit with `No` before the number (`serviceTask_step1No2`, never `serviceTask_step12`), `gateway_approvedJoin`; the join after an explicit split id the rule rejects: its prefix + the gateway, `gateway_checkJoin` |
 | what the rule does not name | the file's style (without the ids that already follow the rule); in a file without it, the rule's case and prefix shape: `lane_sales` |
-| process, definitions | bpmn-cli's (`Process_InvoiceHandling`, also the process of a new pool), unless the rule names `bpmn:Process` / `bpmn:Definitions` (`process_main` without a name) |
+| process, definitions | bpmn-cli's (`Process_InvoiceHandling`), unless the rule names `bpmn:Process` / `bpmn:Definitions` (`process_main` without a name); a new pool's process takes the prefix two of the file's process ids share, as without the rule |
 
 - Existing ids are never renamed because of the rule. A `retype` or a trigger change that leaves a
   prefix the rule rejects gives `W_ID_PREFIX_STALE` with the `bpmn set <file> <id> id=<newId>` that
-  renames it; an element the same `apply` batch created takes the new prefix instead, and the flows
-  the batch named after it follow.
-- A result names the new ids under a prefix the rule declares that differ from what the file's own
-  style would give (`conventions:`; JSON: `conventions.ids`).
+  renames it (the new prefix and the rest of the id; the id of what the element is now where the
+  rest did not pass the rule); an element the same `apply` batch created takes the new prefix
+  instead, and the flows the batch named after it follow.
+- In a file with ids of its own that the rule rejects, a result names the new ids under a prefix the
+  rule declares that differ from what the file's own style would give (`conventions:`; JSON:
+  `conventions.ids`). A new file and a file that follows the rule get none.
 - A value the rule names that cannot start an id, or an unknown `case` or qualifier, is
-  `W_CONFIG_IGNORED`; that type follows the learned style. `--no-lint-config` leaves the
+  `W_CONFIG_IGNORED`; that type follows the learned style. So is a prefix for a DI type bpmn-cli
+  writes ids for (`bpmndi:BPMNShape`): DI ids follow their element. `--no-lint-config` leaves the
   conventions out. Details: [bpmnlint](bpmnlint.md#id-conventions).
 
 ## Kinds
