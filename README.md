@@ -35,6 +35,7 @@ Requires Node 22.12+.
 
 ```
 npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
+brew install miragon/tap/bpmn-cli  # or with Homebrew (pulls in Node)
 bpmn guide --short                 # the agent cheat sheet (`bpmn guide` for all of it)
 ```
 
