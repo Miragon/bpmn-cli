@@ -50,8 +50,13 @@ them on a private corpus without copying it into the repository, are described i
   fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
   deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
   maintainer notes (`testing.md`, `releasing.md`, the audit) stay out of the site via `srcExclude`.
-  The theme in `docs/.vitepress/theme/` and the logos in `docs/public/logo/` are copied unchanged
-  from Miragon/mcp-toolkit's docs site: do not edit them here.
+  The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
+  nav and sidebar to its `miragonDocs()`, and the kit sets the theme, the colours light and dark,
+  the GitHub-style heading anchors and the legal row. The kit in `docs/.vitepress/miragon/` and the
+  logos in `docs/public/logo/` are vendored unchanged from Miragon's corporate identity (skill
+  `docs-site` of the miragon-brand plugin): do not edit them here, `npm --prefix docs run check:kit`
+  fails on a hand edit, and the `docs` workflow runs it on every pull request that touches `docs/`.
+  `.miragon/brand.json` switches brand-lint on for the docs and the README.
 - `plugins/bpmn-cli/`: the Claude Code plugin (see its [README](plugins/bpmn-cli/README.md)).
 
 ### Dependencies
