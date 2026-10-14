@@ -1,0 +1,105 @@
+name: publish-homebrew
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published npm version without prefix (e.g. 0.6.0)"
+        required: true
+        type: string
+      dry-run:
+        description: "Generate and test the formula without pushing to the tap"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      dry-run:
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  update-tap:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download npm tarball and compute sha256
+        id: tarball
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          URL="https://registry.npmjs.org/@miragon/bpmn-cli/-/bpmn-cli-${VERSION}.tgz"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fsSL -o bpmn-cli.tgz "$URL" && break
+            echo "Attempt $attempt: $URL not available yet"
+            sleep 30
+          done
+          test -f bpmn-cli.tgz
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 bpmn-cli.tgz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Generate formula
+        env:
+          URL: ${{ steps.tarball.outputs.url }}
+          SHA: ${{ steps.tarball.outputs.sha256 }}
+        run: |
+          cat > bpmn-cli.rb <<EOF
+          class BpmnCli < Formula
+            desc "AI-friendly CLI for editing BPMN 2.0 models semantically"
+            homepage "https://github.com/Miragon/bpmn-cli"
+            url "${URL}"
+            sha256 "${SHA}"
+            license "MIT"
+
+            depends_on "node"
+
+            def install
+              system "npm", "install", *std_npm_args
+              bin.install_symlink libexec.glob("bin/*")
+            end
+
+            test do
+              system bin/"bpmn", "--help"
+            end
+          end
+          EOF
+          cat bpmn-cli.rb
+
+      - name: Install and test the formula
+        run: |
+          brew tap-new --no-git miragon/verify
+          cp bpmn-cli.rb "$(brew --repository miragon/verify)/Formula/bpmn-cli.rb"
+          brew install miragon/verify/bpmn-cli
+          brew test miragon/verify/bpmn-cli
+
+      - uses: actions/create-github-app-token@v3
+        if: ${{ !inputs.dry-run }}
+        id: tap-token
+        with:
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: Miragon
+          repositories: homebrew-tap
+
+      - name: Push to homebrew-tap
+        if: ${{ !inputs.dry-run }}
+        env:
+          VERSION: ${{ inputs.version }}
+          TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/Miragon/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp bpmn-cli.rb tap/Formula/bpmn-cli.rb
+          cd tap
+          git config user.name "miragon-release-please[bot]"
+          git config user.email "miragon-release-please[bot]@users.noreply.github.com"
+          git add Formula/bpmn-cli.rb
+          git diff --cached --quiet && echo "Formula unchanged" && exit 0
+          git commit -m "chore: update bpmn-cli to ${VERSION}"
+          git push

@@ -19,6 +19,9 @@ repository or in GitHub secrets.
 3. Merging the release PR creates the tag `vX.Y.Z` and the GitHub release. The `publish` job of the same
    workflow then checks out the tag, runs `npm ci`, `npm run build` and `npm test`, and runs
    `npm publish` with an OIDC token.
+4. The `homebrew` job then calls `.github/workflows/publish-homebrew.yml`: it downloads the published npm
+   tarball, writes `Formula/bpmn-cli.rb` with its sha256, installs and tests the formula, and pushes it
+   to [Miragon/homebrew-tap](https://github.com/Miragon/homebrew-tap) (see [Homebrew](#homebrew)).
 
 The `ci` workflow (`.github/workflows/ci.yml`) runs `npm run typecheck` and `npm run gate` on every pull
 request, including the release PRs.
@@ -61,6 +64,16 @@ CLI version it describes (until then the pinned `npx` version is the previous re
 workflow's `plugin` job runs `claude plugin validate --strict` on the plugin and the marketplace (no
 credentials needed), and `test/plugin.test.ts` fails when `plugin.json`, the pinned `npx` version and
 `package.json` disagree.
+
+## Homebrew
+
+`publish-homebrew.yml` pushes to the tap with a short-lived token of the GitHub App
+`miragon-release-please`, limited to `Miragon/homebrew-tap`. The App is installed for the whole
+organisation and its credentials are organisation-wide (variable `RELEASE_PLEASE_APP_ID`, secret
+`RELEASE_PLEASE_APP_PRIVATE_KEY`), so the repository needs no token of its own.
+
+To rerun the tap update for a published version, start `publish-homebrew` by hand (workflow_dispatch)
+with the version and, to only build and test the formula, `dry-run`.
 
 ## Notes
 
