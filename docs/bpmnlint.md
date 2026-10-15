@@ -93,9 +93,10 @@ before and after, so a write only counts it, and its validator line says so: `1 
 (W_LINT_UNAVAILABLE; bpmn validate lists it)`. Findings a write does not compare at all are counted
 in its totals and named at the end of the line, so the totals are those of `bpmn validate` on the
 result: the findings of the [incoming / outgoing lists](#lists-of-incoming-and-outgoing-flows) a
-file does not keep (``7 left out (incoming / outgoing lists the file does not keep; `bpmn validate
-<file>` lists them)``), and the `W_LINT_FAILED` of a model bpmnlint could not lint at all (``1 left
-out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)``). Such a finding is never added
+file does not keep (``7 left out (incoming / outgoing lists the file does not keep;
+`bpmn validate <file>` lists them)``), and the `W_LINT_FAILED` of a model bpmnlint could not
+lint at all (``1 left out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)``). Such a
+finding is never added
 or resolved, also where the file had it before as a real one. `--json` has them in
 `validation.validators[].leftOut` (`[{ "reason", "count" }]`); `--summary` names them in their own
 line (``validator bpmnlint: 7 left out (...; `bpmn validate <file>` lists them)``, `--json`:

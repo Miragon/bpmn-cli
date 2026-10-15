@@ -39,8 +39,8 @@
   `MutationResult.delta` has the comparison.
 - `--json` prints compact JSON on one line; `--pretty` indents it.
 - `show` prints each node's lane (`lane=<id>`) instead of member lists in
-  the `lanes:` section, and message flows as `messageFlow <id> ["name"]:
-  <source> "name" -> <target> "name"`.
+  the `lanes:` section, and message flows as
+  `messageFlow <id> ["name"]: <source> "name" -> <target> "name"`.
 - New ids speak ([Ids](reference.md#ids)): names, a kind and a place for unnamed
   elements (`Gateway_AfterCheckInvoice`), the ends for flows
   (`Flow_CheckInvoiceToBookInvoice`); 0.3 gave flows and unnamed elements a
@@ -62,8 +62,8 @@
 - `remove --with-branch` / `--bridge-all` (`E_AMBIGUOUS_BRANCH`,
   `E_AMBIGUOUS_BRIDGE`); a node added into a flow between two lanes takes
   the lane of its row (`W_LANE_INHERITED`).
-- Format commands: `compact`, pool order (`order <collaborationId>
-  <participantId...>`, ops JSON `pools`), the selectors `--path` /
+- Format commands: `compact`, pool order
+  (`order <collaborationId> <participantId...>`, ops JSON `pools`), the selectors `--path` /
   `--via`, `--kind`, `--branch` of place, align, color and tidy (`E_NO_MATCH`,
   `E_NOT_PARTICIPANT`), negative `space --by`; `show --layout` prints
   columns (`c0 Event_Start, c1 ...`, JSON `columns`, `gaps`); four soft
@@ -97,7 +97,7 @@
 - The Claude Code plugin's skill looks at what it drew: after a change to
   the drawing it renders into `.bpmn-render/` of the working directory,
   reads the PNG and fixes the numbered problems with the format commands
-  ([Claude Code plugin](../plugins/bpmn-cli/README.md)); a new eval case,
+  ([Claude Code plugin](claude-code-plugin.md)); a new eval case,
   `tidy-after-edit`, measures it.
 - The Camunda 7 and Camunda 8 profile rules load on demand
   ([Browser bundles](library.md#browser-bundles)): `applyToXml` alone is 618.2 KB
@@ -485,10 +485,10 @@
   the line at the old ends, and with `--keep-flow-ids` said nothing. A line
   that already reaches the new ends stays, and so does one into a node the
   same write added (it has no shape yet). The note counts and names those
-  flows: `removed 2 stale diagram element(s), among them the edge(s) of
+  flows: ``removed 2 stale diagram element(s), among them the edge(s) of
   Flow_AToC (their ends changed; the next model edit without --no-layout
-  draws them, or \`bpmn route <file> <flowId>\`)` (0.6: `removed 1 stale
-  diagram element(s); run \`bpmn layout\` to redraw`; without such flows
+  draws them, or `bpmn route <file> <flowId>`)`` (0.6: ``removed 1 stale
+  diagram element(s); run `bpmn layout` to redraw``; without such flows
   the command now names `<file>`). The
   quality line lists them as `missing` until a write that updates the
   layout draws them, plain. `route` draws such a flow on its own (0.6:

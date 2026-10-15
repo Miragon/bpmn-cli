@@ -8,6 +8,8 @@ A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 
 **semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
 no diagram coordinates.
 
+The documentation is at **[miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)**.
+
 ![One bpmn add command inserts a task into a small order process](docs/assets/demo.gif)
 
 ## Why
@@ -55,7 +57,8 @@ problems: none
 ```
 
 The result is a normal `.bpmn` file that opens in Camunda Modeler / bpmn-js with a laid-out
-diagram. [A worked session](docs/walkthrough.md) builds a complete process step by step.
+diagram. [A worked session](https://miragon.github.io/bpmn-cli/walkthrough) builds a complete
+process step by step.
 
 ## Commands
 
@@ -69,7 +72,7 @@ diagram. [A worked session](docs/walkthrough.md) builds a complete process step 
 | Check before deploying | `validate` (also runs the project's `.bpmnlintrc`) |
 | Ask the CLI itself | `guide`, `kinds`, `--help` |
 
-Details: [command reference](docs/commands.md).
+Details: [command reference](https://miragon.github.io/bpmn-cli/commands).
 
 ## Claude Code plugin
 
@@ -82,14 +85,15 @@ BPMN model, instead of writing BPMN XML by hand.
 /plugin install bpmn-cli@miragon-bpmn
 ```
 
-Details: [plugins/bpmn-cli](plugins/bpmn-cli/README.md).
+Details: [Claude Code plugin](https://miragon.github.io/bpmn-cli/claude-code-plugin), and the plugin
+itself in [plugins/bpmn-cli](plugins/bpmn-cli/README.md).
 
 ## Camunda 7 and Camunda 8
 
 Models can target Camunda 7 (including CIB seven and Operaton) or Camunda 8. The CLI sets the
 platform's implementation details and validates them against its deploy rules.
 
-Details: [Camunda 7 and Camunda 8](docs/camunda.md).
+Details: [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda).
 
 ## bpmnlint
 
@@ -98,27 +102,31 @@ agent sees the findings its change added and fixes them in the same batch, inste
 it runs `@miragon/rules/element-id-naming`, the ids bpmn-cli generates follow its prefixes and case
 (`bpmn show <file> --conventions` lists them).
 
-Details: [bpmnlint](docs/bpmnlint.md).
+Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).
 
 ## Library use
 
 The package is also a library that edits BPMN in memory, in Node and in the browser.
 
-Details: [library use](docs/library.md), [validators](docs/validators.md), [migrating between versions](docs/migrating.md).
+Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators](https://miragon.github.io/bpmn-cli/validators),
+[migrating between versions](https://miragon.github.io/bpmn-cli/migrating).
 
 ## Documentation
 
-- [Command reference](docs/commands.md): every command with its options
-- [Reference](docs/reference.md): ids, kinds, triggers, placement, set keys, output, errors and exit codes
-- [Ops JSON](docs/ops.md): the batch format of `bpmn apply`
-- [Layout and formatting](docs/layout.md): layout modes and the diagram-only commands
-- [The contract and its limits](docs/contract.md): what the CLI guarantees, what a write changes, limitations
-- [Camunda 7 and Camunda 8](docs/camunda.md): platform settings with worked examples
-- [bpmnlint](docs/bpmnlint.md): the project's `.bpmnlintrc` in validate and every write
-- [A worked session](docs/walkthrough.md): one process from an empty file to a validated model
-- [Library use](docs/library.md) and [migrating](docs/migrating.md)
-- [Validators](docs/validators.md): a library host's own checks inside the write
-- [Testing](docs/testing.md) and [releasing](docs/releasing.md)
+The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), is built from [docs/](docs/):
+
+- [Command reference](https://miragon.github.io/bpmn-cli/commands): every command with its options
+- [Reference](https://miragon.github.io/bpmn-cli/reference): ids, kinds, triggers, placement, set keys, output, errors and exit codes
+- [Ops JSON](https://miragon.github.io/bpmn-cli/ops): the batch format of `bpmn apply`
+- [Layout and formatting](https://miragon.github.io/bpmn-cli/layout): layout modes and the diagram-only commands
+- [The contract and its limits](https://miragon.github.io/bpmn-cli/contract): what the CLI guarantees, what a write changes, limitations
+- [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda): platform settings with worked examples
+- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate and every write
+- [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
+- [Library use](https://miragon.github.io/bpmn-cli/library) and [migrating](https://miragon.github.io/bpmn-cli/migrating)
+- [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
+- For maintainers, in the repository only: [testing](docs/testing.md) and
+  [releasing](docs/releasing.md)
 
 ## Contributing
 

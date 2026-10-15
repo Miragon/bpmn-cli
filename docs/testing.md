@@ -11,7 +11,7 @@ opt-in Camunda 8 engine check, see
 | unit tests | behaviour of every op, the pipeline, the layout engines | `npx vitest run` | ~10 s |
 | property test | invariant violations in short seeded edit sequences | `npx vitest run test/fuzz.test.ts` | ~5 s |
 | layout regression | quality of the clean full-layout engine on tools/scenarios | `npm run layout:regress` | ~20 s |
-| fuzzer | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s – hours |
+| fuzzer | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s to hours |
 | benchmark | stability, quality, hard defects and semantic success of six typical edits, against a baseline | `npm run bench` | ~30 s per arm on the scenarios |
 | roundtrip | how much of a file a no-op, a rename and an insert rewrite (byte-identical no-ops, changed lines, the replaced text region) | `npm run roundtrip` | ~10 s on the scenarios |
 

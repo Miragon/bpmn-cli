@@ -1,0 +1,5 @@
+{
+  "_comment": "Activates brand-lint from the miragon-brand plugin (Claude Code hook and CI). The repo is English, so the German-only copy rules are off: du (A1), umlauts (A3), German passive (A4), German claim (A7), gender forms (A11) and German UI texts (C5). Em dashes as connectors (A2), spellings (A10), the anti-slop patterns (S*), palette, token and dark-mode rules stay on. The docs kit in docs/.vitepress/miragon/ is linted at its source in Miragon/corporate-identity. The code in src/, test/ and tools/ is not linted: its colours are the colours of BPMN diagrams (the bpmn-js colour picker that `bpmn color` writes into a model, the halos and badges of `bpmn render`), data of the models, not the brand.",
+  "ignorieren": ["docs/.vitepress/miragon/", "CHANGELOG.md", "src/", "test/", "tools/"],
+  "aus": ["A1", "A3", "A4", "A7", "A11", "C5"]
+}

@@ -12,3 +12,4 @@ coverage/
 plugins/bpmn-cli/evals/results/
 .bpmn-render/
 .claude/logs/
+docs/.vitepress/cache/

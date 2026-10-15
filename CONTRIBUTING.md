@@ -44,7 +44,19 @@ them on a private corpus without copying it into the repository, are described i
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
   `node tools/demo/make-demo.mjs` redraws the README demo (`docs/assets/demo.gif`; needs
   [gifski](https://gif.ski/) on your PATH and network access for the Geist fonts).
-- `docs/`: the reference the README links to.
+- `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
+  VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
+  `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
+  fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
+  deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
+  maintainer notes (`testing.md`, `releasing.md`, the audit) stay out of the site via `srcExclude`.
+  The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
+  nav and sidebar to its `miragonDocs()`, and the kit sets the theme, the colours light and dark,
+  the GitHub-style heading anchors and the legal row. The kit in `docs/.vitepress/miragon/` and the
+  logos in `docs/public/logo/` are vendored unchanged from Miragon's corporate identity (skill
+  `docs-site` of the miragon-brand plugin): do not edit them here, `npm --prefix docs run check:kit`
+  fails on a hand edit, and the `docs` workflow runs it on every pull request that touches `docs/`.
+  `.miragon/brand.json` switches brand-lint on for the docs and the README.
 - `plugins/bpmn-cli/`: the Claude Code plugin (see its [README](plugins/bpmn-cli/README.md)).
 
 ### Dependencies
