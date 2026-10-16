@@ -89,26 +89,29 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      # The commit is made through the contents API, so GitHub signs it: the ruleset of the tap
+      # requires signed commits and an approval for unsigned ones. A re-run replaces the branch.
       - name: Open and squash-merge homebrew-tap PR
         if: ${{ !inputs.dry-run }}
         env:
           VERSION: ${{ inputs.version }}
-          TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          TAP: Miragon/homebrew-tap
+          FORMULA_PATH: Formula/bpmn-cli.rb
         run: |
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/Miragon/homebrew-tap.git" tap
-          mkdir -p tap/Formula
-          cp bpmn-cli.rb tap/Formula/bpmn-cli.rb
-          cd tap
-          git config user.name "miragon-release-please[bot]"
-          git config user.email "miragon-release-please[bot]@users.noreply.github.com"
           BRANCH="bpmn-cli-${VERSION}"
-          git switch -c "$BRANCH"
-          git add Formula/bpmn-cli.rb
-          git diff --cached --quiet && echo "Formula unchanged" && exit 0
-          git commit -m "chore: update bpmn-cli to ${VERSION}"
-          git push --force origin "$BRANCH"
-          gh pr create --repo Miragon/homebrew-tap --base main --head "$BRANCH" \
+          CURRENT="$(gh api "repos/${TAP}/contents/${FORMULA_PATH}?ref=main" --jq .sha)" || CURRENT=""
+          if [ "$CURRENT" = "$(git hash-object bpmn-cli.rb)" ]; then
+            echo "Formula unchanged"
+            exit 0
+          fi
+          MAIN="$(gh api "repos/${TAP}/git/ref/heads/main" --jq .object.sha)"
+          gh api -X DELETE "repos/${TAP}/git/refs/heads/${BRANCH}" 2>/dev/null || true
+          gh api "repos/${TAP}/git/refs" -f ref="refs/heads/${BRANCH}" -f sha="$MAIN" > /dev/null
+          gh api -X PUT "repos/${TAP}/contents/${FORMULA_PATH}" -f branch="$BRANCH" \
+            -f message="chore: update bpmn-cli to ${VERSION}" -f content="$(base64 < bpmn-cli.rb | tr -d '\n')" \
+            ${CURRENT:+-f sha="$CURRENT"} > /dev/null
+          gh pr create --repo "$TAP" --base main --head "$BRANCH" \
             --title "chore: update bpmn-cli to ${VERSION}" \
             --body "Automated formula update for [@miragon/bpmn-cli ${VERSION}](https://www.npmjs.com/package/@miragon/bpmn-cli/v/${VERSION})."
-          gh pr merge "$BRANCH" --repo Miragon/homebrew-tap --squash
+          gh pr merge "$BRANCH" --repo "$TAP" --squash --delete-branch
