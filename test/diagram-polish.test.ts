@@ -2,7 +2,8 @@
  * Regressions found by blind visual judges comparing edits on hand-drawn
  * models (incremental engine, src/diagram/): connection labels that stayed
  * behind, long names overflowing their task, two flows on one gateway vertex
- * after a lane change, an event sub-process stretched by the space tool, and
+ * after a lane change (only a join's entries from below share one, its
+ * bottom vertex), an event sub-process stretched by the space tool, and
  * the empty flow a removal left on its row. The fixtures in
  * test/fixtures/incremental/polish-*.bpmn are small synthetic hand drawings.
  */
@@ -275,18 +276,25 @@ describe('judged edits on hand drawings', () => {
     for (const id of ['A', 'B', 'C', 'E', 'EB']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
   });
 
-  it('lane change: the rerouted flows use free vertices of the split and the join, and only vertices', async () => {
+  it('lane change: the rerouted flows dock only on vertices, free ones of the split; the join\'s entries from below share its bottom vertex', async () => {
     const xml = fixture('polish-lanes.bpmn');
     const { after } = await run(xml, [{ op: 'set', id: 'T1', values: { lane: 'L2' } }]);
     const a = shapes(after);
     const es = [...edges(after).values()];
+    const docksOf = (gw: string): string[] => [...es.filter((e) => e.sourceId === gw).map((e) => e.points[0]!), ...es.filter((e) => e.targetId === gw).map((e) => e.points[e.points.length - 1]!)].map(key);
     for (const gw of ['G1', 'J']) {
-      const v = vertices(a.get(gw)!.bounds);
-      const docks = [...es.filter((e) => e.sourceId === gw).map((e) => e.points[0]!), ...es.filter((e) => e.targetId === gw).map((e) => e.points[e.points.length - 1]!)].map(key);
+      const docks = docksOf(gw);
       expect(docks).toHaveLength(3);
-      for (const d of docks) expect(v, `${gw} ${d}`).toContain(d);
-      expect(new Set(docks).size, gw).toBe(3);
+      for (const d of docks) expect(vertices(a.get(gw)!.bounds), `${gw} ${d}`).toContain(d);
     }
+    expect(new Set(docksOf('G1')).size).toBe(3);
+    // T1, now in the lower lane, rises into J's bottom vertex beside T2's flow (bpmn-js draws a join so), without crossing it
+    const j = a.get('J')!.bounds;
+    const end = (id: string): string => key(edges(after).get(id)!.points.at(-1)!);
+    expect(end('f4')).toBe(`${j.x + j.width / 2},${bottom(j)}`);
+    expect(end('f5')).toBe(end('f4'));
+    const between = layoutProblems(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
+    expect(between).toEqual([]);
   });
 
   it('remove: when other rows block the strip, the row of the removed node closes on its own', async () => {

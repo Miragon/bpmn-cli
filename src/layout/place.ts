@@ -12,12 +12,28 @@
  *  - boundary event handlers are bands below their host
  *  - loops (edges closing a cycle) do not influence layering; they are drawn
  *    underneath (see route.ts)
+ *  - the flows that enter a node from below (the entries of a join, the
+ *    way of a boundary path into its handler in the lane or row above) rise
+ *    straight into its bottom (a join's bottom vertex), the node right above
+ *    them: what lies in the column under it down to the lowest of them (a
+ *    shape, a routed artifact or a label: the end of a boundary path, the
+ *    task after the boundary event's host, say) stays, and the node moves
+ *    right past it with what follows it (a node whose column that takes
+ *    moves on too), when the routes then have more such rises or run
+ *    through fewer labels, and no more crossings, cut shapes or labels run
+ *    through (freeJoinColumns); the chains, and so the happy path, are those
+ *    without the moves
  *  - event sub-processes sit below the main content
- *  - text annotations go above, data objects/stores below their node; a
+ *  - text annotations go above, data objects/stores below their node (a
+ *    join's right of the line its entries from below rise on); a
  *    note on a boundary event hangs below the host, clear of the sibling
  *    events, their labels and the flows dropping from them
  *  - expanded / collapsed follows `opts.expanded` for every sub-process,
- *    event sub-processes included
+ *    event sub-processes included; an expanded one is sized for its
+ *    content, the labels of its content (data objects and stores included)
+ *    and its title (frameSubProcess)
+ *  - neighbours in a row whose labels sit on one side (events below,
+ *    gateways above) are spaced so that the labels keep 4 px apart
  *  - parts of a scope that no flow connects (each from its start event, then
  *    from a node without incoming flow) go below one another in declaration
  *    order, except that with `opts.groups` (layoutModel: the groups whose
@@ -30,8 +46,9 @@
  *    together
  */
 import { layoutDebug, layoutDebugOn } from '../debug.js';
+import { titleDepth } from '../diagram/text.js';
 import { is, many, type El } from '../model.js';
-import { elementLabel, routeEdges, routeLinks, routedSegments } from './route.js';
+import { RISE_KEEP, XIndex, elementLabel, entriesFromBelow, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments } from './route.js';
 import { METRICS, SIZES, boxesOverlap, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LinkEnd, type Point, type ScopeLayout } from './types.js';
 
 const idOf = (el: El): string => el.get<string>('id');
@@ -79,9 +96,7 @@ export function layoutScope(scope: El, opts: PlaceOptions): ScopeLayout {
       // event sub-processes too: expanded unless the DI or the caller collapses them
       if (opts.expanded.has(node.id)) {
         node.child = layoutScope(el, opts);
-        const p = SIZES.subProcessPadding;
-        node.width = Math.max(SIZES.subProcessMin.width, node.child.width + p.left + p.right);
-        node.height = Math.max(SIZES.subProcessMin.height, node.child.height + p.top + p.bottom);
+        frameSubProcess(node);
       } else {
         opts.collapsedScopes.set(node.id, layoutScope(el, opts));
       }
@@ -134,11 +149,16 @@ export function layoutScope(scope: El, opts: PlaceOptions): ScopeLayout {
     layout.compensations.push({ el, id: idOf(el), event, handler, points: [] });
   }
   markBackEdges(layout);
-  assignLayers(layout);
-  assignRows(layout, opts.groups);
   buildArtifacts(layout, scope, byId);
-  positionNodes(layout);
+  gridScope(layout, opts.groups);
   placeAttachedArtifacts(layout);
+  // a process in lanes arranges its rows by lane first, and frees the joins' columns there (engine.ts applyLanes)
+  if (!hasLanes(scope)) {
+    freeJoinColumns(layout, (shifts) => {
+      gridScope(layout, opts.groups, shifts);
+      placeAttachedArtifacts(layout);
+    });
+  }
   routeEdges(layout);
   refreshFlowAnchors(layout);
   placeEventSubs(layout);
@@ -240,25 +260,45 @@ function outgoingOf(n: GNode): GEdge[] {
   return [...n.out, ...n.boundary.flatMap((b) => b.out)];
 }
 
-function assignLayers(layout: ScopeLayout): void {
+/** assignLayers' columns without the moves, by scope. */
+const naturalLayers = new WeakMap<ScopeLayout, ReadonlyMap<GNode, number>>();
+
+/** assignRows' farthest layer reachable from each node, by the columns without the moves it is measured in. */
+const reaches = new WeakMap<ReadonlyMap<GNode, number>, Map<GNode, number>>();
+
+/**
+ * Columns: one more than the deepest forward predecessor, more for a node moved right (`shifts`, freeJoinColumns).
+ * Returns the columns without the moves (assignRows chooses the chains by them).
+ */
+function assignLayers(layout: ScopeLayout, shifts: ReadonlyMap<GNode, number>): ReadonlyMap<GNode, number> {
   const { nodes } = layout;
-  const memo = new Map<GNode, number>();
-  const layerOf = (n: GNode): number => {
-    const known = memo.get(n);
-    if (known !== undefined) return known;
-    memo.set(n, 0); // guard against unexpected cycles
-    let layer = 0;
-    for (const e of n.in) {
-      if (e.back) continue;
-      const src = e.source.host ?? e.source;
-      layer = Math.max(layer, layerOf(src) + 1);
-    }
-    memo.set(n, layer);
-    return layer;
+  // the columns without the moves stay what they are once the loops are marked: computed once per scope
+  const layers = (moves: ReadonlyMap<GNode, number>): Map<GNode, number> => {
+    const memo = new Map<GNode, number>();
+    const layerOf = (n: GNode): number => {
+      const known = memo.get(n);
+      if (known !== undefined) return known;
+      memo.set(n, 0); // guard against unexpected cycles
+      let layer = 0;
+      for (const e of n.in) {
+        if (e.back) continue;
+        const src = e.source.host ?? e.source;
+        layer = Math.max(layer, layerOf(src) + 1);
+      }
+      layer += moves.get(n) ?? 0;
+      memo.set(n, layer);
+      return layer;
+    };
+    for (const n of nodes) layerOf(n);
+    return memo;
   };
-  for (const n of nodes) n.layer = layerOf(n);
+  let natural = naturalLayers.get(layout);
+  if (!natural) naturalLayers.set(layout, (natural = layers(new Map())));
+  const moved = shifts.size ? layers(shifts) : natural;
+  for (const n of nodes) n.layer = moved.get(n)!;
   for (const n of nodes) if (n.compensatedBy?.host) n.layer = n.compensatedBy.host.layer; // handler under its host
   for (const n of nodes) for (const b of n.boundary) b.layer = n.layer;
+  return natural;
 }
 
 /* ------------------------------------------------------------------ */
@@ -283,7 +323,8 @@ function overlapsRange(a: { from: number; to: number }, b: { from: number; to: n
 }
 
 /**
- * Assigns rows. Row 0 is the spine (the path that reaches farthest). Every
+ * Assigns rows. Row 0 is the spine (the path that reaches farthest, by the
+ * columns without the moves of freeJoinColumns: `natural`). Every
  * other branch (a chain of not yet placed nodes starting with a non-spine
  * outgoing flow) becomes a band below its origin:
  *  1. the first existing row below the origin where the column interval is
@@ -293,17 +334,24 @@ function overlapsRange(a: { from: number; to: number }, b: { from: number; to: n
  *  3. else the first row where merely the interval is free (the router then
  *     bends the drop line around the obstacle).
  * A split flow that goes straight to an already placed node on the same row
- * (an empty branch, a skip) reserves an empty band the same way.
+ * (an empty branch, a skip) reserves an empty band the same way. Without
+ * lanes the nodes between the two lie on that row, so the flow runs in its
+ * band; in a laned scope they can lie in other lanes and the router draws
+ * it straight when the row is free (route.ts). There the band leaves no
+ * strip: engine.ts applyLanes builds the rows of a lane from its nodes.
  */
-function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly string[]>): void {
+function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly string[]>, natural: ReadonlyMap<GNode, number> = new Map()): void {
   const { nodes } = layout;
   const placed = new Set<GNode>();
   const branches: Branch[] = [];
   const debug = (msg: string): void => {
     if (layoutDebugOn()) layoutDebug(`[rows] ${msg}`);
   };
-  const inRow = (row: number): Branch[] => branches.filter((b) => b.row === row);
-  const maxRow = (): number => Math.max(-1, ...branches.map((b) => b.row));
+  /** the placed branches of each row (a placed branch only moves down: the lowest row is the deepest one yet) */
+  const rows = new Map<number, Branch[]>();
+  let lowest = -1;
+  const inRow = (row: number): Branch[] => rows.get(row) ?? [];
+  const maxRow = (): number => lowest;
   /** the drop line of `b` (excluding its ends) passes row `row` at its drop column */
   const dropPasses = (b: Branch, row: number): boolean => b.originRow < row && row < b.row;
   const intervalFree = (row: number, iv: Branch): boolean => !inRow(row).some((o) => overlapsRange(o, iv));
@@ -318,10 +366,29 @@ function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly s
     for (const n of iv.nodes) n.row = row;
     if (iv.edge) iv.edge.bandRow = row;
   };
+  const enter = (iv: Branch): void => {
+    const list = rows.get(iv.row);
+    if (list) list.push(iv);
+    else rows.set(iv.row, [iv]);
+    lowest = Math.max(lowest, iv.row);
+  };
+  /** a placed branch moves to another row */
+  const move = (iv: Branch, row: number): void => {
+    const list = rows.get(iv.row)!;
+    list.splice(list.indexOf(iv), 1);
+    setRow(iv, row);
+    enter(iv);
+  };
+  /** the placed branches by their drop column */
+  const byDrop = new Map<number, Branch[]>();
   const commit = (iv: Branch, row: number): void => {
     setRow(iv, row);
     for (const n of iv.nodes) n.band = branches.length;
     branches.push(iv);
+    const list = byDrop.get(iv.dropColumn);
+    if (list) list.push(iv);
+    else byDrop.set(iv.dropColumn, [iv]);
+    enter(iv);
   };
 
   /** inserts a new band at `at` for `iv`, shifting only colliding bands down; false when a drop line would be cut */
@@ -339,11 +406,11 @@ function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly s
         queue.push(o);
       }
     }
-    // a drop line of a band that stays must not be cut by the new band
-    for (const b of branches) {
-      if (moving.has(b)) continue;
-      if (dropPasses(b, at) && iv.from <= b.dropColumn && b.dropColumn <= iv.to) return false;
-    }
+    // a drop line of a band that stays must not be cut by the new band (those dropping in its columns)
+    const cuts = (b: Branch): boolean => !moving.has(b) && dropPasses(b, at) && iv.from <= b.dropColumn && b.dropColumn <= iv.to;
+    if (iv.to - iv.from < branches.length) {
+      for (let c = iv.from; c <= iv.to; c++) if (byDrop.get(c)?.some(cuts)) return false;
+    } else if (branches.some(cuts)) return false;
     // a moved band's drop line now also passes row `at`
     for (const [b] of moving) {
       if (b.originRow < at && iv.from <= b.dropColumn && b.dropColumn <= iv.to) return false;
@@ -352,7 +419,7 @@ function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly s
     for (let r = iv.originRow + 1; r < at; r++) {
       if (inRow(r).some((o) => !moving.has(o) && o.owner !== iv.owner && o.from <= iv.dropColumn && iv.dropColumn <= o.to)) return false;
     }
-    for (const [b, newRow] of moving) setRow(b, newRow);
+    for (const [b, newRow] of moving) move(b, newRow);
     commit(iv, at);
     return true;
   };
@@ -381,13 +448,18 @@ function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly s
     }
   };
 
-  /** farthest layer reachable from a node over forward edges */
-  const reachMemo = new Map<GNode, number>();
+  /**
+   * farthest layer reachable from a node over forward edges (without the moves of freeJoinColumns: a moved node keeps the
+   * chains; the same for every arrangement of the scope, so kept with its columns without the moves)
+   */
+  const reachMemo = reaches.get(natural) ?? new Map<GNode, number>();
+  reaches.set(natural, reachMemo);
   const reach = (n: GNode): number => {
     const known = reachMemo.get(n);
     if (known !== undefined) return known;
-    reachMemo.set(n, n.layer);
-    let best = n.layer;
+    const layer = natural.get(n) ?? n.layer;
+    reachMemo.set(n, layer);
+    let best = layer;
     for (const e of outgoingOf(n)) if (!e.back) best = Math.max(best, reach(e.target));
     reachMemo.set(n, best);
     return best;
@@ -581,15 +653,46 @@ export function layerGapFor(edges: GEdge[], layer: number): number {
     if (e.back) continue;
     const s = e.source.host ?? e.source;
     if (s.layer !== layer || e.target.layer !== layer + 1) continue;
-    const name = e.el.get<string | undefined>('name');
+    const name = nameOf(e);
     if (!name) continue;
     const lbl = labelSize(name);
     let need = lbl.width + 16;
-    const gwName = s.kind === 'gateway' ? s.el.get<string | undefined>('name') : undefined;
+    const gwName = s.kind === 'gateway' ? nameOf(s) : undefined;
     if (gwName && lbl.lines > 1) need = Math.max(need, labelSize(gwName).width / 2 - s.width / 2 + lbl.width + 12);
     gap = Math.max(gap, need);
   }
   return gap;
+}
+
+/** The side the engine draws a node's external label on (route.ts elementLabel): a gateway's above, an event's below. */
+function labelSide(n: GNode): 'above' | 'below' | undefined {
+  if (n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' || !nameOf(n)) return undefined;
+  return n.kind === 'gateway' ? 'above' : isEvent(n) ? 'below' : undefined;
+}
+
+/** A node of the layout that is an event (is(n.el, 'bpmn:Event'), told by its kind: place.ts kindOfNode, a boundary event's 'event'). */
+function isEvent(n: GNode): boolean {
+  return n.kind === 'start' || n.kind === 'end' || n.kind === 'event';
+}
+
+/**
+ * Horizontal gap needed after a layer so that the labels of two neighbours
+ * in one row on the same side (events below, gateways above) keep 4 px
+ * apart: what the one's label reaches beyond its column and the other's
+ * beyond the next (0 when none do).
+ */
+function labelGapFor(here: GNode[], next: GNode[], colWidth: number[], layer: number, sides: ReadonlyMap<GNode, 'above' | 'below' | undefined>): number {
+  let gap = 0;
+  const width = (n: GNode): number => labelSize(nameOf(n)!).width;
+  for (const a of here) {
+    const side = sides.get(a);
+    if (!side) continue;
+    for (const b of next) {
+      if (b.row !== a.row || sides.get(b) !== side) continue;
+      gap = Math.max(gap, (width(a) - colWidth[layer]!) / 2 + (width(b) - colWidth[layer + 1]!) / 2 + 4);
+    }
+  }
+  return Math.ceil(gap);
 }
 
 function positionNodes(layout: ScopeLayout): void {
@@ -612,11 +715,18 @@ function positionNodes(layout: ScopeLayout): void {
   for (const a of layout.artifacts) {
     if (a.kind !== 'annotation' && a.anchorNode) rowExtra[a.anchorNode.row] = DATA_ROW_EXTRA;
   }
+  // the flows leaving each column and the nodes in it, for the gap after the column
+  const outOf = colWidth.map((): GEdge[] => []);
+  for (const e of layout.edges) outOf[(e.source.host ?? e.source).layer]?.push(e);
+  const inColumn = colWidth.map((): GNode[] => []);
+  for (const n of nodes) inColumn[n.layer]!.push(n);
+  const sides = new Map(nodes.map((n) => [n, labelSide(n)]));
+  const gaps = colWidth.map((_, l) => Math.max(layerGapFor(outOf[l]!, l), labelGapFor(inColumn[l]!, inColumn[l + 1] ?? [], colWidth, l, sides)));
   const colX: number[] = [];
   let x = 0;
   for (let l = 0; l < layers; l++) {
     colX.push(x);
-    x += colWidth[l]! + layerGapFor(layout.edges, l);
+    x += colWidth[l]! + gaps[l]!;
   }
   const rowY: number[] = [];
   let y = 0;
@@ -642,8 +752,267 @@ function positionNodes(layout: ScopeLayout): void {
       placeBoundaryEvents(n);
     }
   }
-  layout.width = x - layerGapFor(layout.edges, layers - 1);
+  layout.width = x - gaps[layers - 1]!;
   layout.height = y - METRICS.vGap - rowExtra[rows - 1]!;
+}
+
+/**
+ * Columns, rows and positions of a scope's nodes and boundary events, and the
+ * y of the empty bands. `shifts`: the columns a node sits further right than
+ * its entries need (freeJoinColumns), what follows it with it; the chains
+ * and their rows are those without them. Run again from scratch, it gives
+ * the same grid for the same `shifts`.
+ */
+export function gridScope(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly string[]>, shifts: ReadonlyMap<GNode, number> = new Map()): void {
+  for (const e of layout.edges) {
+    delete e.bandRow;
+    delete e.bandY;
+  }
+  assignRows(layout, groups, assignLayers(layout, shifts));
+  positionNodes(layout);
+}
+
+/** The scope is a process drawn in lanes (engine.ts applyLanes draws the lanes of its first lane set). */
+export function hasLanes(scope: El): boolean {
+  const laneSet = is(scope, 'bpmn:Process') ? many(scope, 'laneSets')[0] : undefined;
+  return !!laneSet && many(laneSet, 'lanes').length > 0;
+}
+
+/**
+ * Keeps the column under a node free between the node and the flows that
+ * enter it from below (route.ts risesInto: a join's entries, a boundary
+ * path's way into its handler in the lane or row above, any forward flow
+ * from a source below), so that they rise straight into its bottom
+ * (route.ts riseX: a join's bottom vertex), the node right above their line
+ * (else they hook in from the column gap). What lies there (a node, a
+ * boundary event, a data object or store, a note on a boundary event, or
+ * the label of one of them, unless it moves with the node: the end of a
+ * boundary path or of a dead-end branch, the task after a boundary event's
+ * host, say) is not moved: it cannot go left of its predecessors, and right
+ * of the column its incoming flow would cross the rise. The node moves right
+ * instead, with what follows it: one column, and further while its column is
+ * still taken (the blocking chain goes on), at most MAX_JOIN_SHIFT. The move
+ * must draw better: the scope is routed both ways (route.ts routeEdges) and
+ * the move is kept only when more flows then rise straight into the bottom
+ * of the node they enter or fewer labels of shapes lie on a flow (a label
+ * only in the way: the entries rise through it), and no more pairs of flows
+ * cross, no more shapes are cut and no more such labels are run through (a
+ * shape in an entry's own row, or a flow its run would cross, is in the way
+ * in either column). When the move alone is not kept, or a flow that rose
+ * straight no longer does, the nodes whose column it took (something is
+ * there that was not, or it moved there: the end of the moved chain now
+ * under a join, say) move right too, as far as they need (each at most
+ * MAX_JOIN_SHIFT), and that is kept when it draws better, else the move
+ * alone when that does. One node at a time, the joins first (a node entered
+ * from below may then move under a join that is already where it goes),
+ * else in the order of the nodes, each once (a later trial that takes its
+ * column again moves it on as above). The chains, and so the happy path,
+ * stay as without the moves (assignRows). `arrange` lays the scope out again with the nodes
+ * moved (gridScope and the attached artifacts; in a process with lanes the
+ * rows by lane, the empty bands kept where the earlier passes moved them,
+ * engine.ts applyLanes). A trial measures the routes the scope is then drawn
+ * with: every routing for it starts from the state the scope came with
+ * (route.ts routeEdges reads the tops its last run marked used) and leaves
+ * the scope as it was. A move that is not kept is undone exactly
+ * (keepArrangement): the scope is left arranged as it came or as the last
+ * kept move left it, not routed. Entries from above end on a join's left
+ * vertex (route.ts), so a top vertex needs no room.
+ */
+export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyMap<GNode, number>) => void): void {
+  const shifts = new Map<GNode, number>();
+  const tried = new Set<GNode>();
+  type Routes = { crossings: number; hits: number; labels: number; rises: Set<GEdge> };
+  /** the faults and straight rises of the routes the current arrangement gets; the scope is left as it was */
+  const route = (): Routes => {
+    const undo = keepArrangement(layout);
+    const faults = routeEdges(layout);
+    const routes = { ...faults([...shapeLabels(layout), ...dataLabels(layout)]), rises: straightRises(layout) };
+    undo();
+    return routes;
+  };
+  const show = (r: Routes): string => JSON.stringify({ ...r, rises: r.rises.size });
+  /** the routes of the current arrangement, once measured */
+  let routed: Routes | undefined;
+  /** the nodes whose column the current arrangement leaves taken, with what takes it (a kept move's from its trial) */
+  let taken: Map<GNode, Array<GNode | undefined>> | undefined;
+  for (;;) {
+    const blocked = (taken ??= takenColumns(layout));
+    // the joins first: a node entered from below may then move under a join that is already where it goes
+    const open = layout.nodes.filter((n) => blocked.has(n) && !tried.has(n));
+    const j = open.find((n) => entriesFromBelow(n).length) ?? open[0];
+    if (!j) break;
+    tried.add(j);
+    const before = routed ?? route();
+    const undo = keepArrangement(layout);
+    const kept = new Map(shifts);
+    const step = (n: GNode): number => (shifts.get(n) ?? 0) - (kept.get(n) ?? 0);
+    const reset = (to: ReadonlyMap<GNode, number>): void => {
+      shifts.clear();
+      for (const [n, k] of to) shifts.set(n, k);
+    };
+    // more straight rises or fewer labels run through, or fewer crossings or cut shapes with as many rises, and nothing
+    // worse; or fewer cut shapes, each paying for at most one more crossing, and no more labels run through
+    const keeps = (r: Routes): boolean =>
+      ((r.rises.size > before.rises.size || r.labels < before.labels || ((r.crossings < before.crossings || r.hits < before.hits) && r.rises.size >= before.rises.size)) && r.crossings <= before.crossings && r.hits <= before.hits && r.labels <= before.labels) ||
+      (r.hits < before.hits && r.labels <= before.labels && r.crossings - before.crossings <= before.hits - r.hits);
+    const xs = new Map(layout.nodes.map((n) => [n, n.box.x]));
+    const dx = (n: GNode): number => n.box.x - xs.get(n)!;
+    /** of the taken columns, those the trial took (something is there that was not, or moved there) that can move on, and the moved node's while it is taken */
+    const took = (cols: ReadonlyMap<GNode, Array<GNode | undefined>>): GNode[] =>
+      [...cols].filter(([n, owners]) => (n === j || owners.some((o) => !blocked.get(n)?.includes(o) || (!!o && dx(o) !== dx(n)))) && step(n) < MAX_JOIN_SHIFT).map(([n]) => n);
+    // right until the column is free (the chain that blocks it may go on)
+    let now: Map<GNode, Array<GNode | undefined>>;
+    do {
+      shifts.set(j, (shifts.get(j) ?? 0) + 1);
+      arrange(shifts);
+      now = takenColumns(layout);
+    } while (step(j) < MAX_JOIN_SHIFT && now.has(j));
+    const alone = new Map(shifts);
+    const first = took(now);
+    /** takenColumns of the arrangement the trial is in (that of a kept trial is the next one's) */
+    let last = now;
+    /** what else moved with it in the trial and the routes that got, for the debug line */
+    let others = '';
+    let together: Routes | undefined;
+    /** the nodes whose column the move took move right too, as far as they need; false when there are none */
+    const push = (): boolean => {
+      let next = first;
+      for (let round = 0; next.length && round < 3 * MAX_JOIN_SHIFT; round++, next = took((last = takenColumns(layout)))) {
+        for (const n of next) shifts.set(n, (shifts.get(n) ?? 0) + 1);
+        // a push that moves more than MAX_PUSHED other nodes is not tried (no such one draws better, each costs a routing)
+        if ([...shifts.keys()].filter((n) => n !== j && step(n)).length > MAX_PUSHED) {
+          if (round) back();
+          else reset(alone);
+          return false;
+        }
+        arrange(shifts);
+      }
+      if (layoutDebugOn()) others = layout.nodes.filter((n) => n !== j && step(n)).map((n) => `${n.id} ${step(n)}`).join(', ');
+      return [...shifts].some(([n, k]) => k !== alone.get(n));
+    };
+    const back = (): void => {
+      reset(alone);
+      arrange(shifts);
+      last = now;
+    };
+    // with them first when the move takes the column of a node a flow rose straight into (the end of the moved chain
+    // now under a join, say), else only when the move alone is not kept or a flow that rose straight no longer does;
+    // the move alone when that is kept and they are not
+    const breaks = first.some((n) => risesInto(n).some((e) => before.rises.has(e)));
+    let after = before;
+    let keep = false;
+    if (breaks && push()) {
+      after = together = route();
+      keep = keeps(after);
+      if (!keep) back();
+    }
+    if (!keep) {
+      const single = route();
+      after = single;
+      keep = keeps(single);
+      if ((!keep || [...before.rises].some((e) => !single.rises.has(e))) && !breaks && push()) {
+        together = route();
+        if (keeps(together)) {
+          after = together;
+          keep = true;
+        } else back();
+      }
+    }
+    if (layoutDebugOn()) layoutDebug(`[joins] ${j.id} ${keep ? `moves ${step(j)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
+    if (keep) {
+      routed = after;
+      taken = last;
+    } else {
+      reset(kept);
+      undo();
+      routed = before;
+    }
+  }
+}
+
+/**
+ * Saves what arranging and routing set on a scope: the columns, rows, boxes
+ * and used tops of its nodes and boundary events, the bands, waypoints and
+ * labels of its flows, the boxes of its artifacts, the compensation links,
+ * its size and lane bands. The returned function puts that back (once).
+ */
+function keepArrangement(layout: ScopeLayout): () => void {
+  const shapes = layout.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => ({ n, layer: n.layer, row: n.row, band: n.band, width: n.width, box: { ...n.box }, topUsed: n.topUsed }));
+  const edges = layout.edges.map((e) => ({ e, bandRow: e.bandRow, bandY: e.bandY, points: e.points.map((p) => ({ ...p })), label: e.label && { ...e.label }, runsBelow: e.runsBelow }));
+  const artifacts = layout.artifacts.map((a) => ({ a, box: { ...a.box } }));
+  const compensations = layout.compensations.map((c) => ({ c, points: c.points.map((p) => ({ ...p })) }));
+  const { width, height } = layout;
+  const laneBands = layout.laneBands?.map((b) => ({ ...b }));
+  // a used top or flow label that was missing gets undefined back (the router sets them on every node and flow);
+  // a band only where there was one, as gridScope leaves it: deleting a property slows every later access to the object
+  return () => {
+    for (const s of shapes) Object.assign(s.n, { layer: s.layer, row: s.row, band: s.band, width: s.width, box: s.box, topUsed: s.topUsed });
+    for (const s of edges) {
+      Object.assign(s.e, { points: s.points, label: s.label, runsBelow: s.runsBelow });
+      if (s.bandRow === undefined) delete s.e.bandRow;
+      else s.e.bandRow = s.bandRow;
+      if (s.bandY === undefined) delete s.e.bandY;
+      else s.e.bandY = s.bandY;
+    }
+    for (const s of artifacts) s.a.box = s.box;
+    for (const s of compensations) s.c.points = s.points;
+    layout.width = width;
+    layout.height = height;
+    layout.laneBands = laneBands;
+  };
+}
+
+/** How many columns freeJoinColumns moves a node right at most (in one trial). */
+const MAX_JOIN_SHIFT = 3;
+
+/** How many other nodes a trial of freeJoinColumns moves with the node at most. */
+const MAX_PUSHED = 4;
+
+/**
+ * The nodes whose column is taken, each with the nodes that what lies there
+ * moves with (undefined: an artifact of none): something that does not move
+ * with the node (a node, a boundary event, a routed artifact or the label of
+ * one of them) lies on the vertical line its flows from below rise on into
+ * its bottom (route.ts risesInto, riseX), or closer to it than RISE_KEEP (a
+ * gateway's vertex on it), between it and the lowest of them.
+ */
+function takenColumns(layout: ScopeLayout): Map<GNode, Array<GNode | undefined>> {
+  const out = new Map<GNode, Array<GNode | undefined>>();
+  const rising = layout.nodes.filter((n) => risesInto(n).length);
+  if (!rising.length) return out;
+  // each box with the node it moves with
+  const index = new XIndex<[Box, GNode | undefined]>();
+  const add = (b: Box, owner: GNode | undefined): void => index.add([b, owner], b.x, b.x + b.width);
+  for (const n of layout.nodes) {
+    add(n.box, n);
+    for (const b of n.boundary) add(b.box, n);
+  }
+  const ownerOf = (a: GArtifact): GNode | undefined => a.anchorNode?.host ?? a.anchorNode;
+  for (const a of routedArtifacts(layout)) add(a.box, ownerOf(a));
+  for (const [b, n] of ownShapeLabels(layout)) add(b, n);
+  for (const [b, a] of placedDataLabels(layout)) add(b, ownerOf(a));
+  for (const j of rising) {
+    const x = riseX(j), top = j.box.y + j.box.height, low = Math.max(...risesInto(j).map(riseFrom));
+    const owners = index.near(x - RISE_KEEP, x + RISE_KEEP).filter(([b, owner]) => owner !== j && b.x - RISE_KEEP < x && x < b.x + b.width + RISE_KEEP && b.y < low && top < b.y + b.height).map(([, owner]) => owner);
+    if (owners.length) out.set(j, owners);
+  }
+  return out;
+}
+
+/**
+ * The routed flows that rise straight into a node's bottom (route.ts risesInto, riseX; a boundary event's also at
+ * another of riseSlots), from their row or band (a boundary event's: from its run below the host's row; no hook).
+ */
+function straightRises(layout: ScopeLayout): Set<GEdge> {
+  const out = new Set<GEdge>();
+  for (const j of layout.nodes) {
+    const xs = riseSlots(j).map(Math.round), y = j.box.y + j.box.height;
+    for (const e of risesInto(j)) {
+      const [p, q] = e.points.slice(-2);
+      if (p && q && (e.source.host ? xs.includes(q.x) : q.x === xs[0]) && q.y === y && p.x === q.x && (e.source.host ? p.y >= riseFrom(e) - 1 : Math.abs(p.y - riseFrom(e)) <= 1)) out.add(e);
+    }
+  }
+  return out;
 }
 
 function placeEventSubs(layout: ScopeLayout): void {
@@ -831,9 +1200,10 @@ function boundaryNoteBox(a: GArtifact, event: GNode, host: GNode, free: (b: Box)
 }
 
 /**
- * Data objects / stores right below the node they belong to, annotations of
- * boundary events at the lower left of the event. Runs before routing so the
- * router treats them as obstacles.
+ * Data objects / stores right below the node they belong to (a join's right
+ * of the line its entries from below rise on), annotations of boundary
+ * events at the lower left of the event. Runs before routing so the router
+ * treats them as obstacles.
  */
 export function placeAttachedArtifacts(layout: ScopeLayout): void {
   const taken: Box[] = [];
@@ -847,7 +1217,8 @@ export function placeAttachedArtifacts(layout: ScopeLayout): void {
       taken.push(a.box);
       continue;
     }
-    const cx = belowX(n);
+    // a join's entries from below rise into its bottom vertex: its data hang right of their line
+    const cx = entriesFromBelow(n).length ? n.box.x + n.box.width / 2 + 6 + a.width / 2 : belowX(n);
     let box: Box = { x: Math.round(cx - a.width / 2), y: n.box.y + n.box.height + (n.boundary.length ? 24 : 20), width: a.width, height: a.height };
     while (!free(box)) box = { ...box, x: box.x + a.width + 10 };
     a.box = box;
@@ -935,32 +1306,97 @@ export function placeAnnotations(layout: ScopeLayout): void {
  * scope origin.
  */
 export function nodeLabels(layout: ScopeLayout): Box[] {
-  const out: Box[] = [];
-  for (const n of layout.nodes) {
-    const kind = n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' ? undefined : n.kind === 'gateway' ? 'gateway' : is(n.el, 'bpmn:Event') ? 'event' : undefined;
-    const label = kind ? elementLabel(n, kind) : undefined;
-    if (label) out.push(label);
-    for (const b of n.boundary) {
-      const bl = elementLabel(b, 'boundary');
-      if (bl) out.push(bl);
-    }
-  }
+  const out = shapeLabels(layout);
   for (const e of layout.edges) if (e.label) out.push(e.label);
   return out;
 }
 
+/** The external labels of a scope's nodes and boundary events (nodeLabels without the flows'). */
+function shapeLabels(layout: ScopeLayout): Box[] {
+  return ownShapeLabels(layout).map(([b]) => b);
+}
+
+/** shapeLabels, each with its node (a boundary event's: the host). */
+function ownShapeLabels(layout: ScopeLayout): Array<[Box, GNode]> {
+  const out: Array<[Box, GNode]> = [];
+  for (const n of layout.nodes) {
+    const kind = n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' ? undefined : n.kind === 'gateway' ? 'gateway' : isEvent(n) ? 'event' : undefined;
+    const label = kind ? elementLabel(n, kind) : undefined;
+    if (label) out.push([label, n]);
+    for (const b of n.boundary) {
+      const bl = elementLabel(b, 'boundary');
+      if (bl) out.push([bl, n]);
+    }
+  }
+  return out;
+}
+
 /**
- * The width a frame around a scope (pool, lane, expanded sub-process) needs
- * for its content and the labels that reach past it (an end event at the
- * right edge has a label wider than the event: labelOutsideFrame otherwise),
- * and `left`, how far labels reach left of the content (a sub-process moves
- * its content right by that much; a pool's lane padding holds it). Only the
- * frames use it; the content is placed with the scope's own size.
+ * The labels the engine draws for a scope's data objects and stores
+ * (engine.ts emitScope), relative to the scope origin, where they end up: a
+ * label on the label of a data object before it (two data objects of one
+ * task stand closer than their labels are wide) takes the first spot below
+ * its shape clear of them that engine.ts declutterLabels tries, shifted
+ * sideways, else stepped further down.
+ */
+function dataLabels(layout: ScopeLayout): Box[] {
+  return placedDataLabels(layout).map(([b]) => b);
+}
+
+/** dataLabels, each with its data object or store. */
+function placedDataLabels(layout: ScopeLayout): Array<[Box, GArtifact]> {
+  const out: Array<[Box, GArtifact]> = [];
+  for (const a of layout.artifacts) {
+    const label = a.kind === 'annotation' ? undefined : elementLabel(a, 'data');
+    if (!label) continue;
+    const spots = [...[0, -0.6, 0.6, -1.2, 1.2].map((dx) => ({ ...label, x: Math.round(label.x + dx * label.width) })), ...[1, 2, 3].map((step) => ({ ...label, y: label.y + step * (label.height + 4) }))];
+    out.push([spots.find((b) => !out.some(([o]) => boxesOverlap(o, b, 2))) ?? label, a]);
+  }
+  return out;
+}
+
+/**
+ * The width a pool or a lane needs for the content of its scope and the
+ * labels that reach past it (an end event at the right edge has a label
+ * wider than the event: labelOutsideFrame otherwise), and `left`, how far
+ * labels reach left of the content (the lane padding holds it). Only the
+ * frames use it; the content is placed with the scope's own size. Expanded
+ * sub-processes are sized by frameSubProcess.
  */
 export function framedSize(layout: ScopeLayout): { width: number; left: number } {
   const labels = nodeLabels(layout);
   const left = Math.max(0, ...labels.map((l) => -l.x));
   return { width: Math.max(layout.width, ...labels.map((l) => l.x + l.width)) + left, left };
+}
+
+/** Labels may reach this close to the border of an expanded sub-process (into its padding). */
+const LABEL_KEEP = 6;
+/** Room between the title of an expanded sub-process and what is drawn below it. */
+const TITLE_GAP = 4;
+
+/**
+ * Sizes an expanded sub-process around its laid-out content and says where
+ * the content sits in it (`childPad`, engine.ts emitNode): the padding
+ * (SIZES.subProcessPadding) all round, wider where a label of the content
+ * (nodeLabels, and the labels of its data objects and stores) reaches
+ * further out than LABEL_KEEP px from the border (a label left of the
+ * content moves it right), and at the top room for the title's lines and the
+ * labels above the first row (a gateway's), TITLE_GAP below the title; never
+ * smaller than SIZES.subProcessMin, the content centred in a wider frame.
+ */
+function frameSubProcess(node: GNode): void {
+  const child = node.child!;
+  const p = SIZES.subProcessPadding;
+  const labels = [...nodeLabels(child), ...dataLabels(child)];
+  const left = Math.max(0, ...labels.map((l) => -l.x - (p.left - LABEL_KEEP)));
+  const right = Math.max(child.width, ...labels.map((l) => l.x + l.width - (p.right - LABEL_KEEP)));
+  const below = Math.max(child.height, ...labels.map((l) => l.y + l.height - (p.bottom - LABEL_KEEP)));
+  const above = Math.max(0, ...labels.map((l) => -l.y));
+  const inner = Math.ceil(left + right);
+  node.width = Math.max(SIZES.subProcessMin.width, inner + p.left + p.right);
+  const top = Math.max(p.top, Math.ceil(titleDepth(node.el.get<string | undefined>('name'), node.width) + TITLE_GAP + above));
+  node.height = Math.max(SIZES.subProcessMin.height, Math.ceil(below) + top + p.bottom);
+  node.childPad = { left, top, inner };
 }
 
 /** Extends the content size of a scope so association routes drawn around the content still fit. */

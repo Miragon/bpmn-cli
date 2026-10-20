@@ -39,19 +39,24 @@
  *  change only when it adds no hard layout defect (see ops.ts); the
  *  result counts the strips closed and the pixels removed per axis.
  *  Paddings: lanes and pools 30 px (left of the content: after the 30 px
- *  headers), sub-processes 30 px (45 px at the top, room for the name).
+ *  headers), sub-processes 30 px (45 px at the top, room for the name; a
+ *  name of three lines and more keeps its lines and 4 px, text.ts
+ *  titleDepth).
  *  Interior gaps: the drawing's gap (spacingOf) on x, clamp(row - 80, 30,
  *  60) on y. Strips with less than 10 px to gain are left alone.
  */
 import { bottom, right, type Box } from './geom.js';
 import { spacingOf } from './place.js';
-import { inFrame, isLeaf, type DEdge, type DShape, type Plane } from './plane.js';
+import { inFrame, isLeaf, raw, type DEdge, type DShape, type Plane } from './plane.js';
 import { closeStrip, type Axis, type SpaceResult } from './space.js';
+import { titleDepth } from './text.js';
 
 /** padding kept between a frame's border and its content */
 export const PAD = 30;
 /** padding above the content of a sub-process (its name sits at the top) */
 export const SUB_TOP = 45;
+/** the padding above the content of a sub-process: SUB_TOP, or its name's lines and 4 px when they need more */
+const subTop = (sub: DShape): number => Math.max(SUB_TOP, Math.round(titleDepth(raw<string>(sub.el, 'name'), sub.bounds.width) + 4));
 /** headers of pools and lanes (their name, written vertically) */
 export const HEADER = 30;
 /** an empty lane keeps this height */
@@ -282,7 +287,7 @@ export function compactPlane(plane: Plane, opts: CompactOptions): CompactStats {
       const strips = findStrips(axis, b, {
         start: near(b, axis),
         end: far(b, axis),
-        lead: axis === 'x' ? PAD : SUB_TOP,
+        lead: axis === 'x' ? PAD : subTop(f),
         trail: PAD,
         gap: axis === 'x' ? gapX : gapY,
         skip: chainIds(plane, f),

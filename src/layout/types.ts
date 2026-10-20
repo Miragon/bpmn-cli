@@ -28,6 +28,11 @@ export interface GNode {
   host?: GNode;
   /** expanded sub-process: its laid-out child scope */
   child?: ScopeLayout;
+  /**
+   * expanded sub-process: where its content sits (place.ts frameSubProcess): `left` and `top` from the
+   * padding's left edge and the frame's top, `inner` the width of the content with its labels
+   */
+  childPad?: { left: number; top: number; inner: number };
   /** compensate boundary event: the handler it is associated with */
   compensationHandler?: GNode;
   /** compensation handler: the boundary event it hangs from */
@@ -53,12 +58,20 @@ export interface GEdge {
   target: GNode;
   /** edge closes a cycle (drawn as a loop) */
   back: boolean;
-  /** empty band (gateway -> join without nodes): the reserved row and its y, set by the placer */
+  /**
+   * empty band (gateway -> join without nodes): the reserved row and its y, set by the placer; the router
+   * draws the flow straight instead when the row between the two is free (route.ts)
+   */
   bandRow?: number;
   bandY?: number;
   /** waypoints, relative to the scope origin */
   points: Point[];
   label?: Box;
+  /**
+   * set by the router on a boundary event's flow that leaves the event downwards to a run below its host's row (at
+   * its second waypoint's y; the host's lane holds it, engine.ts fitLaneLoops)
+   */
+  runsBelow?: boolean;
 }
 
 /** One end of an association: a node/artifact box, or a point on a routed flow. */
@@ -150,8 +163,22 @@ export function center(b: Box): Point {
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }
 
-/** Estimated label box for a name rendered by bpmn-js (12px Arial, wrapped at `maxWidth`). */
+/** labelSize's results by width and name (the layout asks for the same names over and over); cleared when full */
+const sizes = new Map<number, Map<string, { width: number; height: number; lines: number }>>();
+
+/** Estimated label box for a name rendered by bpmn-js (12px Arial, wrapped at `maxWidth`); do not change the result. */
 export function labelSize(name: string, maxWidth = 90): { width: number; height: number; lines: number } {
+  let byName = sizes.get(maxWidth);
+  if (!byName) sizes.set(maxWidth, (byName = new Map()));
+  let size = byName.get(name);
+  if (!size) {
+    if (byName.size >= 4096) byName.clear();
+    byName.set(name, (size = measureLabel(name, maxWidth)));
+  }
+  return size;
+}
+
+function measureLabel(name: string, maxWidth: number): { width: number; height: number; lines: number } {
   const words = name.split(/\s+/).filter(Boolean);
   const charW = 7;
   const pad = 12;

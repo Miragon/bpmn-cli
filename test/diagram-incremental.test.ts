@@ -9,6 +9,8 @@
  * under --no-layout loses its edge, an edge that does not reach its ends is
  * rerouted by the next write.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
@@ -54,9 +56,10 @@ async function engineXml(ops: Op[]): Promise<string> {
   return r.xml;
 }
 
-/** The clean engine's drawing of `ops`, every DI coordinate moved by (dx, dy): no longer engine-owned. */
-async function handXml(ops: Op[], dx = 13, dy = 7): Promise<string> {
+/** The clean engine's drawing of `ops`, changed by hand (`redraw`) and every DI coordinate moved by (dx, dy): no longer engine-owned. */
+async function handXml(ops: Op[], dx = 13, dy = 7, redraw?: (doc: Doc) => void): Promise<string> {
   const doc = await Doc.fromXml(await engineXml(ops));
+  redraw?.(doc);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
       const b = pe.get<El | undefined>('bounds');
@@ -229,6 +232,141 @@ describe('incremental placement', () => {
     expect(cy(now.get('NE')!)).toBe(cy(now.get('N')!));
     for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
     expect(addedKinds(r).filter((k) => k !== 'labelOnLine')).toEqual([]);
+  });
+
+  describe('a new branch into a join enters from below, sharing the bottom vertex with the other entries', () => {
+    const SPLIT3: Op[] = [
+      { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
+      { op: 'add', kind: 'task', id: 'A', name: 'Check', after: 'S' },
+      { op: 'add', kind: 'endEvent', id: 'E', name: 'Done', after: 'A' },
+    ];
+    const split = (lanes: boolean): Op => ({
+      op: 'split',
+      after: 'A',
+      kind: 'parallelGateway',
+      id: 'G',
+      joinId: 'GJ',
+      branches: [
+        { nodes: [{ kind: 'task', id: 'T1', name: 'Archive' }] },
+        { nodes: [{ kind: 'task', id: 'T2', name: 'Approve', ...(lanes ? { lane: 'L2' } : {}) }] },
+        { nodes: [{ kind: 'task', id: 'T3', name: 'Book', ...(lanes ? { lane: 'L3' } : {}) }, { kind: 'task', id: 'T4', name: 'Pay', ...(lanes ? { lane: 'L3' } : {}) }] },
+      ],
+    });
+    /** where the flow from `source` into the join ends, and the join's bottom vertex */
+    const entry = (after: Doc, source: string): { end: string; bottom: string } => {
+      const j = shapes(after).get('GJ')!;
+      const e = [...edges(after).values()].find((x) => x.sourceId === source && x.targetId === 'GJ')!;
+      const end = e.points[e.points.length - 1]!;
+      return { end: `${end.x},${end.y}`, bottom: `${j.bounds.x + j.bounds.width / 2},${bottom(j)}` };
+    };
+
+    it('a 4th branch of a parallel split rises into the bottom vertex beside the others: no segmentOverlap, the score stays', async () => {
+      const xml = await handXml([...SPLIT3, split(false)]);
+      const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Notify', after: 'G', to: 'GJ' }]);
+      expect(r.layout.mode).toBe('incremental');
+      for (const source of ['T2', 'T4', 'N']) {
+        const { end, bottom: vertex } = entry(after, source);
+        expect(end, source).toBe(vertex);
+      }
+      expect(layoutProblems(after.definitions).counts.segmentOverlap).toBe(0);
+      expect(r.layout.metrics!.after.score).toBe(r.layout.metrics!.before!.score);
+      expect(addedKinds(r)).toEqual([]);
+    });
+
+    it('lanes: a new branch in a lower lane rises into the bottom vertex of the join, not over the top into its top vertex', async () => {
+      const xml = await handXml([
+        ...SPLIT3,
+        { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Clerk', in: 'Pool', members: ['S', 'A', 'E'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Boss', in: 'Pool' },
+        { op: 'add', kind: 'lane', id: 'L3', name: 'Accounting', in: 'Pool' },
+        split(true),
+      ]);
+      const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Audit', after: 'G', to: 'GJ', lane: 'L2' }]);
+      expect(r.layout.mode).toBe('incremental');
+      const { end, bottom: vertex } = entry(after, 'N');
+      expect(end).toBe(vertex);
+      expect(addedKinds(r)).toEqual([]);
+    });
+
+    /**
+     * A join GJ drawn by hand as the engine drew it before it kept a join's column free: the end event EL right
+     * below it, the entries from below rising in the column gap right of it and hooking into its bottom vertex.
+     */
+    const hookBundle = (doc: Doc): void => {
+      const planeElements = doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement');
+      const di = (id: string): El => planeElements.find((pe) => pe.get<El>('bpmnElement').get<string>('id') === id)!;
+      const num = (el: El, key: string): number => el.get<number>(key);
+      const j = di('GJ').get<El>('bounds'), el = di('EL').get<El>('bounds');
+      const jx = num(j, 'x') + num(j, 'width') / 2, jb = num(j, 'y') + num(j, 'height');
+      const dx = jx - (num(el, 'x') + num(el, 'width') / 2);
+      for (const b of [el, di('EL').get<El | undefined>('label')?.get<El>('bounds')]) b?.set('x', num(b, 'x') + dx);
+      const point = (x: number, y: number): El => doc.moddle.create('dc:Point', { x, y }) as El;
+      for (const pe of planeElements) {
+        const flow = pe.get<El>('bpmnElement');
+        if (!is(flow, 'bpmn:SequenceFlow')) continue;
+        const pts = pe.get<El[]>('waypoint');
+        const target = flow.get<El>('targetRef').get<string>('id');
+        if (target === 'EL') pts.at(-1)!.set('x', num(pts.at(-1)!, 'x') + dx);
+        if (target !== 'GJ' || num(pts.at(-1)!, 'y') !== jb) continue;
+        // along the source's row into the gap right of the join, up it, a 15 px hook into the bottom vertex
+        const gapX = num(j, 'x') + num(j, 'width') + 30, y = num(pts[0]!, 'y');
+        pe.set('waypoint', [pts[0]!, point(gapX, y), point(gapX, jb + 15), point(jx, jb + 15), point(jx, jb)]);
+      }
+    };
+
+    it('a hook bundle (the entries rise beside the join, over an end event below it, and hook into its bottom vertex): a new branch in a lower lane joins the whole bundle, touching no other vertex', async () => {
+      // the maintainer's order model in small, its boundary path ending right below the join, drawn by hand with every entry hooked in
+      const xml = await handXml([
+        ...SPLIT3,
+        { op: 'split', after: 'A', kind: 'parallelGateway', id: 'G', joinId: 'GJ', branches: [{ nodes: [{ kind: 'task', id: 'T1', name: 'Pick' }, { kind: 'task', id: 'T1b', name: 'Pack' }] }, { nodes: [{ kind: 'task', id: 'T2', name: 'Invoice' }] }, { nodes: [{ kind: 'task', id: 'T3', name: 'Label' }] }] },
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Late', on: 'T1', timer: 'P2D', nonInterrupting: true },
+        { op: 'add', kind: 'sendTask', id: 'TL', name: 'Inform', after: 'BT' },
+        { op: 'add', kind: 'endEvent', id: 'EL', name: 'Informed', after: 'TL' },
+        { op: 'add', kind: 'participant', id: 'Pool', name: 'Shop' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'Pool', members: ['S', 'A', 'E', 'G', 'GJ', 'TL', 'EL'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Store', in: 'Pool', members: ['T1', 'T1b', 'T3'] },
+        { op: 'add', kind: 'lane', id: 'L3', name: 'Accounting', in: 'Pool', members: ['T2'] },
+      ], 13, 7, hookBundle);
+      const into = (doc: Doc, source: string): DEdge => [...edges(doc).values()].find((x) => x.sourceId === source && x.targetId === 'GJ')!;
+      const before = await Doc.fromXml(xml);
+      expect(layoutProblems(before.definitions).problems.filter((p) => ['through', 'overlaps'].includes(p.kind))).toEqual([]);
+      const hook = into(before, 'T2').points;
+      const j = shapes(before).get('GJ')!;
+      expect(hook.at(-1)).toEqual({ x: j.bounds.x + j.bounds.width / 2, y: bottom(j) });
+      expect(hook.at(-3)!.x, 'the bundle rises right of the join').toBeGreaterThan(right(j));
+      const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Customs', after: 'G', to: 'GJ', lane: 'L3' }], { layout: 'incremental' });
+      expect(r.layout.mode).toBe('incremental');
+      const pts = into(after, 'N').points;
+      // up the bundle's column, along its hook into the shared bottom vertex
+      expect(pts.slice(-3)).toEqual(hook.slice(-3));
+      expect(pts.at(-4)!.x).toBe(hook.at(-3)!.x);
+      // no other vertex of the join on the way (not along its box under the diamond)
+      const through = (v: { x: number; y: number }): boolean => pts.slice(1).some((q, i) => {
+        const p = pts[i]!;
+        return p.x === q.x ? v.x === p.x && v.y >= Math.min(p.y, q.y) && v.y <= Math.max(p.y, q.y) : v.y === p.y && v.x >= Math.min(p.x, q.x) && v.x <= Math.max(p.x, q.x);
+      });
+      for (const v of [{ x: j.bounds.x + j.bounds.width / 2, y: j.bounds.y }, { x: right(j), y: cy(j) }, { x: j.bounds.x, y: cy(j) }]) expect(through(v), JSON.stringify(pts)).toBe(false);
+      expect(addedKinds(r)).toEqual([]);
+      expect(r.layout.metrics!.after.score).toBe(r.layout.metrics!.before!.score);
+    });
+
+    it('sharing the bottom vertex never costs a crossing: an entry that would cross a line to reach it takes the free top vertex', async () => {
+      // s24 / s20: a task after a decision back into a join whose bottom vertex a loop or branch already enters
+      const scenario = (name: string): string => readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', name), 'utf8');
+      for (const [file, from, into] of [
+        ['controlflow__s24.bpmn', 'Gateway_Release', 'Gateway_Work_join'],
+        ['controlflow__s20.bpmn', 'Gateway_Agrees', 'Gateway_Sev_join'],
+      ] as const) {
+        const { r, after } = await run(scenario(file), [{ op: 'add', kind: 'task', id: 'N', name: 'New work', after: from, to: into }], { layout: 'incremental' });
+        expect(addedKinds(r), file).toEqual([]);
+        // routing the new entry again keeps it so
+        const flow = [...edges(after).values()].find((e) => e.sourceId === 'N' && e.targetId === into)!;
+        const again = await run(r.xml, [{ op: 'route', id: flow.id }], { layout: 'incremental' });
+        expect(addedKinds(again.r), file).toEqual([]);
+        expect(again.r.layout.metrics!.after.score, file).toBe(r.layout.metrics!.after.score);
+      }
+    });
   });
 
   it('hangs a boundary event on the host\'s bottom border and its handler one row below', async () => {

@@ -1,6 +1,6 @@
 /**
  * The text inside an activity as bpmn-js draws it, to size a shape for its
- * name.
+ * name and to know where the title of an expanded sub-process is.
  *
  * CONTRACT
  *  - textWidth(text) estimates the rendered width of one line in 12px Arial
@@ -26,7 +26,16 @@
  *    fit, higher in steps of 20 (at most 5 steps) at the narrowest of those
  *    widths that breaks the name into as few lines as 200 px do. Never
  *    smaller than `size`.
+ *  - titleBox(bounds, name) is where bpmn-js draws the name of an expanded
+ *    sub-process (also an event sub-process, a transaction, an ad-hoc
+ *    sub-process) with these bounds, its title: the lines of innerLines,
+ *    centred, the first one 7 px below the top border, 14.4 px each, as wide
+ *    as the widest line; undefined without a name. titleDepth(name, width) is
+ *    how far below the top border that box ends (0 without a name). The
+ *    renderer, both layout engines and the metrics use them, so they agree
+ *    on where a title is.
  */
+import type { Box } from '../layout/types.js';
 
 /** advance widths of Arial in 1/1000 em */
 const ARIAL: Record<string, number> = {
@@ -99,8 +108,24 @@ export function wrapLines(text: string, maxWidth: number): string[] {
   return out;
 }
 
+/** bpmn-js's padding around the name inside a shape */
+const PADDING = 7;
+
 /** Number of lines bpmn-js breaks `name` into inside a shape `width` px wide (the embedded label's padding: 7 px on each side). */
-export const innerLines = (name: string, width: number): number => wrapLines(name, width - 14).length;
+export const innerLines = (name: string, width: number): number => wrapLines(name, width - 2 * PADDING).length;
+
+/** Where the name of an expanded sub-process is drawn: centred at the top (see module contract). */
+export function titleBox(bounds: Box, name: string | undefined): Box | undefined {
+  if (!name || !name.trim()) return undefined;
+  const lines = wrapLines(name, bounds.width - 2 * PADDING);
+  const width = Math.max(...lines.map((l) => textWidth(l)));
+  return { x: bounds.x + (bounds.width - width) / 2, y: bounds.y + PADDING, width, height: lines.length * LINE_HEIGHT };
+}
+
+/** How far below the top border of an expanded sub-process `width` px wide its name reaches (0 without one). */
+export function titleDepth(name: string | undefined, width: number): number {
+  return name && name.trim() ? PADDING + innerLines(name, width) * LINE_HEIGHT : 0;
+}
 
 /** room a marker or a boundary event on the bottom border needs below the text (glyphs end ~3 px above their line box) */
 export const BOTTOM_ROOM = 17;

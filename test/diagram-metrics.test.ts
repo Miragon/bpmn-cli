@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
+import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
 import { parseXml } from '../src/model.js';
 import { definitionsXml } from './helpers.js';
 
@@ -342,6 +342,106 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
     expect(only(m.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['F1', 'F2', 'J'], detail: '100px' }]);
   });
 
+  describe('segmentOverlap into a gateway: a join\'s entries share its bottom / top vertex', () => {
+    type Line = Array<[number, number]>;
+    // A, B, C left of the target J (one above the other), J -> E
+    const J: Rect = [300, 115, 50, 50]; // vertices: left 300,140  top 325,115  bottom 325,165
+    const scene = (kind: string, j: Rect, lines: { FA: Line; FB: Line; FC: Line; FE?: Line }, extra: { body?: string; di?: string[] } = {}): string =>
+      processXml(`${task('A')}${task('B')}${task('C')}<bpmn:${kind} id="J" />${task('E')}${flow('FA', 'A', 'J')}${flow('FB', 'B', 'J')}${flow('FC', 'C', 'J')}${flow('FE', 'J', 'E')}${extra.body ?? ''}`, [
+        shape('A', [100, 100, 100, 80]),
+        shape('B', [100, 250, 100, 80]),
+        shape('C', [100, 400, 100, 80]),
+        shape('J', j),
+        shape('E', [450, 100, 100, 80]),
+        edge('FA', lines.FA),
+        edge('FB', lines.FB),
+        edge('FC', lines.FC),
+        edge('FE', lines.FE ?? [[350, 140], [450, 140]]),
+        ...(extra.di ?? []),
+      ]);
+    const INTO_LEFT: Line = [[200, 140], [300, 140]];
+    // B and C rise into the bottom vertex, on one line for 125 px (bpmn-js h:v)
+    const RISE_B: Line = [[200, 290], [325, 290], [325, 165]];
+    const RISE_C: Line = [[200, 440], [325, 440], [325, 165]];
+
+    for (const kind of ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'complexGateway', 'eventBasedGateway']) {
+      it(`a shared rise into the bottom vertex of a join is not reported (${kind})`, async () => {
+        const m = await measure(scene(kind, J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }));
+        expect(m.problems).toEqual([]);
+        expect(m.score).toBe(0);
+      });
+    }
+
+    it('a shared descent into the top vertex is not reported', async () => {
+      // J below its entries: A and B come down into the top vertex 325,480 (110 px on one line), C enters the left vertex
+      const m = await measure(
+        scene('parallelGateway', [300, 480, 50, 50], {
+          FA: [[200, 140], [325, 140], [325, 480]],
+          FB: [[200, 290], [325, 290], [325, 480]],
+          FC: [[200, 440], [250, 440], [250, 505], [300, 505]],
+          FE: [[350, 505], [400, 505], [400, 140], [450, 140]],
+        }),
+      );
+      expect(m.problems).toEqual([]);
+    });
+
+    it('a hook bundle is not reported: up the column gap, the hook and the rise, back to where the flows part', async () => {
+      // B and C share the gap at x 400 (110 px), the hook at y 180 (75 px) and the rise (15 px)
+      const m = await measure(
+        scene('exclusiveGateway', J, {
+          FA: INTO_LEFT,
+          FB: [[200, 290], [400, 290], [400, 180], [325, 180], [325, 165]],
+          FC: [[200, 440], [400, 440], [400, 180], [325, 180], [325, 165]],
+        }),
+      );
+      expect(only(m.problems, 'segmentOverlap')).toEqual([]);
+    });
+
+    it('still reported: a merge onto a line into the left vertex, two flows drawn on top of each other, a task as the target', async () => {
+      // B joins A's line 40 px before the left vertex; C rises into the bottom vertex alone
+      const left = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: [[200, 290], [260, 290], [260, 140], [300, 140]], FC: RISE_C }));
+      expect(only(left.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FA', 'FB', 'J'], detail: '40px' }]);
+      // B and C on one line from start to end: one flow hides the other
+      const hidden = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_B }));
+      expect(only(hidden.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '250px' }]);
+      // the same with a duplicate first waypoint on one or both of them (a zero-length first segment)
+      const dup = (line: Line): Line => [line[0]!, ...line];
+      for (const [fb, fc] of [[dup(RISE_B), RISE_B], [RISE_B, dup(RISE_B)], [dup(RISE_B), dup(RISE_B)]]) {
+        const twin = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: fb!, FC: fc! }));
+        expect(only(twin.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '250px' }]);
+      }
+      // the same rise into the bottom of a task: an implicit join, the flows merge before it
+      const into = await measure(scene('task', [275, 100, 100, 80], { FA: [[200, 140], [275, 140]], FB: [[200, 290], [325, 290], [325, 180]], FC: [[200, 440], [325, 440], [325, 180]], FE: [[375, 140], [450, 140]] }));
+      expect(only(into.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '110px' }]);
+    });
+
+    it('a gateway that also splits: entries sharing the bottom vertex with its outgoing drop are inOut', async () => {
+      // J -> X drops from the bottom vertex the entries of B and C rise into
+      const m = await measure(
+        scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }, { body: `${task('X')}${flow('FX', 'J', 'X')}`, di: [shape('X', [450, 300, 100, 80]), edge('FX', [[325, 165], [325, 340], [450, 340]])] }),
+      );
+      expect(only(m.problems, 'segmentOverlap')).toEqual([]);
+      expect(only(m.problems, 'inOut')).toEqual([
+        { kind: 'inOut', ids: ['FB', 'FX', 'J'] },
+        { kind: 'inOut', ids: ['FC', 'FX', 'J'] },
+      ]);
+    });
+
+    it('a pair still reported counts only what it shares outside the common tail, and shows its badge there', async () => {
+      // B and C form a hook bundle into the bottom vertex (gap at x 400, hook at y 230, rise); C first runs 35 px along the hook's line
+      const xml = scene('exclusiveGateway', J, {
+        FA: INTO_LEFT,
+        FB: [[200, 290], [400, 290], [400, 230], [325, 230], [325, 165]],
+        FC: [[200, 440], [230, 440], [230, 230], [360, 230], [360, 300], [400, 300], [400, 230], [325, 230], [325, 165]],
+      });
+      const m = await measure(xml);
+      const found = only(m.problems, 'segmentOverlap');
+      expect(found).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '35px' }]);
+      const { definitions } = await parseXml(xml);
+      expect(locateProblems(definitions, found).map((p) => p.at)).toEqual([{ plane: 'Process_1', x: 342.5, y: 230 }]);
+    });
+  });
+
   describe('labels', () => {
     const collab = `<bpmn:collaboration id="Collab_1"><bpmn:participant id="Pool" processRef="Process_1" /><bpmn:participant id="Partner" />
       <bpmn:messageFlow id="M1" name="Order" sourceRef="Partner" targetRef="Task_A" /></bpmn:collaboration>`;
@@ -376,6 +476,32 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
       expect(only(ok.problems, 'messageLabelFar')).toEqual([]);
       const far = await measure(xml([160, 325, 36, 14], [500, 100, 40, 14]));
       expect(only(far.problems, 'messageLabelFar')).toEqual([{ kind: 'messageLabelFar', ids: ['M1'], detail: '150px' }]);
+    });
+
+    describe('labelOnTitle', () => {
+      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (text.ts titleBox)
+      const titled = (name: string, expanded: boolean, label: Rect): string =>
+        processXml(`<bpmn:subProcess id="Sub"${name ? ` name="${name}"` : ''} /><bpmn:startEvent id="E" name="Order in" />`, [shape('Sub', [100, 100, 300, 200], { expanded }), shape('E', [40, 40, 36, 36], { label })]);
+
+      it('a label on the title of a named expanded sub-process', async () => {
+        const m = await measure(titled('Handle order', true, [230, 105, 60, 14]));
+        expect(m.problems).toEqual([{ kind: 'labelOnTitle', ids: ['E', 'Sub'] }]);
+        expect(m.score).toBe(WEIGHTS.labelOnTitle);
+      });
+
+      it('a label below the title, or beside it, is none', async () => {
+        expect((await measure(titled('Handle order', true, [230, 125, 60, 14]))).problems).toEqual([]);
+        expect((await measure(titled('Handle order', true, [110, 105, 60, 14]))).problems).toEqual([]);
+      });
+
+      it('a sub-process without a name has no title', async () => {
+        expect((await measure(titled('', true, [230, 105, 60, 14]))).problems).toEqual([]);
+      });
+
+      it('a collapsed sub-process is a leaf: a label on it is a labelClash, not on a title', async () => {
+        const m = await measure(titled('Handle order', false, [230, 105, 60, 14]));
+        expect(m.problems).toEqual([{ kind: 'labelClash', ids: ['E', 'Sub'], detail: 'label on shape' }]);
+      });
     });
   });
 });

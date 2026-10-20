@@ -32,10 +32,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withLayoutDebug } from '../src/debug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { Doc } from '../src/document.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout.js';
+import { freeJoinColumns, gridScope, layoutScope, placeAttachedArtifacts } from '../src/layout/place.js';
 import { is, many, type El } from '../src/model.js';
 import { collapsedIds } from '../src/ops/add.js';
 import { runOps } from '../src/ops/index.js';
@@ -573,6 +575,906 @@ describe('clean layout engine', () => {
     expect(loop.label).toBeDefined();
   });
 
+  it('loops into a join share its bottom vertex with its other entries: a second loop into a merge, a loop into a split\'s join', async () => {
+    // Fix and Ask both loop back into the merge M; the second one does not take M's left vertex
+    const merge = await layout(
+      'two-loops-merge',
+      proc([
+        start('S'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'M', after: 'S' },
+        task('A', 'Check', 'M'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'Ok?', after: 'A' },
+        task('B', 'Book', 'G', { flowName: 'yes' }),
+        end('E', 'B'),
+        task('F', 'Fix', 'G', { flowName: 'no', to: 'M' }),
+        task('Q', 'Ask', 'G', { flowName: 'unclear', to: 'M' }),
+      ]),
+    );
+    expectClean(merge);
+    const m = merge.box('M');
+    for (const id of ['F', 'Q']) expect(flowBetween(merge, id, 'M').points.at(-1), id).toEqual({ x: cx(m), y: bottom(m) });
+    // Fix loops back into the join GJ, which T2 enters from below: it rises there too, not over the top
+    const join = await layout(
+      'loop-into-join',
+      proc([
+        start('S'),
+        task('A', 'Check', 'S'),
+        end('E', 'A'),
+        { op: 'split', after: 'A', id: 'G', name: 'Route?', joinId: 'GJ', branches: [{ flowName: 'a', nodes: [{ kind: 'task', id: 'T1', name: 'One' }] }, { flowName: 'b', nodes: [{ kind: 'task', id: 'T2', name: 'Two' }] }] },
+        { op: 'add', kind: 'task', id: 'V', name: 'Verify', before: 'E' },
+        { op: 'add', kind: 'exclusiveGateway', id: 'K', name: 'Ok?', before: 'E' },
+        task('F', 'Fix', 'K', { flowName: 'no', to: 'GJ' }),
+      ]),
+    );
+    expectClean(join);
+    const gj = join.box('GJ');
+    for (const id of ['T2', 'F']) expect(flowBetween(join, id, 'GJ').points.at(-1), id).toEqual({ x: cx(gj), y: bottom(gj) });
+  });
+
+  it('a loop from a gateway into a join leaves through a vertex of the diamond, not beside it, to share the join\'s bottom vertex', async () => {
+    // rework goes back into the merge J, whose bottom vertex the standard branch rises into; Approved?'s bottom vertex carries "no"
+    const L = await layout(
+      'rework-into-merge',
+      proc([
+        start('S', 'Order received'),
+        { op: 'split', after: 'S', id: 'Sp', name: 'Express?', joinId: 'J', branches: [{ flowName: 'yes', nodes: [{ kind: 'task', id: 'A', name: 'Prepare express' }] }, { flowName: 'no', nodes: [{ kind: 'task', id: 'B', name: 'Prepare standard' }] }] },
+        task('R', 'Review order', 'J'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'Approved?', after: 'R' },
+        task('Ship', 'Ship order', 'G', { flowName: 'yes' }),
+        end('E1', 'Ship', 'Shipped'),
+        task('Rej', 'Notify rejection', 'G', { flowName: 'no' }),
+        end('E2', 'Rej', 'Rejected'),
+        { op: 'connect', source: 'G', target: 'J', name: 'rework' },
+      ]),
+    );
+    expectClean(L);
+    const g = L.box('G');
+    const vertices = [`${cx(g)},${g.y}`, `${cx(g)},${bottom(g)}`, `${g.x},${g.y + g.height / 2}`, `${right(g)},${g.y + g.height / 2}`];
+    const first = flowBetween(L, 'G', 'J').points[0]!;
+    expect(vertices).toContain(`${first.x},${first.y}`);
+  });
+
+  it('the label of a gateway a loop leaves through the top stays clear of the loop as bpmn-js draws it (on one line, wider than its box)', async () => {
+    // s20: "yes, another claim" rises from the top vertex of "Another claim?", whose name bpmn-js draws on one line
+    const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s20.bpmn'), 'utf8'));
+    const L = await layout('top-loop-label', doc);
+    const g = L.box('Gateway_Another');
+    expect(flowBetween(L, 'Gateway_Another', 'Activity_Claim').points[0]).toEqual({ x: cx(g), y: g.y });
+    expect(layoutProblems(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
+  });
+
+  it('lanes: a join whose entries rise into its bottom vertex leaves for a target below through its right vertex; a split with one entry keeps its drops', async () => {
+    // the branches and the join's successor lie in the lane below split and join: Ship would leave J down the line Pack and Label rise on
+    for (const kind of ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway'] as const) {
+      const named = kind !== 'parallelGateway';
+      const L = await layout(
+        `lanes-join-exit-${kind}`,
+        proc([
+          start('S', 'Order received'),
+          task('A', 'Check order', 'S'),
+          { op: 'split', after: 'A', kind, id: 'G', joinId: 'J', ...(named ? { name: 'Extras?' } : {}), branches: [{ ...(named ? { flowName: 'pack' } : {}), nodes: [{ kind: 'task', id: 'B1', name: 'Pack' }] }, { ...(named ? { flowName: 'label' } : {}), nodes: [{ kind: 'task', id: 'B2', name: 'Label' }] }] },
+          task('T', 'Ship', 'J'),
+          end('E', 'T', 'Shipped'),
+          { op: 'add', kind: 'participant', id: 'Org', name: 'Shop' },
+          { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'A', 'G', 'J', 'E'] },
+          { op: 'add', kind: 'lane', id: 'L2', name: 'Warehouse', in: 'P', members: ['B1', 'B2', 'T'] },
+        ]),
+      );
+      expectClean(L);
+      const g = L.box('G'), j = L.box('J'), t = L.box('T');
+      for (const id of ['B1', 'B2']) {
+        expect(flowBetween(L, 'G', id).points[0], `${kind}: G -> ${id}`).toEqual({ x: cx(g), y: bottom(g) });
+        expect(flowBetween(L, id, 'J').points.at(-1), `${kind}: ${id} -> J`).toEqual({ x: cx(j), y: bottom(j) });
+      }
+      const out = flowBetween(L, 'J', 'T').points;
+      expect(out, kind).toEqual([{ x: right(j), y: cy(j) }, { x: right(j) + 15, y: cy(j) }, { x: right(j) + 15, y: cy(t) }, { x: t.x, y: cy(t) }]);
+    }
+    // o2c: the join's entries from Finance and Warehouse, and the fork's entry from Finance (it merges "ok" too): both leave for the lanes below through the right vertex
+    const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'agent__o2c.bpmn'), 'utf8'));
+    const o2c = await layout('o2c-join-exits', doc);
+    expect(layoutProblems(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
+    const fork = o2c.box('Gateway_Fork'), join2 = o2c.box('Gateway_Join');
+    for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
+    expect(flowBetween(o2c, 'Gateway_Join', 'Activity_ShipGoods').points[0]).toEqual({ x: right(join2), y: cy(join2) });
+  });
+
+  it('a loop into a gateway keeps off the top vertex a branch leaves through, as off a bottom vertex with a drop', async () => {
+    // "other" leaves Which? up through its top (Step A blocks the way right), "rare" drops from its bottom: the loop "no" must not run down onto "other"
+    const L = await layout(
+      'loop-off-top-exit',
+      proc([
+        start('S', 'Start'),
+        task('Pr', 'Prepare', 'S'),
+        { op: 'split', after: 'Pr', id: 'G', name: 'Which?', joinId: 'J', branches: [{ flowName: 'usual', nodes: [{ kind: 'task', id: 'A', name: 'Step A' }] }, { flowName: 'rare', nodes: [{ kind: 'task', id: 'D', name: 'Step D' }] }, { flowName: 'other', nodes: [{ kind: 'task', id: 'B', name: 'Step B' }] }] },
+        { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Done?', after: 'J' },
+        end('E', 'C', 'End', { flowName: 'yes' }),
+        { op: 'connect', source: 'C', target: 'G', name: 'no' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['S', 'Pr', 'B', 'C', 'E'] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['G', 'A', 'J'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Lane 2', in: 'P', members: ['D'] },
+      ]),
+    );
+    const g = L.box('G');
+    expect(flowBetween(L, 'G', 'B').points[0]).toEqual({ x: cx(g), y: g.y });
+    expect(flowBetween(L, 'C', 'G').points.at(-1)).not.toEqual({ x: cx(g), y: g.y });
+    expect(L.report.inOutOverlaps).toEqual([]);
+  });
+
+  /** Order received -> Extras booked? (gift, express, an empty default branch "none") -> join -> Hand over parcel -> Done. */
+  function emptyBranchDoc(lanes: Record<string, readonly string[]> | undefined, empty = true): Doc {
+    const branches = [{ flowName: 'gift', nodes: [{ kind: 'task' as const, id: 'X', name: 'Wrap gift' }] }, { flowName: 'express', nodes: [{ kind: 'task' as const, id: 'Y', name: 'Book express' }] }, ...(empty ? [{ flowName: 'none', default: true, nodes: [] }] : [])];
+    return proc([
+      start('S', 'Order received'),
+      { op: 'split', after: 'S', kind: 'inclusiveGateway', id: 'G', name: 'Extras booked?', joinId: 'J', branches },
+      task('T', 'Hand over parcel', 'J'),
+      end('E', 'T', 'Done'),
+      ...(lanes ? [{ op: 'add', kind: 'participant', id: 'Org', name: 'Shop' } as Op, ...Object.entries(lanes).map(([id, members]) => ({ op: 'add', kind: 'lane', id, name: id, in: 'P', members: [...members] }) as Op)] : []),
+    ]);
+  }
+
+  it('lanes: an empty branch whose row between split and join is free runs straight from the split into the join, and its band leaves no strip', async () => {
+    // gift and express run in the lane below, so the split's row up to the join is empty
+    const lanes = { Service: ['S', 'G', 'J', 'E'], Warehouse: ['X', 'Y', 'T'] } as const;
+    const L = await layout('lanes-empty-branch-straight', emptyBranchDoc(lanes));
+    expectClean(L);
+    expectLabelsClear(L);
+    const g = L.box('G'), j = L.box('J');
+    expect(flowBetween(L, 'G', 'J').points).toEqual([{ x: right(g), y: cy(g) }, { x: j.x, y: cy(j) }]);
+    const without = await layout('lanes-no-empty-branch', emptyBranchDoc(lanes, false));
+    for (const id of ['Service', 'Warehouse']) expect(L.box(id), id).toEqual(without.box(id));
+    // without lanes the branches lie on that row: the empty branch keeps its band below them
+    const plain = await layout('empty-branch-band', emptyBranchDoc(undefined));
+    expectClean(plain);
+    expect(longestHorizontalY(flowBetween(plain, 'G', 'J').points)).toBeGreaterThan(bottom(plain.box('X')));
+    // the join's left vertex takes express from the lane above: no straight line onto it
+    const taken = await layout('lanes-empty-branch-left-taken', emptyBranchDoc({ Office: ['Y'], Service: ['S', 'G', 'J', 'E'], Warehouse: ['X', 'T'] }));
+    expect(flowBetween(taken, 'Y', 'J').points.at(-1)).toEqual({ x: taken.box('J').x, y: cy(taken.box('J')) });
+    expect(flowBetween(taken, 'G', 'J').points.length).toBeGreaterThan(2);
+  });
+
+  /** The flows from `sources` into `joinId` run along their row and rise straight into its bottom vertex, the join right above them. */
+  function expectStraightRises(L: Laid, joinId: string, sources: string[], what: string): void {
+    const j = L.box(joinId);
+    for (const id of sources) {
+      const s = L.box(id);
+      expect(flowBetween(L, id, joinId).points, `${what}: ${id} -> ${joinId}`).toEqual([{ x: right(s), y: cy(s) }, { x: cx(j), y: cy(s) }, { x: cx(j), y: bottom(j) }]);
+    }
+  }
+
+  /**
+   * controlflow__s26 in small: Channel? (online: Auto process; manual: Handle manually, Confirm) -> join -> Finish, two
+   * boundary paths on Handle manually: Reminder -> Send reminder -> Reminded ends in the join's column, in the row
+   * between the join and Fallback, which Failed leads into the join. `lanes`: Fallback in a lane of its own below.
+   */
+  function boundaryEndDoc(kind: 'exclusiveGateway' | 'parallelGateway' | 'inclusiveGateway', lanes: boolean): Doc {
+    const named = kind !== 'parallelGateway';
+    return proc([
+      start('S', 'Start'),
+      task('R', 'Receive', 'S'),
+      { op: 'split', after: 'R', kind, id: 'G', joinId: 'J', ...(named ? { name: 'Channel?' } : {}), branches: [{ ...(named ? { flowName: 'online' } : {}), nodes: [{ kind: 'task', id: 'Au', name: 'Auto process' }] }, { ...(named ? { flowName: 'manual' } : {}), nodes: [{ kind: 'userTask', id: 'H', name: 'Handle manually' }, { kind: 'task', id: 'C', name: 'Confirm' }] }] },
+      task('F', 'Finish', 'J'),
+      end('E', 'F', 'End'),
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BR', name: 'Reminder', on: 'H', timer: 'PT1H', nonInterrupting: true },
+      { op: 'add', kind: 'sendTask', id: 'SR', name: 'Send reminder', after: 'BR' },
+      end('ER', 'SR', 'Reminded'),
+      { op: 'add', kind: 'boundaryEvent:error', id: 'BF', name: 'Failed', on: 'H' },
+      task('FB', 'Fallback', 'BF'),
+      { op: 'connect', source: 'FB', target: 'J' },
+      ...(lanes
+        ? ([
+            { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+            { op: 'add', kind: 'lane', id: 'L1', name: 'Office', in: 'P', members: ['S', 'R', 'G', 'Au', 'H', 'C', 'SR', 'ER', 'J', 'F', 'E'] },
+            { op: 'add', kind: 'lane', id: 'L2', name: 'Support', in: 'P', members: ['FB'] },
+          ] as Op[])
+        : []),
+    ]);
+  }
+
+  it('the entries of a join from below rise straight into its bottom vertex: a boundary path ending in the join\'s column moves the join one column right (without and with lanes)', async () => {
+    for (const kind of ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway'] as const) {
+      for (const lanes of [false, true]) {
+        const what = `${kind}${lanes ? ', lanes' : ''}`;
+        const L = await layout(`join-column-free-${kind}${lanes ? '-lanes' : ''}`, boundaryEndDoc(kind, lanes));
+        expectClean(L);
+        expectLabelsClear(L);
+        expectStraightRises(L, 'J', ['C', 'FB'], what);
+        // Reminded keeps its place right after Send reminder, in its row; the join moved past it, the happy path stays straight
+        const er = L.box('ER'), sr = L.box('SR');
+        expect(cy(er), what).toBe(cy(sr));
+        expect(flowBetween(L, 'SR', 'ER').points, what).toEqual([{ x: right(sr), y: cy(sr) }, { x: er.x, y: cy(sr) }]);
+        expect(right(er), what).toBeLessThan(L.box('J').x);
+        expectStraightLine(L, ['S', 'R', 'G', 'Au', 'J', 'F', 'E']);
+      }
+    }
+  });
+
+  it('lanes: the order model in small: the entries from the lanes below rise straight into the join, which moves past the end of the boundary path in its lane', async () => {
+    // Pick has a timer path Late -> Inform -> Informed in the join's lane; Informed would sit in the join's column, under it
+    for (const kind of ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway'] as const) {
+      const L = await layout(
+        `lanes-join-column-free-${kind}`,
+        proc([
+          start('S', 'Order received'),
+          task('A', 'Check order', 'S'),
+          { op: 'split', after: 'A', kind, id: 'G', joinId: 'GJ', branches: [{ nodes: [{ kind: 'task', id: 'T1', name: 'Pick' }, { kind: 'task', id: 'T1b', name: 'Pack' }] }, { nodes: [{ kind: 'task', id: 'T2', name: 'Invoice' }] }, { nodes: [{ kind: 'task', id: 'T3', name: 'Label' }] }] },
+          end('E', 'GJ', 'Shipped'),
+          { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Late', on: 'T1', timer: 'P2D', nonInterrupting: true },
+          { op: 'add', kind: 'sendTask', id: 'TL', name: 'Inform', after: 'BT' },
+          end('EL', 'TL', 'Informed'),
+          { op: 'add', kind: 'participant', id: 'Org', name: 'Shop' },
+          { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'A', 'E', 'G', 'GJ', 'TL', 'EL'] },
+          { op: 'add', kind: 'lane', id: 'L2', name: 'Store', in: 'P', members: ['T1', 'T1b', 'T3'] },
+          { op: 'add', kind: 'lane', id: 'L3', name: 'Accounting', in: 'P', members: ['T2'] },
+        ]),
+      );
+      expect(L.report.through, kind).toEqual([]);
+      expect(L.report.overlaps, kind).toEqual([]);
+      expectStraightRises(L, 'GJ', ['T1b', 'T2', 'T3'], kind);
+      expect(right(L.box('EL')), kind).toBeLessThan(L.box('GJ').x);
+      expectStraightLine(L, ['S', 'A', 'G', 'GJ', 'E']);
+      // only the timer path's way up to Inform crosses a line (Pack's into the join), as before
+      expect(L.report.crossings.length, kind).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('a join moves as far right as the boundary path in its column goes on (two columns: Print goods, then Stopped)', async () => {
+    const L = await layout(
+      'join-column-free-two',
+      proc([
+        start('S', 'Start'),
+        task('A', 'Print data', 'S'),
+        { op: 'split', after: 'A', kind: 'inclusiveGateway', id: 'G', name: 'Which way?', joinId: 'J', branches: [{ flowName: 'goods', nodes: [{ kind: 'task', id: 'T0', name: 'Check goods' }, { kind: 'task', id: 'T1', name: 'Call data' }, { kind: 'task', id: 'T2', name: 'Approve order' }] }, { flowName: 'claim', nodes: [{ kind: 'task', id: 'U0', name: 'Pack goods' }, { kind: 'task', id: 'U1', name: 'Review claim' }] }] },
+        task('B', 'Book claim', 'J'),
+        end('E', 'B', 'Done'),
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Late', on: 'T1', timer: 'P2D', nonInterrupting: true },
+        task('P1', 'Print case', 'BT'),
+        task('P2', 'Print goods', 'P1'),
+        end('X', 'P2', 'Stopped'),
+      ]),
+    );
+    expectClean(L);
+    expectLabelsClear(L);
+    expectStraightRises(L, 'J', ['U1'], 'two columns');
+    expect(right(L.box('X'))).toBeLessThan(L.box('J').x);
+    expectStraightLine(L, ['S', 'A', 'G', 'T0', 'T1', 'T2', 'J', 'B', 'E']);
+  });
+
+  it('a label in the join\'s column moves the join too: the entries keep off it, the label stays under its event', async () => {
+    // the end of the reminder path sits left of the join's column, its one-word name reaches across it
+    const L = await layout(
+      'join-column-label',
+      proc([
+        start('S', 'Start'),
+        task('R', 'Receive', 'S'),
+        { op: 'split', after: 'R', id: 'G', name: 'Channel?', joinId: 'J', branches: [{ flowName: 'online', nodes: [{ kind: 'task', id: 'Au', name: 'Auto process' }] }, { flowName: 'manual', nodes: [{ kind: 'userTask', id: 'H', name: 'Handle manually' }, { kind: 'task', id: 'C', name: 'Confirm' }] }] },
+        task('F', 'Finish', 'J'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BR', name: 'Reminder', on: 'H', timer: 'PT1H', nonInterrupting: true },
+        end('ER', 'BR', 'Kundenbenachrichtigungsversandbestaetigung'),
+        { op: 'add', kind: 'boundaryEvent:error', id: 'BF', name: 'Failed', on: 'H' },
+        task('FB', 'Fallback', 'BF'),
+        { op: 'connect', source: 'FB', target: 'J' },
+      ]),
+    );
+    expectClean(L);
+    expectLabelsClear(L);
+    expectStraightRises(L, 'J', ['C', 'FB'], 'label');
+    const label = L.shape('ER').label!;
+    expect(cx(label)).toBe(cx(L.box('ER')));
+    expect(label.y).toBeGreaterThan(bottom(L.box('ER')));
+    expect(right(label)).toBeLessThan(cx(L.box('J')));
+  });
+
+  it('a join stays where moving it right would add a crossing (Review case\'s run would cross the way up into Fine?, its route over the top does not)', async () => {
+    const L = await layout(
+      'join-stays-crossing',
+      proc([
+        start('S', 'Start'),
+        task('A', 'Ship data', 'S'),
+        { op: 'split', after: 'A', id: 'G', name: 'Which way?', joinId: 'J', branches: [{ flowName: 'b0', nodes: [{ kind: 'task', id: 'T0', name: 'Book claim' }, { kind: 'task', id: 'T1', name: 'Ship case' }] }, { flowName: 'b1', nodes: [{ kind: 'task', id: 'R', name: 'Review case' }] }] },
+        task('T', 'Notify order', 'J'),
+        { op: 'split', after: 'T', kind: 'parallelGateway', id: 'G2', joinId: 'J2', branches: [{ nodes: [{ kind: 'task', id: 'U0', name: 'Ship goods' }] }, { nodes: [{ kind: 'task', id: 'U1', name: 'Approve order' }, { kind: 'task', id: 'U2', name: 'Inform goods' }] }] },
+        end('E', 'J2', 'Done'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'D', name: 'Fine?', after: 'T1' },
+        end('DX', 'D', 'Dropped', { flowName: 'no' }),
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['A', 'J', 'J2', 'U0', 'U2'] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['S', 'R', 'T', 'U1', 'E', 'D', 'DX'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Lane 2', in: 'P', members: ['G', 'T0', 'T1', 'G2'] },
+      ]),
+    );
+    expect(cx(L.box('J'))).toBe(cx(L.box('DX')));
+    expect(flowBetween(L, 'R', 'J').points[0]).toEqual({ x: cx(L.box('R')), y: L.box('R').y });
+    expect(L.report.crossings).toHaveLength(1);
+  });
+
+  it('a join stays where moving it right straightens none of its entries (controlflow__s22: the end event under it is in the way of its entry\'s own row)', async () => {
+    const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s22.bpmn'), 'utf8'));
+    const L = await layout('join-stays-s22', doc);
+    // Gave up? -> Abandoned runs in the row the entry would run along: the entry leaves Gave up? upwards as before
+    expect(cx(L.box('Gateway_Complete_join'))).toBe(cx(L.box('Event_Abandoned')));
+    expect(flowBetween(L, 'Gateway_GaveUp', 'Gateway_Complete_join').points[0]).toEqual({ x: cx(L.box('Gateway_GaveUp')), y: L.box('Gateway_GaveUp').y });
+  });
+
+  it('a join\'s move that is not kept is undone exactly, also on a scope the passes after placement already ran on (as in a process with lanes)', async () => {
+    // controlflow__s22 laid out and routed; its join's column is still taken, so freeJoinColumns tries the move once more
+    const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s22.bpmn'), 'utf8'));
+    const scope = layoutScope(doc.require('Process_S22'), { expanded: new Set(), collapsedScopes: new Map() });
+    const state = (): string =>
+      JSON.stringify({
+        nodes: scope.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => [n.id, n.layer, n.row, n.band, n.width, n.box, n.topUsed]),
+        edges: scope.edges.map((e) => [e.id, e.bandRow, e.bandY, e.points, e.label]),
+        artifacts: scope.artifacts.map((a) => a.box),
+        size: [scope.width, scope.height],
+      });
+    const drawn = state();
+    const lines: string[] = [];
+    await withLayoutDebug(
+      (line) => lines.push(line),
+      async () =>
+        freeJoinColumns(scope, (shifts) => {
+          gridScope(scope, undefined, shifts);
+          placeAttachedArtifacts(scope);
+        }),
+    );
+    expect(lines.filter((l) => l.startsWith('[joins]')).map((l) => l.split(':')[0])).toEqual(['[joins] Gateway_Complete_join stays']);
+    expect(state()).toBe(drawn);
+  });
+
+  it('lanes: a join\'s trial measures the empty band where it is drawn (a loop over the top moved the content down, the band with it)', async () => {
+    // generated (L118): b1 is an empty branch; the band of Print invoice? runs under Pack order only with the offset the loop over the top gave it
+    const L = await layout(
+      'lanes-join-band-offset',
+      proc([
+        start('S', 'Start'),
+        task('A', 'Review invoice', 'S'),
+        {
+          op: 'split',
+          after: 'A',
+          id: 'G0',
+          joinId: 'J0',
+          name: 'Print invoice?',
+          branches: [
+            { flowName: 'b0', nodes: [{ kind: 'task', id: 'T0', name: 'Pack goods' }, { kind: 'sendTask', id: 'T1', name: 'Print case' }, { kind: 'userTask', id: 'T2', name: 'Ship customer' }] },
+            { flowName: 'b1', default: true, nodes: [] },
+            { flowName: 'b2', nodes: [{ kind: 'serviceTask', id: 'U', name: 'Pack order' }] },
+          ],
+        },
+        task('F', 'Label order', 'J0'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:error', id: 'BE1', name: 'Failed', on: 'T1' },
+        end('EE2', 'BE1', 'Reminder sent to customer and manager'),
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BE3', name: 'Late', on: 'T2', timer: 'P2D', nonInterrupting: true },
+        { op: 'add', kind: 'sendTask', id: 'H4', name: 'Ship invoice', after: 'BE3' },
+        { op: 'add', kind: 'serviceTask', id: 'H5', name: 'Approve claim', after: 'H4' },
+        { op: 'add', kind: 'userTask', id: 'H6', name: 'Print goods', after: 'H5' },
+        end('EE7', 'H6', 'Ended'),
+        { op: 'connect', source: 'T0', target: 'A', name: 'retry' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['S', 'T0', 'T1', 'T2', 'U', 'G0', 'J0', 'F', 'E', 'H4', 'H5', 'EE7'] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['A', 'EE2', 'H6'] },
+      ]),
+    );
+    // the band keeps its offset in the trial: it runs under Pack order, not through it, and the move straightens both entries
+    expect(L.report.through).toEqual([]);
+    expect(longestHorizontalY(flowBetween(L, 'G0', 'J0').points)).toBeGreaterThan(bottom(L.box('U')));
+    const j = L.box('J0');
+    for (const id of ['G0', 'U']) {
+      const [p, q] = flowBetween(L, id, 'J0').points.slice(-2);
+      expect([p, q], `${id} -> J0`).toEqual([{ x: cx(j), y: p!.y }, { x: cx(j), y: bottom(j) }]);
+    }
+    expect(L.box('H5').x).toBeLessThan(cx(j));
+  });
+
+  it('a join\'s own data object hangs right of the line its entries from below rise on', async () => {
+    // only another tool ties a data object to a gateway (an association; bpmn-cli connects data to activities and events)
+    const doc = proc([
+      start('S', 'Start'),
+      { op: 'split', after: 'S', id: 'G', name: 'Which?', joinId: 'J', branches: [{ flowName: 'one', nodes: [{ kind: 'task', id: 'B1', name: 'One' }] }, { flowName: 'two', nodes: [{ kind: 'task', id: 'B2', name: 'Two' }] }] },
+      end('E', 'J', 'End'),
+      { op: 'add', kind: 'dataObjectReference', id: 'D', name: 'Record' },
+    ]);
+    const process = doc.require('P');
+    const association = doc.moddle.create('bpmn:Association', { id: 'Association_D', sourceRef: doc.require('D'), targetRef: doc.require('J') }) as El;
+    association.$parent = process;
+    process.set('artifacts', [...many(process, 'artifacts'), association]);
+    const L = await layout('join-own-data', doc);
+    expectClean(L);
+    expectStraightRises(L, 'J', ['B2'], 'data');
+    expect(L.box('D').x).toBeGreaterThan(cx(L.box('J')));
+  });
+
+  /**
+   * The flow of boundary event `eventId` leaves the event downwards to a run that keeps 15 px from the shapes `passed`
+   * and from the labels of them and of the event, and (`straight`) rises straight into the bottom of `targetId`, the
+   * target right above its line. Returns the run's y.
+   */
+  function expectRunBelow(L: Laid, eventId: string, targetId: string, passed: string[], what: string, straight = true): number {
+    const ev = L.box(eventId), t = L.box(targetId);
+    const pts = flowBetween(L, eventId, targetId).points;
+    expect(pts[0], `${what}: out of the event's bottom`).toEqual({ x: cx(ev), y: bottom(ev) });
+    expect(pts[1]!.x, what).toBe(cx(ev));
+    const run = pts[1]!.y;
+    expect(pts[2]!.y, `${what}: a horizontal run`).toBe(run);
+    for (const id of [eventId, ...passed]) {
+      const s = L.shape(id);
+      for (const b of [s.box, ...(s.label ? [s.label] : [])]) expect(run - bottom(b), `${what}: the run keeps off ${id}`).toBeGreaterThanOrEqual(15);
+    }
+    if (straight) expect(pts.slice(2), `${what}: straight up into ${targetId}`).toEqual([{ x: cx(t), y: run }, { x: cx(t), y: bottom(t) }]);
+    return run;
+  }
+
+  it('lanes: a boundary path into the lane above leaves its event downwards, runs below the host\'s row and its label, and rises straight into the handler, which moves right past the host\'s next task (the order model in small)', async () => {
+    // Pick goods has a timer path After 2 days -> Inform customer -> Customer informed in the lane above; Inform customer
+    // would sit in the column of Pack goods, the task after the host: the flow ran along Pack goods' bottom border and hooked in
+    for (const kind of ['parallelGateway', 'exclusiveGateway', 'inclusiveGateway'] as const) {
+      const L = await layout(
+        `lanes-handler-column-free-${kind}`,
+        proc([
+          start('S', 'Order received'),
+          task('A', 'Check order', 'S'),
+          { op: 'split', after: 'A', kind, id: 'G', joinId: 'GJ', branches: [{ nodes: [{ kind: 'userTask', id: 'T1', name: 'Pick goods' }, { kind: 'task', id: 'T1b', name: 'Pack goods' }] }, { nodes: [{ kind: 'serviceTask', id: 'T2', name: 'Write invoice' }] }, { nodes: [{ kind: 'serviceTask', id: 'T3', name: 'Print label' }] }] },
+          end('E', 'GJ', 'Shipped'),
+          { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'After 2 days', on: 'T1', timer: 'P2D', nonInterrupting: true },
+          { op: 'add', kind: 'sendTask', id: 'TL', name: 'Inform customer about the delay', after: 'BT' },
+          end('EL', 'TL', 'Customer informed'),
+          { op: 'add', kind: 'participant', id: 'Org', name: 'Shop' },
+          { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'A', 'E', 'G', 'GJ', 'TL', 'EL'] },
+          { op: 'add', kind: 'lane', id: 'L2', name: 'Store', in: 'P', members: ['T1', 'T1b', 'T3'] },
+          { op: 'add', kind: 'lane', id: 'L3', name: 'Accounting', in: 'P', members: ['T2'] },
+        ]),
+      );
+      expect(L.report.through, kind).toEqual([]);
+      expect(L.report.overlaps, kind).toEqual([]);
+      expectLabelsClear(L);
+      expectRunBelow(L, 'BT', 'TL', ['T1', 'T1b'], kind);
+      // the handler right of Pack goods, its end right after it; the join right of both, its entries still rising straight
+      const tl = L.box('TL'), el = L.box('EL');
+      expect(tl.x, kind).toBeGreaterThan(right(L.box('T1b')));
+      expect(flowBetween(L, 'TL', 'EL').points, kind).toEqual([{ x: right(tl), y: cy(tl) }, { x: el.x, y: cy(tl) }]);
+      expectStraightRises(L, 'GJ', ['T1b', 'T2', 'T3'], kind);
+      expect(right(el), kind).toBeLessThan(L.box('GJ').x);
+      expectStraightLine(L, ['S', 'A', 'G', 'GJ', 'E']);
+      // only the timer's way up crosses a line (Pack goods' into the join), as before
+      expect(L.report.crossings.length, kind).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('lanes: the lane of a boundary event holds the run of its way to the lane above 15 px from its bottom border (a label of two lines pushes the run down)', async () => {
+    const L = await layout(
+      'lanes-boundary-run-in-lane',
+      proc([
+        start('S', 'Start'),
+        task('A', 'Ship goods', 'S'),
+        task('B', 'Archive order', 'A'),
+        end('E', 'B', 'Done'),
+        { op: 'add', kind: 'boundaryEvent:error', id: 'BF', name: 'Shipping failed badly', on: 'A' },
+        task('H', 'Escalate to the team lead', 'BF'),
+        end('EH', 'H', 'Escalated'),
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'H', 'EH'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Logistics', in: 'P', members: ['A', 'B', 'E'] },
+        { op: 'add', kind: 'lane', id: 'L3', name: 'Accounting', in: 'P', members: [] },
+      ]),
+    );
+    expectClean(L);
+    expect(L.shape('BF').label!.height).toBeGreaterThan(20);
+    const run = expectRunBelow(L, 'BF', 'H', ['A', 'B'], 'two-line label');
+    expect(bottom(L.box('L2')) - run).toBeGreaterThanOrEqual(15);
+    for (const id of ['A', 'B', 'E']) expect(bottom(L.box(id)), id).toBeLessThan(bottom(L.box('L2')));
+  });
+
+  it('a boundary flow into a node on the row above leaves its event downwards and runs below the host\'s row and the event\'s label, not along the host\'s bottom border (without lanes)', async () => {
+    // Review claim (the second branch) has a timer whose path goes on with Notify, the task after the join
+    const L = await layout(
+      'boundary-run-row-above',
+      proc([
+        start('S', 'Start'),
+        { op: 'split', after: 'S', id: 'G', name: 'Which way?', joinId: 'J', branches: [{ flowName: 'fast', nodes: [{ kind: 'task', id: 'A', name: 'Check order' }] }, { flowName: 'slow', nodes: [{ kind: 'userTask', id: 'B', name: 'Review claim' }] }] },
+        task('C', 'Notify customer', 'J'),
+        end('E', 'C', 'Done'),
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Two days late', on: 'B', timer: 'P2D', nonInterrupting: true },
+        { op: 'connect', source: 'BT', target: 'C' },
+      ]),
+    );
+    expectClean(L);
+    expectLabelsClear(L);
+    expect(cy(L.box('B'))).toBeGreaterThan(cy(L.box('C')));
+    expectRunBelow(L, 'BT', 'C', ['B'], 'row above');
+    expectStraightLine(L, ['S', 'G', 'A', 'J', 'C', 'E']);
+  });
+
+  it('the run below the host\'s row on the bottom row is part of the scope: a pool or an expanded sub-process without lanes holds it 15 px from its border, an event sub-process below keeps off it (boundary labels of two and three lines)', async () => {
+    // the scope without lanes was sized without the run: it lay on the frame's bottom border or below it, and through the
+    // event sub-process placed under the content
+    const claim = (name: string): Op[] => [
+      { op: 'split', after: 'S', id: 'G', name: 'Which way?', joinId: 'J', branches: [{ flowName: 'fast', nodes: [{ kind: 'task', id: 'A', name: 'Check order' }] }, { flowName: 'slow', nodes: [{ kind: 'userTask', id: 'B', name: 'Review claim' }] }] },
+      task('C', 'Notify customer', 'J'),
+      end('E', 'C', 'Done'),
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name, on: 'B', timer: 'P2D', nonInterrupting: true },
+      { op: 'connect', source: 'BT', target: 'C' },
+    ];
+    const cancel: Op[] = [
+      { op: 'add', kind: 'eventSubProcess', id: 'ESP', name: 'Cancel', in: 'P' },
+      { op: 'add', kind: 'startEvent:message', id: 'ES', name: 'Cancelled', in: 'ESP', message: 'Cancel' },
+      task('ET1', 'Undo booking', 'ES'),
+      task('ET2', 'Refund', 'ET1'),
+      end('EE', 'ET2', 'Stopped'),
+    ];
+    for (const name of ['Two days late', 'No reply within 5 days', 'Two days late without any answer from the customer at all']) {
+      const what = (where: string): string => `${where}, "${name}"`;
+      const pool = await layout(`boundary-run-in-pool-${name.length}`, proc([start('S', 'Start'), ...claim(name), { op: 'add', kind: 'participant', id: 'Org', name: 'Shop' }]));
+      const sub = await layout(`boundary-run-in-sub-${name.length}`, proc([start('S0', 'Go'), { op: 'add', kind: 'subProcess', id: 'SP', name: 'Handle', after: 'S0' }, { op: 'add', kind: 'startEvent', id: 'S', name: 'Start', in: 'SP' }, ...claim(name), end('E0', 'SP', 'End')]));
+      const esp = await layout(`boundary-run-above-event-sub-${name.length}`, proc([start('S', 'Start'), ...claim(name), ...cancel]));
+      expect(pool.shape('BT').label!.height, what('label lines')).toBeGreaterThan(20);
+      for (const [L, frame, where] of [[pool, 'Org', 'pool'], [sub, 'SP', 'expanded sub-process']] as const) {
+        expect(L.report.through, what(where)).toEqual([]);
+        expect(L.report.overlaps, what(where)).toEqual([]);
+        const run = expectRunBelow(L, 'BT', 'C', ['B'], what(where), false);
+        const f = L.box(frame);
+        expect(bottom(f) - run, what(`${where}: the run keeps off the frame's bottom border`)).toBeGreaterThanOrEqual(15);
+        for (const p of flowBetween(L, 'BT', 'C').points) expect(contains(f, { ...p, width: 0, height: 0 }), what(`${where}: (${p.x}, ${p.y}) inside`)).toBe(true);
+      }
+      const run = expectRunBelow(esp, 'BT', 'C', ['B'], what('event sub-process'), false);
+      const box = esp.box('ESP');
+      expect(box.y - run, what('event sub-process: below the run')).toBeGreaterThanOrEqual(15);
+      expect(segments(flowBetween(esp, 'BT', 'C').points).some((s) => segmentCutsBox(s, box)), what('event sub-process: the flow keeps out')).toBe(false);
+    }
+  });
+
+  it('a boundary flow into a node on the row above rises straight into it: the node moves right past the host\'s next task, which stood under it (without lanes)', async () => {
+    // Late on Pick goods (the second branch) goes on with Inform customer on the first; Inform customer would sit in the
+    // column of Pack goods, the task after the host
+    const L = await layout(
+      'boundary-handler-column-free',
+      proc([
+        start('S', 'Start'),
+        { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'PO', name: 'Prepare order' }, { kind: 'sendTask', id: 'Q', name: 'Inform customer' }] }, { nodes: [{ kind: 'userTask', id: 'K', name: 'Pick goods' }, { kind: 'task', id: 'N', name: 'Pack goods' }] }] },
+        end('E', 'J', 'Done'),
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Late', on: 'K', timer: 'P2D', nonInterrupting: true },
+        { op: 'connect', source: 'BT', target: 'Q' },
+      ]),
+    );
+    expect(L.report.through).toEqual([]);
+    expect(L.report.overlaps).toEqual([]);
+    expectLabelsClear(L);
+    expectRunBelow(L, 'BT', 'Q', ['K', 'N'], 'no lanes');
+    expect(L.box('Q').x).toBeGreaterThan(right(L.box('N')));
+    expectStraightRises(L, 'J', ['N'], 'no lanes');
+    expectStraightLine(L, ['S', 'G', 'PO', 'Q', 'J', 'E']);
+    // the way up crosses Pack goods' flow into the join, as the hook did
+    expect(L.report.crossings).toHaveLength(1);
+  });
+
+  it('a boundary flow to a target below whose way down would cut a data store hanging under the event keeps its side exit, not a line through the store', async () => {
+    // the second data element of the host shifts right, under the boundary event
+    const L = await layout(
+      'boundary-down-blocked-by-data',
+      proc([
+        start('S', 'Start'),
+        task('A', 'Score applicant', 'S'),
+        task('B', 'Review score', 'A'),
+        end('E', 'B', 'Done'),
+        { op: 'add', kind: 'dataObjectReference', id: 'D0', name: 'Score sheet' },
+        { op: 'connect', source: 'A', target: 'D0' },
+        { op: 'add', kind: 'dataStoreReference', id: 'D1', name: 'Applicant DB' },
+        { op: 'connect', source: 'A', target: 'D1' },
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Timeout', on: 'A', timer: 'PT1H' },
+        end('ET', 'BT', 'Timed out'),
+      ]),
+    );
+    const ev = L.box('BT'), store = L.box('D1');
+    expect(store.x).toBeLessThan(cx(ev));
+    expect(right(store)).toBeGreaterThan(cx(ev));
+    expect(L.report.through).toEqual([]);
+    expect(L.report.overlaps).toEqual([]);
+  });
+
+  it('lanes: a handler stays where moving it right would add a crossing (Inform\'s way up would cross Failed\'s into Fix), and Fix moves instead', async () => {
+    // generated: two boundary paths into the lane above, Inform (Late on Pick) and Fix (Failed on Invoice), both in the column of Pack
+    const lines: string[] = [];
+    const L = await withLayoutDebug(
+      (line) => lines.push(line),
+      async () =>
+        layout(
+          'lanes-handler-stays-crossing',
+          proc([
+            start('S', 'Start'),
+            task('A', 'Check order', 'S'),
+            { op: 'split', after: 'A', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'K', name: 'Pick' }, { kind: 'task', id: 'V', name: 'Pack' }] }, { nodes: [{ kind: 'task', id: 'R', name: 'Invoice' }] }] },
+            task('F', 'Ship', 'J'),
+            end('E', 'F', 'Done'),
+            { op: 'add', kind: 'boundaryEvent:timer', id: 'B', name: 'Late', on: 'K', timer: 'P2D', nonInterrupting: true },
+            task('H', 'Inform', 'B'),
+            { op: 'connect', source: 'H', target: 'J' },
+            { op: 'add', kind: 'boundaryEvent:error', id: 'B2', name: 'Failed', on: 'R' },
+            task('X', 'Fix', 'B2'),
+            { op: 'connect', source: 'X', target: 'J' },
+            { op: 'add', kind: 'participant', id: 'Org', name: 'Shop' },
+            { op: 'add', kind: 'lane', id: 'L0', name: 'Service', in: 'P', members: ['S', 'A', 'G', 'J', 'F', 'E', 'H', 'X'] },
+            { op: 'add', kind: 'lane', id: 'L1', name: 'Store', in: 'P', members: ['K', 'V', 'R'] },
+          ]),
+        ),
+    );
+    const trials = lines.filter((l) => /^\[joins\] [HX] /.test(l));
+    expect(trials.map((l) => l.split(':')[0])).toEqual(['[joins] H stays', '[joins] X moves 1 right']);
+    // Inform's move would have given one more crossing (and no fewer cut shapes or labels run through)
+    const [, was, would] = /: (\{.*?\}) -> (\{.*?\})/.exec(trials[0]!)!;
+    const before = JSON.parse(was!) as { crossings: number; hits: number; rises: number }, after = JSON.parse(would!) as { crossings: number; hits: number; rises: number };
+    expect(after.crossings).toBeGreaterThan(before.crossings);
+    expect(after.hits).toBeGreaterThanOrEqual(before.hits);
+    expect(cx(L.box('H'))).toBe(cx(L.box('V')));
+    expect(L.box('X').x).toBeGreaterThan(right(L.box('V')));
+    expectRunBelow(L, 'B2', 'X', ['R'], 'Fix');
+    // Late's way still leaves its event downwards and keeps off Pick's row, and hooks into Inform from the column gap
+    expectRunBelow(L, 'B', 'H', ['K', 'V'], 'Inform', false);
+    expect(L.report.through).toEqual([]);
+    expect(L.report.crossings).toHaveLength(3);
+  });
+
+  /** The id of the sequence flow from `source` to `target` in `doc`. */
+  function flowId(doc: Doc, source: string, target: string): string {
+    return idOf(doc.outgoing(doc.require(source)).find((f) => idOf(f.get<El>('targetRef')) === target)!);
+  }
+
+  /** `doc` with the sequence flow `id` moved to the start (`first`) or the end of its process's flow elements. */
+  function moveFlow(doc: Doc, id: string, first = true): Doc {
+    const process = many(doc.definitions, 'rootElements').find((r) => is(r, 'bpmn:Process'))!;
+    const list = process.get<El[]>('flowElements');
+    const [flow] = list.splice(list.findIndex((el) => idOf(el) === id), 1);
+    if (first) list.unshift(flow!);
+    else list.push(flow!);
+    return doc;
+  }
+
+  it('a boundary flow to a target above is routed after the other flows: its run below the host\'s row keeps off their drops and rises, wherever the flow stands in the file', async () => {
+    // generated (k-signal-down): 2 days on Invoice invoice goes on with Label customer after the join. Routed before the
+    // others, its run just below the host's row looked free and was crossed by the split's drop, the join's rise and the
+    // drop of Payment failed
+    const ops: Op[] = [
+      start('S', 'Start'),
+      task('A1', 'Invoice invoice', 'S'),
+      { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'userTask', id: 'T4', name: 'Print case' }, { kind: 'sendTask', id: 'T5', name: 'Print data' }] }, { nodes: [{ kind: 'task', id: 'T6', name: 'Inform customer' }] }] },
+      task('F', 'Label customer', 'J3'),
+      end('E', 'F', 'End'),
+      { op: 'add', kind: 'boundaryEvent:signal', id: 'BE7', on: 'A1', name: 'Payment failed', signal: 'Go' },
+      task('H8', 'Escalate invoice', 'BE7'),
+      { op: 'add', kind: 'dataStoreReference', id: 'DS9', name: 'Archive', in: 'P' },
+      { op: 'connect', source: 'H8', target: 'DS9' },
+      end('EE10', 'H8', 'Escalation finished'),
+      { op: 'add', kind: 'boundaryEvent:signal', id: 'BE11', on: 'A1', name: '2 days', signal: 'Stop' },
+      { op: 'connect', source: 'BE11', target: 'F' },
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: [] },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['S', 'A1', 'T4', 'T5', 'T6', 'G2', 'J3', 'F', 'E', 'H8', 'EE10'] },
+    ];
+    const routes: Point[][] = [];
+    for (const order of ['as built', 'boundary flow first', 'boundary flow last']) {
+      const doc = proc(ops);
+      const id = flowId(doc, 'BE11', 'F');
+      if (order !== 'as built') moveFlow(doc, id, order === 'boundary flow first');
+      const L = await layout(`boundary-run-routed-late-${routes.length}`, doc);
+      expect(L.report.crossings, order).toEqual([]);
+      expect(L.report.through, order).toEqual([]);
+      expectRunBelow(L, 'BE11', 'F', ['A1'], order, false);
+      routes.push(flowBetween(L, 'BE11', 'F').points);
+    }
+    expect(routes[1]).toEqual(routes[0]);
+    expect(routes[2]).toEqual(routes[0]);
+  });
+
+  it('boundary events on one host take their runs below its row right to left: the rightmost event\'s run is the highest, so no sibling\'s drop crosses it (both file orders)', async () => {
+    // generated (d-9): Late (right) goes on with the join, Escalated (left) with Ship goods after it; stacked in file
+    // order, Late's drop crossed Escalated's run when Escalated's flow came first
+    const ops: Op[] = [
+      start('S', 'Start'),
+      { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'userTask', id: 'T7', name: 'Label goods' }] }, { nodes: [{ kind: 'task', id: 'T8', name: 'Escalate case' }, { kind: 'sendTask', id: 'T9', name: 'Inform invoice' }] }] },
+      task('F', 'Ship goods', 'J'),
+      end('E', 'F', 'End'),
+      { op: 'add', kind: 'boundaryEvent:signal', id: 'BL', on: 'T8', name: 'Late', signal: 'Go' },
+      { op: 'connect', source: 'BL', target: 'J' },
+      { op: 'add', kind: 'boundaryEvent:message', id: 'BS', on: 'T8', name: 'Escalated', message: 'Reminder', nonInterrupting: true },
+      { op: 'connect', source: 'BS', target: 'F', name: 'timeout' },
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+    ];
+    for (const first of ['BL', 'BS']) {
+      const doc = proc(ops);
+      moveFlow(doc, flowId(doc, first, first === 'BL' ? 'J' : 'F'));
+      const L = await layout(`boundary-siblings-right-to-left-${first}`, doc);
+      const what = `${first}'s flow first`;
+      expect(L.box('BL').x, what).toBeGreaterThan(L.box('BS').x);
+      expect(L.report.crossings, what).toEqual([]);
+      expect(L.report.through, what).toEqual([]);
+      const late = expectRunBelow(L, 'BL', 'J', ['T8'], what, false), escalated = expectRunBelow(L, 'BS', 'F', ['T8'], what, false);
+      expect(late, what).toBeLessThan(escalated);
+    }
+  });
+
+  it('a join moves right when that removes a crossing, though no entry rises straight more than before (as many straight rises, nothing worse)', async () => {
+    // generated (r048): moving J4 right of the boundary path's end was rejected as it gained no straight rise; Check
+    // customer's way into J4 then crossed Book case's flow and hooked into the join
+    const lines: string[] = [];
+    const L = await withLayoutDebug(
+      (line) => lines.push(line),
+      async () =>
+        layout(
+          'join-moves-for-fewer-crossings',
+          proc([
+            start('S', 'Start'),
+            { op: 'add', kind: 'sendTask', id: 'A1', name: 'Inform customer', after: 'S' },
+            { op: 'add', kind: 'sendTask', id: 'A2', name: 'Notify case', after: 'A1' },
+            { op: 'split', after: 'A2', kind: 'exclusiveGateway', id: 'G3', joinId: 'J4', name: 'Archive goods?', branches: [{ flowName: 'b0', nodes: [{ kind: 'userTask', id: 'T5', name: 'Check customer' }] }, { flowName: 'b1', nodes: [{ kind: 'userTask', id: 'T6', name: 'Ship invoice' }, { kind: 'userTask', id: 'T7', name: 'Call case' }] }] },
+            task('F', 'Check order', 'J4'),
+            end('E', 'F', 'End'),
+            { op: 'add', kind: 'boundaryEvent:timer', id: 'BE8', on: 'T7', name: 'Reminder after 3 days', timer: 'PT1H' },
+            { op: 'add', kind: 'userTask', id: 'H9', name: 'Book case', after: 'BE8' },
+            { op: 'add', kind: 'userTask', id: 'H10', name: 'Invoice customer', after: 'H9' },
+            { op: 'add', kind: 'sendTask', id: 'H11', name: 'Approve invoice', after: 'H10' },
+            end('EE12', 'H11', 'Customer informed about the delay'),
+          ]),
+        ),
+    );
+    const trial = lines.find((l) => l.startsWith('[joins] J4 '));
+    expect(trial).toMatch(/^\[joins\] J4 moves \d right/);
+    const [, was, now] = /: (\{.*?\}) -> (\{.*?\})/.exec(trial!)!;
+    const before = JSON.parse(was!) as { crossings: number; rises: number }, after = JSON.parse(now!) as { crossings: number; rises: number };
+    expect(after.crossings).toBeLessThan(before.crossings);
+    expect(after.rises).toBe(before.rises);
+    expect(L.report.crossings).toEqual([]);
+    expect(L.report.through).toEqual([]);
+    expectLabelsClear(L);
+    // the join right of Book case, Check customer's flow into its bottom vertex
+    const j = L.box('J4'), pts = flowBetween(L, 'T5', 'J4').points;
+    expect(j.x).toBeGreaterThan(right(L.box('H9')));
+    expect(pts[pts.length - 1]).toEqual({ x: cx(j), y: bottom(j) });
+  });
+
+  it('a node moves right when that uncuts a shape, at the cost of no more crossings than the shapes it uncuts', async () => {
+    // generated (s-5): Ended (x) stood above Call invoice, the task after its host; every way up into it cut Call
+    // invoice. Moving it right takes a crossing with Cancelled by customer's way, which a cut shape is worse than
+    const L = await layout(
+      'move-uncuts-shape',
+      proc([
+        start('S', 'Start'),
+        { op: 'add', kind: 'serviceTask', id: 'A1', name: 'Pack claim', after: 'S' },
+        { op: 'add', kind: 'sendTask', id: 'A2', name: 'Notify data', after: 'A1' },
+        { op: 'add', kind: 'subProcess', id: 'SP3', name: 'Inform claim', after: 'A2' },
+        { op: 'add', kind: 'startEvent', id: 'SS4', in: 'SP3' },
+        task('ST5', 'Approve customer', 'SS4'),
+        end('SE6', 'ST5'),
+        task('F', 'Call invoice', 'SP3'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:signal', id: 'BE7', on: 'SP3', name: 'x', signal: 'Stop' },
+        end('EE8', 'BE7', 'Ended'),
+        { op: 'add', kind: 'boundaryEvent:conditional', id: 'BE9', on: 'SP3', name: 'Cancelled by customer', when: '${late}' },
+        end('EE10', 'BE9', 'Ended'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'D', name: 'Ok?', after: 'A2' },
+        { op: 'connect', source: 'D', target: 'A1', name: 'again' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: [] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['EE8', 'EE10'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Lane 2', in: 'P', members: [] },
+        { op: 'add', kind: 'lane', id: 'L3', name: 'Lane 3', in: 'P', members: ['S', 'A1', 'A2', 'SP3', 'F', 'E', 'D'] },
+      ]),
+    );
+    expect(L.report.through).toEqual([]);
+    expect(L.report.crossings.length).toBeLessThanOrEqual(1);
+    expect(L.box('EE8').x).toBeGreaterThan(right(L.box('F')));
+  });
+
+  it('two boundary flows into one task rise at different slots of its bottom, not on one line', async () => {
+    // generated (m-5): Conditional and Signal received on Call order both go on with Call claim; both rose at its centre
+    const L = await layout(
+      'boundary-rises-own-slot',
+      proc([
+        start('S', 'Start'),
+        task('A1', 'Call order', 'S'),
+        { op: 'add', kind: 'serviceTask', id: 'A2', name: 'Label case', after: 'A1' },
+        task('F', 'Call claim', 'A2'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:conditional', id: 'BE3', on: 'A1', when: '${late}' },
+        { op: 'connect', source: 'BE3', target: 'F' },
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BE6', on: 'A1', name: 'Signal received', timer: 'PT1H', nonInterrupting: true },
+        { op: 'connect', source: 'BE6', target: 'F' },
+      ]),
+    );
+    expect(L.report.through).toEqual([]);
+    expect(L.report.crossings).toEqual([]);
+    const f = L.box('F');
+    const ends = ['BE3', 'BE6'].map((id) => {
+      const pts = flowBetween(L, id, 'F').points;
+      const [p, q] = pts.slice(-2) as [Point, Point];
+      expect(q.y, `${id} ends on the bottom of Call claim`).toBe(bottom(f));
+      expect(p.x, `${id} rises straight`).toBe(q.x);
+      return q.x;
+    });
+    expect(ends[0]).not.toBe(ends[1]);
+    expect(L.report.inOutOverlaps).toEqual([]);
+  });
+
+  it('lanes: the labels of two boundary events on a collapsed sub-process sit beside their own events, off the runs of their ways to the lane above', async () => {
+    // the labels' spots assumed the events right to left (a collapsed sub-process has them left to right): both lay on
+    // the other event, and the one moved away landed on the run of its sibling's way
+    const doc = proc([
+      start('S', 'Start'),
+      task('A', 'Ship goods', 'S'),
+      { op: 'add', kind: 'subProcess', id: 'SP', name: 'Pick and pack', after: 'A', collapsed: true },
+      { op: 'add', kind: 'startEvent', id: 'SS', in: 'SP' },
+      task('ST', 'Pick', 'SS'),
+      end('SE', 'ST'),
+      task('B', 'Archive order', 'SP'),
+      end('E', 'B', 'Done'),
+      { op: 'add', kind: 'boundaryEvent:error', id: 'BF', name: 'Packing failed', on: 'SP' },
+      task('H', 'Escalate', 'BF'),
+      end('EH', 'H', 'Escalated'),
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name: 'Too slow', on: 'SP', timer: 'PT1H', nonInterrupting: true },
+      task('H2', 'Notify', 'BT'),
+      end('EH2', 'H2', 'Notified'),
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'H', 'EH', 'H2', 'EH2'] },
+      { op: 'add', kind: 'lane', id: 'L2', name: 'Logistics', in: 'P', members: ['A', 'SP', 'B', 'E'] },
+    ]);
+    expect(collapsedIds(doc)).toEqual(['SP']);
+    const L = await layout('lanes-collapsed-boundary-labels', doc, { collapse: collapsedIds(doc) });
+    expect(L.report.through).toEqual([]);
+    expect(L.report.labelClashes).toEqual([]);
+    expectLabelsClear(L);
+    const bf = L.shape('BF'), bt = L.shape('BT');
+    expect(bf.box.x).toBeLessThan(bt.box.x);
+    // the left event's label left of it, the right one's right of it
+    expect(right(bf.label!)).toBeLessThanOrEqual(bf.box.x);
+    expect(bt.label!.x).toBeGreaterThanOrEqual(right(bt.box));
+    expectLabelsOffRuns(L);
+  });
+
+  /** No label of a shape sits on a horizontal run: the run keeps more than 2 px from its top and bottom edge (or crosses it: labelOnLine). */
+  function expectLabelsOffRuns(L: Laid): void {
+    for (const plane of L.planes) {
+      for (const s of plane.shapes.filter((x) => x.label)) {
+        for (const e of plane.edges) {
+          for (const [p, q] of segments(e.points)) {
+            if (p.y !== q.y || Math.max(p.x, q.x) <= s.label!.x || Math.min(p.x, q.x) >= right(s.label!)) continue;
+            expect(Math.abs(p.y - s.label!.y) > 2 && Math.abs(p.y - bottom(s.label!)) > 2, `${s.id}'s label off ${e.id} at y ${p.y}`).toBe(true);
+          }
+        }
+      }
+    }
+  }
+
+  it('lanes: a boundary event\'s label is not left on a horizontal run that only touches its box (it moves to a free spot)', async () => {
+    // generated (r077): the hook of the split's flow into Ship case ran along the bottom edge of Failed's label
+    const L = await layout(
+      'lanes-boundary-label-off-run',
+      proc([
+        start('S', 'Start'),
+        { op: 'add', kind: 'sendTask', id: 'A1', name: 'Print claim', after: 'S' },
+        { op: 'split', after: 'A1', kind: 'inclusiveGateway', id: 'G2', joinId: 'J3', name: 'Ship customer?', branches: [{ flowName: 'b0', nodes: [{ kind: 'task', id: 'T4', name: 'Inform customer' }] }, { flowName: 'b1', nodes: [{ kind: 'serviceTask', id: 'T5', name: 'Pick invoice' }] }, { flowName: 'b2', nodes: [{ kind: 'userTask', id: 'T6', name: 'Ship case' }] }] },
+        task('F', 'Notify data', 'J3'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:signal', id: 'BE7', on: 'T4', name: 'Failed', signal: 'Stop', nonInterrupting: true },
+        { op: 'add', kind: 'userTask', id: 'H8', name: 'Pick claim', after: 'BE7' },
+        { op: 'add', kind: 'sendTask', id: 'H9', name: 'Call invoice', after: 'H8' },
+        { op: 'add', kind: 'userTask', id: 'H10', name: 'Pick customer', after: 'H9' },
+        { op: 'connect', source: 'H10', target: 'J3' },
+        { op: 'add', kind: 'boundaryEvent:error', id: 'BE11', on: 'T6', name: 'Late', error: 'Rejected' },
+        { op: 'connect', source: 'BE11', target: 'J3', name: 'timeout' },
+        { op: 'add', kind: 'boundaryEvent:compensate', id: 'BE12', on: 'T4', name: 'Signal received' },
+        { op: 'add', kind: 'task', id: 'C13', name: 'Undo goods', in: 'P' },
+        { op: 'connect', source: 'BE12', target: 'C13' },
+        { op: 'add', kind: 'boundaryEvent:message', id: 'BE14', on: 'T6', name: 'Failed', message: 'Update' },
+        { op: 'add', kind: 'sendTask', id: 'H15', name: 'Archive customer', after: 'BE14' },
+        { op: 'connect', source: 'H15', target: 'A1' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['H10', 'H15'] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['T6'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Lane 2', in: 'P', members: ['S', 'A1', 'T4', 'T5', 'G2', 'J3', 'F', 'E', 'C13'] },
+        { op: 'add', kind: 'lane', id: 'L3', name: 'Lane 3', in: 'P', members: ['H8', 'H9'] },
+      ]),
+    );
+    expect(L.report.through).toEqual([]);
+    expectLabelsOffRuns(L);
+  });
+
   /** start -> "Poll status" -> end with a named self loop on the task. */
   function selfLoopDoc(): Doc {
     return proc([start('S'), task('A', 'Poll status', 'S'), end('E', 'A'), { op: 'connect', source: 'A', target: 'A', name: 'again' }]);
@@ -719,6 +1621,31 @@ describe('clean layout engine', () => {
       expect(p.x).toBeLessThan(right(L.box('Sub')));
       expect(p.y).toBeGreaterThan(L.box('Sub').y);
       expect(p.y).toBeLessThan(bottom(L.box('Sub')));
+    }
+  });
+
+  it('a flow between two expanded sub-processes of one row is horizontal when their heights differ in parity', async () => {
+    // a three-line title and a named gateway in the first row make Long even in height, Ship is odd: their centres differ by half a pixel
+    const doc = proc([
+      start('S'),
+      { op: 'add', kind: 'subProcess', id: 'Long', name: 'Check the order and every item in it against the stock, the credit limit of the customer, the delivery dates we promised and the terms of the framework contract', after: 'S' },
+      { op: 'add', kind: 'subProcess', id: 'Ship', name: 'Ship', after: 'Long' },
+      task('T', 'Bill', 'Ship'),
+      end('E', 'T'),
+      start('S2', undefined, { in: 'Long' }),
+      { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'Is it ok?', after: 'S2' },
+      task('T1', 'Do it', 'G'),
+      task('T2', 'Fix it', 'G'),
+      start('S3', undefined, { in: 'Ship' }),
+      task('T3', 'Pack', 'S3'),
+    ]);
+    const L = await layout('subprocess-row-parity', doc);
+    expect(L.box('Long').height % 2).not.toBe(L.box('Ship').height % 2);
+    expectClean(L);
+    for (const [a, b] of [['Long', 'Ship'], ['Ship', 'T']]) {
+      const pts = flowBetween(L, a!, b!).points;
+      expect(pts, `${a} -> ${b}`).toHaveLength(2);
+      expect(pts[0]!.y, `${a} -> ${b}`).toBe(pts[1]!.y);
     }
   });
 
@@ -900,6 +1827,226 @@ describe('clean layout engine', () => {
     expectClean(L);
     expectLabelsClear(L);
     expectLaneConventions(L, lanes);
+  });
+
+  it('lanes: a loop below the last row of a lane runs inside the lane, which grows around its channel', async () => {
+    // Done? loops back into the join J, whose bottom vertex Check credit in the lane below rises into; Again? loops into the free merge M
+    const loops = (merge: boolean): Doc =>
+      proc([
+        start('S', 'Start'),
+        { op: 'split', after: 'S', id: 'G', name: 'Kind?', joinId: 'J', branches: [{ flowName: 'A', nodes: [{ kind: 'task', id: 'A', name: 'Offer' }] }, { flowName: 'B', nodes: [{ kind: 'task', id: 'B', name: 'Check credit' }] }] },
+        task('T', 'Process', 'J'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Done?', after: 'T' },
+        ...(merge
+          ? [
+              { op: 'add', kind: 'exclusiveGateway', id: 'M', after: 'C', flowName: 'yes' } as AddOp,
+              task('U', 'Update', 'M'),
+              { op: 'add', kind: 'exclusiveGateway', id: 'K', name: 'Again?', after: 'U' } as AddOp,
+              end('E', 'K', 'End', { flowName: 'no' }),
+              { op: 'connect', source: 'K', target: 'M', name: 'yes' } as Op,
+            ]
+          : [end('E', 'C', 'End', { flowName: 'yes' })]),
+        { op: 'connect', source: 'C', target: 'J', name: 'no' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Sales', in: 'P', members: ['S', 'G', 'A', 'J', 'T', 'C', 'E', ...(merge ? ['M', 'U', 'K'] : [])] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Review', in: 'P', members: ['B'] },
+      ]);
+    for (const [name, merge, flows] of [
+      ['lane-loop-join', false, [['C', 'J']]],
+      ['lane-loop-merge', true, [['C', 'J'], ['K', 'M']]],
+    ] as const) {
+      const L = await layout(name, loops(merge));
+      expectClean(L);
+      const l1 = L.box('L1');
+      expect(bottom(l1), name).toBe(L.box('L2').y);
+      for (const [from, to] of flows) {
+        const y = longestHorizontalY(flowBetween(L, from, to).points)!;
+        expect(y, `${name} ${from} -> ${to}`).toBeGreaterThan(bottom(L.box(to)));
+        expect(y, `${name} ${from} -> ${to}`).toBeLessThanOrEqual(bottom(l1) - 15);
+      }
+    }
+  });
+
+  it('lanes: a loop over the first row of a lane runs inside the lane, which grows above its channel', async () => {
+    // the branch Book -> Bill runs under Work and Check, so Ok? loops back to Work over the top; in the first lane and in the second
+    for (const first of [true, false]) {
+      const main = ['S', 'G', 'T', 'T2', 'B1', 'B2', 'J', 'C', 'E'];
+      const doc = proc([
+        start('S', 'Start'),
+        { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'T', name: 'Work' }, { kind: 'task', id: 'T2', name: 'Check' }] }, { nodes: [{ kind: 'task', id: 'B1', name: 'Book' }, { kind: 'task', id: 'B2', name: 'Bill' }] }] },
+        { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Ok?', after: 'J' },
+        end('E', 'C', 'End', { flowName: 'yes' }),
+        { op: 'connect', source: 'C', target: 'T' },
+        start('S2', 'Start 2'),
+        task('P2', 'Archive', 'S2'),
+        end('E2', 'P2', 'Done 2'),
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: first ? main : ['S2', 'P2', 'E2'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: first ? ['S2', 'P2', 'E2'] : main },
+      ]);
+      const L = await layout(`lane-loop-top-${first ? 'first' : 'second'}`, doc);
+      expectClean(L);
+      const lane = L.box(first ? 'L1' : 'L2');
+      expect(bottom(L.box('L1'))).toBe(L.box('L2').y);
+      const y = longestHorizontalY(flowBetween(L, 'C', 'T').points)!;
+      expect(y, `first lane: ${first}`).toBeLessThan(L.box('T').y);
+      expect(y, `first lane: ${first}`).toBeGreaterThanOrEqual(lane.y + 15);
+    }
+  });
+
+  /** Every end point of the sequence flows lies on the border of its shape. */
+  function expectFlowsAttached(L: Laid): void {
+    const onBorder = (p: Point, b: Box): boolean =>
+      p.x >= b.x && p.x <= right(b) && p.y >= b.y && p.y <= bottom(b) && (p.x === b.x || p.x === right(b) || p.y === b.y || p.y === bottom(b));
+    for (const flow of L.out.allSequenceFlows()) {
+      const e = L.edge(idOf(flow));
+      const s = idOf(flow.get<El>('sourceRef')), t = idOf(flow.get<El>('targetRef'));
+      expect(onBorder(e.points[0]!, L.box(s)), `${e.id} starts on ${s}`).toBe(true);
+      expect(onBorder(e.points[e.points.length - 1]!, L.box(t)), `${e.id} ends on ${t}`).toBe(true);
+    }
+  }
+
+  /** The loop `source` -> `target` runs inside `laneId` 15 px from its borders; its name 4 px above its run, inside the lane. */
+  function expectLoopInLane(L: Laid, source: string, target: string, laneId: string, named = true): void {
+    const e = flowBetween(L, source, target), lane = L.box(laneId);
+    for (const [p, q] of segments(e.points)) {
+      if (p.y !== q.y) continue;
+      expect(p.y, `${e.id} runs inside ${laneId}`).toBeGreaterThanOrEqual(lane.y + 15);
+      expect(p.y, `${e.id} runs inside ${laneId}`).toBeLessThanOrEqual(bottom(lane) - 15);
+    }
+    if (!named) return;
+    expect(bottom(e.label!), `${e.id} label next to its run`).toBe(longestHorizontalY(e.points)! - 4);
+    expect(contains(lane, e.label!), `${e.id} label inside ${laneId}`).toBe(true);
+  }
+
+  it('lanes: a named loop over the first row of the second lane takes its label along when the lane grows above it', async () => {
+    // the router lays the channel of Ok? -> Work on the lane divider, its label above it in the first lane
+    const doc = proc([
+      start('S', 'Start'),
+      { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'T', name: 'Work' }, { kind: 'task', id: 'T2', name: 'Check' }] }, { nodes: [{ kind: 'task', id: 'B1', name: 'Book' }, { kind: 'task', id: 'B2', name: 'Bill' }] }] },
+      { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Ok?', after: 'J' },
+      end('E', 'C', 'End', { flowName: 'yes' }),
+      { op: 'connect', source: 'C', target: 'T', name: 'no, redo' },
+      start('S2', 'Start 2'),
+      task('P2', 'Archive', 'S2'),
+      end('E2', 'P2', 'Done 2'),
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: ['S2', 'P2', 'E2'] },
+      { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: ['S', 'G', 'T', 'T2', 'B1', 'B2', 'J', 'C', 'E'] },
+    ]);
+    const L = await layout('lane-loop-top-label', doc);
+    expectClean(L);
+    expectFlowsAttached(L);
+    expect(longestHorizontalY(flowBetween(L, 'C', 'T').points)!).toBeLessThan(L.box('T').y);
+    expectLoopInLane(L, 'C', 'T', 'L2');
+  });
+
+  it('lanes: nested named loops over the first row of the second lane take their labels along', async () => {
+    // Really ok? -> Work runs over Ok? -> Check, both over the top: the outer label lay 49 px above its run, in the first lane
+    const doc = proc([
+      start('S', 'Start'),
+      { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'T', name: 'Work' }, { kind: 'task', id: 'T2', name: 'Check' }] }, { nodes: [{ kind: 'task', id: 'B1', name: 'Book' }, { kind: 'task', id: 'B2', name: 'Bill' }] }] },
+      { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Ok?', after: 'J' },
+      { op: 'add', kind: 'exclusiveGateway', id: 'C2', name: 'Really ok?', after: 'C', flowName: 'yes' },
+      end('E', 'C2', 'End', { flowName: 'yes' }),
+      { op: 'connect', source: 'C', target: 'T2', name: 'recheck' },
+      { op: 'connect', source: 'C2', target: 'T', name: 'redo all' },
+      start('S2', 'Start 2'),
+      task('P2', 'Archive', 'S2'),
+      task('P3', 'Store', 'P2', { flowName: 'to the store' }),
+      end('E2', 'P3', 'Done 2'),
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: ['S2', 'P2', 'P3', 'E2'] },
+      { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: ['S', 'G', 'T', 'T2', 'B1', 'B2', 'J', 'C', 'C2', 'E'] },
+    ]);
+    const L = await layout('lane-loops-top-nested', doc);
+    expectClean(L);
+    expectFlowsAttached(L);
+    for (const [from, to] of [['C', 'T2'], ['C2', 'T']] as const) {
+      expect(longestHorizontalY(flowBetween(L, from, to).points)!).toBeLessThan(L.box(to).y);
+      expectLoopInLane(L, from, to, 'L2');
+    }
+  });
+
+  it('lanes: a named self loop in a lane that is not the last keeps its label, below the run, inside the lane', async () => {
+    const doc = proc([
+      start('S', 'Start'),
+      task('T', 'Poll status', 'S'),
+      task('B', 'Book', 'T'),
+      end('E', 'B', 'Done'),
+      { op: 'connect', source: 'T', target: 'T', name: 'call again' },
+      start('S3', 'Start 3'),
+      task('X', 'Archive', 'S3'),
+      end('E3', 'X', 'Done 3'),
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: ['S3', 'X', 'E3'] },
+      { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: ['S', 'T', 'B', 'E'] },
+      { op: 'add', kind: 'lane', id: 'L3', name: 'Three', in: 'P', members: [] },
+    ]);
+    const L = await layout('lane-self-loop-label', doc);
+    expectClean(L);
+    expectFlowsAttached(L);
+    const loop = flowBetween(L, 'T', 'T');
+    expect(loop.label!.y).toBeGreaterThan(longestHorizontalY(loop.points)!);
+    expect(contains(L.box('L2'), loop.label!), 'label inside L2').toBe(true);
+    expect(bottom(L.box('L2'))).toBe(L.box('L3').y);
+  });
+
+  it('lanes: the label of the next lane\'s loop on the divider does not push a lane\'s event sub-process down', async () => {
+    const doc = proc([
+      start('S2', 'Start 2'),
+      task('P2', 'Receive', 'S2'),
+      end('E2', 'P2', 'Done 2'),
+      { op: 'add', kind: 'eventSubProcess', id: 'ES', name: 'Cancel handling', in: 'P' },
+      { op: 'add', kind: 'startEvent:message', id: 'ES_S', name: 'Cancelled', in: 'ES', message: 'Cancel' },
+      task('ES_T', 'Undo', 'ES_S'),
+      end('ES_E', 'ES_T'),
+      start('S', 'Start'),
+      { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'T', name: 'Work' }, { kind: 'task', id: 'T2', name: 'Check' }] }, { nodes: [{ kind: 'task', id: 'B1', name: 'Book' }] }] },
+      { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Ok?', after: 'J' },
+      end('E', 'C', 'End', { flowName: 'yes' }),
+      { op: 'connect', source: 'C', target: 'T', name: 'no, do the whole work again' },
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: ['S2', 'P2', 'E2', 'ES'] },
+      { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: ['S', 'G', 'T', 'T2', 'B1', 'J', 'C', 'E'] },
+    ]);
+    const L = await layout('lane-event-sub-loop-label', doc);
+    expectFlowsAttached(L);
+    const loop = flowBetween(L, 'C', 'T');
+    expect(contains(L.box('L2'), loop.label!), 'loop label inside L2').toBe(true);
+    // the event sub-process sits one vertical gap below its lane's content, not below the other lane's label
+    const content = Math.max(...['S2', 'P2', 'E2'].map((id) => bottom(L.box(id))));
+    expect(L.box('ES').y).toBeLessThanOrEqual(content + 60);
+    expect(contains(L.box('L1'), L.box('ES'))).toBe(true);
+  });
+
+  it('lanes: a loop below the first lane and one over the second lane each stay in their lane, attached to their nodes', async () => {
+    // Again? -> Archive runs on the divider, so the router lays Ok? -> Work over the top higher, inside lane One (on Archive's bottom)
+    for (const named of [true, false]) {
+      const doc = proc([
+        start('S', 'Start'),
+        { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'task', id: 'T', name: 'Work' }, { kind: 'task', id: 'T2', name: 'Check' }] }, { nodes: [{ kind: 'task', id: 'B1', name: 'Book' }, { kind: 'task', id: 'B2', name: 'Bill' }] }] },
+        { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Ok?', after: 'J' },
+        end('E', 'C', 'End', { flowName: 'yes' }),
+        { op: 'connect', source: 'C', target: 'T', ...(named ? { name: 'no, redo' } : {}) },
+        start('S2', 'Start 2'),
+        task('P2', 'Archive', 'S2'),
+        { op: 'add', kind: 'exclusiveGateway', id: 'K2', name: 'Again?', after: 'P2' },
+        end('E2', 'K2', 'Done 2', { flowName: 'no' }),
+        { op: 'connect', source: 'K2', target: 'P2', name: 'retry archive' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'One', in: 'P', members: ['S2', 'P2', 'K2', 'E2'] },
+        { op: 'add', kind: 'lane', id: 'L2', name: 'Two', in: 'P', members: ['S', 'G', 'T', 'T2', 'B1', 'B2', 'J', 'C', 'E'] },
+      ]);
+      const L = await layout(`lane-loops-two-lanes${named ? '-named' : ''}`, doc);
+      expectClean(L);
+      expectFlowsAttached(L);
+      expect(bottom(L.box('L1'))).toBe(L.box('L2').y);
+      expect(longestHorizontalY(flowBetween(L, 'K2', 'P2').points)!).toBeGreaterThan(bottom(L.box('P2')));
+      expectLoopInLane(L, 'K2', 'P2', 'L1');
+      expect(longestHorizontalY(flowBetween(L, 'C', 'T').points)!).toBeLessThan(L.box('T').y);
+      expectLoopInLane(L, 'C', 'T', 'L2', named);
+    }
   });
 
   it('data object and data store hang below their tasks with associations', async () => {

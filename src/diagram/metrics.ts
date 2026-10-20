@@ -47,11 +47,29 @@
  *      segmentOverlap    two sequence flows into the same target running on
  *                        top of each other for more than 20 px (a shared
  *                        final segment: they merge before the target; a
- *                        common first segment of a fork does not count)
+ *                        common first segment of a fork does not count).
+ *                        Into a gateway (any kind), the common tail of two
+ *                        flows that both enter its bottom vertex, or both
+ *                        its top vertex, on a vertical final segment does
+ *                        not count either: a join's entries share that
+ *                        vertex, as bpmn-js draws them. The tail runs from
+ *                        the vertex back to where the two part (while
+ *                        their runs are collinear and start at the same
+ *                        point, 2 px tolerance); what they share elsewhere
+ *                        counts, and so do a merge onto a line into a side
+ *                        vertex and two flows drawn on top of each other
+ *                        from start to end
  *      labelOutsideFrame the label of a named event, gateway, data object /
  *                        store or sequence flow reaching out of its home
  *                        frame: the expanded sub-process it lives in, else
  *                        the pool of its process (2 px tolerance)
+ *      labelOnTitle      the label of a named event (boundary events
+ *                        included), gateway, data object / store, sequence
+ *                        or message flow overlapping the title of a named
+ *                        expanded sub-process (event sub-processes,
+ *                        transactions and ad-hoc ones too) on its plane:
+ *                        where bpmn-js draws its name, text.ts titleBox.
+ *                        Pool and lane names are not checked
  *      messageLabelFar   a named message flow whose label is more than 50 px
  *                        away from its line
  *  - `through` uses a real segment-rectangle test (an axis-parallel segment:
@@ -75,6 +93,7 @@
  *      laneGap        [lane, participant]      failed       []
  *      backwardFlow   [flow, source, target]   segmentOverlap [flowA, flowB, shared node]
  *      labelOutsideFrame [labelOwner, frame]   messageLabelFar [messageFlow]
+ *      labelOnTitle   [labelOwner, subProcess]
  *    `detail` carries the label variant ('label on shape' | 'label on label'),
  *    the lane side ('top' | 'bottom'), the collinear length of a parallel run
  *    or a segment overlap ('35px'), the distance of a far message label
@@ -97,11 +116,14 @@
  *      labelClash     the centre of the label's overlap with the shape / other label
  *      labelOnLine    the middle of the segment's part in the label text
  *      inOut, parallelRun, segmentOverlap  the middle of the first shared run
+ *                     (of a segmentOverlap: the first one that counts, a
+ *                     join's common tail skipped)
  *      frameIntrusion, outsideLane, outsidePool, outsideSub  the shape's centre
  *      edgeLeavesLane, edgeOutside  the first waypoint outside the frame
  *      laneGap        the middle of the gap between the lane and the pool border
  *      backwardFlow   half-way along the flow
  *      labelOutsideFrame, messageLabelFar  the centre of the label
+ *      labelOnTitle   the centre of the label's overlap with the title
  *    `missing` and `failed` (and a problem whose elements are not drawn)
  *    get no `at`. It is a separate pass, so layoutProblems (every mutation
  *    runs it) and its output are unchanged: results and `metrics` never
@@ -114,12 +136,13 @@
  */
 import { is, parseXml, type El } from '../model.js';
 import type { Box, Point } from '../layout/types.js';
+import { titleBox } from './text.js';
 
 /** structural defects the regression harness does not measure (see contract) */
 export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge', 'detachedEdge'] as const;
 
 /** soft drawing-quality kinds the regression harness does not measure (see contract) */
-export const QUALITY_KEYS = ['backwardFlow', 'segmentOverlap', 'labelOutsideFrame', 'messageLabelFar'] as const;
+export const QUALITY_KEYS = ['backwardFlow', 'segmentOverlap', 'labelOutsideFrame', 'labelOnTitle', 'messageLabelFar'] as const;
 
 export const KEYS = [
   'crossings',
@@ -145,6 +168,7 @@ export const KEYS = [
   'backwardFlow',
   'segmentOverlap',
   'labelOutsideFrame',
+  'labelOnTitle',
   'messageLabelFar',
   'failed',
 ] as const;
@@ -178,6 +202,7 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   backwardFlow: 3,
   segmentOverlap: 2,
   labelOutsideFrame: 2,
+  labelOnTitle: 2,
   messageLabelFar: 1,
   failed: 50,
 };
@@ -834,12 +859,76 @@ function checkBackwardFlows({ sem, edges, byId, add }: PlaneCtx): void {
   }
 }
 
+/** consecutive segments of a polyline going one way on one line, with their indices */
+interface Run {
+  seg: Seg;
+  idx: number[];
+}
+
+/** the runs of a polyline (a zero-length segment joins the run before it; leading ones join the first run) */
+function runs(list: Seg[]): Run[] {
+  const out: Run[] = [];
+  const way = ([p, q]: Seg): string => `${Math.sign(q.x - p.x)},${Math.sign(q.y - p.y)}`;
+  // zero-length segments before the first run (a duplicate first waypoint)
+  const lead: number[] = [];
+  list.forEach((s, k) => {
+    const last = out[out.length - 1];
+    const empty = s[0].x === s[1].x && s[0].y === s[1].y;
+    const straight = s[0].x === s[1].x || s[0].y === s[1].y;
+    if (!last && empty) lead.push(k);
+    else if (last && (empty || (straight && way(last.seg) === way(s)))) {
+      last.seg = [last.seg[0], s[1]];
+      last.idx.push(k);
+    } else out.push({ seg: s, idx: out.length ? [k] : [...lead, k] });
+  });
+  if (!out.length && lead.length) out.push({ seg: list[lead[0]!]!, idx: lead });
+  return out;
+}
+
+/**
+ * The common tail of two sequence flows into one gateway that both enter it
+ * through its bottom vertex (or both through its top vertex) on a vertical
+ * final segment: the pairs of their segments (`i,j`, indices into a.segs and
+ * b.segs) from that vertex back to where the flows part. A join's entries
+ * share the vertex (bpmn-js draws them so), so this run is no merge. Empty
+ * for any other target or end, and for two flows that never part.
+ */
+function joinTail(a: Edge, b: Edge, target: Shape | undefined): Set<string> {
+  const tail = new Set<string>();
+  if (!target || !is(target.el, 'bpmn:Gateway')) return tail;
+  const g = target.b;
+  const near = (p: Point, q: Point): boolean => Math.abs(p.x - q.x) <= 2 && Math.abs(p.y - q.y) <= 2;
+  // the vertex a last run enters vertically from outside: 1 the bottom one, -1 the top one, 0 none
+  const entry = (r: Run | undefined): number => {
+    if (!r) return 0;
+    const [p, q] = r.seg;
+    if (p.x !== q.x || Math.abs(q.x - (g.x + g.width / 2)) > 2) return 0;
+    if (Math.abs(q.y - (g.y + g.height)) <= 2 && p.y > q.y) return 1;
+    return Math.abs(q.y - g.y) <= 2 && p.y < q.y ? -1 : 0;
+  };
+  const ra = runs(a.segs);
+  const rb = runs(b.segs);
+  const side = entry(ra[ra.length - 1]);
+  if (!side || entry(rb[rb.length - 1]) !== side) return tail;
+  for (let i = ra.length - 1, j = rb.length - 1; i >= 0 && j >= 0; i--, j--) {
+    const x = ra[i]!;
+    const y = rb[j]!;
+    if (collinear(x.seg, y.seg) <= 0) break;
+    for (const k of x.idx) for (const l of y.idx) tail.add(`${k},${l}`);
+    if (!near(x.seg[0], y.seg[0])) break;
+    // one line from start to end: two flows drawn on top of each other, not a join
+    if (i === 0 && j === 0) return new Set();
+  }
+  return tail;
+}
+
 /**
  * two sequence flows into one target sharing a line for more than 20 px (they
  * merge before the target; flows leaving one source on a common first
- * segment are the usual fork and do not count)
+ * segment are the usual fork and do not count, nor do a join's entries on
+ * their common way into the gateway's bottom / top vertex: joinTail)
  */
-function checkSegmentOverlaps({ edges, add }: PlaneCtx): void {
+function checkSegmentOverlaps({ edges, byId, add }: PlaneCtx): void {
   const byTarget = new Map<string, Edge[]>();
   for (const e of edges) {
     const target = is(e.el, 'bpmn:SequenceFlow') ? idOf(raw(e.el, 'targetRef')) : undefined;
@@ -853,8 +942,9 @@ function checkSegmentOverlaps({ edges, add }: PlaneCtx): void {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i]!;
         const b = list[j]!;
+        const tail = joinTail(a, b, byId.get(target));
         let len = 0;
-        for (const sa of a.segs) for (const sb of b.segs) len += Math.max(0, collinear(sa, sb));
+        for (const [k, sa] of a.segs.entries()) for (const [l, sb] of b.segs.entries()) if (!tail.has(`${k},${l}`)) len += Math.max(0, collinear(sa, sb));
         if (len > 20) add('segmentOverlap', `${a.id}=${b.id}`, [a.id, b.id, target], `${len}px`);
       }
     }
@@ -882,6 +972,23 @@ function checkLabelFrames(ctx: PlaneCtx): void {
     const frame = labelHome(ctx, o.id);
     if (!frame || inside(o.label, { x: frame.b.x - 2, y: frame.b.y - 2, width: frame.b.width + 4, height: frame.b.height + 4 })) continue;
     ctx.add('labelOutsideFrame', `${o.id}#L@${frame.id}`, [o.id, frame.id]);
+  }
+}
+
+/** The title of a named expanded sub-process (text.ts titleBox), undefined for any other shape. */
+const titleOf = (s: Shape): Box | undefined => (s.expanded && is(s.el, 'bpmn:SubProcess') ? titleBox(s.b, raw<string>(s.el, 'name')) : undefined);
+
+/** named external labels on the title of an expanded sub-process */
+function checkLabelTitles({ shapes, edges, add }: PlaneCtx): void {
+  const titles = shapes.flatMap((s) => {
+    const box = titleOf(s);
+    return box ? [{ id: s.id, box }] : [];
+  });
+  if (!titles.length) return;
+  const owners: Array<{ id: string; el: El; label?: Box }> = [...shapes.filter((s) => externallyLabelled(s.el)), ...edges.filter((e) => is(e.el, 'bpmn:SequenceFlow') || is(e.el, 'bpmn:MessageFlow'))];
+  for (const o of owners) {
+    if (!o.label || !raw<string>(o.el, 'name')?.trim()) continue;
+    for (const t of titles) if (overlap(o.label, t.box)) add('labelOnTitle', `${o.id}#L^${t.id}`, [o.id, t.id]);
   }
 }
 
@@ -942,6 +1049,7 @@ function analysePlane(plane: unknown, sem: Semantics, seen: Set<string>, add: Ad
   checkBackwardFlows(ctx);
   checkSegmentOverlaps(ctx);
   checkLabelFrames(ctx);
+  checkLabelTitles(ctx);
   checkMessageLabels(ctx);
 }
 
@@ -1030,11 +1138,11 @@ function clipMiddle(seg: Seg, b: Box, shrink: number): Point {
   return meetCentre({ x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), width: Math.abs(dx), height: Math.abs(dy) }, b);
 }
 
-/** the middle of the first run two edges share on one line */
-function sharedAt(a: Edge, b: Edge): Point | undefined {
-  for (const [p, q] of a.segs) {
-    for (const [r, t] of b.segs) {
-      if (collinear([p, q], [r, t]) <= 0) continue;
+/** the middle of the first run two edges share on one line, skipping the segment pairs in `skip` (`i,j`) */
+function sharedAt(a: Edge, b: Edge, skip = new Set<string>()): Point | undefined {
+  for (const [i, [p, q]] of a.segs.entries()) {
+    for (const [j, [r, t]] of b.segs.entries()) {
+      if (skip.has(`${i},${j}`) || collinear([p, q], [r, t]) <= 0) continue;
       if (p.x === q.x) return { x: p.x, y: (Math.max(Math.min(p.y, q.y), Math.min(r.y, t.y)) + Math.min(Math.max(p.y, q.y), Math.max(r.y, t.y))) / 2 };
       return { x: (Math.max(Math.min(p.x, q.x), Math.min(r.x, t.x)) + Math.min(Math.max(p.x, q.x), Math.max(r.x, t.x))) / 2, y: p.y };
     }
@@ -1114,8 +1222,10 @@ function locate(p: LayoutProblem, pl: LocPlane): Point | undefined {
     }
     case 'inOut':
     case 'parallelRun':
-    case 'segmentOverlap':
       return ea && eb ? sharedAt(ea, eb) : undefined;
+    case 'segmentOverlap':
+      // a join's common tail into the gateway's vertex is not counted: the badge goes on the run that is
+      return ea && eb ? sharedAt(ea, eb, joinTail(ea, eb, pl.shapes.get(p.ids[2] ?? ''))) : undefined;
     case 'edgeLeavesLane':
     case 'edgeOutside':
       return sb ? ea?.pts.find((q) => !ptIn(q, sb.b)) : undefined;
@@ -1128,6 +1238,11 @@ function locate(p: LayoutProblem, pl: LocPlane): Point | undefined {
     case 'messageLabelFar': {
       const own = labelOf(a);
       return own ? centreOf(own) : undefined;
+    }
+    case 'labelOnTitle': {
+      const own = labelOf(a);
+      const title = sb ? titleOf(sb) : undefined;
+      return own && title ? meetCentre(own, title) : undefined;
     }
     default:
       return undefined;

@@ -1,16 +1,53 @@
 /**
  * Orthogonal edge routing for one scope (coordinates relative to the scope).
  *
- *  - same row: straight line (a reserved empty band or a bypass underneath
- *    when something is in the way)
- *  - target below: down from the source, then right (branch drop)
+ *  - same row: straight line at one y for both ends (centres of boxes whose
+ *    heights differ in parity are half a pixel apart; a bypass underneath
+ *    when something is in the way). An empty branch (a split's flow straight
+ *    to its join) runs in its reserved band underneath, unless the row
+ *    between split and join is free (in a laned scope the branches between
+ *    them can run in other lanes): no shape, node label, flow or flow label
+ *    on the line, no other flow on the split's right or the join's left
+ *    vertex, and no more crossings than the band; then it is drawn straight
+ *    (routed after the other forward flows, which it must see) and no loop
+ *    enters that join through its left vertex
+ *  - target below: down from the source, then right (branch drop); a gateway
+ *    that merges flows, one of them rising into its bottom vertex (a join),
+ *    leaves through its right vertex instead: right, down near the join (not
+ *    in the middle of the column gap, where loops and hooks run), right. A
+ *    split with one entry keeps its drops on the bottom vertex. Where the
+ *    drop is blocked: right, down, right; a boundary event's down to a run
+ *    below its host's row and right into the column gap after the host
+ *    (runBelow), not out of its side along the host's bottom border
  *  - target above: right from the source, then up into the target's bottom
- *    (join); alternatives: hook from the column gap, up from the source's top
- *    and right into the target, or into the target's left side
- *  - loops: down into a channel below everything in their column span, left,
- *    up into the target's bottom; or over the top when that is cleaner. Every
- *    loop is scored over side/centre exits and entries: hits count 1000,
- *    crossings 1, a border point already used by another flow 2.
+ *    (a join, or any node a forward flow enters from below), straight under
+ *    it: the placer keeps that column free between the node and its entries
+ *    from below where that draws better (place.ts freeJoinColumns);
+ *    alternatives: hook from the column gap (elsewhere, and for loops and
+ *    empty bands), up from the source's top and right into the target (that
+ *    top point counts as used, so a loop into the source's top keeps off it
+ *    like one into a bottom vertex with a drop), or into the target's left
+ *    side. A boundary event leaves downwards instead, to a run RUN_CLEAR
+ *    below the shapes and labels of its host's row (its own label included)
+ *    and the runs of the flows routed before it, or below everything between
+ *    the two in its lane, then up: straight, into the target's left side from
+ *    the column gap before it, or a hook (in that order, where they cross as
+ *    many lines and run through as many labels: each counts 3); out of its
+ *    side along the host's bottom border only when every such way cuts a
+ *    shape. No forward flow enters a top vertex: a target below is entered
+ *    from the left
+ *  - loops: down into a channel below everything in their column span (the
+ *    default labels below events and boundary events included, so a label
+ *    keeps its spot), left, up into the target's bottom; or over the top when
+ *    that is cleaner. Every loop is scored over side/centre exits and
+ *    entries: hits count 1000, crossings 3, a border point already used by
+ *    another flow 2 (entering a gateway: only a point a flow leaving it
+ *    uses, so a loop into a join shares the vertex with the join's other
+ *    entries; not when the loop leaves a gateway by a side exit, which
+ *    starts beside the diamond).
+ *  - a gateway whose top a flow uses has its label to the upper left, clear
+ *    of that flow also when bpmn-js draws the name on one line wider than
+ *    the label box (it wraps at 90 px)
  *  - data associations are orthogonal stubs (vertical / horizontal / Z)
  */
 import { LABEL_LINE, METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type Point, type ScopeLayout } from './types.js';
@@ -22,6 +59,9 @@ interface Channel {
 }
 
 type Segment = [Point, Point];
+
+/** the x positions on the bottom / top border of each node that flows use; `out`: a flow leaving the node there */
+type Used = Map<GNode, Array<{ x: number; out: boolean }>>;
 
 /** artifacts that are already positioned when the edges are routed (data objects/stores, notes of boundary events) */
 export function routedArtifacts(layout: ScopeLayout): GArtifact[] {
@@ -45,20 +85,131 @@ function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
 }
 
 /** number of boxes a path cuts through (segment ends shrunk so touching the own border does not count) */
-export function hitCount(points: Point[], boxes: Box[], ignore: Box[]): number {
-  const hit = new Set<Box>();
+function hitCount(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Box[]): number {
+  let hit: Set<Box> | undefined;
   for (let i = 0; i + 1 < points.length; i++) {
     const a = points[i]!, b = points[i + 1]!;
     const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y);
-    const a2 = { x: a.x + dx * 2, y: a.y + dy * 2 };
-    const b2 = { x: b.x - dx * 2, y: b.y - dy * 2 };
-    for (const box of boxes) if (!ignore.includes(box) && segmentHitsBox(a2, b2, box)) hit.add(box);
+    // the segment shrunk by 2 px at both ends (segmentHitsBox of the shrunk ends)
+    const ax = a.x + dx * 2, ay = a.y + dy * 2, bx = b.x - dx * 2, by = b.y - dy * 2;
+    const x1 = Math.min(ax, bx), x2 = Math.max(ax, bx), y1 = Math.min(ay, by), y2 = Math.max(ay, by);
+    const test = (box: Box): void => {
+      if (x1 < box.x + box.width && x2 > box.x && y1 < box.y + box.height && y2 > box.y && !ignore.includes(box)) (hit ??= new Set()).add(box);
+    };
+    if (Array.isArray(boxes)) boxes.forEach(test);
+    else boxes.each(x1, x2, test);
   }
-  return hit.size;
+  return hit?.size ?? 0;
 }
 
-function pathHits(points: Point[], boxes: Box[], ignore: Box[]): boolean {
-  return hitCount(points, boxes, ignore) > 0;
+/** hitCount > 0 (stops at the first box cut) */
+function pathHits(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Box[]): boolean {
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i]!, b = points[i + 1]!;
+    const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y);
+    const ax = a.x + dx * 2, ay = a.y + dy * 2, bx = b.x - dx * 2, by = b.y - dy * 2;
+    const x1 = Math.min(ax, bx), x2 = Math.max(ax, bx), y1 = Math.min(ay, by), y2 = Math.max(ay, by);
+    const cuts = (box: Box): boolean => x1 < box.x + box.width && x2 > box.x && y1 < box.y + box.height && y2 > box.y && !ignore.includes(box);
+    if (Array.isArray(boxes) ? boxes.some(cuts) : boxes.each(x1, x2, cuts)) return true;
+  }
+  return false;
+}
+
+/** Width of the columns XIndex sorts its items into, and the most columns a range covers (a wider one is everywhere). */
+const X_BUCKET = 128;
+const X_COLUMNS = 4096;
+
+/**
+ * Items (boxes, segments) found by the x range they cover: `near(lo, hi)` gives each item whose range meets
+ * [lo, hi] once, maybe some more (those in the same columns of X_BUCKET px), in no particular order. The router's
+ * tests count only what lies there (crossings, cut shapes), so over these items they count as over all of them.
+ */
+export class XIndex<T> {
+  private readonly columns = new Map<number, number[]>();
+  /** items whose range is not finite or very wide: met by every query */
+  private readonly everywhere: number[] = [];
+  private readonly items: T[] = [];
+  private readonly seen: number[] = [];
+  private query = 0;
+
+  /** how many items were added */
+  get size(): number {
+    return this.items.length;
+  }
+
+  add(item: T, lo: number, hi: number): void {
+    const id = this.items.length;
+    this.items.push(item);
+    this.seen.push(0);
+    const first = Math.floor(lo / X_BUCKET), last = Math.floor(hi / X_BUCKET);
+    if (!(last - first <= X_COLUMNS)) {
+      this.everywhere.push(id);
+      return;
+    }
+    for (let c = first; c <= last; c++) {
+      const column = this.columns.get(c);
+      if (column) column.push(id);
+      else this.columns.set(c, [id]);
+    }
+  }
+
+  /**
+   * Calls `fn` on what near(lo, hi) gives (with its id: the items count from 0 in the order they were added; only
+   * those from id `from` on), without collecting it, until `fn` returns true (then true). `fn` must not query this
+   * index itself.
+   */
+  each(lo: number, hi: number, fn: (item: T, id: number) => boolean | void, from = 0): boolean {
+    const first = Math.floor(lo / X_BUCKET), last = Math.floor(hi / X_BUCKET);
+    if (!(last - first <= X_COLUMNS)) return this.items.some((item, id) => id >= from && fn(item, id) === true);
+    const { items, seen } = this;
+    const q = ++this.query;
+    for (let c = first - 1; c <= last; c++) {
+      const ids = c < first ? this.everywhere : this.columns.get(c);
+      if (!ids) continue;
+      // the ids of a column ascend (they are added in order): start at the first from `from` on
+      let k = 0;
+      for (let hiK = from ? ids.length : 0; k < hiK; ) {
+        const mid = (k + hiK) >> 1;
+        if (ids[mid]! < from) k = mid + 1;
+        else hiK = mid;
+      }
+      for (; k < ids.length; k++) {
+        const id = ids[k]!;
+        if (seen[id] === q) continue;
+        seen[id] = q;
+        if (fn(items[id]!, id) === true) return true;
+      }
+    }
+    return false;
+  }
+
+  near(lo: number, hi: number): T[] {
+    const first = Math.floor(lo / X_BUCKET), last = Math.floor(hi / X_BUCKET);
+    if (!(last - first <= X_COLUMNS)) return [...this.items];
+    const { items, seen } = this;
+    const out: T[] = [];
+    const q = ++this.query;
+    for (let c = first - 1; c <= last; c++) {
+      const ids = c < first ? this.everywhere : this.columns.get(c);
+      if (!ids) continue;
+      for (const id of ids) {
+        if (seen[id] === q) continue;
+        seen[id] = q;
+        out.push(items[id]!);
+      }
+    }
+    return out;
+  }
+}
+
+function boxIndex(boxes: Box[]): XIndex<Box> {
+  const index = new XIndex<Box>();
+  for (const b of boxes) index.add(b, b.x, right(b));
+  return index;
+}
+
+function addSegments(index: XIndex<Segment>, segments: Segment[]): void {
+  for (const s of segments) index.add(s, Math.min(s[0].x, s[1].x), Math.max(s[0].x, s[1].x));
 }
 
 function orient(a: Point, b: Point, c: Point): number {
@@ -83,9 +234,12 @@ export function routedSegments(layout: ScopeLayout): Segment[] {
   return layout.edges.flatMap((e) => toSegments(e.points));
 }
 
-function countCrossings(points: Point[], routed: Segment[]): number {
+function countCrossings(points: Point[], routed: Segment[] | XIndex<Segment>, stop = Infinity): number {
   let n = 0;
-  for (const a of toSegments(points)) for (const b of routed) if (segmentsCross(a, b)) n++;
+  for (const a of toSegments(points)) {
+    const count = (b: Segment): boolean => segmentsCross(a, b) && ++n >= stop;
+    if (Array.isArray(routed) ? routed.some(count) : routed.each(Math.min(a[0].x, a[1].x), Math.max(a[0].x, a[1].x), count)) break;
+  }
   return n;
 }
 
@@ -115,6 +269,45 @@ export function dataX(n: GNode): number {
 }
 
 /**
+ * The forward entries that rise into a node's bottom (riseX): from a source below it, or along an empty
+ * branch's band. Told from the placed nodes, not from routes: the placer asks before routing (place.ts
+ * freeJoinColumns), the router before the entries are routed.
+ */
+export function risesInto(n: GNode): GEdge[] {
+  return n.in.filter((e) => !e.back && (e.bandY !== undefined || center(e.source.box).y > center(n.box).y + 1));
+}
+
+/** The entries of a join that rise into its bottom vertex (risesInto; none for a node that is no gateway or has fewer than two forward entries). */
+export function entriesFromBelow(n: GNode): GEdge[] {
+  return n.kind === 'gateway' && n.in.filter((e) => !e.back).length >= 2 ? risesInto(n) : [];
+}
+
+/**
+ * How far the way of a boundary event to a target above keeps from the shapes and labels it runs below (the
+ * host's row, the event's own label): it leaves the event downwards to a run at least this far below them.
+ */
+export const RUN_CLEAR = 15;
+
+/** How far a straight rise into a node's bottom keeps from the shapes beside its line (place.ts takenColumns, the router's choice of slot). */
+export const RISE_KEEP = 5;
+
+/** The height an entry from below rises from: its band's, a boundary event's run (at least RUN_CLEAR below the event), else its source's centre. */
+export function riseFrom(e: GEdge): number {
+  return e.bandY ?? (e.source.host ? bottom(e.source.box) + RUN_CLEAR : center(e.source.box).y);
+}
+
+/** The x on a node's bottom border where a flow rises in: the centre (beside the boundary events), beside the drop line when the node has one. */
+export function riseX(n: GNode): number {
+  return riseSlots(n)[0]!;
+}
+
+/** The x positions on a node's bottom border a flow may rise in at, riseX first (not on the drop line). */
+export function riseSlots(n: GNode): number[] {
+  const cands = bottomCandidates(n);
+  return cands.length > 1 && n.out.some((e) => !e.back && center(e.target.box).y > center(n.box).y + 1) ? cands.slice(1) : cands;
+}
+
+/**
  * Candidate x positions on the bottom border of a node for drops and rises:
  * the centre (or the free part beside the boundary events), then the sides.
  */
@@ -125,18 +318,25 @@ function bottomCandidates(n: GNode): number[] {
   return boundaryLeft(n) ? [right(b) - 20, right(b) - 8] : [b.x + 20, b.x + 8];
 }
 
-export function routeEdges(layout: ScopeLayout): void {
-  const boxes = obstacles(layout);
+/** How the routes of a scope run: pairs of flows that cross, the shapes they cut (not their own ends, nor the host of a boundary event they leave) and the `labels` some flow runs through. */
+export type RouteFaults = (labels?: Box[]) => { crossings: number; hits: number; labels: number };
+
+/** Routes the sequence flows of a scope; returns what measures the routes, with the indexes the router built. */
+export function routeEdges(layout: ScopeLayout): RouteFaults {
+  const obstacleList = obstacles(layout);
+  // the shapes and the segments routed so far, found by their x range
+  const boxes = boxIndex(obstacleList);
   const channels: Channel[] = [];
   const topChannels: Channel[] = [];
   const allNodes = [...layout.nodes, ...layout.nodes.flatMap((n) => n.boundary)];
-  const routed: Segment[] = [];
-  const usedBottom = new Map<GNode, number[]>();
-  const usedTop = new Map<GNode, number[]>();
-  const used = (map: Map<GNode, number[]>, n: GNode, x: number): boolean => (map.get(n) ?? []).some((u) => Math.abs(u - x) < 1);
-  const use = (map: Map<GNode, number[]>, n: GNode, x: number): void => {
+  const routed = new XIndex<Segment>();
+  const usedBottom: Used = new Map();
+  const usedTop: Used = new Map();
+  /** `x` is taken; for a flow entering a gateway only by a flow leaving it (a join's entries share the vertex) */
+  const used = (map: Used, n: GNode, x: number, entry = false): boolean => (map.get(n) ?? []).some((u) => Math.abs(u.x - x) < 1 && (u.out || !entry || n.kind !== 'gateway'));
+  const use = (map: Used, n: GNode, x: number, out: boolean): void => {
     const list = map.get(n) ?? [];
-    list.push(x);
+    list.push({ x, out });
     map.set(n, list);
   };
   const bandOf = (n: GNode): LaneBandInfo | undefined => layout.laneBands?.find((b) => b.nodes.has(n.host ?? n));
@@ -149,13 +349,14 @@ export function routeEdges(layout: ScopeLayout): void {
   };
   /** the "target below" drop x of a node (stable: the same for every branch, so labels line up) */
   const exitX = (n: GNode): number => bottomCandidates(n)[0]!;
-  /** a node whose bottom border carries a branch drop */
-  const hasDownExit = (n: GNode): boolean => n.out.some((e) => !e.back && center(e.target.box).y > center(n.box).y + 1);
+  /**
+   * a gateway that merges flows, one of them rising into its bottom vertex (from a source below it, or an
+   * empty branch's band): its exits to targets below leave through the right vertex, off that shared line
+   * (the entries may be routed after the exit)
+   */
+  const joinFromBelow = (n: GNode): boolean => entriesFromBelow(n).length > 0;
   /** where a flow enters a node from below: beside the drop line when the node has one */
-  const entryX = (n: GNode): number => {
-    const cands = bottomCandidates(n);
-    return cands.length > 1 && hasDownExit(n) ? cands[1]! : cands[0]!;
-  };
+  const entryX = riseX;
 
   /** lowest occupied y over a column span (layers), including boundary events */
   const spanBottom = (fromLayer: number, toLayer: number): number => {
@@ -171,21 +372,33 @@ export function routeEdges(layout: ScopeLayout): void {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
     const inBand = (y: number): boolean => !band || (y >= band.top && y <= band.bottom);
     let minY = Infinity;
-    for (const n of allNodes) if (n.box.x <= hi && right(n.box) >= lo && inBand(center(n.box).y)) minY = Math.min(minY, n.box.y);
-    for (const a of routedArtifacts(layout)) if (a.box.x <= hi && right(a.box) >= lo && inBand(center(a.box).y)) minY = Math.min(minY, a.box.y);
-    for (const [a, b] of routed) {
+    // the nodes, boundary events and artifacts
+    for (const b of boxes.near(lo, hi)) if (b.x <= hi && right(b) >= lo && inBand(center(b).y)) minY = Math.min(minY, b.y);
+    for (const [a, b] of routed.near(lo, hi)) {
       if (Math.max(a.x, b.x) >= lo && Math.min(a.x, b.x) <= hi && inBand(a.y) && inBand(b.y)) minY = Math.min(minY, a.y, b.y);
     }
     return minY === Infinity ? 0 : minY;
   };
-  /** lowest y of any node, artifact or routed edge point inside an x range (restricted to a lane band) */
+  // the default spots of the labels below events and boundary events (a loop channel through one would push the label away)
+  const labelsBelow: Box[] = [];
+  for (const n of layout.nodes) {
+    const label = n.kind === 'start' || n.kind === 'end' || n.kind === 'event' ? elementLabel(n, 'event') : undefined;
+    if (label) labelsBelow.push(label);
+    for (const b of n.boundary) {
+      const bl = elementLabel(b, 'boundary');
+      if (bl) labelsBelow.push(bl);
+    }
+  }
+  const belowIndex = boxIndex(labelsBelow);
+  /** lowest y of any node, label below a node, artifact or routed edge point inside an x range (restricted to a lane band) */
   const rangeBottom = (x1: number, x2: number, band?: LaneBandInfo): number => {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
     const inBand = (y: number): boolean => !band || (y >= band.top && y <= band.bottom);
     let maxY = 0;
-    for (const n of allNodes) if (n.box.x <= hi && right(n.box) >= lo && inBand(center(n.box).y)) maxY = Math.max(maxY, bottom(n.box));
-    for (const a of routedArtifacts(layout)) if (a.box.x <= hi && right(a.box) >= lo && inBand(center(a.box).y)) maxY = Math.max(maxY, bottom(a.box));
-    for (const [a, b] of routed) {
+    // the nodes, boundary events and artifacts
+    for (const b of boxes.near(lo, hi)) if (b.x <= hi && right(b) >= lo && inBand(center(b).y)) maxY = Math.max(maxY, bottom(b));
+    for (const l of belowIndex.near(lo, hi)) if (l.x <= hi && right(l) >= lo && inBand(l.y)) maxY = Math.max(maxY, bottom(l));
+    for (const [a, b] of routed.near(lo, hi)) {
       if (Math.max(a.x, b.x) >= lo && Math.min(a.x, b.x) <= hi && inBand(a.y) && inBand(b.y)) maxY = Math.max(maxY, a.y, b.y);
     }
     return maxY;
@@ -235,7 +448,70 @@ export function routeEdges(layout: ScopeLayout): void {
     return direct;
   };
 
-  const forward = layout.edges.filter((e) => !e.back);
+  /** the straight line of a same-row flow, at one y for both ends (centres of either height parity are half a pixel apart) */
+  const straightLine = (s: GNode, t: GNode): Point[] => {
+    const y = Math.round((center(s.box).y + center(t.box).y) / 2);
+    return [{ x: right(s.box), y }, { x: t.box.x, y }];
+  };
+  // the default spots of the node and data labels (an empty branch drawn straight keeps off them)
+  const labelSpots = [...labelsBelow, ...layout.nodes.map((n) => (n.kind === 'gateway' ? elementLabel(n, 'gateway') : undefined)), ...routedArtifacts(layout).map((a) => (a.kind === 'annotation' ? undefined : elementLabel(a, 'data')))].filter((b): b is Box => !!b);
+  const spotIndex = boxIndex(labelSpots);
+  /**
+   * empty branches whose split and join lie on one row with no shape and no node label between them (in a
+   * laned scope the branches between them can run in other lanes): straight when no flow is on that line
+   * either, so they are routed after the other forward flows
+   */
+  const openRow = new Set(layout.edges.filter((e) => !e.back && e.bandY !== undefined && Math.abs(center(e.source.box).y - center(e.target.box).y) < 1 && !pathHits(straightLine(e.source, e.target), [...obstacleList, ...labelSpots], [e.source.box, e.target.box])));
+  /** the labels of the flows routed so far (also by their x range) */
+  const flowLabels: Box[] = [];
+  const flowLabelIndex = new XIndex<Box>();
+  /** no routed flow on the horizontal `line` or on its ends (the split's right, the join's left vertex; crossing it is counted apart), no flow label */
+  const lineFree = (line: Point[]): boolean => {
+    const [a, b] = line as [Point, Point];
+    const on = ([c, d]: Segment): boolean => Math.min(c.y, d.y) <= a.y && Math.max(c.y, d.y) >= a.y && Math.min(c.x, d.x) <= b.x && Math.max(c.x, d.x) >= a.x && (c.y === d.y || c.x === a.x || c.x === b.x);
+    return !routed.near(Math.min(a.x, b.x), Math.max(a.x, b.x)).some(on) && !pathHits(line, flowLabels, []);
+  };
+  /** gateways whose left vertex an empty branch drawn straight takes (no loop enters there) */
+  const leftTaken = new Set<GNode>();
+  /** what a run between lo and hi keeps RUN_CLEAR from: the shapes, node labels, flow labels and horizontal runs of the flows routed so far there */
+  const runArea = (lo: number, hi: number): Box[] => [
+    ...boxes.near(lo, hi),
+    ...spotIndex.near(lo, hi),
+    ...flowLabelIndex.near(lo, hi),
+    // the horizontal runs of the flows routed so far too (two such runs stack instead of sharing a line)
+    ...routed.near(lo, hi).flatMap(([a, b]): Box[] => (a.y === b.y ? [{ x: Math.min(a.x, b.x), y: a.y, width: Math.abs(b.x - a.x), height: 0 }] : [])),
+  ];
+  /**
+   * the highest y from RUN_CLEAR below `from` at which a run from x1 to x2 keeps RUN_CLEAR from every shape, node
+   * label, flow label and horizontal run it passes (`area`: runArea of a range that holds it, measured once for several runs)
+   */
+  const runBelow = (x1: number, x2: number, from: number, area = runArea(Math.min(x1, x2), Math.max(x1, x2))): number => {
+    const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
+    const near = area.filter((b) => b.x < hi && right(b) > lo);
+    // every move is to a height the run must at least have, so the result does not depend on the order of `near`
+    let y = from + RUN_CLEAR;
+    for (let moved = true; moved; ) {
+      moved = false;
+      for (const b of near) {
+        if (b.y < y + RUN_CLEAR && bottom(b) + RUN_CLEAR > y) {
+          y = bottom(b) + RUN_CLEAR;
+          moved = true;
+        }
+      }
+    }
+    return y;
+  };
+
+  // the flows of boundary events after the other forward flows, so a way below the host's row (runBelow) sees what is
+  // drawn there: the lowest host first (its way up passes the rows above, whose runs then keep off it), of one row the
+  // rightmost event first (its run is the highest: no drop of an event left of it crosses that); the open rows last
+  /** the segments of each flow in the order they are routed, and the id in `routed` of each one's first */
+  const flowSegs: Segment[][] = [];
+  const firstIds: number[] = [];
+  const forward = layout.edges.filter((e) => !e.back && !openRow.has(e));
+  const low = (e: GEdge): number => bottom(e.source.host!.box);
+  const fromEvents = forward.filter((e) => e.source.host).sort((a, b) => low(b) - low(a) || center(b.source.box).x - center(a.source.box).x);
+  forward.splice(0, forward.length, ...forward.filter((e) => !e.source.host), ...fromEvents, ...openRow);
   // loops: narrow spans first so nested loops get the inner channels
   const loops = layout.edges.filter((e) => e.back).sort((a, b) => Math.abs(center(a.source.box).x - center(a.target.box).x) - Math.abs(center(b.source.box).x - center(b.target.box).x));
   for (const e of [...forward, ...loops]) {
@@ -245,6 +521,8 @@ export function routeEdges(layout: ScopeLayout): void {
     const ignore = [sb, tb];
     let pts: Point[] = [];
     let chosenChannel: { list: Channel[]; y: number; x1: number; x2: number } | undefined;
+    /** a boundary event's way that runs below its host's row (GEdge.runsBelow) */
+    let runsBelow: boolean | undefined;
 
     if (e.back) {
       const src = s.host ?? s;
@@ -260,8 +538,10 @@ export function routeEdges(layout: ScopeLayout): void {
         const ex = s.host ? sc.x : exitX(s);
         const tx = entryX(t);
         const sideY = sb.y + sb.height * 0.75;
-        type Cand = { pts: Point[]; exit?: [Map<GNode, number[]>, GNode, number]; entry?: [Map<GNode, number[]>, GNode, number]; channel?: { list: Channel[]; y: number }; penalty: number };
+        type Cand = { pts: Point[]; exit?: [Used, GNode, number]; entry?: [Used, GNode, number]; channel?: { list: Channel[]; y: number }; penalty: number; offDiamond?: boolean };
         const cands: Cand[] = [];
+        // a side exit (no x) leaves the bounding box below / above the side vertex: off a gateway's diamond
+        const offDiamond = (ex2: { x?: number }): boolean => s.kind === 'gateway' && ex2.x === undefined;
         // channel below every node and every routed edge between the two columns
         const base = rangeBottom(x1, x2, sameBand) + METRICS.loopGap;
         const y = freeChannel(channels, x1, x2, base, METRICS.loopGap / 2);
@@ -277,7 +557,7 @@ export function routeEdges(layout: ScopeLayout): void {
           { pts: [{ x: x1, y }, { x: x1, y: hookY }, { x: tx, y: hookY }, { x: tx, y: bottom(tb) }], x: tx },
         ];
         // a gateway's bottom vertex carries its branch drops, so a loop may enter through the left vertex instead
-        if (t.kind === 'gateway') entries.push({ pts: [{ x: x1, y }, { x: x1, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 1.5 });
+        if (t.kind === 'gateway' && !leftTaken.has(t)) entries.push({ pts: [{ x: x1, y }, { x: x1, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 1.5 });
         for (const ex2 of exits) {
           for (const en of entries) {
             cands.push({
@@ -286,6 +566,7 @@ export function routeEdges(layout: ScopeLayout): void {
               entry: en.x !== undefined ? [usedBottom, t, en.x] : undefined,
               channel: { list: channels, y },
               penalty: en.penalty ?? 0,
+              offDiamond: offDiamond(ex2),
             });
           }
         }
@@ -313,6 +594,7 @@ export function routeEdges(layout: ScopeLayout): void {
               entry: en.x !== undefined ? [usedTop, t, en.x] : undefined,
               channel: { list: topChannels, y: topY },
               penalty: 0.5,
+              offDiamond: offDiamond(ex2),
             });
           }
         }
@@ -325,24 +607,35 @@ export function routeEdges(layout: ScopeLayout): void {
         }
         let best: { c: Cand; score: number } | undefined;
         cands.forEach((c, i) => {
-          let score = hitCount(c.pts, boxes, ignore) * 1000 + countCrossings(c.pts, routed) * 3 + c.penalty + i * 0.001;
+          let score = c.penalty + i * 0.001;
           if (c.exit && used(c.exit[0], c.exit[1], c.exit[2])) score += 2;
-          if (c.entry && used(c.entry[0], c.entry[1], c.entry[2])) score += 2;
+          // a join's entries share its vertex, but not for a loop that leaves its gateway off the diamond to get there
+          if (c.entry && used(c.entry[0], c.entry[1], c.entry[2], !c.offDiamond)) score += 2;
+          // a way that cannot beat the best so far is not measured further (each part only adds)
+          if (best && score >= best.score) return;
+          score += hitCount(c.pts, boxes, ignore) * 1000;
+          if (best && score >= best.score) return;
+          score += countCrossings(c.pts, routed, best ? Math.ceil((best.score - score) / 3) : Infinity) * 3;
           if (!best || score < best.score) best = { c, score };
         });
         const win = best!.c;
         pts = win.pts;
-        if (win.exit) use(win.exit[0], win.exit[1], win.exit[2]);
-        if (win.entry) use(win.entry[0], win.entry[1], win.entry[2]);
+        if (win.exit) use(win.exit[0], win.exit[1], win.exit[2], true);
+        if (win.entry) use(win.entry[0], win.entry[1], win.entry[2], false);
         if (win.channel) chosenChannel = { list: win.channel.list, y: win.channel.y, x1, x2 };
       }
     } else if (Math.abs(sc.y - tc.y) < 1) {
-      pts = [{ x: right(sb), y: sc.y }, { x: tb.x, y: tc.y }];
+      pts = straightLine(s, t);
       if (e.bandY !== undefined) {
-        // reserved empty band: drop, run along the band, hook into the join from below
+        // reserved empty band: drop, run along the band, hook into the join from below; straight when the row
+        // between split and join is free and that crosses no more lines
         const ex = exitX(s);
-        pts = [...exitToBelow(s, ex, e.bandY), ...hookFromBelow(t, e.bandY)];
-        use(usedBottom, s, ex);
+        const band = [...exitToBelow(s, ex, e.bandY), ...hookFromBelow(t, e.bandY)];
+        if (openRow.has(e) && lineFree(pts) && countCrossings(pts, routed) <= countCrossings(band, routed)) leftTaken.add(t);
+        else {
+          pts = band;
+          use(usedBottom, s, ex, true);
+        }
       } else if (pathHits(pts, boxes, ignore)) {
         const base = spanBottom(s.layer, t.layer) + METRICS.loopGap;
         const y = channelFor(exitX(s), tb.x - 20, base);
@@ -352,34 +645,108 @@ export function routeEdges(layout: ScopeLayout): void {
       // drop from the source (or from the boundary event), then right
       const ex = s.host ? sc.x : exitX(s);
       pts = [{ x: ex, y: bottom(sb) }, { x: ex, y: tc.y }, { x: tb.x, y: tc.y }];
-      if (pathHits(pts, boxes, ignore)) {
-        // fall back: right, down, right
-        const midX = right(sb) + METRICS.hGap / 2;
-        pts = [{ x: right(sb), y: sc.y }, { x: midX, y: sc.y }, { x: midX, y: tc.y }, { x: tb.x, y: tc.y }];
+      // right, down, right (the fallback below): a join's way out, as its entries from below share the bottom vertex,
+      // down near the join when it can, off the middle of the column gap where loops and hooks run
+      const sideAt = (x: number): Point[] => [{ x: right(sb), y: sc.y }, { x, y: sc.y }, { x, y: tc.y }, { x: tb.x, y: tc.y }];
+      const joinSide = joinFromBelow(s) ? [METRICS.hGap / 4, METRICS.hGap / 2].map((d) => sideAt(right(sb) + d)).find((p) => !pathHits(p, boxes, ignore)) : undefined;
+      if (joinSide) pts = joinSide;
+      else if (pathHits(pts, boxes, ignore)) {
+        // fall back: right, down, right; a boundary event's down to a run below its host's row first, then right to the
+        // column gap after the host (out of the event's side it would run along the host's bottom border)
+        pts = sideAt(right(sb) + METRICS.hGap / 2);
+        if (s.host) {
+          const gx = right(s.host.box) + METRICS.hGap / 2, y = runBelow(sc.x, gx, bottom(sb));
+          const down = [{ x: sc.x, y: bottom(sb) }, { x: sc.x, y }, { x: gx, y }, { x: gx, y: tc.y }, { x: tb.x, y: tc.y }];
+          if (y < tc.y && !pathHits(down, boxes, ignore)) {
+            pts = down;
+            runsBelow = true;
+          }
+        }
         if (pathHits(pts, boxes, ignore)) {
+          runsBelow = undefined;
           const base = spanBottom(s.host ? s.host.layer : s.layer, t.layer) + METRICS.loopGap;
           const y = channelFor(ex, tb.x - 20, base);
           pts = [{ x: ex, y: bottom(sb) }, { x: ex, y }, { x: tb.x - 20, y }, { x: tb.x - 20, y: tc.y }, { x: tb.x, y: tc.y }];
         }
-      } else use(usedBottom, s.host ?? s, ex);
+      } else use(usedBottom, s.host ?? s, ex, true);
     } else {
       // right, then up into the target's bottom (join)
       const tx = entryX(t);
-      const cands: Array<{ pts: Point[]; x?: number }> = [
-        { pts: [{ x: right(sb), y: sc.y }, { x: tx, y: sc.y }, { x: tx, y: bottom(tb) }], x: tx },
-        { pts: [{ x: right(sb), y: sc.y }, ...hookFromBelow(t, sc.y)], x: tx },
-      ];
+      const gapX = tb.x - METRICS.hGap / 2;
+      /** a way in, with the x on the target's bottom it ends on */
+      type Way = { pts: Point[]; x?: number; below?: boolean };
+      /** the ways in, best first (`penalty`: the order of a boundary event's, else by index), each made only when it can still win */
+      const cands: Array<{ penalty?: number; make: () => Way | undefined }> = [];
+      if (s.host) {
+        // a boundary event: down out of the event to a run below its host's row (clear of the shapes and labels it
+        // passes), or below everything between the two in its lane where that crosses fewer lines, then up: straight,
+        // into the target's left side from the column gap before it, or a hook from the gap beside it; along the
+        // host's bottom border only when every such way cuts a shape
+        const band = bandOf(s);
+        // straight up at the slots of the target's bottom that are free and where the rise from the run keeps RISE_KEEP
+        // from every shape (a gateway's vertex lies on the side slot of a task in its column; riseX first, the others a
+        // little later: the one crossing fewer lines wins), else at the first where it does
+        const slots = riseSlots(t).filter((x) => Math.abs(x - sc.x) >= RUN_CLEAR);
+        const hookX = right(tb) + METRICS.hGap / 2;
+        // what the runs of all these ways pass, measured once; the run up to each x, once
+        const area = runArea(Math.min(sc.x, gapX, hookX, ...slots), Math.max(sc.x, gapX, hookX, ...slots));
+        const runs = new Map<number, number>();
+        const runTo = (to: number): number => {
+          let y = runs.get(to);
+          if (y === undefined) runs.set(to, (y = runBelow(sc.x, to, bottom(sb), area)));
+          return y;
+        };
+        const clear = (x: number): boolean => {
+          const y = runTo(x);
+          return !boxes.near(x - RISE_KEEP, x + RISE_KEEP).some((b) => b !== tb && b.x - RISE_KEEP < x && x < right(b) + RISE_KEEP && b.y < y && bottom(b) > bottom(tb));
+        };
+        const free = slots.filter((x) => clear(x) && !used(usedBottom, t, x, true));
+        const rises = free.length ? free : slots.filter(clear).slice(0, 1);
+        /** how far the run goes, the way up from it, its rank, the x on the target's bottom it ends on */
+        const ways: Array<{ to: number; up: (y: number) => Point[]; penalty: number; x?: number }> = [
+          ...(rises.length ? rises : slots.slice(0, 1)).map((sx, k) => ({ to: sx, up: (y: number): Point[] => [{ x: sx, y }, { x: sx, y: bottom(tb) }], penalty: k * 0.1, x: sx })),
+          ...(gapX - sc.x >= RUN_CLEAR ? [{ to: gapX, up: (y: number): Point[] => [{ x: gapX, y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 0.5 }] : []),
+          { to: hookX, up: (y: number): Point[] => hookFromBelow(t, y), penalty: 1, x: tx },
+        ];
+        for (const { to, up, penalty, x } of ways) {
+          const way = (y: number): Way => ({ pts: [{ x: sc.x, y: bottom(sb) }, { x: sc.x, y }, ...up(y)], ...(x !== undefined ? { x } : {}), below: true });
+          cands.push({ penalty, make: () => way(runTo(to)) });
+          cands.push({
+            penalty: penalty + 1,
+            make: () => {
+              const near = runTo(to), deep = runBelow(sc.x, to, Math.max(near, rangeBottom(sc.x, to, band) + METRICS.loopGap) - RUN_CLEAR, area);
+              return deep > near ? way(deep) : undefined;
+            },
+          });
+        }
+      }
+      const late = (j: number): number | undefined => (s.host ? 100 + j * 0.5 : undefined);
+      cands.push({ penalty: late(0), make: () => ({ pts: [{ x: right(sb), y: sc.y }, { x: tx, y: sc.y }, { x: tx, y: bottom(tb) }], x: tx }) });
+      cands.push({ penalty: late(1), make: () => ({ pts: [{ x: right(sb), y: sc.y }, ...hookFromBelow(t, sc.y)], x: tx }) });
       // up out of the source's top, then right into the target's left side (target in a lane above)
-      if (tb.x >= right(sb)) cands.push({ pts: [{ x: sc.x, y: sb.y }, { x: sc.x, y: tc.y }, { x: tb.x, y: tc.y }] });
+      if (tb.x >= right(sb)) cands.push({ penalty: late(2), make: () => ({ pts: [{ x: sc.x, y: sb.y }, { x: sc.x, y: tc.y }, { x: tb.x, y: tc.y }] }) });
       // into the target's left side through the column gap before it
-      if (tb.x - METRICS.hGap / 2 > right(sb)) cands.push({ pts: [{ x: right(sb), y: sc.y }, { x: tb.x - METRICS.hGap / 2, y: sc.y }, { x: tb.x - METRICS.hGap / 2, y: tc.y }, { x: tb.x, y: tc.y }] });
-      let best: { pts: Point[]; score: number; x?: number } | undefined;
+      if (gapX > right(sb)) cands.push({ penalty: late(3), make: () => ({ pts: [{ x: right(sb), y: sc.y }, { x: gapX, y: sc.y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }] }) });
+      let best: (Way & { score: number }) | undefined;
       cands.forEach((c, i) => {
-        const score = hitCount(c.pts, boxes, ignore) * 1000 + countCrossings(c.pts, routed) + i * 0.5;
-        if (!best || score < best.score) best = { pts: c.pts, score, ...(c.x !== undefined ? { x: c.x } : {}) };
+        // a way that cannot beat the best so far is neither made nor measured further (each part only adds)
+        let score = c.penalty ?? i * 0.5;
+        if (best && score >= best.score) return;
+        const w = c.make();
+        if (!w) return;
+        score += hitCount(w.pts, boxes, ignore) * 1000;
+        if (best && score >= best.score) return;
+        // a boundary event's way: a crossing or a label it runs through (its own, say) counts 3
+        const per = s.host ? 3 : 1;
+        score += per * countCrossings(w.pts, routed, best ? Math.ceil((best.score - score) / per) : Infinity);
+        if (s.host && !(best && score >= best.score)) score += 3 * (hitCount(w.pts, spotIndex, []) + hitCount(w.pts, flowLabelIndex, []));
+        if (!best || score < best.score) best = { ...w, score };
       });
       pts = best!.pts;
-      if (best!.x !== undefined) use(usedBottom, t, best!.x);
+      if (best!.score < 1000) runsBelow = best!.below;
+      if (best!.x !== undefined) use(usedBottom, t, best!.x, false);
+      // up out of the source's top: a loop into that top keeps off it, as one into a bottom vertex keeps off a drop
+      if (best!.score < 1000 && pts[0]!.y === sb.y) use(usedTop, s, sc.x, true);
       if (best!.score >= 1000) {
         const base = spanBottom(s.layer, t.layer) + METRICS.loopGap;
         const y = channelFor(tb.x - METRICS.hGap / 2, exitX(s), base);
@@ -387,20 +754,41 @@ export function routeEdges(layout: ScopeLayout): void {
       }
     }
     e.points = dedupe(pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })));
-    routed.push(...toSegments(e.points));
+    e.runsBelow = runsBelow;
+    const segs = toSegments(e.points);
+    firstIds.push(routed.size);
+    flowSegs.push(segs);
+    addSegments(routed, segs);
     if (chosenChannel) chosenChannel.list.push({ y: chosenChannel.y, from: Math.min(chosenChannel.x1, chosenChannel.x2), to: Math.max(chosenChannel.x1, chosenChannel.x2) });
     e.label = flowLabel(e);
-  }
-  // nodes whose top border carries a flow get their label beside
-  for (const n of allNodes) n.topUsed = false;
-  for (const e of layout.edges) {
-    for (const p of [e.points[0]!, e.points[e.points.length - 1]!]) {
-      for (const n of allNodes) if (p && Math.abs(p.y - n.box.y) < 1 && p.x >= n.box.x && p.x <= right(n.box)) n.topUsed = true;
+    if (e.label) {
+      flowLabels.push(e.label);
+      flowLabelIndex.add(e.label, e.label.x, right(e.label));
     }
   }
-  // channels extend the content height
+  // nodes whose top border carries a flow get their label beside (the nodes by the px row of their top and their x
+  // range, an end within 1 px)
+  const byTop = new Map<number, XIndex<GNode>>();
+  for (const n of allNodes) {
+    n.topUsed = false;
+    const row = Math.floor(n.box.y);
+    let list = byTop.get(row);
+    if (!list) byTop.set(row, (list = new XIndex<GNode>()));
+    list.add(n, n.box.x, right(n.box));
+  }
+  for (const e of layout.edges) {
+    for (const p of [e.points[0]!, e.points[e.points.length - 1]!]) {
+      if (!p) continue;
+      for (let row = Math.floor(p.y) - 1; row <= Math.floor(p.y) + 1; row++) {
+        for (const n of byTop.get(row)?.near(p.x, p.x) ?? []) if (Math.abs(p.y - n.box.y) < 1 && p.x >= n.box.x && p.x <= right(n.box)) n.topUsed = true;
+      }
+    }
+  }
+  // channels extend the content height, as do the runs below their host's row (by RUN_CLEAR: a frame or an event
+  // sub-process below keeps that far off)
   const maxChannel = Math.max(0, ...channels.map((c) => c.y));
-  layout.height = Math.max(layout.height, maxChannel + 10);
+  const maxRun = Math.max(0, ...layout.edges.filter((e) => e.runsBelow).map((e) => e.points[1]!.y + RUN_CLEAR));
+  layout.height = Math.max(layout.height, maxChannel + 10, maxRun);
   // loops drawn over the top may have produced negative y: shift everything down
   let minY = 0;
   for (const e of layout.edges) for (const p of e.points) minY = Math.min(minY, p.y);
@@ -424,14 +812,52 @@ export function routeEdges(layout: ScopeLayout): void {
     }
     layout.height += dy;
   }
+  return (labels = []) => {
+    // the index of the flow that added each segment, by its id
+    const owner = new Int32Array(routed.size);
+    firstIds.forEach((id, i) => owner.fill(i, id));
+    let crossings = 0, hits = 0;
+    // the flows a later flow crosses, counted once each: met[j] is the last flow found crossing j
+    const met = new Array<number>(flowSegs.length).fill(-1);
+    flowSegs.forEach((segs, i) => {
+      // the segments of the flows after this one
+      const later = firstIds[i + 1] ?? routed.size;
+      for (const s of segs) {
+        routed.each(
+          Math.min(s[0].x, s[1].x),
+          Math.max(s[0].x, s[1].x),
+          (q, id) => {
+            const j = owner[id]!;
+            if (met[j] !== i && segmentsCross(s, q)) {
+              met[j] = i;
+              crossings++;
+            }
+          },
+          later,
+        );
+      }
+    });
+    for (const e of layout.edges) hits += hitCount(e.points, boxes, [e.source.box, e.target.box, ...(e.source.host ? [e.source.host.box] : [])]);
+    return { crossings, hits, labels: labels.filter((l) => routed.each(l.x, right(l), ([a, b]) => segmentHitsBox(a, b, l))).length };
+  };
 }
 
 function dedupe(points: Point[]): Point[] {
   return points.filter((p, i) => i === 0 || p.x !== points[i - 1]!.x || p.y !== points[i - 1]!.y);
 }
 
+/** the names of the layout's nodes, flows and artifacts, read once each (a layout object lives for one run, which renames nothing) */
+const names = new WeakMap<object, string | null>();
+
+/** The name of the element of a node, flow or artifact of the layout. */
+export function nameOf(o: { el: GNode['el'] }): string | undefined {
+  let name = names.get(o);
+  if (name === undefined) names.set(o, (name = o.el.get<string | undefined>('name') ?? null));
+  return name ?? undefined;
+}
+
 function flowLabel(e: GEdge): Box | undefined {
-  const name = e.el.get<string | undefined>('name');
+  const name = nameOf(e);
   if (!name) return undefined;
   const { width, height } = labelSize(name);
   const pts = e.points;
@@ -583,16 +1009,18 @@ export interface LabelOptions {
 
 /** External label boxes for events, gateways, boundary events and data objects. */
 export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
-  const name = n.el.get<string | undefined>('name');
+  const name = nameOf(n);
   if (!name) return undefined;
   const b = n.box;
   const cx = b.x + b.width / 2;
   switch (kind) {
     case 'gateway': {
       if ('topUsed' in n && n.topUsed) {
-        // a flow leaves through the top: label to the upper left of the diamond
+        // a flow leaves through the top: label to the upper left of the diamond, its text clear of that flow (bpmn-js
+        // centres the text on the label and wraps it at 90 px, so a short line can be wider than the estimated box)
         const { width, height } = labelSize(name, 80);
-        return { x: Math.round(cx - 8 - width), y: b.y - height - 2, width, height };
+        const drawn = Math.max(width, Math.min(90, name.length * 6));
+        return { x: Math.round(cx - 8 - drawn / 2 - width / 2), y: b.y - height - 2, width, height };
       }
       const { width, height } = labelSize(name);
       return { x: Math.round(cx - width / 2), y: b.y - height - 6, width, height };
@@ -602,7 +1030,9 @@ export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUs
       const host = 'host' in n ? n.host : undefined;
       const hostBottom = host ? bottom(host.box) : b.y + b.height / 2;
       const siblings = host?.boundary ?? [];
-      const i = Math.max(0, siblings.findIndex((s) => s.box === b));
+      // counted from the right: a collapsed sub-process has its events left to right (place.ts placeBoundaryEvents)
+      const k = Math.max(0, siblings.findIndex((s) => s.box === b));
+      const i = host && boundaryLeft(host) ? siblings.length - 1 - k : k;
       if (siblings.length === 2 && i === 1) return { x: b.x - 4 - width, y: hostBottom + 2, width, height };
       const stagger = siblings.length >= 3 ? i * (LABEL_LINE + 2) : 0;
       return { x: b.x + b.width + 4, y: hostBottom + 2 + stagger, width, height };
