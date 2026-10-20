@@ -563,9 +563,15 @@
   into its target: any node a flow enters from below moves right past what
   lies in its column, with what follows it, by up to three columns, when
   that adds no crossing (0.7 ran the flow out of the event's side along
-  the host's bottom border and hooked it into the target). A full redraw
-  can therefore differ from 0.7's (36 of the 115 layout-regression
-  scenarios: shapes by a few pixels, a node and what follows it by a
+  the host's bottom border and hooked it into the target); where host and
+  target share a lane (or there are no lanes) and a way over the top row
+  crosses fewer lines, the flow rises beside its host past the row and
+  runs above everything into the target's top. In a pool with lanes, a
+  branch in its split's own lane moves up onto the split's row when the
+  happy path continues in another lane, so it leaves the split
+  horizontally (0.7 dropped every branch from the split's bottom vertex).
+  A full redraw can therefore differ from 0.7's (39 of the 115
+  layout-regression scenarios: shapes by a few pixels, a node and what follows it by a
   column, a loop 12 px lower, some labels on another side), so `auto` mode
   keeps a
   drawing 0.7's engine made (incremental) where this engine no longer

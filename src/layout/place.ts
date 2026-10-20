@@ -22,7 +22,18 @@
  *    moves on too), when the routes then have more such rises or run
  *    through fewer labels, and no more crossings, cut shapes or labels run
  *    through (freeJoinColumns); the chains, and so the happy path, are those
- *    without the moves
+ *    without the moves. A boundary event's way the router draws over the top
+ *    enters the node's top instead and needs no such column
+ *  - in a process with lanes, whose rows engine.ts applyLanes arranges by
+ *    lane, a node entered from a node of its own lane on a row above moves
+ *    up onto that row with the nodes of its row and lane it leads on to,
+ *    where nothing of the lane lies or runs in their cells there (the happy
+ *    path's line past the columns its nodes in other lanes leave empty
+ *    included), when the flow into it is then straight and the routes have
+ *    more straight flows and nothing worse (liftChains, after the moves of
+ *    freeJoinColumns, whose straight rises stay): a split whose happy path
+ *    runs on in another lane sends its branch in its own lane out through
+ *    its right vertex. Without lanes the happy path holds the split's row
  *  - event sub-processes sit below the main content
  *  - text annotations go above, data objects/stores below their node (a
  *    join's right of the line its entries from below rise on); a
@@ -816,21 +827,16 @@ export function hasLanes(scope: El): boolean {
  * the scope as it was. A move that is not kept is undone exactly
  * (keepArrangement): the scope is left arranged as it came or as the last
  * kept move left it, not routed. Entries from above end on a join's left
- * vertex (route.ts), so a top vertex needs no room.
+ * vertex (route.ts), so a top vertex needs no room; a boundary event's way
+ * over the top (route.ts) enters its target's top from a run above all
+ * between them, so a node whose column only the entries the routes draw that
+ * way would need is not moved (no trial).
  */
 export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyMap<GNode, number>) => void): void {
   const shifts = new Map<GNode, number>();
   const tried = new Set<GNode>();
-  type Routes = { crossings: number; hits: number; labels: number; rises: Set<GEdge> };
-  /** the faults and straight rises of the routes the current arrangement gets; the scope is left as it was */
-  const route = (): Routes => {
-    const undo = keepArrangement(layout);
-    const faults = routeEdges(layout);
-    const routes = { ...faults([...shapeLabels(layout), ...dataLabels(layout)]), rises: straightRises(layout) };
-    undo();
-    return routes;
-  };
-  const show = (r: Routes): string => JSON.stringify({ ...r, rises: r.rises.size });
+  const route = (): Routes => routesOf(layout);
+  const show = (r: Routes): string => showRoutes(r);
   /** the routes of the current arrangement, once measured */
   let routed: Routes | undefined;
   /** the nodes whose column the current arrangement leaves taken, with what takes it (a kept move's from its trial) */
@@ -843,6 +849,12 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
     if (!j) break;
     tried.add(j);
     const before = routed ?? route();
+    // an entry the routes draw over the top enters the node's top: the column below it is not taken for that one
+    if (before.above.size && !takenColumns(layout, before.above).has(j)) {
+      if (layoutDebugOn()) layoutDebug(`[joins] ${j.id} stays: entered over the top`);
+      routed = before;
+      continue;
+    }
     const undo = keepArrangement(layout);
     const kept = new Map(shifts);
     const step = (n: GNode): number => (shifts.get(n) ?? 0) - (kept.get(n) ?? 0);
@@ -931,6 +943,213 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
 }
 
 /**
+ * How the routes of an arrangement run (freeJoinColumns, liftChains): route.ts RouteFaults, the straight rises, the
+ * boundary events' ways over the top (GEdge.runsAbove), the flows of one segment, the bends of all and, when asked for (sharedLines), the pairs of flows that run on one line
+ * (`shared`) and the flows that do (`sharing`).
+ */
+type Routes = { crossings: number; hits: number; labels: number; rises: Set<GEdge>; above: Set<GEdge>; straight: Set<GEdge>; bends: number; shared: number; sharing: Set<GEdge> };
+
+/**
+ * The faults (crossings, cut shapes, labels of shapes and data run through) and straight rises of the routes the
+ * current arrangement gets, the flows drawn as one segment and the bends of all, with `lines` the flows that share a
+ * piece of line (sharedLines; else none); the scope is left as it was.
+ */
+function routesOf(layout: ScopeLayout, lines = false): Routes {
+  const undo = keepArrangement(layout);
+  const faults = routeEdges(layout);
+  const straight = new Set<GEdge>();
+  let bends = 0;
+  for (const e of layout.edges) {
+    if (e.points.length === 2) straight.add(e);
+    bends += Math.max(0, e.points.length - 2);
+  }
+  const routes = { ...faults([...shapeLabels(layout), ...dataLabels(layout)]), rises: straightRises(layout), above: new Set(layout.edges.filter((e) => e.runsAbove)), straight, bends, ...(lines ? sharedLines(layout) : { shared: 0, sharing: new Set<GEdge>() }) };
+  undo();
+  return routes;
+}
+
+/** Routes as a debug line shows them: the counts (with `lines` those of the flows of one segment, the bends and the shared lines too). */
+function showRoutes(r: Routes, lines = false): string {
+  return JSON.stringify({ crossings: r.crossings, hits: r.hits, labels: r.labels, rises: r.rises.size, ...(r.above.size ? { above: r.above.size } : {}), ...(lines ? { straight: r.straight.size, bends: r.bends, shared: r.shared } : {}) });
+}
+
+/**
+ * The pairs of routed flows that run on one line for a piece (two horizontal segments at one y, or two vertical ones
+ * at one x, overlapping by more than a point: two branches out of one vertex, say, or the entries of a join on its
+ * shared way in), and the flows of those pairs.
+ */
+function sharedLines(layout: ScopeLayout): { shared: number; sharing: Set<GEdge> } {
+  const lines = new Map<string, Array<[number, number, number]>>();
+  layout.edges.forEach((e, i) => {
+    for (let k = 0; k + 1 < e.points.length; k++) {
+      const p = e.points[k]!, q = e.points[k + 1]!;
+      const key = p.y === q.y ? `h${p.y}` : p.x === q.x ? `v${p.x}` : undefined;
+      if (!key) continue;
+      const [lo, hi] = p.y === q.y ? [Math.min(p.x, q.x), Math.max(p.x, q.x)] : [Math.min(p.y, q.y), Math.max(p.y, q.y)];
+      const list = lines.get(key);
+      if (list) list.push([lo, hi, i]);
+      else lines.set(key, [[lo, hi, i]]);
+    }
+  });
+  const pairs = new Set<number>();
+  const sharing = new Set<GEdge>();
+  const n = layout.edges.length;
+  for (const list of lines.values()) {
+    // by where they start: every piece that starts before one ends overlaps it
+    list.sort((a, b) => a[0] - b[0]);
+    for (let a = 0; a < list.length; a++) {
+      const [, hi, i] = list[a]!;
+      for (let b = a + 1; b < list.length && list[b]![0] < hi; b++) {
+        const j = list[b]![2];
+        if (i === j) continue;
+        pairs.add(Math.min(i, j) * n + Math.max(i, j));
+        sharing.add(layout.edges[i]!).add(layout.edges[j]!);
+      }
+    }
+  }
+  return { shared: pairs.size, sharing };
+}
+
+/**
+ * In a process with lanes, after the rows are arranged by lane and the
+ * columns freed (engine.ts applyLanes, after freeJoinColumns): a node whose
+ * flow comes from a node of its own lane on a row above (not a boundary
+ * event's flow, not a loop) moves up onto that row when its cell there is
+ * free: nothing of the lane in that row in its column or in a column
+ * between the two, neither a node nor a flow between two nodes of the row
+ * (the happy path's flow past the columns its nodes in other lanes leave
+ * empty, an empty branch drawn straight). The nodes of its row and lane its
+ * flows lead on to move with it, one after the other while their cells on
+ * that row are free too (its chain). So the flow into it runs straight: a
+ * split whose next column on its own row the happy path leaves empty (it
+ * runs on in another lane) sends the branch whose first node is in its lane
+ * out through its right vertex instead of dropping both from its bottom
+ * vertex. A lane's rows are those of its nodes (`arrange`), so a row the
+ * chain leaves empty closes. The move must draw better: the scope is routed
+ * both ways (route.ts routeEdges) and the move is kept only when the flow
+ * into the node is then one segment on no other flow's line, more flows are
+ * one segment and no more bend, no more pairs of flows cross, share a piece
+ * of line (sharedLines) or cut shapes, no more labels of shapes are run
+ * through, every flow that rose straight into a node's bottom still does
+ * or is one segment now (the rises freeJoinColumns made stay), and every
+ * flow of one segment not of a moved node stays one (so the happy path
+ * stays straight); else it is undone exactly (keepArrangement). A move that
+ * certainly bends a flow rising straight now is not tried: one between a
+ * node of the chain and a node of the new row past a node between them, or
+ * one whose way up crosses the new row in the column of a node of the chain
+ * (not a boundary event's: it may rise at another slot). One node at a
+ * time, left to right (by column, then row, then the order of the nodes; of
+ * a split's branches in its lane the upper one first, which takes the
+ * cell), each tried once. `arrange` lays the rows of the scope out again by
+ * lane (engine.ts applyLanes), from the nodes' rows; the scope is left
+ * arranged as the last kept move left it (or as it came), not routed.
+ */
+export function liftChains(layout: ScopeLayout, arrange: () => void): void {
+  const lanes = layout.laneBands;
+  if (!lanes?.length) return;
+  const laneOf = new Map<GNode, number>();
+  lanes.forEach((b, i) => {
+    for (const n of b.nodes) laneOf.set(n, i);
+  });
+  const lane = (n: GNode): number => laneOf.get(n) ?? 0;
+  const tried = new Set<GNode>();
+  const show = (r: Routes): string => showRoutes(r, true);
+  const setRow = (n: GNode, row: number): void => {
+    n.row = row;
+    for (const b of n.boundary) b.row = row;
+  };
+  /** the routes of the current arrangement, once measured */
+  let routed: Routes | undefined;
+  for (;;) {
+    // the cells of each lane by row and column that hold a node, or that a flow between two nodes of the row runs through
+    // (the happy path's flow past columns its nodes in other lanes leave empty, an empty branch drawn straight)
+    const cells = new Set<string>();
+    const cell = (lane: number, row: number, layer: number): string => `${lane}/${row}/${layer}`;
+    for (const n of layout.nodes) cells.add(cell(lane(n), n.row, n.layer));
+    const nodeCells = new Set(cells);
+    for (const e of layout.edges) {
+      const s = e.source, t = e.target;
+      if (e.back || s.host || s.row !== t.row || lane(s) !== lane(t)) continue;
+      for (let l = s.layer + 1; l < t.layer; l++) cells.add(cell(lane(s), s.row, l));
+    }
+    /** nothing of the lane in `row` from column `from` to `to` */
+    const free = (lane: number, row: number, from: number, to: number): boolean => {
+      for (let l = from; l <= to; l++) if (cells.has(cell(lane, row, l))) return false;
+      return true;
+    };
+    const open = layout.nodes.filter((n) => !tried.has(n) && !n.compensatedBy).sort((a, b) => a.layer - b.layer || a.row - b.row);
+    let lift: { chain: GNode[]; row: number; flow: GEdge } | undefined;
+    for (const n of open) {
+      const flow = n.in.find((e) => !e.back && !e.source.host && lane(e.source) === lane(n) && e.source.row < n.row && e.source.layer < n.layer && free(lane(n), e.source.row, e.source.layer + 1, n.layer));
+      if (!flow) continue;
+      const row = flow.source.row;
+      // the nodes of its row and lane it leads on to, while their cells on the new row are free
+      const chain = [n];
+      for (let cur: GNode | undefined = n; cur; ) {
+        const from: GNode = cur;
+        cur = undefined;
+        for (const e of from.out) {
+          const t = e.target;
+          if (e.back || t.row !== n.row || lane(t) !== lane(n) || t.layer <= from.layer || t.compensatedBy || chain.includes(t) || !free(lane(n), row, from.layer + 1, t.layer)) continue;
+          if (!cur || t.layer < cur.layer) cur = t;
+        }
+        if (cur) chain.push(cur);
+      }
+      lift = { chain, row, flow };
+      break;
+    }
+    if (!lift) break;
+    const n = lift.chain[0]!;
+    tried.add(n);
+    const before = (routed ??= routesOf(layout, true));
+    const moved = new Set(lift.chain);
+    // a flow that rises straight now and that the move certainly bends (route.ts routeEdges): the move cannot be kept,
+    // it is not tried. One between a node of the chain and one of the new row in its lane, past a node between the two
+    // (a bypass); one from a node not below the new row into a node above it, in the column of a node of the chain
+    // that moves between them (its way up cuts that node: a boundary event's may rise at another slot, not counted)
+    const row = lift.row;
+    /** lane, then row: the order of the rows from the top */
+    const above = (a: [number, number], b: [number, number]): boolean => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+    const to: [number, number] = [lane(n), row];
+    const bent = [...before.rises].find((e) => {
+      const s = e.source, t = e.target;
+      if (s.host || e.bandY !== undefined) return false;
+      if (moved.has(s) !== moved.has(t)) {
+        const o = moved.has(s) ? t : s, m = o === s ? t : s;
+        if (lane(o) !== lane(n) || o.row !== row) return false;
+        for (let l = Math.min(m.layer, o.layer) + 1; l < Math.max(m.layer, o.layer); l++) if (nodeCells.has(cell(lane(n), row, l))) return true;
+        return false;
+      }
+      if (moved.has(s)) return false;
+      const x = riseX(t);
+      return lift.chain.some((m) => m.box.x < x && x < m.box.x + m.box.width) && above([lane(t), t.row], to) && !above([lane(s), s.row], to);
+    });
+    if (bent) {
+      if (layoutDebugOn()) layoutDebug(`[lifts] ${n.id} stays: ${bent.id} would no longer rise straight`);
+      continue;
+    }
+    const undo = keepArrangement(layout);
+    for (const m of lift.chain) setRow(m, lift.row);
+    arrange();
+    const after = routesOf(layout, true);
+    const keep =
+      after.straight.has(lift.flow) &&
+      after.straight.size > before.straight.size &&
+      after.bends <= before.bends &&
+      after.crossings <= before.crossings &&
+      after.hits <= before.hits &&
+      after.labels <= before.labels &&
+      after.shared <= before.shared &&
+      !after.sharing.has(lift.flow) &&
+      [...before.rises].every((e) => after.rises.has(e) || after.straight.has(e)) &&
+      [...before.straight].every((e) => after.straight.has(e) || moved.has(e.source) || moved.has(e.target));
+    if (layoutDebugOn()) layoutDebug(`[lifts] ${n.id} ${keep ? `moves up onto row ${lift.row}` : 'stays'}${lift.chain.length > 1 ? ` (with ${lift.chain.slice(1).map((m) => m.id).join(', ')})` : ''}: ${show(before)} -> ${show(after)}`);
+    if (keep) routed = after;
+    else undo();
+  }
+}
+
+/**
  * Saves what arranging and routing set on a scope: the columns, rows, boxes
  * and used tops of its nodes and boundary events, the bands, waypoints and
  * labels of its flows, the boxes of its artifacts, the compensation links,
@@ -938,7 +1157,7 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
  */
 function keepArrangement(layout: ScopeLayout): () => void {
   const shapes = layout.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => ({ n, layer: n.layer, row: n.row, band: n.band, width: n.width, box: { ...n.box }, topUsed: n.topUsed }));
-  const edges = layout.edges.map((e) => ({ e, bandRow: e.bandRow, bandY: e.bandY, points: e.points.map((p) => ({ ...p })), label: e.label && { ...e.label }, runsBelow: e.runsBelow }));
+  const edges = layout.edges.map((e) => ({ e, bandRow: e.bandRow, bandY: e.bandY, points: e.points.map((p) => ({ ...p })), label: e.label && { ...e.label }, runsBelow: e.runsBelow, runsAbove: e.runsAbove }));
   const artifacts = layout.artifacts.map((a) => ({ a, box: { ...a.box } }));
   const compensations = layout.compensations.map((c) => ({ c, points: c.points.map((p) => ({ ...p })) }));
   const { width, height } = layout;
@@ -948,7 +1167,7 @@ function keepArrangement(layout: ScopeLayout): () => void {
   return () => {
     for (const s of shapes) Object.assign(s.n, { layer: s.layer, row: s.row, band: s.band, width: s.width, box: s.box, topUsed: s.topUsed });
     for (const s of edges) {
-      Object.assign(s.e, { points: s.points, label: s.label, runsBelow: s.runsBelow });
+      Object.assign(s.e, { points: s.points, label: s.label, runsBelow: s.runsBelow, runsAbove: s.runsAbove });
       if (s.bandRow === undefined) delete s.e.bandRow;
       else s.e.bandRow = s.bandRow;
       if (s.bandY === undefined) delete s.e.bandY;
@@ -974,11 +1193,13 @@ const MAX_PUSHED = 4;
  * with the node (a node, a boundary event, a routed artifact or the label of
  * one of them) lies on the vertical line its flows from below rise on into
  * its bottom (route.ts risesInto, riseX), or closer to it than RISE_KEEP (a
- * gateway's vertex on it), between it and the lowest of them.
+ * gateway's vertex on it), between it and the lowest of them (`over`: flows
+ * drawn over the top, which enter its top instead, not among them).
  */
-function takenColumns(layout: ScopeLayout): Map<GNode, Array<GNode | undefined>> {
+function takenColumns(layout: ScopeLayout, over?: ReadonlySet<GEdge>): Map<GNode, Array<GNode | undefined>> {
   const out = new Map<GNode, Array<GNode | undefined>>();
-  const rising = layout.nodes.filter((n) => risesInto(n).length);
+  const entries = (n: GNode): GEdge[] => (over ? risesInto(n).filter((e) => !over.has(e)) : risesInto(n));
+  const rising = layout.nodes.filter((n) => entries(n).length);
   if (!rising.length) return out;
   // each box with the node it moves with
   const index = new XIndex<[Box, GNode | undefined]>();
@@ -992,7 +1213,7 @@ function takenColumns(layout: ScopeLayout): Map<GNode, Array<GNode | undefined>>
   for (const [b, n] of ownShapeLabels(layout)) add(b, n);
   for (const [b, a] of placedDataLabels(layout)) add(b, ownerOf(a));
   for (const j of rising) {
-    const x = riseX(j), top = j.box.y + j.box.height, low = Math.max(...risesInto(j).map(riseFrom));
+    const x = riseX(j), top = j.box.y + j.box.height, low = Math.max(...entries(j).map(riseFrom));
     const owners = index.near(x - RISE_KEEP, x + RISE_KEEP).filter(([b, owner]) => owner !== j && b.x - RISE_KEEP < x && x < b.x + b.width + RISE_KEEP && b.y < low && top < b.y + b.height).map(([, owner]) => owner);
     if (owners.length) out.set(j, owners);
   }

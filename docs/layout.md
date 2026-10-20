@@ -107,11 +107,18 @@ reported as `W_LAYOUT_DI_NOT_CREATED`.
   shapes and labels of the host's row (the event's own label included), or below everything between
   the two in the host's lane where that crosses fewer lines or labels, and rises straight into the
   target's bottom (see below), else into its left side from the column gap before it, else with a
-  hook; the host's lane grows to keep that run 15 px from its border. A handler below that a
-  straight drop cannot reach is entered the same way: down to such a run, right into the column gap
-  after the host, down, right. Neither runs along the host's bottom border, unless every such way
-  cuts a shape (a data object hanging right under the event). Loops run underneath the elements they
-  span (and the labels below their events) and enter their target from below (over the top only
+  hook; the host's lane grows to keep that run 15 px from its border. Where host and target share
+  a lane (or there are no lanes) and every such way crosses more lines than the way over the top
+  (a shape it cuts counts as one; a label it runs through does not: the label moves off it), the
+  flow goes over the top instead: down out of the event, a short run into the column gap beside
+  the host (not under another of its events), up past the host's row, along a run 15 px above the
+  shapes and labels it passes, and down into the target's top (a gateway's top vertex); the lane,
+  pool or sub-process grows to hold that run and the flow's label, and loops keep off it. A handler
+  below that a straight drop cannot reach is entered through such a run below the host's row: down
+  to it, right into the column gap after the host, down, right. Neither runs along the host's
+  bottom border, unless every such way cuts a shape (a data object hanging right under the event).
+  Loops run underneath the elements they span (and the labels below their events) and enter their
+  target from below (over the top only
   when that avoids a crossing), as do flows into a join. The entries of a join from below, loops
   included, share its bottom vertex, for every gateway type (exclusive, parallel, inclusive,
   complex, event-based); the flow of such a join to a target below leaves through its right vertex
@@ -133,7 +140,20 @@ reported as `W_LAYOUT_DI_NOT_CREATED`.
   when their way up is blocked. Joins are tried first, then the other nodes in the order of the
   model; the happy path stays the one it is without these moves. A data object tied to the join
   itself (an association from another tool) hangs right of that line. Flows from above enter a
-  join through its left vertex, so its top vertex needs no room.
+  join through its left vertex (a boundary event's way over the top: its top vertex, from a run
+  above everything around it), so its top vertex needs no room, and a node that such a way enters
+  is not moved for it.
+- In a pool with lanes, a node whose flow comes from a node of its own lane on a row above moves
+  up onto that row, with the nodes after it in its row and lane, where nothing of the lane lies or
+  runs in their cells there (a shape, or a flow along that row such as the happy path's past the
+  columns its nodes in other lanes leave empty). So a split whose happy path continues in another
+  lane sends its branch in its own lane straight out of its right vertex, instead of dropping both
+  branches from its bottom vertex. The move is kept only when the flow into the node is then one
+  straight segment on no other flow's line, more flows are straight and none bends more, and the
+  sequence flows get no more crossings, shared lines, lines through shapes or through labels; every
+  flow that rose straight still does (or runs straight now), and the happy path stays straight. A row
+  the move leaves empty closes, so the lane gets lower. Without lanes the happy path holds the
+  split's row, so nothing moves.
 - Sub-processes are laid out recursively, expanded by default, on their own plane when collapsed.
   Event sub-processes sit below the content of their lane (without lanes: below the main content).
   An expanded sub-process (event sub-process, transaction) is sized for its content and the labels

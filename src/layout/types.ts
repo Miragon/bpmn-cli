@@ -72,6 +72,11 @@ export interface GEdge {
    * its second waypoint's y; the host's lane holds it, engine.ts fitLaneLoops)
    */
   runsBelow?: boolean;
+  /**
+   * set by the router on such a flow that then goes over the top to its target (its highest waypoints, its label
+   * above them; the lane of both ends holds them, engine.ts fitLaneLoops)
+   */
+  runsAbove?: boolean;
 }
 
 /** One end of an association: a node/artifact box, or a point on a routed flow. */

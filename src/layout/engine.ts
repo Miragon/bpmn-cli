@@ -3,11 +3,17 @@
  * the BPMN DI writer. Coordinates handed to the DI are absolute.
  *
  * Contract (beyond the placement conventions of place.ts / route.ts):
- *  - lanes: every flow node lies inside the band of its leaf lane; the bands
- *    follow the content when routing or annotations open a strip above it,
+ *  - lanes: every flow node lies inside the band of its leaf lane, in the
+ *    rows the placer gave the lane's nodes, except that a node entered from a
+ *    node of its lane on a row above moves up onto that row where its cell
+ *    there is free and that draws better (place.ts liftChains: a split whose
+ *    happy path runs on in another lane sends its branch in its own lane out
+ *    through its right vertex); the bands follow the content when routing
+ *    or annotations open a strip above it,
  *    a loop inside a lane keeps CHANNEL_KEEP (15 px) from the lane's top and
  *    bottom border and its label inside the lane, as does the run of a
  *    boundary event's way to a target above from its lane's bottom border
+ *    and such a way over the top, with its label, from its lane's top border
  *    (the lane grows around them; nothing of the lanes before it moves), and
  *    the lanes fill their pool without gaps
  *  - event sub-processes sit below the content of their own lane (the lanes
@@ -29,7 +35,7 @@
 import { titleBox } from '../diagram/text.js';
 import { addTo, is, many, type El, type Model } from '../model.js';
 import { layoutRoot } from '../model.js';
-import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
 import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
@@ -137,6 +143,7 @@ const CHANNEL_KEEP = METRICS.loopGap / 2;
  * or whose label lies beyond it (above a run over the top: the top border;
  * below a run, a self loop's: the bottom border), and around the run below
  * the host's row of a boundary event's way to a target above (its bottom)
+ * and around such a way over the top, held like a loop over the top
  * (routeEdges keeps every label below the scope's top, so the first lane's
  * too): the bands are sized for their rows, and a channel runs loopGap below
  * the last row (or above the first one), which is the lane padding, so on
@@ -151,7 +158,8 @@ function fitLaneLoops(scope: ScopeLayout, leaves: LaneBand[]): void {
     const band = bands[k];
     if (!band) return;
     const inside = scope.edges.filter((e) => band.nodes.has(e.source.host ?? e.source) && band.nodes.has(e.target));
-    const loops = inside.filter((e) => e.back);
+    // a boundary event's way over the top (route.ts) is held like a loop over the top
+    const loops = inside.filter((e) => e.back || e.runsAbove);
     const runs = loops.flatMap((e) => e.points.filter((p, i) => i > 0 && e.points[i - 1]!.y === p.y).map((p) => p.y));
     // the way of a boundary event of the lane that runs below its host's row (route.ts) is held like a loop's run
     const ups = scope.edges.filter((e) => e.runsBelow && band.nodes.has(e.source.host ?? e.source));
@@ -228,7 +236,10 @@ function placeLaneEventSubs(scope: ScopeLayout, leaves: LaneBand[], lane: LaneBa
  * A node with something in its column between it and the flows that enter
  * it from below (a join, the handler of a boundary path in a lane above)
  * moves right as without lanes (place.ts freeJoinColumns, measured on the
- * rows by lane; `groups`: the scope's, place.ts PlaceOptions).
+ * rows by lane; `groups`: the scope's, place.ts PlaceOptions). Then a node
+ * entered from a node of its own lane on a row above moves up onto that row
+ * with its chain where their cells there are free (place.ts liftChains; the
+ * columns stay, a row the chain leaves empty closes).
  */
 function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string, readonly string[]>): void {
   const laneSets = many(process, 'laneSets');
@@ -297,7 +308,10 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
     for (const e of scope.edges) if (e.bandY !== undefined) e.bandY += bandShift;
     arrange();
   });
-  // the lanes as the joins left them (undoing a trial, freeJoinColumns puts back the scope's lane bands, not these)
+  // then a node entered from a row above in its own lane moves up onto that row where its cell there is free (a split's
+  // branch in its lane, whose happy path runs on in another lane, leaves through its right vertex); the columns stay
+  liftChains(scope, arrange);
+  // the lanes as the joins and lifts left them (undoing a trial puts back the scope's lane bands, not these)
   leaves.forEach((l, i) => {
     const b = scope.laneBands![i]!;
     l.y = b.top;

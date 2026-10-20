@@ -42,9 +42,9 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2297 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2310 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
-node tools/layout-regress.mjs   # FILES 115 SCORE 371 (budget in tools/bench/regress-budget.json)
+node tools/layout-regress.mjs   # FILES 115 SCORE 370 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
 ```
 
@@ -303,6 +303,58 @@ boundary paths this way nor moves a handler; drawings get wider where nodes
 move (54 of 200 generated models, 193 px on average); the runs keep clear of
 the labels' default spots only, so declutter can still move a sibling
 boundary label onto a run (review finding 8, not fixed).
+
+### A way over the top, a branch on its split's row (2026-10-20, after PR #72 was opened)
+
+The maintainer, looking at the reviewer model r013 (a timer on the first task
+of lane 0 leading to its last task; a parallel split whose happy path runs on
+in lane 2): "the way over the top would have had fewer crossings" and "why is
+Notify data not on the straight line: both arrows leave the AND gateway
+downwards".
+
+- **Ways over the top** (`layout/route.ts`, `runAbove`, `GEdge.runsAbove`):
+  where host and target share a lane (or there are no lanes), a boundary
+  event's flow to a target above may leave the event downwards, take a short
+  stub to the column gap after (or before) its host, rise past the host's row
+  to a run 15 px above everything in its x range and enter the target's top
+  (or its left side from the gap before it). Scored with the same faults as
+  the ways below, a small penalty above them, and taken only when it crosses
+  fewer lines than the best way below crosses plus cuts; the run is a top
+  channel later loops keep off; lanes grow for it (`fitLaneLoops`), and
+  `freeJoinColumns` does not move a node for an entry it gets from above.
+  r013 25 -> 10.
+- **A branch on its split's row** (`layout/place.ts` `liftChains`, in
+  `engine.ts` `applyLanes` after `freeJoinColumns`): in a laned scope a node
+  entered from a node of its own lane on a row above moves up onto that row,
+  with the nodes after it in its row and lane, where nothing of the lane lies
+  or runs in their cells (the happy path's line past the columns its nodes in
+  other lanes leave empty included); kept only when the flow into it is then
+  one segment on no other flow's line, more flows are straight, none bends
+  more and nothing gets worse (trial routing, `routesOf`, exact rollback); a
+  row left empty closes. Without lanes nothing moves. Harness 371 -> 370
+  (subproc__s13: a parallel run gone); 7 scenario drawings change.
+
+Evidence: gate 2310 tests + 246 opt-in, layout regression 370 (budget 370),
+fuzz 12 x 15 0 / 0, edit benches (incremental, auto) no regression; 740
+generated models (the reviewer corpus and both implementers' corpora) against
+PR #72's first commit: 36 better, 0 worse (crossings e.g. 186 -> 128 on 120
+models of r013's kind); timings within 1.13x on 60 / 120-split models; a full
+redraw differs from 0.7 in 39 of 115 scenarios; bundle 996.6 / 320.0 KB and
+713.3 / 229.8 KB, budgets 997 / 321 and 714 / 230. Verified by the integrator
+(no separate review round).
+
+Still open: the way over the top in r013 leaves through the gap before the
+host (the gap after it holds the event's label) and so crosses Start -> Pick
+invoice; ways over the top only within one lane; loops and compensation
+links routed after the boundary flows are not seen by their scoring; the
+lift tries only a node's first qualifying incoming flow and gives up gains
+where the flow would share the split's right vertex with a blocked drop
+(p041, p047); trials measure routes before `fitLaneLoops` and message flows;
+the plugin's recipes model (skills/bpmn/reference/formatting.md) now shows a
+`labelOnLine` after its incremental review batch (the incremental router
+reroutes a message flow through a label), and its "place a branch" step
+needs a `space` first; a shortened message flow's envelope can sit on a pool
+border; the incremental layout lifts nothing and draws no way over the top.
 
 ## Follow-ups of the id conventions (2026-10-13, `fix/conventions-followups`, follow-ups of #34)
 
