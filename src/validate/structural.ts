@@ -492,6 +492,13 @@ function checkBoundaryEvent(ctx: Ctx, el: El, scope: El): void {
       hint: `Remove it (\`bpmn remove <file> ${idOf(el)}\`), attach it to a normal activity (\`bpmn move <file> ${idOf(el)} --on <activityId>\`), or make ${idOf(host)} a normal activity (\`bpmn set <file> ${idOf(host)} isForCompensation=false\`).`,
     });
   }
+  // an event sub-process has no place in the flow to interrupt or leave; bpmn-js does not attach to one either
+  if (isEventSubProcess(host)) {
+    pushFinding(ctx.errors, 'E_INVALID_HOST', `${describe(el)} is attached to ${idOf(host)}, an event sub-process, which cannot carry boundary events`, idOf(el), {
+      related: [idOf(host)],
+      hint: `Remove it (\`bpmn remove <file> ${idOf(el)}\`) or attach it to an activity in the flow (\`bpmn move <file> ${idOf(el)} --on <activityId>\`).`,
+    });
+  }
   const trigger = triggerOf(el);
   if (trigger && peek<boolean>(el, 'cancelActivity') === false && NON_INTERRUPTING_FORBIDDEN.includes(trigger)) {
     pushFinding(ctx.errors, 'E_INVALID_TRIGGER', `boundaryEvent:${trigger} ${idOf(el)} cannot be non-interrupting`, idOf(el), {
