@@ -42,7 +42,7 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2310 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2317 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
 node tools/layout-regress.mjs   # FILES 115 SCORE 370 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
@@ -343,9 +343,7 @@ redraw differs from 0.7 in 39 of 115 scenarios; bundle 996.6 / 320.0 KB and
 713.3 / 229.8 KB, budgets 997 / 321 and 714 / 230. Verified by the integrator
 (no separate review round).
 
-Still open: the way over the top in r013 leaves through the gap before the
-host (the gap after it holds the event's label) and so crosses Start -> Pick
-invoice; ways over the top only within one lane; loops and compensation
+Still open: ways over the top only within one lane; loops and compensation
 links routed after the boundary flows are not seen by their scoring; the
 lift tries only a node's first qualifying incoming flow and gives up gains
 where the flow would share the split's right vertex with a blocked drop
@@ -355,6 +353,50 @@ the plugin's recipes model (skills/bpmn/reference/formatting.md) now shows a
 reroutes a message flow through a label), and its "place a branch" step
 needs a `space` first; a shortened message flow's envelope can sit on a pool
 border; the incremental layout lifts nothing and draws no way over the top.
+
+### A boundary event on its host's top border (2026-10-21)
+
+The maintainer, on r013's way over the top (it left the event downwards and
+rose through the gap before the host, crossing Start -> Pick invoice): "the
+boundary event would have fitted better on top when the flow runs along the
+top".
+
+- `layout/place.ts` `boundariesOnTop` (after `freeJoinColumns`, in laned
+  scopes after `liftChains`): a boundary event whose flows all go forward to
+  targets above it in its host's lane (or without lanes) is tried on its
+  host's top border (`GNode.onTop`, `placeBoundaryEvents`: from the right end
+  of the border, the nearer target's event rightmost; never on an expanded
+  sub-process's title), its label to the upper right (`labelLeft`: upper
+  left). The router (`route.ts`, shared `overEnds` / `overWay`) takes the
+  flow straight up to `runAbove`, along and down into the target's top (or
+  its left side). Kept by trial routing (flows, compensation links, data
+  associations) only when every flow of the event leaves upwards, its label
+  is clear, no straight rise or one-segment flow of another flow is lost and
+  the faults drop, or stay with a shorter way and fewer bends; else rolled
+  back exactly. Not tried: compensation events, events with data or notes,
+  message-flow ends. Labels of top events are obstacles for runs, loops and
+  notes; message legs going up jog above them.
+- A boundary event's last-resort channel to a target below in its own lane is
+  a run its lane holds (`runsBelow`); to a target in another lane it is not
+  (the integrator's fix: marking those too made the host's lane grow while the
+  flow stayed, a `detachedEdge` in 3 of 420 laned models).
+- The incremental layout needed no change: `attachedSide` sends a top-border
+  event's flow out of its top, labels.ts already labels it upper right.
+
+Evidence: gate 2317 tests + 246 opt-in, layout regression 370 (all 115
+drawings identical), fuzz 12 x 15 0 / 0, edit benches (incremental, auto) no
+regression; 988 generated models against the previous PR commit: 93 better,
+0 worse (corpus of r013's kind: crossings 128 -> 73, score 789 -> 469), 104
+events on a top border; r013 10 -> 5; timings within 1.08x; bundle 1001.6 /
+321.8 KB and 718.3 / 231.6 KB, budgets 1002 / 322 and 719 / 232. Verified by
+the integrator.
+
+Still open: only events whose way goes over the top move (a target in another
+lane keeps the way below); the host's row keeps its room below when all its
+events moved up; on a 100 px task the second top event covers the task's type
+icon, and three or more rarely pass the clear-label check; trials do not see
+message flows or lane growth; a message flow into the host's top docks about
+7 px from a top event.
 
 ## Follow-ups of the id conventions (2026-10-13, `fix/conventions-followups`, follow-ups of #34)
 

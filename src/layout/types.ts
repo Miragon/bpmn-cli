@@ -26,6 +26,13 @@ export interface GNode {
   boundary: GNode[];
   /** host for boundary events */
   host?: GNode;
+  /**
+   * a boundary event on its host's top border instead of the bottom one (place.ts boundariesOnTop): its flows leave
+   * it upwards over the top (route.ts), its label sits above the host (route.ts elementLabel)
+   */
+  onTop?: boolean;
+  /** such an event's label goes to the upper left of it (place.ts boundariesOnTop: where the upper right is taken) */
+  labelLeft?: boolean;
   /** expanded sub-process: its laid-out child scope */
   child?: ScopeLayout;
   /**
@@ -73,7 +80,8 @@ export interface GEdge {
    */
   runsBelow?: boolean;
   /**
-   * set by the router on such a flow that then goes over the top to its target (its highest waypoints, its label
+   * set by the router on such a flow that then goes over the top to its target, and on the flow of a boundary event
+   * on its host's top border (GNode.onTop), which goes straight up over the top (its highest waypoints, its label
    * above them; the lane of both ends holds them, engine.ts fitLaneLoops)
    */
   runsAbove?: boolean;

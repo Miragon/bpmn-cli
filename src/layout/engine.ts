@@ -13,9 +13,10 @@
  *    a loop inside a lane keeps CHANNEL_KEEP (15 px) from the lane's top and
  *    bottom border and its label inside the lane, as does the run of a
  *    boundary event's way to a target above from its lane's bottom border
- *    and such a way over the top, with its label, from its lane's top border
- *    (the lane grows around them; nothing of the lanes before it moves), and
- *    the lanes fill their pool without gaps
+ *    and such a way over the top (also one from the event's place on its
+ *    host's top border, place.ts boundariesOnTop), with its label, from its
+ *    lane's top border (the lane grows around them; nothing of the lanes
+ *    before it moves), and the lanes fill their pool without gaps
  *  - event sub-processes sit below the content of their own lane (the lanes
  *    below move down); those of the last lane or of no lane below everything
  *  - pools stack vertically in the order whose message flows cut the fewest
@@ -35,7 +36,7 @@
 import { titleBox } from '../diagram/text.js';
 import { addTo, is, many, type El, type Model } from '../model.js';
 import { layoutRoot } from '../model.js';
-import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
 import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
@@ -239,7 +240,9 @@ function placeLaneEventSubs(scope: ScopeLayout, leaves: LaneBand[], lane: LaneBa
  * rows by lane; `groups`: the scope's, place.ts PlaceOptions). Then a node
  * entered from a node of its own lane on a row above moves up onto that row
  * with its chain where their cells there are free (place.ts liftChains; the
- * columns stay, a row the chain leaves empty closes).
+ * columns stay, a row the chain leaves empty closes), and a boundary event
+ * whose way goes over the top better from its host's top border goes there
+ * (place.ts boundariesOnTop; the rows stay).
  */
 function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string, readonly string[]>): void {
   const laneSets = many(process, 'laneSets');
@@ -311,6 +314,8 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
   // then a node entered from a row above in its own lane moves up onto that row where its cell there is free (a split's
   // branch in its lane, whose happy path runs on in another lane, leaves through its right vertex); the columns stay
   liftChains(scope, arrange);
+  // a boundary event whose way goes over the top better from its host's top border sits there (the rows stay)
+  boundariesOnTop(scope);
   // the lanes as the joins and lifts left them (undoing a trial puts back the scope's lane bands, not these)
   leaves.forEach((l, i) => {
     const b = scope.laneBands![i]!;

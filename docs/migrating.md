@@ -565,8 +565,10 @@
   that adds no crossing (0.7 ran the flow out of the event's side along
   the host's bottom border and hooked it into the target); where host and
   target share a lane (or there are no lanes) and a way over the top row
-  crosses fewer lines, the flow rises beside its host past the row and
-  runs above everything into the target's top. In a pool with lanes, a
+  crosses fewer lines, the flow runs above everything into the target's
+  top, and where that draws better the event sits on its host's top border
+  and its flow leaves it straight up (0.7 kept every boundary event on the
+  bottom border). In a pool with lanes, a
   branch in its split's own lane moves up onto the split's row when the
   happy path continues in another lane, so it leaves the split
   horizontally (0.7 dropped every branch from the split's bottom vertex).

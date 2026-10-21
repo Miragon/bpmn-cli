@@ -18,7 +18,10 @@
  *    split with one entry keeps its drops on the bottom vertex. Where the
  *    drop is blocked: right, down, right; a boundary event's down to a run
  *    below its host's row and right into the column gap after the host
- *    (runBelow), not out of its side along the host's bottom border
+ *    (runBelow), not out of its side along the host's bottom border. Where
+ *    every such way cuts a shape: down to a channel below everything between
+ *    the two (a boundary event's is a run below its host's row too, which
+ *    its lane holds: GEdge.runsBelow)
  *  - target above: right from the source, then up into the target's bottom
  *    (a join, or any node a forward flow enters from below), straight under
  *    it: the placer keeps that column free between the node and its entries
@@ -48,6 +51,15 @@
  *    host's bottom border only when every such way cuts a shape. No forward
  *    flow but such a way enters a top vertex: a target below is entered from
  *    the left
+ *  - a boundary event on its host's top border (GNode.onTop, place.ts
+ *    boundariesOnTop; wherever its target lies): straight up out of its top
+ *    to a run RUN_CLEAR from the shapes, labels (its own above the host
+ *    included) and runs of its lane in its x range, along, and down into the
+ *    target's top or into its left side from the column gap before it, as
+ *    over the top above (a top channel, GEdge.runsAbove; the scope grows for
+ *    it), the out-of-the-side ways only when both cut a shape or run on a
+ *    routed flow. Its flow is no entry from below (risesInto), and loops
+ *    over the top keep above its label too
  *  - loops: down into a channel below everything in their column span (the
  *    default labels below events and boundary events included, so a label
  *    keeps its spot), left, up into the target's bottom; or over the top when
@@ -91,7 +103,8 @@ function obstacles(layout: ScopeLayout): Box[] {
   return boxes;
 }
 
-function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
+/** the segment from a to b runs through the inside of `box` (touching its border does not count) */
+export function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
   const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
   const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
   return x1 < box.x + box.width && x2 > box.x && y1 < box.y + box.height && y2 > box.y;
@@ -247,6 +260,36 @@ export function routedSegments(layout: ScopeLayout): Segment[] {
   return layout.edges.flatMap((e) => toSegments(e.points));
 }
 
+/**
+ * The flows of `flows` that, as routed, cross another flow of the scope, cut a shape (not their own ends, nor the
+ * host of the boundary event they leave; RouteFaults alike) or run through one of `labels`.
+ */
+export function faultyFlows(layout: ScopeLayout, flows: readonly GEdge[], labels: readonly Box[]): Set<GEdge> {
+  const boxes = obstacles(layout);
+  const cuts = (e: GEdge): boolean => hitCount(e.points, boxes, [e.source.box, e.target.box, ...(e.source.host ? [e.source.host.box] : [])]) > 0;
+  const crosses = (e: GEdge): boolean => crossingPairs([e.points], layout.edges.filter((o) => o !== e).map((o) => o.points)) > 0;
+  return new Set(flows.filter((e) => cuts(e) || crosses(e) || labels.some((l) => toSegments(e.points).some(([a, b]) => segmentHitsBox(a, b, l)))));
+}
+
+/** How many pairs of a line of `a` and a line of `b` cross (proper crossings, RouteFaults alike). */
+export function crossingPairs(a: readonly Point[][], b: readonly Point[][]): number {
+  const index = new XIndex<[Segment, number]>();
+  b.forEach((pts, j) => {
+    for (const s of toSegments(pts)) index.add([s, j], Math.min(s[0].x, s[1].x), Math.max(s[0].x, s[1].x));
+  });
+  let n = 0;
+  for (const pts of a) {
+    const met = new Set<number>();
+    for (const s of toSegments(pts)) {
+      index.each(Math.min(s[0].x, s[1].x), Math.max(s[0].x, s[1].x), ([q, j]) => {
+        if (!met.has(j) && segmentsCross(s, q)) met.add(j);
+      });
+    }
+    n += met.size;
+  }
+  return n;
+}
+
 function countCrossings(points: Point[], routed: Segment[] | XIndex<Segment>, stop = Infinity): number {
   let n = 0;
   for (const a of toSegments(points)) {
@@ -283,11 +326,12 @@ export function dataX(n: GNode): number {
 
 /**
  * The forward entries that rise into a node's bottom (riseX): from a source below it, or along an empty
- * branch's band. Told from the placed nodes, not from routes: the placer asks before routing (place.ts
- * freeJoinColumns), the router before the entries are routed.
+ * branch's band; not the flow of a boundary event on its host's top border (GNode.onTop), which enters from above.
+ * Told from the placed nodes, not from routes: the placer asks before routing (place.ts freeJoinColumns), the
+ * router before the entries are routed.
  */
 export function risesInto(n: GNode): GEdge[] {
-  return n.in.filter((e) => !e.back && (e.bandY !== undefined || center(e.source.box).y > center(n.box).y + 1));
+  return n.in.filter((e) => !e.back && !e.source.onTop && (e.bandY !== undefined || center(e.source.box).y > center(n.box).y + 1));
 }
 
 /** The entries of a join that rise into its bottom vertex (risesInto; none for a node that is no gateway or has fewer than two forward entries). */
@@ -380,29 +424,33 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
     }
     return maxY;
   };
-  /** highest y (smallest) of any node, artifact or routed edge point inside an x range (restricted to a lane band) */
+  // the default spots of the labels below events and boundary events (a loop channel through one would push the label
+  // away), and of those above the host of a boundary event on its top border
+  const labelsBelow: Box[] = [];
+  const labelsAbove: Box[] = [];
+  for (const n of layout.nodes) {
+    const label = n.kind === 'start' || n.kind === 'end' || n.kind === 'event' ? elementLabel(n, 'event') : undefined;
+    if (label) labelsBelow.push(label);
+    for (const b of n.boundary) {
+      const bl = elementLabel(b, 'boundary');
+      if (bl) (b.onTop ? labelsAbove : labelsBelow).push(bl);
+    }
+  }
+  const belowIndex = boxIndex(labelsBelow);
+  const aboveIndex = boxIndex(labelsAbove);
+  /** highest y (smallest) of any node, artifact, label above a boundary event's host or routed edge point inside an x range (restricted to a lane band) */
   const rangeTop = (x1: number, x2: number, band?: LaneBandInfo): number => {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
     const inBand = (y: number): boolean => !band || (y >= band.top && y <= band.bottom);
     let minY = Infinity;
     // the nodes, boundary events and artifacts
     for (const b of boxes.near(lo, hi)) if (b.x <= hi && right(b) >= lo && inBand(center(b).y)) minY = Math.min(minY, b.y);
+    for (const l of aboveIndex.near(lo, hi)) if (l.x <= hi && right(l) >= lo && inBand(bottom(l))) minY = Math.min(minY, l.y);
     for (const [a, b] of routed.near(lo, hi)) {
       if (Math.max(a.x, b.x) >= lo && Math.min(a.x, b.x) <= hi && inBand(a.y) && inBand(b.y)) minY = Math.min(minY, a.y, b.y);
     }
     return minY === Infinity ? 0 : minY;
   };
-  // the default spots of the labels below events and boundary events (a loop channel through one would push the label away)
-  const labelsBelow: Box[] = [];
-  for (const n of layout.nodes) {
-    const label = n.kind === 'start' || n.kind === 'end' || n.kind === 'event' ? elementLabel(n, 'event') : undefined;
-    if (label) labelsBelow.push(label);
-    for (const b of n.boundary) {
-      const bl = elementLabel(b, 'boundary');
-      if (bl) labelsBelow.push(bl);
-    }
-  }
-  const belowIndex = boxIndex(labelsBelow);
   /** lowest y of any node, label below a node, artifact or routed edge point inside an x range (restricted to a lane band) */
   const rangeBottom = (x1: number, x2: number, band?: LaneBandInfo): number => {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
@@ -472,7 +520,7 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
     const label = n.kind === 'gateway' ? elementLabel(n, 'gateway') : undefined;
     if (label) gatewaySpots.set(n, label);
   }
-  const labelSpots = [...labelsBelow, ...gatewaySpots.values(), ...routedArtifacts(layout).map((a) => (a.kind === 'annotation' ? undefined : elementLabel(a, 'data')))].filter((b): b is Box => !!b);
+  const labelSpots = [...labelsBelow, ...labelsAbove, ...gatewaySpots.values(), ...routedArtifacts(layout).map((a) => (a.kind === 'annotation' ? undefined : elementLabel(a, 'data')))].filter((b): b is Box => !!b);
   const spotIndex = boxIndex(labelSpots);
   /**
    * empty branches whose split and join lie on one row with no shape and no node label between them (in a
@@ -672,7 +720,7 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
         if (win.entry) use(win.entry[0], win.entry[1], win.entry[2], false);
         if (win.channel) chosenChannel = { list: win.channel.list, y: win.channel.y, x1, x2 };
       }
-    } else if (Math.abs(sc.y - tc.y) < 1) {
+    } else if (!s.onTop && Math.abs(sc.y - tc.y) < 1) {
       pts = straightLine(s, t);
       if (e.bandY !== undefined) {
         // reserved empty band: drop, run along the band, hook into the join from below; straight when the row
@@ -689,7 +737,7 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
         const y = channelFor(exitX(s), tb.x - 20, base);
         pts = [...exitToBelow(s, exitX(s), y), ...hookFromBelow(t, y)];
       }
-    } else if (tc.y > sc.y) {
+    } else if (!s.onTop && tc.y > sc.y) {
       // drop from the source (or from the boundary event), then right
       const ex = s.host ? sc.x : exitX(s);
       pts = [{ x: ex, y: bottom(sb) }, { x: ex, y: tc.y }, { x: tb.x, y: tc.y }];
@@ -711,7 +759,9 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
           }
         }
         if (pathHits(pts, boxes, ignore)) {
-          runsBelow = undefined;
+          // a boundary event's channel to a target in its own lane is a run below its host's row too: the lane holds it
+          // (engine.ts fitLaneLoops); to a target in another lane the channel leaves the lane, which must not grow for it
+          runsBelow = s.host && bandOf(s) === bandOf(t) ? true : undefined;
           const base = spanBottom(s.host ? s.host.layer : s.layer, t.layer) + METRICS.loopGap;
           const y = channelFor(ex, tb.x - 20, base);
           pts = [{ x: ex, y: bottom(sb) }, { x: ex, y }, { x: tb.x - 20, y }, { x: tb.x - 20, y: tc.y }, { x: tb.x, y: tc.y }];
@@ -728,7 +778,46 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
       type Way = { pts: Point[]; x?: number; below?: boolean; top?: number; over?: Channel; spare?: Box };
       /** the ways in, best first (`penalty`: the order of a boundary event's, else by index), each made only when it can still win */
       const cands: Array<{ penalty?: number; make: () => Way | undefined }> = [];
-      if (s.host) {
+      /** where a way over the top goes down from its run at y, how far the run goes, the x on the target's top it ends on, its rank */
+      type OverEnd = { to: number; down: (y: number) => Point[]; top?: number; penalty: number };
+      /**
+       * the ends of a way over the top: down into the target's top (a gateway's top vertex, its label then goes to the
+       * upper left) where no flow enters there yet, or into its left side from the column gap before it where no flow
+       * ends on that side yet
+       */
+      const overEnds = (): OverEnd[] => {
+        const ttx = topX(t);
+        const sideFree = !routed.near(tb.x - 1, tb.x + 1).some((seg) => seg.some((p) => Math.abs(p.x - tb.x) < 1 && p.y > tb.y && p.y < bottom(tb)));
+        return [
+          ...(used(usedTop, t, ttx, true) ? [] : [{ to: ttx, down: (y: number): Point[] => [{ x: ttx, y }, { x: ttx, y: tb.y }], top: ttx, penalty: 0 }]),
+          ...(sideFree ? [{ to: gapX, down: (y: number): Point[] => [{ x: gapX, y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 0.1 }] : []),
+        ];
+      };
+      /** a way over the top along `way`, its run at y from x1 to the end; none where it cuts a shape or runs on a routed flow */
+      const overWay = (way: Point[], y: number, x1: number, end: OverEnd, below?: boolean): Way | undefined => {
+        if (pathHits(way, boxes, ignore) || onRouted(way)) return undefined;
+        const spare = end.top !== undefined ? gatewaySpots.get(t) : undefined;
+        return { pts: way, ...(below ? { below } : {}), over: { y, from: Math.min(x1, end.to), to: Math.max(x1, end.to) }, ...(end.top !== undefined ? { top: end.top } : {}), ...(spare ? { spare } : {}) };
+      };
+      if (s.host && s.onTop) {
+        // a boundary event on its host's top border (place.ts boundariesOnTop): straight up out of its top to a run
+        // RUN_CLEAR from the shapes, labels (its own above the host included) and runs of its lane between it and the end,
+        // along, and down into the target as over the top below (a way to a gap less than RUN_CLEAR after it is none)
+        const band = bandOf(s);
+        const ends = overEnds().filter((end) => end.top !== undefined || end.to - sc.x >= RUN_CLEAR);
+        const area = runArea(Math.min(sc.x, ...ends.map((end) => end.to)), Math.max(sc.x, ...ends.map((end) => end.to)));
+        const topArea = band ? area.filter((b) => center(b).y >= band.top && center(b).y <= band.bottom) : area;
+        const from = Math.min(tb.y, sb.y);
+        for (const end of ends) {
+          cands.push({
+            penalty: end.penalty,
+            make: () => {
+              const y = runAbove(sc.x, end.to, from, topArea);
+              return overWay([{ x: sc.x, y: sb.y }, { x: sc.x, y }, ...end.down(y)], y, sc.x, end);
+            },
+          });
+        }
+      } else if (s.host) {
         // a boundary event: down out of the event to a run below its host's row (clear of the shapes and labels it
         // passes), or below everything between the two in its lane where that crosses fewer lines, then up: straight,
         // into the target's left side from the column gap before it, or a hook from the gap beside it; else over the
@@ -784,27 +873,19 @@ export function routeEdges(layout: ScopeLayout): RouteFaults {
         if (!band || band === bandOf(t)) {
           const topArea = band ? area.filter((b) => center(b).y >= band.top && center(b).y <= band.bottom) : area;
           const from = Math.min(tb.y, host.box.y);
-          const ttx = topX(t);
-          const sideFree = !routed.near(tb.x - 1, tb.x + 1).some((seg) => seg.some((p) => Math.abs(p.x - tb.x) < 1 && p.y > tb.y && p.y < bottom(tb)));
-          const ends: Array<{ to: number; down: (y: number) => Point[]; top?: number; penalty: number }> = [
-            ...(used(usedTop, t, ttx, true) ? [] : [{ to: ttx, down: (y: number): Point[] => [{ x: ttx, y }, { x: ttx, y: tb.y }], top: ttx, penalty: 0 }]),
-            ...(sideFree ? [{ to: gapX, down: (y: number): Point[] => [{ x: gapX, y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 0.1 }] : []),
-          ];
+          const ends = overEnds();
           hostGaps.forEach((gx, k) => {
-            // a gap before the scope's first column is none; the short run passes under no other event of the host (their
-            // drops, labels and compensation links, not all routed yet, lie there)
+            // a gap before the scope's first column is none; the short run passes under no other event of the host's bottom
+            // border (their drops, labels and compensation links, not all routed yet, lie there)
             if (gx < 0 || Math.abs(gx - sc.x) < RUN_CLEAR) return;
-            if (host.boundary.some((b) => b !== s && Math.min(gx, sc.x) < center(b.box).x && center(b.box).x < Math.max(gx, sc.x))) return;
+            if (host.boundary.some((b) => b !== s && !b.onTop && Math.min(gx, sc.x) < center(b.box).x && center(b.box).x < Math.max(gx, sc.x))) return;
             for (const end of ends) {
               if (end.top === undefined && gapX - gx < RUN_CLEAR) continue;
               cands.push({
                 penalty: 2.5 + k * 0.2 + end.penalty,
                 make: () => {
                   const low = runTo(gx), y = runAbove(gx, end.to, from, topArea);
-                  const way = [{ x: sc.x, y: bottom(sb) }, { x: sc.x, y: low }, { x: gx, y: low }, { x: gx, y }, ...end.down(y)];
-                  if (pathHits(way, boxes, ignore) || onRouted(way)) return undefined;
-                  const spare = end.top !== undefined ? gatewaySpots.get(t) : undefined;
-                  return { pts: way, below: true, over: { y, from: Math.min(gx, end.to), to: Math.max(gx, end.to) }, ...(end.top !== undefined ? { top: end.top } : {}), ...(spare ? { spare } : {}) };
+                  return overWay([{ x: sc.x, y: bottom(sb) }, { x: sc.x, y: low }, { x: gx, y: low }, { x: gx, y }, ...end.down(y)], y, gx, end, true);
                 },
               });
             }
@@ -1118,8 +1199,13 @@ export interface LabelOptions {
   above?: boolean;
 }
 
-/** External label boxes for events, gateways, boundary events and data objects. */
-export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
+/**
+ * External label boxes for events, gateways, boundary events and data objects. A boundary event's hangs below its
+ * host, right of the event (of two events the second one's left of it, three and more stepped down); on the top
+ * border (GNode.onTop) it sits above the host, right of the event (of two such events the second one's left of it,
+ * three and more stepped up; left of it with GNode.labelLeft), as the incremental layout puts it (diagram/labels.ts).
+ */
+export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
   const name = nameOf(n);
   if (!name) return undefined;
   const b = n.box;
@@ -1139,10 +1225,19 @@ export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUs
     case 'boundary': {
       const { width, height } = labelSize(name);
       const host = 'host' in n ? n.host : undefined;
-      const hostBottom = host ? bottom(host.box) : b.y + b.height / 2;
-      const siblings = host?.boundary ?? [];
-      // counted from the right: a collapsed sub-process has its events left to right (place.ts placeBoundaryEvents)
+      const top = !!host && 'onTop' in n && !!n.onTop;
+      // the events on the same border of the host
+      const siblings = (host?.boundary ?? []).filter((s) => !!s.onTop === top);
+      if (top) {
+        // counted from the right (the top border's events run right to left, place.ts placeBoundaryEvents)
+        const j = siblings.filter((s) => s.box.x > b.x).length;
+        const y = host.box.y - 2 - height;
+        if ((siblings.length === 2 && j === 1) || ('labelLeft' in n && n.labelLeft)) return { x: b.x - 4 - width, y, width, height };
+        return { x: b.x + b.width + 4, y: y - (siblings.length >= 3 ? j * (LABEL_LINE + 2) : 0), width, height };
+      }
       const k = Math.max(0, siblings.findIndex((s) => s.box === b));
+      const hostBottom = host ? bottom(host.box) : b.y + b.height / 2;
+      // counted from the right: a collapsed sub-process has its events left to right (place.ts placeBoundaryEvents)
       const i = host && boundaryLeft(host) ? siblings.length - 1 - k : k;
       if (siblings.length === 2 && i === 1) return { x: b.x - 4 - width, y: hostBottom + 2, width, height };
       const stagger = siblings.length >= 3 ? i * (LABEL_LINE + 2) : 0;

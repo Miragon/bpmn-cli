@@ -10,6 +10,12 @@
  *    band is reused when its column interval is free (compact but never
  *    overlapping), and the split's column stays free for the drop line
  *  - boundary event handlers are bands below their host
+ *  - boundary events sit on their host's bottom border (placeBoundaryEvents);
+ *    one whose flows go to targets above it in its host's lane (or a scope
+ *    without lanes) sits on the top border instead, at its right end, its
+ *    flows straight up over the top, where the scope then draws better
+ *    (boundariesOnTop, on the final arrangement: the rows stay, the other
+ *    events keep their places)
  *  - loops (edges closing a cycle) do not influence layering; they are drawn
  *    underneath (see route.ts)
  *  - the flows that enter a node from below (the entries of a join, the
@@ -57,10 +63,10 @@
  *    together
  */
 import { layoutDebug, layoutDebugOn } from '../debug.js';
-import { titleDepth } from '../diagram/text.js';
+import { titleBox, titleDepth } from '../diagram/text.js';
 import { is, many, type El } from '../model.js';
-import { RISE_KEEP, XIndex, elementLabel, entriesFromBelow, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments } from './route.js';
-import { METRICS, SIZES, boxesOverlap, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LinkEnd, type Point, type ScopeLayout } from './types.js';
+import { RISE_KEEP, XIndex, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments, segmentHitsBox } from './route.js';
+import { METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type LinkEnd, type Point, type ScopeLayout } from './types.js';
 
 const idOf = (el: El): string => el.get<string>('id');
 
@@ -163,12 +169,14 @@ export function layoutScope(scope: El, opts: PlaceOptions): ScopeLayout {
   buildArtifacts(layout, scope, byId);
   gridScope(layout, opts.groups);
   placeAttachedArtifacts(layout);
-  // a process in lanes arranges its rows by lane first, and frees the joins' columns there (engine.ts applyLanes)
+  // a process in lanes arranges its rows by lane first, and frees the joins' columns there, and puts boundary events on
+  // their host's top border there (engine.ts applyLanes)
   if (!hasLanes(scope)) {
     freeJoinColumns(layout, (shifts) => {
       gridScope(layout, opts.groups, shifts);
       placeAttachedArtifacts(layout);
     });
+    boundariesOnTop(layout);
   }
   routeEdges(layout);
   refreshFlowAnchors(layout);
@@ -632,7 +640,7 @@ function groupedOrder(list: GNode[], nodes: GNode[], groups: ReadonlyMap<string,
 /* geometry                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Extra row height below a node for its boundary events (they hang out of the bottom border, labels beside). */
+/** Extra row height below a node for its boundary events (they hang out of the bottom border, labels beside; the rows are made before boundariesOnTop moves one up). */
 export function boundaryExtra(n: GNode): number {
   return n.boundary.length ? SIZES.event.height / 2 + 20 : 0;
 }
@@ -647,13 +655,23 @@ export function hostWidthFor(n: GNode): number {
   return Math.max(n.width, 2 * METRICS.boundaryOffset + (count - 1) * (SIZES.event.width + 8) + 10);
 }
 
-/** Positions the boundary events of a host along its bottom border (right to left; collapsed sub-processes: left to right, away from the drill-down marker). */
+/**
+ * Positions the boundary events of a host along its bottom border (right to left; collapsed sub-processes: left to
+ * right, away from the drill-down marker), each in the place of its index, and those on its top border (GNode.onTop,
+ * boundariesOnTop) along that one from its right end (off the type icon at the top left), right to left by the x of
+ * their nearest target (the ways over the top nest: the rightmost event's runs lowest, route.ts), else in their
+ * order: an event that goes up moves no event of the bottom border.
+ */
 export function placeBoundaryEvents(n: GNode): void {
   const collapsed = n.kind === 'subProcess' && !n.child;
+  const reach = (b: GNode): number => Math.min(...b.out.map((e) => center(e.target.box).x));
+  const tops = n.boundary.filter((b) => b.onTop).sort((a, b) => reach(a) - reach(b));
   n.boundary.forEach((b, i) => {
-    const step = i * (SIZES.event.width + 8);
-    const cx = collapsed ? n.box.x + METRICS.boundaryOffset + step : n.box.x + n.box.width - METRICS.boundaryOffset - step;
-    b.box = { x: Math.round(cx - SIZES.event.width / 2), y: n.box.y + n.box.height - SIZES.event.height / 2, width: SIZES.event.width, height: SIZES.event.height };
+    const k = b.onTop ? tops.indexOf(b) : i;
+    const step = k * (SIZES.event.width + 8);
+    const cx = collapsed && !b.onTop ? n.box.x + METRICS.boundaryOffset + step : n.box.x + n.box.width - METRICS.boundaryOffset - step;
+    const y = b.onTop ? n.box.y - SIZES.event.height / 2 : n.box.y + n.box.height - SIZES.event.height / 2;
+    b.box = { x: Math.round(cx - SIZES.event.width / 2), y, width: SIZES.event.width, height: SIZES.event.height };
   });
 }
 
@@ -952,9 +970,9 @@ type Routes = { crossings: number; hits: number; labels: number; rises: Set<GEdg
 /**
  * The faults (crossings, cut shapes, labels of shapes and data run through) and straight rises of the routes the
  * current arrangement gets, the flows drawn as one segment and the bends of all, with `lines` the flows that share a
- * piece of line (sharedLines; else none); the scope is left as it was.
+ * piece of line (sharedLines; else none); `look` sees the routed scope before it is left as it was.
  */
-function routesOf(layout: ScopeLayout, lines = false): Routes {
+function routesOf(layout: ScopeLayout, lines = false, look?: () => void): Routes {
   const undo = keepArrangement(layout);
   const faults = routeEdges(layout);
   const straight = new Set<GEdge>();
@@ -964,6 +982,7 @@ function routesOf(layout: ScopeLayout, lines = false): Routes {
     bends += Math.max(0, e.points.length - 2);
   }
   const routes = { ...faults([...shapeLabels(layout), ...dataLabels(layout)]), rises: straightRises(layout), above: new Set(layout.edges.filter((e) => e.runsAbove)), straight, bends, ...(lines ? sharedLines(layout) : { shared: 0, sharing: new Set<GEdge>() }) };
+  look?.();
   undo();
   return routes;
 }
@@ -1150,13 +1169,172 @@ export function liftChains(layout: ScopeLayout, arrange: () => void): void {
 }
 
 /**
+ * Boundary events on the top border of their host (GNode.onTop): an event
+ * whose flows all go forward to targets above it in its host's lane (or in a
+ * scope without lanes) moves to its host's top border (placeBoundaryEvents:
+ * at its right end, the host's other events keep their places; its label
+ * goes above the host, route.ts elementLabel) and its flows leave it straight
+ * up over the top (route.ts), when that draws better. The scope is routed
+ * both ways (route.ts routeEdges; the links as routeLinks then draws them)
+ * and the move is kept only when every flow of the event then leaves it
+ * upwards over the top; no other line runs through the event (a flow into
+ * or out of the host's top there, a link); its label lies clear of the
+ * shapes, the other labels (of shapes, data and flows) and every line, to
+ * the upper right of the event, else to its upper left (GNode.labelLeft);
+ * every flow that rose straight into a node's bottom still does, every other
+ * flow of one segment stays one and the other flows bend no more; no more
+ * pairs of lines cross (flows, and flows with links), no more shapes are cut
+ * and no more labels of shapes are run through, and fewer of one of them,
+ * or as many and the event's flows are shorter with fewer bends. So an event
+ * whose way the bottom border sends over the top (round its host, past the
+ * flow into it) takes the top border, and one with a way below its host's
+ * row that is as clean stays. Not tried: a compensation event, an event with
+ * data or a note (placed below the host for the event as it is), the end of
+ * a message flow (the message routes come later), one that would sit on the
+ * title of an expanded sub-process, and one whose flows, drawn from the
+ * bottom border, neither go over the top nor bend three times nor cross a
+ * flow, cut a shape or run through a label of a shape or data (the way up
+ * cannot draw better). One event at a time, in the order of the nodes and
+ * their events, each tried once; a move not kept is undone exactly
+ * (keepArrangement). Runs on the final arrangement (after freeJoinColumns
+ * and liftChains), before the routing that draws it.
+ */
+export function boundariesOnTop(layout: ScopeLayout): void {
+  const lanes = layout.laneBands;
+  const laneOf = (n: GNode): LaneBandInfo | undefined => lanes?.find((b) => b.nodes.has(n));
+  // the boundary events with data or a note
+  const attached = new Set<GNode>();
+  for (const a of layout.artifacts) {
+    const ends: Array<LinkEnd | GNode | undefined> = [a.anchorNode, ...a.links.flatMap((l) => [l.from, l.to])];
+    for (const end of ends) if (end && 'host' in end && (end as GNode).host) attached.add(end as GNode);
+  }
+  let messages: Set<string> | undefined;
+  const events = layout.nodes.flatMap((n) =>
+    n.boundary.filter((b) => !b.onTop && !b.compensationHandler && !attached.has(b) && b.out.length && b.out.every((e) => !e.back && e.target !== n && center(e.target.box).y < center(b.box).y - 1 && laneOf(e.target) === laneOf(n)) && !(messages ??= messageEnds(layout.el)).has(b.id)),
+  );
+  if (!events.length) return;
+  /**
+   * what the routes of an arrangement give each event: its flows' length and bends, whether they leave it upwards over
+   * the top, no other line runs through the event (`box`) and its label is clear, and it is worth a trial
+   */
+  const ways = new Map<GNode, { length: number; bends: number; up: boolean; box: boolean; label: boolean; worth: boolean }>();
+  /** the pairs of a flow and a link that cross in the routes of the arrangement `look` saw last */
+  let linkCrossings = 0;
+  const look = (): void => {
+    // the flows and the links as routeLinks draws them after the flows (compensation links, data associations; notes
+    // other than a boundary event's are placed later: not theirs)
+    routeLinks(layout);
+    const links = [...layout.compensations.map((c) => c.points), ...routedArtifacts(layout).flatMap((a) => a.links.map((l) => l.points))];
+    linkCrossings = crossingPairs(layout.edges.map((e) => e.points), links);
+    const segments = [...layout.edges.map((e) => [e, e.points] as const), ...links.map((pts) => [undefined, pts] as const)].map(([e, pts]) => [e, pts.slice(1).map((p, i): [Point, Point] => [pts[i]!, p])] as const);
+    const shapes = layout.nodes.flatMap((n) => [n.box, ...n.boundary.map((b) => b.box)]).concat(routedArtifacts(layout).map((a) => a.box));
+    const labels = [...shapeLabels(layout), ...dataLabels(layout)];
+    const flowLabels = layout.edges.flatMap((e) => (e.label ? [e.label] : []));
+    for (const b of events) {
+      const mine = new Set(b.out);
+      let length = 0, bends = 0;
+      for (const e of b.out) {
+        for (let i = 0; i + 1 < e.points.length; i++) length += Math.abs(e.points[i + 1]!.x - e.points[i]!.x) + Math.abs(e.points[i + 1]!.y - e.points[i]!.y);
+        bends += Math.max(0, e.points.length - 2);
+      }
+      if (b.onTop) {
+        const up = b.out.every((e) => e.runsAbove && e.points.length > 1 && e.points[1]!.y < e.points[0]!.y);
+        const label = elementLabel(b, 'boundary');
+        const box = !segments.some(([e, s]) => (!e || !mine.has(e)) && s.some(([p, q]) => segmentHitsBox(p, q, b.box)));
+        const clear =
+          !label ||
+          (!shapes.some((s) => s !== b.box && boxesOverlap(s, label, 2)) &&
+            !labels.some((l) => !sameBox(l, label) && boxesOverlap(l, label, 2)) &&
+            !flowLabels.some((l) => boxesOverlap(l, label, 2)) &&
+            !segments.some(([, s]) => s.some(([p, q]) => segmentHitsBox(p, q, label))));
+        ways.set(b, { length, bends, up, box, label: clear, worth: false });
+        continue;
+      }
+      // a way below its host's row as clean as a way up (two bends, no fault) cannot be beaten
+      const worth = b.out.some((e) => e.runsAbove || e.points.length >= 5) || faultyFlows(layout, b.out, labels).size > 0;
+      ways.set(b, { length, bends, up: false, box: false, label: false, worth });
+    }
+  };
+  /** the routes of the arrangement, their crossings with those of the links */
+  const measure = (): Routes => {
+    const r = routesOf(layout, false, look);
+    return { ...r, crossings: r.crossings + linkCrossings };
+  };
+  let before = measure();
+  for (const b of events) {
+    const host = b.host!;
+    const was = ways.get(b)!;
+    if (!was.worth) continue;
+    const undo = keepArrangement(layout);
+    b.onTop = true;
+    placeBoundaryEvents(host);
+    const title = host.child ? titleBox(host.box, nameOf(host)) : undefined;
+    if (title && boxesOverlap(title, b.box, 2)) {
+      if (layoutDebugOn()) layoutDebug(`[boundary] ${b.id} stays on the bottom border: the title of ${host.id} is in the way`);
+      undo();
+      continue;
+    }
+    const kept = new Map(ways);
+    let after = measure();
+    let now = ways.get(b)!;
+    // the label to the upper left where the upper right is taken
+    if (now.up && now.box && !now.label) {
+      b.labelLeft = true;
+      after = measure();
+      now = ways.get(b)!;
+    }
+    const mine = new Set(b.out);
+    const keep =
+      now.up &&
+      now.box &&
+      now.label &&
+      [...before.rises].every((e) => after.rises.has(e) || mine.has(e)) &&
+      [...before.straight].every((e) => after.straight.has(e) || mine.has(e)) &&
+      after.bends - now.bends <= before.bends - was.bends &&
+      after.crossings <= before.crossings &&
+      after.hits <= before.hits &&
+      after.labels <= before.labels &&
+      (after.crossings < before.crossings || after.hits < before.hits || after.labels < before.labels || (now.length < was.length && now.bends < was.bends));
+    if (layoutDebugOn()) {
+      const why = [now.up ? '' : 'not up', now.box ? '' : 'a line through it', now.label ? '' : 'its label not clear', b.labelLeft ? 'label left' : ''].filter(Boolean).join(', ');
+      layoutDebug(`[boundary] ${b.id} ${keep ? 'moves to the top border' : 'stays on the bottom border'}: ${showRoutes(before)} ${was.length} px ${was.bends} bends -> ${showRoutes(after)} ${now.length} px ${now.bends} bends${why ? ` (${why})` : ''}`);
+    }
+    if (keep) before = after;
+    else {
+      undo();
+      ways.clear();
+      for (const [k, v] of kept) ways.set(k, v);
+    }
+  }
+}
+
+/** The ids of the elements message flows connect, in the collaborations of the definitions of `scope`. */
+function messageEnds(scope: El): Set<string> {
+  let root = scope;
+  while (root.$parent) root = root.$parent as El;
+  const ids = new Set<string>();
+  for (const c of many(root, 'rootElements')) {
+    if (!is(c, 'bpmn:Collaboration')) continue;
+    for (const mf of many(c, 'messageFlows')) {
+      for (const end of [mf.get<El | undefined>('sourceRef'), mf.get<El | undefined>('targetRef')]) if (end) ids.add(idOf(end));
+    }
+  }
+  return ids;
+}
+
+function sameBox(a: Box, b: Box): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+/**
  * Saves what arranging and routing set on a scope: the columns, rows, boxes
- * and used tops of its nodes and boundary events, the bands, waypoints and
- * labels of its flows, the boxes of its artifacts, the compensation links,
- * its size and lane bands. The returned function puts that back (once).
+ * and used tops of its nodes and boundary events (and the border each event
+ * sits on), the bands, waypoints and labels of its flows, the boxes of its
+ * artifacts, the compensation links, its size and lane bands. The returned
+ * function puts that back (once).
  */
 function keepArrangement(layout: ScopeLayout): () => void {
-  const shapes = layout.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => ({ n, layer: n.layer, row: n.row, band: n.band, width: n.width, box: { ...n.box }, topUsed: n.topUsed }));
+  const shapes = layout.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => ({ n, layer: n.layer, row: n.row, band: n.band, width: n.width, box: { ...n.box }, topUsed: n.topUsed, onTop: n.onTop, labelLeft: n.labelLeft }));
   const edges = layout.edges.map((e) => ({ e, bandRow: e.bandRow, bandY: e.bandY, points: e.points.map((p) => ({ ...p })), label: e.label && { ...e.label }, runsBelow: e.runsBelow, runsAbove: e.runsAbove }));
   const artifacts = layout.artifacts.map((a) => ({ a, box: { ...a.box } }));
   const compensations = layout.compensations.map((c) => ({ c, points: c.points.map((p) => ({ ...p })) }));
@@ -1165,7 +1343,12 @@ function keepArrangement(layout: ScopeLayout): () => void {
   // a used top or flow label that was missing gets undefined back (the router sets them on every node and flow);
   // a band only where there was one, as gridScope leaves it: deleting a property slows every later access to the object
   return () => {
-    for (const s of shapes) Object.assign(s.n, { layer: s.layer, row: s.row, band: s.band, width: s.width, box: s.box, topUsed: s.topUsed });
+    for (const s of shapes) {
+      Object.assign(s.n, { layer: s.layer, row: s.row, band: s.band, width: s.width, box: s.box, topUsed: s.topUsed });
+      // the border and label side only where a trial changed them (the other nodes get no such property)
+      if (s.n.onTop !== s.onTop) s.n.onTop = s.onTop;
+      if (s.n.labelLeft !== s.labelLeft) s.n.labelLeft = s.labelLeft;
+    }
     for (const s of edges) {
       Object.assign(s.e, { points: s.points, label: s.label, runsBelow: s.runsBelow, runsAbove: s.runsAbove });
       if (s.bandRow === undefined) delete s.e.bandRow;
@@ -1378,7 +1561,8 @@ function boundaryNoteBlockers(event: GNode, host: GNode): Box[] {
     out.push(b.box);
     const label = elementLabel(b, 'boundary');
     if (label) out.push(label);
-    if (b.out.length) out.push(dropLine(b.box.x + b.box.width / 2, b.box.y));
+    // an event on the top border sends its flows up
+    if (b.out.length && !b.onTop) out.push(dropLine(b.box.x + b.box.width / 2, b.box.y));
   }
   const hostY = host.box.y + host.box.height / 2;
   if (host.out.some((e) => !e.back && e.target.box.y + e.target.box.height / 2 > hostY + 1)) {
@@ -1466,7 +1650,12 @@ export function placeAnnotations(layout: ScopeLayout): void {
   const boxes: Box[] = [];
   for (const n of layout.nodes) {
     boxes.push(n.box);
-    for (const b of n.boundary) boxes.push(b.box);
+    for (const b of n.boundary) {
+      boxes.push(b.box);
+      // the label of an event on its host's top border lies above the host, where a note would go
+      const label = b.onTop ? elementLabel(b, 'boundary') : undefined;
+      if (label) boxes.push(label);
+    }
   }
   for (const es of layout.eventSubs) boxes.push(es.box);
   for (const a of layout.artifacts) if (a.kind !== 'annotation' || a.anchorNode?.host) boxes.push(a.box);

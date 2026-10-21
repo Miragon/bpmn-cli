@@ -35,6 +35,7 @@ import { describe, expect, it } from 'vitest';
 import { withLayoutDebug } from '../src/debug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
+import { titleBox } from '../src/diagram/text.js';
 import { Doc } from '../src/document.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout.js';
 import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/place.js';
@@ -1508,6 +1509,47 @@ describe('clean layout engine', () => {
     return run;
   }
 
+  /**
+   * A boundary event on its host's top border whose way goes over the top (place.ts boundariesOnTop, route.ts):
+   * straight up out of the event's top, along a run at least 15 px from every shape and label in its x range (its own
+   * label above the host included), down into the target's top (`side`: into its left side from the column gap
+   * before it). The event's label lies above the host, below the run. Returns the run's y.
+   */
+  function expectUpOverTop(L: Laid, eventId: string, targetId: string, hostId: string, what: string, side = false): number {
+    const ev = L.box(eventId), t = L.box(targetId), host = L.box(hostId);
+    expect(cy(ev), `${what}: ${eventId} on ${hostId}'s top border`).toBe(host.y);
+    const flow = flowBetween(L, eventId, targetId);
+    const pts = flow.points;
+    expect(pts, `${what}: ${pts.map((p) => `(${p.x}, ${p.y})`).join(' ')}`).toHaveLength(side ? 5 : 4);
+    expect(pts[0], `${what}: out of the event's top`).toEqual({ x: cx(ev), y: ev.y });
+    expect(pts[1]!.x, `${what}: straight up`).toBe(cx(ev));
+    const run = pts[1]!.y;
+    expect(run, `${what}: over the host's row`).toBeLessThan(host.y);
+    const tx = pts[2]!.x;
+    expect(pts[2]!.y, `${what}: along`).toBe(run);
+    if (side) {
+      expect(tx, `${what}: down the gap before ${targetId}`).toBeLessThan(t.x);
+      expect(pts.slice(3), `${what}: into ${targetId}'s left side`).toEqual([{ x: tx, y: cy(t) }, { x: t.x, y: cy(t) }]);
+    } else {
+      expect(pts[3], `${what}: down into ${targetId}'s top`).toEqual({ x: tx, y: t.y });
+      expect(tx > t.x && tx < right(t), `${what}: into ${targetId}'s top`).toBe(true);
+    }
+    const label = L.shape(eventId).label;
+    if (label) {
+      expect(bottom(label), `${what}: ${eventId}'s label above the host`).toBeLessThanOrEqual(host.y);
+      expect(label.x >= right(ev) || right(label) <= ev.x, `${what}: ${eventId}'s label beside the event`).toBe(true);
+    }
+    const lo = Math.min(cx(ev), tx), hi = Math.max(cx(ev), tx);
+    for (const plane of L.planes) {
+      const boxes = [...plane.shapes.filter((s) => !s.container).flatMap((s) => [s.box, ...(s.label ? [s.label] : [])]), ...plane.edges.filter((e) => e !== flow && e.label).map((e) => e.label!)];
+      for (const b of boxes) {
+        if (right(b) <= lo || b.x >= hi) continue;
+        expect(b.y >= run + 15 || bottom(b) <= run - 15, `${what}: the run at ${run} keeps 15 px from (${b.x}, ${b.y}, ${b.width}, ${b.height})`).toBe(true);
+      }
+    }
+    return run;
+  }
+
   /** The crossings of the drawing that one flow takes part in. */
   const crossingsOf = (L: Laid, flowId: string): string[] => L.report.crossings.filter((c) => c.startsWith(`${flowId}x`) || c.endsWith(`x${flowId}`));
 
@@ -1544,33 +1586,43 @@ describe('clean layout engine', () => {
     ]);
   }
 
-  it('lanes: a boundary flow into the last task of its host\'s row goes over the top where its run below would cross the lines of the branches in the lanes below (the maintainer\'s r013): one crossing, the run 15 px inside the lane, nothing on a lane border', async () => {
+  it('lanes: a boundary flow into the last task of its host\'s row goes over the top from the host\'s top border where its run below would cross the lines of the branches in the lanes below (the maintainer\'s r013): straight up, along and down into Pack data, no crossing, the run 15 px inside the lane, nothing on a lane border', async () => {
     // the run below lane 0's content crossed the split's drop, Notify data's into Book data, Pack order's way up and Book
-    // data's into the join (score 25)
-    const L = await layout('lanes-boundary-over-top', paymentFailedDoc());
+    // data's into the join (score 25); from the bottom border the way over the top crossed Start -> Pick invoice (score 10)
+    const lines: string[] = [];
+    const L = await withLayoutDebug(
+      (line) => lines.push(line),
+      async () => layout('lanes-boundary-over-top', paymentFailedDoc()),
+    );
     expect(L.report.through).toEqual([]);
     expect(L.report.overlaps).toEqual([]);
     expect(L.report.labelClashes).toEqual([]);
-    const run = expectOverTop(L, 'BE12', 'F', 'A1', 'r013');
+    expect(lines.filter((l) => l.startsWith('[boundary] BE12 '))).toEqual([expect.stringMatching(/^\[boundary\] BE12 moves to the top border/)]);
+    const run = expectUpOverTop(L, 'BE12', 'F', 'A1', 'r013');
     expect(run - L.box('L0').y, 'the run keeps 15 px from the lane\'s top border').toBeGreaterThanOrEqual(15);
     const flow = flowBetween(L, 'BE12', 'F');
-    // it crosses one line (into or out of Pick invoice), the drawing two (score 10)
-    expect(crossingsOf(L, flow.id)).toHaveLength(1);
-    expect(L.report.crossings.length).toBeLessThanOrEqual(2);
+    // it crosses no line; the drawing keeps the crossing the lanes force (score 5)
+    expect(crossingsOf(L, flow.id)).toEqual([]);
+    expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+    expect(layoutProblems(L.out.model.definitions).score).toBeLessThanOrEqual(5);
+    // the label to the upper right of the event, clear of the flows into and out of Pick invoice
+    const label = L.shape('BE12').label!, host = L.box('A1');
+    expect(label.x).toBeGreaterThan(right(L.box('BE12')));
+    expect(bottom(label)).toBeLessThanOrEqual(host.y);
+    expect(L.box('BE8').y, '2 days stays on the bottom border of Inform order').toBe(bottom(L.box('T5')) - 18);
     const borders = ['L0', 'L1', 'L2', 'L3'].flatMap((id) => [L.box(id).y, bottom(L.box(id))]);
     for (const p of flow.points) expect(borders, `(${p.x}, ${p.y}) off the lane borders`).not.toContain(p.y);
   });
 
-  it('lanes: a host in the first column takes the way over the top through the gap after it, none left of the content (r013 without the start event)', async () => {
+  it('lanes: a host in the first column sends its boundary flow over the top from its top border (r013 without the start event)', async () => {
     const doc = paymentFailedDoc();
     runOps(doc, [{ op: 'remove', ids: ['S'] }]);
     const L = await layout('lanes-boundary-over-top-first-column', doc);
     expect(L.report.through).toEqual([]);
     const host = L.box('A1');
     expect(host.x, 'Pick invoice comes first').toBe(Math.min(...L.planes[0]!.shapes.filter((s) => !s.container).map((s) => s.box.x)));
-    expectOverTop(L, 'BE12', 'F', 'A1', 'first column');
-    expect(flowBetween(L, 'BE12', 'F').points[2]!.x, 'up through the gap after the host').toBeGreaterThan(right(host));
-    expect(crossingsOf(L, flowBetween(L, 'BE12', 'F').id)).toHaveLength(1);
+    expectUpOverTop(L, 'BE12', 'F', 'A1', 'first column');
+    expect(crossingsOf(L, flowBetween(L, 'BE12', 'F').id)).toEqual([]);
   });
 
   it('lanes: the lane of host and target grows to hold a way over the top and its label (a lane that is not the first: the lane above keeps its place and height)', async () => {
@@ -1593,18 +1645,22 @@ describe('clean layout engine', () => {
     );
     expect(L.report.through).toEqual([]);
     expect(L.report.overlaps).toEqual([]);
-    const run = expectOverTop(L, 'BT', 'F', 'A', 'middle lane');
-    const lane = L.box('L1'), flow = flowBetween(L, 'BT', 'F'), label = flow.label!;
+    expect(L.report.labelClashes).toEqual([]);
+    // from the host's top border; the upper right of the event is the split's three-line label's, so the event's label
+    // goes to its upper left
+    const run = expectUpOverTop(L, 'BT', 'F', 'A', 'middle lane');
+    const lane = L.box('L1'), flow = flowBetween(L, 'BT', 'F'), label = flow.label!, own = L.shape('BT').label!;
+    expect(right(own), 'Payment failed left of the event').toBeLessThanOrEqual(L.box('BT').x);
     expect(run - lane.y, 'the run keeps 15 px from the lane\'s top border').toBeGreaterThanOrEqual(15);
     expect(label.y, 'its label inside the lane').toBeGreaterThanOrEqual(lane.y);
     expect(bottom(label)).toBeLessThanOrEqual(run);
-    expect(bottom(lane) - flow.points[1]!.y, 'the run below the host\'s row keeps 15 px from the bottom border').toBeGreaterThanOrEqual(15);
+    expect(contains(lane, own), 'the event\'s label inside the lane').toBe(true);
     const office = L.box('L0');
     expect(office.height, 'the empty lane above keeps its height').toBe(120);
     expect(bottom(office)).toBe(lane.y);
-    // the way below crossed the split's drops and the branches' ways into the join (four lines), this one Start's flow
-    expect(L.report.crossings).toEqual(crossingsOf(L, flow.id));
-    expect(L.report.crossings).toHaveLength(1);
+    // the way below crossed the split's drops and the branches' ways into the join (four lines), the way over the top
+    // from the bottom border Start's flow; this one none
+    expect(L.report.crossings).toEqual([]);
   });
 
   /** generated (on-34): Failed on Inform data goes on with the second join; the compensation handler under its sibling blocks the way below everything */
@@ -1622,9 +1678,10 @@ describe('clean layout engine', () => {
     { op: 'connect', source: 'BE13', target: 'C14' },
   ];
 
-  it('a boundary flow into a join on its row goes over the top into the join\'s top vertex where the ways below cross more lines (without lanes: a process, a pool and an expanded sub-process hold the run and its label)', async () => {
+  it('a boundary flow into a join on its row goes over the top from its host\'s top border into the join\'s top vertex where the ways below cross more lines (without lanes: a process, a pool and an expanded sub-process hold the event, the run and their labels)', async () => {
     // the run just below the host's row crossed the first split's drop, Notify claim's way up and the second split's
-    // drop; the way below everything would cut Undo customer
+    // drop; the way below everything would cut Undo customer; from the bottom border the way over the top crossed
+    // Start's flow
     const docs: Array<[string, Doc, string | undefined]> = [
       ['process', proc(failedToJoinOps()), undefined],
       ['pool', proc([...failedToJoinOps(), { op: 'add', kind: 'participant', id: 'Org', name: 'Company' }]), 'Org'],
@@ -1634,15 +1691,20 @@ describe('clean layout engine', () => {
       const L = await layout(`boundary-over-top-${where}`, doc);
       expect(L.report.through, where).toEqual([]);
       expect(L.report.overlaps, where).toEqual([]);
-      const run = expectOverTop(L, 'BE12', 'J8', 'A1', where);
+      expect(L.report.labelClashes, where).toEqual([]);
+      const run = expectUpOverTop(L, 'BE12', 'J8', 'A1', where);
       const j = L.box('J8'), flow = flowBetween(L, 'BE12', 'J8');
       expect(flow.points[flow.points.length - 1], `${where}: into the top vertex`).toEqual({ x: cx(j), y: j.y });
-      expect(crossingsOf(L, flow.id), where).toHaveLength(1);
-      expect(L.report.crossings, where).toHaveLength(1);
+      expect(L.report.crossings, where).toEqual([]);
+      // the compensation event stays on the bottom border, its handler right under it
+      const comp = L.box('BE13'), handler = L.box('C14');
+      expect(cy(comp), `${where}: Signal received on the bottom border`).toBe(bottom(L.box('A1')));
+      expect(cx(handler), `${where}: Undo customer under Signal received`).toBe(cx(comp));
       if (!frame) continue;
-      const f = L.box(frame), label = flow.label!;
+      const f = L.box(frame);
       expect(run - f.y, `${where}: the run keeps 15 px from the frame's top border`).toBeGreaterThanOrEqual(15);
-      expect(contains(f, label), `${where}: its label inside the frame`).toBe(true);
+      for (const label of [flow.label!, L.shape('BE12').label!]) expect(contains(f, label), `${where}: the labels inside the frame`).toBe(true);
+      expect(contains(f, L.box('BE12')), `${where}: the event inside the frame`).toBe(true);
     }
   });
 
@@ -1670,7 +1732,8 @@ describe('clean layout engine', () => {
       ]),
     );
     expect(L.report.through).toEqual([]);
-    expectOverTop(L, 'BE6', 'F', 'A1', 'om-19');
+    // from its host's top border: the run starts above the host, the loop runs below
+    expectUpOverTop(L, 'BE6', 'F', 'A1', 'om-19');
     const way = segments(flowBetween(L, 'BE6', 'F').points), loop = segments(flowBetween(L, 'D', 'A1').points);
     for (const s of way) for (const q of loop) expect(collinearOverlap(s, q), `${JSON.stringify(s)} / ${JSON.stringify(q)}`).toBeLessThanOrEqual(0);
   });
@@ -1685,7 +1748,8 @@ describe('clean layout engine', () => {
     );
     expect(lines.filter((l) => l.startsWith('[joins] F '))).toEqual(['[joins] F stays: entered over the top']);
     expect(L.report.through).toEqual([]);
-    expectOverTop(L, 'BE12', 'F', 'A1', 'r013 with data');
+    // then the event goes to the top border (boundariesOnTop runs after the joins' moves)
+    expectUpOverTop(L, 'BE12', 'F', 'A1', 'r013 with data');
   });
 
   it('lanes: a way over the top passes under no other boundary event of its host (their drops are routed after it): the three ways of Book invoice cross none of each other', async () => {
@@ -1730,9 +1794,10 @@ describe('clean layout engine', () => {
     }
   });
 
-  it('a boundary flow keeps its way below where that crosses no line but runs through labels (they move off it): a way over the top would cross one', async () => {
+  it('a boundary flow keeps its way below where that crosses no line but runs through labels (they move off it) and a way over the top from the bottom border would cross one; from the top border of its host (an expanded sub-process) it crosses none and runs through no label', async () => {
     // generated (ol-23): Cancelled by customer on Inform invoice rose straight into Book claim through the default spots
-    // of Book claim's boundary labels; the way over the top crossed Start's flow
+    // of Book claim's boundary labels; the way over the top crossed Start's flow. Book claim's events rise straight into
+    // Pack invoice, clean: they stay on the bottom border
     const L = await layout(
       'boundary-over-top-not-for-labels',
       proc([
@@ -1758,10 +1823,188 @@ describe('clean layout engine', () => {
     );
     expect(L.report.through).toEqual([]);
     expect(L.report.crossings).toEqual([]);
-    for (const [ev, t] of [['BE6', 'A5'], ['BE7', 'F'], ['BE8', 'F']] as const) {
+    for (const [ev, t] of [['BE7', 'F'], ['BE8', 'F']] as const) {
       const pts = flowBetween(L, ev, t).points;
       expect(Math.min(...pts.map((p) => p.y)), `${ev} -> ${t} enters from below`).toBe(bottom(L.box(t)));
+      expect(cy(L.box(ev)), `${ev} on the bottom border`).toBe(bottom(L.box('A5')));
     }
+    const run = expectUpOverTop(L, 'BE6', 'A5', 'SP1', 'ol-23');
+    // the event at the right end of the sub-process's top border, off its title; its label inside the lane
+    const sp = L.box('SP1'), ev = L.box('BE6'), title = titleBox(sp, 'Inform invoice')!;
+    expect(cx(ev)).toBe(right(sp) - 25);
+    expect(ev.x).toBeGreaterThan(right(title));
+    expect(run - L.box('L2').y).toBeGreaterThanOrEqual(15);
+    expect(contains(L.box('L2'), L.shape('BE6').label!)).toBe(true);
+  });
+
+  /**
+   * Pick invoice (no lanes) with the timer Payment failed going on with Pack data after the join and the error event
+   * Rejected with its own handler below (`host`: the host, an expanded sub-process with content when `sub`).
+   */
+  function twoEventsDoc(sub = false): Doc {
+    return proc([
+      start('S', 'Start'),
+      ...(sub
+        ? [{ op: 'add', kind: 'subProcess', id: 'A1', name: 'Handle claim', after: 'S' } as AddOp, start('SS', undefined, { in: 'A1' }), task('ST', 'Check claim', 'SS'), end('SE', 'ST')]
+        : [{ op: 'add', kind: 'userTask', id: 'A1', name: 'Pick invoice', after: 'S' } as AddOp]),
+      { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'task', id: 'T4', name: 'Pack order' }, { kind: 'sendTask', id: 'T5', name: 'Inform order' }] }, { nodes: [{ kind: 'serviceTask', id: 'T6', name: 'Notify data' }, { kind: 'task', id: 'T7', name: 'Book data' }] }] },
+      task('F', 'Pack data', 'J3'),
+      end('E', 'F', 'End'),
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BE12', on: 'A1', name: 'Payment failed', timer: 'P2D', nonInterrupting: true },
+      { op: 'connect', source: 'BE12', target: 'F' },
+      { op: 'add', kind: 'boundaryEvent:error', id: 'BE13', on: 'A1', name: 'Rejected', error: 'Fail' },
+      task('H', 'Call customer', 'BE13'),
+      end('HE', 'H', 'Called'),
+    ]);
+  }
+
+  it('without lanes: a boundary event whose way goes over the top sits on its host\'s top border; the other event of the host, whose handler lies below, stays on the bottom border in its place', async () => {
+    for (const sub of [false, true]) {
+      const what = sub ? 'an expanded sub-process as host' : 'a task as host';
+      const lines: string[] = [];
+      const L = await withLayoutDebug(
+        (line) => lines.push(line),
+        async () => layout(`boundary-top-border-one-of-two${sub ? '-sub' : ''}`, twoEventsDoc(sub)),
+      );
+      expect(L.report.through, what).toEqual([]);
+      expect(L.report.overlaps, what).toEqual([]);
+      expect(L.report.labelClashes, what).toEqual([]);
+      // from the bottom border the way below everything crossed Rejected's drop (score 5)
+      expect(L.report.crossings, what).toEqual([]);
+      expect(lines.filter((l) => l.startsWith('[boundary] ')), what).toEqual([expect.stringMatching(/^\[boundary\] BE12 moves to the top border/)]);
+      expectUpOverTop(L, 'BE12', 'F', 'A1', what);
+      const host = L.box('A1'), rejected = L.box('BE13');
+      expect(cx(L.box('BE12')), `${what}: Payment failed at the right end of the top border`).toBe(right(host) - 25);
+      expect(cy(rejected), `${what}: Rejected on the bottom border`).toBe(bottom(host));
+      expect(cx(rejected), `${what}: Rejected keeps its place, the second from the right`).toBe(right(host) - 69);
+      expect(flowBetween(L, 'BE13', 'H').points[0], `${what}: Rejected's flow leaves downwards`).toEqual({ x: cx(rejected), y: bottom(rejected) });
+      expect(L.shape('BE13').label!.x, `${what}: its label right of it, below the host`).toBeGreaterThan(right(rejected));
+      if (sub) expect(L.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
+      expect(layoutProblems(L.out.model.definitions).score, what).toBe(0);
+    }
+  });
+
+  it('lanes: two boundary events of one host on its top border nest their ways (the one with the nearer target on the right): no crossing, their labels apart (r013 with a second event into the join)', async () => {
+    const doc = paymentFailedDoc();
+    runOps(doc, [
+      { op: 'add', kind: 'boundaryEvent:message', id: 'BE14', on: 'A1', name: 'Paid', message: 'Paid', nonInterrupting: true },
+      { op: 'connect', source: 'BE14', target: 'J3' },
+    ]);
+    const L = await layout('lanes-boundary-top-border-two', doc);
+    expect(L.report.through).toEqual([]);
+    expect(L.report.overlaps).toEqual([]);
+    expect(L.report.labelClashes).toEqual([]);
+    // from the bottom border: score 30 (the ways below cross the branches in the lanes below, the one over the top Start's flow)
+    expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+    const host = L.box('A1');
+    expect(cx(L.box('BE14')), 'Paid (into the join) on the right').toBe(right(host) - 25);
+    expect(cx(L.box('BE12')), 'Payment failed (into Pack data) left of it').toBe(right(host) - 69);
+    const inner = expectUpOverTop(L, 'BE14', 'J3', 'A1', 'Paid');
+    const outer = expectUpOverTop(L, 'BE12', 'F', 'A1', 'Payment failed');
+    expect(outer, 'the outer way runs above the inner one').toBeLessThan(inner);
+    const paid = L.shape('BE14').label!, failed = L.shape('BE12').label!;
+    expect(paid.x, 'Paid\'s label to its upper right').toBeGreaterThan(right(L.box('BE14')));
+    expect(right(failed), 'Payment failed\'s label to its upper left').toBeLessThan(L.box('BE12').x);
+    expect(boxesOverlap(paid, failed)).toBe(false);
+  });
+
+  it('a boundary event stays on the bottom border where its way from the top border would be worse: the node of the row above stands right above its host', async () => {
+    // generated: Too late on Order goods (the "no" branch) goes on with Ship order; Check stock (the "yes" branch) is in
+    // its column on the row above, so a way up out of the top border cuts it; the way below crosses Wait for goods' way
+    // into the join and stays
+    const lines: string[] = [];
+    const L = await withLayoutDebug(
+      (line) => lines.push(line),
+      async () =>
+        layout(
+          'boundary-top-border-worse',
+          proc([
+            start('S', 'Start'),
+            task('A', 'Receive order', 'S'),
+            { op: 'split', after: 'A', kind: 'exclusiveGateway', id: 'G', joinId: 'J', name: 'In stock?', branches: [{ flowName: 'yes', nodes: [{ kind: 'task', id: 'X', name: 'Check stock' }, { kind: 'task', id: 'Y', name: 'Reserve stock' }] }, { flowName: 'no', nodes: [{ kind: 'userTask', id: 'H', name: 'Order goods' }] }, { flowName: 'later', nodes: [{ kind: 'task', id: 'Z', name: 'Notify customer' }, { kind: 'task', id: 'Z2', name: 'Wait for goods' }] }] },
+            task('F', 'Ship order', 'J'),
+            end('E', 'F', 'Shipped'),
+            { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', on: 'H', name: 'Too late', timer: 'P2D', nonInterrupting: true },
+            { op: 'connect', source: 'BT', target: 'F' },
+          ]),
+        ),
+    );
+    expect(lines.filter((l) => l.startsWith('[boundary] '))).toEqual([expect.stringMatching(/^\[boundary\] BT stays on the bottom border: .* \(not up\)$/)]);
+    const host = L.box('H'), ev = L.box('BT');
+    expect(cy(ev)).toBe(bottom(host));
+    expect(flowBetween(L, 'BT', 'F').points[0]).toEqual({ x: cx(ev), y: bottom(ev) });
+    expect(L.report.through).toEqual([]);
+    expect(L.report.crossings).toHaveLength(1);
+  });
+
+  it('lanes: a boundary event\'s flow to an end below whose drop is blocked runs in a channel its lane holds 15 px from its border, also when no way below holds the lane open (m-9: the other event goes over the top from its top border)', async () => {
+    // generated (m-9): 2 days on Book order drops through the data store into a channel below Undo data; Cancelled by
+    // customer's way below everything held the lane open, from the top border it no longer does (the channel lay on the
+    // lane border)
+    const L = await layout(
+      'lanes-boundary-channel-held',
+      proc([
+        start('S', 'Start'),
+        { op: 'add', kind: 'serviceTask', id: 'A1', name: 'Call invoice', after: 'S' },
+        { op: 'add', kind: 'serviceTask', id: 'A2', name: 'Book order', after: 'A1' },
+        task('F', 'Check invoice', 'A2'),
+        end('E', 'F', 'End'),
+        { op: 'add', kind: 'boundaryEvent:compensate', id: 'BE3', on: 'A2' },
+        { op: 'add', kind: 'task', id: 'C4', name: 'Undo data', in: 'P' },
+        { op: 'connect', source: 'BE3', target: 'C4' },
+        { op: 'add', kind: 'boundaryEvent:message', id: 'BE5', on: 'A1', name: 'Cancelled by customer', message: 'Update', nonInterrupting: true },
+        { op: 'connect', source: 'BE5', target: 'F', name: 'timeout' },
+        { op: 'add', kind: 'boundaryEvent:timer', id: 'BE6', on: 'A2', name: '2 days', timer: 'PT1H' },
+        end('EE7', 'BE6', 'Escalation finished'),
+        { op: 'add', kind: 'dataStoreReference', id: 'DU8', name: 'Event log', in: 'P' },
+        { op: 'connect', source: 'BE6', target: 'DU8' },
+        { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+        { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['S', 'A1', 'A2', 'F', 'E', 'C4', 'EE7'] },
+        { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: [] },
+      ]),
+    );
+    expectUpOverTop(L, 'BE5', 'F', 'A1', 'm-9');
+    const channel = flowBetween(L, 'BE6', 'EE7').points[1]!.y;
+    expect(bottom(L.box('L0')) - channel, 'the channel 15 px inside its lane').toBeGreaterThanOrEqual(15);
+  });
+
+  it('pools: a message flow into the top of a host keeps off the boundary event on its top border and its label', async () => {
+    const doc = twoEventsDoc();
+    runOps(doc, [
+      { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
+      { op: 'add', kind: 'participant', id: 'Cust', name: 'Customer' },
+      start('CS', 'Order', { in: 'Cust' }),
+      { op: 'add', kind: 'sendTask', id: 'CT', name: 'Send invoice', after: 'CS' },
+      end('CE', 'CT', 'Sent'),
+      { op: 'connect', source: 'CT', target: 'A1' },
+    ]);
+    // the customer's pool above: the message flow enters Pick invoice's top
+    const collaboration = [...doc.byId()].find(([, el]) => is(el, 'bpmn:Collaboration'))![0];
+    runOps(doc, [{ op: 'order', id: collaboration, pools: ['Cust', 'Org'] }]);
+    const L = await layout('pools-boundary-top-border-message', doc);
+    expectUpOverTop(L, 'BE12', 'F', 'A1', 'with a message flow into Pick invoice');
+    const message = L.planes.flatMap((p) => p.edges).find((e) => is(e.el, 'bpmn:MessageFlow'))!;
+    const ev = L.box('BE12'), label = L.shape('BE12').label!;
+    expect(message.points[message.points.length - 1]!.y, 'into the top of Pick invoice').toBe(L.box('A1').y);
+    for (const s of segments(message.points)) {
+      expect(segmentHitsBox(s, ev, 0), `${JSON.stringify(s)} keeps off Payment failed`).toBe(false);
+      expect(segmentHitsBox(s, label, 0), `${JSON.stringify(s)} keeps off its label`).toBe(false);
+    }
+    expect(L.report.crossings).toEqual([]);
+  });
+
+  it('a boundary event with a note keeps the bottom border (the note hangs below the host): its way goes over the top from there (r013 with a note on the timer)', async () => {
+    const doc = paymentFailedDoc();
+    runOps(doc, [{ op: 'add', kind: 'textAnnotation', id: 'N', text: 'Reminder after two days', to: 'BE12' }]);
+    const lines: string[] = [];
+    const L = await withLayoutDebug(
+      (line) => lines.push(line),
+      async () => layout('lanes-boundary-note-bottom', doc),
+    );
+    expect(lines.filter((l) => l.startsWith('[boundary] '))).toEqual([]);
+    expect(cy(L.box('BE12'))).toBe(bottom(L.box('A1')));
+    expectOverTop(L, 'BE12', 'F', 'A1', 'with a note');
+    expect(L.box('N').y, 'the note below the host').toBeGreaterThan(bottom(L.box('A1')));
   });
 
   /** start -> "Poll status" -> end with a named self loop on the task. */
@@ -2403,9 +2646,9 @@ describe('clean layout engine', () => {
       expect((JSON.parse(now!) as { crossings: number }).crossings, what).toBeLessThanOrEqual((JSON.parse(was!) as { crossings: number }).crossings);
       expect(L.report.through, what).toEqual([]);
       expect(L.report.overlaps, what).toEqual([]);
-      // with the boundary paths the timer path goes over the top (it crosses Start -> Pick invoice), and the crossing the
-      // lanes force stays
-      if (full) expect(L.report.crossings, what).toHaveLength(2);
+      // with the boundary paths the timer path goes over the top from Pick invoice's top border (it crosses nothing), and
+      // the crossing the lanes force stays
+      if (full) expect(L.report.crossings, what).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
       if (!full) {
         // only the crossing the lanes force: Pack order's way up into Inform order crosses Book data's into the join
         expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);

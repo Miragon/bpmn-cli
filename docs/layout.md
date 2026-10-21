@@ -113,10 +113,23 @@ reported as `W_LAYOUT_DI_NOT_CREATED`.
   flow goes over the top instead: down out of the event, a short run into the column gap beside
   the host (not under another of its events), up past the host's row, along a run 15 px above the
   shapes and labels it passes, and down into the target's top (a gateway's top vertex); the lane,
-  pool or sub-process grows to hold that run and the flow's label, and loops keep off it. A handler
+  pool or sub-process grows to hold that run and the flow's label, and loops keep off it. Such an
+  event (also one whose way would go over the top from there) sits on its host's top border instead
+  where that draws better: its flow leaves it straight up to the run (15 px above the shapes and
+  labels it passes, its own label included), along, and down into the target's top or into its left
+  side from the column gap before it; the event sits at the right end of the top border (of two,
+  the one with the nearer target on the right, so their ways nest), its label above the host to the
+  upper right of the event (to the upper left where that is taken, and for the second of two). The
+  drawing is routed both ways, and the top border is kept only with fewer crossings, lines through
+  shapes or lines through labels, or as many and a shorter way with fewer bends, with the event and
+  its label clear of the other lines and labels and no straight line or straight rise lost. The
+  host's other events keep their places; an event with data or a note, a compensation event and the
+  end of a message flow stay on the bottom border. A handler
   below that a straight drop cannot reach is entered through such a run below the host's row: down
   to it, right into the column gap after the host, down, right. Neither runs along the host's
   bottom border, unless every such way cuts a shape (a data object hanging right under the event).
+  Where that run cuts a shape too, the flow drops to a channel below everything between the two,
+  which its lane also keeps 15 px from its border.
   Loops run underneath the elements they span (and the labels below their events) and enter their
   target from below (over the top only
   when that avoids a crossing), as do flows into a join. The entries of a join from below, loops

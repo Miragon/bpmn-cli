@@ -18,7 +18,10 @@
  *    (it cuts a shape, e.g. a node of a lower lane, or runs on top of a
  *    drawn flow), the leg jogs sideways right outside the element into the
  *    free vertical corridor (usually a column gap) with the fewest cuts,
- *    crossings and parallel runs, and runs to the border there. A flow whose pools are not neighbours uses the gap
+ *    crossings and parallel runs, and runs to the border there; the end's own
+ *    boundary events are no obstacles, but a leg up keeps off those on the
+ *    top border (route.ts: the engine puts one there whose way goes over the
+ *    top) and jogs above them. A flow whose pools are not neighbours uses the gap
  *    next to its own pool, a vertical run right of all pools and the gap next
  *    to the other pool. A pool end docks right above / below the other end.
  *  - deterministic; obstacles are leaf shapes (no pools, lanes or expanded
@@ -46,7 +49,7 @@ export interface MessageFlowJob {
   target: El;
   sourceBox: Box;
   targetBox: Box;
-  /** boxes that belong to the end itself (its boundary events): never obstacles */
+  /** boxes that belong to the end itself (its boundary events): no obstacles, but for a leg up those on its top border */
   sourceOwn: Box[];
   targetOwn: Box[];
   sourcePool?: MessagePool;
@@ -133,9 +136,18 @@ interface Leg {
   x: number;
 }
 
-/** shapes that count as obstacles for an end (the pool's obstacles are the same box objects as the ends) */
-function obstaclesFor(pool: MessagePool, box: Box, own: Box[]): Box[] {
-  return pool.obstacles.filter((o) => o !== box && !own.includes(o));
+/**
+ * shapes that count as obstacles for an end (the pool's obstacles are the same box objects as the ends): not the end,
+ * nor its boundary events, but for a leg up those on its top border
+ */
+function obstaclesFor(pool: MessagePool, box: Box, own: Box[], up = false): Box[] {
+  const mine = up ? own.filter((o) => !onTop(o, box)) : own;
+  return pool.obstacles.filter((o) => o !== box && !mine.includes(o));
+}
+
+/** a boundary event box on the top border of its host's box (the engine puts one there whose way goes over the top) */
+function onTop(o: Box, box: Box): boolean {
+  return center(o).y < center(box).y;
 }
 
 /** shapes the straight vertical from an element to its pool border cuts, plus 1 when it runs on top of a drawn line */
@@ -145,7 +157,7 @@ function straightHits(box: Box, own: Box[], pool: MessagePool | undefined, up: b
   const from = up ? box.y : box.y + box.height;
   const to = up ? pool.box.y : pool.box.y + pool.box.height;
   const line = [{ x, y: from }, { x, y: to }];
-  return hits(line, obstaclesFor(pool, box, own)) + (alongCost(line, pool.lines) >= 300 ? 1 : 0);
+  return hits(line, obstaclesFor(pool, box, own, up)) + (alongCost(line, pool.lines) >= 300 ? 1 : 0);
 }
 
 /** Free x positions for a vertical between `y1` and `y2` inside the pool: gaps between the shapes in that corridor. */
@@ -189,7 +201,7 @@ function legOf(box: Box, own: Box[], pool: MessagePool | undefined, up: boolean,
   const straight = (x: number): Leg => ({ points: [{ x, y: edge }], x });
   if (!pool || is(el, 'bpmn:Participant')) return straight(exits[0]!);
   const border = up ? pool.box.y : pool.box.y + pool.box.height;
-  const obstacles = obstaclesFor(pool, box, own);
+  const obstacles = obstaclesFor(pool, box, own, up);
   const score = (pts: Point[]): number => hits(pts, obstacles) * 1000 + crossings(pts, pool.lines) * 5 + alongCost(pts, pool.lines);
   // a straight line that cuts no shape and does not run on top of a drawn flow: the middle first, else the one crossing the fewest lines
   const clean = exits
@@ -197,8 +209,8 @@ function legOf(box: Box, own: Box[], pool: MessagePool | undefined, up: boolean,
     .filter(({ line }) => !hits(line, obstacles) && alongCost(line, pool.lines) < 300)
     .map(({ x, line, i }) => ({ x, score: i === 0 ? -1 : crossings(line, pool.lines) * 5 + i }));
   if (clean.length) return straight(clean.reduce((a, b) => (b.score < a.score ? b : a)).x);
-  // the jog runs below the boundary events hanging out of the bottom border
-  const reach = up ? box.y : Math.max(box.y + box.height, ...own.map((o) => o.y + o.height));
+  // the jog runs below the boundary events hanging out of the bottom border (a leg up: above those on the top border)
+  const reach = up ? Math.min(box.y, ...own.filter((o) => onTop(o, box)).map((o) => o.y)) : Math.max(box.y + box.height, ...own.map((o) => o.y + o.height));
   const jy = Math.round(up ? reach - JOG : reach + JOG);
   let best: { leg: Leg; score: number } = { leg: straight(exits[0]!), score: score([{ x: exits[0]!, y: edge }, { x: exits[0]!, y: border }]) };
   exits.forEach((ex, i) => {

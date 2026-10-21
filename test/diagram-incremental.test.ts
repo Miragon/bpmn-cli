@@ -606,6 +606,54 @@ describe('incremental placement', () => {
     expect(r.layout.placed).toEqual([]);
     expect(r.layout.moved).toEqual([]);
   });
+
+  it('an engine drawing with a boundary event on its host\'s top border (its way over the top) stays editable: a task after its target, a task into its flow and a reroute keep the event there and its flow leaving it by its top', async () => {
+    // the clean engine puts Payment failed on Pick invoice's top border (layout/place.ts boundariesOnTop); Rejected,
+    // whose handler lies below, stays on the bottom border
+    const ops: Op[] = [
+      { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
+      { op: 'add', kind: 'userTask', id: 'A1', name: 'Pick invoice', after: 'S' },
+      { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'task', id: 'T4', name: 'Pack order' }, { kind: 'sendTask', id: 'T5', name: 'Inform order' }] }, { nodes: [{ kind: 'serviceTask', id: 'T6', name: 'Notify data' }, { kind: 'task', id: 'T7', name: 'Book data' }] }] },
+      { op: 'add', kind: 'task', id: 'F', name: 'Pack data', after: 'J3' },
+      { op: 'add', kind: 'endEvent', id: 'E', name: 'End', after: 'F' },
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BE12', on: 'A1', name: 'Payment failed', timer: 'P2D', nonInterrupting: true },
+      { op: 'connect', source: 'BE12', target: 'F' },
+      { op: 'add', kind: 'boundaryEvent:error', id: 'BE13', on: 'A1', name: 'Rejected', error: 'Fail' },
+      { op: 'add', kind: 'task', id: 'H', name: 'Call customer', after: 'BE13' },
+      { op: 'add', kind: 'endEvent', id: 'HE', name: 'Called', after: 'H' },
+    ];
+    const xml = await engineXml(ops);
+    const doc = await Doc.fromXml(xml);
+    const drawn = shapes(doc);
+    const ev = drawn.get('BE12')!;
+    const cx = (s: DShape): number => s.bounds.x + s.bounds.width / 2;
+    expect(cy(ev), 'on the top border').toBe(drawn.get('A1')!.bounds.y);
+    expect(cy(drawn.get('BE13')!), 'Rejected on the bottom border').toBe(bottom(drawn.get('A1')!));
+    expect(layoutProblems(doc.definitions).score).toBe(0);
+    const flow = flowFrom(doc, 'BE12', 'F');
+    const top = { x: cx(ev), y: ev.bounds.y };
+    expect(edges(doc).get(flow)!.points[0]).toEqual(top);
+    // a task after the target: nothing of the event's way changes
+    const after = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Check payment', after: 'F' }], { layout: 'incremental' });
+    expect(after.r.layout.mode).toBe('incremental');
+    expect(addedKinds(after.r)).toEqual([]);
+    expect(shapes(after.after).get('BE12')!.bounds).toEqual(ev.bounds);
+    expect(edges(after.after).get(flow)!.points[0]).toEqual(top);
+    // a task into the event's flow goes above the host, the flow into it leaves the event by its top
+    const into = await run(xml, [{ op: 'add', kind: 'task', id: 'R', name: 'Remind customer', flow }], { layout: 'incremental' });
+    expect(addedKinds(into.r)).toEqual([]);
+    const now = shapes(into.after);
+    expect(bottom(now.get('R')!), 'Remind customer above Pick invoice').toBeLessThan(now.get('A1')!.bounds.y);
+    const up = edges(into.after).get(flowFrom(into.after, 'BE12', 'R'))!;
+    expect(up.points[0]).toEqual({ x: cx(now.get('BE12')!), y: now.get('BE12')!.bounds.y });
+    expect(orthogonal(up)).toBe(true);
+    // routed again, the flow leaves by the top
+    const again = await run(xml, [{ op: 'route', id: flow }], { layout: 'incremental' });
+    expect(addedKinds(again.r)).toEqual([]);
+    const rerouted = edges(again.after).get(flow)!;
+    expect(rerouted.points[0]!.y).toBe(ev.bounds.y);
+    expect(orthogonal(rerouted)).toBe(true);
+  });
 });
 
 /* ------------------------------------------------------------------ */
