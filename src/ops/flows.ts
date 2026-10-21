@@ -778,7 +778,8 @@ export type PlacementOptions = Placement & FlowOptions & { to?: string };
 /**
  * A compensation handler (isForCompensation=true) cannot carry boundary
  * events: Camunda 7, CIB seven and Operaton reject the deployment ("Invalid
- * reference in boundary event").
+ * reference in boundary event"). Neither can an event sub-process: it has no
+ * place in the flow to interrupt or leave (bpmn-js does not attach to one).
  */
 export function assertBoundaryHost(host: El, boundary?: El): void {
   if (host.get<boolean | undefined>('isForCompensation')) {
@@ -786,6 +787,13 @@ export function assertBoundaryHost(host: El, boundary?: El): void {
       element: boundary ? idOf(boundary) : idOf(host),
       related: [idOf(host)],
       hint: `Attach the boundary event to the activity that is compensated, or make ${idOf(host)} a normal activity first (\`bpmn set <file> ${idOf(host)} isForCompensation=false\`).`,
+    });
+  }
+  if (isEventSubProcess(host)) {
+    throw modelError('E_INVALID_HOST', `${label(host)} is an event sub-process; it cannot carry boundary events`, {
+      element: boundary ? idOf(boundary) : idOf(host),
+      related: [idOf(host)],
+      hint: `Attach the boundary event to an activity in the flow; an event sub-process is triggered by its start event (\`bpmn add <file> eventSubProcess:<trigger> "<Name>" --in <scope>\`).`,
     });
   }
 }
