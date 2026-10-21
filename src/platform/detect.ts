@@ -20,10 +20,10 @@
  * camunda as the fallback), which Camunda 7 and CIB seven ignore. A file that
  * uses the operaton namespace therefore targets Operaton: `operaton` says so
  * (and the detail line), and the profile reads its content the way Operaton
- * does (platform/c7.ts).
+ * does (platform/profiles/c7.ts).
  */
-import { KNOWN_NAMESPACES, type Doc } from '../document.js';
-import { isBpmnElement, walk, type El } from '../model.js';
+import { KNOWN_NAMESPACES, type Doc } from '../model/document.js';
+import { isBpmnElement, walk, type El } from '../model/moddle.js';
 import { CAMUNDA_URI, C7_URIS, OPERATON_URI, ZEEBE_URI } from './descriptor.js';
 
 export { C7_URIS, OPERATON_URI } from './descriptor.js';

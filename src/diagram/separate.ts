@@ -32,7 +32,7 @@
  *   every unit active and movable. For `bpmn layout --tidy` and the `tidy`
  *   format op.
  */
-import { layoutDebug, layoutDebugOn } from '../debug.js';
+import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
 import { bottom, right, type Box } from './geom.js';
 import { frameOf, isLeaf, type DShape, type Plane } from './plane.js';
 import { fitInFrame, shiftShape, unitBox } from './space.js';

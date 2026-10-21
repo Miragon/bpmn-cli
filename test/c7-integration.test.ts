@@ -16,18 +16,18 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseOps } from '../src/batch.js';
-import { Doc } from '../src/document.js';
-import { renderDetail, renderExtensionList } from '../src/format.js';
-import { kindsJson, kindsText } from '../src/guide.js';
-import { is, type El } from '../src/model.js';
+import { parseOps } from '../src/ops/batch.js';
+import { Doc } from '../src/model/document.js';
+import { renderDetail, renderExtensionList } from '../src/report/view-text.js';
+import { kindsJson, kindsText } from '../src/report/guide.js';
+import { is, type El } from '../src/model/moddle.js';
 import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/ops/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { validateDoc } from '../src/validate.js';
-import { elementDetail } from '../src/view.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { validateDoc } from '../src/validate/structural.js';
+import { elementDetail } from '../src/query/model-view.js';
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 

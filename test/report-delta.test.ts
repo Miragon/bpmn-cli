@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { mutationSummary, renderMutation, renderSummary, warningLines } from '../src/report.js';
+import { mutationSummary, renderMutation, renderSummary, warningLines } from '../src/report/command-report.js';
 import { definitionsXml } from './helpers.js';
 
 const ROOT = join(import.meta.dirname, '..');

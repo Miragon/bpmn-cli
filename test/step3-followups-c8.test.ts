@@ -17,9 +17,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
-import { Doc } from '../src/document.js';
-import { cronProblem, dateTimeRangeProblem, validCycle, validDateTime } from '../src/platform/c8.js';
-import { loadProfiles, runProfile } from '../src/platform/profile.js';
+import { Doc } from '../src/model/document.js';
+import { cronProblem, dateTimeRangeProblem, validCycle, validDateTime } from '../src/platform/profiles/c8.js';
+import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

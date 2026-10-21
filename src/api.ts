@@ -21,14 +21,14 @@
  * whether it is byte-identical to the input (nothing to save), and what the
  * CLI prints with --json (changes, warnings, layout, validation, import
  * warnings; the model view with `show`), without the XML. renderMutation
- * (src/report.ts) gives the CLI's text for it. The CLI's guards apply: a
+ * (src/report/command-report.ts) gives the CLI's text for it. The CLI's guards apply: a
  * lossy import (E_IMPORT_LOSSY), validation errors the ops would introduce
  * (E_VALIDATION) and content a retype would delete (E_WOULD_DROP_CONTENT)
  * are refused unless `force`; the layout modes, the format ops and the
  * platform profile's new findings work as in the CLI, a host's own
  * validators (`validators`) run in the same transaction, `keepFlowIds`
  * keeps flow ids like `--keep-flow-ids`, and `conventions` are the declared
- * id conventions new ids follow (src/conventions.ts; a host that lints with
+ * id conventions new ids follow (src/ids/conventions.ts; a host that lints with
  * element-id-naming builds them from the same configuration). The result
  * keeps the input's text wherever the ops changed nothing (the
  * text-preserving step).
@@ -37,25 +37,25 @@
  * candidates, hint, op), exactly what the CLI prints with --json; the input
  * string is never modified.
  */
-import { parseOps } from './batch.js';
-import type { DebugSink } from './debug.js';
+import { parseOps } from './ops/batch.js';
+import type { DebugSink } from './shared/debug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
-import { layoutView, type LayoutView } from './diagram/view.js';
-import { aroundView, elementContext, type AroundView, type ElementContext } from './context.js';
-import type { BpmnlintSeverity } from './bpmnlint.js';
-import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './conventions.js';
-import { Doc, type NewDocOptions } from './document.js';
-import { CliError, usageError } from './errors.js';
-import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './format.js';
-import { assertKindToken } from './kinds.js';
-import type { LayoutEngine } from './layout.js';
+import { layoutView, type LayoutView } from './query/layout-view.js';
+import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
+import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
+import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
+import { Doc, type NewDocOptions } from './model/document.js';
+import { CliError, usageError } from './shared/errors.js';
+import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
+import { assertKindToken } from './model/kinds.js';
+import type { LayoutEngine } from './layout/index.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
-import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline.js';
-import type { PlatformChoice } from './platform/profile.js';
-import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report.js';
-import type { Validator, ValidatorFinding } from './validators.js';
-import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './view.js';
+import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline/index.js';
+import type { PlatformChoice } from './platform/profiles/profile.js';
+import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
+import type { Validator, ValidatorFinding } from './validate/validators.js';
+import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
 export interface EditOptions {

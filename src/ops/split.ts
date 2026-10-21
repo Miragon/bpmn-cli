@@ -16,7 +16,7 @@
  *         reach it: when one continues, its end connects to the old
  *         successor directly (no pass-through gateway), when none does no
  *         join is created either.
- *  - Typed ops of the library skip parseOps (src/batch.ts): before the split
+ *  - Typed ops of the library skip parseOps (src/ops/batch.ts): before the split
  *    changes anything, `branches` must be an array of objects, each with a
  *    `nodes` array (empty allowed) of objects with a string `kind`, else
  *    E_USAGE in parseOps' words (the path starts with `split`, not
@@ -24,14 +24,14 @@
  *    is checked when addElement creates it.
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError, type CliError } from '../errors.js';
-import { parseKind, KindError } from '../kinds.js';
-import { is, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
-import { anchorContext, keyRequest, labelOf } from '../idstyle.js';
-import { BRANCH_FIELDS, NODE_FIELDS } from '../batch.js';
-import { withSuffix } from '../ids.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError, type CliError } from '../shared/errors.js';
+import { parseKind, KindError } from '../model/kinds.js';
+import { is, type El } from '../model/moddle.js';
+import { ChangeSet } from '../model/change-set.js';
+import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
+import { withSuffix } from '../ids/slugs.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';

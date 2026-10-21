@@ -262,7 +262,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   beforeAll(async () => {
     bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
-    const profileOf = (c: Chunk): 'c7' | 'c8' | undefined => (c.inputs.includes('src/platform/c7.ts') ? 'c7' : c.inputs.includes('src/platform/c8.ts') ? 'c8' : undefined);
+    const profileOf = (c: Chunk): 'c7' | 'c8' | undefined => (c.inputs.includes('src/platform/profiles/c7.ts') ? 'c7' : c.inputs.includes('src/platform/profiles/c8.ts') ? 'c8' : undefined);
     files = bundle.chunks.map((c) => {
       const text = c.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, q: string, name: string) => `${q}./${name}.mjs${q}`);
       return { name: basename(c.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(c) };
@@ -303,7 +303,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
     expect(bundle.chunks.filter((c) => c.entry).map((c) => c.entryPoint)).toEqual(['src/index.ts']);
     expect(bundle.entry.entryPoint).toBe('src/index.ts');
-    expect(bundle.chunks.map((c) => c.entryPoint)).toEqual(expect.arrayContaining(['src/platform/c7.ts', 'src/platform/c8.ts']));
+    expect(bundle.chunks.map((c) => c.entryPoint)).toEqual(expect.arrayContaining(['src/platform/profiles/c7.ts', 'src/platform/profiles/c8.ts']));
   });
 
   it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
@@ -321,15 +321,15 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       return seen;
     };
     const core = reach('src/index.ts');
-    expect(core.has('src/model.ts') && core.has('src/platform/profile.ts')).toBe(true);
-    for (const rules of ['src/platform/c7.ts', 'src/platform/c8.ts']) {
+    expect(core.has('src/model/moddle.ts') && core.has('src/platform/profiles/profile.ts')).toBe(true);
+    for (const rules of ['src/platform/profiles/c7.ts', 'src/platform/profiles/c8.ts']) {
       const own = [...reach(rules)];
       expect(own.filter((f) => core.has(f)), rules).toEqual([]);
       expect(own.flatMap((f) => bundle.graph[f] ?? []).filter((g) => core.has(g)), rules).toEqual([]);
       const chunk = bundle.chunks.find((c) => c.inputs.includes(rules))!;
       expect(chunk.imports.filter((p) => initial.has(p)), rules).toEqual([]);
     }
-    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/c8.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/feel.ts', 'src/platform/schema-text.ts']));
+    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/profiles/c8.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/feel.ts', 'src/platform/profiles/schema-text.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {

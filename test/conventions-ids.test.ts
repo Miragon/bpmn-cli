@@ -1,6 +1,6 @@
 /**
  * Edits follow the file: generated ids take the id style of the file they
- * are written into (src/idstyle.ts) and say what they name (never a hash or
+ * are written into (src/ids/style.ts) and say what they name (never a hash or
  * a running number: names, kind + context, the ends of a flow), names are
  * transliterated the German way. All fixtures are synthetic.
  */
@@ -9,12 +9,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
-import { Doc } from '../src/document.js';
-import { IdStyle } from '../src/idstyle.js';
+import { Doc } from '../src/model/document.js';
+import { IdStyle } from '../src/ids/style.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
-import { guideText, kindsJson } from '../src/guide.js';
-import { mutateDoc } from '../src/pipeline.js';
+import { guideText, kindsJson } from '../src/report/guide.js';
+import { mutateDoc } from '../src/pipeline/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

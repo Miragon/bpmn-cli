@@ -25,7 +25,7 @@
  * Encoding: a file is read in the encoding its XML declaration names
  * (decodeXmlBytes: UTF-8 without one, UTF-16 by its byte order mark), so
  * that the characters of an ISO-8859-1 / Windows-1252 file survive; every
- * write is UTF-8, and a changed result declares UTF-8 (src/encoding.ts).
+ * write is UTF-8, and a changed result declares UTF-8 (src/xml/encoding.ts).
  *
  * Validators (MutationOptions.validators): they see the file being written
  * (the `out` target with `out`) or checked as `ctx.file`, unless `file` names
@@ -37,18 +37,18 @@
  * or `lintConfig`, runs as an advisory validator next to the host's
  * (`lintBlocks`: a blocking one); without a .bpmnlintrc nothing is loaded.
  * Its @miragon/rules/element-id-naming gives the id conventions new ids
- * follow (src/conventions.ts), unless the host passes `conventions` itself
+ * follow (src/ids/conventions.ts), unless the host passes `conventions` itself
  * (or a validator named bpmnlint: then its own conventions, if any).
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
-import { Doc } from '../document.js';
-import { declaredEncoding, isUtf8 } from '../encoding.js';
-import { ioError } from '../errors.js';
+import { Doc } from '../model/document.js';
+import { declaredEncoding, isUtf8 } from '../xml/encoding.js';
+import { ioError } from '../shared/errors.js';
 import type { Op } from '../ops/types.js';
-import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline.js';
-import type { IdConventions } from '../conventions.js';
-import type { Validator } from '../validators.js';
+import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline/index.js';
+import type { IdConventions } from '../ids/conventions.js';
+import type { Validator } from '../validate/validators.js';
 import { projectLint, type FileBpmnlintOptions } from './bpmnlint.js';
 
 /** Where and whether the node layer writes the result of the in-memory pipeline. */

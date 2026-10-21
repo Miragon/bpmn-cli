@@ -1,6 +1,6 @@
 /**
- * Step 3: closing empty space in a kept drawing (src/diagram/compact.ts and
- * the `compact` / negative `space` format ops in src/diagram/ops.ts).
+ * Step 3: closing empty space in a kept drawing (src/format/compact.ts and
+ * the `compact` / negative `space` format ops in src/format/index.ts).
  *
  *  - compact closes empty columns and rows and shrinks lanes, pools and
  *    expanded sub-processes to their content, keeping the order; it never
@@ -15,13 +15,13 @@
  * keeps them (see test/diagram-format.test.ts), or written by hand.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { isCliError } from '../src/errors.js';
-import type { El } from '../src/model.js';
+import { isCliError } from '../src/shared/errors.js';
+import type { El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 import { definitionsXml } from './helpers.js';
 
 const BASE: Op[] = [

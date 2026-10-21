@@ -41,7 +41,7 @@
  *    `stale(edge, plane, further)` is true (`further`: its diagram shows a
  *    root an earlier diagram already shows, a second view); returns the ids
  *    of their elements in document order. Used for the edges of flows whose
- *    ends changed (incremental.ts pruneReEnded).
+ *    ends changed (layout/incremental.ts pruneReEnded).
  *  - colorsOf(defs) / applyColors(defs, colors): the bpmn-js colour
  *    attributes by element id, used to carry colours over a full redraw.
  *  - setSwatch(di, swatch) writes one colour of the bpmn-js colour
@@ -53,8 +53,8 @@
  *    back (the swatch name, or 'custom').
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import { cutAt, MAX_ID } from '../ids.js';
-import { addTo, is, removeFrom, type El } from '../model.js';
+import { cutAt, MAX_ID } from '../ids/slugs.js';
+import { addTo, is, removeFrom, type El } from '../model/moddle.js';
 import { roundPoints, sameBox, samePoints, type Box, type Point } from './geom.js';
 import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 
@@ -136,7 +136,7 @@ const MAX_DI = MAX_ID - 3;
 /**
  * The DI id of an element in a style (`<id>_di`, `BPMNShape_<id>`,
  * `Edge_<id>`), at most MAX_ID characters less room for a collision suffix:
- * a long element id is cut at a word boundary (src/ids.ts cutAt), like the
+ * a long element id is cut at a word boundary (src/ids/slugs.ts cutAt), like the
  * element ids themselves. `legacy`: cut as 0.6 cut (recognising the DI ids
  * it wrote).
  */
@@ -173,7 +173,7 @@ export function diIdsFit(defs: El): boolean {
   return true;
 }
 
-/** What followDiIds asks and changes: the document's id registry (src/ids.ts IdRegistry). */
+/** What followDiIds asks and changes: the document's id registry (src/ids/slugs.ts IdRegistry). */
 export interface IdClaims {
   has(id: string): boolean;
   claim(id: string): void;

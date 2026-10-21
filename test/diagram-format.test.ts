@@ -1,5 +1,5 @@
 /**
- * Format operations (src/diagram/ops.ts) through the write pipeline: place,
+ * Format operations (src/format/index.ts) through the write pipeline: place,
  * align, color, label, route, space, tidy and lane order, their refusals,
  * batch semantics (after the semantic ops, in batch order, all or nothing)
  * and the persistence of formatting over later writes; plus the read side
@@ -12,18 +12,18 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OPS_SCHEMA, parseOps } from '../src/batch.js';
-import { kindsJson } from '../src/guide.js';
+import { OPS_SCHEMA, parseOps } from '../src/ops/batch.js';
+import { kindsJson } from '../src/report/guide.js';
 import { FORMAT_OP_NAMES } from '../src/ops/types.js';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { layoutView } from '../src/diagram/view.js';
-import { isCliError } from '../src/errors.js';
-import { renderLayoutView } from '../src/format.js';
-import type { El } from '../src/model.js';
+import { layoutView } from '../src/query/layout-view.js';
+import { isCliError } from '../src/shared/errors.js';
+import { renderLayoutView } from '../src/report/view-text.js';
+import type { El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */

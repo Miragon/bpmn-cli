@@ -11,12 +11,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { readPlanes, semantics } from '../src/diagram/plane.js';
 import { inside } from '../src/diagram/geom.js';
-import { isCliError } from '../src/errors.js';
+import { isCliError } from '../src/shared/errors.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 
 /** S -> Sub (S1 -> T1 -> E1) -> G -> B -> E, G -> C -> E2: the sub-process's end event E1 lies left of the outer end events. */
 const MODEL: Op[] = [

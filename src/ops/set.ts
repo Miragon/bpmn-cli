@@ -86,16 +86,16 @@
  * (`changeOf`, `descriptorOf`, `ownValue`, `idOf`).
  */
 import { followDiIds } from '../diagram/write.js';
-import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
-import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids.js';
-import { kindRequest, type IdRequest, type IdState } from '../idstyle.js';
-import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
-import { diExpansionState } from '../layout.js';
-import { addTo, is, localType, many, walk, type El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError } from '../shared/errors.js';
+import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
+import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
+import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
+import { diExpansionState } from '../layout/index.js';
+import { addTo, is, localType, many, walk, type El } from '../model/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
-import { about, ChangeSet, type Change } from '../result.js';
+import { about, ChangeSet, type Change } from '../model/change-set.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';

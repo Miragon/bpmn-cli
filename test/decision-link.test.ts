@@ -12,14 +12,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
-import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/guide.js';
+import { Doc } from '../src/model/document.js';
+import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/report/guide.js';
 import { runOps } from '../src/ops/index.js';
 import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline.js';
-import { loadProfiles, runProfile } from '../src/platform/profile.js';
-import { buildView, elementDetail, findElements } from '../src/view.js';
+import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
+import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

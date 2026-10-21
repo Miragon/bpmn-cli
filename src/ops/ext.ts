@@ -68,13 +68,13 @@
  * exactly the generic elements moddle would create (same $type / attrs /
  * $body / $children shape, verified against moddle's own parse).
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError, type Warning } from '../errors.js';
-import { addTo, BPMN_NS, is, many, removeFrom, walk, type El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError, type Warning } from '../shared/errors.js';
+import { addTo, BPMN_NS, is, many, removeFrom, walk, type El } from '../model/moddle.js';
 import { allowedOn, allowedParents, CAMUNDA_URI, containersOf, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeType } from '../platform/zeebe.js';
-import { ChangeSet } from '../result.js';
-import { kindLabel } from '../kinds.js';
+import { ChangeSet } from '../model/change-set.js';
+import { kindLabel } from '../model/kinds.js';
 import { coversProfileSubjects } from './covers.js';
 import { changeOf, definitionsOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';

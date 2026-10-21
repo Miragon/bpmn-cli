@@ -8,7 +8,7 @@
  *    Process_<Slug>) unless op.process names an existing unbound process or
  *    op.blackBox is set. Participant ids: Participant_<Slug> (unnamed: the
  *    label of its process, or BlackBox). (Ids follow the file's style,
- *    src/idstyle.ts; the bpmn-cli default is given here.)
+ *    src/ids/style.ts; the bpmn-cli default is given here.)
  *  - createLane(): creates the process' laneSet when missing (id
  *    LaneSet_<Process>), lane id Lane_<Slug>; op.in may be a process, participant or a lane
  *    (-> nested childLaneSet); op.members assigns nodes. The first child lane
@@ -21,12 +21,12 @@
  *    members (E_INVALID_LANE_MEMBERSHIP).
  *  - laneOf(): the (deepest) lane referencing a node.
  */
-import type { Doc } from '../document.js';
-import { modelError } from '../errors.js';
-import { kindByName, kindLabel } from '../kinds.js';
-import { contextOf, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
-import { addTo, insertInto, is, many, removeFrom, type El } from '../model.js';
-import type { ChangeSet } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { modelError } from '../shared/errors.js';
+import { kindByName, kindLabel } from '../model/kinds.js';
+import { contextOf, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
+import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
+import type { ChangeSet } from '../model/change-set.js';
 import type { AddOp } from './types.js';
 
 function idOf(el: El): string {

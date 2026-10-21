@@ -27,10 +27,10 @@
  *     (withoutProfileDuplicates).
  */
 import { describe, expect, it } from 'vitest';
-import { parseOps } from '../src/batch.js';
-import { Doc } from '../src/document.js';
-import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/format.js';
-import { is, many, type El } from '../src/model.js';
+import { parseOps } from '../src/ops/batch.js';
+import { Doc } from '../src/model/document.js';
+import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
+import { is, many, type El } from '../src/model/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/ops/index.js';
@@ -38,8 +38,8 @@ import { removeElements } from '../src/ops/remove.js';
 import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { buildView, elementDetail } from '../src/view.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { buildView, elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

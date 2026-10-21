@@ -37,10 +37,10 @@
  *    (`branches`, their `nodes`) are read only where they are arrays of
  *    objects, so a malformed one reaches splitFlow's own check (E_USAGE).
  */
-import type { Doc } from '../document.js';
-import { CliError, usageError } from '../errors.js';
-import { editDistance, typoTolerance } from '../ids.js';
-import type { El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import { CliError, usageError } from '../shared/errors.js';
+import { editDistance, typoTolerance } from '../ids/slugs.js';
+import type { El } from '../model/moddle.js';
 import type { Op } from './types.js';
 
 export const ALIAS = /^\$[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -61,7 +61,7 @@ export const REF_KEYS: Record<Op['op'], readonly string[]> = {
   order: ['id', 'flows', 'lanes', 'pools'],
   ext: ['id'],
   split: ['after'],
-  // the selectors of place / align / color / tidy (diagram/select.ts) name elements too: path, via, branch
+  // the selectors of place / align / color / tidy (query/select.ts) name elements too: path, via, branch
   place: ['ids', 'path', 'via', 'branch', 'rowOf', 'below', 'above', 'columnOf', 'after', 'before'],
   align: ['ids', 'path', 'via', 'branch', 'to'],
   color: ['ids', 'path', 'via', 'branch'],

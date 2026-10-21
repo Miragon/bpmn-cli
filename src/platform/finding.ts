@@ -1,5 +1,5 @@
 /**
- * A finding of a platform validation profile (src/platform/profile.ts): a
+ * A finding of a platform validation profile (src/platform/profiles/profile.ts): a
  * Warning with a severity, so an agent can tell what a deployment will
  * refuse from what only misbehaves at run time.
  *
@@ -13,7 +13,7 @@
  * findings it introduced from those the file already had (profileDelta)
  * without the subject showing up in JSON output.
  */
-import type { Warning } from '../errors.js';
+import type { Warning } from '../shared/errors.js';
 
 export type Severity = 'deploy' | 'runtime' | 'practice';
 

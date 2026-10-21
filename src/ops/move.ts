@@ -75,11 +75,11 @@
  *    unless op.lane names one. --on re-attaches a boundary event (it takes
  *    its host's lane).
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError, type Warning } from '../errors.js';
-import { kindLabel } from '../kinds.js';
-import { addTo, is, removeFrom, walk, type El } from '../model.js';
-import { about, ChangeSet } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError, type Warning } from '../shared/errors.js';
+import { kindLabel } from '../model/kinds.js';
+import { addTo, is, removeFrom, walk, type El } from '../model/moddle.js';
+import { about, ChangeSet } from '../model/change-set.js';
 import { assignLane, laneOf } from './containers.js';
 import { applyFlowOptions, carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';

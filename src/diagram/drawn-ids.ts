@@ -13,7 +13,7 @@
  *  draws or keys by id (processes, collaborations, participants, lanes,
  *  flow nodes, sequence and message flows, data object / store references,
  *  text annotations, groups, associations, data associations) that has no
- *  id one in the file's id style (src/idstyle.ts; `allocate` claims it in
+ *  id one in the file's id style (src/ids/style.ts; `allocate` claims it in
  *  the caller's registry, by default a registry of every id of `defs`), and
  *  returns them in document order: its name, else its kind and `In <parent>`;
  *  a connection names its ends. Nodes and containers get theirs first, so
@@ -22,10 +22,10 @@
  *  id-less elements it changes nothing. The incremental layout does not
  *  need it: it never draws an element without id (the element keeps no DI).
  */
-import { IdRegistry } from '../ids.js';
-import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../idstyle.js';
-import { kindLabel, kindOf, triggerOf } from '../kinds.js';
-import { indexById, is, isDiElement, walk, type El } from '../model.js';
+import { IdRegistry } from '../ids/slugs.js';
+import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
+import { kindLabel, kindOf, triggerOf } from '../model/kinds.js';
+import { indexById, is, isDiElement, walk, type El } from '../model/moddle.js';
 
 /** Element types a full redraw draws (shape, edge or plane) or keys by id. */
 const DRAWN = [

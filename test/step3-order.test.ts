@@ -1,6 +1,6 @@
 /**
  * Step 3: pool order (`order <collaborationId> <participantId...>`,
- * src/ops/order.ts and src/diagram/ops.ts orderPoolBands): the participants
+ * src/ops/order.ts and src/format/index.ts orderPoolBands): the participants
  * of a collaboration are reordered top to bottom, black-box partner pools
  * included; a kept drawing gets its pool bands restacked with their content
  * and the message flows routed again.
@@ -10,14 +10,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from "vitest";
-import { parseOps } from '../src/batch.js';
-import { Doc } from '../src/document.js';
+import { parseOps } from '../src/ops/batch.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { isCliError } from '../src/errors.js';
-import type { El } from '../src/model.js';
+import { isCliError } from '../src/shared/errors.js';
+import type { El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 
 const OPS: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },

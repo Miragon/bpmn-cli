@@ -7,10 +7,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml } from '../src/api.js';
-import { Doc } from '../src/document.js';
-import { parseXml } from '../src/model.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report.js';
+import { Doc } from '../src/model/document.js';
+import { parseXml } from '../src/model/moddle.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
 const defs = (body: string): string => `<?xml version="1.0" encoding="UTF-8"?>

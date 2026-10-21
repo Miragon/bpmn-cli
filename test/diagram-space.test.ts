@@ -4,8 +4,8 @@
  * src/diagram/separate.ts (local overlap removal, tidy).
  */
 import { describe, expect, it } from 'vitest';
-import type { Box, Point } from '../src/layout/types.js';
-import type { El } from '../src/model.js';
+import type { Box, Point } from '../src/diagram/types.js';
+import type { El } from '../src/model/moddle.js';
 import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
 import { closeStrip, fitInFrame, makeSpace, shiftShape } from '../src/diagram/space.js';
 import { separate, tidy } from '../src/diagram/separate.js';

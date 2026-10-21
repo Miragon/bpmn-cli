@@ -11,16 +11,16 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { aroundView } from '../src/context.js';
-import { Doc } from '../src/document.js';
+import { aroundView } from '../src/query/context.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems, locateProblems, type LayoutProblem } from '../src/diagram/metrics.js';
 import { readPlanes, type Plane } from '../src/diagram/plane.js';
-import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/diagram/render.js';
-import { pathOf } from '../src/diagram/select.js';
+import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/render/index.js';
+import { pathOf } from '../src/query/select.js';
 import { CliError, parseOps, mutateDoc } from '../src/index.js';
-import { is } from '../src/model.js';
+import { is } from '../src/model/moddle.js';
 import { renderPng } from '../src/node/render.js';
-import { mutationReport } from '../src/report.js';
+import { mutationReport } from '../src/report/command-report.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { libExecutor } from '../tools/fuzz/lib/exec.mjs';
 // @ts-expect-error plain ESM tooling without type declarations
@@ -313,7 +313,7 @@ describe('tiles', () => {
       next = t.columns![1] + 1;
     }
     const doc = await Doc.fromXml(xml);
-    const columns = (await import('../src/diagram/view.js')).layoutView(doc.definitions).diagrams[0]!.columns;
+    const columns = (await import('../src/query/layout-view.js')).layoutView(doc.definitions).diagrams[0]!.columns;
     expect(next).toBe(columns);
     expect(r.svg).toBe(r.tiles![0]!.svg);
     expect(r.notes.join('\n')).toMatch(new RegExp(`split into ${r.tiles!.length} tiles at the diagram's columns`));

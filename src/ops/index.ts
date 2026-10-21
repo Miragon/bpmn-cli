@@ -1,10 +1,10 @@
 /**
  * Op dispatcher. Every CLI command and `apply` go through here.
  */
-import type { BatchContext, Doc, FlowEnds } from '../document.js';
-import { usageError, type Warning } from '../errors.js';
-import { is, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
+import type { BatchContext, Doc, FlowEnds } from '../model/document.js';
+import { usageError, type Warning } from '../shared/errors.js';
+import { is, type El } from '../model/moddle.js';
+import { ChangeSet } from '../model/change-set.js';
 import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
@@ -99,7 +99,7 @@ function dispatch(doc: Doc, op: Op): ChangeSet {
     case 'space':
     case 'tidy':
     case 'compact':
-      // diagram only: they run after the layout (src/diagram/ops.ts, called by the pipeline)
+      // diagram only: they run after the layout (src/format/index.ts, called by the pipeline)
       return new ChangeSet();
     default:
       throw usageError(`Unknown operation "${String((op as { op?: unknown }).op)}"`);
@@ -132,7 +132,7 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const table = new AliasTable(doc);
   const resolved: Op[] = [];
   const deferred: number[] = [];
-  // what the batch did so far, for E_NOT_FOUND (document.ts require / suggest)
+  // what the batch did so far, for E_NOT_FOUND (model/document.ts require / suggest)
   const context: BatchContext = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => table.toRecord() };
   readIdStyle(doc);
   doc.takeKeptFlows();

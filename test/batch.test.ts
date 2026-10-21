@@ -1,15 +1,15 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/batch.js';
-import { Doc } from '../src/document.js';
-import { isCliError } from '../src/errors.js';
-import { renderView } from '../src/format.js';
-import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/guide.js';
-import { MAX_ID, MAX_SLUG } from '../src/ids.js';
-import { KINDS } from '../src/kinds.js';
+import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js';
+import { Doc } from '../src/model/document.js';
+import { isCliError } from '../src/shared/errors.js';
+import { renderView } from '../src/report/view-text.js';
+import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
+import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
+import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline.js';
+import { mutateDoc } from '../src/pipeline/index.js';
 
 /** Runs parseOps and returns the thrown CliError. */
 function failure(input: unknown): { code: string; message: string; op?: number; hint?: string; candidates?: string[] } {
@@ -42,7 +42,7 @@ function sourceFiles(dir: string): string[] {
 function codesInSource(): string[] {
   const codes = new Set<string>();
   for (const file of sourceFiles(SRC_DIR)) {
-    if (file.endsWith('guide.ts')) continue;
+    if (file.endsWith('report/guide.ts')) continue;
     for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
   }
   return [...codes].sort();

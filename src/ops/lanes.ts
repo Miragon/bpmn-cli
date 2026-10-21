@@ -16,9 +16,9 @@
  *    lane, neither of the two lanes the flow connects: says so and names
  *    the lane of the row the layout would draw a new node on.
  */
-import type { Doc } from '../document.js';
-import type { Warning } from '../errors.js';
-import { is, type El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import type { Warning } from '../shared/errors.js';
+import { is, type El } from '../model/moddle.js';
 import { laneOf } from './containers.js';
 import { placementMode } from './flows.js';
 import type { Placement } from './types.js';

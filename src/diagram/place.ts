@@ -10,19 +10,19 @@
  *  normal flow's new nodes, so the two do not cross), then nodes with a
  *  placed successor, then the rest (chains of new nodes are placed one after
  *  the other). When more nodes follow, ctx.afterNode gets the node just
- *  placed (incremental.ts routes its flows and measures the spacing again,
+ *  placed (layout/incremental.ts routes its flows and measures the spacing again,
  *  as the next single command would see them). A join placed in this run
  *  that a flow from its last placed predecessor would enter backwards (no
  *  loop return) is placed again right of its predecessors, before its one
  *  successor, as the `connect` into it does as a single command
- *  (pullPlacedJoins; incremental.ts pullJoins for joins drawn before). The rules
+ *  (pullPlacedJoins; layout/incremental.ts pullJoins for joins drawn before). The rules
  *  (gap = median horizontal gap between connected neighbours of the plane,
  *  clamped 40..100, fallback 60; row = median row spacing, clamped 80..150):
  *   - splice (the flow P->S was split by N; also N in a chain of new nodes
  *     after a node spliced before S in this run, when S still follows N
  *     through new nodes, branches included: a decision with a new "no"
  *     branch or a `split` in the chain keeps the splice; a join re-placed by
- *     incremental.ts pullJoins, before its successor): x = P.right + gap (more
+ *     layout/incremental.ts pullJoins, before its successor): x = P.right + gap (more
  *     where P's label and N's on one side, below or above, would come closer
  *     than 4 px; the same between N and S), centred on
  *     S's row when S is in P's row band (or P is a branching node: another
@@ -70,7 +70,7 @@
  *   when they are placed); a node without any successor yet keeps room for
  *   one event (the next command mostly ends the branch there). The chosen
  *   head and its number of candidates are recorded (ctx.heads); the local
- *   repair (incremental.ts) can ask for the next cheapest one (ctx.skip).
+ *   repair (layout/incremental.ts) can ask for the next cheapest one (ctx.skip).
  *   - unconnected: below the content of its frame (expanded sub-process, lane,
  *     pool or plane), left-aligned at the frame's first column; only the
  *     frame's own content counts (its members, what is drawn in it, the
@@ -79,7 +79,7 @@
  *  Obstacles are the frame's content plus whatever is drawn inside the frame
  *  without belonging to it (annotations and data in a lane, collaboration
  *  annotations in a pool). Groups are obstacles, except a group drawn around
- *  the anchor: the new node may go inside it (incremental.ts grows the group),
+ *  the anchor: the new node may go inside it (layout/incremental.ts grows the group),
  *  and on a plane without pools that group confines the space tool like a
  *  pool. A boundary event avoids the spots where connections dock on the
  *  host. A relocated node keeps its size and DI; a BPMNShape without valid
@@ -102,10 +102,10 @@
  *  associated with, data object / store below-right of the activity it is
  *  connected to (unconnected: like an unconnected node).
  */
-import { layoutDebug, layoutDebugOn } from '../debug.js';
-import { annotationSize } from '../layout/place.js';
-import { SIZES } from '../layout/types.js';
-import { is, type El } from '../model.js';
+import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
+import { annotationSize } from '../layout/clean/place.js';
+import { SIZES } from './types.js';
+import { is, type El } from '../model/moddle.js';
 import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, type Box, type Point } from './geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf, labelSizeOf } from './labels.js';
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
@@ -150,7 +150,7 @@ export interface PlaceCtx {
    * called after placeFlowNodes placed a node when more nodes follow: its
    * sequence flows to drawn nodes are routed (and labelled) right away, so
    * what a batch places next sees them like the next single command would
-   * (incremental.ts routeNow)
+   * (layout/incremental.ts routeNow)
    */
   afterNode?: (plane: Plane, id: string) => void;
   /** fixed sizes for blocks laid out elsewhere (new expanded sub-processes, pools) */
@@ -162,7 +162,7 @@ export interface PlaceCtx {
   notes: string[];
   /** nodes placed in this run as a splice: the successor S they were spliced before (a chain of new nodes continues it) */
   spliced?: Map<string, string>;
-  /** joins placed again right of their rightmost predecessor, before this successor (incremental.ts pullJoins) */
+  /** joins placed again right of their rightmost predecessor, before this successor (layout/incremental.ts pullJoins) */
   joins?: Map<string, string>;
   /** shapes whose label is placed again at the end (a boundary event moved to the top border) */
   relabel?: Set<string>;
@@ -638,7 +638,7 @@ function chainCost(plane: Plane, box: Box, cand: Cand): number {
  * The candidate a branch or exception path starts at: the cheapest by
  * connectionCost and chainCost plus its penalty, or, when the local repair
  * asked for it (ctx.skip: the chain crossed a line after placement,
- * incremental.ts), the next cheapest one. The head and its number of
+ * layout/incremental.ts), the next cheapest one. The head and its number of
  * candidates are recorded (ctx.heads), so the repair knows what it can retry.
  */
 function cheapest(ctx: PlaceCtx, id: string, plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): Cand {
@@ -1191,7 +1191,7 @@ function topCandidates(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, ev
 function seatOnTop(ctx: PlaceCtx, plane: Plane, event: DShape, spot: Box): void {
   const moved = shiftShape(plane, event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
   for (const m of moved) if (!ctx.placed.has(m)) ctx.moved.add(m);
-  // its label is placed again once its path is drawn (incremental.ts labels)
+  // its label is placed again once its path is drawn (layout/incremental.ts labels)
   if (event.label) (ctx.relabel ??= new Set()).add(event.id);
   ctx.notes.push(`${event.id} moved to the top border of ${event.hostId}: its path runs above it (below, it would cross a line or take more room)`);
 }
@@ -1268,7 +1268,7 @@ function leadsTo(ctx: PlaceCtx, from: string, to: string): boolean {
  * whose last predecessor `id` was just placed, and that a flow from one of
  * its predecessors would now enter backwards (no loop return), is placed
  * again right of its rightmost predecessor, before its one successor S: what
- * the `connect` into it does as a single command (incremental.ts
+ * the `connect` into it does as a single command (layout/incremental.ts
  * pullJoins). Same conditions: a gateway with two or more incoming flows and
  * one outgoing flow to S, its predecessors and S in its pool / sub-process,
  * S right of the predecessors.

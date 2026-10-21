@@ -35,9 +35,32 @@ them on a private corpus without copying it into the repository, are described i
 
 ## How the package is laid out
 
-- `src/`: the CLI (`cli.ts`), the in-memory API (`api.ts`, exported from `index.ts`), the ops, the
-  layout engine and the Camunda 7 / 8 rules (`platform/`). `src/guide.ts` is the source of
-  `bpmn guide`, `bpmn kinds` and `--help`.
+- `src/`: the three entries (`cli.ts`, `api.ts`, the browser-safe `index.ts`) and one folder per
+  stage of the pipeline. `src/report/guide.ts` is the source of `bpmn guide`, `bpmn kinds` and
+  `--help`.
+
+  | folder | holds |
+  | --- | --- |
+  | `shared/` | errors and the debug sink, used everywhere |
+  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation |
+  | `ids/` | id words and slugs, the file's id style, the declared id conventions |
+  | `xml/` | the text-preserving write, the positional XML reader, the encoding |
+  | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
+  | `ops/` | the semantic edits (`add`, `connect`, `set`, ...) and the ops JSON of `apply` |
+  | `diagram/` | the drawing (BPMN DI) and the geometry building blocks the engines share |
+  | `layout/` | the layout engines: `clean/` redraws, `incremental.ts` keeps a hand-made drawing |
+  | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
+  | `render/` | the SVG of a diagram |
+  | `validate/` | structural validation, the validator hook, the bpmnlint validator |
+  | `query/` | the read views: `show`, `find`, `--around`, `--context`, the selectors |
+  | `pipeline/` | the transactions: `mutateDoc`, `layoutDoc`, `checkDoc` |
+  | `report/` | what a command prints, as text and JSON, and the guide |
+  | `node/` | the Node-only layer (`@miragon/bpmn-cli/node`): files, the `.bpmnlintrc`, PNG |
+
+  Where new code goes: a change of the model's semantics is an op (`ops/`); reading the model
+  without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
+  user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
+  is `report/`; anything that touches the file system or `process` is `node/` or `cli.ts`.
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
   examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.
@@ -85,7 +108,7 @@ names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
   generated from them via [release-please](https://github.com/googleapis/release-please), so a
   `feat` or `fix` title is what users read in the release notes.
 - **Documentation moves with the code.** A change to a command, an option or an output also
-  changes `src/guide.ts` and the matching page in `docs/`.
+  changes `src/report/guide.ts` and the matching page in `docs/`.
 
 ## Before opening a PR
 

@@ -192,7 +192,7 @@ export interface SplitOp {
 }
 
 /* ------------------------------------------------------------------ */
-/* format operations: diagram only, see src/diagram/ops.ts               */
+/* format operations: diagram only, see src/format/index.ts               */
 /* ------------------------------------------------------------------ */
 
 export type SideName = 'left' | 'right' | 'top' | 'bottom';
@@ -200,7 +200,7 @@ export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
 /**
- * Selectors of place / align / color / tidy (src/diagram/select.ts): they add
+ * Selectors of place / align / color / tidy (src/query/select.ts): they add
  * elements to `ids` (connections only for color).
  */
 export interface Selectors {

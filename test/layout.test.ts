@@ -32,19 +32,19 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { withLayoutDebug } from '../src/debug.js';
+import { withLayoutDebug } from '../src/shared/debug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { titleBox } from '../src/diagram/text.js';
-import { Doc } from '../src/document.js';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout.js';
-import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/place.js';
-import type { GNode, ScopeLayout } from '../src/layout/types.js';
-import { is, many, type El } from '../src/model.js';
+import { Doc } from '../src/model/document.js';
+import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
+import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
+import type { GNode, ScopeLayout } from '../src/diagram/types.js';
+import { is, many, type El } from '../src/model/moddle.js';
 import { collapsedIds } from '../src/ops/add.js';
 import { runOps } from '../src/ops/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
-import { layoutDoc, mutateDoc } from '../src/pipeline.js';
+import { layoutDoc, mutateDoc } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* DI reading                                                           */

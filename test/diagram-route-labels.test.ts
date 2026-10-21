@@ -2,16 +2,16 @@
  * Connections and labels in a kept drawing: src/diagram/reroute.ts (routing
  * one connection with the BPMN side conventions, deciding which kept
  * connections need a new route), src/diagram/labels.ts (label placement)
- * and the text rendering of the layout block (src/format.ts renderLayout).
+ * and the text rendering of the layout block (src/report/view-text.ts renderLayout).
  */
 import { describe, expect, it } from 'vitest';
 import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines } from '../src/diagram/reroute.js';
 import { crossings } from '../src/diagram/router.js';
 import { clearTitles, labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
-import { renderLayout } from '../src/format.js';
-import { Doc } from '../src/document.js';
-import type { El } from '../src/model.js';
+import { renderLayout } from '../src/report/view-text.js';
+import { Doc } from '../src/model/document.js';
+import type { El } from '../src/model/moddle.js';
 
 /** A real element for `type` with `name` (labels read the name, routing the type). */
 const els = Doc.create({ processId: 'P' });

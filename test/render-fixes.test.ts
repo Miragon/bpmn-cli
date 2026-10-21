@@ -13,9 +13,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { MAX_TILES, MIN_LABEL_SCALE, renderSvg, scaleText } from '../src/diagram/render.js';
+import { MAX_TILES, MIN_LABEL_SCALE, renderSvg, scaleText } from '../src/render/index.js';
 import { textWidth } from '../src/diagram/text.js';
 import { rasterize } from '../src/node/render.js';
 

@@ -1,7 +1,7 @@
 /**
  * Data objects / stores, text annotations, associations, data associations.
  *
- *  Ids follow the file's style (src/idstyle.ts); the bpmn-cli default is
+ *  Ids follow the file's style (src/ids/style.ts); the bpmn-cli default is
  *  given here.
  *  - createDataObject(): bpmn:DataObject (id DataObject_<Slug>) + a
  *    bpmn:DataObjectReference (id DataObjectReference_<Slug>, the element the
@@ -26,12 +26,12 @@
  *  - removeDataAssociation() / removeAssociation(): inverse, incl. placeholder
  *    property cleanup when unused.
  */
-import type { Doc } from '../document.js';
-import { modelError } from '../errors.js';
-import { kindByName, kindLabel, triggerOf } from '../kinds.js';
-import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../idstyle.js';
-import { addTo, is, many, removeFrom, type El } from '../model.js';
-import type { ChangeSet } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { modelError } from '../shared/errors.js';
+import { kindByName, kindLabel, triggerOf } from '../model/kinds.js';
+import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
+import { addTo, is, many, removeFrom, type El } from '../model/moddle.js';
+import type { ChangeSet } from '../model/change-set.js';
 
 export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
 

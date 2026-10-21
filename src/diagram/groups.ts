@@ -16,7 +16,7 @@
  *    the plane elements; nothing else runs then.
  *  - membersOf(groups): element id -> the ids of the groups that held it,
  *    outermost (largest old box) first; the clean engine keeps the parts of
- *    a scope no flow connects together by it (layout/place.ts).
+ *    a scope no flow connects together by it (layout/clean/place.ts).
  *  - redrawGroups(moddle, defs, groups), after the redraw, in the order of
  *    the old boxes' areas (smallest first, so a group inside another one is
  *    drawn first and counts as its member): a group whose element is gone,
@@ -56,7 +56,7 @@
  *    materialise empty collections on the semantic elements).
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import { addTo, is, type El } from '../model.js';
+import { addTo, is, type El } from '../model/moddle.js';
 import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll, type Box, type Point } from './geom.js';
 import { idOf, raw, rawList } from './plane.js';
 

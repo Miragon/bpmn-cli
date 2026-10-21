@@ -134,8 +134,8 @@
  *    ids (order-free for symmetric kinds) and the detail unless it is a
  *    measurement (parallelRun length). Duplicates are matched one to one.
  */
-import { is, parseXml, type El } from '../model.js';
-import type { Box, Point } from '../layout/types.js';
+import { is, parseXml, type El } from '../model/moddle.js';
+import type { Box, Point } from './types.js';
 import { titleBox } from './text.js';
 
 /** structural defects the regression harness does not measure (see contract) */
