@@ -2,7 +2,7 @@
  * Camunda 8 after the step 3 verifier round (each finding with a test that
  * failed before the fix):
  *
- *  - FEEL is parsed (src/platform/feel.ts): the 762 expressions of
+ *  - FEEL is parsed (src/platform/profiles/feel.ts): the 762 expressions of
  *    fixtures/c8/feel-verdicts.json were deployed to Camunda 8.9.22 as flow
  *    conditions; the check agrees with the engine on every one (`&`, `|`,
  *    `<>`, `>>`, `%`, if without else, AND, `:=` ... are refused; ranges,
@@ -28,12 +28,12 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
-import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/guide.js';
+import { Doc } from '../src/model/document.js';
+import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/report/guide.js';
 import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/c8.js';
-import { loadProfiles, runProfile } from '../src/platform/profile.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/profiles/c8.js';
+import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

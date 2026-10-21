@@ -5,7 +5,7 @@
  *  - id: op.id (claimId) or a speaking id in the file's style
  *    (doc.allocateId with kindRequest: kind, trigger, name, and the placement
  *    as the context of an unnamed element: Gateway_AfterCheckInvoice,
- *    Event_TimerOnReview; src/idstyle.ts); a taken id gets a `_2` suffix
+ *    Event_TimerOnReview; src/ids/style.ts); a taken id gets a `_2` suffix
  *    (W_ID_SUFFIXED, reported by ops/index.ts).
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).
@@ -21,7 +21,7 @@
  *    (found by id or name, created when missing), like a message event.
  *  - participants: a new process gets the platform defaults (Doc.initProcess:
  *    camunda:historyTimeToLive in a Camunda 7 file); a user task of a Camunda 8
- *    file gets zeebe:userTask (ops/platform.ts).
+ *    file gets zeebe:userTask (platform/defaults.ts).
  *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
  *    applyTrigger() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
@@ -60,18 +60,18 @@
  * Because 'expanded' lives in DI, explicit collapse requests are recorded per
  * Doc (collapseRequests) so the pipeline can hand them to the layouter.
  */
-import type { Doc } from '../document.js';
-import { CliError, modelError, usageError } from '../errors.js';
-import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../idstyle.js';
-import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../kinds.js';
-import { addTo, is, localType, many, type El } from '../model.js';
-import { ChangeSet, renamedNote, type Change } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { CliError, modelError, usageError } from '../shared/errors.js';
+import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
+import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
+import { addTo, is, localType, many, type El } from '../model/moddle.js';
+import { ChangeSet, renamedNote, type Change } from '../model/change-set.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
-import { zeebeUserTaskDefault } from './platform.js';
+import { zeebeUserTaskDefault } from '../platform/defaults.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 

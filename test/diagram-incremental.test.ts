@@ -12,13 +12,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { detachedEnds } from '../src/diagram/reroute.js';
-import { is, type El } from '../src/model.js';
+import { is, type El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -608,7 +608,7 @@ describe('incremental placement', () => {
   });
 
   it('an engine drawing with a boundary event on its host\'s top border (its way over the top) stays editable: a task after its target, a task into its flow and a reroute keep the event there and its flow leaving it by its top', async () => {
-    // the clean engine puts Payment failed on Pick invoice's top border (layout/place.ts boundariesOnTop); Rejected,
+    // the clean engine puts Payment failed on Pick invoice's top border (layout/clean/place.ts boundariesOnTop); Rejected,
     // whose handler lies below, stays on the bottom border
     const ops: Op[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },

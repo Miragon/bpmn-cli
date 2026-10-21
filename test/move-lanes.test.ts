@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { laneOf } from '../src/ops/containers.js';
 
 interface Box {

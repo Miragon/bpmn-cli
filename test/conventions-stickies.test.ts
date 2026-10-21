@@ -4,10 +4,10 @@
  * Synthetic fixtures only.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
-import { renderLayout } from '../src/format.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { renderLayout } from '../src/report/view-text.js';
 
 const OPS: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },

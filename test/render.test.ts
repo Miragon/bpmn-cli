@@ -1,6 +1,6 @@
 /**
  * `bpmn render` (issue #12): the SVG renderer of the core
- * (src/diagram/render.ts), the PNG rasteriser of the node layer
+ * (src/render/index.ts), the PNG rasteriser of the node layer
  * (src/node/render.ts: resvg-wasm with the bundled Arimo font) and the
  * command. Every scenario and fixture renders to SVG and PNG with the same
  * bytes twice; labels are laid out like bpmn-js; a rasteriser failure is
@@ -13,9 +13,9 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, w
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/diagram/render.js';
+import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/render/index.js';
 import { innerLines, wrapLines } from '../src/diagram/text.js';
-import { CliError } from '../src/errors.js';
+import { CliError } from '../src/shared/errors.js';
 import { rasterize, renderPng } from '../src/node/render.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { bundleCore } from '../tools/iso/bundle.mjs';
@@ -244,7 +244,7 @@ describe('renderSvg', () => {
     expect(lean.chunks.flatMap((c: { inputs: string[] }) => c.inputs).filter((f: string) => /render/.test(f))).toEqual([]);
     // (not vacuous: an entry that imports renderSvg has it)
     const render = await bundleCore({ stdin: { contents: "export { renderSvg } from './src/index.ts';", sourcefile: 'render-only.ts' }, minify: false });
-    expect(render.chunks.flatMap((c: { inputs: string[] }) => c.inputs)).toContain('src/diagram/render.ts');
+    expect(render.chunks.flatMap((c: { inputs: string[] }) => c.inputs)).toContain('src/render/index.ts');
   }, 60000);
 });
 

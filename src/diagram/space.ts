@@ -29,7 +29,7 @@
  *     crossed container: the line rule; untouched shape: kept); interior
  *     waypoints beyond the line are shifted. Orthogonal edges stay
  *     orthogonal unless an end docks on an untouched shape across the line
- *     (callers repair those, see incremental.ts)
+ *     (callers repair those, see layout/incremental.ts)
  *   - an edge label follows the segment it belongs to (the one nearest to
  *     it): shifted when both ends of that segment were shifted, kept when
  *     neither was, and for a segment stretched by the line shifted when it
@@ -87,7 +87,7 @@
  *  frame mode, anchored at `anchor`). Returns the pixels and what moved;
  *  undefined when the label fits.
  */
-import { layoutDebug, layoutDebugOn } from '../debug.js';
+import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
 import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './geom.js';
 import { defaultLabelSide, hasExternalLabel, labelArea, labelAt, labelSizeOf } from './labels.js';
 import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, raw, type DShape, type Plane } from './plane.js';

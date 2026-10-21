@@ -8,13 +8,13 @@
  *  - pre-existing validation errors do not block unrelated writes
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
-import { addTo } from '../src/model.js';
+import { Doc } from '../src/model/document.js';
+import { addTo } from '../src/model/moddle.js';
 import { runOps } from '../src/ops/index.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import type { Op } from '../src/ops/types.js';
-import { validateDoc } from '../src/validate.js';
-import { elementDetail } from '../src/view.js';
+import { validateDoc } from '../src/validate/structural.js';
+import { elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

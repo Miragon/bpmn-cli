@@ -13,19 +13,19 @@
  * process) or a lane (its child lanes); every listed id must be a direct
  * child lane of it (E_NOT_CHILD_LANE); unlisted lanes follow in their old
  * order. Rewrites `laneSet.lanes`. A kept diagram gets its bands reordered in
- * the diagram phase (src/diagram/ops.ts, orderBands).
+ * the diagram phase (src/format/index.ts, orderBands).
  *
  * Pools: with `op.pools`, a collaboration as op.id (or participant ids in
  * `op.flows`) the participants of that collaboration are ordered top to
  * bottom instead (black-box pools included); every listed id must be one of
  * its participants (E_NOT_PARTICIPANT); unlisted pools follow in their old
  * order. Rewrites `collaboration.participants`; a kept diagram gets its pool
- * bands reordered in the diagram phase (src/diagram/ops.ts, orderPools).
+ * bands reordered in the diagram phase (src/format/index.ts, orderPools).
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
-import { insertInto, is, many, removeFrom, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError } from '../shared/errors.js';
+import { insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
+import { ChangeSet } from '../model/change-set.js';
 import { changeOf, idOf } from './set.js';
 import type { OrderOp } from './types.js';
 

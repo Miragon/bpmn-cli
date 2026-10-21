@@ -64,7 +64,7 @@ function esbuildOptions(opts, minify) {
   };
 }
 
-/** The module comments (`// src/model.ts`) of an unminified bundle with their offsets. */
+/** The module comments (`// src/model/moddle.ts`) of an unminified bundle with their offsets. */
 function moduleMarks(code) {
   const marks = [];
   for (const m of code.matchAll(/^\s*\/\/ (\S+\.(?:[cm]?[jt]s|json))$/gm)) marks.push({ at: m.index, file: m[1] });

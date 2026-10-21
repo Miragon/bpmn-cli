@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
-import { CliError } from '../src/errors.js';
-import { Doc } from '../src/document.js';
+import { CliError } from '../src/shared/errors.js';
+import { Doc } from '../src/model/document.js';
 import { runOps } from '../src/ops/index.js';
 import { branchOf } from '../src/ops/remove.js';
 import { definitionsXml } from './helpers.js';

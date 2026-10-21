@@ -42,18 +42,18 @@
  *    W_C7_MISPLACED_EXTENSION, W_C8_MISPLACED_ATTRIBUTE, W_C8_MISPLACED_EXTENSION);
  *    withoutProfileDuplicates() drops the summary then, so
  *    a write reports every item once. Retyped to a userTask in a Camunda 8
- *    file, the task gets zeebe:userTask (ops/platform.ts).
+ *    file, the task gets zeebe:userTask (platform/defaults.ts).
  */
-import type { Doc } from '../document.js';
-import { modelError, type Warning } from '../errors.js';
-import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../kinds.js';
-import { findReferences, is, many, removeFrom, walk, type El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import { modelError, type Warning } from '../shared/errors.js';
+import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
+import { findReferences, is, many, removeFrom, walk, type El } from '../model/moddle.js';
 import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
-import { ChangeSet } from '../result.js';
+import { ChangeSet } from '../model/change-set.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
-import { zeebeUserTaskDefault } from './platform.js';
+import { zeebeUserTaskDefault } from '../platform/defaults.js';
 import { cascadeRemove } from './remove.js';
 import {
   assertMessageFlowsFit,

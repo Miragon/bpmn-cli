@@ -25,27 +25,27 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
-import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './batch.js';
-import { setLayoutDebug } from './debug.js';
+import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './ops/batch.js';
+import { setLayoutDebug } from './shared/debug.js';
 import { layoutProblems } from './diagram/metrics.js';
-import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './diagram/render.js';
+import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
-import { AROUND_DEFAULT_DEPTH } from './context.js';
-import { conventionsView, renderConventions, type Undeclared } from './conventions.js';
-import { assertProcessId, assertTarget, Doc } from './document.js';
-import { CliError, ioError, isCliError, usageError, type Warning } from './errors.js';
-import { renderExtensionList, renderFind, renderMetrics, renderView } from './format.js';
-import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './guide.js';
-import { assertKindToken } from './kinds.js';
+import { AROUND_DEFAULT_DEPTH } from './query/context.js';
+import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
+import { assertProcessId, assertTarget, Doc } from './model/document.js';
+import { CliError, ioError, isCliError, usageError, type Warning } from './shared/errors.js';
+import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
+import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './report/guide.js';
+import { assertKindToken } from './model/kinds.js';
 import { projectIdConventions } from './node/bpmnlint.js';
 import { assertNewFile, checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
 import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
-import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline.js';
-import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profile.js';
-import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report.js';
-import { findElements } from './view.js';
+import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
+import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
+import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
+import { findElements } from './query/model-view.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -82,7 +82,7 @@ function printJson(value: unknown, pretty?: boolean, out: Out = process.stdout):
 }
 
 /**
- * The result of a mutation (src/report.ts: the same for the CLI and the
+ * The result of a mutation (src/report/command-report.ts: the same for the CLI and the
  * in-memory API); --render draws the result (its own block / `render` key);
  * --strict exits 5 on any warning (process.exitCode, like every exit code:
  * process.exit would cut off what a pipe has not taken yet, beyond 64 KB on macOS).
@@ -444,7 +444,7 @@ function kindArg(value: string): string {
   return value;
 }
 
-/* The same rules `apply` enforces on ops JSON (batch.ts), spelled with CLI flags. */
+/* The same rules `apply` enforces on ops JSON (ops/batch.ts), spelled with CLI flags. */
 
 const PLACEMENT_FLAGS = ['after', 'before', 'flow', 'in', 'on'] as const;
 const FLOW_FLAGS: Record<string, string> = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' };
@@ -908,7 +908,7 @@ async function runFormat(file: string, op: Op, o: RawOpts): Promise<void> {
   }, opts.json);
 }
 
-/** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/diagram/select.ts). */
+/** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/query/select.ts). */
 function withSelectors(cmd: CommandType, what: string): CommandType {
   return cmd
     .option('--path <ids...>', `${what} every node${what === 'colour' ? ' and flow' : ''} on the shortest sequence-flow path <fromId> <toId>`)

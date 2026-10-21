@@ -47,7 +47,7 @@ export async function loadMetrics() {
 
 export async function loadRender() {
   const lib = await importDist(join('node', 'render.js'));
-  const core = await importDist(join('diagram', 'render.js'));
+  const core = await importDist(join('render', 'index.js'));
   return { draw: (xml) => lib.renderPng(xml, { problems: true, tiles: true }), maxSize: core.RENDER_MAX_SIZE };
 }
 

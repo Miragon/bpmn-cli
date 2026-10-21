@@ -1,0 +1,1253 @@
+/**
+ * Self-description for agents: `bpmn kinds [--section <names>]`, `bpmn kinds
+ * --json`, `bpmn guide` (everything), `bpmn guide --short` (the core in at
+ * most 5 KB) and `bpmn guide <topic>` (one section of the full guide).
+ *
+ * Everything here is derived from the live tables (KINDS, SET_KEYS, the ops
+ * field specs and schema) so the text can never drift from the code; only
+ * the error catalogue, exit codes, trigger options, placement rules and the
+ * command reference are written by hand.
+ */
+import { EXIT_CODES, usageError } from '../shared/errors.js';
+import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/kinds.js';
+import { Doc } from '../model/document.js';
+import { SINGLE_TOP } from '../ops/ext.js';
+import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
+import { OP_NAMES } from '../ops/types.js';
+import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
+import { SWATCHES } from '../diagram/write.js';
+import { LAYOUT_MODES } from '../pipeline/index.js';
+import { zeebeAllowedOn, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
+
+/* ------------------------------------------------------------------ */
+/* error catalogue                                                      */
+/* ------------------------------------------------------------------ */
+
+export interface ErrorDoc {
+  code: string;
+  meaning: string;
+  fix: string;
+}
+
+/**
+ * Every E_/W_ code the CLI can emit (kept complete by test/batch.test.ts,
+ * which greps src/ for codes).
+ */
+export const ERROR_CATALOGUE: ErrorDoc[] = [
+  // usage / I/O
+  { code: 'E_USAGE', meaning: 'Bad command line, ops JSON or environment value (unknown command, option, op, key or value type; a BPMN_KEEP_FLOW_IDS that is no switch value: 1 / true / yes / on, 0 / false / no / off).', fix: 'Read the message (it names the op index and the allowed keys), then `bpmn <command> --help` or `bpmn guide`. A bad BPMN_KEEP_FLOW_IDS: set it to 1 or 0, or unset it, where it is set (shell, Claude Code settings `env`); --keep-flow-ids / --no-keep-flow-ids decide for one command.' },
+  { code: 'E_UNKNOWN_ALIAS', meaning: 'An op of an `apply` batch uses a batch alias (`"after": "$check"`) that no op before it defines (exit 1; checked before anything runs). The message lists the aliases defined so far.', fix: 'Define it with "as": "$check" (add, connect, split, the nodes of a split branch), "flowAs" (add: the flow into the new node), "outAs" (add: the flow it creates out of the new node), "joinAs" (split) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references) in an earlier op, or fix the spelling (the candidates are the defined aliases).' },
+  { code: 'E_DUPLICATE_ALIAS', meaning: 'Two ops of a batch define the same alias (exit 1).', fix: 'Give every element its own alias.' },
+  { code: 'E_FILE_NOT_FOUND', meaning: 'The .bpmn file does not exist.', fix: 'Check the path, or create the file with `bpmn new <file>`.' },
+  { code: 'E_IO', meaning: 'Reading or writing the file failed (permissions, directory missing, ...).', fix: 'Check the path and permissions; use -o <file> to write elsewhere.' },
+  { code: 'E_PARSE', meaning: 'The file is not well-formed BPMN XML or its root is not bpmn:definitions.', fix: 'Fix the XML (or start over with `bpmn new`); the message points to the first problem.' },
+  { code: 'E_IMPORT_LOSSY', meaning: 'bpmn-moddle dropped content while importing (unparsable/unknown elements, unresolved references, duplicate ids, an element the schema allows once appearing twice: "duplicate element", e.g. two loopCharacteristics; the reader keeps the last one); writing would lose it. The library refuses it too (Doc.fromXml + mutateDoc). `show` and `validate` print these as `import:` lines (`validate --strict` exits 5 on them).', fix: 'Inspect the warnings with `bpmn validate <file>`, fix the XML, or write anyway with --force (library: force: true; the reported content is dropped, of a duplicate element the last one is kept).' },
+  { code: 'E_NO_FILE', meaning: 'No output file: the document was not loaded from a file and no -o/--out was given.', fix: 'Pass -o <file>.' },
+  { code: 'E_FILE_EXISTS', meaning: '`bpmn new` refuses to overwrite an existing file.', fix: 'Choose another name, or pass --force to overwrite.' },
+  { code: 'E_INVALID_XML', meaning: 'The --xml snippet of `ext add` could not be parsed.', fix: 'Pass one well-formed element with declared prefixes, e.g. --xml \'<zeebe:taskDefinition type="x"/>\', or use <prefix:type> attr=value instead.' },
+  { code: 'E_RENDER', meaning: '`bpmn render` (renderPng) could not rasterise the image: the PNG rasteriser (@resvg/resvg-wasm) failed to load or failed on this drawing (exit 4; never a process abort); or nothing on the plane can be drawn because every shape and connection has broken coordinates (not a number, beyond ±1,000,000 px, a negative size).', fix: 'Write the SVG instead (`--format svg`), or render a smaller part; report the file if it keeps failing. Broken coordinates: `bpmn layout <file>` draws the model again.' },
+  { code: 'E_PROFILE_LOAD', meaning: 'Library use (exit 4): the Camunda 7 or Camunda 8 profile rules, which load on demand (a chunk of their own in a browser bundle), could not be loaded; the call rejected before a result existed and nothing was written. `details.platform` names the platform.', fix: 'Check that the chunk is served next to the entry chunk (base URL, network, content security policy). The library does not cache the failure: a later call imports the chunk again, which loads it in Node; a browser may keep the failed module fetch until the page reloads (Chrome does), so reload the page there after fixing the cause. Prefetch with `loadProfile(platform)` when a file is opened to find out early.' },
+  { code: 'E_PROFILE_NOT_LOADED', meaning: 'Library use (exit 1): `runProfile` or `validateDoc(doc, { platform })` ran on a Camunda 7 / 8 document whose profile rules are not loaded yet (they load on demand; the async API, `applyToXml`, `validateXml`, `mutateDoc`, `checkDoc`, loads them itself). `details.platform` names the platform.', fix: '`await loadProfile(platform)` (or `await loadProfiles()` for both) once before the synchronous calls.' },
+  // ids & lookup
+  { code: 'E_NOT_FOUND', meaning: 'No element with the given id (elements are addressed by id, never by name). The candidates are the meant ids, best first: the new id of a flow an earlier op of the batch renamed, the same id in another case, umlaut spelling or with another / no prefix (Task_CheckInvoice, CheckInvoice -> Activity_CheckInvoice), ids containing it, typos (ChekInvoice), names containing it; within each, the ids the batch created first. In a batch the hint lists the ids it created so far (and an alias written without $). Ids of vendor extension elements (e.g. camunda:formField) are not element ids: the message then names the BPMN element they belong to.', fix: 'Use the candidates listed, or run `bpmn show <file>` / `bpmn find <file> <text>` to list ids; in `apply`, name what an op creates with "as": "$name". `remove --if-exists` / `add --if-absent` make the op idempotent.' },
+  { code: 'E_WRONG_KIND', meaning: 'The element exists but is not of the expected kind (e.g. a flow where a node is required); also `ext add` on bpmn:definitions or a non-BPMN element (the BPMN 2.0 XSD has no extensionElements there; the engines refuse the file), or a definition. / loop. / condition. prefix the element has no slot for; `compact` with an id that is no pool, lane or expanded sub-process; `render --plane` with an element without a plane of its own, `render --scope` with one that is no pool, lane, sub-process or process.', fix: 'Pass an id of the right kind; `bpmn show <file> <id>` prints the kind. Process-level extensions go on the process id.' },
+  { code: 'E_INVALID_ID', meaning: 'The id is not an XML NCName ([A-Za-z_][A-Za-z0-9_.-]*).', fix: 'Use letters, digits, _ . - and start with a letter or _, e.g. Activity_CheckInvoice.' },
+  { code: 'E_DUPLICATE_ID', meaning: 'An element with that id already exists (BPMN and diagram elements only: ids inside vendor extension elements, e.g. two camunda:formField with the same id in different forms, are not checked). In `validate`: two elements of the file have one id (bpmn-moddle keeps the first and drops the later one with an import warning; the engines refuse the file).', fix: 'Choose another --id, omit it (ids are generated from the name), or use --if-absent. In a file: give one of the elements another id in the XML.' },
+  { code: 'E_UNKNOWN_KIND', meaning: 'The kind token is not a known kind, alias or bpmn type.', fix: 'Run `bpmn kinds`; the message suggests close matches.' },
+  { code: 'E_UNSUPPORTED_KIND', meaning: 'The kind exists in BPMN but is not supported (complexGateway, choreographies, groups).', fix: 'Model it differently, e.g. exclusiveGateway/inclusiveGateway instead of complexGateway.' },
+  { code: 'E_UNKNOWN_KEY', meaning: '`set` got a key that is not settable on this element; also a bad nested selector (`definition[x].`) or a selector on loop. / condition.', fix: 'The message lists the settable keys; `bpmn kinds` has the full set-key table. Vendor attributes need a prefix (camunda:assignee). An attribute without prefix that BPMN does not define (W_C7_DEPLOY_SCHEMA) can only be removed: `bpmn set <file> <id> <attr>=`.' },
+  { code: 'E_INVALID_VALUE', meaning: 'A value is not acceptable: empty condition, bad enum value, option on the wrong connection kind, ...; also removing `condition.camunda:resource` from a condition without inline body (it would leave an empty condition, which every engine evaluation fails on); `route --exit` / `--entry` on a boundary event with the side that points into its host (the flow would run through the host).', fix: 'Quote expressions with single quotes (\'${ok}\'), check the allowed values in the message. A script resource is replaced in one command: `bpmn set <file> <id> condition.camunda:resource= \'condition=${...}\'` (flow; or `condition=` to remove the condition) / `\'when=${...}\'` (conditional event).' },
+  { code: 'E_UNKNOWN_NAMESPACE', meaning: 'A vendor prefix (e.g. `acme:`) has no known xmlns.', fix: 'Use a known prefix (camunda, zeebe, modeler, bioc, color) or declare the namespace on bpmn:definitions in the file.' },
+  // scope & placement
+  { code: 'E_NO_PROCESS', meaning: 'The file contains no process.', fix: 'Create one with `bpmn new`, or add a participant.' },
+  { code: 'E_AMBIGUOUS_SCOPE', meaning: 'The file has several processes and the command did not say which one.', fix: 'Add --in <processId|subProcessId|participantId>.' },
+  { code: 'E_BLACK_BOX', meaning: 'The participant has no process (black-box pool), so nothing can be placed in it.', fix: 'Pick a participant with a process, or create a new pool without --black-box.' },
+  { code: 'E_INVALID_SCOPE', meaning: 'The --in container does not fit the kind: data objects and text annotations need a process, sub-process or participant, lanes need a process, participant or lane, not a sub-process.', fix: 'Pass --in <processId|subProcessId|participantId> (lanes: or a lane id for nesting).' },
+  { code: 'E_PROCESS_BOUND', meaning: '`add participant --process <id>`: that process is already bound to another participant.', fix: 'Omit --process to create a new process for the pool, or use --black-box.' },
+  { code: 'E_MULTIPLE_ROOTS', meaning: 'Several root processes exist without a collaboration; the layouter draws only one root.', fix: 'Wrap the processes in pools (`bpmn add <file> participant <name> --process <processId>`), or remove the extra processes.' },
+  { code: 'E_ORPHAN_PROCESS', meaning: 'A collaboration exists but this process is not referenced by any participant, so it would not be drawn.', fix: 'Add a participant for it (`bpmn add <file> participant <name> --process <processId>`) or remove it.' },
+  { code: 'E_INVALID_PLACEMENT', meaning: 'The placement does not fit the kind: --on for a non-boundary node, a boundary event without --on, --after for data objects / annotations / lanes. Or a node would be placed relative to itself, one of its children or one of its boundary events, or a move chain would start after one of its own nodes (the --after anchor or the source of the --flow is a later moved node, inside one or a boundary event of one; a --before anchor inside one); nothing was changed.', fix: 'Boundary events: --on <activityId>. Flow nodes: --after/--before/--flow/--in. Data, annotations, lanes, pools: --in only, then `connect`. A move: pick an anchor outside the moved nodes, or move the first node alone; the hint has the command (`bpmn move <file> <id> --after <anchor>`, or `--before <anchor>` when the first node is already after it).' },
+  { code: 'E_HAS_SUCCESSOR', meaning: '--after <X>: X already has several outgoing flows, so it is unclear where to insert.', fix: 'Use --flow <flowId> (candidates are listed) or --after X --before <targetId>.' },
+  { code: 'E_HAS_PREDECESSOR', meaning: '--before <Y>: Y already has several incoming flows.', fix: 'Use --flow <flowId> (candidates are listed) or --after <sourceId> --before Y.' },
+  { code: 'E_NO_FLOW', meaning: '--after X --before Y: there is no sequence flow X -> Y.', fix: 'Check `bpmn show <file> X` for its outgoing flows, or use --after X alone / --flow <id>.' },
+  { code: 'E_AMBIGUOUS_FLOW', meaning: '--after X --before Y: there are several flows X -> Y.', fix: 'Use --flow <flowId> with one of the listed candidates.' },
+  { code: 'E_CROSS_SCOPE', meaning: 'A sequence flow would cross a process / sub-process / pool boundary; or `definition.activityRef` names an activity outside the compensation event\'s scope (allowed: its own (sub-)process, from an event sub-process also the scope around it; the engines refuse anything else).', fix: 'Use a message flow between pools (`connect` infers it), or move the node with `bpmn move <file> <id> --in <scope>`. For activityRef pick one of the listed candidates, or `definition.activityRef=` to compensate the whole scope.' },
+  { code: 'E_INVALID_SOURCE', meaning: 'The element cannot be the source of a sequence flow (end event, event sub-process, non-flow-node).', fix: 'Start the flow from a task, gateway, start/intermediate event or boundary event.' },
+  { code: 'E_INVALID_TARGET', meaning: 'The element cannot be the target of a sequence flow (start event, boundary event, event sub-process, non-flow-node).', fix: 'End the flow at a task, gateway, intermediate or end event.' },
+  { code: 'E_INVALID_ENDPOINT', meaning: '`connect` found no connection kind for these endpoints (e.g. message flow to a gateway, association between two tasks).', fix: 'Message flows join pools, tasks, events and sub-processes across pools; associations need a text annotation; data associations need a data object/store.' },
+  { code: 'E_NO_COLLABORATION', meaning: '`connect` would need a message flow, but the file has no collaboration (no pools).', fix: 'Add participants first: `bpmn add <file> participant "<name>"` wraps the existing process, a second one gets its own process.' },
+  { code: 'E_NO_PARTICIPANT', meaning: 'A message flow endpoint is not inside any participant; message flows only connect pools.', fix: 'Bind its process to a pool: `bpmn add <file> participant "<name>" --process <processId>`.' },
+  { code: 'E_SAME_POOL', meaning: '`connect` between two elements of the same pool where a message flow was requested (e.g. --message given).', fix: 'Use a plain sequence flow inside a pool; message flows connect different pools.' },
+  { code: 'E_INVALID_DEFAULT', meaning: 'Only exclusive/inclusive gateways and activities can have a default flow.', fix: 'Drop --default, or make the source an exclusiveGateway.' },
+  { code: 'E_NOT_OUTGOING', meaning: '`order` got a flow that is not an outgoing flow of the node.', fix: 'List only the node\'s outgoing flow ids (`bpmn show <file> <nodeId>`).' },
+  { code: 'E_INVALID_LANE_MEMBERSHIP', meaning: 'Nodes inside sub-processes cannot be lane members; lanes only contain top-level nodes of their process.', fix: 'Assign the sub-process itself to the lane.' },
+  { code: 'E_NOT_CHILD_LANE', meaning: '`order` with lanes: a listed lane is not a direct child lane of the given pool / process / parent lane.', fix: 'List lanes of one level (the candidates are listed); order nested lanes with their parent lane as id: `bpmn order <file> <parentLaneId> <laneIds...>`.' },
+  // format operations (diagram only)
+  { code: 'E_NO_MATCH', meaning: 'A selector of a format operation names nothing: no sequence-flow path leads from --path <fromId> to <toId> (over the --via flows), no element of the --kind is drawn, or nothing lies on the --branch (its flow leads straight to the join). `bpmn render`: a crop (--around, --path, --scope, ids) of which nothing is drawn on the plane (no shape, or only on another plane), or a --scope on an empty plane.', fix: 'Check the direction and the --via order (`bpmn show <file>` lists the flows of every node), the kind name (`bpmn find <file> "" --kind <kind>`), or name a flow that starts a branch with its own nodes. render: drop --plane or pass the plane the message names; `bpmn layout <file>` draws elements without a shape.' },
+  { code: 'E_NOT_PARTICIPANT', meaning: '`order` with pools: a listed id is a participant, but not one of the given collaboration.', fix: 'List the participants of that collaboration (the candidates are listed): `bpmn order <file> <collaborationId> <participantIds...>`.' },
+  { code: 'E_NO_DIAGRAM', meaning: 'The file has no diagram (DI), so a format operation (place, align, color, label, route, space, tidy) has nothing to work on.', fix: 'Draw it first with `bpmn layout <file>`, or drop --no-layout (a file without diagram is then drawn in full before the format operation runs).' },
+  { code: 'E_NO_SHAPE', meaning: 'The element exists but has no shape or connection in the diagram (added with --no-layout, a flow whose ends a --no-layout write changed, a process that is drawn as its pool, an element outside the drawn root).', fix: 'For a pool use the participant id, not the process id. A flow: `bpmn route <file> <flowId>` draws its line. Else the next model edit without --no-layout draws it (`bpmn layout <file>` redraws all).' },
+  { code: 'E_DIFFERENT_DIAGRAM', meaning: '`place` / `align`: the element and its reference are drawn on different diagrams (the content of a collapsed sub-process has its own).', fix: 'Use a reference on the same diagram, or expand the sub-process first (`bpmn set <file> <subProcessId> expanded=true`).' },
+  { code: 'E_LEAVES_CONTAINER', meaning: '`place` / `align` would move a node out of its lane, pool or expanded sub-process: its centre would leave the frame, its box would start more than 10 px into the header of its lane / pool (before the border of a sub-process), the reference is the node\'s own frame (a node is not placed beside the sub-process it lives in), or the reference lies outside the node\'s sub-process and the node would land outside it (a sub-process grows towards a reference inside it, never out to one outside). `align` leaves out (noted) a member only a selector (--kind / --path / --branch) named.', fix: 'Change the membership first (`bpmn move <file> <id> --lane <laneId>`; in a batch a move op before the place op; the hint names the lane at the target position), or choose a reference inside the frame.' },
+  { code: 'E_NO_ROOM', meaning: '`place` / `align`: there is no room for the request: after the shapes in the way gave way, the requested row / column no longer holds (e.g. a node placed onto its own reference, or into a gap that is too small next to it), or the lane / sub-process of the moved shape would have to grow over a reference outside it, or push the reference\'s own pool / lane / sub-process away, or two shapes would end up on each other (a reference that would be overrun moves along when its row / column still holds), or a shape would be pushed out of a sub-process, lane or pool that held it. The refusal of `place` / `align` carries one space-tool run that makes the room (details.ops: a batch op; details.command, e.g. `bpmn space <file> --after Gateway_Budget --by 2col`, the file filled in on the command line, only when the refused op saw the file\'s own drawing: not after other ops of a batch, whose changes and new ids the file does not have): a dry run inside the op checked that the request fits after it, and of the runs that do, it is the one with the fewest layout problems; without one, the hint names the shapes to move first. `place --side`: the border is taken by other boundary events and docking connections. `space --by -<amount>`: closing the empty space there would add a layout problem (the message names it).', fix: 'Run the command of the hint, then place again (in a batch: its op before the place op; after other ops of a batch the hint names only that op); without one, move the shapes the hint names first, or use a reference inside the same lane / sub-process.' },
+  { code: 'E_NO_LABEL', meaning: '`label`: the element has no name, so there is no label to place.', fix: 'Name it first: `bpmn set <file> <id> name=...`.' },
+  // validation (structural errors block writes; `bpmn validate` lists them)
+  { code: 'E_DANGLING_REF', meaning: 'A reference (sourceRef, targetRef, attachedToRef, processRef, default, flowNodeRef, ...) points to an element that is not in the model.', fix: 'Remove the referencing element (`bpmn remove <file> <id>`) or re-point it with `bpmn set <file> <id> source=/target=`; usually a hand-edited file.' },
+  { code: 'E_FLOW_LINKS', meaning: 'A sequence flow and its endpoints disagree: the flow is missing from node.outgoing/incoming, or a node lists a flow that does not touch it.', fix: 'Remove and re-create the flow (`bpmn remove <file> <flowId>`, `bpmn connect <file> <src> <tgt>`).' },
+  { code: 'E_EMPTY_COLLABORATION', meaning: 'The collaboration has no participant with a process (only black boxes or none at all), so nothing would be drawn.', fix: 'Add a pool with a process (`bpmn add <file> participant <name>` wraps the existing process) or remove the collaboration.' },
+  { code: 'E_NO_HOST', meaning: 'A boundary event is not attached to any activity.', fix: 'Remove it, or re-create it with `bpmn add <file> boundary:<trigger> --on <activityId>`.' },
+  { code: 'E_INVALID_HOST', meaning: 'A boundary event is attached to a non-activity, to an activity in another scope, or to a compensation handler (isForCompensation=true; `add --on` / `move --on` refuse it, and `set isForCompensation=true` on an activity with boundary events is blocked; the C7 engines reject such a file).', fix: 'Attach it to a task/sub-process of the same scope that is not a compensation handler (`--on <activityId>`), move it with `bpmn move <file> <id> --in <scope>`, or `bpmn set <file> <hostId> isForCompensation=false`.' },
+  { code: 'E_EVENT_SUBPROCESS_NO_START', meaning: 'An event sub-process has no (triggered) start event.', fix: 'Create the event sub-process with its trigger in one command: `bpmn add <file> eventSubProcess:<message|timer|signal|conditional|error|escalation|compensate> "<Name>" --in <scope> [--error X | --message X | --timer PT1H ...]` (the start event is created inside), or use one `bpmn apply` batch that adds the sub-process and its startEvent:<trigger> together.' },
+  { code: 'E_EVENT_SUBPROCESS_PLAIN_START', meaning: 'A start event inside an event sub-process has no trigger.', fix: 'Give it one: `bpmn set <file> <startId> trigger=<message|timer|error|...>` (plus --message/--timer/... values via `retype`).' },
+  { code: 'E_INVALID_LANE_MEMBER', meaning: 'A lane lists an element that is not a flow node of its process.', fix: 'Remove the member from the lane (`bpmn set <file> <nodeId> lane=`) or delete the lane.' },
+  { code: 'E_LANE_CONFLICT', meaning: 'A node is a member of several lanes.', fix: 'Assign it to exactly one lane: `bpmn set <file> <nodeId> lane=<laneId>` (or `bpmn move <file> <nodeId> --lane <laneId>`).' },
+  { code: 'E_INVALID_MESSAGE_FLOW', meaning: 'A message flow ends at an element that cannot send or receive messages (gateway, data object, ...).', fix: 'Connect pools, tasks, events or sub-processes instead.' },
+  { code: 'E_MESSAGE_FLOW_SAME_POOL', meaning: 'A message flow connects two elements inside the same pool.', fix: 'Use a sequence flow inside a pool; message flows only cross pool boundaries.' },
+  // events & retype
+  { code: 'E_TRIGGER_REQUIRED', meaning: 'Boundary events need a trigger.', fix: 'Use boundaryEvent:<trigger> with its option, e.g. boundary:timer --timer P2D or boundary:error --error PaymentFailed.' },
+  { code: 'E_INVALID_TRIGGER', meaning: 'The trigger is not allowed here: e.g. startEvent:error outside an event sub-process, --non-interrupting on an error/cancel/compensate boundary event, a trigger the kind does not support.', fix: '`bpmn kinds` shows the allowed triggers per event kind; error/escalation/compensate start events go inside an eventSubProcess.' },
+  { code: 'E_INVALID_REMOVE', meaning: '`remove` was asked to delete the bpmn:Definitions root.', fix: 'Delete the file instead; remove processes, participants or elements.' },
+  { code: 'E_NO_CONDITION', meaning: '`set language=...` on a sequence flow that has no condition expression.', fix: 'Set condition=<expression> together with language.' },
+  { code: 'E_NO_EXTENSION', meaning: '`ext remove`: the element (or the nested element named by a definition. / loop. / condition. prefix) has no extension elements, none matching the selector, or the index is out of range; `ext add`: a path step does not exist and cannot be created (only attribute-free containers are created on the way).', fix: 'Run `bpmn ext list <file> <id>` and remove by an existing type, selector (the candidates list keyed items such as camunda:inputParameter[name=a]) or index; create the parent first (a listener or form field) and select it with [attr=value] or [n].' },
+  { code: 'W_BLACK_BOX', meaning: '`remove`: a participant lost its process and is now a black-box pool.', fix: 'Remove the participant too, or bind a new process to it.' },
+  { code: 'W_DANGLING_CALLED_ELEMENT', meaning: '`remove`: a call activity still references the removed process id via calledElement.', fix: '`bpmn set <file> <callActivityId> calledElement=<processId>` or remove the call activity.' },
+  { code: 'W_FLOW_DROPPED', meaning: '`move`: a sequence flow was removed because it would cross scopes after the move (also for boundary events that followed their host).', fix: 'Reconnect the node inside its new scope with `bpmn connect`.' },
+  { code: 'E_WOULD_DROP_CONTENT', meaning: '`retype` to a kind that cannot hold the element\'s content (a sub-process with nodes -> task / callActivity) would delete that content; nothing was written. The ids are listed.', fix: 'Move what should stay out first (`bpmn move <file> <ids> --in <scopeId>`), or pass --force to retype anyway (the listed elements are deleted).' },
+  { code: 'E_INVALID_RETYPE', meaning: '`retype` between incompatible families (e.g. task -> gateway, start -> end event).', fix: 'Retype within a family (task <-> task/subProcess/callActivity, gateway <-> gateway, event <-> event of the same position); otherwise remove and add.' },
+  // write-time
+  { code: 'E_VALIDATION', meaning: 'The change would introduce structural errors, or errors of a validator (a host\'s validator in library use; the project\'s bpmnlint only when a library host asked for that, lintBlocks), so the file was not written (the new errors are listed in the details, a validator\'s with its name in brackets; errors the file already had do not block, see W_PREEXISTING_ERROR). Validators check the result after the layout, i.e. exactly what would be written.', fix: 'Read the errors in the refusal: the lines under it (JSON `error.errors`, library `err.details.errors`), each with its code and hint, a validator\'s with its name in brackets. The file is unchanged, so `bpmn validate <file>` does not show them. Change the edit so that it does not add them, e.g. make it in one transaction (`bpmn apply <file> ops.json`) that ends in a valid model, or pass --force (library: force: true) to write anyway.' },
+  { code: 'E_VALIDATOR_FAILED', meaning: 'A validator (MutationOptions.validators / checkFile validators in library use) threw or did not return an array of findings; nothing was written.', fix: 'Fix the validator or the input it cannot read, or run without it.' },
+  { code: 'E_LAYOUT_*', meaning: 'The layout engine could not draw the model (e.g. E_LAYOUT_ERROR); the suffix is the layouter\'s own code, the message names the element.', fix: 'Check the element named in the message (unsupported kind, broken flow graph), or write without DI using --no-layout and run `bpmn layout` later.' },
+  { code: 'E_LAYOUT_INCREMENTAL', meaning: '`--layout incremental` was requested and the incremental layout (keep the drawing, place what is new) failed; nothing was written.', fix: 'Retry with --layout full (redraws the whole diagram) or --no-layout (writes without updating the diagram), and report the command and file.' },
+  { code: 'E_INTERNAL', meaning: 'An unexpected internal error (exit 70).', fix: 'Re-run with --json (or BPMN_DEBUG=1 for a stack trace) and report the command and file.' },
+  // warnings
+  { code: 'W_ID_SUFFIXED', meaning: 'The id generated for a new element (from its name, its kind and place, or the ends of a flow) already existed (for an unnamed gateway or activity also with its kind spelled out, Gateway_ParallelAfterCheck, and with the kind of the unnamed anchor it follows, Task_AfterCheckGateway), so a _2/_3 suffix was appended (2/3 without `_` where element-id-naming of the .bpmnlintrc checks the id in camelCase or PascalCase, and in stemTo / scopedTo flows; after an id that ends in a digit No2/No3, serviceTask_step1No2, so it never reads as another number; a long id loses whole words first, to stay within 64 characters): a name the file already has, or unnamed elements that only an index tells apart.', fix: 'Use the reported id, pass an explicit id (--id, --flow-id, "id", "flowId", "joinId") to choose one yourself, or give the element a distinct name.' },
+  { code: 'W_ID_PREFIX_STALE', meaning: 'A retype or a trigger change (`retype`, `set trigger=` and the other trigger keys) kept an id whose prefix the project\'s id conventions (element-id-naming of the .bpmnlintrc) give what the element was, or that they did not check for it (a type switched off), and do not accept for what it is now (serviceTask_checkInvoice, now a user task; timerEvent_x, now a message event). Ids are API, so the element keeps it; element-id-naming reports it from now on. Only the change that made it stale reports it (an apply batch: once per element, from its state before the batch to its final state). An element the same batch created (a split\'s join too) is nobody\'s API yet: it takes the new prefix instead, and the flows the batch named after it follow, without the warning.', fix: 'Keep the id while code, tests or links use it. To follow the convention, run the hint\'s `bpmn set <file> <id> id=<newId>` (the new prefix and the rest of the id; where the rest did not pass the rule, e.g. a body in another case, the id of what the element is now; free in the file after the batch).' },
+  { code: 'W_FLOW_ID_STALE', meaning: 'With flow ids kept (--keep-flow-ids or BPMN_KEEP_FLOW_IDS=1; library: keepFlowIds) a flow the file had kept its id although the change gave it other ends (a splice, a bridge, a move, `set source=` / `target=`; also where an end got another id or name earlier in the batch): the id names ends the flow no longer has. Only the change that made it stale reports it, once per flow and against its ends after the whole batch; a flow the same change created follows its ends, one it renamed with `set id=` takes that id, and `bpmn validate` never lists it.', fix: 'Keep the id while code or tests use it. To rename it deliberately, together with them: `bpmn set <file> <flowId> id=<newId>` (the hint names the id its new ends give, or the --flow-id / "flowId" the splice into it was given; a second flow between the same ends gets `_2`, so every hint can be followed).' },
+  { code: 'W_KIND_MISMATCH', meaning: '`add --if-absent`: the id exists but with another kind; nothing was changed.', fix: 'Use `bpmn retype <file> <id> <kind>` to change its kind, or pick another id.' },
+  { code: 'W_OPTION_IGNORED', meaning: 'An option does not apply to the kind (trigger options on a task, --collapsed on a non-sub-process, --lane on a data object) or to the placement (--flow-id on a splice: the flow into the node is the existing one; one without id takes it) and was ignored.', fix: 'Drop the option, or use the kind it applies to. For --flow-id: the hint\'s `bpmn set <file> <flowId> id=<newId>` renames the existing flow; with flow ids kept, where W_FLOW_ID_STALE reports that flow, it names the command instead.' },
+  { code: 'W_LANE_INHERITED', meaning: 'A node added (or moved without a lane of its own, e.g. out of a sub-process) into a flow between two lanes (a cross-lane splice) without --lane got one of the two lanes: the lane of the row the layout puts it on (the target\'s after a branching source such as a gateway, else the anchor\'s); the message names both. A moved node that is in a lane keeps it.', fix: 'Keep it, or `bpmn move <file> <id> --lane <otherLaneId>` (the hint names it); pass --lane when adding or moving to choose up front.' },
+  { code: 'W_LANES_WITHOUT_POOL', meaning: 'The process has lanes but no participant; lanes are only drawn inside a pool.', fix: 'Add a pool: `bpmn add <file> participant "<name>"` (it wraps the existing process).' },
+  { code: 'W_LAYOUT_*', meaning: 'The layout engine reported a warning while drawing (suffix = the layouter\'s code); the diagram was still written.', fix: 'Check the named element; usually a node the layouter could not place nicely (e.g. unreachable or oddly connected).' },
+  { code: 'W_LAYOUT_INCREMENTAL_FAILED', meaning: 'Layout mode auto: keeping the hand-made drawing failed (incremental layout error, or a diagram with vertical pools / lanes, which only a full redraw handles), so the whole diagram was redrawn; colours were carried over, positions were not.', fix: 'Check the result (`bpmn show <file> --layout`); report the command and file. To refuse instead of redrawing, pass --layout incremental.' },
+  // lint (from `bpmn validate` and after every write)
+  { code: 'W_NO_START', meaning: 'A process or sub-process has no start event.', fix: '`bpmn add <file> startEvent "<name>" --before <firstNodeId>` (or --in <scope>).' },
+  { code: 'W_NO_END', meaning: 'A process or sub-process has no end event.', fix: '`bpmn add <file> endEvent "<name>" --after <lastNodeId>`.' },
+  { code: 'W_UNREACHABLE', meaning: 'A node is not reachable from any start event.', fix: 'Connect it (`bpmn connect <file> <source> <id>` / `bpmn move <file> <id> --after <nodeId>`) or remove it.' },
+  { code: 'W_DEAD_END', meaning: 'A non-end node has no outgoing flow.', fix: 'Connect it to the next node or to an end event (`bpmn add <file> endEvent --after <id>`).' },
+  { code: 'W_GATEWAY_NAME', meaning: 'A splitting exclusive/inclusive gateway is not named as a question.', fix: '`bpmn set <file> <gatewayId> name="Invoice ok?"`.' },
+  { code: 'W_BRANCH_NAME', meaning: 'Outgoing flows of a splitting exclusive/inclusive gateway have no names.', fix: '`bpmn set <file> <flowId> name=yes` for each branch.' },
+  { code: 'W_NAMED_JOIN', meaning: 'A joining gateway has a name (convention: joins are unnamed).', fix: '`bpmn set <file> <gatewayId> name=`.' },
+  { code: 'W_NAMED_PARALLEL', meaning: 'A parallel gateway has a name (convention: parallel gateways are unnamed).', fix: '`bpmn set <file> <gatewayId> name=`.' },
+  { code: 'W_NOT_IN_LANE', meaning: 'The process has lanes but this node is in none of them.', fix: '`bpmn set <file> <nodeId> lane=<laneId>` or `bpmn move <file> <nodeId> --lane <laneId>`.' },
+  { code: 'W_EVENT_GATEWAY_TARGET', meaning: 'An event-based gateway leads to something BPMN 2.0 does not allow there: not a catching event or receive task (lint); in a plain file also a receive task mixed with message catch events, a receive task with boundary events, or a target with another incoming flow (`connect`, `add`, `move` warn about the edge they create). Camunda 7, CIB seven, Operaton and Camunda 8 accept only intermediate catch events: in a Camunda 7 / 8 file W_C7_DEPLOY_EVENT_GATEWAY / W_C8_DEPLOY_EVENT_GATEWAY reports it instead.', fix: 'Put intermediateCatchEvent:<message|timer|signal|conditional> nodes directly after the gateway (`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow <flowId> --message <Msg>`).' },
+  { code: 'W_EMPTY_SUBPROCESS', meaning: 'A sub-process contains no nodes.', fix: '`bpmn add <file> startEvent --in <subProcessId>` and build its content, or remove it.' },
+  { code: 'W_DUPLICATE_NAME', meaning: 'Several elements of the same kind share a name.', fix: 'Rename with `bpmn set <file> <id> name=...` unless intended.' },
+  { code: 'W_IMPLICIT_SPLIT', meaning: 'A non-gateway node got a second outgoing flow (implicit parallel split).', fix: 'Route the branches through a gateway: a `split` op in `bpmn apply` (split exists only as an apply op, not as a command) or `bpmn add <file> exclusiveGateway --after <id>` plus `connect`; ignore it when the implicit split is intended.' },
+  { code: 'W_IMPLICIT_JOIN', meaning: 'A non-gateway node got a second incoming flow (implicit join: every token runs the node again).', fix: 'Join through a gateway unless the repeated execution is intended.' },
+  { code: 'W_LABEL_DROPPED', meaning: 'While bridging a removed node the outgoing flow label could not be carried over because the incoming flow has its own; or, with flow ids kept, a moved node that was not bridged (several in- or out-flows, or none) put its out-flow back at its new place, to another node, without the label, which nothing at the old place took.', fix: 'Set the wanted label on the surviving flow with `bpmn set <file> <flowId> name=...`.' },
+  { code: 'W_CONDITION_DROPPED', meaning: 'While bridging a removed node the outgoing flow condition could not be carried over; or, with flow ids kept, a moved node that was not bridged put its out-flow back at its new place, to another node, without the condition, which nothing at the old place took, or as the default flow, which has none.', fix: 'Set the condition on the surviving flow with `bpmn set <file> <flowId> condition=...`.' },
+  { code: 'W_PROPERTY_DROPPED', meaning: '`retype` dropped a property the new kind does not have (e.g. script on a userTask); a trigger kind change (`set trigger=`, `retype`) dropped vendor attributes / extension elements of the old event definition (changing only the details of the same trigger keeps the definition; on an event with several definitions `set trigger=<t>` keeps that one and drops the others); `set loop=none|standard` (or standard -> multi-instance) dropped the vendor content of the old loop; a condition change dropped camunda:resource / the script language (an inline body replacing a script resource, a ${...} body that does not inherit a script language) or the inline body (a script resource replacing it); or `ext add` replaced a keyed item (same name / id) whose attributes, value or children the new one does not have.', fix: 'Re-add the information in a form the new kind supports (the hint says how, e.g. language=<lang> to keep a script language; for `ext add` the hint holds the `--xml` that keeps the old content), or accept the loss.' },
+  { code: 'W_PREEXISTING_ERROR', meaning: 'A structural error, or an error of a validator (a host\'s validator in library use: `[<name>]`), that the model already had before this change (the message starts with its original code); it does not block the write. A validator\'s error follows its element through a rename. A result counts it with the other warnings the file already had (`N warnings already in the file`, JSON `warnings.preexistingCount`) instead of listing it; `MutationResult.validation.warnings` of the library keeps it.', fix: 'Fix it when convenient: `bpmn validate <file>` lists it with its own code and hint (a host validator\'s error: the host\'s own check or `validateXml(xml, { validators })` lists it).' },
+  // vendor content: nested keys of set, ext structure, retype, connect, remove
+  { code: 'E_WRONG_HOST', meaning: '`set`: a known camunda attribute was given to an element that does not carry it: the Camunda descriptor places it on a nested element (the event definition, the multi-instance loop or the condition expression), it is a process attribute given to a participant, or a `<slot>.<attr>` the nested element cannot carry (loop.camunda:collection on a standard loop). Camunda 8: a zeebe attribute of an extension element (zeebe:assignee), or a zeebe:subscription / zeebe:correlationKey for an element that waits for no message (with a message, both go to that message\'s zeebe:subscription, with a note).', fix: 'Use the prefixed key from the hint, e.g. `bpmn set <file> <id> definition.camunda:errorCodeVariable=code`, `bpmn set <file> <id> \'loop.camunda:collection=${items}\'`, `bpmn set <file> <flowId> condition.camunda:resource=<uri>`; set the trigger it needs first (trigger=error ...), loop=parallel for multi-instance attributes, or set it on the process id.' },
+  { code: 'E_NO_NESTED_ELEMENT', meaning: '`set`: a definition. or condition. key names a nested element that does not exist (an event without trigger has no event definition; a flow or conditional event without condition has no condition expression), or a `definition[<n>]` / `definition[<trigger>]` selector matches no event definition.', fix: 'Give the event a trigger in the same command (`bpmn set <file> <id> trigger=<t> definition.<key>=<value>`) or set condition=<expr> / when=<expr> first; a script resource condition is created directly with `condition.camunda:resource=<uri> language=<lang>`. (loop. never needs this: a parallel multi-instance loop is created.)' },
+  { code: 'E_AMBIGUOUS_NESTED', meaning: '`set` / `ext` with `definition.` on an event that has several event definitions: it does not say which one. The message lists them as definition[<n>] = <type> <id>.', fix: 'Name one by position (0-based) or by trigger: `bpmn set <file> <id> \'definition[1].<key>=<value>\'` or `\'definition[timer].<key>=<value>\'` (quote the brackets in a shell; `ext` takes the same prefix), or keep a single definition: `bpmn set <file> <id> trigger=<t>` (the engines act on one only, see W_C7_MULTIPLE_EVENT_DEFINITIONS).' },
+  { code: 'E_DUPLICATE_EXTENSION', meaning: '`ext add` would create a second single-instance vendor element (camunda:inputOutput, formData, connector, failedJobRetryTimeCycle, properties; nested: connector/connectorId, formField/validation, ...; zeebe:ioMapping, taskDefinition, ...) and merging is ambiguous: an attribute or value conflicts, or the element already holds several. Camunda 7 engines refuse duplicates (ENGINE-01009).', fix: 'Pass --replace to replace it as a whole, or remove the old one first (`bpmn ext remove <file> <id> <selector>`, see `bpmn ext list <file> <id>`).' },
+  { code: 'E_AMBIGUOUS_EXTENSION', meaning: 'An `ext add` path step matches several vendor elements, or an `ext remove` predicate matches items in several places.', fix: 'Name one with [attr=value] or [index] in the path, e.g. \'camunda:formField[id=amount]/camunda:validation\'; the error lists the candidate paths.' },
+  { code: 'E_AMBIGUOUS_BRANCH', meaning: '`remove --with-branch` on a node that several paths reach (2+ incoming flows): its downstream is not the branch of one path.', fix: 'Remove the branch from a node only one path reaches (the first node after the split), or remove the node alone (`--bridge-all` reconnects the paths to its successor).' },
+  { code: 'E_AMBIGUOUS_BRIDGE', meaning: '`remove --bridge-all` on a node with several outgoing flows: which predecessor would go to which successor is not clear. A plain `remove` of a synchronising join (parallel, inclusive, complex gateway with several incoming flows and one outgoing): bridging ends the synchronisation, not bridging cuts off its successor.', fix: 'A join: say which, `bpmn remove <file> <id> --bridge-all` (each path runs on to the successor on its own) or `--no-bridge` (connect what should stay yourself). A split: remove the branches you do not need first (`bpmn remove <file> <firstNodeOfBranch> --with-branch`), or remove the node with `--no-bridge` and connect what should stay.' },
+  { code: 'E_INVALID_BRIDGE', meaning: '`remove` (or `move`) would bridge an event-based gateway to a target the file\'s rule does not allow. Camunda 7 files: the engines\' rule (only message / timer / signal / conditional intermediate catch events, no receive tasks, no catch event with another incoming flow, no two branches waiting for one message or signal name). Other files: BPMN 2.0 (catch events with those triggers or receive tasks without boundary events, receive tasks not mixed with message catch events, no other incoming flow). The message says which rule applied.', fix: '`bpmn remove <file> <id> --no-bridge` and wire the gateway yourself, put a catch event in front of the successor first (`bpmn add <file> intermediateCatchEvent:timer "<Name>" --flow <flowId> --timer PT1H`), or remove the successor in the same command. For move: move a whole branch, or remove and re-add.' },
+  { code: 'W_MISPLACED_EXTENSION', meaning: '`ext add`: camunda content was added at the top of extensionElements where the engines do not read it: a type that may only be nested and has no unique container (camunda:constraint, validation, value, script, entry, list, map), or camunda:field on an element that does not read fields.', fix: 'Add it with a path into its container (the hint shows one, e.g. \'camunda:formField[id=<id>]/camunda:validation/camunda:constraint\') and remove the loose one (`bpmn ext remove <file> <id> <index>`).' },
+  { code: 'W_DUPLICATE_FLOW', meaning: '`connect` created a second sequence or message flow between the same two elements (the target runs twice).', fix: 'Use --if-absent to skip an existing connection, or remove the extra flow with `bpmn remove <file> <flowId>`.' },
+  { code: 'W_PROPERTY_INAPPLICABLE', meaning: '`retype`: camunda attributes or extension elements of the element are not allowed on the new kind by the Camunda descriptor (camunda:assignee on a serviceTask, camunda:topic on a userTask, camunda:taskListener outside a userTask). They are kept (nothing was dropped) but have no effect.', fix: 'Remove them with the commands in the hint (`bpmn set <file> <id> camunda:assignee=`, `bpmn ext remove <file> <id> camunda:taskListener`), set what the new kind needs, or retype back.' },
+  // platform profile (validate, and the findings a mutation introduces)
+  { code: 'W_C7_*', meaning: 'A finding of the Camunda 7 profile, which runs in Camunda 7 files (detected from modeler:executionPlatform or the camunda namespace; CIB seven and Operaton included; `validate --platform c7|c8|none|auto`). A file that uses Operaton\'s own namespace (operaton:*) is read the way Operaton reads it: operaton:* first, camunda:* as the fallback (Camunda 7 and CIB seven ignore operaton:*); `--json` platform says `"operaton": true` and the detail line says so. Every finding has a severity (JSON field `severity`): deploy = the engines (Camunda 7.24, CIB seven 2.2, Operaton 2.1) refuse the file (codes W_C7_DEPLOY_*); runtime = it deploys but the setting is ignored or fails when it runs; practice = it works, the engine logs a warning. Only executable processes are checked, without the content of ad-hoc sub-processes (the engines skip both); the schema rules cover the whole file (W_C7_DEPLOY_SCHEMA, and the event definitions of W_C7_DEPLOY_EVENT_DEFINITION / W_C7_DEPLOY_LINK). A mutation reports only the findings it introduced.', fix: 'Fix every W_C7_DEPLOY_* finding before deploying; the hint of each finding names the exact `bpmn set` / `bpmn ext` / `bpmn add|remove|move` command. `bpmn validate <file>` lists all of them.' },
+  { code: 'W_C7_DEPLOY_HISTORY_TTL', meaning: 'An executable process has no camunda:historyTimeToLive, or a value that is not a number of days or P<n>D; Camunda 7.20+, CIB seven and Operaton refuse to deploy it (ENGINE-12018).', fix: '`bpmn set <file> <processId> camunda:historyTimeToLive=180` (`bpmn new <file> --target camunda7` writes 180).' },
+  { code: 'W_C7_DEPLOY_IMPLEMENTATION', meaning: 'A service, send or business rule task (or a message throw / end event definition) has no implementation (class, delegateExpression, expression, type=external or shell, connector; decisionRef for business rule tasks), camunda:type is neither external nor shell ("mail" included: the standard distributions cannot load it), or a shell task has no camunda:field command, an expression field, or wait / redirectError / cleanEnv other than true / false; the engines refuse the file.', fix: '`bpmn set <file> <id> camunda:type=external camunda:topic=<topic>` (or camunda:delegateExpression=${...}; `definition.camunda:...` for message events); a shell task: `bpmn ext add <file> <id> camunda:field name=command stringValue=<command>`.' },
+  { code: 'W_C7_DEPLOY_EXTERNAL_TOPIC', meaning: 'camunda:type=external without camunda:topic; the engines refuse the file.', fix: '`bpmn set <file> <id> camunda:topic=<topic>`.' },
+  { code: 'W_C7_DEPLOY_RESULT_VARIABLE', meaning: 'camunda:resultVariable together with camunda:class or camunda:delegateExpression; the engines refuse the file.', fix: '`bpmn set <file> <id> camunda:resultVariable=`, or use camunda:expression.' },
+  { code: 'W_C7_DEPLOY_CALLED_ELEMENT', meaning: 'A call activity has neither calledElement nor camunda:caseRef, or both; the engines refuse the file.', fix: '`bpmn set <file> <id> calledElement=<processId>` (or `camunda:caseRef=` to drop the case reference).' },
+  { code: 'W_C7_DEPLOY_BINDING_VERSION', meaning: 'calledElementBinding / caseBinding / decisionRefBinding / formRefBinding is version (or versionTag) without the matching *Version / *VersionTag; the engines refuse the file.', fix: '`bpmn set <file> <id> camunda:<x>Version=<n>`, or set the binding to latest.' },
+  { code: 'W_C7_DEPLOY_FORM', meaning: 'camunda:formRef without a formRefBinding of deployment / latest / version, or formKey and formRef together; the engines refuse the file.', fix: '`bpmn set <file> <id> camunda:formRefBinding=latest` or `bpmn set <file> <id> camunda:formKey=`.' },
+  { code: 'W_C7_DEPLOY_BAD_VALUE', meaning: 'A value the engines refuse at deploy: mapDecisionResult not singleEntry / singleResult / collectEntries / resultList; jobPriority or (process / external) taskPriority not an integer or expression.', fix: '`bpmn set <file> <id> camunda:mapDecisionResult=singleEntry` or `bpmn set <file> <id> camunda:jobPriority=50`.' },
+  { code: 'W_C7_DEPLOY_MULTI_INSTANCE', meaning: 'A multi-instance activity has neither loop cardinality nor camunda:collection (also when the collection sits on the activity instead of the loop), an empty cardinality, or an elementVariable without collection; the engines refuse the file.', fix: '`bpmn set <file> <id> \'loop.camunda:collection=${items}\' loop.camunda:elementVariable=item` (or cardinality=3).' },
+  { code: 'W_C7_DEPLOY_DUPLICATE_EXTENSION', meaning: 'A second camunda:inputOutput / connector / connectorId / formData / failedJobRetryTimeCycle where the engine reads it; the engines refuse the file (ENGINE-01009).', fix: 'Merge them into one: `bpmn ext list <file> <id> --json`, then `bpmn ext add <file> <id> camunda:<type> --replace --xml \'...\'`.' },
+  { code: 'W_C7_DEPLOY_INPUT_OUTPUT', meaning: 'camunda:inputOutput on a start or boundary event, a gateway or an event sub-process, or output parameters on an end event or a multi-instance activity; the engines refuse the file.', fix: '`bpmn ext remove <file> <id> camunda:inputOutput` (move the mapping to the next activity).' },
+  { code: 'W_C7_DEPLOY_LISTENER', meaning: 'An execution or task listener without implementation (class / expression / delegateExpression / script) or event, with an event the engine does not know, a script without scriptFormat, or a timeout task listener without timer or without id; the engines refuse the file.', fix: 'Rebuild just that listener (the hint has both commands; --replace would remove its siblings): `bpmn ext remove <file> <id> \'camunda:executionListener[event=finish]\'`, then e.g. `bpmn ext add <file> <id> camunda:executionListener event=start delegateExpression=${...}`.' },
+  { code: 'W_C7_DEPLOY_EXTENSION', meaning: 'Invalid content of camunda extension elements: camunda:in/out without source and target (and without variables / businessKey), a parameter without name, a form field without id or with a type other than string / long / boolean / date / enum, a connector without connectorId, a camunda:field without a value (or with stringValue and camunda:string together) where the engines read fields (class / delegateExpression tasks, message throws and listeners, shell tasks); the engines refuse the file.', fix: '`bpmn ext list <file> <id> --json`, then re-add the item complete (`bpmn ext add <file> <id> camunda:field name=a stringValue=b`: keyed items replace the old one); a repeatable item without key is removed by its selector and added again (the hint has both commands).' },
+  { code: 'W_C7_DEPLOY_EVENT_GATEWAY', meaning: 'An event-based gateway branch is not a message / timer / signal / conditional intermediate catch event (receive tasks included; of several event definitions the one the engines act on counts), a catch event after it has other incoming flows, or two branches wait for one message / signal name; the engines refuse the file.', fix: '`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow <flowId> --message <Msg>` in front of the target, or rename one message / signal.' },
+  { code: 'W_C7_DEPLOY_MESSAGE', meaning: 'A catching message event (or receive task) without messageRef or with a nameless bpmn:Message, or two subscriptions to one message name in one engine scope: the start events of a process; the event sub-process starts of a (sub-)process together with the boundary events on that sub-process (a multi-instance host is a scope of its own); a receive task together with its boundary events. The engines refuse the file.', fix: '`bpmn set <file> <id> message=<MessageName>` (creates the bpmn:Message when missing).' },
+  { code: 'W_C7_DEPLOY_SIGNAL', meaning: 'A signal event without signalRef or with a nameless signal, two root signals with one name, or two subscriptions to one signal name in one engine scope (two signal start events, two boundary events of one host, an event sub-process start and a boundary event on its sub-process); the engines refuse the file.', fix: '`bpmn set <file> <id> signal=<SignalName>`, or rename the signal.' },
+  { code: 'W_C7_DEPLOY_ERROR', meaning: 'An error end event without errorRef, or whose bpmn:Error has no errorCode; the engines refuse the file.', fix: '`bpmn set <file> <id> error=<ErrorName> errorCode=<CODE>`.' },
+  { code: 'W_C7_DEPLOY_ESCALATION', meaning: 'An escalation throw / end event without escalationRef or escalationCode, or an escalation boundary event on something other than a sub-process, call activity or user task; the engines refuse the file.', fix: '`bpmn set <file> <id> escalationCode=<CODE>`, or move / remove the boundary event.' },
+  { code: 'W_C7_DEPLOY_EVENT_DEFINITION', meaning: 'A timer without date, cycle or duration, or a compensation activityRef outside the throw event\'s (sub-)process (an event sub-process may name activities of its parent scope); or, by the BPMN schema, a conditional event definition without a condition element (an empty one or a camunda:resource script deploys: W_C7_EMPTY_CONDITION / fine) or a timer definition with more than one of timeDate, timeCycle and timeDuration. The engines refuse the file. The schema rules hold for every event definition in the file: also for one the engines ignore next to another (W_C7_MULTIPLE_EVENT_DEFINITIONS) and in non-executable processes.', fix: '`bpmn set <file> <id> timer=PT1H`, `bpmn set <file> <id> \'when=${...}\'`, or `bpmn set <file> <id> definition.activityRef=<activityId>` (the hint lists the candidates); a definition the engines ignore is dropped with `bpmn set <file> <id> trigger=<acting trigger>`.' },
+  { code: 'W_C7_DEPLOY_START_EVENT', meaning: 'A process or embedded sub-process without a start event, also an empty one ("must define a startEvent element"; a transaction without one deploys: W_C7_TRANSACTION_NO_START), a second none or timer start event in a process (message / signal / conditional start events may be added), or a second start event of any kind in a sub-process (event sub-processes and transactions included); the engines refuse the file. Replaces W_NO_START / W_EMPTY_SUBPROCESS for the same (sub-)process.', fix: 'A second start event: remove it when the first one already reaches where it leads (`bpmn remove <file> <extraStartId>`, its flows go with it), else start its branch from the first one (`bpmn set <file> <flowId> source=<startId>`, then remove it) or give a process start another trigger (`bpmn set <file> <id> trigger=message message=<Name>`); the hint names the flows and never moves one into a node the first start already reaches. A missing start: `bpmn add <file> startEvent "<Name>" --before <firstNodeId>` (`--in <id>` when empty).' },
+  { code: 'W_C7_DEPLOY_AD_HOC_SUBPROCESS', meaning: 'An ad-hoc sub-process with a sequence flow into or out of it, or a boundary event on it: the engines do not run ad-hoc sub-processes and refuse the file ("Invalid destination / source of sequence flow", "Invalid reference in boundary event"); one with a multi-instance loop is refused by Camunda 7 and CIB seven too (Operaton deploys a valid loop; the loop rules of W_C7_DEPLOY_MULTI_INSTANCE hold on all three). One that nothing connects deploys and is skipped with its content, so the profile does not check that content.', fix: '`bpmn retype <file> <id> subProcess`, then give its content a start event and flows (`bpmn add <file> startEvent "<Name>" --in <id>`, `bpmn connect <file> <fromId> <toId>`); or drop the loop: `bpmn set <file> <id> loop=none`.' },
+  { code: 'W_C7_DEPLOY_LINK', meaning: 'A link event definition without a name (BPMN schema: every one in the file, also one the engines ignore next to another and in non-executable processes), two link catch events with one name in a process (sub-processes included), or a link throw event reached by a flow with no catch event of its name in its own (sub-)process; the engines refuse the file.', fix: '`bpmn set <file> <eventId> link=<Name>`, or add the catching side: `bpmn add <file> intermediateCatchEvent:link "<Name>" --in <scopeId> --link <Name>`.' },
+  { code: 'W_C7_DEPLOY_SCHEMA', meaning: 'An attribute without namespace prefix that the BPMN schema does not define (calledDecision="..." on a businessRuleTask, assignee="..." on a userTask), anywhere in the file: non-executable processes, the diagram and bpmn:definitions included. The engines validate the file against the schema and refuse it.', fix: 'Remove it: `bpmn set <file> <id> <attr>=` (on an event definition, loop or condition: `definition.<attr>=` / `loop.<attr>=` / `condition.<attr>=`); a vendor attribute needs its prefix: `bpmn set <file> <id> assignee= camunda:assignee=<value>`. A business rule task\'s calledDecision (bpmn-cli\'s decision link for a model without an engine) is converted: `bpmn set <file> <id> calledDecision=<decision>` writes camunda:decisionRef and removes it.' },
+  { code: 'W_C7_DEPLOY_BOUNDARY_HOST', meaning: 'A boundary event is attached to a compensation handler (isForCompensation=true); the engines refuse the file. `validate` and writes report it as the structural error E_INVALID_HOST instead (the profile alone, `runProfile`, reports this code).', fix: '`bpmn remove <file> <id>` or `bpmn move <file> <id> --on <activityId>`.' },
+  { code: 'W_C7_DEPLOY_SCRIPT', meaning: 'A script task has neither a script nor camunda:resource; the engines refuse the file.', fix: '`bpmn set <file> <id> scriptFormat=groovy \'script=...\'` (or camunda:resource=deployment://<file>).' },
+  { code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', meaning: 'An exclusive gateway without outgoing flow, a single outgoing flow with a condition, a default flow with a condition, or flows without condition next to a default (or more than one without condition); the engines refuse the file.', fix: '`bpmn set <file> <flowId> \'condition=${...}\'` or `bpmn set <file> <flowId> default=true`.' },
+  { code: 'W_C7_DEPLOY_DEFINITIONS_EXTENSION', meaning: 'bpmn:extensionElements directly under bpmn:definitions (the BPMN schema does not allow them there); the engines refuse the file.', fix: '`bpmn ext remove <file> <definitionsId> <type>`, then `bpmn ext add <file> <processId> ...`.' },
+  { code: 'W_C7_UNKNOWN_ATTRIBUTE', meaning: 'A camunda attribute (on a BPMN element or inside camunda content) the Camunda descriptor does not know, e.g. a typo; the engines ignore it. The message suggests the closest known name.', fix: 'Replace it: `bpmn set <file> <id> camunda:asignee= camunda:assignee=<value>`.' },
+  { code: 'W_C7_MISPLACED_ATTRIBUTE', meaning: 'A camunda attribute on an element type that does not read it (camunda:assignee on a serviceTask, camunda:collection on the activity, errorCodeVariable on the event instead of its definition), or on the side of an event definition the engines do not read it on: type / topic / class / delegateExpression / expression / resultVariable / taskPriority on a message catch event, camunda:async on a signal catch event, errorCodeVariable / errorMessageVariable on an error end event, escalationCodeVariable on an escalation throw; it has no effect.', fix: 'Move it with the definition. / loop. / condition. keys of set (the hint has the command), or remove it: `bpmn set <file> <id> camunda:<attr>=` (`definition.camunda:<attr>=`).' },
+  { code: 'W_C7_UNKNOWN_ELEMENT', meaning: 'A camunda extension element type the Camunda descriptor does not know (camunda:inputOutputt, camunda:values); the engines ignore it.', fix: '`bpmn ext remove <file> <id> <index>` and add the right type.' },
+  { code: 'W_C7_MISPLACED_EXTENSION', meaning: 'A camunda extension element on a host that does not read it (taskListener, camunda:in or formData on a serviceTask; inputOutput on the process or a flow; camunda:field / connector on a message catch event definition, camunda:in on a signal catch), a child type loose in extensionElements, or a child in the wrong container; the engines ignore it.', fix: '`bpmn ext remove <file> <id> <selector>` (the hint has it), then add it where it belongs with `bpmn ext add <file> <hostId> <type> ...` (child types go into their container automatically).' },
+  { code: 'W_C7_FOREIGN_CONTENT', meaning: 'zeebe:* attributes or extension elements in a Camunda 7 file; Camunda 7 ignores them.', fix: '`bpmn set <file> <id> zeebe:<attr>=` or `bpmn ext remove <file> <id> zeebe:<type>`, and use the camunda equivalent.' },
+  { code: 'W_C7_BAD_VALUE', meaning: 'A value the engines accept but misread: a boolean other than exactly true / false (asyncBefore=yes stays off), an unknown calledElement / case / decisionRef binding, variableEvents other than create / update / delete, an empty topic or calledElement, a non-numeric user task priority.', fix: '`bpmn set <file> <id> camunda:<attr>=<valid value>` (the hint names it).' },
+  { code: 'W_C7_MESSAGE_NO_IMPLEMENTATION', meaning: 'A message throw or end event without implementation: it sends nothing and behaves like a none event at run time.', fix: '`bpmn set <file> <id> definition.camunda:type=external definition.camunda:topic=<topic>` (or definition.camunda:delegateExpression=${...}).' },
+  { code: 'W_C7_TRANSACTION_NO_START', meaning: '(runtime) A transaction without a start event (also an empty one): unlike an embedded sub-process it deploys, but every instance that reaches it fails ("No initial activity found for subprocess"). Replaces W_NO_START / W_EMPTY_SUBPROCESS for the same transaction.', fix: '`bpmn add <file> startEvent "<Name>" --before <firstNodeId>` (`--in <id>` when empty), or `bpmn remove <file> <id>`.' },
+  { code: 'W_C7_EMPTY_CONDITION', meaning: '(runtime) A condition with no expression and no camunda:resource, on a conditional event or on a sequence flow the engines evaluate (not a default flow, not out of a parallel or event-based gateway). It deploys, but every evaluation fails ("condition expression returns non-Boolean" / "condition script returns null").', fix: '`bpmn set <file> <flowId> \'condition=${...}\'` (or `condition=` to drop it); a conditional event: `bpmn set <file> <id> \'when=${...}\'` or `bpmn set <file> <id> condition.camunda:resource=deployment://<script> condition.language=groovy`.' },
+  { code: 'W_C7_MULTIPLE_EVENT_DEFINITIONS', meaning: '(runtime) An event with several event definitions (BPMN "multiple"): the engines act on one and do not even parse the others. Engine-checked order: intermediate catch timer > signal > message > link > conditional; process start timer > message > signal > conditional; event sub-process start message > signal > timer > conditional; boundary timer > signal > message > conditional; intermediate throw signal > message; end message > signal. The other W_C7_DEPLOY_* rules look at the acting definition only, like the engines, except the schema rules (a conditional definition without condition element, a link definition without name, a timer definition with two time elements): the engines validate the file against the BPMN schema before they pick a definition, so these refuse the file on an ignored definition too.', fix: 'Keep one: `bpmn set <file> <id> trigger=<t>` (keeps that definition, drops the others), and model every other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with `bpmn set <file> <id> \'definition[<n>].<key>=<value>\'`.' },
+  { code: 'W_C7_DANGLING_REF', meaning: 'An id reference inside camunda content (camunda:errorEventDefinition errorRef) points to no element of the right type; the mapping is ignored at run time.', fix: 'Rebuild just that mapping (the hint has both commands; --replace would remove the other mappings): `bpmn ext remove <file> <id> \'camunda:errorEventDefinition[id=<mappingId>]\'`, then `bpmn ext add <file> <id> camunda:errorEventDefinition id=<mappingId> errorRef=<ErrorId> expression=${...}`.' },
+  { code: 'W_C7_EXCLUSIVE_GATEWAY_DEFAULT', meaning: '(practice) An exclusive gateway has exactly one flow without condition and no default; the engine takes it as the default and logs a warning.', fix: '`bpmn set <file> <flowId> default=true`.' },
+  { code: 'W_C7_DUPLICATE_EXTENSION', meaning: '(practice) A second camunda:failedJobRetryTimeCycle on an element that is not asynchronous yet; the engines refuse the file once it is.', fix: 'Keep one: `bpmn ext add <file> <id> camunda:failedJobRetryTimeCycle --replace --body R3/PT5M`.' },
+  { code: 'W_C8_*', meaning: 'A finding of the Camunda 8 profile, which runs in Camunda 8 files (modeler:executionPlatform "Camunda Cloud" or the zeebe namespace; `validate --platform c8` forces it). Every rule was checked against Camunda 8.9 (deploy and, for the runtime rules, running the process). Every finding has a severity (JSON field `severity`): deploy = Camunda 8 refuses the file (codes W_C8_DEPLOY_*); runtime = it deploys but the setting is ignored or fails when the process runs; practice = it works, but differently than intended. Executable processes are checked (Camunda 8 skips the others but refuses a file without any), the content of ad-hoc sub-processes included; the schema rules cover the whole file. Placement and known names come from the zeebe-bpmn-moddle descriptor. FEEL is parsed (the grammar Camunda 8.9 accepts; the JUEL habits &&, ||, ==, !, ${...}, single quotes are named). Timer values are checked for their form and range (a date that does not exist, 25:00, a cron field out of range), xsd:boolean attributes for true / false / 1 / 0. A mutation reports only the findings it introduced.', fix: 'Fix every W_C8_DEPLOY_* finding before deploying; the hint of each finding names the exact `bpmn ext` / `bpmn set` / `bpmn add|remove|retype` command. `bpmn validate <file>` lists all of them.' },
+  { code: 'W_C8_DEPLOY_EXECUTABLE', meaning: 'The file has processes, but none is executable; Camunda 8 refuses it ("Must contain at least one executable process").', fix: '`bpmn set <file> <processId> isExecutable=true`.' },
+  { code: 'W_C8_DEPLOY_IMPLEMENTATION', meaning: 'A service, send, script or business rule task, or a message throw / end event, has no implementation: Camunda 8 needs a zeebe:taskDefinition (the job type a worker subscribes to); a script task may have a zeebe:script (FEEL expression + resultVariable), a business rule task a zeebe:calledDecision (decisionId + resultVariable) instead, not both. Also: a job without type, a zeebe:script without expression or resultVariable, a zeebe:calledDecision without decisionId or resultVariable, a thrown message without name. Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType>` (retries=3 optional); `bpmn ext add <file> <id> zeebe:script expression==<FEEL> resultVariable=<variable>`; `bpmn set <file> <id> calledDecision=<decisionId>` plus `bpmn ext add <file> <id> zeebe:calledDecision resultVariable=<variable>`.' },
+  { code: 'W_C8_DEPLOY_CALLED_ELEMENT', meaning: 'A call activity without zeebe:calledElement (the BPMN calledElement attribute is not read by Camunda 8), or one without processId; Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false`.' },
+  { code: 'W_C8_DEPLOY_MULTI_INSTANCE', meaning: 'A multi-instance loop without exactly one zeebe:loopCharacteristics in its extension elements (a BPMN loop cardinality or a camunda:collection is not read; a zeebe:loopCharacteristics on the activity itself neither), one without inputCollection, or an outputCollection without outputElement (or the other way round); Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>` (creates a parallel loop when there is none; outputCollection=<results> outputElement==<expression> collects results).' },
+  { code: 'W_C8_DEPLOY_DUPLICATE_EXTENSION', meaning: 'Two of a zeebe element Camunda 8 reads once per element: taskDefinition, ioMapping, taskHeaders, userTask, formDefinition, assignmentDefinition, priorityDefinition, taskSchedule, versionTag, executionListeners, taskListeners, properties, linkedResources, adHoc, calledElement, calledDecision, script, publishMessage, subscription (on a message), loopCharacteristics (on a multi-instance loop), conditionalFilter. Camunda 8 refuses the file. (A second one added with ext add is merged into the first.)', fix: 'Merge them: `bpmn ext list <file> <id> --json`, then `bpmn ext add <file> <id> zeebe:<type> --replace --xml \'<zeebe:<type> ...>...</zeebe:<type>>\'`.' },
+  { code: 'W_C8_DEPLOY_EXTENSION', meaning: 'Invalid content of a zeebe element: an input / output mapping without target or with a target that is no variable path (a.b.c), an output mapping without source, two task headers with one key, a bindingType other than deployment / latest / versionTag (or versionTag without a versionTag), a linked resource without resourceType, conditional-filter variable events other than create / update, a zeebe:adHoc output collection without output element; Camunda 8 refuses the file.', fix: 'The hint has the command: keyed items (zeebe:input / zeebe:output by target, zeebe:header by key) are replaced when added again with ext add; others are rebuilt with `--replace` and every attribute they keep.' },
+  { code: 'W_C8_DEPLOY_EXPRESSION', meaning: 'A value Camunda 8 parses as FEEL at deploy is wrong: a static value where a FEEL expression (=...) is required (sequence-flow and conditional-event conditions, zeebe:script expression, multi-instance inputCollection / outputElement, correlationKey), or a FEEL expression the engine cannot parse: the JUEL habits (&& / || / == / ! / ${...}, single quotes, ?:) and every other syntax error of the grammar Camunda 8.9 parses (& | <> >> % := AND, if without else, unbalanced brackets or strings, an operator without operand, ...; engine-checked on 762 expressions), in conditions, zeebe attributes parsed as FEEL, a signal / message name starting with =, zeebe:adHoc and an ad-hoc sub-process\'s completion condition. Camunda 8 refuses the file.', fix: 'Write FEEL with a leading =: `bpmn set <file> <flowId> \'condition== amount > 100 and approved\'` (and / or, = for equality, not(...), double-quoted strings); attributes of zeebe elements with `bpmn ext add <file> <id> zeebe:<type> <attr>==<expression> ... --replace`.' },
+  { code: 'W_C8_DEPLOY_MESSAGE', meaning: 'A catching message event or receive task without message, a message without name, a catching message (not a process start event) whose bpmn:Message has no zeebe:subscription with a correlationKey, a FEEL message name on a process start event, a zeebe:publishMessage without message or correlationKey, or one message name caught twice in one scope (the boundary events of one activity together with the activity when it is a receive task, the branches of an event-based gateway, the event sub-process starts of a scope, the start events of a process). Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> message=<MessageName>` (creates the bpmn:Message), then `bpmn ext add <file> <messageId> zeebe:subscription correlationKey==<expression>`.' },
+  { code: 'W_C8_DEPLOY_SIGNAL', meaning: 'A signal event without signal or with a nameless one, a FEEL signal name on a start event, or one signal name on two start events of a process or two boundary events of one activity; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> signal=<SignalName>`, or rename the signal.' },
+  { code: 'W_C8_DEPLOY_ERROR', meaning: 'An error end / throw event without error or whose bpmn:Error has no errorCode, a catching error event with an error code that is an expression, two error catch events with one code (or two without code, catch-alls) in one scope, or a non-interrupting error event; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> error=<ErrorName> errorCode=<CODE>` (or another code / remove one of the catch events; `nonInterrupting=false`).' },
+  { code: 'W_C8_DEPLOY_ESCALATION', meaning: 'An escalation throw / end event without escalation or escalationCode, or an escalation boundary event on something else than a sub-process or call activity; Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> escalation=<Name> escalationCode=<CODE>`, or move / remove the boundary event.' },
+  { code: 'W_C8_DEPLOY_TIMER', meaning: 'A timer without date, cycle or duration; a static value Camunda 8 cannot parse (an ISO 8601 duration PT1H / P2D; a date-time with offset or Z, 2030-12-31T10:00:00Z; a repeating interval R/PT1H, R5/<start>/<duration> or a 6-field cron expression / @daily) or one out of range (a date that does not exist, 2030-02-30, 25:00, an offset over 18 hours; a cron field out of range, hour 25, month 13, a step of 0, a reversed range, ? outside the day fields); a cycle on an intermediate timer catch event; an interrupting timer boundary event or event sub-process start with a cycle. Camunda 8 refuses the file.', fix: '`bpmn set <file> <id> timer=PT1H` (R/... is a cycle, an ISO date-time a date); `bpmn set <file> <id> nonInterrupting=true` for a repeating boundary timer.' },
+  { code: 'W_C8_DEPLOY_EVENT_DEFINITION', meaning: 'An intermediate catch or boundary event without event definition, an event with several, a definition its position does not support (a non-none start in an embedded sub-process is W_C8_DEPLOY_START_EVENT; a none or compensation start in an event sub-process), a conditional, compensation or link catch event definition without id (Camunda 8.9 fails with an internal error), a compensation activityRef outside the throw event\'s scope, a compensation boundary event without association to a handler or with an outgoing flow, or (BPMN schema, every definition in the file) a conditional definition without condition. Camunda 8 refuses the file.', fix: 'The hint names it: `bpmn set <file> <id> trigger=<trigger>`, `bpmn set <file> <id> definition.id=<Id>`, `bpmn set <file> <id> definition.activityRef=<activityId>`, `bpmn connect <file> <boundaryId> <handlerId>`.' },
+  { code: 'W_C8_DEPLOY_EVENT_GATEWAY', meaning: 'An event-based gateway with fewer than two outgoing flows (Camunda 8 counts the <bpmn:outgoing> entries the file lists), or a branch that is not a message, timer, signal or conditional intermediate catch event (receive tasks included); Camunda 8 refuses the file.', fix: '`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after <gatewayId> --timer PT1H`; a receive task: `bpmn retype <file> <id> intermediateCatchEvent:message --message <Name>`.' },
+  { code: 'W_C8_DEPLOY_START_EVENT', meaning: 'A process without start event or with two none start events, an embedded sub-process without exactly one start event or with a start event that has a trigger, an event sub-process without exactly one start event; Camunda 8 refuses the file. Replaces W_NO_START / W_EMPTY_SUBPROCESS for the same (sub-)process.', fix: '`bpmn add <file> startEvent "<Name>" --before <firstNodeId>` (`--in <id>` when empty); a second none start: `bpmn remove <file> <id>` or `bpmn set <file> <id> trigger=message message=<Name>`.' },
+  { code: 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', meaning: 'An ad-hoc sub-process that contains a start or end event, or no activity; Camunda 8 refuses the file. (Its content is checked like any other: Camunda 8 runs ad-hoc sub-processes.)', fix: '`bpmn remove <file> <eventId>`; `bpmn add <file> serviceTask "<Name>" --in <id>`.' },
+  { code: 'W_C8_DEPLOY_LINK', meaning: 'A link throw event without a catch event of its name in its own (sub-)process, two link catch events with one name in a process (sub-processes included), or (every definition in the file) a link definition without name (the BPMN schema) or with an empty one; Camunda 8 refuses the file.', fix: '`bpmn add <file> intermediateCatchEvent:link "<Name>" --in <scopeId> --link <Name>`, or `bpmn set <file> <id> link=<Name>`.' },
+  { code: 'W_C8_DEPLOY_USER_TASK', meaning: 'A zeebe:formDefinition that is not exactly one of formId / externalReference (Camunda user task: an embedded formKey is not read) or of formId / formKey (job worker user task), a static priority that is not a number from 0 to 100, a static due or follow-up date that is no ISO 8601 date-time with offset; Camunda 8 refuses the file.', fix: '`bpmn ext add <file> <id> zeebe:formDefinition formId=<formId> --replace` (or externalReference=<url>); `bpmn ext add <file> <id> zeebe:priorityDefinition priority=50 --replace`.' },
+  { code: 'W_C8_DEPLOY_LISTENER', meaning: 'An execution or task listener without type (the job type of its worker) or event type, an unknown event type (execution: start / end; task: creating / assigning / updating / completing / canceling, the older create / assignment / update / complete / cancel too), a start listener on a start or boundary event, an end listener on a gateway, execution listeners on a sequence flow, or task listeners on a job worker user task; Camunda 8 refuses the file.', fix: 'Rebuild just that listener (the hint has both commands): `bpmn ext remove <file> <id> \'zeebe:executionListeners/zeebe:executionListener[0]\'`, then `bpmn ext add <file> <id> zeebe:executionListeners/zeebe:executionListener eventType=end type=<jobType>`.' },
+  { code: 'W_C8_DEPLOY_UNSUPPORTED', meaning: 'A transaction or a cancel event: Camunda 8 does not support them and refuses the file (a complex gateway is the structural E_UNSUPPORTED_KIND).', fix: '`bpmn retype <file> <id> subProcess` (a transaction); `bpmn set <file> <id> trigger=error` (a cancel boundary event).' },
+  { code: 'W_C8_DEPLOY_BOUNDARY_HOST', meaning: 'A boundary event is attached to a compensation handler (isForCompensation=true); Camunda 8 refuses the file. `validate` and writes report it as the structural error E_INVALID_HOST instead (the profile alone, `runProfile`, reports this code).', fix: '`bpmn remove <file> <id>` or `bpmn move <file> <id> --on <activityId>`.' },
+  { code: 'W_C8_DEPLOY_SCHEMA', meaning: 'Camunda 8 validates the file against the BPMN schema and refuses it: an attribute without namespace prefix that the schema does not define (calledDecision="..." on a businessRuleTask), bpmn:extensionElements on bpmn:definitions, an id that is no XML NCName (a:b, 1abc; one bpmn-moddle cannot read at all is an import warning too), an IDREF that names no id of the file (a lane\'s flowNodeRef, default, dataObjectRef, ...), child elements in an order the schema does not allow (extensionElements after incoming, documentation after extensionElements, a laneSet after the flow elements, a message after the diagram), or an xsd:boolean attribute of another value than true / false / 1 / 0 (cancelActivity="maybe", isExpanded="TRUE"; bpmn-moddle reads it as false). The model shows none of the last three; the rule reads the file\'s text.', fix: 'Remove the attribute: `bpmn set <file> <id> <attr>=` (a business rule task\'s calledDecision is converted: `bpmn set <file> <id> calledDecision=<decision>` writes zeebe:calledDecision); rename the id: `bpmn set <file> <id> id=<NewId>`; the reference, the order and a boolean: fix them in the XML (Camunda Modeler and `bpmn` write the schema\'s order for the elements they create or change).' },
+  { code: 'W_C8_FOREIGN_CONTENT', meaning: 'camunda:* / operaton:* attributes or extension elements (Camunda 7 content) in a Camunda 8 file; Camunda 8 ignores them (engine-checked: camunda:assignee does not assign a Camunda user task).', fix: 'Remove it (`bpmn set <file> <id> camunda:<attr>=` / `bpmn ext remove <file> <id> <index>`) and use the zeebe element the hint names (zeebe:assignmentDefinition, zeebe:taskDefinition, zeebe:ioMapping, ...).' },
+  { code: 'W_C8_UNKNOWN_ELEMENT', meaning: 'A zeebe extension element the Zeebe descriptor does not know (a typo); Camunda 8 ignores it. The message suggests the closest known type.', fix: '`bpmn ext remove <file> <id> <index>` and add the right type.' },
+  { code: 'W_C8_UNKNOWN_ATTRIBUTE', meaning: 'An attribute a zeebe element does not have (zeebe:taskDefinition typo="..."), or a zeebe:* attribute on a BPMN element the descriptor does not know (most zeebe settings are extension elements); Camunda 8 ignores it.', fix: 'Rebuild the element without it (the hint has the command), or `bpmn set <file> <id> zeebe:<attr>=`.' },
+  { code: 'W_C8_MISPLACED_ATTRIBUTE', meaning: 'A zeebe attribute on an element type that does not carry it (zeebe:modelerTemplate on a lane); it has no effect.', fix: '`bpmn set <file> <id> zeebe:<attr>=`.' },
+  { code: 'W_C8_MISPLACED_EXTENSION', meaning: 'A zeebe element on a host that does not read it (zeebe:taskDefinition on a user task, zeebe:userTask on a service task, zeebe:calledDecision on a service task, zeebe:ioMapping on a gateway), a child type loose in extensionElements or in the wrong container, or input mappings on a start, boundary, none intermediate throw or none end event (Camunda 8 applies only their output mappings); it has no effect (engine-checked).', fix: '`bpmn ext remove <file> <id> <selector>` (the hint has it), then add it where it is read.' },
+  { code: 'W_C8_EXCLUSIVE_GATEWAY', meaning: '(runtime) A sequence flow out of an exclusive or inclusive gateway with other outgoing flows has no condition and is not the default flow: Camunda 8 never takes it, and an instance where no condition holds gets an incident ("Expected at least one condition to evaluate to true, or to have a default flow").', fix: '`bpmn set <file> <flowId> default=true`, or `bpmn set <file> <flowId> \'condition== <expression>\'`.' },
+  { code: 'W_C8_CONDITION_IGNORED', meaning: '(runtime) A condition on a sequence flow out of anything but an exclusive or inclusive gateway (a task, a parallel gateway): Camunda 8 ignores it and always takes the flow.', fix: '`bpmn set <file> <flowId> condition=`, or branch with a gateway (`bpmn add <file> exclusiveGateway "<Question?>" --after <sourceId>`).' },
+  { code: 'W_C8_STANDARD_LOOP', meaning: '(runtime) Standard loop characteristics: Camunda 8 does not support them and runs the activity once.', fix: '`bpmn set <file> <id> loop=none` and loop with a gateway, or a multi-instance: `bpmn ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>` after `bpmn set <file> <id> loop=sequential`.' },
+  { code: 'W_C8_EXPRESSION', meaning: '(runtime) A multi-instance completion condition that is no FEEL expression (a JUEL ${...}): it deploys, but every completed instance gets an incident ("Expected result of the expression to be BOOLEAN, but was STRING").', fix: '`bpmn set <file> <id> \'completion== <FEEL expression>\'`.' },
+  { code: 'W_C8_BAD_VALUE', meaning: '(runtime) A static job retries value that is no number (every instance gets an incident when it reaches the task), or a task header without key or value (Camunda 8 drops it, the job does not carry it).', fix: 'The hint has the command: `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType> retries=3 --replace`, `bpmn ext add <file> <id> zeebe:header key=<key> value=<value>`.' },
+  { code: 'W_C8_UNSUPPORTED_IMPLEMENTATION', meaning: '(runtime) zeebe:publishMessage (on a send task or in a message event definition): Camunda 8.9 accepts it at deploy but does not run it: a send task gets an incident ("only job worker-based implementation is supported"), a message throw / end event completes without sending anything.', fix: 'Use a job worker: `bpmn ext remove <file> <id> zeebe:publishMessage` (definition.zeebe:publishMessage for an event), then `bpmn ext add <file> <id> zeebe:taskDefinition type=<jobType>`.' },
+  { code: 'W_C8_JOB_WORKER_USER_TASK', meaning: '(practice) A user task without zeebe:userTask is a job worker user task: Camunda 8 creates a job of type io.camunda.zeebe:userTask instead of a user task, which the v2 user task API (/v2/user-tasks) and Tasklist in V2 mode do not list (engine-checked). `bpmn add` / `retype` give new user tasks of a Camunda 8 file zeebe:userTask, like Camunda Modeler.', fix: '`bpmn ext add <file> <id> zeebe:userTask` (a form then needs formId or externalReference instead of an embedded formKey).' },
+  { code: 'W_DECISION_RESULT_VARIABLE', meaning: '`set <id> calledDecision=<decision>` in a Camunda 8 file wrote a zeebe:calledDecision without a resultVariable; Camunda 8 requires one to deploy.', fix: '`bpmn ext add <file> <id> zeebe:calledDecision decisionId=<decision> resultVariable=<variable> --replace`.' },
+  // the project's bpmnlint (a .bpmnlintrc; its findings carry the rule name as code, see BPMNLINT in `bpmn guide`)
+  { code: 'W_LINT_UNAVAILABLE', meaning: 'Something the project\'s .bpmnlintrc names is left out, the rest of it runs (`bpmn validate` and `bpmn new` list it, and `--strict` exits 5; `bpmn show <file> --conventions` lists it too; a later write finds it before and after the change, only counts it, and its validator line says `N left out` or, when the whole file is left out, `bpmnlint did not run`): a config, rule or moddle extension that is neither bundled with bpmn-cli nor installed inside the repository next to the .bpmnlintrc, a package that fails to load, a project plugin the host does not run (library use without lintProjectCode; outside a git repository; in a repository of another user, by the owners of its directory and .git as git checks them, not git\'s safe.directory, on Windows one outside the home directory; a .git file that names no git directory; the rest of the .bpmnlintrc runs: root over another uid\'s checkout in a CI container gets the repository\'s .bpmnlintrc with the rules bpmn-cli ships), a moddle extension that is no JSON file or that BpmnModdle rejects (a prefix or uri already defined, an extends of an unknown type: bpmnlint fails on the whole file with it, here only that extension is left out), a config that extends itself (its rules apply once). Or bpmnlint did not run at all: a .bpmnlintrc found by the lookup that is not strict JSON, or bpmnlint / @miragon/bpmnlint-plugin-rules could not be loaded (e.g. a bpmnlint older than 11.14 next to the plugin in the project\'s node_modules: npm keeps the plugin with bpmn-cli\'s own bpmnlint then, an install with --legacy-peer-deps or a package manager that ignores peer dependencies does not). The message names what and why.', fix: 'Install the package inside the repository (`npm i -D <package>`), keep the .bpmnlintrc and its plugin in a git repository of your own (or run bpmn-cli as the repository\'s owner), correct the name (the hint names a bundled rule of that name), fix the moddle descriptor, write the file as strict JSON, or update the project\'s bpmnlint to 11.14 or later (or install without --legacy-peer-deps); `--no-lint-config` skips bpmnlint.' },
+  { code: 'W_LINT_FAILED', meaning: 'A rule of the project\'s .bpmnlintrc threw (its factory on the options, or its check on an element; also an async check that rejects or a factory that returns a promise): that rule\'s findings are left out, the other rules\' are reported. Or bpmnlint could not lint the model at all (a moddleExtensions descriptor BpmnModdle takes but cannot parse the file with, e.g. one that redefines a property bpmn does not have): no rule ran (`bpmn validate` and `bpmn new` list it); a later write does not compare it, and its validator line says `1 left out (W_LINT_FAILED, no rule ran; ...)` (--summary: a `validator bpmnlint:` line).', fix: 'Fix the rule or its options (the message names both), or the moddleExtensions; `--no-lint-config` skips bpmnlint.' },
+  { code: 'W_CONFIG_IGNORED', meaning: 'A value of @miragon/rules/element-id-naming in the project\'s .bpmnlintrc that new ids cannot follow is ignored (the message names the .bpmnlintrc, the key and the value): a prefix that is no string, cannot start an XML id (a letter or _ first, then letters, digits, _ . -), has a character outside ASCII (bpmn-cli writes ASCII ids) or is longer than 56 characters (new ids of that type follow the learned id style, and the rule reports them; under eventDefinitionQualifier required also a qualified prefix that long, for the events of its trigger), a prefix declared for a DI type bpmn-cli writes ids for (bpmndi:BPMNShape, BPMNEdge, BPMNPlane, BPMNDiagram; not BPMNLabel, which has none: bpmn-cli names DI after its element, BPMNShape_<id> or <id>_di like bpmn-js, and the rule reports the new DI ids), an unknown `case` (the rule checks its fallback, PascalCase, and new ids take it) or `eventDefinitionQualifier` (optional). It never blocks: `bpmn validate`, `bpmn new` and `bpmn show <file> --conventions` list it, a later write finds it before and after the change and only counts it (its validator line: `N element-id-naming values ignored`).', fix: 'Fix the value in the .bpmnlintrc (the hint names the allowed ones), or set the prefix to false to switch the type off; `--no-lint-config` skips the .bpmnlintrc.' },
+  { code: 'E_LINT_CONFIG', meaning: '`--lint-config <path>` (library: lintConfig) names a file that cannot be read or is not strict JSON (exit 4). A broken .bpmnlintrc found by the lookup is W_LINT_UNAVAILABLE instead.', fix: 'Pass an existing .bpmnlintrc in strict JSON (no comments, no trailing commas: bpmnlint reads it with JSON.parse), or `--no-lint-config`.' },
+];
+
+/* ------------------------------------------------------------------ */
+/* exit codes                                                           */
+/* ------------------------------------------------------------------ */
+
+export const EXIT_CODE_DOCS: Array<{ code: number; meaning: string }> = [
+  { code: 0, meaning: 'ok (warnings allowed)' },
+  { code: EXIT_CODES.usage, meaning: 'usage error: unknown command/option, bad ops JSON or environment value (E_USAGE)' },
+  { code: EXIT_CODES.model, meaning: 'model or validation error (E_NOT_FOUND, E_CROSS_SCOPE, ...); validate: also an error of the project\'s bpmnlint' },
+  { code: EXIT_CODES.layout, meaning: 'layout error (E_LAYOUT_*)' },
+  { code: EXIT_CODES.io, meaning: 'I/O or parse error (E_FILE_NOT_FOUND, E_PARSE, E_IMPORT_LOSSY, E_FILE_EXISTS, E_RENDER, E_LINT_CONFIG)' },
+  { code: 5, meaning: '--strict and the result has warnings' },
+  { code: EXIT_CODES.internal, meaning: 'internal error' },
+];
+
+/* ------------------------------------------------------------------ */
+/* triggers                                                             */
+/* ------------------------------------------------------------------ */
+
+export interface TriggerOptionDoc {
+  trigger: Trigger;
+  /** the CLI option(s) */
+  option: string;
+  /** the ops JSON key(s) */
+  keys: string[];
+  description: string;
+  /** non-event kinds that take the option too (sendTask / receiveTask: --message) */
+  alsoOn?: string[];
+}
+
+export const TRIGGER_OPTIONS: TriggerOptionDoc[] = [
+  { trigger: 'none', option: '(no option)', keys: [], description: 'plain event; the default for start/end/throw events in `add` (`retype` keeps the current trigger unless the suffix :none is given)' },
+  { trigger: 'message', option: '--message <name>', keys: ['message'], description: 'root bpmn:Message found by name, created when missing', alsoOn: ['sendTask', 'receiveTask'] },
+  { trigger: 'timer', option: '--timer <iso> [--timer-kind cycle|duration|date]', keys: ['timer', 'timerKind'], description: 'R/PT1H -> timeCycle, PT2D -> timeDuration, 2026-01-31T09:00:00Z -> timeDate (auto-classified)' },
+  { trigger: 'error', option: '--error <name> [--error-code <code>]', keys: ['error', 'errorCode'], description: 'root bpmn:Error by name, created when missing' },
+  { trigger: 'signal', option: '--signal <name>', keys: ['signal'], description: 'root bpmn:Signal by name, created when missing' },
+  { trigger: 'escalation', option: '--escalation <name> [--escalation-code <code>]', keys: ['escalation', 'escalationCode'], description: 'root bpmn:Escalation by name, created when missing' },
+  { trigger: 'conditional', option: '--when <expr>', keys: ['when'], description: 'condition expression' },
+  { trigger: 'link', option: '--link <name>', keys: ['link'], description: 'a throwing and a catching link event pair up by name' },
+  { trigger: 'compensate', option: '(no option)', keys: [], description: 'compensation' },
+  { trigger: 'terminate', option: '(no option)', keys: [], description: 'terminate end event' },
+  { trigger: 'cancel', option: '(no option)', keys: [], description: 'transaction cancel' },
+];
+
+export const NON_INTERRUPTING_DOC = '--non-interrupting (nonInterrupting): boundary events get cancelActivity=false, start events of an event sub-process isInterrupting=false; not allowed on error/cancel/compensate boundary events.';
+
+/** Event kinds that allow a trigger. */
+export function kindsWithTrigger(trigger: Trigger): string[] {
+  return KINDS.filter((k) => k.triggers?.includes(trigger)).map((k) => k.kind);
+}
+
+/* ------------------------------------------------------------------ */
+/* placement                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface PlacementDoc {
+  option: string;
+  key: string;
+  rule: string;
+}
+
+export const PLACEMENT_DOCS: PlacementDoc[] = [
+  { option: '--after <X>', key: 'after', rule: 'X is a gateway or has no outgoing flow: append X -> node. X has exactly one outgoing flow: splice, X -> node -> old successor. Otherwise E_HAS_SUCCESSOR (say which flow).' },
+  { option: '--before <Y>', key: 'before', rule: 'Symmetric: prepend before a join gateway or a node without incoming flow, else splice into its single incoming flow; several incoming flows -> E_HAS_PREDECESSOR.' },
+  { option: '--after <X> --before <Y>', key: 'after + before', rule: 'Splice into the flow X -> Y (E_NO_FLOW / E_AMBIGUOUS_FLOW when there is none / several).' },
+  { option: '--flow <F>', key: 'flow', rule: 'Splice into sequence flow F: A -> B becomes A -> node -> B. F keeps its name and condition and now ends at the node; it keeps its id too, unless the id named A and B (Flow_AToB is renamed Flow_AToNode; with --keep-flow-ids it stays, W_FLOW_ID_STALE, which suggests a --flow-id given for it).' },
+  { option: '--in <S>', key: 'in', rule: 'Put the node into process / sub-process / participant S without connecting it (connect it afterwards).' },
+  { option: '--on <A>', key: 'on', rule: 'Boundary events only: attach to activity A.' },
+  { option: '--to <T>', key: 'to', rule: 'Additionally connect node -> T (a branch that re-joins the main path).' },
+];
+
+/** How new ids are made (docs/reference.md "Ids", src/ids/style.ts); `bpmn kinds --json` -> `ids`. */
+export const ID_CONVENTIONS = {
+  rule: 'Elements are addressed by id only (names may repeat). New ids speak (never a hash or a running number) and follow the id style of the file (prefix, case, flow form), and the id conventions the project declares where it declares them (see declared); explicit ids (--id, "id") are taken as given. A rule needs two ids that follow it (one id of a kind in a file whose ids are mostly prefixed).',
+  declared: 'where element-id-naming of the project\'s .bpmnlintrc declares a prefix for a BPMN type, new ids of it take that prefix and the declared case (serviceTask_checkInvoice, flow_checkInvoiceToBookInvoice; required qualifier: timerStartEvent_monthly); under a declared camelCase / PascalCase a taken id gets a glued 2 (serviceTask_checkInvoice2; after a digit No2: serviceTask_step1No2) and a split\'s join is <gatewayId>Join (gateway_approvedJoin); the rest follows the file, learned without the ids that already follow the rule; process and definitions ids stay bpmn-cli\'s unless named exactly (a new pool\'s process: the prefix the file\'s process ids share, see prefixes); existing ids never change (W_ID_PREFIX_STALE); `bpmn show <file> --conventions` lists them, `bpmn guide conventions` has the rules',
+  default: { element: '<Prefix>_<NameSlug> (prefix: `prefix` of the kind)', unnamed: '<Prefix>_<KindWord><Context> (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_EndAfterTimerOnReview, Event_ErrorStartInHandleErrors, Gateway_Parallel)', flow: 'Flow_<Source>To<Target> (Flow_CheckInvoiceToBookInvoice)', di: '<id>_di in files with DI of that form; BPMNShape_<id> / BPMNEdge_<id> in a new drawing (a long id cut at whole words: every DI id within 64 characters)' },
+  prefixes: 'per kind (and trigger) as the file has them; else the family prefix the file shares (Task_); else the type name when the file names prefixes after types (serviceTask_); else the bpmn-cli prefix in the case of the file. No prefix counts too: where the file\'s ids of a kind or family have none (checkOrder), or its flow nodes mostly have none, a named element gets a bare camelCase (PascalCase) id; an unnamed one keeps a prefix. A new pool\'s process takes the prefix two of the file\'s process ids share, in their case (process_customer, process_shop: process_bankAccount; participant ids never count), also under declared conventions',
+  bodies: { pascal: 'CheckInvoice', camel: 'checkInvoice', snake: 'check_invoice', pascalSnake: 'Check_Invoice' },
+  bodiesNote: 'the case of the named flow nodes\' ids; Camunda Modeler hashes (Activity_0k3x9qa) and numbers (Task_12) show none: pascal with the file\'s prefixes (Activity_CheckInvoice, Task_CheckInvoice)',
+  unnamed: 'a word for the kind (events: Start, End, MessageStart, ErrorEnd, Timer, MessageThrow; other kinds only without context: Gateway_Parallel) + the context: After <anchor>, Before <anchor>, On <host>, In <sub-process or pool>; after / before an unnamed anchor placed the same way, the nearest named anchor, once (Event_EndAfterCheckInvoice after Gateway_AfterCheckInvoice, never EndAfterAfter...), with the anchor\'s kind where the id would repeat the anchor\'s (Task_AfterCheckInvoiceGateway); a name without a letter (123) names nothing; joins of a split: <gatewayId>_join in the file\'s case (camelCase ids and a declared camelCase / PascalCase: <gatewayId>Join; a split id without the declared gateway prefix: that prefix + the gateway, gateway_checkJoin)',
+  flowForms: { named: 'Flow_<Source>To<Target> in the file\'s case (Flow_CheckInvoiceToBookInvoice; also for files with hashed or numbered flows, with their prefix: SequenceFlow_ArchiveToDone, SF_ThirdToFinish, flowCheckOrderToShip)', stemTo: 'flow_checkStockToShipGoods', idPair: 'Flow_<sourceId>_<targetId>', stemSnake: 'Flow_check_stock_to_ship_goods', idSnake: 'Flow_<sourceId>_to_<targetId>', scopedTo: 'Flow_<scope>_<SourceWord>To<TargetWord> (Flow_KotO_ValidateToReserve: the first word with a letter of each end\'s id; Start / End for start and end events)' },
+  ends: 'a flow end or an anchor is named by the speaking part of its id (CheckInvoice; an unnamed element by its own kind and place, Gateway_AfterCheckInvoice -> AfterCheckInvoice, the join of the split after it -> CheckInvoiceJoin: Flow_CheckInvoiceToAfterCheckInvoice, so the flows at two unnamed gateways differ), by its name when the id says too little (a hash, a number, one or two letters), else by a word for its kind (Gateway, End, Timer); an id with a number and a word speaks (Gateway_AfterCheck2024 -> AfterCheck2024); hashes, numbers, machine ids and StartEvent_1 are never copied',
+  length: 'at most 64 characters, a collision suffix included; a name gives at most 40 characters of words (a single longer word is cut at 40), and an id within 64 is not cut again; a longer one loses whole words the same way every time: the two ends of a flow share the room (each gives up its last words, never its first word, its last word with a letter before its Join or number, a word between two numbers, or the numbers before a number it ends with (x_2_2 stays whole), and a number left at the end of the id goes too where it reads like a collision suffix, and so does a filler word a cut would end on; of the cuts that fit, the one with the most words, then the most characters; a flow named by its ends\' ids keeps each id\'s prefix unless the prefixes leave fewer than 16 characters, then the whole ids share the room), a join\'s Join, a number and a collision suffix are kept; a word is cut inside only when no whole word is left to give up (each end of a flow keeps its first word, or its last where the two begin alike), and then in the longer end, keeping its Join or number (in both ends where the longer would keep fewer than 8 characters); a cut keeps a letter (a room that ends inside a leading number starts at the first word with a letter); a file prefix of more than 52 characters (fewer than 8 left for the body beside a suffix up to _99) stays where the body\'s words up to its first one with a letter (no filler word) fit beside it whole (an unnamed element\'s up to its anchor\'s first word, afterCheck), else the bpmn-cli prefix (activity_auftrag, also for one id of the file), a flow prefix or scope that leaves a flow\'s ends fewer than 16 stays where the ends fit beside it at whole words, else a named flow with Flow_ (one file can hold both; also where a suffix leaves the ends no room: Flow_Validate_To_Step1_2); a cut (a name\'s 40 characters, a body, a flow\'s end) never ends on a filler word, und, oder, an, die, the, of, ... (LieferantenbestellungVersenden, not ...VersendenUnd), the first word stays, and so does one between two numbers (StartAfter2Und2)',
+  collisions: 'the same edit gives the same ids; an unnamed gateway or activity whose id is taken, or whose body another id has (the unnamed gateway it follows), first spells out its kind where the prefix does not say it (Gateway_ParallelAfterCheckInvoice, Activity_ServiceTaskAfterCheckInvoice), then names the kind of the unnamed anchor it follows (Task_AfterCheckInvoiceGateway after ExclusiveGateway_AfterCheckInvoice, Task_AfterCheckInvoiceGatewayTask after that); a flow whose two ends begin with the same word keeps each end\'s last word when cut; a taken id gets _2, _3 (stemTo / scopedTo flows and a declared camelCase / PascalCase: 2, 3, after an id that ends in a digit No2, No3: serviceTask_step1No2, never serviceTask_step12, the id of Step 12; an id the suffix would take past 64 characters loses whole words first) and W_ID_SUFFIXED (a repeated name, or unnamed elements only an index tells apart)',
+  renames: 'a flow whose id names its ends (the id the file\'s style gives a flow between them, or the one any other flow prefix or form the file\'s flows use gives it, also the named Flow_<Source>To<Target> id in the file\'s case, which earlier versions gave its flows, whoever wrote it; an end also by its name, and in a batch by the id and name it had before a `set id=` / `name=` earlier in the batch) is renamed after its new ends when a splice, a bridge, a move or `set target=` changes them (its derived DI edge id follows; a flow without id gets one from its new ends, or the --flow-id of the add that splices into it, `id added`); with --keep-flow-ids (BPMN_KEEP_FLOW_IDS=1; library: keepFlowIds) a flow the file had keeps its id and W_FLOW_ID_STALE names it (a flow the same change created still follows its ends); every other id stays',
+  transliteration: 'ä -> ae, ö -> oe, ü -> ue, ß -> ss; ø -> oe, å -> aa, æ -> ae, œ -> oe, ł -> l, þ -> th; other accents dropped (é -> e)',
+  di: 'a full redraw keeps the ids of existing DI elements, planes and diagrams; new DI follows the DI ids of the file, cut like element ids to stay within 64 characters (a taken one gets _2); a DI shape or edge id derived from an element id (<id>_di, BPMNShape_<id>, Edge_<id>) follows `set <id> id=` as it follows a flow renamed after its ends; other DI ids, and plane and diagram ids, stay',
+};
+
+export const PLACEMENT_NOTES: string[] = [
+  'Exactly one placement per add/move (after + before counts as one). Without any, the node is appended to the only process, unconnected.',
+  'Flow options --flow-name / --flow-id / --condition / --language / --default describe the flow INTO the new node (from the anchor).',
+  'move: several ids form a chain (the first takes the placement, each next one goes after the one before); the node the chain starts after (--after, the source of --flow) must lie outside it, else E_INVALID_PLACEMENT and nothing changes (a --before anchor in the chain is fine). A move that leaves its nodes where they are (move B --after A with A -> B) changes nothing and notes `Activity_B is already after Activity_A`; in a batch its flow keys still go to the flow into the first node, and "flowId" renames that flow. With --after <gateway> alone (an append) or --before <join> alone (a prepend) a node always moves.',
+  'Branch order in the diagram: the default flow (else the first outgoing flow that leads to an end event, else the first one) continues straight; the other branches go alternately below and above it in declaration order (all below when a default flow exists). `bpmn order` changes the declaration order, `set <flowId> default=true` picks the continuation.',
+  'Data objects, data stores, text annotations, lanes and pools take --in only; wire them with `bpmn connect`.',
+];
+
+/* ------------------------------------------------------------------ */
+/* commands                                                             */
+/* ------------------------------------------------------------------ */
+
+export interface CommandDoc {
+  name: string;
+  usage: string;
+  summary: string;
+  examples: string[];
+}
+
+export const COMMANDS: CommandDoc[] = [
+  { name: 'new', usage: 'bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]', summary: 'Create a file with one empty process. --target camunda7 (also for CIB seven and Operaton) writes what Camunda Modeler writes: the camunda / modeler namespaces, the platform version and camunda:historyTimeToLive=180 (the engines refuse an executable process without it). --target camunda8 writes the zeebe / modeler namespaces and the platform (Camunda Cloud, 8.9.0); in a Camunda 8 file new user tasks are Camunda user tasks (zeebe:userTask) and new event definitions get an id, like the Modeler. The process id is Process_<Name> (Process_1 without a name) unless element-id-naming of the .bpmnlintrc names a bpmn:Process prefix (process_orderHandling, process_main without a name; see CONVENTIONS).', examples: ['bpmn new order.bpmn --name "Order handling" --target camunda8', 'bpmn new order.bpmn --name "Order handling" --target camunda7'] },
+  { name: 'show', usage: 'bpmn show <file> [<id> [--context]] [--json] [--scope <id>] | bpmn show <file> --around <id> [--depth <n>] [--inner] [--json] | bpmn show <file> --layout [--json] | bpmn show <file> --conventions [--json] [--lint-config <path> | --no-lint-config]', summary: 'Print the model in flow order (no coordinates), or every detail of one element. Every node carries its lane (lane=<id>); vendor attributes appear with their values next to the properties (nested ones under their set keys: loop.camunda:collection=${items}), extension types as `ext: camunda:taskListener x3`; the process line carries the process\'s own; a business rule task shows its decision link as calledDecision=<id> in every spelling; message flows name their endpoints, the collaboration lists its annotations. --around <id> prints only the neighbourhood of an element (--depth flow steps both ways, default 2; see READING LARGE MODELS), <id> --context the element in its context (where, lane, before / after, catching events, message flows). --layout prints the drawing instead: per pool / lane the rows of node ids (left to right) with their column across the diagram (c0..cN; " … " where a wide gap splits a row), the wide empty gaps between columns, colours, labels off their default side and the layout problems with ids. --conventions prints the id conventions new ids follow in the file: per pattern the kinds and where it comes from (element-id-naming of the .bpmnlintrc, the file\'s ids, bpmn-cli\'s default), also for a file that does not exist yet (see CONVENTIONS). `-` as the file reads stdin.', examples: ['bpmn show order.bpmn', 'bpmn show order.bpmn --around Activity_CheckInvoice', 'bpmn show order.bpmn Activity_CheckInvoice --context', 'bpmn show order.bpmn Activity_CheckInvoice --json', 'bpmn show order.bpmn --layout', 'bpmn show order.bpmn --conventions'] },
+  { name: 'find', usage: 'bpmn find <file> <text> [--kind <kind>] [--json]', summary: 'Find elements by id or name substring, or by a vendor attribute value (topic, assignee, candidate groups, listener class, extension attributes and bodies; the hit shows the match); --kind accepts any kind plus sequenceFlow, messageFlow, association, dataAssociation, process, collaboration, message, error, signal, escalation.', examples: ['bpmn find order.bpmn invoice --kind userTask', 'bpmn find order.bpmn charge-card'] },
+  { name: 'add', usage: 'bpmn add <file> <kind[:trigger]> [<name>] [--id <id>] [placement] [--to <id>] [--lane <laneId>] [flow options] [trigger options] [--collapsed] [--if-absent] [--doc <text>] [--text <text>] [--process <id>] [--black-box] [--members <id,...>] [key=value ...]', summary: 'Create one element and wire it in (see PLACEMENT and TRIGGERS). Pools: the first participant wraps the existing process, later ones get a new process; --black-box creates a pool without a process and never wraps, so add a normal pool first.', examples: ['bpmn add order.bpmn start "Order received"', 'bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived', 'bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice --timer PT2D --non-interrupting', 'bpmn add order.bpmn participant "Order handling"', 'bpmn add order.bpmn participant "Customer" --black-box'] },
+  { name: 'connect', usage: 'bpmn connect <file> <sourceId> <targetId> [--name <text>] [--id <id>] [--condition <expr>] [--language <lang>] [--default] [--message <name>] [--if-absent]', summary: 'Connect two elements; sequence flow, message flow, association or data association is inferred from the endpoints.', examples: ["bpmn connect order.bpmn Gateway_InvoiceOk Activity_BookInvoice --name yes --condition '${ok}'", 'bpmn connect order.bpmn Activity_SendOffer Participant_Customer --message Offer'] },
+  { name: 'set', usage: 'bpmn set <file> <id> <key=value ...> [--unset <key>]...', summary: 'Set properties (name, doc, condition, timer, loop, camunda:assignee, ...); key= or --unset removes. Nested elements without an id take a prefix: definition.<key> (event definition), loop.<key> (loop characteristics), condition.<key> (condition expression); see NESTED KEYS in `bpmn kinds`. calledDecision= links a business rule task to its decision in the file\'s spelling (Camunda 7: camunda:decisionRef, Camunda 8: zeebe:calledDecision, no engine: bpmn-cli\'s unprefixed calledDecision; with the library\'s platform \'none\' a link in an engine spelling keeps it and a new link takes the engine spelling all other links share).', examples: ['bpmn set order.bpmn Activity_CheckInvoice name="Check the invoice" camunda:assignee=kermit', 'bpmn set order.bpmn Flow_InvoiceOkToBookInvoice condition=\'${amount > 100}\'', 'bpmn set order.bpmn Activity_CheckInvoice --unset doc', "bpmn set order.bpmn Activity_CheckInvoice 'loop.camunda:collection=${invoices}' loop.camunda:elementVariable=invoice", 'bpmn set order.bpmn Activity_RateRisk calledDecision=risk-rating'] },
+  { name: 'remove', usage: 'bpmn remove <file> <id...> [--no-bridge | --bridge-all | --with-branch] [--if-exists]', summary: 'Remove elements with cascade; a node with one in / one out is bridged (predecessor -> successor) unless --no-bridge, a merge (several in, one out) from every predecessor; a parallel / inclusive join is refused (E_AMBIGUOUS_BRIDGE: say --bridge-all or --no-bridge). --bridge-all bridges a join from every predecessor to its successor; --with-branch also removes the exclusive downstream path of a node or boundary event (up to the next merge with another path, or the ends).', examples: ['bpmn remove order.bpmn Activity_Old', 'bpmn remove order.bpmn Event_Timeout Flow_ReminderToRemindCustomer --if-exists', 'bpmn remove order.bpmn Event_Reminder --with-branch', 'bpmn remove order.bpmn Gateway_InvoiceOk_join --bridge-all'] },
+  { name: 'retype', usage: 'bpmn retype <file> <id> <kind[:trigger]> [trigger options]', summary: 'Change the kind (task <-> task/subProcess/callActivity, gateway <-> gateway, event <-> event of the same position, trigger changes) keeping id, name, flows and extensions. A kind without trigger suffix keeps the current trigger; <kind>:none (or `set <id> trigger=none`) drops it. Same trigger, new details: the event definition (id, vendor attributes) is kept. A sub-process with content becomes a task / callActivity only with --force (E_WOULD_DROP_CONTENT).', examples: ['bpmn retype order.bpmn Activity_CheckInvoice serviceTask', 'bpmn retype order.bpmn Event_Start startEvent:message --message OrderReceived', 'bpmn retype order.bpmn Event_Start startEvent:none'] },
+  { name: 'move', usage: 'bpmn move <file> <id...> [--after <id>] [--before <id>] [--flow <flowId>] [--in <scopeId>] [--on <activityId>] [--lane <laneId>]', summary: 'Relocate nodes (they are detached with bridging, then placed again) and/or assign a lane. Several ids form a chain: the first takes the placement, each next one goes after the one before; the node it starts after must lie outside it (E_INVALID_PLACEMENT). Nodes already where the placement puts them stay: nothing changes, a note says so.', examples: ['bpmn move order.bpmn Activity_Clarify --after Activity_CheckInvoice', 'bpmn move order.bpmn Activity_Book Activity_Ship --lane Lane_Backoffice'] },
+  { name: 'order', usage: 'bpmn order <file> <nodeId> <flowId...> | bpmn order <file> <poolId|processId|laneId> <laneId...> | bpmn order <file> <collaborationId> <participantId...>', summary: 'Set the declaration order of a node\'s outgoing flows. In the diagram the default flow (else the first flow) continues straight and the others alternate below/above it in this order (see PLACEMENT). With lane ids: the lanes of a pool / process / parent lane top to bottom (laneSet and diagram bands). With a collaboration and participant ids: the pools top to bottom (black boxes too; the bands move with their content, message flows are routed again).', examples: ['bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice Flow_InvoiceOkToBookInvoice', 'bpmn order order.bpmn Participant_OrderHandling Lane_Backoffice Lane_Sales', 'bpmn order order.bpmn Collaboration_OrderHandling Participant_Customer'] },
+  { name: 'ext', usage: 'bpmn ext add <file> <id> <type|path> [attr=value ...] [--body <text>] [--xml <snippet>] [--replace] | bpmn ext remove <file> <id> <selector|index> | bpmn ext list <file> <id> [--json]', summary: 'Vendor extension elements inside <bpmn:extensionElements> (sub-command first, then file and element id). Child types go into their container (camunda:inputParameter -> camunda:inputOutput, camunda:formField -> camunda:formData, zeebe:input -> zeebe:ioMapping), single-instance containers are merged (E_DUPLICATE_EXTENSION on a conflict; --replace replaces), an item with the same key (name / id / target) is replaced. A path reaches nested containers (camunda:connector/camunda:inputParameter); remove takes a selector (\'camunda:inputParameter[name=x]\', \'camunda:formField[1]\'). A definition. / loop. / condition. prefix addresses the nested element (loop.camunda:failedJobRetryTimeCycle). Quote selectors in the shell.', examples: ['bpmn ext add order.bpmn Activity_BookInvoice zeebe:taskDefinition type=book-invoice retries=3', 'bpmn ext add order.bpmn Activity_BookInvoice zeebe:ioMapping --xml \'<zeebe:ioMapping><zeebe:input source="=amount" target="total"/></zeebe:ioMapping>\'', "bpmn ext add order.bpmn Activity_ChargeCard camunda:inputParameter name=amount --body '${order.total}'", "bpmn ext remove order.bpmn Activity_ChargeCard 'camunda:inputParameter[name=amount]'", 'bpmn ext list order.bpmn Activity_BookInvoice', 'bpmn ext remove order.bpmn Activity_BookInvoice zeebe:taskDefinition'] },
+  { name: 'apply', usage: 'bpmn apply <file> [<ops.json> | -]', summary: 'Run a list of ops (JSON) as one transaction: all or nothing, one layout at the end, then the format ops in batch order. An op names what it creates with "as": "$name"; later ops use "$name" as an id. `-` as the ops reads them from stdin; `-` as the file reads the model from stdin (the ops then come from a file) and writes the result to stdout.', examples: ['bpmn apply order.bpmn ops.json', "echo '[{\"op\":\"add\",\"kind\":\"userTask\",\"name\":\"Ship\",\"after\":\"Activity_BookInvoice\"}]' | bpmn apply order.bpmn -", 'cat order.bpmn | bpmn apply - ops.json > new.bpmn'] },
+  { name: 'place', usage: 'bpmn place <file> [<id...>] [--row-of <id> | --below <id> | --above <id>] [--column-of <id> | --after <id> | --before <id>] [SELECTORS] | bpmn place <file> <boundaryEventId> --side top|bottom', summary: 'Diagram only: move shapes as one rigid group so the first lands on the row and/or column of another element; boundary events and labels follow, others give way, flows are rerouted. --branch <flowId> moves what only that branch reaches up to the join. Refuses to leave the lane / pool / sub-process (E_LEAVES_CONTAINER); E_NO_ROOM names a checked `space` command that makes the room. --side moves a boundary event to the top / bottom border of its host, its exception path (drawn on the old side, in the host\'s lane / pool / sub-process) follows.', examples: ['bpmn place order.bpmn Activity_ClarifyInvoice Event_ReminderSent --below Activity_BookInvoice', 'bpmn place order.bpmn Event_InvoiceHandled --row-of Activity_CheckInvoice --after Gateway_InvoiceOk_join', 'bpmn place order.bpmn --branch Flow_InvoiceOkToClarifyInvoice --below Activity_BookInvoice', 'bpmn place order.bpmn Event_ApprovalOverdue --side top'] },
+  { name: 'align', usage: 'bpmn align <file> [<id...>] --axis row|column [--to <id>] [SELECTORS]', summary: 'Diagram only: put shapes on one row (same vertical centre) or one column (same horizontal centre) as --to (default: the first id; with only --kind and --axis column the rightmost one).', examples: ['bpmn align order.bpmn Event_InvoiceHandled Event_ReminderSent --axis column', 'bpmn align order.bpmn --kind endEvent --axis column'] },
+  { name: 'color', usage: `bpmn color <file> [<id...>] --color ${Object.keys(SWATCHES).join('|')}|default [SELECTORS]`, summary: 'Diagram only: colour shapes and connections with a bpmn-js colour picker colour; default removes it. Colours survive every later write. SELECTORS (place, align, color, tidy): --path <fromId> <toId> [--via <flowId...>] (every node and flow on the shortest sequence-flow path), --kind <kind> (every element of a kind), --branch <flowId> (what only that branch reaches up to the join); they add to the ids.', examples: ['bpmn color order.bpmn Activity_CheckInvoice Flow_CheckInvoiceToInvoiceOk Gateway_InvoiceOk --color red', 'bpmn color order.bpmn --path Event_OrderReceived Event_Done --color green'] },
+  { name: 'label', usage: 'bpmn label <file> <id> --side above|below|left|right', summary: 'Diagram only: put the external label of an event, gateway, data object / store or flow on one side: a shape\'s label off lines, other labels and the name of an expanded sub-process where possible (above a shape at the top of a sub-process, the sub-process makes room below its name first); a flow\'s label at the middle of its longest horizontal / vertical segment, unchecked.', examples: ['bpmn label order.bpmn Gateway_InvoiceOk --side below'] },
+  { name: 'route', usage: 'bpmn route <file> <flowId> [--exit right|top|bottom|left] [--entry left|top|bottom|right]', summary: 'Diagram only: route one sequence / message flow again, optionally forcing the side it leaves its source and enters its target by (a flow without a line gets one).', examples: ['bpmn route order.bpmn Flow_ReminderToRemindCustomer --exit bottom --entry bottom'] },
+  { name: 'space', usage: 'bpmn space <file> (--after <id> | --below <id>) [--by column|row|<n>col|<n>row|<px>|-column|-<n>col|-row|-<px>]', summary: 'Diagram only: the modeler\'s space tool: everything right of (--after, within the pool) or below (--below) the element moves by one column / row (default), <n>col / <n>row of them, or <px> (a number, 80px; --by 2 is 2 px, --by 2col two columns; the result notes the distance); frames grow. On a lane or pool it makes that frame bigger. A negative amount closes up to that much empty space there instead (only as far as it is empty; on a lane / pool: its own bottom / right).', examples: ['bpmn space order.bpmn --after Activity_CheckInvoice', 'bpmn space order.bpmn --below Lane_Sales --by 80', 'bpmn space order.bpmn --after Activity_CheckInvoice --by 2col', 'bpmn space order.bpmn --after Activity_CheckInvoice --by -column'] },
+  { name: 'tidy', usage: 'bpmn tidy <file> [<id>...] [SELECTORS]', summary: 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape). Same as `bpmn layout <file> --tidy`.', examples: ['bpmn tidy order.bpmn'] },
+  { name: 'compact', usage: 'bpmn compact <file> [<poolId|laneId|subProcessId>...]', summary: 'Diagram only: close empty rows and columns and shrink expanded sub-processes, lanes and pools to their content (default: the whole drawing), keeping the order and relative positions. A gap whose closing would add a layout problem stays open (noted).', examples: ['bpmn compact order.bpmn', 'bpmn compact order.bpmn Lane_Backoffice'] },
+  { name: 'validate', usage: 'bpmn validate <file> [--json] [--strict] [--platform auto|c7|c8|none] [--lint-config <path> | --no-lint-config]', summary: 'Structural errors (an error a change introduces blocks its write), lint warnings, the engine profile of the file\'s platform (Camunda 7: W_C7_* findings, Camunda 8: W_C8_* findings, each with a severity; W_C7_DEPLOY_* / W_C8_DEPLOY_* = the engine refuses the file) and the project\'s .bpmnlintrc (bpmnlint: its errors fail the check; see BPMNLINT), without changing the file. The platform is detected from modeler:executionPlatform or the vendor namespace; --platform overrides it.', examples: ['bpmn validate order.bpmn --json', 'bpmn validate order.bpmn --platform c7 --strict', 'bpmn validate order.bpmn --no-lint-config'] },
+  { name: 'layout', usage: 'bpmn layout <file> [--expand <id,...>] [--collapse <id,...>] | bpmn layout <file> --tidy', summary: 'Redraw the whole diagram (DI) from the model, optionally changing which sub-processes are expanded (always redraws, a hand layout is replaced; colours, DI ids and group boxes survive; there is no --no-layout here). --tidy keeps the drawing and only removes overlaps (= bpmn tidy).', examples: ['bpmn layout order.bpmn --collapse Activity_Payment', 'bpmn layout order.bpmn --tidy'] },
+  { name: 'metrics', usage: 'bpmn metrics <file> [--json]', summary: 'Layout quality of the drawing: the score and every problem (crossings, overlaps, flows through shapes, labels on lines, nodes outside their lane / pool, frames covering foreign shapes, flows running backwards, flows merging before their target (not a join\'s entries sharing a gateway\'s bottom / top vertex), labels outside their pool, labels on the name of a sub-process, message labels far from their line, ...) with the element ids.', examples: ['bpmn metrics order.bpmn --json'] },
+  { name: 'render', usage: 'bpmn render <file> [<id>...] [-o <file.png|file.svg|->] [--format png|svg] [--plane <id>] [--around <id> [--depth n] [--inner]] [--path <from> <to> [--via <flowId...>]] [--scope <id>] [--highlight <id,...>] [--problems] [--tiles] [--max-size <px>] [--scale <n>] [--json]', summary: 'Draw the diagram as an image to look at it (no browser; close to bpmn-js, not identical): a PNG (resvg with the bundled Arimo font) or SVG of one diagram plane. Without -o it writes bpmn-cli/<name>.png in the temp directory; `-o -` writes the image to stdout (the report to stderr); the format comes from --format or the -o extension. Prints the path, the size, the image tokens (width * height / 784), the scale, the plane and the other planes (collapsed sub-processes: --plane <id> draws one). Crops (one per call): --around <id> draws exactly the nodes of `show --around` with their flows, data and annotations, --path the nodes and flows of a sequence-flow path, --scope a pool, lane or sub-process, ids exactly these elements; flows to what is left out are drawn faded, pools and lanes as context. --highlight puts a halo around elements; --problems numbers the layout problems of `bpmn metrics` (with a crop: those of its elements) in the image at the defect and lists them with their ids. The long edge stays within --max-size (default 2000; --scale zooms); when labels shrink below 0.75 a note says so and names the crops, and --tiles splits such an image at the diagram columns (show --layout c<n>) into readable tiles <name>-1.png, <name>-2.png, ... --tiles writes only tiles with a shape, label or numbered problem (empty space and connections passing through are left out), at most 40 (more: one image and a note). A file without a diagram is drawn in memory (nothing written), and --problems lists what `bpmn metrics` reports for the file. Elements without a shape or with broken coordinates (not a number, beyond ±1,000,000 px) are named, not drawn. -o takes a .png or .svg name (another name needs --format). A rasteriser failure is E_RENDER. Every mutating command takes --render <file.png> to draw its result (see LOOKING AT THE DRAWING).', examples: ['bpmn render order.bpmn --problems -o order.png', 'bpmn render order.bpmn --around Gateway_Ok --depth 2 --problems -o ok.png', 'bpmn render order.bpmn --path Event_Start Event_Done --highlight Activity_Check -o path.png', 'bpmn render order.bpmn --scope Lane_Finance -o finance.png', 'bpmn render order.bpmn --tiles -o order.png', 'bpmn render order.bpmn --plane Activity_ReviewClaim -o review.png', 'bpmn render order.bpmn --format svg -o -'] },
+  { name: 'kinds', usage: 'bpmn kinds [--section <name,...>] [--json [--pretty]]', summary: 'Kind table, trigger options, set keys, placement grammar, ops schema and error catalogue; --section prints only the named parts (kinds, triggers, setKeys, nestedKeys, zeebeElements, placement, ops, layoutModes, ids, colors, errors, exitCodes; with --json those keys).', examples: ['bpmn kinds', 'bpmn kinds --section ops --json', 'bpmn kinds --section errors'] },
+  { name: 'guide', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
+];
+
+export const COMMON_OPTIONS: Array<{ option: string; description: string }> = [
+  { option: '--json', description: 'machine-readable result on stdout, compact (errors as JSON on stderr)' },
+  { option: '--pretty', description: 'with --json: indented JSON' },
+  { option: '--summary', description: 'a short result: created ids by kind, changed / removed ids, the added warnings, one layout line (score, added problems)' },
+  { option: '-o, --out <file>', description: 'write to another file instead of in place (also when the result equals the input); `-o -` writes the XML to stdout (the report goes to stderr)' },
+  { option: '--dry-run', description: 'report what would change, write nothing' },
+  { option: '--render <file.png|file.svg>', description: 'also draw the result to this image: created elements with a green halo, changed ones orange, moved ones blue, the layout problems the change added numbered and listed; a drawing too large to read shows the region of the change (also with --dry-run; a failed render is reported, the change stands)' },
+  { option: '--layout <mode>', description: `${LAYOUT_MODES.join(' | ')}: auto (default) keeps a hand-made or formatted drawing and places changes locally, and redraws a new file or a drawing the engine made and nobody changed; incremental always keeps; full always redraws (colours, DI ids and group boxes survive)` },
+  { option: '--relayout', description: 'redraw the whole diagram (= --layout full)' },
+  { option: '--no-layout', description: 'write without updating the diagram (stale DI of removed elements is pruned, a flow whose ends changed loses its edge, new elements have no shape until the next write that updates the layout or `bpmn layout <file>`; format operations still apply to the existing drawing)' },
+  { option: '--force', description: 'write although the import was lossy (E_IMPORT_LOSSY), the change introduces validation errors (E_VALIDATION; errors the file already had never block) or a retype would delete a sub-process\'s content (E_WOULD_DROP_CONTENT); for `new`: overwrite an existing file' },
+  { option: '--lint-config <path>', description: 'the project\'s bpmnlint configuration to run instead of the nearest .bpmnlintrc above the file written (-o) or checked (looked up to the repository root, whoever owns it; outside a git repository only in the file\'s directory; a model from stdin without -o: from the working directory); the result lists the bpmnlint findings the change added, see BPMNLINT, and its element-id-naming decides the prefix and case of new ids, see CONVENTIONS' },
+  { option: '--no-lint-config', description: 'do not read the project\'s bpmnlint configuration (nothing of it is loaded: no bpmnlint findings, no id conventions from element-id-naming)' },
+  { option: '--backup', description: 'write <file>.bak before overwriting' },
+  { option: '--show', description: 'append the full model view to the result' },
+  { option: '--strict', description: 'exit 5 when the result has warnings' },
+  { option: '--keep-flow-ids', description: 'keep the id of every existing sequence flow the change gives other ends, where flow ids are API (generated code, process tests); W_FLOW_ID_STALE names each flow whose id no longer names its ends, with the `bpmn set <file> <flowId> id=<newId>` that renames it. Default: a flow whose id names its old ends is renamed after its new ones (`renamed:`). BPMN_KEEP_FLOW_IDS=1 (true, yes, on) makes keeping the default, 0 (false, no, off) or unset renames, any other value is E_USAGE' },
+  { option: '--no-keep-flow-ids', description: 'rename such flows after their new ends, also when BPMN_KEEP_FLOW_IDS=1' },
+  { option: '--engine <clean|auto>', description: 'layout engine: clean (built-in, default: straight happy path, branches as bands below, loops underneath) or auto (bpmn-auto-layout)' },
+];
+
+/* ------------------------------------------------------------------ */
+/* text helpers                                                         */
+/* ------------------------------------------------------------------ */
+
+const FAMILY_LABELS: Record<Family, string> = {
+  task: 'Tasks',
+  subProcess: 'Sub-processes',
+  callActivity: 'Call activity',
+  gateway: 'Gateways',
+  event: 'Events  (kind:trigger, e.g. startEvent:message, boundary:timer)',
+  participant: 'Pools',
+  lane: 'Lanes',
+  data: 'Data',
+  artifact: 'Artifacts',
+};
+
+/** Left-aligned columns separated by two spaces; the last column is not padded. */
+export function table(rows: string[][], indent = '  '): string {
+  const widths: number[] = [];
+  for (const row of rows) row.forEach((cell, i) => (widths[i] = Math.max(widths[i] ?? 0, cell.length)));
+  return rows
+    .map((row) => indent + row.map((cell, i) => (i === row.length - 1 ? cell : cell.padEnd(widths[i] ?? 0))).join('  ').trimEnd())
+    .join('\n');
+}
+
+function heading(title: string): string {
+  return `\n${title}\n${'-'.repeat(title.length)}`;
+}
+
+function kindLabelWithAliases(def: KindDef): string {
+  return def.aliases.length ? `${def.kind} (${def.aliases.join(', ')})` : def.kind;
+}
+
+function kindsSection(): string {
+  const out: string[] = [heading('KINDS  (bpmn add <file> <kind[:trigger]> [name] ...; aliases in parentheses; id prefix in the 2nd column)')];
+  const families = [...new Set(KINDS.map((k) => k.family))];
+  for (const family of families) {
+    out.push(`\n${FAMILY_LABELS[family]}`);
+    const rows: string[][] = [];
+    for (const def of KINDS.filter((k) => k.family === family)) {
+      rows.push([kindLabelWithAliases(def), `${def.prefix}_`, def.description]);
+      if (def.triggers) rows.push(['', '', `triggers: ${def.triggers.join(', ')}`]);
+    }
+    out.push(table(rows));
+  }
+  return out.join('\n');
+}
+
+function triggersSection(): string {
+  const rows = TRIGGER_OPTIONS.map((t) => [t.trigger, t.option, t.description, `on: ${[...kindsWithTrigger(t.trigger), ...(t.alsoOn ?? [])].join(', ') || '-'}`]);
+  return [heading('TRIGGERS  (event kind suffix + option; ops JSON keys = option names in lowerCamelCase)'), table(rows), `  ${NON_INTERRUPTING_DOC}`].join('\n');
+}
+
+function groupSetKeys(keys: SetKeyDoc[]): Map<string, SetKeyDoc[]> {
+  const groups = new Map<string, SetKeyDoc[]>();
+  for (const k of keys) {
+    const list = groups.get(k.appliesTo) ?? [];
+    list.push(k);
+    groups.set(k.appliesTo, list);
+  }
+  return groups;
+}
+
+function setKeysSection(): string {
+  const out: string[] = [heading('SET KEYS  (bpmn set <file> <id> key=value ...; key= or --unset key removes; also usable as `set` in add ops)')];
+  if (!SET_KEYS.length) {
+    out.push('  (no set keys registered)');
+    return out.join('\n');
+  }
+  for (const [appliesTo, keys] of groupSetKeys(SET_KEYS)) {
+    out.push(`\n${appliesTo}`);
+    out.push(table(keys.map((k) => [k.key, k.description])));
+  }
+  return out.join('\n');
+}
+
+/** Per slot and nested BPMN type, the `<slot>.<key>` keys `set` accepts (id, BPMN attributes, camunda attributes of the descriptor). */
+export function nestedKeyTable(): Record<NestedSlot, Record<string, string[]>> {
+  const doc = Doc.create();
+  const table = {} as Record<NestedSlot, Record<string, string[]>>;
+  for (const slot of NESTED_SLOTS) {
+    table[slot] = {};
+    for (const type of NESTED_TYPES[slot]) table[slot][type] = nestedKeysOf(doc, slot, doc.moddle.create(type));
+  }
+  return table;
+}
+
+/** Selectors for one of several event definitions of an event (`set`, `ext`, ops JSON). */
+export const NESTED_SELECTORS: Record<string, string> = {
+  'definition[<n>].<key>': 'one of several event definitions of an event, by position (0-based), e.g. \'definition[1].id=Def_Timer\'; plain definition. on such an event is E_AMBIGUOUS_NESTED. `show` and `ext list` name each definition this way; `ext` takes the same prefix (\'definition[0].camunda:field\').',
+  'definition[<trigger>].<key>': 'the same by trigger, e.g. \'definition[message].camunda:type=external\' (when the event has one definition of that trigger). Quote the brackets in a shell. `set <id> trigger=<t>` keeps only that definition.',
+};
+
+function nestedKeysSection(): string {
+  const out: string[] = [heading('NESTED KEYS  (set keys of nested elements without an id: definition. = event definition, loop. = loop characteristics, condition. = condition expression; every slot also takes <slot>.id)')];
+  const keyTable = nestedKeyTable();
+  const rows: string[][] = [];
+  for (const slot of NESTED_SLOTS) {
+    for (const [type, keys] of Object.entries(keyTable[slot])) {
+      const shown = keys.filter((k) => k !== `${slot}.id`);
+      if (shown.length) rows.push([type.replace('bpmn:', ''), shown.join(', ')]);
+    }
+  }
+  out.push(table(rows));
+  out.push('  A camunda attribute that belongs on a nested element is refused on its parent (E_WRONG_HOST, the hint names the key).');
+  for (const [selector, text] of Object.entries(NESTED_SELECTORS)) out.push(`  ${selector}: ${text}`);
+  out.push('  Extension elements of a nested element: the same prefix on the ext type, e.g. `bpmn ext add <file> <id> loop.camunda:failedJobRetryTimeCycle --body R3/PT5M`.');
+  return out.join('\n');
+}
+
+/** One zeebe extension element type: where it goes (kinds, nested slots, containers), its attributes, whether it is single. */
+export interface ZeebeElementDoc {
+  type: string;
+  /** element kinds (`bpmn kinds`), nested slots (`loop.` of activities, `definition.` of events) or `message`; for a child type its container */
+  on: string[];
+  attributes: string[];
+  children?: string[];
+  /** Camunda 8 reads one per element: a second one is merged by ext add */
+  single: boolean;
+}
+
+/** Where each zeebe extension element goes, by the Zeebe descriptor (`bpmn kinds` section CAMUNDA 8, `kinds --json` -> zeebeElements). */
+export function zeebeElementTable(): ZeebeElementDoc[] {
+  const out: ZeebeElementDoc[] = [];
+  for (const name of zeebeTypeNames()) {
+    const t = zeebeType(name)!;
+    const on: string[] = [];
+    if (zeebeNestedOnly(name)) on.push(...zeebeContainersOf(name).map((c) => `in ${c}`));
+    else {
+      if (zeebeAllowedOn(name, 'bpmn:Process') === true) on.push('process');
+      // a whole family (all events, all tasks, ...) is named once
+      const families = new Map<string, KindDef[]>();
+      for (const k of KINDS) families.set(k.family, [...(families.get(k.family) ?? []), k]);
+      for (const [family, kinds] of families) {
+        const allowed = kinds.filter((k) => zeebeAllowedOn(name, k.type) === true);
+        if (allowed.length && allowed.length === kinds.length && kinds.length > 1) on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
+        else on.push(...allowed.map((k) => k.kind));
+      }
+      if (zeebeAllowedOn(name, 'bpmn:Message') === true && zeebeAllowedOn(name, 'bpmn:Task') !== true) on.push('message');
+      if (zeebeAllowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
+      const defs = ['Message', 'Conditional'].filter((d) => zeebeAllowedOn(name, `bpmn:${d}EventDefinition`) === true);
+      for (const d of defs) on.push(`definition. (${d.toLowerCase()} events)`);
+      if (zeebeAllowedOn(name, 'bpmn:Lane') === true && zeebeAllowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
+      for (const c of zeebeContainersOf(name)) on.push(`in ${c}`);
+    }
+    out.push({ type: name, on, attributes: t.attributes.map((a) => a.name), ...(t.children.length ? { children: t.children } : {}), single: ZEEBE_SINGLE.includes(name) });
+  }
+  return out;
+}
+
+/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ext.ts SINGLE_TOP). */
+const ZEEBE_SINGLE = [...SINGLE_TOP].filter((t) => t.startsWith('zeebe:'));
+
+function zeebeSection(): string {
+  const out: string[] = [heading('CAMUNDA 8  (zeebe extension elements: bpmn ext add <file> <id> <type> attr=value; FEEL values start with =, write attr==<expression>; from the Zeebe descriptor)')];
+  for (const z of zeebeElementTable()) {
+    out.push(`  ${z.type.padEnd(28)} ${[z.attributes.join(' '), z.children ? `children: ${z.children.join(', ')}` : ''].filter(Boolean).join('; ') || '(no attributes)'}${z.single ? '  (one per element)' : ''}`);
+    out.push(`      on: ${z.on.join(', ') || 'see the descriptor'}`);
+  }
+  out.push('  Child types go into their container (zeebe:input -> zeebe:ioMapping), a single element is merged, a keyed item (zeebe:input by target,');
+  out.push('  zeebe:header by key, zeebe:property by name) is replaced. A zeebe attribute set on the element itself is refused (E_WRONG_HOST).');
+  return out.join('\n');
+}
+
+function placementSection(): string {
+  return [heading('PLACEMENT  (add / move; ops JSON key in parentheses)'), table(PLACEMENT_DOCS.map((p) => [p.option, `(${p.key})`, p.rule])), ...PLACEMENT_NOTES.map((n) => `  ${n}`)].join('\n');
+}
+
+function errorsSection(): string {
+  const out: string[] = [heading('ERRORS AND WARNINGS')];
+  for (const e of ERROR_CATALOGUE) out.push(`  ${e.code}\n      ${e.meaning}\n      fix: ${e.fix}`);
+  return out.join('\n');
+}
+
+function exitCodesSection(): string {
+  return [heading('EXIT CODES'), table(EXIT_CODE_DOCS.map((e) => [String(e.code), e.meaning]))].join('\n');
+}
+
+function opsSection(): string {
+  const out: string[] = [heading('OPS JSON  (bpmn apply <file> ops.json; keys = CLI flags in lowerCamelCase; full schema: bpmn kinds --json -> ops)')];
+  for (const n of OP_NAMES) {
+    const required = Object.entries(OP_FIELDS[n]).filter(([, s]) => s.required).map(([k]) => k);
+    out.push(`  ${n.padEnd(8)} ${OP_DESCRIPTIONS[n]}`);
+    out.push(`           keys: ${Object.keys(OP_FIELDS[n]).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
+  }
+  out.push('\nBatch aliases: "as": "$name" on add / connect / split / split nodes ("flowAs" on add and split nodes: the flow into the');
+  out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "outAs" on add: the one flow');
+  out.push('the add creates out of the node, to the old successor on a splice, to the anchor on a prepend, else to "to"; E_USAGE');
+  out.push('when it creates none or two; "joinAs" on split: the join;');
+  out.push('"refAs" on add / connect / set / retype: the message, error, signal or escalation');
+  out.push('the element references) names what the op creates; later ops use "$name" wherever an id goes (after, before,');
+  out.push('flow, in, on, to, source, target, id, ids, set values default / source / target / lane, order flows / lanes / pools,');
+  out.push('the format ops with their selectors path / via / branch). An unknown or later-defined alias fails before anything');
+  out.push('runs (E_UNKNOWN_ALIAS, listing the aliases defined so far); the result lists alias -> final id ("aliases:" line,');
+  out.push('`aliases` in --json) and the old -> new id of a flow it renamed after its new ends ("renamed:" with --summary, `renamed`).');
+  out.push('An alias follows its element through a rename and a retype (also to another type: create, retype, then configure).');
+  out.push('With --keep-flow-ids a flow the file had keeps its id through the whole batch unless an op removes it (the flows of a');
+  out.push('removed node, the out-flow a bridge replaces: "removed:"), so later ops can use it; a move puts the moved node\'s');
+  out.push('out-flow back at its new place, with its id, documentation and extensions (its name, condition and annotations stay');
+  out.push('with the bridge, its change says which, and it is no longer a default flow; a node that is not bridged, or whose');
+  out.push('bridge a later node of the move removed, drops name and condition, W_LABEL_DROPPED, W_CONDITION_DROPPED, unless the');
+  out.push('flow is put back between its old ends; a "flowId" on a move that prepends names a new flow node -> anchor instead).');
+  out.push('The result names the stale ones (W_FLOW_ID_STALE) instead. A flow the batch created still follows its ends: name it');
+  out.push('where an op creates it, with "flowAs" on an add that appends or prepends and on split nodes, "outAs" on an add that');
+  out.push('splices, prepends or has "to", or "as" on connect. On a splice "flowAs" names the kept flow into the node and "outAs"');
+  out.push('the new flow node -> old successor, so the batch that splices a gateway in can set that flow\'s condition or make it');
+  out.push('the default.');
+  out.push('\nExample (after `bpmn new order.bpmn --name "Order handling" --target camunda8`, start -> "Check invoice" -> end):');
+  out.push(JSON.stringify(opsExample(), null, 2));
+  return out.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* public renderers                                                     */
+/* ------------------------------------------------------------------ */
+
+/** `bpmn kinds`: kinds, triggers, set keys, placement grammar and the error catalogue as text. */
+export function kindsText(): string {
+  return [kindsSection(), triggersSection(), setKeysSection(), nestedKeysSection(), zeebeSection(), placementSection(), errorsSection()].join('\n') + '\n';
+}
+
+/** `bpmn kinds --json`: the same as one object, plus the ops schema and example. */
+export function kindsJson(): Record<string, unknown> {
+  return {
+    kinds: KINDS.map((k) => ({
+      kind: k.kind,
+      type: k.type,
+      family: k.family,
+      aliases: k.aliases,
+      prefix: k.prefix,
+      ...(k.triggers ? { triggers: k.triggers } : {}),
+      ...(k.props ? { props: k.props } : {}),
+      description: k.description,
+    })),
+    triggers: Object.fromEntries(
+      TRIGGER_OPTIONS.map((t) => [
+        t.trigger,
+        {
+          ...(t.trigger !== 'none' ? { type: TRIGGER_TYPES[t.trigger] } : {}),
+          option: t.option,
+          keys: t.keys,
+          description: t.description,
+          kinds: kindsWithTrigger(t.trigger),
+          ...(t.alsoOn ? { alsoOn: t.alsoOn } : {}),
+        },
+      ]),
+    ),
+    nonInterrupting: NON_INTERRUPTING_DOC,
+    setKeys: SET_KEYS,
+    nestedKeys: nestedKeyTable(),
+    nestedSelectors: NESTED_SELECTORS,
+    zeebeElements: zeebeElementTable(),
+    placement: {
+      options: PLACEMENT_DOCS,
+      notes: PLACEMENT_NOTES,
+    },
+    ops: OPS_SCHEMA,
+    opsExample: opsExample(),
+    layoutModes: [...LAYOUT_MODES],
+    ids: ID_CONVENTIONS,
+    colors: SWATCHES,
+    errors: ERROR_CATALOGUE,
+    exitCodes: Object.fromEntries(EXIT_CODE_DOCS.map((e) => [String(e.code), e.meaning])),
+  };
+}
+
+/** `bpmn guide`: the agent cheat sheet. */
+export function guideText(): string {
+  const out: string[] = [];
+  out.push('bpmn — edit BPMN 2.0 models semantically; the diagram is drawn for you');
+  out.push('======================================================================');
+  out.push(`(\`bpmn guide --short\`: the core in 5 KB; \`bpmn guide <topic>\`: one section; topics: ${Object.keys(GUIDE_TOPICS).join(', ')})`);
+  out.push(heading('CONTRACT'));
+  out.push(
+    [
+      '  - You edit the metamodel: kinds, names, flows, triggers, lanes, pools, properties, extensions.',
+      '  - You never see or write DI (shapes, edges, coordinates). The CLI keeps the drawing: a hand-made (or formatted)',
+      '    diagram stays as it is, new elements are placed locally and only affected flows rerouted; a new file, or a',
+      '    drawing the engine made and nobody changed, is redrawn by the built-in engine (see LAYOUT MODES).',
+      '  - To change the picture, use the format commands (place, align, color, label, route, space, tidy, compact,',
+      '    order of lanes and pools); they name other elements, never coordinates (see FORMATTING WITHOUT XML).',
+      '  - Elements are addressed by id only (names may repeat). Ids speak and follow the file: a new id says what it',
+      '    names (Activity_CheckInvoice; unnamed: kind + place, Gateway_AfterCheckInvoice, Event_TimerOnReview; flows',
+      '    their ends, Flow_CheckInvoiceToBookInvoice) with the file\'s prefixes, case and flow form (serviceTask_checkStock,',
+      '    Task_check_stock, flow_aToB; a Camunda Modeler file of Activity_0k3x9qa gets Activity_CheckInvoice). Never a',
+      '    hash or a running number; umlauts become ae oe ue ss (ø oe, å aa); at most 64 characters, cut at whole words; a',
+      '    taken id gets _2 (W_ID_SUFFIXED; an unnamed gateway or task says its kind first, Gateway_ParallelAfterCheck,',
+      '    then the unnamed anchor it follows, Task_AfterCheckGateway). Where the .bpmnlintrc\'s element-id-naming',
+      '    declares a prefix, it and the declared case decide instead (serviceTask_checkInvoice; see CONVENTIONS).',
+      '    A flow names an unnamed gateway by its id (Flow_CheckToAfterCheck). A flow whose id names its ends is',
+      '    renamed when a splice or bridge changes them (the result says so). Where flow ids are API (generated code,',
+      '    process tests), --keep-flow-ids or BPMN_KEEP_FLOW_IDS=1 keeps them; W_FLOW_ID_STALE then names each flow',
+      '    whose id no longer names its ends, with the `bpmn set` that renames it.',
+      '    Every result names the ids it created; use them in the next command. In `apply`, name what an op creates',
+      '    with an alias ("as": "$check"; add: "flowAs" for the flow into the node, "outAs" for the flow it creates out of',
+      '    it; split: "joinAs"; "refAs": the message, error, signal or escalation the element references) and use the',
+      '    alias in later ops wherever an id goes ("after": "$check"); the result lists alias -> id.',
+      '  - Sub-processes are drawn expanded by default (`--collapsed` / `set expanded=false` to collapse).',
+      '  - Branches: the default flow (else the first outgoing flow) continues straight; the other branches alternate',
+      '    below and above it in declaration order (`bpmn order` changes the order, `set <flowId> default=true` the continuation).',
+      '  - One diagram root: the collaboration when pools exist, else the single process. Several root processes',
+      '    need pools (participants). Complex gateways are not supported (a file with one stays editable;',
+      '    retype it to a supported gateway). Errors a file already has never block a write (W_PREEXISTING_ERROR).',
+      '  - A write rewrites only the elements it changed: comments, CDATA, attribute and namespace order, indentation',
+      '    and incoming/outgoing lists (written only where the file has them) stay as the file had them. A result equal',
+      '    to the file is not written ("unchanged: <file>"); a comment next to a removed element is reported in a note.',
+    ].join('\n'),
+  );
+  out.push(heading('WORKFLOW'));
+  out.push(
+    [
+      '  1. bpmn new <file> --name "..."          create (or start from an existing .bpmn)',
+      '  2. bpmn show <file>                       read the model in flow order; note the ids (a large model:',
+      '                                            show --around <id> / show <id> --context, see READING LARGE MODELS)',
+      '  3. bpmn add / connect / set / remove ...  one change per command, or many in one `bpmn apply <file> ops.json`',
+      '                                            (the split macro is an apply-only op; there is no split command)',
+      '  4. bpmn validate <file>                   new errors block a write anyway; warnings are lint hints (with a',
+      '                                            .bpmnlintrc also bpmnlint, whose errors fail validate: see BPMNLINT)',
+      '  5. bpmn show <file>                       confirm the result (add --show to any mutating command instead)',
+      '  Prefer `apply` for more than two related changes: it is one transaction and one layout pass.',
+    ].join('\n'),
+  );
+  out.push(heading('READING LARGE MODELS  (by id only: names may repeat)'));
+  out.push(READING.join('\n'));
+  out.push(heading('LAYOUT MODES  (every mutating command: --layout <auto|incremental|full>, --relayout, --no-layout)'));
+  out.push(
+    [
+      '  auto (default)  no diagram yet, or the drawing is exactly what the engine would draw (nobody changed it):',
+      '                  redraw in full. Otherwise keep it: new elements are placed next to their neighbours, room is',
+      '                  made like the modeler\'s space tool, only affected flows are rerouted, removed elements\' DI pruned.',
+      '                  A line that does not reach an end of its own (left at an old place by an older --no-layout',
+      '                  write or another tool) is routed again and listed as rerouted.',
+      '                  A batch places its new nodes like the same ops sent one by one (exception paths after the',
+      '                  normal flow); a `connect` that would enter a merge backwards moves the merge after its sources.',
+      '                  A new branch / boundary path whose rows below cross a line opens the row right under its anchor',
+      '                  (the line moves down), or goes above it (a boundary event the CLI placed then on the top border;',
+      '                  one drawn by hand keeps its border; the path of an event on the top border runs above its host);',
+      '                  a crossing left is repaired once more (the flow routed again, the branch at its next row) when',
+      '                  that lowers the score and crosses no two drawn lines: such a flow is listed as rerouted.',
+      '  incremental     always keep the drawing (fails with E_LAYOUT_INCREMENTAL instead of redrawing).',
+      '  full            always redraw (= --relayout; also `bpmn layout <file>`). Colours and DI ids survive, positions do not;',
+      '                  a group box is drawn again around the elements it held (one around nothing keeps its box, or its',
+      '                  size below the drawing when the redraw put shapes on it; a note says so).',
+      '  design-iq stickies (bpmiq:sticky) move with the flow node nearest to them, never when no node moved.',
+      '  The result says which mode ran and why, what was placed / moved / rerouted, and the layout quality before ->',
+      '  after with the problems added and resolved (ids). A format command that changed the drawing (moved a shape,',
+      '  rerouted a flow, moved a label) makes it hand-made, so later writes keep your formatting.',
+    ].join('\n'),
+  );
+  out.push(heading('FORMATTING WITHOUT XML  (diagram only: the model does not change)'));
+  out.push(
+    [
+      '  1. bpmn show <file> --layout       per pool / lane the rows of node ids (left to right) with their column',
+      '                                     (c0..cN, " … " at a wide gap), wide empty gaps, colours, label sides,',
+      '                                     and the layout problems with ids',
+      '  2. place / align / space / route / label / color / order (lanes, pools) / tidy / compact: say where things',
+      '     go by naming other elements; others give way, frames grow, flows are rerouted',
+      '  3. bpmn metrics <file>             check that no overlaps / through / outsideLane / frameIntrusion were added',
+      '  4. bpmn render <file> --problems -o <f.png>   look at it (read the PNG): the problems numbered, labels,',
+      '                                     crossings, aesthetics the metrics miss (see LOOKING AT THE DRAWING)',
+      '  Selectors (place, align, color, tidy): --path <fromId> <toId> [--via <flowId...>], --kind <kind>,',
+      '  --branch <flowId> name many elements at once; elements are always named by id.',
+      '  Recipes:',
+      '    bpmn color f.bpmn Activity_A Flow_AToB Activity_B --color red       shapes and flows in red (default removes)',
+      '    bpmn color f.bpmn --path Event_Start Event_Done --color green       the happy path (--via <flowId> picks a branch)',
+      '    bpmn align f.bpmn --kind endEvent --axis column                     every end event in one column (the rightmost)',
+      '    bpmn place f.bpmn Activity_Fix Event_Fixed --below Activity_Book    a branch one row below (rigid group)',
+      '    bpmn place f.bpmn --branch Flow_OkToFix --below Activity_Book       the whole branch of Flow_OkToFix, up to the join',
+      '    bpmn place f.bpmn Event_Done --row-of Activity_Check                same row, x unchanged',
+    '    bpmn place f.bpmn Event_Overdue --side top                          a boundary event and its path on top',
+      '    bpmn order f.bpmn Participant_Org Lane_Boss Lane_Clerk              lanes top to bottom',
+      '    bpmn order f.bpmn Collaboration_Org Participant_Customer            pools top to bottom (the customer on top)',
+      '    bpmn route f.bpmn Flow_Retry --exit bottom --entry bottom           a loop below',
+      '    bpmn space f.bpmn --after Activity_Check                            room for one more column',
+      '    bpmn space f.bpmn --after Activity_Check --by -column               close (up to) one column of empty space',
+      '    bpmn compact f.bpmn                                                 close every empty row / column, shrink frames',
+      '    bpmn label f.bpmn Gateway_Ok --side below',
+      '    bpmn tidy f.bpmn                                                    remove overlaps (= layout --tidy)',
+      '  In `apply` they are ops as well ({"op": "place", "ids": [...], "below": "..."}): they run after the semantic',
+      '  ops and the layout, in batch order, all or nothing. A node cannot be placed out of its lane: `move --lane` first',
+      '  (E_LEAVES_CONTAINER). No room next to the reference (E_NO_ROOM): run the `space` command of its hint (a dry',
+      '  run checked it), then place again; in a batch, put the space op it names before the place op.',
+    ].join('\n'),
+  );
+  out.push(heading('LOOKING AT THE DRAWING  (bpmn render; read the PNG it writes)'));
+  out.push(LOOKING.join('\n'));
+  out.push(heading('QUOTING'));
+  out.push(
+    [
+      "  - Expressions and anything with `$`: single quotes, e.g. --condition '${amount > 100}'.",
+      '  - Names with spaces: quote them, e.g. add userTask "Check invoice".',
+      '  - key=value with spaces: quote the whole pair, e.g. name="Check the invoice".',
+      '  - In JSON nothing is expanded, so ops files are the safest place for expressions.',
+    ].join('\n'),
+  );
+  out.push(heading('CAMUNDA 7  (also CIB seven and Operaton: the camunda: namespace)'));
+  out.push(
+    [
+      '  bpmn new f.bpmn --name "Order" --target camunda7     camunda + modeler namespaces, historyTimeToLive=180, platform 7.24.0',
+      '  Attributes: `set` (or `add ... key=value`) with the camunda: prefix; elements without an id take a prefix:',
+      '    bpmn set f.bpmn Activity_Charge camunda:type=external camunda:topic=charge-card              external task',
+      '    bpmn set f.bpmn Activity_Review camunda:candidateGroups=sales camunda:formKey=embedded:app:forms/review.html',
+      "    bpmn set f.bpmn Activity_Review 'loop.camunda:collection=${items}' loop.camunda:elementVariable=item   collection multi-instance",
+      '    bpmn set f.bpmn Event_Declined definition.camunda:errorCodeVariable=code                      on the event definition',
+      '    bpmn set f.bpmn Flow_Yes condition.camunda:resource=deployment://check.groovy language=groovy  script resource condition',
+      '  Extension elements: `ext add`; child types are filed into their container, single containers merged:',
+      "    bpmn ext add f.bpmn Activity_Charge camunda:inputParameter name=amount --body '${order.total}'",
+      "    bpmn ext add f.bpmn Activity_Charge camunda:errorEventDefinition id=Map_Declined errorRef=Error_Declined 'expression=${declined}'",
+      '    bpmn ext add f.bpmn Activity_Call camunda:in variables=all',
+      '    bpmn ext add f.bpmn Activity_Review loop.camunda:failedJobRetryTimeCycle --body R3/PT5M',
+      "    bpmn ext remove f.bpmn Activity_Charge 'camunda:inputParameter[name=amount]'",
+      '  A camunda attribute on the wrong element is refused (E_WRONG_HOST, the hint names the right key).',
+      "  One of several event definitions of an event: 'definition[1].<key>=...' or 'definition[timer].<key>=...' (plain",
+      '  definition. is E_AMBIGUOUS_NESTED); the engines act on one of them only, set trigger=<t> keeps that one.',
+      "  Back from a script resource to an inline condition, in one command: condition.camunda:resource= 'condition=${ok}'.",
+      '  Before deploying: `bpmn validate f.bpmn`; fix every W_C7_DEPLOY_* finding (the engines refuse the file), e.g.',
+      '  `bpmn set f.bpmn <processId> camunda:historyTimeToLive=180`. Every write reports only the C7 findings it introduced.',
+      '  Operaton files (operaton: namespace) work the same with the operaton: prefix; Operaton reads operaton:* first,',
+      '  camunda:* as the fallback, Camunda 7 and CIB seven ignore operaton:* (validate says so in its platform line).',
+    ].join('\n'),
+  );
+  out.push(heading('CAMUNDA 8  (Zeebe: the zeebe: namespace; `bpmn validate` runs the Camunda 8 profile)'));
+  out.push(CAMUNDA8.join('\n'));
+  out.push(heading('BPMNLINT  (the project\'s .bpmnlintrc in validate and every write)'));
+  out.push(BPMNLINT.join('\n'));
+  out.push(heading('CONVENTIONS  (the id conventions of the .bpmnlintrc: element-id-naming)'));
+  out.push(CONVENTIONS.join('\n'));
+  out.push(heading('OUTPUT  (results, warnings, JSON, stdin / stdout)'));
+  out.push(OUTPUT.join('\n'));
+  out.push(heading('COMMANDS'));
+  for (const c of COMMANDS) {
+    out.push(`\n  ${c.usage}`);
+    out.push(`      ${c.summary}`);
+    for (const ex of c.examples) out.push(`      $ ${ex}`);
+  }
+  out.push('\n  Common options of every mutating command:');
+  out.push(table(COMMON_OPTIONS.map((o) => [o.option, o.description]), '      '));
+  out.push('\n  Result (text): one line per created/changed/removed element, then notes, the warnings the change added (see');
+  out.push('  OUTPUT), "layout: ok - <full|incremental> (<reason>)" or "layout: skipped", the ids the layout placed / moved / rerouted /');
+  out.push('  pruned, one "format <op> #<index>: moved ...; rerouted ...; colored ..." line per format op, "layout quality:');
+  out.push('  score <before> -> <after>; added: <kind> [ids]; resolved: ...", then "written: <file>" ("dry run: <file> not written";');
+  out.push('  "unchanged: <file> (the result equals the file; nothing written)" when the change left the file as it was).');
+  out.push('  With --json: {ok, file, written, unchanged, created, changed, removed, warnings: {added, resolved, preexistingCount},');
+  out.push('  notes, layout: {status, mode, reason, warnings, expanded, placed?, moved?, rerouted?, pruned?, notes?, format?: [{op,');
+  out.push('  index, moved, rerouted, colored?, labels?, notes?}], metrics: {before?, after: {counts, score}, added, resolved}},');
+  out.push('  validation: {errors, platform?, validators?: [{name, detail?, blocks?, errors, warnings, preexisting, resolved, counts,');
+  out.push('  leftOut?: [{reason, count}]}]}, importWarnings, view?, conventions?: {ids, source}}. With --summary --json: {ok, file,');
+  out.push('  written, unchanged, created: {<kind>: [ids]}, changed, removed, forced?, warnings: {added, resolvedCount, preexistingCount},');
+  out.push('  leftOut?: [{validator, reason, count}], layout: {status, mode?, score?: {before?, after}, added?}, conventions?, notes? (only');
+  out.push('  the note of flow ids BPMN_KEEP_FLOW_IDS kept, see OUTPUT)}.');
+  out.push('  A validator\'s findings (the project\'s bpmnlint; a host\'s validators in library use) carry `validator` and');
+  out.push('  `severity`; in text they read "[<name>] <code> <element>: <message>" ("[bpmnlint error] <rule> ..." for a bpmnlint');
+  out.push('  error, "warning [bpmnlint error] <rule> ..." when a write added it: bpmnlint is advisory, `blocks: false`).');
+  out.push('  Errors go to stderr as "error E_CODE: message" + "  hint: ..." (+ candidates; an E_VALIDATION refusal lists');
+  out.push('  each error it would add on a line under the message); with --json as {ok: false, error: {code, message,');
+  out.push('  element?, related?, candidates?, hint?, op?, command?, ops?, errors?}} (errors: those of an E_VALIDATION');
+  out.push('  refusal, each with its code and hint; command, ops: the checked space run of an E_NO_ROOM).');
+  out.push(placementSection());
+  out.push(triggersSection());
+  out.push(opsSection());
+  out.push(exitCodesSection());
+  out.push(heading('COMMON ERRORS'));
+  const common = ['E_NOT_FOUND', 'E_HAS_SUCCESSOR', 'E_AMBIGUOUS_SCOPE', 'E_CROSS_SCOPE', 'E_INVALID_PLACEMENT', 'E_TRIGGER_REQUIRED', 'E_UNKNOWN_KEY', 'E_WRONG_HOST', 'E_DUPLICATE_EXTENSION', 'E_VALIDATION', 'E_IMPORT_LOSSY', 'E_USAGE', 'E_LEAVES_CONTAINER', 'E_NO_ROOM'];
+  for (const code of common) {
+    const e = ERROR_CATALOGUE.find((d) => d.code === code);
+    if (e) out.push(`  ${e.code}: ${e.meaning}\n      fix: ${e.fix}`);
+  }
+  out.push('  The full catalogue: `bpmn kinds` (section ERRORS AND WARNINGS) or `bpmn kinds --json` -> errors.');
+  return out.join('\n') + '\n';
+}
+
+/* ------------------------------------------------------------------ */
+/* the short guide and the topics                                       */
+/* ------------------------------------------------------------------ */
+
+/** READING LARGE MODELS: the views an agent reads a large model with. */
+const READING = [
+  '  bpmn show <file> --around <id> [--depth 2] [--inner]   the neighbourhood of one element: --depth flow steps along',
+  '      sequence flows both ways (boundary events and their hosts are neighbours; the first / last node of a sub-process',
+  '      leads out to it, --inner also leads into sub-processes); per node its lane, implementation (vendor values,',
+  '      `io: in a; out b`, zeebe:taskDefinition type=...) and flows, `<- Src (Flow)` for a flow from outside the window;',
+  '      the header counts what was left out; message flows, annotations and data of the window follow.',
+  '  bpmn show <file> <id> --context   the element in its context: `in:` pool > process > sub-processes, `lane:` (also',
+  '      inherited through sub-processes), `from:` / `to:` with names and flows, its boundary events, `caught by:` every',
+  '      boundary event of the sub-processes around it (interrupting ones cancel it; non-interrupting marked), the event',
+  '      sub-processes around it, annotations, message flows with the partner and its pool, data it reads / writes, its',
+  '      implementation; a message element its `message:` (id, name, correlation key) and the flows of that message drawn',
+  '      to its pool `(at pool P)`; a message flow its ends with their pools; a message / signal / error `used by:`.',
+  '  bpmn show <file> <id>             every detail of one element (properties, extension tree, message flows, data)',
+  '  bpmn find <file> <text> [--kind k]   ids by id, name or vendor value (topic, assignee, ...)',
+  '  bpmn show <file> [--scope <id>]   the whole model (lane=<id> per node), or one process / pool / sub-process',
+  '  For a local edit read --around first; "what happens if X fails" / "who does X" is one --context call.',
+];
+
+/** LOOKING AT THE DRAWING: bpmn render for agents. */
+const LOOKING = [
+  '  bpmn render <file> --problems -o f.png        the whole plane; every layout problem of `bpmn metrics` as a numbered',
+  '                                                 badge on the defect, listed below the result line with its ids:',
+  '                                                   1 crossings [Flow_6, Flow_21]',
+  '  bpmn render <file> --around <id> [--depth 2] [--inner]   exactly the nodes of `show --around` (cheap: a few',
+  '                                                 hundred image tokens), their flows, data and annotations',
+  '  bpmn render <file> --path <from> <to> [--via <flowId>]   the nodes and flows of that sequence-flow path',
+  '  bpmn render <file> --scope <pool|lane|subProcess>       one pool, lane or sub-process with its content',
+  '  bpmn render <file> <id> <id> ...               exactly these elements',
+  '  A crop draws flows to what it leaves out faded, pools and lanes as context; with --problems it lists the',
+  '  problems of its elements. --highlight <id,...> puts an orange halo around elements. --tiles splits an image',
+  '  whose labels would be too small (scale below 0.75) at the diagram columns into readable tiles (-1.png, ...);',
+  '  only tiles with a shape, label or numbered problem are written (at most 40; more: render a part).',
+  '  Budget: the result line says the image tokens (width * height / 784); the long edge stays within --max-size',
+  '  (2000). On a large model render a crop, not the whole plane.',
+  '  After a change: add --render <f.png> to the mutating command (or `apply`): created elements green, changed',
+  '  orange, moved blue, the layout problems the change added numbered (a large drawing: the region of the change).',
+  '  Fix what you see with the format commands (label, place, route, space, tidy) by the ids of the legend, then',
+  '  look again; stop after two rounds.',
+];
+
+/** CAMUNDA 8: zeebe extension elements in practice. */
+const CAMUNDA8 = [
+  '  bpmn new f.bpmn --name "Order" --target camunda8     zeebe + modeler namespaces, platform Camunda Cloud 8.9.0',
+  '  Camunda 8 settings are extension elements (`bpmn kinds --section zeebeElements` lists them per kind): child types go',
+  '  into their container, single elements are merged, an item with the same key (zeebe:input / output target,',
+  '  zeebe:header key) replaces the old one. FEEL values start with = (write attr==<expression>: the first = separates',
+  '  key and value):',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:taskDefinition type=charge-card retries=3          job worker',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:input source==order.total target=amount            -> zeebe:ioMapping',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:output source==receipt target=receipt',
+  '    bpmn ext add f.bpmn Activity_Charge zeebe:header key=channel value=web                       -> zeebe:taskHeaders',
+  '    bpmn ext add f.bpmn Activity_Review zeebe:assignmentDefinition candidateGroups=sales assignee==reviewer',
+  '    bpmn ext add f.bpmn Activity_Review zeebe:formDefinition formId=review-form                  linked form',
+  '    bpmn ext add f.bpmn Activity_Bill zeebe:calledElement processId=billing propagateAllChildVariables=false',
+  '    bpmn ext add f.bpmn Activity_Inform loop.zeebe:loopCharacteristics inputCollection==parties inputElement=party',
+  '                                                                  (creates the parallel multi-instance loop)',
+  '    bpmn set f.bpmn Activity_Wait message=PaymentReceived                                        receive task',
+  '    bpmn ext add f.bpmn Message_PaymentReceived zeebe:subscription correlationKey==orderId       message correlation',
+  '    bpmn set f.bpmn Activity_Wait zeebe:correlationKey==orderId          the same, on the message Activity_Wait waits for',
+  '  A zeebe:subscription (ext add) or zeebe:correlationKey (set) given to a catch event or receive task goes to the',
+  '  bpmn:Message it waits for (Camunda 8 reads it there; the result notes it). In `apply`, "refAs": "$msg" names the',
+  '  message an op creates or finds: {"op":"add","kind":"receiveTask","name":"Wait","message":"Paid","refAs":"$msg",...},',
+  '  then {"op":"ext","id":"$msg","action":"add","type":"zeebe:subscription","attrs":{"correlationKey":"=orderId"}}.',
+  '    bpmn set f.bpmn Activity_Rate calledDecision=risk-rating      zeebe:calledDecision decisionId (business rule task)',
+  '    bpmn ext add f.bpmn Activity_Rate zeebe:calledDecision resultVariable=risk',
+  "    bpmn add f.bpmn userTask \"Approve\" --after Gateway_Big --condition '= amount > 1000' --flow-name yes   FEEL condition",
+  "    bpmn ext remove f.bpmn Activity_Charge 'zeebe:input[target=amount]'",
+  '  New user tasks of a Camunda 8 file get zeebe:userTask (a Camunda user task, like the Modeler); new event',
+  '  definitions an id (Camunda 8.9 refuses conditional, compensation and link catch definitions without one).',
+  '  A zeebe attribute that belongs on an extension element is refused (`set X zeebe:assignee=...`: E_WRONG_HOST,',
+  '  the hint is the ext add). `bpmn ext list f.bpmn <id>` shows the tree; `show --around` / `show <id> --context` show',
+  '  the implementation in one line (zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt).',
+  '  Before deploying: `bpmn validate f.bpmn`; fix every W_C8_DEPLOY_* finding (Camunda 8 refuses the file: a service',
+  '  task without job type, a FEEL syntax error, a message without correlation key, PT2D instead of P2D, PT1.5H (a',
+  '  fraction on seconds only), an id with a colon, child elements in an order the BPMN schema does not allow, ...; each',
+  '  hint is the command). Runtime findings (W_C8_*) deploy but misbehave: a flow without condition out of an exclusive',
+  '  gateway is never taken, camunda:* content is ignored, ...',
+];
+
+/** BPMNLINT: the project's .bpmnlintrc in validate and every write (src/validate/bpmnlint-validator.ts, src/node/bpmnlint.ts). */
+const BPMNLINT = [
+  '  A .bpmnlintrc in the model\'s directory or above, up to the repository root (the directory with .git), runs in',
+  '  `bpmn validate` and in every write; --lint-config <path> names another one, --no-lint-config switches it off.',
+  '  A write looks it up from the file it writes (-o), a model from stdin without -o from the working directory.',
+  '  Outside a git repository only the model\'s own directory counts. Whose repository it is does not matter for the',
+  '  lookup (root over another uid\'s checkout in CI, on Windows one outside the home directory: the same .bpmnlintrc);',
+  '  only project plugins depend on the owner, see below. No .bpmnlintrc: nothing is loaded. Unlike bpmnlint\'s own',
+  '  CLI, which reads the .bpmnlintrc of the working directory, the nearest one above the model wins. A model whose',
+  '  directory is reached through a symbolic link: the path as given first, then the physical directory (where git',
+  '  finds the repository); a linked model file counts by the directory of the link.',
+  '  Findings name the validator, the severity, the rule and the element id (a warning reads `[bpmnlint] <rule>`):',
+  '    [bpmnlint error] label-required Activity_Check: Element is missing label/name            (validate)',
+  '    warning [bpmnlint error] label-required Activity_Check: Element is missing label/name    (a write)',
+  '  validate reports every finding; an error fails the check (exit 2), and three or more of one rule with one hint',
+  '  are one line (its most common message with the ids that have it; --json lists every finding). A write lists',
+  '  only the findings the change added (three or more of one rule and message as one line; --strict exits 5 on',
+  '  them), never refuses because of them, and counts the rest: `validator bpmnlint (.bpmnlintrc in models): 1',
+  '  error(s), 10 warning(s) in the result (3 added, 1 resolved, 8 already in the file)`; --summary counts them in its',
+  '  `warnings:` line. Fix what the change added in the same batch. In a file without incoming / outgoing lists,',
+  '  no-implicit-end, no-implicit-start, no-disconnected and event-based-gateway report nodes that have flows (in CI',
+  '  too): validate lists them with a hint, a write never adds or resolves them but counts them (its validator line',
+  '  ends with `7 left out (incoming / outgoing lists the file does not keep; ...)`, --summary has a `validator',
+  '  bpmnlint:` line), also those of the nodes it added; a node without a flow is reported. Where a rule says what a',
+  '  lint warning says (start-event-required: W_NO_START, end-event-required: W_NO_END, no-implicit-end: W_DEAD_END),',
+  '  only the bpmnlint finding is listed, with the hint. Its element-id-naming decides the prefix and case of new ids,',
+  '  so a write adds no finding of it (see CONVENTIONS).',
+  '  A new file from `bpmn new` lists its findings (an empty process: start-event-required, end-event-required).',
+  '  Rules: bpmnlint\'s own, camunda-compat\'s and @miragon/rules ship with bpmn-cli (offline, no install). A plugin',
+  '  bpmn-cli does not ship runs from the repository\'s node_modules: its code runs (the validator line names it); one',
+  '  installed outside the repository is not loaded, nor one outside a git repository of the user running bpmn-cli',
+  '  (by the owners of the directory and its .git, not git\'s safe.directory; root: also SUDO_UID\'s; on Windows only',
+  '  inside the home directory): W_LINT_UNAVAILABLE says why, and the rest of the .bpmnlintrc runs.',
+  '  moddleExtensions: JSON descriptors only; camunda-bpmn-moddle/resources/camunda.json and',
+  '  zeebe-bpmn-moddle/resources/zeebe.json work without an install; a descriptor BpmnModdle rejects is left out.',
+  '  W_LINT_UNAVAILABLE: something the .bpmnlintrc names is left out (not installed, no such rule, not strict JSON,',
+  '  a project plugin outside a git repository of the user, ...); the hint says what to do; a write counts it (its',
+  '  validator line: `N left out`). W_LINT_FAILED: a rule threw, its findings are left out; or no rule ran (validate',
+  '  and `bpmn new` list it, a later write says `1 left out (W_LINT_FAILED, no rule ran; ...)`). import-warning: an',
+  '  error of bpmnlint\'s parse with the moddleExtensions (bpmnlint\'s CLI fails on it too, validate exits 2); the hint',
+  '  says what to fix. E_LINT_CONFIG (exit 4): --lint-config names a file that cannot be read or is not strict JSON.',
+];
+
+/** CONVENTIONS: the id conventions element-id-naming of the project's .bpmnlintrc declares (src/ids/conventions.ts, src/ids/style.ts). */
+const CONVENTIONS = [
+  '  A .bpmnlintrc that runs @miragon/rules/element-id-naming (plugin:@miragon/rules/recommended-for-automation and the',
+  '  plugin\'s engine defaults turn it on) declares the prefix of each BPMN type, the case of the body and the',
+  '  event-definition qualifier. New ids take the declared prefix and case where the rule declares one, so a write adds',
+  '  no element-id-naming finding:',
+  '    serviceTask_checkInvoice, gateway_approved, event_timer2Days, flow_checkInvoiceToBookInvoice; under camelCase /',
+  '    PascalCase a taken id gets a glued 2 (serviceTask_checkInvoice2; after a digit No2: serviceTask_step1No2) and a',
+  '    split\'s join is gateway_approvedJoin',
+  '  `bpmn show <file> --conventions` lists each pattern with its kinds and where it comes from (lint: the rule, file:',
+  '  the file\'s ids, lint shape: shaped like the rule\'s prefixes, default: bpmn-cli\'s; not checked: the rule declares',
+  '  nothing for it), also for a file that does not exist yet: run it before the first change. Where none are declared',
+  '  it says why (--no-lint-config, no .bpmnlintrc, one that could not be loaded: W_LINT_UNAVAILABLE, the rule off).',
+  '  What the rule does not name (lanes, pools, data, messages) follows the file, learned without the ids that already',
+  '  follow the rule; a new file takes the rule\'s case and prefix shape (lane_sales). Message flows take the sequence',
+  '  flows\' prefix until the file\'s own message flows show a style. The process and the definitions keep',
+  '  Process_<Name> / Definitions_<Name> unless the rule names bpmn:Process / bpmn:Definitions (process_main',
+  '  without a name); a new pool\'s process takes the prefix two of the file\'s process ids share (process_customer,',
+  '  process_shop: process_bankAccount; never the pools\'). eventDefinitionQualifier required: timerStartEvent_...,',
+  '  messageEvent_...; optional (the default): the plain prefix. Explicit ids are taken as given (the join of a split',
+  '  whose id lacks the declared prefix or case: gateway_checkJoin). Existing ids never change for the conventions:',
+  '  after a retype or a trigger change W_ID_PREFIX_STALE names an id whose prefix no longer fits (a batch: from before',
+  '  it to after it), with the `bpmn set <file> <id> id=<newId>` that renames it (the new prefix and the rest of the',
+  '  id, or the id of what it is now where that rest failed the rule); an element the batch created takes the new',
+  '  prefix instead, and the flows named after it follow. In a file with ids of its own the rule rejects, a result',
+  '  names the new ids under a prefix the rule declares that differ from the file\'s own style (`conventions: ...',
+  '  follow element-id-naming (...)`; JSON: conventions.ids); a new file and one that follows the rule get none.',
+  '  W_CONFIG_IGNORED: a value of the rule new ids cannot follow (a prefix that cannot start an id, one for a DI',
+  '  type: DI ids follow their element, an unknown case or qualifier); a write only counts it.',
+  '  --no-lint-config, no .bpmnlintrc or the rule off: the file\'s style alone.',
+];
+
+/** OUTPUT: what a result reports, JSON, stdin / stdout. */
+const OUTPUT = [
+  '  A mutating command reports what changed, the warnings the change ADDED (three or more of one code as one line:',
+  '  `warning W_UNREACHABLE x20 [ids]: ...`; W_FLOW_ID_STALE keeps one line each), `resolved:` what it fixed, and one',
+  '  line counting the warnings the file already had (the platform profile\'s W_C7_* / W_C8_* among them; not repeated:',
+  '  `bpmn validate <file>` lists them); then the layout block and the file line. A group warning (W_DUPLICATE_NAME)',
+  '  that only shrank is the old one; an apply batch reports the warnings of its final state. The project\'s bpmnlint',
+  '  (see BPMNLINT) is advisory: an error of it the change added is listed among the warnings',
+  '  (`warning [bpmnlint error] <rule> <id>: ...`). `conventions:` names the new ids under a prefix its',
+  '  element-id-naming declares, where they differ from the file\'s own style (see CONVENTIONS). Where',
+  '  BPMN_KEEP_FLOW_IDS=1 kept the flow ids (no --keep-flow-ids / --no-keep-flow-ids given) and that changed the',
+  '  result (W_FLOW_ID_STALE, or a move put the node\'s old out-flow back), it says so, also with --summary:',
+  '  `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` (JSON: notes); an E_NOT_FOUND of an apply batch, in its hint.',
+  '  --summary: `created <kind>: ids` per kind, `aliases:` (apply), `changed:`, `renamed: <old> -> <new>` (a flow whose id',
+  '  named its old ends: use the new id; with --keep-flow-ids it keeps its id and W_FLOW_ID_STALE names it) and',
+  '  `removed:` ids, one `format <op> #<i>: ...` line per format op, the added warnings, one `warnings:` count line (what',
+  '  is already in the file includes the project\'s bpmnlint findings) and',
+  '  one layout line (`layout: incremental, score 12 -> 14; added: crossings [Flow_AToB, Flow_CToD]`).',
+  '  --json is compact (one line; --pretty indents it): warnings: {added, resolved, preexistingCount}; with --summary the',
+  '  summary as JSON. Errors go to stderr (`error E_CODE: message` + hint; with --json one JSON line).',
+  '  stdin / stdout: `-` as the file reads the model from stdin: show -, find - <text>, validate -, metrics -,',
+  '  render -, ext list - <id>; a mutating command on `-` (add -, apply - ops.json, layout -, ...) writes the result to',
+  '  stdout. `-o -` writes the result of any mutating command (and the image of render) to stdout. With the XML or',
+  '  the image on stdout the report goes to stderr.',
+];
+
+/** The errors the short guide lists, each with a one-line fix (the catalogue has the full text). */
+const TOP_ERRORS: Array<[string, string]> = [
+  ['E_NOT_FOUND', 'use a listed candidate id; `bpmn find <file> <text>` lists ids'],
+  ['E_HAS_SUCCESSOR', 'several outgoing flows: --flow <flowId> or --after X --before Y'],
+  ['E_AMBIGUOUS_SCOPE', 'several processes: add --in <processId|participantId>'],
+  ['E_INVALID_PLACEMENT', 'boundary events --on <activity>; data, annotations, lanes, pools --in only'],
+  ['E_CROSS_SCOPE', 'sequence flows stay in one scope; between pools `connect` makes a message flow'],
+  ['E_UNKNOWN_KEY', 'the message lists the settable keys; vendor keys need a prefix (camunda:assignee)'],
+  ['E_VALIDATION', 'the refusal lists the new errors (file unchanged): do it in one `apply` batch that ends valid'],
+  ['E_LEAVES_CONTAINER', 'move --lane first, then place'],
+  ['E_NO_ROOM', 'run the checked `bpmn space` command of the hint, then place again'],
+];
+
+/** Keys the short guide leaves out: `bpmn guide ops` and the schema list them (outAs, the flow an add creates out of the node: for a rare batch, not worth the short guide's bytes). */
+const FULL_GUIDE_ONLY_KEYS: ReadonlySet<string> = new Set(['outAs']);
+
+/** Every op with its keys (`*` = required; but FULL_GUIDE_ONLY_KEYS); add / retype fold their trigger keys into `<trigger keys>`. */
+function opKeyLines(): string[] {
+  const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((t) => t.keys), 'nonInterrupting']);
+  return OP_NAMES.map((n) => {
+    const fields = Object.entries(OP_FIELDS[n]).filter(([k]) => !FULL_GUIDE_ONLY_KEYS.has(k));
+    // an op with the whole set of trigger options (add, retype) shows them as one item
+    const folds = fields.filter(([k]) => triggerKeys.has(k)).length > 3;
+    const keys = fields.filter(([k]) => !folds || !triggerKeys.has(k)).map(([k, spec]) => (spec.required ? `${k}*` : k));
+    if (folds) keys.push('<trigger keys>');
+    return `  ${n.padEnd(8)} ${keys.join(' ')}`;
+  });
+}
+
+/** `bpmn guide --short`: contract, reading, changing, ops keys, placement and the top errors in at most 5 KB. */
+export function guideShort(): string {
+  const out: string[] = [];
+  out.push('bpmn — edit BPMN 2.0 models semantically (short guide; `bpmn guide <topic>` for one section, `bpmn guide` for all)');
+  out.push(heading('CONTRACT'));
+  out.push(
+    [
+      '  - You edit the model (kinds, names, flows, triggers, lanes, pools, properties, extensions), never the diagram: a',
+      '    hand-made drawing is kept and changes are placed locally; a new file is drawn for you.',
+      '  - Elements are addressed by id only (names may repeat). New ids speak in the file\'s id conventions (never a hash):',
+      '    Activity_CheckInvoice, Gateway_AfterCheckInvoice, Flow_CheckInvoiceToBookInvoice; an explicit id (--id, "id")',
+      '    always wins; every result names the ids it created. In apply, "as": "$name" names what an op creates and',
+      '    later ops use "$name" as an id (the result lists alias -> id).',
+      '  - Errors the file already had never block a write; a change that would add one is refused (E_VALIDATION). The',
+      '    project\'s bpmnlint only reports what a change adds (`warning [bpmnlint error] ...`); validate fails on its errors.',
+      '    Its element-id-naming sets the prefix and case of new ids: `bpmn show <file> --conventions` first.',
+    ].join('\n'),
+  );
+  out.push(heading('READ'));
+  out.push(
+    [
+      '  bpmn show <f> --around <id> [--depth 2]   neighbourhood: lanes, implementation, flows (cheap)',
+      '  bpmn show <f> <id> --context             where it is, lane, before / after, what catches it, message flows',
+      '  bpmn find <f> <text> [--kind <kind>]     ids by name or vendor value',
+      '  bpmn show <f> [--scope <id>]             the whole model (or one process / pool / sub-process)',
+      '  bpmn render <f> [--around <id>] --problems -o f.png   look at the drawing (read the PNG; guide render)',
+    ].join('\n'),
+  );
+  out.push(heading('CHANGE'));
+  out.push(
+    [
+      '  bpmn add <f> <kind[:trigger]> [name] [--after|--before|--flow|--in|--on <id>] [--id <id>] [key=value ...]',
+      '  bpmn connect|set|remove|retype|move|order|ext ...     bpmn apply <f> ops.json   (one transaction, one layout)',
+      '  Options: --summary (short result), --dry-run, -o <file|->, --json [--pretty]; `-` as <f> reads stdin.',
+      '  Flow ids are API (generated code, tests)? --keep-flow-ids keeps them; W_FLOW_ID_STALE names a stale one.',
+    ].join('\n'),
+  );
+  out.push(heading('OPS JSON  (bpmn apply; {"op": "<name>", ...}; * = required)'));
+  out.push(opKeyLines().join('\n'));
+  out.push(heading('PLACEMENT'));
+  out.push(
+    [
+      '  --after X     append after a gateway / end of a path, else splice into X\'s single outgoing flow',
+      '  --before Y    prepend before a join / start of a path, else splice into Y\'s single incoming flow',
+      '  --flow F      splice into flow F (keeps name, condition; Flow_AToB is renamed)   --after X --before Y: into X -> Y',
+      '  --in S        unconnected in process / sub-process / pool S       --on A: boundary event on activity A',
+      '  --to T        also connect the new node to T',
+    ].join('\n'),
+  );
+  out.push(heading('TOP ERRORS'));
+  out.push(table(TOP_ERRORS.map(([code, fix]) => [code, fix])));
+  out.push(`\nTopics (bpmn guide <topic>): ${Object.keys(GUIDE_TOPICS).join(', ')}. All codes: bpmn kinds --section errors.`);
+  return out.join('\n') + '\n';
+}
+
+/** The topics of `bpmn guide <topic>`: the sections of the full guide they print (by heading). */
+export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string }> = {
+  contract: { sections: ['CONTRACT'], summary: 'what the CLI does and keeps' },
+  workflow: { sections: ['WORKFLOW'], summary: 'the edit loop' },
+  reading: { sections: ['READING LARGE MODELS'], summary: 'show --around, --context, find' },
+  output: { sections: ['OUTPUT'], summary: 'results, warnings delta, --summary, JSON, stdin / stdout' },
+  layout: { sections: ['LAYOUT MODES'], summary: 'auto / incremental / full' },
+  format: { sections: ['FORMATTING WITHOUT XML'], summary: 'place, align, color, label, route, space, tidy' },
+  render: { sections: ['LOOKING AT THE DRAWING'], summary: 'bpmn render: crops, halos, numbered problems, tiles, --render' },
+  ops: { sections: ['OPS JSON'], summary: 'apply and its ops' },
+  placement: { sections: ['PLACEMENT'], summary: '--after / --before / --flow / --in / --on' },
+  triggers: { sections: ['TRIGGERS'], summary: 'event triggers and their options' },
+  errors: { sections: ['COMMON ERRORS', 'EXIT CODES'], summary: 'the common errors and the exit codes' },
+  quoting: { sections: ['QUOTING'], summary: 'shell quoting of expressions' },
+  camunda7: { sections: ['CAMUNDA 7'], summary: 'camunda: attributes, extensions, the deploy profile' },
+  camunda8: { sections: ['CAMUNDA 8'], summary: 'zeebe: extension elements, the Camunda 8 profile' },
+  bpmnlint: { sections: ['BPMNLINT'], summary: "the project's .bpmnlintrc in validate and writes" },
+  conventions: { sections: ['CONVENTIONS'], summary: 'the id conventions of the .bpmnlintrc (element-id-naming)' },
+  commands: { sections: ['COMMANDS'], summary: 'every command with examples' },
+};
+
+/** The guide's sections by heading (a heading is a line underlined with dashes). */
+function guideSections(): Array<{ title: string; text: string }> {
+  const lines = guideText().split('\n');
+  const out: Array<{ title: string; text: string }> = [];
+  let current: { title: string; lines: string[] } | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const next = lines[i + 1];
+    if (next !== undefined && line.length > 0 && /^-+$/.test(next) && next.length === line.length) {
+      if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+      current = { title: line, lines: [line, next] };
+      i++;
+      continue;
+    }
+    current?.lines.push(line);
+  }
+  if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+  return out;
+}
+
+/** `bpmn guide <topic>`: the sections of the full guide a topic names; E_USAGE with the topics for an unknown one. */
+export function guideTopic(topic: string): string {
+  const key = topic.trim().toLowerCase().replace(/[\s_-]/g, '');
+  const entry = Object.entries(GUIDE_TOPICS).find(([name]) => name === key);
+  if (!entry) {
+    const names = Object.keys(GUIDE_TOPICS);
+    throw usageError(`Unknown guide topic "${topic}"`, { candidates: names, hint: 'Pass one of the listed topics, or `bpmn guide --short` for the core.' });
+  }
+  const sections = guideSections();
+  const parts = entry[1].sections.map((title) => sections.find((s) => s.title.startsWith(title))?.text ?? '');
+  return parts.filter(Boolean).join('\n\n') + '\n';
+}
+
+/* ------------------------------------------------------------------ */
+/* kinds --section                                                      */
+/* ------------------------------------------------------------------ */
+
+function simpleRows(title: string, rows: string[][]): string {
+  return [heading(title), table(rows)].join('\n');
+}
+
+/** The parts of `bpmn kinds` / `kinds --json` by their JSON key; text renders the matching section. */
+const KINDS_SECTIONS: Record<string, { text: () => string; keys: string[] }> = {
+  kinds: { text: kindsSection, keys: ['kinds'] },
+  triggers: { text: triggersSection, keys: ['triggers', 'nonInterrupting'] },
+  setKeys: { text: setKeysSection, keys: ['setKeys'] },
+  nestedKeys: { text: nestedKeysSection, keys: ['nestedKeys', 'nestedSelectors'] },
+  zeebeElements: { text: zeebeSection, keys: ['zeebeElements'] },
+  placement: { text: placementSection, keys: ['placement'] },
+  ops: { text: opsSection, keys: ['ops', 'opsExample'] },
+  layoutModes: { text: () => simpleRows('LAYOUT MODES', LAYOUT_MODES.map((m) => [m])), keys: ['layoutModes'] },
+  ids: { text: () => [heading('IDS'), JSON.stringify(ID_CONVENTIONS, null, 2)].join('\n'), keys: ['ids'] },
+  colors: { text: () => simpleRows('COLORS', Object.entries(SWATCHES).map(([name, c]) => [name, JSON.stringify(c)])), keys: ['colors'] },
+  errors: { text: errorsSection, keys: ['errors'] },
+  exitCodes: { text: exitCodesSection, keys: ['exitCodes'] },
+};
+
+/** The section names `kinds --section` accepts (the JSON keys of `kinds --json`). */
+export const KINDS_SECTION_NAMES = Object.keys(KINDS_SECTIONS).join(', ');
+
+/** Resolves `--section a,b` (case and dashes ignored: set-keys = setKeys); E_USAGE with the names for an unknown one. */
+export function kindsSections(spec: string): string[] {
+  const names = Object.keys(KINDS_SECTIONS);
+  return spec
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const key = raw.toLowerCase().replace(/[\s_-]/g, '');
+      const found = names.find((n) => n.toLowerCase() === key) ?? names.find((n) => n.toLowerCase() === key.replace(/s$/, '')) ?? names.find((n) => KINDS_SECTIONS[n]!.keys.some((k) => k.toLowerCase() === key));
+      if (!found) throw usageError(`Unknown kinds section "${raw}"`, { candidates: names, hint: `Sections: ${names.join(', ')} (several: --section ops,errors).` });
+      return found;
+    });
+}
+
+/** `bpmn kinds --section <names>` as text. */
+export function kindsSectionText(sections: string[]): string {
+  return sections.map((s) => KINDS_SECTIONS[s]!.text()).join('\n').replace(/^\n/, '') + '\n';
+}
+
+/** `bpmn kinds --section <names> --json`: only those keys of kindsJson(). */
+export function kindsSectionJson(sections: string[]): Record<string, unknown> {
+  const all = kindsJson();
+  const out: Record<string, unknown> = {};
+  for (const s of sections) for (const k of KINDS_SECTIONS[s]!.keys) out[k] = all[k];
+  return out;
+}

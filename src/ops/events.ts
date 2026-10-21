@@ -26,14 +26,14 @@
  *    "PT2D", "message OrderReceived", "error PaymentFailed (PAY-001)", "" when none.
  *  - triggerDetails(): the same as structured data for --json views.
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError, type Warning } from '../errors.js';
-import { typeRequest } from '../idstyle.js';
-import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../kinds.js';
-import { addTo, is, many, walk, type El } from '../model.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError, type Warning } from '../shared/errors.js';
+import { typeRequest } from '../ids/style.js';
+import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
+import { addTo, is, many, walk, type El } from '../model/moddle.js';
 import { isC7Uri } from '../platform/descriptor.js';
-import type { ChangeSet } from '../result.js';
-import { definitionIdDefault } from './platform.js';
+import type { ChangeSet } from '../model/change-set.js';
+import { definitionIdDefault } from '../platform/defaults.js';
 import type { TriggerOptions } from './types.js';
 
 export interface TriggerDetails {
@@ -73,7 +73,7 @@ function idOf(el: El): string {
 
 /**
  * Finds a root Message/Error/Signal/Escalation by id or name, creating it
- * (id `<Prefix>_<Slug>` in the default style, src/idstyle.ts) when missing. `extra` (errorCode / escalationCode)
+ * (id `<Prefix>_<Slug>` in the default style, src/ids/style.ts) when missing. `extra` (errorCode / escalationCode)
  * is applied to found elements too. Returns whether it was created.
  */
 export function ensureRootElement(doc: Doc, type: RootRefType, nameOrId: string, extra: Record<string, string | undefined> = {}): { el: El; created: boolean } {

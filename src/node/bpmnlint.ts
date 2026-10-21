@@ -1,6 +1,6 @@
 /**
  * The project's .bpmnlintrc on disk (Node only): lookup, loading and the
- * resolver chain. The validator itself is the core's (src/bpmnlint.ts).
+ * resolver chain. The validator itself is the core's (src/validate/bpmnlint-validator.ts).
  *
  *   findBpmnlintConfig(dir)          -> the nearest .bpmnlintrc from dir up to the repository root (the path as given,
  *                                       then the physical one), or undefined
@@ -10,7 +10,7 @@
  *                                       on what it left out or read from the project), or why bpmnlint cannot run
  *   projectBpmnlint(file, opts)      -> the NamedValidator for a file, or undefined (no .bpmnlintrc, --no-lint-config)
  *   projectBpmnlintSettings(file)    -> the effective rule settings (same lookup, flags, cache and errors)
- *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/conventions.ts), the
+ *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/ids/conventions.ts), the
  *                                       W_CONFIG_IGNORED notes the validator reports and what it leaves out (same lookup,
  *                                       flags, cache)
  *
@@ -99,10 +99,10 @@ import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import Module, { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../bpmnlint.js';
-import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../conventions.js';
-import { ioError } from '../errors.js';
-import type { NamedValidator, Validator, ValidatorFinding } from '../validators.js';
+import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../validate/bpmnlint-validator.js';
+import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../ids/conventions.js';
+import { ioError } from '../shared/errors.js';
+import type { NamedValidator, Validator, ValidatorFinding } from '../validate/validators.js';
 import { findUp, gitRoot } from './find-up.js';
 
 export const BPMNLINT_CONFIG_FILE = '.bpmnlintrc';
@@ -963,7 +963,7 @@ export async function projectBpmnlint(file: string | undefined, opts: FileBpmnli
 
 /** What the .bpmnlintrc of a file declares about ids (projectIdConventions). */
 export interface ProjectIdConventions {
-  /** the id conventions of its element-id-naming (src/conventions.ts); absent: the rule is off or not configured, or every prefix is switched off */
+  /** the id conventions of its element-id-naming (src/ids/conventions.ts); absent: the rule is off or not configured, or every prefix is switched off */
   conventions?: IdConventions;
   /** W_CONFIG_IGNORED: values of the rule's options new ids do not follow (the validator reports them); W_LINT_UNAVAILABLE: what the configuration leaves out, or why it could not be loaded */
   notes: ValidatorFinding[];
@@ -977,7 +977,7 @@ export interface ProjectIdConventions {
 
 /**
  * The id conventions the .bpmnlintrc that applies to a file declares through
- * @miragon/rules/element-id-naming (src/conventions.ts idConventionsFromLint
+ * @miragon/rules/element-id-naming (src/ids/conventions.ts idConventionsFromLint
  * with the plugin's own naming helpers): the same lookup, flags and cache as
  * projectBpmnlint; undefined without a .bpmnlintrc or with `lintConfig:
  * false`. The notes list what `validate` lists about the configuration: its

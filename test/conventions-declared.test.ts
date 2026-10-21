@@ -1,20 +1,20 @@
 /**
- * Declared id conventions in the core (issue #34; src/idstyle.ts DECLARED
+ * Declared id conventions in the core (issue #34; src/ids/style.ts DECLARED
  * CONVENTIONS): they fill the gaps a change opens and never rename what is
  * there; the rest of the file keeps its own style, stable over many writes;
  * W_ID_PREFIX_STALE after a retype or a trigger change; the `conventions`
  * of a result; the view of `bpmn show --conventions`. The conventions come
- * from the real plugin's naming helpers (src/conventions.ts).
+ * from the real plugin's naming helpers (src/ids/conventions.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../src/api.js';
-import type { BpmnlintRuleSetting } from '../src/bpmnlint.js';
-import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/conventions.js';
-import { Doc } from '../src/document.js';
+import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
+import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/ids/conventions.js';
+import { Doc } from '../src/model/document.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report.js';
+import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
 import { definitionsXml } from './helpers.js';
 
 const naming = bpmnlintEngine().plugin.naming;

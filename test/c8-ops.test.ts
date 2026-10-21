@@ -14,13 +14,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { opsExample } from '../src/batch.js';
-import { Doc } from '../src/document.js';
-import { renderView } from '../src/format.js';
+import { opsExample } from '../src/ops/batch.js';
+import { Doc } from '../src/model/document.js';
+import { renderView } from '../src/report/view-text.js';
 import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { loadProfiles, runProfile } from '../src/platform/profile.js';
-import { buildView, elementDetail } from '../src/view.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { buildView, elementDetail } from '../src/query/model-view.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

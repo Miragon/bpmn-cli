@@ -9,15 +9,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { renderMutation } from '../src/report.js';
-import { OPS_SCHEMA, opsExample, parseOps } from '../src/batch.js';
-import { idConventionsFromLint } from '../src/conventions.js';
-import { Doc } from '../src/document.js';
-import { CliError } from '../src/errors.js';
-import { ERROR_CATALOGUE, guideShort, guideText } from '../src/guide.js';
+import { renderMutation } from '../src/report/command-report.js';
+import { OPS_SCHEMA, opsExample, parseOps } from '../src/ops/batch.js';
+import { idConventionsFromLint } from '../src/ids/conventions.js';
+import { Doc } from '../src/model/document.js';
+import { CliError } from '../src/shared/errors.js';
+import { ERROR_CATALOGUE, guideShort, guideText } from '../src/report/guide.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline.js';
+import { mutateDoc } from '../src/pipeline/index.js';
 
 function failure(fn: () => unknown): CliError {
   try {

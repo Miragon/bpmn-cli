@@ -1,4 +1,4 @@
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 
 export const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 

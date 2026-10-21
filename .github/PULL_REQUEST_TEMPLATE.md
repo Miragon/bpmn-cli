@@ -11,7 +11,7 @@ or `fix(layout): keep the label of a moved gateway`.
 
 - [ ] `npm run typecheck` passes
 - [ ] `npm run gate` passes
-- [ ] `src/guide.ts` and the matching page in `docs/` are updated (only if a command, option or output changed)
+- [ ] `src/report/guide.ts` and the matching page in `docs/` are updated (only if a command, option or output changed)
 - [ ] PR title is a changelog-worthy Conventional-Commit summary
 
 ## Linked issue

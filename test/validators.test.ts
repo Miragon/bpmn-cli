@@ -1,5 +1,5 @@
 /**
- * The validator hook (src/validators.ts): MutationOptions.validators on
+ * The validator hook (src/validate/validators.ts): MutationOptions.validators on
  * writes, CheckOptions.validators on validate. A validator sees the candidate
  * XML after the layout and the format ops; errors a change introduces block
  * the write, errors the file already had do not (all models synthetic). The
@@ -12,15 +12,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
-import { Doc } from '../src/document.js';
-import { ERROR_CATALOGUE } from '../src/guide.js';
-import type { CliError, Warning } from '../src/errors.js';
-import { is, type El } from '../src/model.js';
+import { Doc } from '../src/model/document.js';
+import { ERROR_CATALOGUE } from '../src/report/guide.js';
+import type { CliError, Warning } from '../src/shared/errors.js';
+import { is, type El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { checkFile, mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report.js';
-import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validators.js';
+import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
+import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report/command-report.js';
+import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validate/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
@@ -208,7 +208,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('checks what would be written: without the layout a new node has no shape', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
-    // the new flow's id in the file's style (src/idstyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
+    // the new flow's id in the file's style (src/ids/style.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
     expect(codes(r.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
@@ -220,7 +220,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('ruleId findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
-    // an unnamed task gets its placement as id (Activity_After<anchor>, src/idstyle.ts)
+    // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/style.ts)
     expect(r.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));

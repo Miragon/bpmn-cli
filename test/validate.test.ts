@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Doc } from '../src/document.js';
-import { addTo, removeFrom } from '../src/model.js';
-import { flowOrder, repairFlowLinks, validateDoc } from '../src/validate.js';
+import type { Doc } from '../src/model/document.js';
+import { addTo, removeFrom } from '../src/model/moddle.js';
+import { flowOrder, repairFlowLinks, validateDoc } from '../src/validate/structural.js';
 import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */
@@ -256,7 +256,7 @@ describe('structural errors', () => {
         <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="A" />
         <bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="End" />`),
     );
-    // Doc.fromXml completes the lists in memory (a write keeps the file's own, see mirror.ts)
+    // Doc.fromXml completes the lists in memory (a write keeps the file's own, see model/mirror.ts)
     expect(doc.source?.mirror.listed.has(doc.require('Start'))).toBe(false);
     expect(codes(doc)).toEqual({ errors: [], warnings: [] });
     const id = (el: { get: <T>(k: string) => T }) => el.get<string>('id');

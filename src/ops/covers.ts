@@ -14,7 +14,7 @@
  * Without the profile (`--platform none`, a file of another platform) the
  * operation warning stays.
  */
-import type { Warning } from '../errors.js';
+import type { Warning } from '../shared/errors.js';
 import { subjectOf, type ProfileFinding } from '../platform/finding.js';
 
 /** Hidden list of profile subjects an operation warning repeats (not serialised). */

@@ -27,7 +27,7 @@
  *    same border as before, in the same order, with their labels.
  *  Every function returns the ids it moved or resized.
  */
-import { SIZES } from '../layout/types.js';
+import { SIZES } from './types.js';
 import { bottom, copyBox, cy, median, right, type Box } from './geom.js';
 import { boundariesOf, contentOf, isLeaf, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 

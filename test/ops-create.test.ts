@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
-import { is, many, type El } from '../src/model.js';
+import { Doc } from '../src/model/document.js';
+import { is, many, type El } from '../src/model/moddle.js';
 import { addElement, collapsedIds } from '../src/ops/add.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
 import { connectElements } from '../src/ops/connect.js';
@@ -8,10 +8,10 @@ import { assignLane, laneOf } from '../src/ops/containers.js';
 import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events.js';
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
-import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/batch.js';
-import type { CliError } from '../src/errors.js';
-import { mutateDoc } from '../src/pipeline.js';
-import { ChangeSet } from '../src/result.js';
+import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
+import type { CliError } from '../src/shared/errors.js';
+import { mutateDoc } from '../src/pipeline/index.js';
+import { ChangeSet } from '../src/model/change-set.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */
@@ -81,7 +81,7 @@ const WITH_JOIN = definitionsXml(`
     <bpmn:sequenceFlow id="F4" sourceRef="B" targetRef="Join" />
     <bpmn:sequenceFlow id="F5" sourceRef="Join" targetRef="End" />`);
 
-// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/idstyle.ts)
+// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/ids/style.ts)
 const WITH_LANES = definitionsXml(`
     <bpmn:laneSet id="LaneSet_1">
       <bpmn:lane id="Lane_Sales" name="Sales"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef></bpmn:lane>

@@ -25,12 +25,12 @@
  *    message flows, message to message flows (else E_INVALID_VALUE);
  *    default together with condition is E_USAGE (a default flow has none)
  */
-import type { Doc } from '../document.js';
-import { modelError, usageError } from '../errors.js';
-import { flowRequest } from '../idstyle.js';
-import { kindLabel, triggerOf } from '../kinds.js';
-import { addTo, is, many, type El } from '../model.js';
-import { ChangeSet } from '../result.js';
+import type { Doc } from '../model/document.js';
+import { modelError, usageError } from '../shared/errors.js';
+import { flowRequest } from '../ids/style.js';
+import { kindLabel, triggerOf } from '../model/kinds.js';
+import { addTo, is, many, type El } from '../model/moddle.js';
+import { ChangeSet } from '../model/change-set.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { bindRefAs, ensureRootElement } from './events.js';
 import { createSequenceFlow, flowChange, warnEventGatewayFlow } from './flows.js';

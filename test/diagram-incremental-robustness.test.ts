@@ -7,13 +7,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/document.js';
+import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { detachedEnds } from '../src/diagram/reroute.js';
-import { is, type El } from '../src/model.js';
+import { is, type El } from '../src/model/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline.js';
+import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

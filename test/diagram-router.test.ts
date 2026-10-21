@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { attachedSide, defaultSides, routeOrthogonal, type RouteRequest, type Side } from '../src/diagram/router.js';
-import type { Box, Point } from '../src/layout/types.js';
+import type { Box, Point } from '../src/diagram/types.js';
 
 const box = (x: number, y: number, width = 100, height = 80): Box => ({ x, y, width, height });
 const TASK_OUT = defaultSides('task', 'source');

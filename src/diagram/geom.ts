@@ -5,7 +5,7 @@
  * about moddle or DI. Boxes are `{x, y, width, height}` in diagram pixels,
  * y grows downwards.
  */
-import type { Box, Point } from '../layout/types.js';
+import type { Box, Point } from './types.js';
 
 export type { Box, Point };
 

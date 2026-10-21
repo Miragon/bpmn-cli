@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
-import { parseXml } from '../src/model.js';
+import { parseXml } from '../src/model/moddle.js';
 import { definitionsXml } from './helpers.js';
 
 const DI_NS =

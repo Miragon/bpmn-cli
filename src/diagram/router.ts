@@ -71,7 +71,7 @@
  * `crossings(points, lines)` counts a route's proper crossings with `lines`
  * (the test of the cost).
  */
-import type { Box, Point } from '../layout/types.js';
+import type { Box, Point } from './types.js';
 
 export type Side = 'left' | 'right' | 'top' | 'bottom';
 

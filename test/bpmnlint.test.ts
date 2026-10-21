@@ -1,5 +1,5 @@
 /**
- * The project's bpmnlint configuration (issue #33): src/bpmnlint.ts (the
+ * The project's bpmnlint configuration (issue #33): src/validate/bpmnlint-validator.ts (the
  * core: resolution, the advisory validator) and src/node/bpmnlint.ts (lookup,
  * loading, the resolver chain), with the real bpmnlint and
  * @miragon/bpmnlint-plugin-rules, offline.
@@ -19,17 +19,17 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/bpmnlint.js';
-import { idConventionsFromLint, ID_NAMING_RULE } from '../src/conventions.js';
-import { Doc } from '../src/document.js';
-import type { CliError } from '../src/errors.js';
+import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/validate/bpmnlint-validator.js';
+import { idConventionsFromLint, ID_NAMING_RULE } from '../src/ids/conventions.js';
+import { Doc } from '../src/model/document.js';
+import type { CliError } from '../src/shared/errors.js';
 import type { Op } from '../src/ops/types.js';
 import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/bpmnlint.js';
 import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/files.js';
 import { gitRoot } from '../src/node/find-up.js';
-import { checkDoc } from '../src/pipeline.js';
-import { advisoryValidators, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/report.js';
-import type { ValidatorFinding, ValidatorIssue } from '../src/validators.js';
+import { checkDoc } from '../src/pipeline/index.js';
+import { advisoryValidators, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/report/command-report.js';
+import type { ValidatorFinding, ValidatorIssue } from '../src/validate/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const fixture = (path: string): string => readFileSync(join(ROOT, 'test', 'fixtures', path), 'utf8');

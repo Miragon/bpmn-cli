@@ -35,7 +35,7 @@
  *    renderer, both layout engines and the metrics use them, so they agree
  *    on where a title is.
  */
-import type { Box } from '../layout/types.js';
+import type { Box } from './types.js';
 
 /** advance widths of Arial in 1/1000 em */
 const ARIAL: Record<string, number> = {

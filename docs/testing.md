@@ -399,7 +399,7 @@ npx vitest run test/isomorphic.test.ts
   loads, naming both (Rollup / Vite would put that module into the host's
   entry chunk and make the rule chunk import the entry chunk back: a host
   whose entry module awaits a Camunda 7 / 8 call at top level would hang;
-  the rules get the core helpers from `src/platform/rule-kit.ts`); and
+  the rules get the core helpers from `src/platform/profiles/rule-kit.ts`); and
   when a size is over its budget in
   `tools/iso/budget.json` (KB = 1024 bytes; set to the measured size plus
   about 2 %: raise one only in the change that needs it, with the reason in
@@ -421,7 +421,7 @@ npx vitest run test/isomorphic.test.ts
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
-  esbuild make of the `import()` in `src/platform/profile.ts`), writes a
+  esbuild make of the `import()` in `src/platform/profiles/profile.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
   chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
   error and covered lint warning come out like Node's) and
@@ -596,7 +596,7 @@ draw the engine corpus with the same CLI.
 ## Roundtrip fidelity
 
 A write changes the text of the elements it changed and nothing else
-(src/preserve.ts, src/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
+(src/xml/preserve.ts, src/model/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
 - `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
@@ -628,7 +628,7 @@ not from the writer: a file without a diagram is drawn, the incremental
 layout completes missing DI (an edge, a shape, the plane's `bpmnElement`)
 and routes a line that does not reach its ends again (`detachedEdge`).
 With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
-above zero means preserve.ts could not keep a file's text (the note says
+above zero means xml/preserve.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.
 
 ## Speaking ids
@@ -664,7 +664,7 @@ flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
-The Camunda 7 profile of `bpmn validate` (`src/platform/c7.ts`) states for
+The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/c7.ts`) states for
 every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
 model per rule (82 models) with the expected codes and the engine verdict;
 by default it checks only the profile. To re-check the verdicts against live
@@ -704,7 +704,7 @@ element by element.
 
 ## Engine checks (Camunda 8)
 
-The Camunda 8 profile (`src/platform/c8.ts`) states for every rule what
+The Camunda 8 profile (`src/platform/profiles/c8.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
 (`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails

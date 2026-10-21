@@ -8,9 +8,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { showXml, viewXml } from '../src/api.js';
-import { aroundView, elementContext, implementationOf } from '../src/context.js';
-import { Doc } from '../src/document.js';
-import { buildView, elementDetail } from '../src/view.js';
+import { aroundView, elementContext, implementationOf } from '../src/query/context.js';
+import { Doc } from '../src/model/document.js';
+import { buildView, elementDetail } from '../src/query/model-view.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const CLAIMS = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
