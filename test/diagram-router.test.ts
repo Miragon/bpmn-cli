@@ -246,6 +246,90 @@ describe('routeOrthogonal: lines, frame, fallback', () => {
     }
   });
 
+  it('targetMerge: a further entry of a join rises along the last run of another one into the bottom vertex; without it, it keeps off that run', () => {
+    // a join (gateway target) whose bottom vertex 325,50 another entry already rises into, straight from below
+    const rise = [{ x: 325, y: 400 }, { x: 325, y: 50 }];
+    const req = { source: box(0, 200), target: box(300, 0, 50, 50), obstacles: [], lines: [rise], sourceSides: ['right'] as Side[], targetSides: defaultSides('gateway', 'target'), targetMiddle: true };
+    expect(route({ ...req, targetMerge: true })).toEqual([{ x: 100, y: 240 }, { x: 325, y: 240 }, { x: 325, y: 50 }]);
+    const apart = route(req);
+    expect(apart[apart.length - 1]).not.toEqual({ x: 325, y: 50 });
+    for (let i = 0; i + 1 < apart.length; i++) {
+      const [p, q] = [apart[i]!, apart[i + 1]!];
+      expect(p.x === 325 && q.x === 325, JSON.stringify(apart)).toBe(false);
+    }
+  });
+
+  it('targetMerge: a grid edge of 1 px or less on the shared tail is part of it (following the tail past it is no overlap)', () => {
+    // the midline between the join's bottom (50) and the source's top (200) is y 125; the box right of them adds the grid
+    // line bottom + margin, 1 or 0.5 px below it: the tail from y 240 up runs over that short grid edge into the vertex
+    const rise = [{ x: 325, y: 400 }, { x: 325, y: 50 }];
+    const req = { source: box(0, 200), target: box(300, 0, 50, 50), lines: [rise], sourceSides: ['right', 'top'] as Side[], targetSides: ['bottom'] as Side[], targetMiddle: true, targetMerge: true };
+    for (const y of [31, 30.5]) {
+      // leaving the tail at the short edge would cost the overlap: the route would turn up out of the source's top and join the tail above it
+      expect(route({ ...req, obstacles: [box(400, y, 40, 80)] }), `grid line ${y + 95}`).toEqual([{ x: 100, y: 240 }, { x: 325, y: 240 }, { x: 325, y: 50 }]);
+    }
+  });
+
+  describe('targetMerge: the shared tail of a hook bundle into the bottom vertex', () => {
+    // a join (box 300,0 50x50, bottom vertex 325,50) with an end event right below it: its entries rise in the
+    // column gap right of it (x 385) and hook left into the bottom vertex, as the engine draws them (hookFromBelow)
+    const JOIN = box(300, 0, 50, 50);
+    const hook = (y: number): Point[] => [{ x: 200, y }, { x: 385, y }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }];
+    const BUNDLE = [hook(160), hook(260), hook(360)];
+    const SOURCES = [box(100, 120), box(100, 220), box(100, 320)];
+    const BELOW = box(307, 90, 36, 36);
+    const lane = { x: 100, y: -60, width: 500, height: 600 };
+    const join = (lines: Point[][], extra: Partial<RouteRequest> = {}): RouteRequest => ({
+      source: box(100, 420),
+      target: JOIN,
+      obstacles: [BELOW, ...SOURCES],
+      lines,
+      sourceSides: ['right'],
+      targetSides: defaultSides('gateway', 'target'),
+      targetMiddle: true,
+      frame: lane,
+      ...extra,
+    });
+    /** the route runs through a vertex of the join other than its last point */
+    const touchesVertex = (pts: Point[]): boolean => {
+      const vertices = [{ x: 325, y: 0 }, { x: 350, y: 25 }, { x: 325, y: 50 }, { x: 300, y: 25 }].filter((v) => v.x !== pts.at(-1)!.x || v.y !== pts.at(-1)!.y);
+      return pts.slice(1).some((q, i) => {
+        const p = pts[i]!;
+        return vertices.some((v) => (p.x === q.x ? v.x === p.x && v.y >= Math.min(p.y, q.y) && v.y <= Math.max(p.y, q.y) : v.y === p.y && v.x >= Math.min(p.x, q.x) && v.x <= Math.max(p.x, q.x)));
+      });
+    };
+
+    it('a 4th entry rises along the bundle and follows its hook into the shared bottom vertex, crossing nothing', () => {
+      const pts = route(join(BUNDLE, { targetMerge: true }));
+      expect(pts).toEqual([{ x: 200, y: 460 }, { x: 385, y: 460 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
+      expect(crossings(pts, BUNDLE.flat())).toBe(0);
+    });
+
+    it('a single entry: its last run, the short hook and the run before it are shared', () => {
+      // the left vertex is taken by a flow from the left; the one entry from below rises in the gap and hooks in
+      const left = [{ x: 150, y: 25 }, { x: 300, y: 25 }];
+      const pts = route(join([hook(300), left], { source: box(150, 400), obstacles: [BELOW, box(100, 260)], targetAvoid: ['left'], targetMerge: true, frame: undefined }));
+      expect(pts).toEqual([{ x: 250, y: 440 }, { x: 385, y: 440 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
+    });
+
+    it('a route never runs along the join\'s box through another of its vertices (not under the diamond into the left vertex)', () => {
+      // the bottom vertex taken and no merge: the free left vertex is reached across the bundle, not along y 50 through 325,50
+      const out = [{ x: 350, y: 25 }, { x: 450, y: 25 }];
+      for (const req of [join([...BUNDLE, out], { targetAvoid: ['bottom'], obstacles: [BELOW, ...SOURCES, box(450, -15)] }), join([...BUNDLE, out], { targetSides: ['left'] })]) {
+        const pts = route(req);
+        expect(touchesVertex(pts), JSON.stringify(pts)).toBe(false);
+        expect(pts.at(-1)).toEqual({ x: 300, y: 25 });
+      }
+    });
+
+    it('a route on the shared tail follows it into the vertex: leaving it for another vertex costs the overlap', () => {
+      // straight below the bundle's column, the top vertex free and the bottom one also used by an outgoing flow
+      const left = [{ x: 150, y: 25 }, { x: 300, y: 25 }];
+      const pts = route(join([...BUNDLE, left], { source: box(335, 420), sourceSides: ['top'], targetAvoid: ['left', 'bottom'], targetMerge: true, frame: undefined }));
+      expect(pts).toEqual([{ x: 385, y: 420 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
+    });
+  });
+
   it('stays inside the frame (goes below the obstacle although above is shorter)', () => {
     const wall = box(200, 80, 40, 180);
     const base = { source: box(0, 100), target: box(400, 100), obstacles: [wall], sourceSides: TASK_OUT, targetSides: TASK_IN };

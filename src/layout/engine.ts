@@ -3,9 +3,20 @@
  * the BPMN DI writer. Coordinates handed to the DI are absolute.
  *
  * Contract (beyond the placement conventions of place.ts / route.ts):
- *  - lanes: every flow node lies inside the band of its leaf lane; the bands
- *    follow the content when routing or annotations open a strip above it,
- *    and the lanes fill their pool without gaps
+ *  - lanes: every flow node lies inside the band of its leaf lane, in the
+ *    rows the placer gave the lane's nodes, except that a node entered from a
+ *    node of its lane on a row above moves up onto that row where its cell
+ *    there is free and that draws better (place.ts liftChains: a split whose
+ *    happy path runs on in another lane sends its branch in its own lane out
+ *    through its right vertex); the bands follow the content when routing
+ *    or annotations open a strip above it,
+ *    a loop inside a lane keeps CHANNEL_KEEP (15 px) from the lane's top and
+ *    bottom border and its label inside the lane, as does the run of a
+ *    boundary event's way to a target above from its lane's bottom border
+ *    and such a way over the top (also one from the event's place on its
+ *    host's top border, place.ts boundariesOnTop), with its label, from its
+ *    lane's top border (the lane grows around them; nothing of the lanes
+ *    before it moves), and the lanes fill their pool without gaps
  *  - event sub-processes sit below the content of their own lane (the lanes
  *    below move down); those of the last lane or of no lane below everything
  *  - pools stack vertically in the order whose message flows cut the fewest
@@ -16,14 +27,20 @@
  *    reported as DI_NOT_CREATED
  *  - groups are not drawn here (no warning either): layoutModel draws them
  *    again around what their boxes held (diagram/groups.ts)
+ *  - a label on a shape, another label, a line or the title of an expanded
+ *    sub-process (diagram/text.ts titleBox) moves to a free spot around its
+ *    element, in a sub-process below its title first, else beside the
+ *    title; a spot next to the element before one stepped further out
+ *    (declutterLabels)
  */
+import { titleBox } from '../diagram/text.js';
 import { addTo, is, many, type El, type Model } from '../model.js';
 import { layoutRoot } from '../model.js';
-import { DATA_ROW_EXTRA, annotationSize, boundaryExtra, framedSize, growToFit, layoutScope, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
 import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
-import { METRICS, SIZES, boxesOverlap, center, type Box, type GNode, type LaneBox, type Point, type ScopeLayout } from './types.js';
+import { METRICS, SIZES, boxesOverlap, center, type Box, type GEdge, type GNode, type LaneBox, type Point, type ScopeLayout } from './types.js';
 
 export interface EngineWarning {
   code: string;
@@ -83,9 +100,10 @@ function growFirstLane(scope: ScopeLayout, leaves: LaneBand[], shift: number, ba
 /**
  * Opens a horizontal strip of height `dy` at `cut` in a routed laned scope
  * (the space tool): everything at or below the cut moves down, lanes below
- * it too. Routes are orthogonal, so a segment across the cut stays vertical.
+ * it too, except the routes and labels of the edges in `keep`. Routes are
+ * orthogonal, so a segment across the cut stays vertical.
  */
-function openStrip(scope: ScopeLayout, leaves: LaneBand[], cut: number, dy: number): void {
+function openStrip(scope: ScopeLayout, leaves: LaneBand[], cut: number, dy: number, keep: ReadonlySet<GEdge> = new Set()): void {
   const move = (p: Point): void => {
     if (p.y >= cut) p.y += dy;
   };
@@ -95,6 +113,7 @@ function openStrip(scope: ScopeLayout, leaves: LaneBand[], cut: number, dy: numb
     for (const link of a.links) link.points.forEach(move);
   }
   for (const e of scope.edges) {
+    if (keep.has(e)) continue;
     e.points.forEach(move);
     if (e.label && e.label.y >= cut) e.label.y += dy;
   }
@@ -116,6 +135,67 @@ function stripX(scope: ScopeLayout, cut: number, width: number): number {
   return candidates.find((x) => !crossing.some((c) => c > x - 20 && c < x + width + 20)) ?? 0;
 }
 
+/** How close a loop inside a lane may come to the lane's top or bottom border. */
+const CHANNEL_KEEP = METRICS.loopGap / 2;
+
+/**
+ * Grows the lanes around the loops inside them (both ends in the lane) that
+ * the router laid closer than CHANNEL_KEEP to the lane's border or beyond it,
+ * or whose label lies beyond it (above a run over the top: the top border;
+ * below a run, a self loop's: the bottom border), and around the run below
+ * the host's row of a boundary event's way to a target above (its bottom)
+ * and around such a way over the top, held like a loop over the top
+ * (routeEdges keeps every label below the scope's top, so the first lane's
+ * too): the bands are sized for their rows, and a channel runs loopGap below
+ * the last row (or above the first one), which is the lane padding, so on
+ * the border. Below a lane that is not the last one (the last grows with its
+ * content anyway) the lanes after it move down; above, the lane's content
+ * moves down with them: its flows whole with their labels (a run over the
+ * top may lie in the lane before), nothing of the lanes before it.
+ */
+function fitLaneLoops(scope: ScopeLayout, leaves: LaneBand[]): void {
+  const bands = scope.laneBands ?? [];
+  leaves.forEach((lane, k) => {
+    const band = bands[k];
+    if (!band) return;
+    const inside = scope.edges.filter((e) => band.nodes.has(e.source.host ?? e.source) && band.nodes.has(e.target));
+    // a boundary event's way over the top (route.ts) is held like a loop over the top
+    const loops = inside.filter((e) => e.back || e.runsAbove);
+    const runs = loops.flatMap((e) => e.points.filter((p, i) => i > 0 && e.points[i - 1]!.y === p.y).map((p) => p.y));
+    // the way of a boundary event of the lane that runs below its host's row (route.ts) is held like a loop's run
+    const ups = scope.edges.filter((e) => e.runsBelow && band.nodes.has(e.source.host ?? e.source));
+    const downs = ups.map((e) => e.points[1]!.y);
+    if (!runs.length && !downs.length) return;
+    const top = Math.min(...runs.map((y) => y - CHANNEL_KEEP), ...loops.flatMap((e) => (e.label ? [e.label.y] : [])));
+    // a label below its run (a self loop's) holds the lane open at the bottom like the run does
+    const low = Math.max(...[...runs, ...downs].map((y) => y + CHANNEL_KEEP), ...loops.flatMap((e) => (e.label ? [e.label.y + e.label.height] : [])));
+    const above = Math.max(0, Math.ceil(lane.y - top));
+    if (above) {
+      // the lane and everything after it move down, then the lane grows back up over the strip; the lane's own
+      // flows move whole, their runs over its top border and their labels too (the lanes before it keep their content)
+      const cut = lane.y;
+      openStrip(scope, leaves, cut, above);
+      for (const e of inside) {
+        for (const p of e.points) if (p.y < cut) p.y += above;
+        if (e.label && e.label.y < cut) e.label.y += above;
+      }
+      lane.y -= above;
+      lane.height += above;
+    }
+    const bottom = lane.y + lane.height;
+    const below = Math.ceil(low + above - bottom);
+    if (below > 0 && k < leaves.length - 1) {
+      // the flows inside the lane that the grown lane holds stay where they are
+      openStrip(scope, leaves, bottom, below, new Set([...inside, ...ups].filter((e) => e.points.every((p) => p.y < bottom + below))));
+      lane.height += below;
+    }
+  });
+  bands.forEach((b, k) => {
+    b.top = leaves[k]!.y;
+    b.bottom = leaves[k]!.y + leaves[k]!.height;
+  });
+}
+
 /**
  * The event sub-processes of a lane that is not the last one: stacked below
  * the lane's content (nodes, routes, artifacts), the lane grows by a strip
@@ -124,12 +204,14 @@ function stripX(scope: ScopeLayout, cut: number, width: number): number {
 function placeLaneEventSubs(scope: ScopeLayout, leaves: LaneBand[], lane: LaneBand): void {
   const top = lane.y, bottom = lane.y + lane.height;
   const inBand = (y: number): boolean => y > top && y <= bottom;
+  // a label that starts on the bottom border (a loop label of the lane below, fitLaneLoops) belongs to the lane below
+  const labelIn = (y: number): boolean => y >= top && y < bottom;
   let content = bottom - SIZES.lanePadding;
   for (const n of lane.nodes) content = Math.max(content, n.box.y + n.box.height, ...n.boundary.map((b) => b.box.y + b.box.height));
   for (const a of scope.artifacts) if (inBand(a.box.y + a.box.height / 2)) content = Math.max(content, a.box.y + a.box.height);
   for (const e of scope.edges) {
     for (const p of e.points) if (inBand(p.y)) content = Math.max(content, p.y);
-    if (e.label && inBand(e.label.y)) content = Math.max(content, e.label.y + e.label.height);
+    if (e.label && labelIn(e.label.y)) content = Math.max(content, e.label.y + e.label.height);
   }
   let y = content;
   const stack = lane.subs.map((es) => {
@@ -152,8 +234,17 @@ function placeLaneEventSubs(scope: ScopeLayout, leaves: LaneBand[], lane: LaneBa
  * order) and lays the scope out again inside them: nodes keep their column,
  * every node moves into the band of its lane, data objects and annotations
  * stay with their node and the router keeps loop channels inside the band.
+ * A node with something in its column between it and the flows that enter
+ * it from below (a join, the handler of a boundary path in a lane above)
+ * moves right as without lanes (place.ts freeJoinColumns, measured on the
+ * rows by lane; `groups`: the scope's, place.ts PlaceOptions). Then a node
+ * entered from a node of its own lane on a row above moves up onto that row
+ * with its chain where their cells there are free (place.ts liftChains; the
+ * columns stay, a row the chain leaves empty closes), and a boundary event
+ * whose way goes over the top better from its host's top border goes there
+ * (place.ts boundariesOnTop; the rows stay).
  */
-function applyLanes(scope: ScopeLayout, process: El): void {
+function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string, readonly string[]>): void {
   const laneSets = many(process, 'laneSets');
   if (!laneSets.length) return;
   const byId = new Map(scope.nodes.map((n) => [n.id, n]));
@@ -183,31 +274,61 @@ function applyLanes(scope: ScopeLayout, process: El): void {
 
   // rows inside every lane, in the order the placer assigned them
   const dataRow = new Set(scope.artifacts.filter((a) => a.kind !== 'annotation' && a.anchorNode).map((a) => a.anchorNode!));
-  let y = 0;
-  for (const lane of leaves) {
-    const rows = [...new Set(lane.nodes.map((n) => n.row))].sort((a, b) => a - b);
-    let rowY = y + SIZES.lanePadding;
-    rows.forEach((r) => {
-      const inRow = lane.nodes.filter((n) => n.row === r);
-      const rh = Math.max(0, ...inRow.map((n) => n.height + boundaryExtra(n)));
-      for (const n of inRow) shiftNode(n, 0, Math.round(rowY + rh / 2 - n.height / 2 - n.box.y));
-      rowY += rh + METRICS.vGap + (inRow.some((n) => dataRow.has(n)) ? DATA_ROW_EXTRA : 0);
-    });
-    const content = rows.length ? rowY - METRICS.vGap - (y + SIZES.lanePadding) : 0;
-    lane.y = y;
-    lane.height = Math.max(60 + 2 * SIZES.lanePadding, content + 2 * SIZES.lanePadding);
-    y += lane.height;
-  }
-  scope.height = y;
-  // data objects and boundary notes follow their node, then route inside the bands
-  placeAttachedArtifacts(scope);
-  scope.laneBands = leaves.map((l) => ({ nodes: new Set(l.nodes), top: l.y, bottom: l.y + l.height }));
+  const arrange = (): void => {
+    let y = 0;
+    for (const lane of leaves) {
+      const rows = [...new Set(lane.nodes.map((n) => n.row))].sort((a, b) => a - b);
+      let rowY = y + SIZES.lanePadding;
+      rows.forEach((r) => {
+        const inRow = lane.nodes.filter((n) => n.row === r);
+        const rh = Math.max(0, ...inRow.map((n) => n.height + boundaryExtra(n)));
+        for (const n of inRow) shiftNode(n, 0, Math.round(rowY + rh / 2 - n.height / 2 - n.box.y));
+        rowY += rh + METRICS.vGap + (inRow.some((n) => dataRow.has(n)) ? DATA_ROW_EXTRA : 0);
+      });
+      const content = rows.length ? rowY - METRICS.vGap - (y + SIZES.lanePadding) : 0;
+      lane.y = y;
+      lane.height = Math.max(60 + 2 * SIZES.lanePadding, content + 2 * SIZES.lanePadding);
+      y += lane.height;
+    }
+    scope.height = y;
+    // data objects and boundary notes follow their node, then route inside the bands
+    placeAttachedArtifacts(scope);
+    scope.laneBands = leaves.map((l) => ({ nodes: new Set(l.nodes), top: l.y, bottom: l.y + l.height }));
+  };
+  arrange();
+  // a node whose column holds something between it and the flows into it from below moves right, the rows by lane as
+  // they come. The empty bands keep the offset the passes of layoutScope gave them (a loop over the top, a strip for notes
+  // moved the content down), which gridScope's y from the grid lacks
+  const band = scope.edges.find((e) => e.bandY !== undefined);
+  const drawnBandY = band?.bandY;
+  let bandShift: number | undefined;
+  freeJoinColumns(scope, (shifts) => {
+    if (bandShift === undefined) {
+      gridScope(scope, groups);
+      bandShift = band?.bandY !== undefined && drawnBandY !== undefined ? drawnBandY - band.bandY : 0;
+    }
+    gridScope(scope, groups, shifts);
+    for (const e of scope.edges) if (e.bandY !== undefined) e.bandY += bandShift;
+    arrange();
+  });
+  // then a node entered from a row above in its own lane moves up onto that row where its cell there is free (a split's
+  // branch in its lane, whose happy path runs on in another lane, leaves through its right vertex); the columns stay
+  liftChains(scope, arrange);
+  // a boundary event whose way goes over the top better from its host's top border sits there (the rows stay)
+  boundariesOnTop(scope);
+  // the lanes as the joins and lifts left them (undoing a trial puts back the scope's lane bands, not these)
+  leaves.forEach((l, i) => {
+    const b = scope.laneBands![i]!;
+    l.y = b.top;
+    l.height = b.bottom - b.top;
+  });
   const ref = scope.nodes[0];
   const yOf = (): number => ref?.box.y ?? 0;
   // a loop drawn over the top (its label above y 0) moves the content down: the bands follow
   const beforeRouting = yOf();
   routeEdges(scope);
   growFirstLane(scope, leaves, yOf() - beforeRouting, true);
+  fitLaneLoops(scope, leaves);
   // annotations may need a strip above the content: same again
   const beforeNotes = yOf();
   placeAnnotations(scope);
@@ -304,7 +425,8 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
     if (n.child) {
       shape(n.el, box, { isExpanded: true });
       const p = SIZES.subProcessPadding;
-      emitScope(n.child, { x: box.x + p.left + Math.max(0, (box.width - p.left - p.right - n.child.width) / 2), y: box.y + p.top });
+      const pad = n.childPad ?? { left: 0, top: p.top, inner: n.child.width };
+      emitScope(n.child, { x: box.x + p.left + pad.left + Math.max(0, (box.width - p.left - p.right - pad.inner) / 2), y: box.y + pad.top });
     } else if (n.kind === 'subProcess' || n.kind === 'eventSubProcess') {
       shape(n.el, box); // collapsed: own plane
     } else {
@@ -327,7 +449,7 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
       const process = participant.get<El | undefined>('processRef');
       if (process) {
         const scope = layoutScope(process, placeOpts);
-        applyLanes(scope, process);
+        applyLanes(scope, process, placeOpts.groups);
         pools.push({ participant, process, scope, box: { x: 0, y: 0, width: 0, height: 0 }, origin: { x: 0, y: 0 } });
       } else {
         pools.push({ participant, box: { x: 0, y: 0, width: 0, height: SIZES.blackBoxHeight }, origin: { x: 0, y: 0 } });
@@ -388,7 +510,7 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
     }
   } else {
     const scope = layoutScope(root, placeOpts);
-    applyLanes(scope, root);
+    applyLanes(scope, root, placeOpts.groups);
     if (scope.lanes.length) {
       const laneDepth = laneDepthOf(scope.lanes);
       const framed = framedSize(scope);
@@ -739,15 +861,24 @@ function segs(points: Point[]): Seg[] {
   return out;
 }
 
+/** How far a label keeps from a horizontal line (declutterLabels). */
+const RUN_KEEP = 2;
+
 function hitsBox([p, q]: Seg, b: Box, shrink = 0): boolean {
   return Math.min(p.x, q.x) < b.x + b.width - shrink && Math.max(p.x, q.x) > b.x + shrink && Math.min(p.y, q.y) < b.y + b.height - shrink && Math.max(p.y, q.y) > b.y + shrink;
 }
 
 /**
- * Moves labels that sit on a shape, on another label or on a line to the next
- * free spot around their element. Runs on the finished DI of one plane, so it
- * sees every shape, edge and label at once. Deterministic: labels are handled
- * in emit order and every placed label becomes an obstacle for the next.
+ * Moves labels that sit on a shape, on another label, on a line or on the
+ * title of an expanded sub-process (text.ts titleBox) to the next free spot
+ * around their element: of the spots next to it (below / above, also
+ * shifted, and beside it) in an expanded sub-process one below its title
+ * first, else one inside the element's frame (in a sub-process always:
+ * beside its title; in a lane or pool when the label was inside it); then
+ * the same of the spots stepped further out below / above; else any. Runs
+ * on the finished DI of one plane, so it sees every shape, edge and label at
+ * once. Deterministic: labels are handled in emit order and every placed
+ * label becomes an obstacle for the next.
  */
 function declutterLabels(di: El[], moddle: Model['moddle']): void {
   const boxOf = (bounds: El): Box => ({ x: bounds.get<number>('x'), y: bounds.get<number>('y'), width: bounds.get<number>('width'), height: bounds.get<number>('height') });
@@ -760,6 +891,9 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
   }
   const shapes: Box[] = [];
   const frames: Box[] = [];
+  /** the frame of each container element; the expanded sub-processes among them with their titles (undefined: no name) */
+  const frameOfEl = new Map<El, Box>();
+  const titles = new Map<Box, Box | undefined>();
   const lines: Seg[] = [];
   const items: Item[] = [];
   for (const d of di) {
@@ -769,7 +903,11 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
     const container = isShape && (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane') || (is(el, 'bpmn:SubProcess') && d.get<boolean | undefined>('isExpanded') === true));
     const shapeBox = isShape ? boxOf(d.get<El>('bounds')) : undefined;
     if (shapeBox && !container) shapes.push(shapeBox);
-    if (shapeBox && container) frames.push(shapeBox);
+    if (shapeBox && container) {
+      frames.push(shapeBox);
+      frameOfEl.set(el, shapeBox);
+      if (is(el, 'bpmn:SubProcess')) titles.set(shapeBox, titleBox(shapeBox, el.get<string | undefined>('name')));
+    }
     const points = isShape ? undefined : many(d, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') }));
     if (points) lines.push(...segs(points));
     const label = d.get<El | undefined>('label');
@@ -780,13 +918,24 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
   const placed: Box[] = [];
   const holds = (f: Box, p: Point): boolean => p.x >= f.x && p.x <= f.x + f.width && p.y >= f.y && p.y <= f.y + f.height;
   const within = (f: Box, b: Box): boolean => b.x >= f.x && b.y >= f.y && b.x + b.width <= f.x + f.width && b.y + b.height <= f.y + f.height;
-  // the innermost frame (lane, pool, expanded sub-process) around a shape / both ends of a flow: a label moves out of it only when no free spot is inside
-  const frameOf = (pts: Point[]): Box | undefined =>
-    frames.filter((f) => pts.every((p) => holds(f, p))).sort((a, b) => a.width * a.height - b.width * b.height)[0];
+  // the innermost frame (lane, pool, expanded sub-process) around a shape / both ends of a flow: a label moves out of it only when no free spot is
+  // inside (a boundary event's frame is not its host: its label hangs outside)
+  const frameOf = (pts: Point[], host?: Box): Box | undefined =>
+    frames.filter((f) => f !== host && pts.every((p) => holds(f, p))).sort((a, b) => a.width * a.height - b.width * b.height)[0];
+  // where in an expanded sub-process a label goes first: below its title (it is sized for the labels inside)
+  const areaOf = (f: Box): Box | undefined => {
+    if (!titles.has(f)) return undefined;
+    const t = titles.get(f);
+    const top = t ? t.y + t.height + 2 : f.y;
+    return { x: f.x, y: top, width: f.width, height: f.y + f.height - top };
+  };
+  const titleBoxes = [...titles.values()].filter((t): t is Box => !!t);
   const clashes = (b: Box, own?: Box): boolean =>
     shapes.some((s) => s !== own && boxesOverlap(s, b, 2)) ||
     placed.some((o) => boxesOverlap(o, b, 2)) ||
-    lines.some((seg) => hitsBox(seg, b, 1));
+    // a horizontal run on the box's top or bottom edge or within RUN_KEEP of it too (the text would sit on the line)
+    lines.some((seg) => hitsBox(seg, b, seg[0].y === seg[1].y ? -RUN_KEEP : 1)) ||
+    titleBoxes.some((t) => boxesOverlap(t, b, 2));
   for (const item of items) {
     const b = item.box;
     if (!clashes(b, item.shape)) {
@@ -794,6 +943,8 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
       continue;
     }
     const cands: Box[] = [];
+    /** the candidates before this index touch the shape (all of a flow's), those after it are stepped further out */
+    let near = Infinity;
     if (item.shape) {
       const s = item.shape;
       const cx = s.x + s.width / 2;
@@ -806,6 +957,7 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
         cands.push({ ...b, x: s.x + s.width + 6, y: Math.round(s.y + s.height / 2 - b.height / 2 + dy * b.height) });
         cands.push({ ...b, x: s.x - b.width - 6, y: Math.round(s.y + s.height / 2 - b.height / 2 + dy * b.height) });
       }
+      near = cands.length;
       for (const step of [1, 2, 3]) {
         cands.push({ ...b, x: Math.round(cx - b.width / 2), y: below + step * (b.height + 4) });
         cands.push({ ...b, x: Math.round(cx - b.width / 2), y: above - step * (b.height + 4) });
@@ -831,10 +983,16 @@ function declutterLabels(di: El[], moddle: Model['moddle']): void {
         }
       }
     }
-    const frame = item.shape ? frameOf([{ x: item.shape.x + item.shape.width / 2, y: item.shape.y + item.shape.height / 2 }]) : item.points?.length ? frameOf([item.points[0]!, item.points[item.points.length - 1]!]) : undefined;
-    // a free spot inside the frame first, else any free spot
-    const free = cands.filter((c) => !clashes(c, item.shape));
-    const win = free.find((c) => !frame || !within(frame, b) || within(frame, c)) ?? free[0];
+    const hostEl = is(item.el, 'bpmn:BoundaryEvent') ? item.el.get<El | undefined>('attachedToRef') : undefined;
+    const host = hostEl ? frameOfEl.get(hostEl) : undefined;
+    const frame = item.shape ? frameOf([{ x: item.shape.x + item.shape.width / 2, y: item.shape.y + item.shape.height / 2 }], host) : item.points?.length ? frameOf([item.points[0]!, item.points[item.points.length - 1]!]) : undefined;
+    // a free spot in a sub-process below its title first, else inside the frame (in a sub-process always, beside its title: titles are obstacles; in a
+    // lane or pool when the label was inside), of the near spots before the far ones (a far spot below the title does not beat one beside it); else any
+    const isFree = (c: Box): boolean => !clashes(c, item.shape);
+    const area = frame ? areaOf(frame) : undefined;
+    const keepIn = frame && (area || within(frame, b)) ? frame : undefined;
+    const pick = (free: Box[]): Box | undefined => (area ? free.find((c) => within(area, c)) : undefined) ?? free.find((c) => !keepIn || within(keepIn, c));
+    const win = pick(cands.slice(0, near).filter(isFree)) ?? pick(cands.slice(near).filter(isFree)) ?? cands.find(isFree);
     const box = win ?? b;
     item.bounds.set('x', Math.round(box.x));
     item.bounds.set('y', Math.round(box.y));

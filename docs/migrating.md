@@ -513,3 +513,78 @@
   prefixes); the pools' ids never count. Where no two process ids share a
   prefix, the process id is the one of 0.6, and files bpmn-cli made keep
   `Process_<Name>`.
+
+## Changes from 0.7
+
+- `segmentOverlap` no longer reports the common run of two flows into one
+  gateway's bottom or top vertex: a join's entries from below share that
+  vertex and their last run into it, as bpmn-js draws them, for every
+  gateway kind. A file with such a join scores 2 per pair lower than in 0.7
+  (a parallel split with three branches drawn by the engine: 2 -> 0). A
+  merge onto a line into a side vertex, two flows on one line from start
+  to end, shared last runs into tasks and events, and an entry sharing a
+  vertex with an outgoing flow (`inOut`) are still reported.
+- The incremental layout and `route` route a join's entry from below into
+  its bottom vertex beside the other entries, along their common way into
+  it (rising beside the join and hooking in, say), where the way there
+  crosses no more lines than the way to a free vertex; 0.7 kept one
+  connection per vertex and sent the entry over the top, into the left
+  vertex across the other entry, or merged it onto the other entry's line.
+  A routed flow touches a gateway it enters at no other vertex than its
+  own (0.7 could run along the diamond's box through another vertex).
+- The layout metrics have a new soft kind, `labelOnTitle` (weight 2, ids
+  `[label owner, sub-process]`, a new key in `counts` and in
+  `METRIC_KEYS`): the label of an event, gateway, data object / store or
+  flow on the name of an expanded sub-process, where bpmn-js draws it at
+  the top. A file with such a label scores higher than in 0.7 (an event
+  sub-process with a compensation event's label on its name: 0 -> 2). The
+  names of pools and lanes are not checked.
+- The built-in engine sizes an expanded sub-process for the labels of its
+  content (data objects and stores included) and for the lines of its
+  name, spaces neighbours in a row so that their labels keep apart, and
+  moves no label onto the name of a sub-process. Its loops run below the
+  labels under the events they pass, a loop into a join (or a second loop
+  into a merge) rises into the join's shared bottom vertex (leaving its gateway
+  through a vertex of the diamond where it can), a loop inside a lane keeps
+  15 px from the lane's borders (the lane grows around it), and a flow
+  between two shapes of one row is exactly horizontal. A join's entries
+  from below rise straight into its bottom vertex with the join exactly
+  above them: a join with a shape or label in its column (the end of a
+  boundary path, say) moves right past it, with everything after it, by
+  up to three columns, when that adds no crossing (0.7 hooked the entries
+  in from the column gap); a join whose entries rise into its bottom
+  vertex sends its flow to a target below out of its right vertex (0.7
+  dropped it down the entries' line, `inOut`); an empty branch whose row
+  between split and join is free (the other branches run in other lanes)
+  is drawn straight (0.7 sent it through a band below). A boundary
+  event's flow to a target above it (a lane or row above) leaves the event
+  downwards and runs at least 15 px below the host's row, its labels and
+  the runs before it (the frame or lane grows for it), and rises straight
+  into its target: any node a flow enters from below moves right past what
+  lies in its column, with what follows it, by up to three columns, when
+  that adds no crossing (0.7 ran the flow out of the event's side along
+  the host's bottom border and hooked it into the target); where host and
+  target share a lane (or there are no lanes) and a way over the top row
+  crosses fewer lines, the flow runs above everything into the target's
+  top, and where that draws better the event sits on its host's top border
+  and its flow leaves it straight up (0.7 kept every boundary event on the
+  bottom border). In a pool with lanes, a
+  branch in its split's own lane moves up onto the split's row when the
+  happy path continues in another lane, so it leaves the split
+  horizontally (0.7 dropped every branch from the split's bottom vertex).
+  A full redraw can therefore differ from 0.7's (39 of the 115
+  layout-regression scenarios: shapes by a few pixels, a node and what follows it by a
+  column, a loop 12 px lower, some labels on another side), so `auto` mode
+  keeps a
+  drawing 0.7's engine made (incremental) where this engine no longer
+  reproduces it; `bpmn layout <file>` redraws it.
+- `label <id> --side above` on a shape at the top of an expanded
+  sub-process, whose name leaves no room above it, makes room below the
+  name first (the content moves down, the sub-process grows; `moved` lists
+  them, a note says so). 0.7 put the label on the name.
+- In the incremental layout, an expanded sub-process renamed to a name of
+  more lines makes room below it for the lines it gained (0.7 drew the
+  name over the content); a rename that keeps the number of lines moves
+  no shape. A label that a wider name or making room brings onto the name
+  of a sub-process is placed again inside the sub-process (the incremental
+  layout notes it), or stays where it is when no spot there is free.

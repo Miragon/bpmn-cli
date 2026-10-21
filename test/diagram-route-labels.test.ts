@@ -7,7 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines } from '../src/diagram/reroute.js';
-import { labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
+import { crossings } from '../src/diagram/router.js';
+import { clearTitles, labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
 import { renderLayout } from '../src/format.js';
 import { Doc } from '../src/document.js';
 import type { El } from '../src/model.js';
@@ -53,6 +54,31 @@ describe('routeEdge', () => {
     expect(pts[0]!.y).toBe(100);
     expect(pts[pts.length - 1]!.y).toBe(310);
     expect(pts.every((q) => q.x > 300)).toBe(true);
+  });
+
+  it('a join entry follows the hook bundle of the other entries into the shared bottom vertex, unless that costs a crossing the way to a free vertex does not', () => {
+    // the join J (bottom vertex 325,50) over an end event; three entries rise in the gap right of it and hook in;
+    // W takes its left vertex, the new task N lies below the entries' tasks
+    const hook = (id: string, y: number): DEdge => ed(id, 'sequenceFlow', id.slice(0, 2), 'J', [[200, y], [385, y], [385, 65], [325, 65], [325, 50]]);
+    const setup = (cross: boolean): Plane =>
+      plane(
+        [
+          sh('J', 'gateway', [300, 0, 50, 50]),
+          sh('EB', 'event', [307, 90, 36, 36]),
+          sh('W', 'task', [100, -15, 100, 80]),
+          ...[1, 2, 3].map((k) => sh(`H${k}`, 'task', [100, 20 + 100 * k, 100, 80])),
+          sh('N', 'task', [100, 420, 100, 80]),
+          ...(cross ? [sh('Y', 'task', [460, 140, 100, 80]), sh('Z', 'event', [230, 162, 36, 36])] : []),
+        ],
+        [ed('WJ', 'sequenceFlow', 'W', 'J', [[200, 25], [300, 25]]), hook('H1J', 160), hook('H2J', 260), hook('H3J', 360), ed('NJ', 'sequenceFlow', 'N', 'J'), ...(cross ? [ed('YZ', 'sequenceFlow', 'Y', 'Z', [[460, 180], [266, 180]])] : [])],
+      );
+    let p = setup(false);
+    expect(routeEdge(p, p.edges.get('NJ')!, { lines: routingLines(p, 'NJ') })).toEqual([{ x: 200, y: 460 }, { x: 385, y: 460 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
+    // Y -> Z crosses the bundle's column: joining it would cross that flow, the way to the free top vertex does not
+    p = setup(true);
+    const pts = routeEdge(p, p.edges.get('NJ')!, { lines: routingLines(p, 'NJ') })!;
+    expect(pts.at(-1)).toEqual({ x: 325, y: 0 });
+    expect(crossings(pts, routingLines(p, 'NJ'))).toBe(0);
   });
 
   it('keeps an association straight when nothing is in the way', () => {
@@ -126,6 +152,21 @@ describe('labels', () => {
     const box = placeEdgeLabel(p, p.edges.get('F')!)!;
     expect(box.y + box.height).toBe(196);
     expect(box.x).toBe(108);
+  });
+
+  it('keeps a label on the title of its sub-process where every free spot is outside the sub-process', () => {
+    // the sub-process fits its gateway tightly: above it the title (widened by a rename), below, left and right its border
+    const sub: DShape = { id: 'SP', el: el('bpmn:SubProcess', 'SP', 'Check the documents'), kind: 'subProcess', container: true, expanded: true, bounds: { x: 100, y: 100, width: 140, height: 80 } };
+    const p = plane([sub, sh('G', 'gateway', [145, 124, 50, 50], { parentId: 'SP' }, 'Complete?')]);
+    const g = p.shapes.get('G')!;
+    g.label = { x: 133, y: 108, width: 75, height: 14 };
+    expect(clearTitles(p, () => true)).toEqual([]);
+    expect(g.label).toEqual({ x: 133, y: 108, width: 75, height: 14 });
+    // with room below the gateway the label moves there, inside the sub-process
+    sub.bounds.height = 120;
+    expect(clearTitles(p, () => true)).toEqual([['G', 'SP']]);
+    expect(g.label!.y).toBeGreaterThanOrEqual(174);
+    expect(g.label!.y + g.label!.height).toBeLessThanOrEqual(220);
   });
 
   it('refits a renamed label on the side it was on', () => {

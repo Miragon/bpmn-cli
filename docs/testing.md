@@ -87,8 +87,8 @@ kinds are **hard** (`tools/fuzz/lib/metric-kinds.mjs`):
    outsideSub; the frame, degenerate-edge and detached-edge kinds weigh 10
    and are hard too.
    The drawing-quality kinds (`QUALITY_KEYS`: backwardFlow, segmentOverlap,
-   labelOutsideFrame, messageLabelFar) weigh less than 6: soft, reported
-   with the score but never counted as hard defects.
+   labelOutsideFrame, labelOnTitle, messageLabelFar) weigh less than 6:
+   soft, reported with the score but never counted as hard defects.
 
 Leaf shapes (`overlaps`, `through`, a label on a shape) are every shape but
 pools, lanes, expanded sub-processes and groups, in the library and the

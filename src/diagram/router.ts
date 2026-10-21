@@ -16,6 +16,23 @@
  *    `targetAvoid` (taken by other connections of that shape) costs AVOID =
  *    100: such a side is used only when every other one costs more than
  *    that extra (a detour with a further bend and a crossing does)
+ *  - `targetMerge` (the target is a join): the common tail of the lines that
+ *    end on a top / bottom port of the target (2 px tolerance) with a
+ *    vertical last run is shared, not overlapped. A line's tail is its last
+ *    run, a short hook before it (a horizontal run of at most the target's
+ *    width + 2·stub) with the run before that, and every run back to where
+ *    it parts from another such line into the same port (the run on which
+ *    they part included; metrics.ts joinTail). Running on a tail costs no
+ *    overlap when the route follows it into the port, leaving it before the
+ *    port costs the overlap, crossing it costs as usual: a further entry
+ *    joins the bundle and follows it into the same vertex. The waiver can
+ *    make a route that crosses a line on its way to the shared vertex
+ *    cheaper than a crossing-free detour to a free one: the caller compares
+ *    (reroute.ts routeEdge, with `crossings`)
+ *  - a target with `targetMiddle` (a gateway) is touched only at its port:
+ *    running through another vertex of the diamond (along its bounding box,
+ *    under or beside it) costs like cutting an obstacle (only the target: a
+ *    route may still run along the box of a gateway source)
  *  - the first and last segment run ≥ 15 px (≥ `margin`) straight off the
  *    border before the first bend, unless the boxes are too close for that
  *  - never passes through an obstacle, the source or the target when an
@@ -25,7 +42,8 @@
  *  - minimises  length + 150·bend + 200·crossing of `lines`
  *               + 200 more for a crossing within 25 px of the start or end
  *                 of one of `lines` (next to its arrowhead or its shape)
- *               + 300·collinear overlap with `lines`
+ *               + 300·collinear overlap with `lines` (but not with a tail
+ *                 `targetMerge` shares, followed into its port)
  *    + 300 per grid edge running along an obstacle's outline (on its border),
  *    plus small tie-breakers: running inside an obstacle's margin costs 1 per
  *    px, an off-centre port a few px, and later entries of `sourceSides` /
@@ -34,9 +52,10 @@
  *
  * Algorithm: an orthogonal visibility (Hanan) grid from the obstacle borders ±
  * margin, the source/target stub lines, the ports and the midlines between
- * source and target; A* over (grid node, direction, overlap run) states with
- * the cost above (an edge inside an obstacle costs 1e6 instead of being
- * removed, so a route always exists). Turning within the stub distance of the
+ * source and target; A* over (grid node, direction, overlap run or shared
+ * tail) states with the cost above (an edge inside an obstacle or through
+ * another vertex of a gateway target costs 1e6 instead of being removed, so
+ * a route always exists). Turning within the stub distance of the
  * source or target costs 500. Only obstacles near the connection enter the grid
  * (the region grows twice from the padded bounding box of source and target by
  * the obstacles touching it); if the best route there still cuts an obstacle,
@@ -49,6 +68,8 @@
  * gateways exit right/bottom/top and enter left/bottom/top, boundary events
  * exit bottom (use `attachedSide` for events on another border of their host),
  * pools/lanes (message flows) use top/bottom, everything else any side.
+ * `crossings(points, lines)` counts a route's proper crossings with `lines`
+ * (the test of the cost).
  */
 import type { Box, Point } from '../layout/types.js';
 
@@ -80,6 +101,12 @@ export interface RouteRequest {
   /** sides other connections of the shape already use: a port there costs AVOID */
   sourceAvoid?: Side[];
   targetAvoid?: Side[];
+  /**
+   * the target is a join: running on the common tail of the lines that end
+   * on a top / bottom port of the target, followed into that port, is no
+   * overlap (the entries share that vertex); crossing it still costs
+   */
+  targetMerge?: boolean;
   /** shapes to avoid (NOT source/target; the caller excludes containers) */
   obstacles: Box[];
   /** existing connections (not the one being routed): crossing one costs, running on top of one costs more */
@@ -218,6 +245,15 @@ function segmentsOverlap(a: Point, b: Point, c: Point, d: Point): boolean {
     return Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) - Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)) > 1;
   }
   return false;
+}
+
+/** Proper crossings of a route with `lines` (the test of the cost: shared end points, T-junctions and collinear runs do not count). */
+export function crossings(points: readonly Point[], lines: readonly Point[][]): number {
+  let n = 0;
+  for (let i = 0; i + 1 < points.length; i++) {
+    for (const line of lines) for (let k = 0; k + 1 < line.length; k++) if (segmentsCross(points[i]!, points[i + 1]!, line[k]!, line[k + 1]!)) n++;
+  }
+  return n;
 }
 
 /** drop duplicate points and interior points on a straight run */
@@ -360,6 +396,8 @@ interface Seg {
   kind: 'h' | 'v' | 'd';
   /** the line's start / end when they lie on this segment (its first / last one) */
   ends?: Point[];
+  /** part of the shared tail of a line into a top / bottom target port (targetMerge): following it into the port is no overlap */
+  merge?: boolean;
 }
 
 interface Ctx {
@@ -371,6 +409,8 @@ interface Ctx {
   segs: Seg[];
   src: Port[];
   tgt: Port[];
+  /** the target is a gateway (`targetMiddle`): touched only at its port */
+  tMiddle: boolean;
 }
 
 function sidesOf(sides: Side[] | undefined, fallback: Side[]): Side[] {
@@ -378,9 +418,41 @@ function sidesOf(sides: Side[] | undefined, fallback: Side[]): Side[] {
   return list.length ? list : fallback;
 }
 
-function lineSegments(lines: Point[][]): Seg[] {
+/** consecutive segments of one line going one way on one grid line (their indices into the segments) */
+interface Run {
+  a: Point;
+  b: Point;
+  kind: Seg['kind'];
+  segs: number[];
+}
+
+/** the runs of the segments from index `first` on (one line) */
+function runsOf(segs: Seg[], first: number): Run[] {
+  const out: Run[] = [];
+  const way = (p: Point, q: Point): string => `${Math.sign(q.x - p.x)},${Math.sign(q.y - p.y)}`;
+  for (let k = first; k < segs.length; k++) {
+    const { a, b, kind } = segs[k]!;
+    const last = out[out.length - 1];
+    if (last && kind !== 'd' && kind === last.kind && (kind === 'v' ? Math.abs(a.x - last.a.x) : Math.abs(a.y - last.a.y)) < EPS && way(a, b) === way(last.a, last.b)) {
+      last.b = b;
+      last.segs.push(k);
+    } else out.push({ a, b, kind, segs: [k] });
+  }
+  return out;
+}
+
+/**
+ * The segments of `lines`. With `mergeAt` (targetMerge: the target's top /
+ * bottom ports), the shared tail of every line that ends on such a port with
+ * a vertical last run into it is marked `merge` (see the module contract):
+ * its last run, a hook of at most `hook` px with the run before it, and the
+ * runs back to where it parts from another such line into the same port.
+ */
+function lineSegments(lines: Point[][], mergeAt: readonly Port[] = [], hook = 0): Seg[] {
   const segs: Seg[] = [];
+  const entries: Array<{ port: Port; runs: Run[] }> = [];
   for (const line of lines) {
+    const first = segs.length;
     for (let i = 0; i + 1 < line.length; i++) {
       const a = line[i]!, b = line[i + 1]!;
       if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) continue;
@@ -389,6 +461,35 @@ function lineSegments(lines: Point[][]): Seg[] {
       const kind = dy < EPS ? 'h' : dx < EPS ? 'v' : 'd';
       const ends = kind === 'd' ? [] : [...(i === 0 ? [a] : []), ...(i + 2 === line.length ? [b] : [])];
       segs.push({ a, b, kind, ...(ends.length ? { ends } : {}) });
+    }
+    const end = line[line.length - 1];
+    const port = end && mergeAt.find((p) => Math.abs(p.x - end.x) <= OVERLAP_TOL && Math.abs(p.y - end.y) <= OVERLAP_TOL);
+    if (!port) continue;
+    const runs = runsOf(segs, first);
+    const last = runs[runs.length - 1];
+    // a vertical last run entering the port from outside (up into a bottom vertex, down into a top one)
+    if (last?.kind === 'v' && (port.side === 'bottom' ? last.a.y > last.b.y : last.a.y < last.b.y)) entries.push({ port, runs });
+  }
+  const mark = (r: Run | undefined): void => {
+    for (const k of r?.segs ?? []) segs[k]!.merge = true;
+  };
+  for (const { port, runs } of entries) {
+    const n = runs.length;
+    mark(runs[n - 1]);
+    const h = runs[n - 2];
+    if (h?.kind === 'h' && Math.abs(h.a.x - h.b.x) <= hook) {
+      mark(h);
+      mark(runs[n - 3]);
+    }
+    // back to where it parts from another entry into the same port
+    for (const other of entries) {
+      if (other.port !== port || other.runs === runs) continue;
+      for (let i = n - 1, j = other.runs.length - 1; i >= 0 && j >= 0; i--, j--) {
+        const x = runs[i]!, y = other.runs[j]!;
+        if (!segmentsOverlap(x.a, x.b, y.a, y.b)) break;
+        mark(x);
+        if (Math.abs(x.a.x - y.a.x) > OVERLAP_TOL || Math.abs(x.a.y - y.a.y) > OVERLAP_TOL) break;
+      }
     }
   }
   return segs;
@@ -400,15 +501,19 @@ function context(req: RouteRequest): Ctx {
   const s = req.source, t = req.target;
   const obstacles = req.obstacles.filter(finiteBox);
   const docked = (req.lines ?? []).flatMap((l) => (l.length >= 2 ? [l[0]!, l[l.length - 1]!] : []));
+  const tgt = makePorts(t, sidesOf(req.targetSides, TARGET_DEFAULT), TGT_RANK, s, obstacles, m, stub, docked, req.targetMiddle === true, req.targetAvoid);
+  // a join's entries share its top / bottom vertex: the common tail of the lines into such a port is no overlap
+  const mergeAt = req.targetMerge ? tgt.filter((p) => p.side === 'top' || p.side === 'bottom') : [];
   return {
     s,
     t,
     m,
     stub,
     obstacles,
-    segs: lineSegments(req.lines ?? []),
+    segs: lineSegments(req.lines ?? [], mergeAt, t.width + 2 * stub),
     src: makePorts(s, sidesOf(req.sourceSides, SOURCE_DEFAULT), SRC_RANK, t, obstacles, m, stub, docked, req.sourceMiddle === true, req.sourceAvoid),
-    tgt: makePorts(t, sidesOf(req.targetSides, TARGET_DEFAULT), TGT_RANK, s, obstacles, m, stub, docked, req.targetMiddle === true, req.targetAvoid),
+    tgt,
+    tMiddle: req.targetMiddle === true,
   };
 }
 
@@ -426,6 +531,10 @@ interface Grid {
   hOv: Uint8Array;
   vOv: Uint8Array;
   anyOv: boolean;
+  /** the edge runs on a shared tail into a join's vertex (targetMerge) and on no other line */
+  hMg: Uint8Array;
+  vMg: Uint8Array;
+  anyMg: boolean;
   /** extra cost for turning at a node (stub zones of source and target) */
   turn: Float64Array;
 }
@@ -460,12 +569,16 @@ function sortedUnique(values: number[], lo: number, hi: number): number[] {
   return out;
 }
 
-/** grid lines: ports, stub lines of source and target, midlines between them, obstacle borders ± margin, frame insets */
+/** grid lines: ports, stub lines of source and target, midlines between them, obstacle borders ± margin, frame insets, shared tails (targetMerge) */
 function gridLines(c: Ctx, ext: Box, inc: Box[], frame: Box | undefined): { xs: number[]; ys: number[] } {
   const xs: number[] = [], ys: number[] = [];
   for (const p of [...c.src, ...c.tgt]) {
     xs.push(p.x);
     ys.push(p.y);
+  }
+  for (const seg of c.segs) {
+    if (seg.merge && seg.kind === 'v') xs.push(seg.a.x);
+    if (seg.merge && seg.kind === 'h') ys.push(seg.a.y);
   }
   for (const b of [c.s, c.t]) {
     xs.push(b.x - c.stub, right(b) + c.stub);
@@ -564,18 +677,44 @@ function markLine(g: Grid, seg: Seg): void {
       crossColumn(g, i, y, cost({ x: xs[i]!, y }));
     }
   }
+  // a join's entry may follow another entry's tail into the same vertex (targetMerge): marked apart. An overlap
+  // counts from 1 px; on a tail every grid edge inside it counts, a short one too (a route leaving the tail there
+  // pays the overlap in astar)
+  const hFlag = seg.merge ? g.hMg : g.hOv, vFlag = seg.merge ? g.vMg : g.vOv;
+  const least = (len: number): number => (seg.merge ? Math.min(1, len - EPS) : 1);
   if (seg.kind === 'h') {
     for (let j = lower(ys, a.y - OVERLAP_TOL); j < ny && ys[j]! <= a.y + OVERLAP_TOL; j++) {
       for (let i = Math.max(0, upper(xs, x1) - 1); i < nx - 1 && xs[i]! < x2; i++) {
-        if (Math.min(xs[i + 1]!, x2) - Math.max(xs[i]!, x1) > 1) g.hOv[j * (nx - 1) + i] = 1;
+        if (Math.min(xs[i + 1]!, x2) - Math.max(xs[i]!, x1) > least(xs[i + 1]! - xs[i]!)) hFlag[j * (nx - 1) + i] = 1;
       }
     }
   } else if (seg.kind === 'v') {
     for (let i = lower(xs, a.x - OVERLAP_TOL); i < nx && xs[i]! <= a.x + OVERLAP_TOL; i++) {
       for (let j = Math.max(0, upper(ys, y1) - 1); j < ny - 1 && ys[j]! < y2; j++) {
-        if (Math.min(ys[j + 1]!, y2) - Math.max(ys[j]!, y1) > 1) g.vOv[j * nx + i] = 1;
+        if (Math.min(ys[j + 1]!, y2) - Math.max(ys[j]!, y1) > least(ys[j + 1]! - ys[j]!)) vFlag[j * nx + i] = 1;
       }
     }
+  }
+}
+
+/**
+ * A gateway target is touched only at its port: every grid edge through a
+ * vertex of the diamond (the middle of a side of its box, where the ports
+ * lie) costs HIT, except the first edge out of it (the stub into that port).
+ */
+function guardVertices(g: Grid, b: Box): void {
+  const { xs, ys, nx, ny } = g;
+  const at = (arr: number[], v: number): number => {
+    const k = lower(arr, v - EPS);
+    return k < arr.length && Math.abs(arr[k]! - v) < EPS ? k : -1;
+  };
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    const [lo, hi] = span(b, side);
+    const v = pointOn(b, side, Math.round(lo + (hi - lo) / 2));
+    const d = OUTWARD[side];
+    const i = at(xs, v.x), j = at(ys, v.y);
+    if (j >= 0) for (let k = 0; k + 1 < nx; k++) if (xs[k]! <= v.x + EPS && xs[k + 1]! >= v.x - EPS && !(d === 0 && k === i) && !(d === 2 && k + 1 === i)) bump(g.hCost, j * (nx - 1) + k, HIT);
+    if (i >= 0) for (let k = 0; k + 1 < ny; k++) if (ys[k]! <= v.y + EPS && ys[k + 1]! >= v.y - EPS && !(d === 1 && k === j) && !(d === 3 && k + 1 === j)) bump(g.vCost, k * nx + i, HIT);
   }
 }
 
@@ -614,6 +753,9 @@ function buildGrid(c: Ctx, ext: Box, frame: Box | undefined): Grid {
     hOv: new Uint8Array(Math.max(0, nx - 1) * ny),
     vOv: new Uint8Array(nx * Math.max(0, ny - 1)),
     anyOv: false,
+    hMg: new Uint8Array(Math.max(0, nx - 1) * ny),
+    vMg: new Uint8Array(nx * Math.max(0, ny - 1)),
+    anyMg: false,
     turn: new Float64Array(nx * ny),
   };
   for (let j = 0; j < ny; j++) for (let i = 0; i + 1 < nx; i++) g.hCost[j * (nx - 1) + i] = xs[i + 1]! - xs[i]!;
@@ -625,12 +767,14 @@ function buildGrid(c: Ctx, ext: Box, frame: Box | undefined): Grid {
   }
   addInside(g, c.s, HIT, 0);
   addInside(g, c.t, HIT, 0);
+  if (c.tMiddle) guardVertices(g, c.t);
   const near = inflate(ext, OVERLAP_TOL + 1);
   for (const seg of c.segs) {
     const bb = { x: Math.min(seg.a.x, seg.b.x), y: Math.min(seg.a.y, seg.b.y), width: Math.abs(seg.a.x - seg.b.x), height: Math.abs(seg.a.y - seg.b.y) };
     if (touches(bb, near)) markLine(g, seg);
   }
   g.anyOv = g.hOv.some((v) => v === 1) || g.vOv.some((v) => v === 1);
+  g.anyMg = g.hMg.some((v) => v === 1) || g.vMg.some((v) => v === 1);
   markStubZones(g, c.s, c.stub);
   markStubZones(g, c.t, c.stub);
   return g;
@@ -722,15 +866,17 @@ function nodeOf(g: Grid, p: Point): number | undefined {
 
 /**
  * A* from the source ports (leaving outward) to a target port (arriving
- * inward). State = (node, direction, on-an-overlap-run); no U-turns; a start
- * state may only go straight on (the stub). Heuristic: Manhattan distance plus
+ * inward). State = (node, direction, run: 0 free, 1 on an overlap run, 2 on
+ * a shared tail); no U-turns; a start state may only go straight on (the
+ * stub). Running on a shared tail is free; leaving it before the goal costs
+ * OVERLAP (it was an overlap after all). Heuristic: Manhattan distance plus
  * 150 per bend that is unavoidable given the current and the final direction
  * (consistent, so the first goal popped is optimal).
  */
 function astar(c: Ctx, g: Grid): Found | undefined {
   const { xs, ys, nx, ny } = g;
   if (!nx || !ny) return undefined;
-  const nOv = g.anyOv ? 2 : 1;
+  const nOv = g.anyMg ? 3 : g.anyOv ? 2 : 1;
 
   const goalNode = new Uint8Array(nx * ny);
   const goals = new Map<number, number>(); // node·4 + inward direction -> port cost
@@ -792,23 +938,27 @@ function astar(c: Ctx, g: Grid): Found | undefined {
       const d = k === 0 ? dir : k === 1 ? (dir + 1) % 4 : (dir + 3) % 4;
       const ni = i + DX[d]!, nj = j + DY[d]!;
       if (ni < 0 || nj < 0 || ni >= nx || nj >= ny) continue;
-      let cost: number, ovEdge: number;
+      let cost: number, ovEdge: number, mgEdge: number;
       if (d === 0 || d === 2) {
         const e = j * (nx - 1) + (d === 0 ? i : i - 1);
         cost = g.hCost[e]!;
         ovEdge = g.hOv[e]!;
+        mgEdge = g.hMg[e]!;
       } else {
         const e = (d === 1 ? j : j - 1) * nx + i;
         cost = g.vCost[e]!;
         ovEdge = g.vOv[e]!;
+        mgEdge = g.vMg[e]!;
       }
       let ng = cg + cost;
       if (d !== dir) ng += BEND + g.turn[node]!;
       let nov = 0;
-      if (nOv === 2 && ovEdge) {
+      if (ovEdge) {
         nov = 1;
         if (!(ov === 1 && d === dir)) ng += OVERLAP;
-      }
+      } else if (mgEdge) nov = 2;
+      // a shared tail left before the vertex was an overlap after all
+      if (ov === 2 && nov !== 2) ng += OVERLAP;
       const nn = nj * nx + ni;
       const goalCost = goalNode[nn] ? goals.get(nn * 4 + d) : undefined;
       if (goalCost !== undefined) ng += goalCost;
@@ -844,12 +994,16 @@ interface Score {
 function score(points: Point[], c: Ctx): Score {
   let hits = 0, penalty = 0;
   const boxes = [...c.obstacles, c.s, c.t];
+  // the route's last segments on shared tails (targetMerge) follow them into the vertex: no overlap there
+  const onTail = (k: number): boolean => c.segs.some((seg) => seg.merge && segmentsOverlap(points[k]!, points[k + 1]!, seg.a, seg.b));
+  let tail = points.length - 1;
+  while (tail > 0 && onTail(tail - 1)) tail--;
   for (let i = 0; i + 1 < points.length; i++) {
     const a = points[i]!, b = points[i + 1]!;
     for (const box of boxes) if (segmentHitsBox(a, b, box)) hits++;
     for (const seg of c.segs) {
       if (segmentsCross(a, b, seg.a, seg.b)) penalty += CROSS;
-      else if (segmentsOverlap(a, b, seg.a, seg.b)) penalty += OVERLAP;
+      else if ((!seg.merge || i < tail) && segmentsOverlap(a, b, seg.a, seg.b)) penalty += OVERLAP;
     }
   }
   return { hits, penalty };

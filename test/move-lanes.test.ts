@@ -36,8 +36,11 @@ const inside = (inner: Box, outer: Box): boolean => inner.y >= outer.y && inner.
  * Check claim -> Goodwill? -> (no) Reject -> Rejected, and a sub-process
  * Prepare (Collect documents inside) after Check claim; Accounting: (yes)
  * Refund -> Book refund (Archive) -> Refunded; Archive: Note (unconnected).
+ * The engine draws Reject on Goodwill?'s row (its happy path runs on in
+ * Accounting). `reminder`: a timer path on Reject in Clerk (Late -> Remind ->
+ * Reminded), on a row below it.
  */
-async function claims(): Promise<string> {
+async function claims(reminder = false): Promise<string> {
   const r = await applyToXml((await newXml({ processName: 'Claims' })).xml, [
     { op: 'add', kind: 'participant', name: 'Claims' },
     { op: 'add', kind: 'lane', name: 'Clerk', in: 'Participant_Claims', as: '$clerk' },
@@ -56,6 +59,13 @@ async function claims(): Promise<string> {
     { op: 'add', kind: 'serviceTask', name: 'Book refund', after: '$refund', lane: '$arc', as: '$book' },
     { op: 'add', kind: 'end', name: 'Refunded', after: '$book' },
     { op: 'add', kind: 'task', name: 'Note', lane: '$arc', in: 'Process_Claims' },
+    ...(reminder
+      ? [
+          { op: 'add', kind: 'boundaryEvent:timer', name: 'Late', on: '$reject', timer: 'P1D', nonInterrupting: true, as: '$late' },
+          { op: 'add', kind: 'sendTask', name: 'Remind', after: '$late', lane: '$clerk', as: '$remind' },
+          { op: 'add', kind: 'end', name: 'Reminded', after: '$remind' },
+        ]
+      : []),
   ]);
   return r.xml;
 }
@@ -113,7 +123,8 @@ describe('move into a flow between two lanes (audit #14 for move)', () => {
   });
 
   it('a node that keeps the branching anchor\'s lane goes on a row of that lane: the lane never stretches over to the target\'s row (move and add --lane)', async () => {
-    const xml = await claims();
+    // the reminder path keeps a row in Clerk below Goodwill?'s, free in the column the node goes to
+    const xml = await claims(true);
     const before = { clerk: bounds(xml, 'Lane_Clerk'), acc: bounds(xml, 'Lane_Accounting') };
     const moved = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CheckClaim'], flow: 'Flow_GoodwillToRefund' }], { layout: 'incremental' });
     const added = await applyToXml(xml, [{ op: 'add', kind: 'task', id: 'Activity_Log', name: 'Log', flow: 'Flow_GoodwillToRefund', lane: 'Lane_Clerk' }], { layout: 'incremental' });

@@ -9,16 +9,31 @@
  *    border it sits on, message flows leave / enter vertically). A gateway
  *    end docks on a vertex of the diamond (the middle of a side), preferably
  *    one no other connection of the gateway uses (a split's branches: one per
- *    vertex, a join's entries likewise): a taken vertex costs the router 100
- *    extra, so it is shared only when every free one costs more than that
- *    (a detour with a further bend and a crossing does; one crossing instead
- *    of running on top of the other connection does not). Connections count
- *    as using a vertex when they are among
- *    `lines` (connections waiting to be routed again are left out of `lines`
- *    by the caller). Explicit `sourceSides` / `targetSides` are taken as they
- *    are. Obstacles are
- *    the leaf shapes and the expanded sub-processes that hold neither end;
- *    message flows also avoid foreign pools. The frame is the common lane,
+ *    vertex): a taken vertex costs the router 100 extra, so it is shared only
+ *    when every free one costs more than that (a detour with a further bend
+ *    and a crossing does; one crossing instead of running on top of the
+ *    other connection does not). A join's entries are the exception on its
+ *    top and bottom vertex: for a sequence flow into a gateway, another
+ *    incoming connection there does not take the vertex, and running on the
+ *    common tail of the entries into that vertex (back to where they part, a
+ *    single entry's last run with a short hook and the run before it) costs
+ *    no overlap when the flow follows it into the vertex (the router's
+ *    `targetMerge`; crossing it still costs), so entries from below join the
+ *    bundle and share the bottom vertex as bpmn-js draws them. A route
+ *    touches its target gateway only at its own vertex (router.ts). An
+ *    outgoing connection takes any vertex, an incoming one the left or right
+ *    vertex (sharing it would merge onto its line). Sharing never costs a
+ *    further crossing: when another entry docks on the top / bottom vertex,
+ *    the flow is also routed as if every connection took its vertex (no
+ *    `targetMerge`), and the shared route is kept only when it crosses no
+ *    more of `lines` than that one. Connections count as using a vertex
+ *    when they are among `lines` (connections waiting to be routed again are
+ *    left out of `lines` by the caller). Explicit `sourceSides` /
+ *    `targetSides` are taken as they are (the shared top / bottom vertex of
+ *    a join still costs no overlap, under the same crossing rule). Obstacles
+ *    are the leaf shapes and the expanded
+ *    sub-processes that hold neither end; message flows also avoid foreign
+ *    pools. The frame is the common lane,
  *    else the common expanded sub-process, else the common pool. Associations
  *    and data associations are a straight line when that cuts nothing, else
  *    routed. An association docked on a flow ends at the nearest point of
@@ -45,7 +60,7 @@
  *    docked on a connection never is. The metric `detachedEdge`
  *    (metrics.ts) applies the same rule.
  */
-import { attachedSide, defaultSides, routeOrthogonal, type Side } from './router.js';
+import { attachedSide, crossings, defaultSides, routeOrthogonal, type RouteRequest, type Side } from './router.js';
 import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './geom.js';
 import { isLeaf, type DEdge, type DShape, type Plane } from './plane.js';
 
@@ -95,16 +110,31 @@ export function gatewaySide(b: Box, p: Point): Side {
   return dy > 0 ? 'bottom' : 'top';
 }
 
-/** Sides of a gateway other settled connections (among `lines`) dock on. */
-function usedSides(plane: Plane, e: DEdge, g: DShape, lines: readonly Point[][]): Set<Side> {
+/** A vertex of a gateway another connection docks on; `out`: it leaves the gateway there. */
+interface GatewayEnd {
+  side: Side;
+  out: boolean;
+}
+
+/** The vertices of a gateway other settled connections (among `lines`) dock on. */
+function gatewayEnds(plane: Plane, e: DEdge, g: DShape, lines: readonly Point[][]): GatewayEnd[] {
   const settled = new Set(lines);
-  const out = new Set<Side>();
+  const ends: GatewayEnd[] = [];
   for (const o of plane.edges.values()) {
     if (o === e || o.points.length < 2 || !settled.has(o.points)) continue;
-    if (o.sourceId === g.id) out.add(gatewaySide(g.bounds, o.points[0]!));
-    if (o.targetId === g.id) out.add(gatewaySide(g.bounds, o.points[o.points.length - 1]!));
+    if (o.sourceId === g.id) ends.push({ side: gatewaySide(g.bounds, o.points[0]!), out: true });
+    if (o.targetId === g.id) ends.push({ side: gatewaySide(g.bounds, o.points[o.points.length - 1]!), out: false });
   }
-  return out;
+  return ends;
+}
+
+/**
+ * The taken vertices among `ends`: every one, or with `shareEntries` (a join's
+ * entry) all but a top or bottom vertex only incoming connections use
+ * (sharing a left / right one would merge onto the other entry's line).
+ */
+function takenSides(ends: readonly GatewayEnd[], shareEntries: boolean): Side[] {
+  return [...new Set(ends.filter((x) => x.out || !shareEntries || x.side === 'left' || x.side === 'right').map((x) => x.side))];
 }
 
 function messageSides(from: Box, to: Box): Side[] {
@@ -277,25 +307,27 @@ export function routeEdge(plane: Plane, e: DEdge, opts: RouteOptions): Point[] |
   const frame = message ? undefined : commonFrame(plane, s, t);
   const sourceSides = opts.sourceSides ?? (message ? messageSides(s.bounds, t.bounds) : sidesFor(plane, s, 'source'));
   const targetSides = opts.targetSides ?? (message ? messageSides(t.bounds, s.bounds) : sidesFor(plane, t, 'target'));
-  // a gateway docks on its vertices, one connection per vertex while a vertex is free
-  const gateway = (g: DShape, given: Side[] | undefined): { middle: boolean; avoid?: Side[] } =>
-    g.kind !== 'gateway' ? { middle: false } : { middle: true, ...(given || message ? {} : { avoid: [...usedSides(plane, e, g, opts.lines)] }) };
-  const sg = gateway(s, opts.sourceSides);
-  const tg = gateway(t, opts.targetSides);
-  const pts = routeOrthogonal({
+  // a gateway docks on its vertices, one connection per vertex while a vertex is free (explicit sides are taken as they are)
+  const ends = (g: DShape): GatewayEnd[] => (g.kind === 'gateway' && !message ? gatewayEnds(plane, e, g, opts.lines) : []);
+  const targetEnds = ends(t);
+  const taken = (shareEntries: boolean): Side[] => (opts.targetSides ? [] : takenSides(targetEnds, shareEntries));
+  const request: RouteRequest = {
     source: s.bounds,
     target: t.bounds,
     sourceSides,
     targetSides,
     obstacles,
     lines: opts.lines,
-    sourceMiddle: sg.middle,
-    targetMiddle: tg.middle,
-    ...(sg.avoid ? { sourceAvoid: sg.avoid } : {}),
-    ...(tg.avoid ? { targetAvoid: tg.avoid } : {}),
+    sourceMiddle: s.kind === 'gateway',
+    targetMiddle: t.kind === 'gateway',
+    sourceAvoid: opts.sourceSides ? [] : takenSides(ends(s), false),
     ...(frame ? { frame } : {}),
-  });
-  return roundPoints(pts);
+  };
+  const pts = routeOrthogonal({ ...request, targetAvoid: taken(false) });
+  // a join's entries share its top / bottom vertex (following the other entries' common tail into it is no overlap), never at the price of a further crossing
+  if (!targetEnds.some((x) => !x.out && (x.side === 'top' || x.side === 'bottom'))) return roundPoints(pts);
+  const merged = routeOrthogonal({ ...request, targetMerge: true, targetAvoid: taken(true) });
+  return roundPoints(crossings(merged, opts.lines) <= crossings(pts, opts.lines) ? merged : pts);
 }
 
 /**

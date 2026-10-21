@@ -1,4 +1,4 @@
-# Handover, 2026-10-13 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, the stale edges of flows whose ends changed, `outAs`, the alias of the flow a splice creates, and the follow-ups of the id conventions: the conventions line, the stale-prefix hint, the process ids of new pools, declared DI prefixes)
+# Handover, 2026-10-20 (after step 1 of the audit fixes, the Camunda 7 step and its follow-ups, step 2: bpmn-cli as design-iq's editing engine, step 3 round 1 with its fixes and follow-ups: views, speaking ids, layout ergonomics, Camunda 8, stages 1 to 3 of `bpmn render` with the fixes after its verification (#12), the profile rules loaded on demand (#13), stages A and B of the incremental layout of edits to hand-drawn models (#18), the removal of the design profile (#35), ids up to 64 characters cut at whole words (#31), flow ids kept on request (#32), the project's bpmnlint configuration (#33), the id conventions of its element-id-naming (#34), @miragon/bpmnlint-plugin-rules 0.12.1, decision links in the file's spelling (#42), the E_VALIDATION advice that reads the refusal, flows that follow every end change, an alias through a retype with a typed split's input checked, the move fixes after #32, the note when BPMN_KEEP_FLOW_IDS kept the flow ids, a write's count of what bpmnlint leaves out, the .bpmnlintrc reloaded after later installs and found through linked directories, group boxes drawn again by a full redraw, the id forms fixed before 0.7, a file's flow form that stays put, DI ids within 64 characters that follow `set id=`, the stale edges of flows whose ends changed, `outAs`, the alias of the flow a splice creates, and the follow-ups of the id conventions: the conventions line, the stale-prefix hint, the process ids of new pools, declared DI prefixes, a join's entries from below sharing its bottom vertex, and labels kept off the titles of expanded sub-processes)
 
 State of `bpmn-cli` and what to do next. Everything below is verified against
 the code in this repository, not from memory.
@@ -42,9 +42,9 @@ was copied, the concepts were re-implemented here.
 
 ```
 npm install && npm run build
-npm run gate            # build, 2211 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
+npm run gate            # build, 2317 tests (+246 opt-in engine tests), isomorphism check with bundle budgets, layout-regression budget, short fuzz campaign
 npm run typecheck
-node tools/layout-regress.mjs   # FILES 115 SCORE 444 (budget in tools/bench/regress-budget.json)
+node tools/layout-regress.mjs   # FILES 115 SCORE 370 (budget in tools/bench/regress-budget.json)
 node bin/bpmn.js guide --short  # the cheat sheet an agent reads first (`guide` for all of it, `guide <topic>` for one section)
 ```
 
@@ -52,6 +52,351 @@ An audit in October 2026 (eight streams, about 60,000 mutations) confirmed 77
 bugs; [docs/audit-2026-10.md](docs/audit-2026-10.md) has the table with the
 current status of each, and [docs/testing.md](docs/testing.md) how to run every
 test layer, the benchmark and the fuzzer.
+
+## A join's entries share its bottom vertex; labels keep off sub-process titles (2026-10-20)
+
+Two layout requests of the maintainer: "In Joining Gateways dürfen Pfeile auch
+von unten reingehen" (in a gateway that merges flows, of any kind, flows may
+enter from below) and "Bei Event Subprozessen überlappen manchmal
+Beschriftungen mit Elementen" (labels in event sub-processes overlap
+elements; the screenshot showed a compensation event's label on the
+sub-process's name). Three review rounds (reviewers, each finding checked
+by a skeptic) found 16, 12 and 7 problems (the last only low ones); they
+are fixed below or listed as open, the doc statements made exact.
+
+- **A join's entries from below share its bottom vertex** (from above: its
+  top vertex), for every gateway kind, as bpmn-js draws them (`h:v`).
+  - Metric (`metrics.ts` `runs`, `joinTail`, `checkSegmentOverlaps`): the
+    common tail of two flows into one gateway that end on the same bottom /
+    top vertex on a vertical last run is no `segmentOverlap`; the rest of
+    their overlap still counts, and so do a merge onto a line into the left
+    / right vertex, two flows on one line from start to end (also with a
+    duplicate first waypoint), shared last runs into tasks and events, and
+    `inOut` against an outgoing flow on the same vertex. `locate` puts the
+    badge of a pair still reported on the counted run. On the engine's 115
+    scenario drawings: segmentOverlap into gateways 50 -> 3 (the 3 left are
+    merges into a left vertex).
+  - Incremental router (`router.ts` `targetMerge`, `crossings`;
+    `reroute.ts` `gatewayEnds`, `takenSides`): a flow into a gateway is
+    routed as before (every docked connection takes its vertex); when
+    another entry docks on the top / bottom vertex it is routed once more
+    with that vertex shared and no overlap cost on the other entries' last
+    vertical run, and that route is kept only when it crosses no more lines
+    (the first version traded a crossing for the shared vertex:
+    controlflow__s24 / s20 adds). Before, a second entry paid AVOID +
+    OVERLAP (about 400) and went over the top, into the left vertex across
+    the other entry, or merged onto a line; the docs/layout.md example now
+    gives `score 6 -> 0` without a `route`.
+  - Full engine (`layout/route.ts` `used()` with `out`, `offDiamond`): a
+    loop into a gateway pays the "used" penalty only when an outgoing flow
+    uses the point, so a second loop into a merge, or a loop into a join
+    with a forward rise, rises into the shared bottom vertex; not when the
+    loop would leave its gateway beside the diamond to get there (the first
+    version did: off-diamond gateway ends on 200 random models went 36 ->
+    53, now 33; a loop still prefers a vertex, it is not forced). A gateway
+    label above a loop leaving through its top keeps left of the vertex
+    line as bpmn-js wraps it.
+  - Bench (764 incremental edits): measured with the 0.7 metric as the
+    baseline, segmentOverlap -281 (the metric alone); with one metric for
+    both, the routing changes 4 runs (crossings -1 each); no run worse.
+- **Labels keep off the titles of expanded sub-processes** (event
+  sub-processes, transactions, ad-hoc included).
+  - One title geometry (`diagram/text.ts` `titleBox` / `titleDepth`: 12 px,
+    padding 7, wrapped at width - 14, 14.4 px a line, centred) for render,
+    the engine, the incremental layout and the metrics.
+  - Full engine: `declutterLabels` treats titles as obstacles and, inside
+    an expanded sub-process, tries a free spot below the title first, then
+    one beside it, the spots next to the shape before the stepped ones;
+    `frameSubProcess` (`layout/place.ts`, `childPad`) sizes a sub-process
+    for its content's labels at their default spots (events, gateways,
+    flows, data objects and stores, a data label that would overlap another
+    at the spot declutter moves it to; overhang past padding - 6) and for
+    its title's lines and the
+    labels above its first row; `labelGapFor` keeps labels on the same side
+    of neighbours in one row 4 px apart (the DI estimate is wide, so their
+    boxes touched and one label jumped onto the title). Loop channels run
+    below the default labels of the events they pass (a loop under a timer
+    pushed its label out of the frame), a loop inside a lane keeps 15 px
+    from its borders and its label inside the lane, above or below its run
+    (`engine.ts` `fitLaneLoops` grows the lane, cutting at the lane's own top so the
+    lanes before it never move, and moves the lane's own flows with their
+    labels; before, a loop could run on the lane divider; the first version
+    of this cut at the loop channel and detached a flow of the lane above;
+    a label that starts on a lane's bottom border belongs to the lane below,
+    so it no longer pushes the lane's event sub-processes down),
+    and a same-row flow uses one y for
+    both ends (sub-process heights of either parity gave 1 px diagonals).
+    This answers the open item of step 3 round 1 ("a label left of a
+    sub-process's content can stick out of it").
+  - Incremental: titles are label obstacles and a label tries spots inside
+    its frame's content area first, then inside its home (sub-process or
+    pool; shifted spots of each side before a centred spot outside), then
+    anywhere (`labels.ts` `labelArea`, `homeOf`, `firstFree`); `fitInFrame`
+    grows a frame around a new shape's label; a new node keeps its label
+    clear of its neighbours' (`place.ts` `labelRoom`); `frameInterior`
+    keeps room for the title; a new gateway at the top of a sub-process and
+    `label --side above` make room below the title (`space.ts`
+    `roomBelowTitle`; the `label` op notes it); a renamed sub-process whose title gains
+    lines and now reaches what is drawn inside it makes room by at most the
+    lines it gained (`incremental.ts` `growForTitle`, `oldTitle`; the first
+    version counted a message flow's label above the sub-process and grew
+    it by 100+ px on every rename), and `compact` keeps that room; a label
+    that making room or a wider name brought onto a sub-process's centred
+    title is placed again inside the sub-process, or stays when no spot
+    there is free (`labels.ts` `clearTitles`, after the incremental layout
+    and every geometric format op; a label already on a title stays).
+  - New soft metric kind `labelOnTitle` (weight 2, not a harness kind):
+    a label on the title of a named expanded sub-process.
+- **Harness**: SCORE 444 -> 443 (controlflow__s20: a gateway label off a
+  loop), budget lowered to 443. A full redraw changes 16 of the 115
+  scenarios: agent__inc and its six variants (a long loop 12 px lower,
+  below an event's label; in agent__inc.i1 two loops, and its "retry"
+  label moves onto the loop's channel), agent__o2c / .e6 (a gateway label 3 px left),
+  artifacts__04 / 04b (the sub-process 10 px taller for the data store's
+  two-line label, which goes below its store), artifacts__14 / 14b (a
+  sub-process 1 px taller), controlflow__s19 (the end event 15 px right,
+  its 7-line label below it instead of above), controlflow__s20 and
+  subproc__s05 (a sub-process 2 px wider); every other per-file score is
+  unchanged.
+
+Evidence: gate 2264 tests + 246 opt-in, layout regression 443 (budget 443),
+fuzz 12 x 15 0 / 0, edit bench no regression; the bundle grew by 10 KB
+minified (whole entry 978.1 / 312.8 KB, `applyToXml` 694.8 / 222.5 KB;
+budgets 979 / 313 and 695 / 223). Differential runs
+against 0.7 (105 generated models, 1431 chained edit steps, identical
+ops; the build the third review round checked): no crash, refusal or model
+difference; summed over all steps labelOnTitle 325 -> 0, labelOutsideFrame
+616 -> 55, labelOnLine 513 -> 440, crossings 910 -> 853. Private corpora
+were not measured.
+
+Still open: ops.ts `settle()` reroutes broken flows with the stale lines of
+those it reroutes later (incremental.ts `routeAll` leaves them out); place.ts
+`connectionCost` does not trial-route a new chain's last flow into its join;
+a split still takes one vertex per branch (the mirror of the join rule); the
+engine's join with a down exit keeps `inOut` (agent__o2c); an empty branch's
+reserved band can lie on a lane border (only loops grow lanes); pool and lane
+header bands are no label obstacles yet (a start label can reach into a lane
+header) and lanes are not sized for bottom-row labels; `labelOutsideFrame`
+still measures the DI estimate, not the drawn text; a sub-process's title
+over its content in a file from another tool is not reported; `label --side
+below/left/right` at a frame border can still step the label out of the
+frame; a rename that keeps the line count but widens the title does not move
+a task drawn by hand in the title row; an event label displaced by a data
+object below it, under a title spanning the whole width, still steps below
+and pushes the data label out (no room is reserved for it); a label for which
+no spot inside its frame is free still goes outside (incremental: the frame
+does not grow for it), and the incremental placer takes a free spot inside
+the frame however far out (up to two label heights, beside other elements)
+before a near one outside it, so in a tight first row a new chain's labels
+can crowd each other (one landing on a data object) or block a crossing
+repair; a shifted spot 6 px beside a gateway's own line can count as
+`labelOnLine` where it replaced a label outside the frame; lane Two's
+over-the-top channel can sit higher than
+needed when lane One's loop runs on the divider (`rangeTop`'s band test is
+inclusive).
+
+### Follow-ups from a demo model (2026-10-20)
+
+The maintainer looked at a large demo (an order process in three lanes:
+exclusive merge with a loop, parallel and inclusive split / join, a timer
+boundary path, an event sub-process) and asked for four more things; each
+was implemented, reviewed by reviewers with a skeptic per finding, and its
+review findings fixed.
+
+- **A new entry follows the shared way into a join** (incremental router,
+  `router.ts` `runsOf`, merge tails, a third A* run state): with
+  `targetMerge` the whole common tail of the other entries into the top /
+  bottom vertex is shared (each entry's last run, a short hook with the
+  run before it, and every run back to where it parts from another entry,
+  as `metrics.ts` `joinTail` defines it), its runs are grid lines, and
+  running on it is free only when the route follows it into the vertex
+  (leaving it costs the overlap); every grid edge inside a tail counts,
+  a 1 px one too. A route touches its target gateway at no other vertex
+  than its port (`guardVertices`; sources are not guarded). Before, a new
+  branch into the demo's hooked join rose beside the bundle and ran along
+  the diamond's bottom edge through the vertex into the left vertex.
+- **A join's flow to a target below leaves through its right vertex**
+  (`layout/route.ts` `joinFromBelow`): a gateway with two or more forward
+  entries, one rising into its bottom vertex, sends its flows to targets
+  below right, down, right (15 px right of the vertex, else mid-gap, else
+  the old drop); a split with one entry keeps its bottom drops. Harness
+  inOut 17 -> 0, SCORE 443 -> 392 (budget lowered).
+- **An empty branch is drawn straight when its row is free**
+  (`route.ts` `openRow`, `lineFree`): in a laned scope the other branches
+  can run in other lanes; the empty one then runs from the split's right
+  vertex into the join's left vertex when nothing lies on that row and it
+  crosses no more lines than the band; an unused band leaves no strip.
+- **A join's entries rise straight with the join exactly above**
+  (`layout/place.ts` `freeJoinColumns`, `columnTaken`, `gridScope`;
+  `route.ts` `entriesFromBelow`, `routeFaults`): when a shape or label lies
+  in the column under a join between it and its entries from below (the
+  demo: the end of the timer path), the join moves right past it with
+  everything after it, up to 3 columns, kept only when more entries rise
+  straight and the scope gets no more crossings, flows through shapes or
+  through labels (trial routing). In laned scopes the trials keep the band
+  offset the earlier passes gave the empty branches and a rejected move
+  restores the arranged state; the trials measure only what can change, so
+  a model with 120 blocked joins lays out in about 1.2x the time without
+  the rule (the first version took 7x). Harness hooks into a join 7 -> 0,
+  every per-file score unchanged (5 drawings move a join a column);
+  120-model differential: hooks 37 -> 3, score 1449 -> 1384, none worse.
+
+Evidence: gate 2283 tests + 246 opt-in, layout regression 392 (budget 392),
+fuzz 12 x 15 0 / 0, edit bench no regression; a full redraw differs from 0.7
+in 28 of the 115 scenarios; bundle 985.7 / 315.7 KB (whole entry) and 702.4 /
+225.3 KB (`applyToXml`), budgets 986 / 316 and 703 / 226.
+
+Still open from these: a split with exactly one entry from below still drops
+its branches from the vertex that entry rises into (`inOut`); in a laned scope
+an empty branch's band, where its row is not free, keeps the y of the layout
+without lanes (it can lie on a lane border); 3 of 120 generated models keep a
+hook because moving the join would add a crossing; the incremental layout does
+not move a join (a new entry into a hand-drawn join whose column is taken
+follows the hook bundle); gateway sources are not guarded against routes
+through their other vertices, and no metric reports such a touch.
+
+**A boundary path into an upper lane leaves downwards and rises straight**
+(the maintainer's request on the demo's timer path: its line ran along the
+bottom border of the next task and hooked into "Kunden über Lieferverzug
+informieren", which sat in that task's column).
+
+- Router (`layout/route.ts` `runBelow`, `GEdge.runsBelow`): a boundary
+  event's flow to a target above leaves the event's bottom and runs at a
+  height that keeps RUN_CLEAR (15 px) from the shapes, node and flow labels
+  and earlier runs in its x range (just below the host's row, else below
+  everything between them in the host's lane), then rises straight into the
+  target's bottom (a free, unblocked bottom slot), else into its left side
+  from the column gap, else hooks in; the old side exits only when every
+  new way cuts a shape. These flows are routed after the other forward
+  flows (the lowest host first; of one row the rightmost event first, so its
+  run is the highest and no drop of an event left of it crosses it), a way
+  through a node's label spot or a flow label costs like a crossing, and the
+  scope (lane: `fitLaneLoops`; pool, expanded sub-process, process:
+  `layout.height`) grows to hold the run.
+- Placer (`place.ts` `freeJoinColumns`, `takenColumns`; `route.ts`
+  `risesInto`, `riseX`): the straight-rise rule of joins now covers every
+  node a forward flow enters from below; such a node (with what follows it)
+  moves right until its column is free, joins first, a node a move would
+  newly block pushed along; a move is kept when it gains a straight rise or
+  lowers crossings / cut shapes / labels run through, and adds nothing;
+  chains are chosen by the columns without moves, so the happy path stays.
+- Harness SCORE 392 -> 371 (budget 371): 5 drawings gain straight rises,
+  lanes__complaint-t1 15 -> 10 and t2 21 -> 11 lose crossings. A reviewer
+  corpus of 148 models (boundary events of every kind, all lane situations):
+  score 1974 -> 1244, crossings 237 -> 170, flows through shapes 79 -> 35;
+  45 better, 5 worse (r013 14 -> 25, r045 5 -> 10, r043 8 -> 12, m-3 10 -> 12,
+  x-9 0 -> 5: a run that kept 3 px from an empty branch's line now keeps 15 px
+  and crosses it).
+
+Evidence: gate 2297 tests + 246 opt-in, layout regression 371, fuzz 12 x 15
+0 / 0, edit benches no regression; a full redraw differs from 0.7 in 36 of the
+115 scenarios; bundle 991.1 / 318.0 KB and 707.8 / 227.7 KB, budgets 992 / 319
+and 708 / 228. The fix round after review was stopped before its own
+independent verification; the integrator verified it (gate, the review
+repros, the corpus above, timings, the demo).
+
+Still open from this: the 5 models above; a laned model with 120 moved
+handlers lays out in about 2x the time without the rule (gate models
+unchanged); a host's second data object under the boundary event blocks the
+way down (the old side exit stays); the incremental layout neither routes
+boundary paths this way nor moves a handler; drawings get wider where nodes
+move (54 of 200 generated models, 193 px on average); the runs keep clear of
+the labels' default spots only, so declutter can still move a sibling
+boundary label onto a run (review finding 8, not fixed).
+
+### A way over the top, a branch on its split's row (2026-10-20, after PR #72 was opened)
+
+The maintainer, looking at the reviewer model r013 (a timer on the first task
+of lane 0 leading to its last task; a parallel split whose happy path runs on
+in lane 2): "the way over the top would have had fewer crossings" and "why is
+Notify data not on the straight line: both arrows leave the AND gateway
+downwards".
+
+- **Ways over the top** (`layout/route.ts`, `runAbove`, `GEdge.runsAbove`):
+  where host and target share a lane (or there are no lanes), a boundary
+  event's flow to a target above may leave the event downwards, take a short
+  stub to the column gap after (or before) its host, rise past the host's row
+  to a run 15 px above everything in its x range and enter the target's top
+  (or its left side from the gap before it). Scored with the same faults as
+  the ways below, a small penalty above them, and taken only when it crosses
+  fewer lines than the best way below crosses plus cuts; the run is a top
+  channel later loops keep off; lanes grow for it (`fitLaneLoops`), and
+  `freeJoinColumns` does not move a node for an entry it gets from above.
+  r013 25 -> 10.
+- **A branch on its split's row** (`layout/place.ts` `liftChains`, in
+  `engine.ts` `applyLanes` after `freeJoinColumns`): in a laned scope a node
+  entered from a node of its own lane on a row above moves up onto that row,
+  with the nodes after it in its row and lane, where nothing of the lane lies
+  or runs in their cells (the happy path's line past the columns its nodes in
+  other lanes leave empty included); kept only when the flow into it is then
+  one segment on no other flow's line, more flows are straight, none bends
+  more and nothing gets worse (trial routing, `routesOf`, exact rollback); a
+  row left empty closes. Without lanes nothing moves. Harness 371 -> 370
+  (subproc__s13: a parallel run gone); 7 scenario drawings change.
+
+Evidence: gate 2310 tests + 246 opt-in, layout regression 370 (budget 370),
+fuzz 12 x 15 0 / 0, edit benches (incremental, auto) no regression; 740
+generated models (the reviewer corpus and both implementers' corpora) against
+PR #72's first commit: 36 better, 0 worse (crossings e.g. 186 -> 128 on 120
+models of r013's kind); timings within 1.13x on 60 / 120-split models; a full
+redraw differs from 0.7 in 39 of 115 scenarios; bundle 996.6 / 320.0 KB and
+713.3 / 229.8 KB, budgets 997 / 321 and 714 / 230. Verified by the integrator
+(no separate review round).
+
+Still open: ways over the top only within one lane; loops and compensation
+links routed after the boundary flows are not seen by their scoring; the
+lift tries only a node's first qualifying incoming flow and gives up gains
+where the flow would share the split's right vertex with a blocked drop
+(p041, p047); trials measure routes before `fitLaneLoops` and message flows;
+the plugin's recipes model (skills/bpmn/reference/formatting.md) now shows a
+`labelOnLine` after its incremental review batch (the incremental router
+reroutes a message flow through a label), and its "place a branch" step
+needs a `space` first; a shortened message flow's envelope can sit on a pool
+border; the incremental layout lifts nothing and draws no way over the top.
+
+### A boundary event on its host's top border (2026-10-21)
+
+The maintainer, on r013's way over the top (it left the event downwards and
+rose through the gap before the host, crossing Start -> Pick invoice): "the
+boundary event would have fitted better on top when the flow runs along the
+top".
+
+- `layout/place.ts` `boundariesOnTop` (after `freeJoinColumns`, in laned
+  scopes after `liftChains`): a boundary event whose flows all go forward to
+  targets above it in its host's lane (or without lanes) is tried on its
+  host's top border (`GNode.onTop`, `placeBoundaryEvents`: from the right end
+  of the border, the nearer target's event rightmost; never on an expanded
+  sub-process's title), its label to the upper right (`labelLeft`: upper
+  left). The router (`route.ts`, shared `overEnds` / `overWay`) takes the
+  flow straight up to `runAbove`, along and down into the target's top (or
+  its left side). Kept by trial routing (flows, compensation links, data
+  associations) only when every flow of the event leaves upwards, its label
+  is clear, no straight rise or one-segment flow of another flow is lost and
+  the faults drop, or stay with a shorter way and fewer bends; else rolled
+  back exactly. Not tried: compensation events, events with data or notes,
+  message-flow ends. Labels of top events are obstacles for runs, loops and
+  notes; message legs going up jog above them.
+- A boundary event's last-resort channel to a target below in its own lane is
+  a run its lane holds (`runsBelow`); to a target in another lane it is not
+  (the integrator's fix: marking those too made the host's lane grow while the
+  flow stayed, a `detachedEdge` in 3 of 420 laned models).
+- The incremental layout needed no change: `attachedSide` sends a top-border
+  event's flow out of its top, labels.ts already labels it upper right.
+
+Evidence: gate 2317 tests + 246 opt-in, layout regression 370 (all 115
+drawings identical), fuzz 12 x 15 0 / 0, edit benches (incremental, auto) no
+regression; 988 generated models against the previous PR commit: 93 better,
+0 worse (corpus of r013's kind: crossings 128 -> 73, score 789 -> 469), 104
+events on a top border; r013 10 -> 5; timings within 1.08x; bundle 1001.6 /
+321.8 KB and 718.3 / 231.6 KB, budgets 1002 / 322 and 719 / 232. Verified by
+the integrator.
+
+Still open: only events whose way goes over the top move (a target in another
+lane keeps the way below); the host's row keeps its room below when all its
+events moved up; on a 100 px task the second top event covers the task's type
+icon, and three or more rarely pass the clear-label check; trials do not see
+message flows or lane growth; a message flow into the host's top docks about
+7 px from a top event.
 
 ## Follow-ups of the id conventions (2026-10-13, `fix/conventions-followups`, follow-ups of #34)
 

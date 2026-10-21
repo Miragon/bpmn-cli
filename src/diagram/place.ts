@@ -22,7 +22,9 @@
  *     after a node spliced before S in this run, when S still follows N
  *     through new nodes, branches included: a decision with a new "no"
  *     branch or a `split` in the chain keeps the splice; a join re-placed by
- *     incremental.ts pullJoins, before its successor): x = P.right + gap, centred on
+ *     incremental.ts pullJoins, before its successor): x = P.right + gap (more
+ *     where P's label and N's on one side, below or above, would come closer
+ *     than 4 px; the same between N and S), centred on
  *     S's row when S is in P's row band (or P is a branching node: another
  *     branch of P is drawn, or was drawn before the ops and leads to a node
  *     a later op of the batch spliced into it), else on P's row; S's row in
@@ -88,7 +90,9 @@
  *  Sizes follow the drawing (median size of shapes of the same kind on the
  *  plane), else the engine's SIZES. Every placed shape is moved inside its
  *  frame's interior at the top / left and fitted into it at the right /
- *  bottom (frames grow, see space.ts fitInFrame).
+ *  bottom with its label (frames grow, see space.ts fitInFrame); a new
+ *  gateway at the top of an expanded sub-process gets room below the title
+ *  for its label above it (space.ts roomBelowTitle).
  *
  *  changeLane(ctx, id) moves an existing node into its (new) lane: same x,
  *  the free row of the target lane band preferred for its neighbours, else a
@@ -103,10 +107,11 @@ import { annotationSize } from '../layout/place.js';
 import { SIZES } from '../layout/types.js';
 import { is, type El } from '../model.js';
 import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, type Box, type Point } from './geom.js';
+import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf, labelSizeOf } from './labels.js';
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { routingLines } from './reroute.js';
 import { attachedSide, defaultSides, routeOrthogonal, type ShapeKind } from './router.js';
-import { borderPad, fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
+import { borderPad, fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from './space.js';
 
 export interface Spacing {
   /** horizontal gap between connected neighbours */
@@ -350,6 +355,12 @@ function commit(ctx: PlaceCtx, plane: Plane, s: DShape): void {
   ctx.afterPlace?.(plane, s);
   const r = fitInFrame(plane, s.id, 15);
   r.moved.forEach((x) => ctx.moved.add(x));
+  // the label a new gateway gets above it: room below the title of its sub-process
+  const name = raw<string>(s.el, 'name')?.trim();
+  if (!reuse && name && frame?.kind === 'subProcess' && hasExternalLabel(s) && s.kind !== 'boundary' && defaultLabelSide(s.kind) === 'above') {
+    const room = roomBelowTitle(plane, frame, labelAt(s, labelSizeOf(name), 'above'), s.id);
+    if (room) recordSpace(ctx, room.res);
+  }
   if (!reuse && s.kind !== 'boundary') reattachBoundaries(ctx, plane, s);
 }
 
@@ -981,6 +992,36 @@ function localShift(plane: Plane, box: Box, line: number, obs: { boxes: Box[]; l
   return Math.ceil(need);
 }
 
+/** What a label above or below its shape reaches out beyond the shape's left and right edge. */
+interface LabelReach {
+  side: 'above' | 'below';
+  left: number;
+  right: number;
+}
+
+/** The reach of a drawn shape's label (undefined: none, or beside or on the shape). */
+function reachOf(s: DShape): LabelReach | undefined {
+  const side = labelSideOf(s);
+  if (!s.label || (side !== 'above' && side !== 'below')) return undefined;
+  return { side, left: s.bounds.x - s.label.x, right: right(s.label) - right(s.bounds) };
+}
+
+/** The reach of the label a new node of `size` gets on its default side (labels.ts; undefined: no name, no external label). */
+function newReach(ctx: PlaceCtx, id: string, size: { width: number; height: number }): LabelReach | undefined {
+  const el = ctx.sem.byId.get(id);
+  const kind = el ? shapeKind(el) : undefined;
+  const name = raw<string>(el, 'name')?.trim();
+  if (!kind || !name || kind === 'boundary' || !hasExternalLabel({ kind })) return undefined;
+  const side = defaultLabelSide(kind);
+  const over = (labelSizeOf(name).width - size.width) / 2;
+  return side === 'above' || side === 'below' ? { side, left: over, right: over } : undefined;
+}
+
+/** The gap two neighbours on a row need so that their labels on one side keep 4 px apart (0: other sides, or no label). */
+function labelRoom(a: LabelReach | undefined, b: LabelReach | undefined): number {
+  return a && b && a.side === b.side ? Math.ceil(Math.max(0, a.right) + Math.max(0, b.left) + 4) : 0;
+}
+
 function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pending: ReadonlySet<string>): void {
   const sp = spacing(ctx, plane);
   const size = sizeFor(ctx, plane, id);
@@ -1023,14 +1064,18 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     // S's row in another lane than the node's own (a node keeping or given the anchor's lane after a branching
     // anchor): the row follows the node's lane, which never stretches over to S's row (audit #14)
     const ownRow = !!S && onS && !!probe.laneId && S.laneId !== probe.laneId;
-    c = intoOwnLane(ctx, plane, probe, maxRight + sp.gap, c, size, S ? [Math.round(cy(S.bounds))] : [], ownRow ? undefined : main);
-    const x = maxRight + sp.gap;
+    // the labels of neighbours on one side (events below, gateways above) keep apart: the gaps grow for them
+    const reach = newReach(ctx, id, size);
+    const gap = Math.max(sp.gap, labelRoom(reachOf(main), reach));
+    const sGap = S ? labelRoom(reach, reachOf(S)) : 0;
+    c = intoOwnLane(ctx, plane, probe, maxRight + gap, c, size, S ? [Math.round(cy(S.bounds))] : [], ownRow ? undefined : main);
+    const x = maxRight + gap;
     const box = { x, y: c - size.height / 2, ...size };
     const blockers = obstacles(plane, frame, exclude);
-    const succRoom = !S || Math.abs(cy(S.bounds) - c) > size.height / 2 + S.bounds.height / 2 || S.bounds.x >= right(box) + Math.min(sp.gap, 40);
+    const succRoom = !S || Math.abs(cy(S.bounds) - c) > size.height / 2 + S.bounds.height / 2 || S.bounds.x >= right(box) + Math.max(Math.min(sp.gap, 40), sGap);
     if (!isFree(box, blockers) || !succRoom) {
-      const full = size.width + sp.gap;
-      const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, sp.gap) ?? full);
+      const full = size.width + gap + Math.max(sp.gap, sGap) - sp.gap;
+      const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, Math.max(sp.gap, sGap)) ?? full);
       recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
     if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);

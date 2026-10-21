@@ -43,8 +43,9 @@ bpmn render order-to-cash.bpmn --highlight Activity_SendInvoice,Activity_Receive
 ```
 
 ```text
-wrote .bpmn-render/order-to-cash.png  1382x865 px  ~1,525 image tokens  scale 1.00  plane Collaboration_OrderToCash
-problems: none
+wrote .bpmn-render/order-to-cash.png  1382x727 px  ~1,282 image tokens  scale 1.00  plane Collaboration_OrderToCash
+problems (numbered in the image):
+  1 labelOnLine [Flow_CustomerToReceivePayment, Flow_SendPaymentReminderToCustomer]
 ```
 
 - The `wrote` line gives the size and the cost: image tokens = width x height
@@ -136,11 +137,14 @@ bpmn compact order-to-cash.bpmn
 ## 5. Place a branch
 
 A typical request is "put the rejection branch below the main line". Read the
-rows first, then place the branch relative to a node of the main line (a
-dry run shows what moves):
+rows first: the rejection branch runs on the main line's row of Sales (the
+happy path goes on in Warehouse), and Sales has no row below it, so make room
+in the lane, then place the branch relative to a node of the main line (a dry
+run shows what moves):
 
 ```bash
 bpmn show order-to-cash.bpmn --layout
+bpmn space order-to-cash.bpmn --below Lane_Sales
 bpmn place order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --below Activity_CheckOrder --dry-run
 bpmn place order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --below Activity_CheckOrder
 bpmn show order-to-cash.bpmn --layout

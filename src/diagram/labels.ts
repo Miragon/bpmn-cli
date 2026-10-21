@@ -8,37 +8,60 @@
  *  - labelAt(shape, size, side, host?) is the label box on one side of a
  *    shape: below/above centred, left/right vertically centred; a boundary
  *    event's 'below' sits below the host border, right of the event.
+ *  - A label box collides with a shape, another label, a line (the borders
+ *    of pools, lanes and expanded sub-processes included) or the title of an
+ *    expanded sub-process (plane.ts titleOf; text.ts titleBox) closer than
+ *    2 px (1 px to a line). labelArea(frame) is where the label of a shape
+ *    in that frame goes first: the frame 2 px inside its border, below its
+ *    title. A label's home is where metrics.ts labelOutsideFrame wants it:
+ *    the expanded sub-process its owner lives in, else its pool (a flow's
+ *    when both its ends share it).
  *  - placeShapeLabel(plane, shape, prefer?) puts the label of an event,
  *    gateway, boundary event or data object on the first side that collides
- *    with no shape, label or line: `prefer` first, then the convention
- *    (events / data below, gateways above, boundary events outside the border
- *    they sit on: below-right of a bottom-border event, above a top-border
- *    one, beside a left / right one), then the other sides and further steps
- *    out, then (all of them taken, e.g. a gateway with a connection on every
- *    vertex) shifted along a side off the line there (labelOnSide). Returns
- *    the box (also stored on
- *    the shape); undefined when the element has no name or no external label.
+ *    with nothing: `prefer` first, then the convention (events / data
+ *    below, gateways above, boundary events outside the border they sit on:
+ *    below-right of a bottom-border event, above a top-border one, beside a
+ *    left / right one), then the other sides and further steps out, then
+ *    (all of them taken, e.g. a gateway with a connection on every vertex)
+ *    shifted along a side off the line there (labelOnSide), side by side.
+ *    Of the centred spots the first one inside the label area of the
+ *    shape's frame (plane.ts frameOf; not for a boundary event) wins, else
+ *    the first one inside its home (beside a title too; any without a
+ *    home); else of the shifted spots of each side in turn the same; else
+ *    the first free one anywhere, outside the home. Returns the box (also
+ *    stored on the shape); undefined when the element has no name or no
+ *    external label.
  *  - placeEdgeLabel(plane, edge) puts a flow label above the first
  *    horizontal segment long enough for it (near its start), else below it,
  *    else beside a vertical segment.
  *  - refitLabel(plane, owner) resizes the label after a rename, keeping the
  *    side it was on; it is re-placed when the new box collides.
+ *  - clearTitles(plane, wasClear) places again every named external label
+ *    (event, gateway, boundary event, data object / store, sequence or
+ *    message flow) that overlaps the title of an expanded sub-process while
+ *    wasClear(owner, subProcess) says it was clear of that title before
+ *    (the space tool moves a widened sub-process's centred title by half
+ *    the added width, a label beyond the line by all of it): a shape's on
+ *    the side it was on (placeShapeLabel), a flow's like placeEdgeLabel. A
+ *    label whose new spot is on a title too or outside its home stays where
+ *    it was. Returns the labels moved, as [owner id, sub-process id].
  *  - labelSideOf(shape) says on which side of its shape a label sits
  *    ('inside' when it overlaps the shape), edgeLabelSideOf(edge) the side of
  *    the nearest segment; defaultLabelSide(kind) is the convention above
  *    (events / data below, gateways above).
  *  - labelOnSide(plane, shape, side, size) is the label box on one requested
  *    side that collides with nothing: centred, else shifted along that side
- *    (off a line leaving the shape there), else stepped further out; the
- *    centred box when every variant collides.
+ *    (off a line leaving the shape there), else stepped further out, the
+ *    first of them inside the label area of the shape's frame first, then
+ *    inside its home; the centred box when every variant collides.
  *  - edgeLabelAt(edge, size, side) is the label box of a flow on one side:
  *    above / below the longest horizontal segment, left / right of the
  *    longest vertical one (undefined when the flow has none).
  */
 import { labelSize } from '../layout/types.js';
 import { is } from '../model.js';
-import { bottom, cx, cy, overlaps, right, segmentHits, type Box } from './geom.js';
-import { raw, type DEdge, type DShape, type Plane } from './plane.js';
+import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from './geom.js';
+import { frameOf, raw, titleOf, type DEdge, type DShape, type Plane } from './plane.js';
 import { attachedSide } from './router.js';
 
 export type LabelSide = 'above' | 'below' | 'left' | 'right';
@@ -90,6 +113,9 @@ function clutter(plane: Plane, ownerId: string, ignoreShapes: ReadonlySet<string
   for (const s of plane.shapes.values()) {
     if (!s.container && s.kind !== 'group' && !ignoreShapes.has(s.id)) shapes.push(s.bounds);
     if (s.label && s.id !== ownerId) labels.push(s.label);
+    // nor on the title of an expanded sub-process
+    const title = titleOf(s);
+    if (title) shapes.push(title);
     if (s.container) {
       // a label should not sit on the border of a pool, lane or sub-process
       const b = s.bounds;
@@ -109,6 +135,48 @@ function clutter(plane: Plane, ownerId: string, ignoreShapes: ReadonlySet<string
 
 function collides(b: Box, c: Clutter): boolean {
   return c.shapes.some((s) => overlaps(s, b, 2)) || c.labels.some((l) => overlaps(l, b, 2)) || c.segments.some(([p, q]) => segmentHits(p, q, b, 1));
+}
+
+/**
+ * Where a label of a shape inside `frame` goes first: the frame 2 px inside
+ * its border, below the title of an expanded sub-process.
+ */
+export function labelArea(frame: DShape): Box {
+  const b = frame.bounds;
+  const title = titleOf(frame);
+  const top = title ? bottom(title) + 2 : b.y + 2;
+  return { x: b.x + 2, y: top, width: Math.max(0, b.width - 4), height: Math.max(0, bottom(b) - 2 - top) };
+}
+
+/**
+ * The first candidate that collides with nothing: of each list in turn one
+ * inside the label area of the shape's frame, then one inside its home
+ * (homeOf: beside the title of a sub-process too; any without a home); then
+ * any of all lists, outside the home (a boundary event's hangs outside its
+ * host).
+ */
+function firstFree(plane: Plane, s: DShape, c: Clutter, ...lists: Array<readonly Box[]>): Box | undefined {
+  const frame = s.kind === 'boundary' ? undefined : frameOf(plane, s);
+  const home = frame ? homeOf(plane, s) : undefined;
+  const area = frame ? labelArea(frame) : undefined;
+  for (const cands of lists) {
+    const free = cands.filter((b) => !collides(b, c));
+    const win = (area ? free.find((b) => inside(b, area)) : undefined) ?? free.find((b) => !home || inside(b, home.bounds));
+    if (win) return win;
+  }
+  return lists.flat().find((b) => !collides(b, c));
+}
+
+/**
+ * The frame a label belongs in (metrics.ts labelOutsideFrame): the expanded
+ * sub-process a shape lives in, else its pool; a flow's when both its ends
+ * share it; undefined when there is none.
+ */
+function homeOf(plane: Plane, o: DShape | DEdge): DShape | undefined {
+  const of = (s: DShape | undefined): DShape | undefined => (s?.parentId ? plane.shapes.get(s.parentId) : undefined) ?? (s?.poolId ? plane.shapes.get(s.poolId) : undefined);
+  if ('bounds' in o) return of(o);
+  const source = of(o.sourceId ? plane.shapes.get(o.sourceId) : undefined);
+  return source && source === of(o.targetId ? plane.shapes.get(o.targetId) : undefined) ? source : undefined;
 }
 
 const ORDER: Record<string, LabelSide[]> = {
@@ -186,11 +254,8 @@ export function edgeLabelAt(e: Pick<DEdge, 'points'>, size: { width: number; hei
   return { x: Math.round(side === 'left' ? p.x - size.width - 6 : p.x + 6), y, ...size };
 }
 
-/** A label box on one requested side that collides with nothing, if possible (see module contract). */
-export function labelOnSide(plane: Plane, s: DShape, side: LabelSide, size: { width: number; height: number }): Box {
-  const host = s.hostId ? plane.shapes.get(s.hostId) : undefined;
-  const c = clutter(plane, s.id, new Set([s.id, ...(host ? [host.id] : [])]));
-  if (host) c.shapes.push(host.bounds);
+/** The label boxes on one side of a shape: centred, then shifted along that side (off a line leaving the shape there), at three steps out. */
+function sideSpots(s: DShape, side: LabelSide, size: { width: number; height: number }, host?: DShape): Box[] {
   const cands: Box[] = [];
   for (let step = 0; step < 3; step++) {
     const base = labelAt(s, size, side, host, step);
@@ -198,7 +263,16 @@ export function labelOnSide(plane: Plane, s: DShape, side: LabelSide, size: { wi
     if (side === 'below' || side === 'above') cands.push({ ...base, x: Math.round(cx(s.bounds) + 6) }, { ...base, x: Math.round(cx(s.bounds) - 6 - size.width) });
     else cands.push({ ...base, y: Math.round(cy(s.bounds) + 6) }, { ...base, y: Math.round(cy(s.bounds) - 6 - size.height) });
   }
-  return cands.find((b) => !collides(b, c)) ?? cands[0]!;
+  return cands;
+}
+
+/** A label box on one requested side that collides with nothing, if possible (see module contract). */
+export function labelOnSide(plane: Plane, s: DShape, side: LabelSide, size: { width: number; height: number }): Box {
+  const host = s.hostId ? plane.shapes.get(s.hostId) : undefined;
+  const c = clutter(plane, s.id, new Set([s.id, ...(host ? [host.id] : [])]));
+  if (host) c.shapes.push(host.bounds);
+  const cands = sideSpots(s, side, size, host);
+  return firstFree(plane, s, c, cands) ?? cands[0]!;
 }
 
 /**
@@ -250,23 +324,11 @@ export function placeShapeLabel(plane: Plane, s: DShape, prefer?: LabelSide): Bo
     for (const side of sides) cands.push(labelAt(s, size, side, host, step));
   }
   const first = cands[0];
-  for (const box of cands) {
-    if (!collides(box, c)) {
-      s.label = box;
-      return box;
-    }
-  }
-  // every side taken in its middle (a gateway with a connection on each vertex): beside a line on one side
-  if (s.kind !== 'boundary' || prefer) {
-    for (const side of sides) {
-      const box = labelOnSide(plane, s, side, size);
-      if (!collides(box, c)) {
-        s.label = box;
-        return box;
-      }
-    }
-  }
-  s.label = prefer ? labelAt(s, size, prefer, host) : first!;
+  // then shifted along a side, off a line there, side by side (every side taken in its middle: a gateway with a connection on each vertex); one of
+  // them inside the frame before a centred one outside
+  const shifted = s.kind !== 'boundary' || prefer ? sides.map((side) => sideSpots(s, side, size, host)) : [];
+  const free = firstFree(plane, s, c, cands, ...shifted);
+  s.label = free ?? (prefer ? labelAt(s, size, prefer, host) : first!);
   return s.label;
 }
 
@@ -305,6 +367,33 @@ export function placeEdgeLabel(plane: Plane, e: DEdge): Box | undefined {
   }
   e.label = cands.find((b) => !collides(b, c)) ?? cands[0]!;
   return e.label;
+}
+
+/** Places again the labels that came onto the title of an expanded sub-process (see module contract). */
+export function clearTitles(plane: Plane, wasClear: (owner: DShape | DEdge, sub: DShape) => boolean): Array<[string, string]> {
+  const titles: Array<[DShape, Box]> = [];
+  for (const s of plane.shapes.values()) {
+    const title = titleOf(s);
+    if (title) titles.push([s, title]);
+  }
+  if (!titles.length) return [];
+  const onTitle = (b: Box): DShape | undefined => titles.find(([, t]) => overlaps(b, t))?.[0];
+  const out: Array<[string, string]> = [];
+  for (const o of [...plane.shapes.values(), ...plane.edges.values()]) {
+    const old = o.label;
+    const sub = old && nameOf(o.el) ? onTitle(old) : undefined;
+    if (!old || !sub || !wasClear(o, sub)) continue;
+    if ('bounds' in o) {
+      if (!hasExternalLabel(o)) continue;
+      const host = o.hostId ? plane.shapes.get(o.hostId) : undefined;
+      const side = labelSideOf(o, host?.bounds);
+      placeShapeLabel(plane, o, side === 'inside' ? undefined : side);
+    } else placeEdgeLabel(plane, o);
+    const home = homeOf(plane, o);
+    if (o.label && !onTitle(o.label) && (!home || inside(o.label, home.bounds))) out.push([o.id, sub.id]);
+    else o.label = old;
+  }
+  return out;
 }
 
 /** Resizes a label after a rename keeping its side; re-placed when it then collides. */

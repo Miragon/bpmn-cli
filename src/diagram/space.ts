@@ -71,16 +71,26 @@
  *
  *  fitInFrame(plane, id, pad?) grows the frames around a shape inside-out
  *  (sub-process frames with `frame`, so they never grow over foreign shapes),
- *  until the shape keeps `pad` from their right and bottom borders, and stays
- *  10 px clear of the frame's own boundary events on those borders that face
- *  it (borderPad: half the event plus 10 px; audit #63).
+ *  until the shape keeps `pad` from their right and bottom borders and its
+ *  external label (a shape without one yet: the label on its default side,
+ *  labels.ts defaultLabelSide; not a boundary event's) LABEL_PAD (5 px), and
+ *  both stay 10 px clear of the frame's own boundary events on those borders
+ *  that face them (borderPad: half the event plus 10 px; audit #63).
  *  Above the shape itself, an ancestor that does not hold the centre of the
  *  frame inside it (a drawing with an event sub-process in another lane than
  *  its member lane) is skipped, never grown around it.
+ *
+ *  roomBelowTitle(plane, sub, label, anchor) makes room for a label above a
+ *  shape in the expanded sub-process `sub`, below its title: when `label`
+ *  starts above the label area (labels.ts labelArea), everything in `sub`
+ *  moves down by the difference and `sub` grows (makeSpace at its top in
+ *  frame mode, anchored at `anchor`). Returns the pixels and what moved;
+ *  undefined when the label fits.
  */
 import { layoutDebug, layoutDebugOn } from '../debug.js';
 import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './geom.js';
-import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, type DShape, type Plane } from './plane.js';
+import { defaultLabelSide, hasExternalLabel, labelArea, labelAt, labelSizeOf } from './labels.js';
+import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, raw, type DShape, type Plane } from './plane.js';
 
 export type Axis = 'x' | 'y';
 
@@ -678,13 +688,23 @@ export function borderPad(plane: Plane, frame: DShape, box: Box, axis: Axis): nu
   return out;
 }
 
+/** Room an external label keeps from the right and bottom border of its frame (fitInFrame). */
+const LABEL_PAD = 5;
+
+/** A shape's external label, or for a shape without one yet the label on its default side (undefined: none, a boundary event's). */
+function labelOrDefault(s: DShape): Box | undefined {
+  const name = raw<string>(s.el, 'name')?.trim();
+  if (!name || s.kind === 'boundary' || !hasExternalLabel(s)) return undefined;
+  return s.label ?? labelAt(s, labelSizeOf(name), defaultLabelSide(s.kind));
+}
+
 /**
  * Grows the frames around a shape (innermost first, then outwards) until it
- * sits inside each with `pad` on the right and at the bottom, and clear of
- * the frame's own boundary events on those borders (borderPad). Content
- * beyond the grown border makes room like with the space tool, except the
- * shapes in `keep` (e.g. the rest of a group moved together). Returns
- * everything moved or resized.
+ * sits inside each with `pad` on the right and at the bottom, its label with
+ * LABEL_PAD, and clear of the frame's own boundary events on those borders
+ * (borderPad). Content beyond the grown border makes room like with the
+ * space tool, except the shapes in `keep` (e.g. the rest of a group moved
+ * together). Returns everything moved or resized.
  */
 export function fitInFrame(plane: Plane, id: string, pad = 15, frameFn: (s: DShape) => DShape | undefined = (s) => frameOf(plane, s), keepAlso: Iterable<string> = []): SpaceResult {
   const out: SpaceResult = { moved: new Set(), resized: new Set() };
@@ -705,15 +725,27 @@ export function fitInFrame(plane: Plane, id: string, pad = 15, frameFn: (s: DSha
     // pools and lanes by their bounds; anything else with its boundary events (also an expanded sub-process)
     const box = inner.kind === 'participant' || inner.kind === 'lane' ? inner.bounds : unitBox(plane, inner);
     // lanes sit flush in their pool / parent lane; everything else keeps `pad`, and clear of the boundary
-    // events on the frame's own border (they reach half their size into it, audit #63)
+    // events on the frame's own border (they reach half their size into it, audit #63); the shape's label too
     const p = inner.kind === 'lane' ? 0 : pad;
-    const overRight = right(box) + Math.max(p, borderPad(plane, frame, box, 'x')) - right(frame.bounds);
+    const label = guard === 0 ? labelOrDefault(inner) : undefined;
+    const reach = (axis: Axis): number => {
+      const far = (b: Box): number => (axis === 'x' ? right(b) : bottom(b));
+      return Math.max(far(box) + Math.max(p, borderPad(plane, frame, box, axis)), label ? far(label) + Math.max(LABEL_PAD, borderPad(plane, frame, label, axis)) : -Infinity);
+    };
+    const overRight = reach('x') - right(frame.bounds);
     if (overRight > 0.5) merge(makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep, anchors: [id], ...growthScope(plane, frame, 'x') }));
-    const overBottom = bottom(box) + Math.max(p, borderPad(plane, frame, box, 'y')) - bottom(frame.bounds);
+    const overBottom = reach('y') - bottom(frame.bounds);
     if (overBottom > 0.5) merge(makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(overBottom), keep, anchors: [id], ...growthScope(plane, frame, 'y') }));
     inner = frame;
   }
   return out;
+}
+
+/** Room for a label above a shape, below the title of its sub-process (see module contract). */
+export function roomBelowTitle(plane: Plane, sub: DShape, label: Box, anchor: string): { delta: number; res: SpaceResult } | undefined {
+  const delta = Math.ceil(labelArea(sub).y - label.y);
+  if (delta <= 0) return undefined;
+  return { delta, res: makeSpace(plane, { axis: 'y', line: sub.bounds.y + 1, delta, anchors: [anchor], frame: sub.id, within: { ...sub.bounds } }) };
 }
 
 function withinOf(b: Box | undefined): { within?: Box } {

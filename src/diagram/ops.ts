@@ -32,8 +32,13 @@
  *     'default' removes every colour. The bioc / color namespaces are
  *     declared on the definitions when missing.
  *   - label: the external label box on one side of its element (labels.ts
- *     labelOnSide: off lines and other labels where possible; flows:
- *     edgeLabelAt), keeping the label's size.
+ *     labelOnSide: off lines, other labels and the titles of expanded
+ *     sub-processes where possible, inside its frame below the title first;
+ *     flows: edgeLabelAt), keeping the label's size. A label put above a
+ *     shape in an expanded sub-process that has no room for it below the
+ *     title gets room at the top of the sub-process first (space tool in
+ *     frame mode: the content moves down, the sub-process grows; a note
+ *     says so).
  *   - route: one flow routed again (reroute.ts routeEdge), `exit` / `entry`
  *     forcing the side it leaves / enters by. A sequence or message flow
  *     without a connection whose two ends are drawn on one plane (added, or
@@ -69,8 +74,13 @@
  *  push that pool away), else E_NO_ROOM and nothing is written.
  *  After every geometric op: connections whose ends moved by the same
  *  offset are translated, connections now broken (reroute.ts brokenEdge)
- *  are routed again, named rerouted flows get their label placed again, and
- *  a shape label a rerouted line runs over steps aside (keeping its side).
+ *  are routed again, named rerouted flows get their label placed again, a
+ *  shape label a rerouted line runs over steps aside (keeping its side),
+ *  and so does a label the op brought onto the title of an expanded
+ *  sub-process that it was clear of before, to a spot off every title
+ *  inside its sub-process or pool, else it stays (labels.ts clearTitles;
+ *  `space` widening a sub-process moves its centred title by half the
+ *  added width).
  *  Result per op: {op, index, moved (shapes whose bounds changed), rerouted
  *  (connections routed again), colored?, labels?, notes?}.
  *  Refusals: E_NO_DIAGRAM (the file has no diagram), E_NO_SHAPE (the
@@ -95,15 +105,16 @@ import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
 import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
-import { edgeLabelAt, hasExternalLabel, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
+import { clearTitles, edgeLabelAt, hasExternalLabel, labelArea, labelAt, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from './labels.js';
 import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { spacingOf } from './place.js';
 import { edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { attachedSide, type Side } from './router.js';
 import { separate, tidy } from './separate.js';
-import { fitInFrame, makeSpace, shiftShape, unitBox } from './space.js';
+import { fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from './space.js';
 import { selection } from './select.js';
+import { titleBox } from './text.js';
 import { setSwatch, writePlanes } from './write.js';
 
 export interface FormatResult {
@@ -244,15 +255,21 @@ interface Snap {
   bounds: Map<string, Box>;
   points: Map<string, Point[]>;
   edges: Map<DEdge, EdgeBefore>;
+  /** external labels of shapes and connections, by element id */
+  labels: Map<string, Box>;
 }
 
 function snapshot(planes: readonly Plane[]): Snap {
-  const out: Snap = { bounds: new Map(), points: new Map(), edges: new Map() };
+  const out: Snap = { bounds: new Map(), points: new Map(), edges: new Map(), labels: new Map() };
   for (const plane of planes) {
-    for (const s of plane.shapes.values()) out.bounds.set(s.id, copyBox(s.bounds));
+    for (const s of plane.shapes.values()) {
+      out.bounds.set(s.id, copyBox(s.bounds));
+      if (s.label) out.labels.set(s.id, copyBox(s.label));
+    }
     for (const e of plane.edges.values()) {
       out.points.set(e.id, copyPoints(e.points));
       out.edges.set(e, edgeBefore(plane, e));
+      if (e.label) out.labels.set(e.id, copyBox(e.label));
     }
   }
   return out;
@@ -301,10 +318,19 @@ function reroute(plane: Plane, e: DEdge, sides: { sourceSides?: Side[]; targetSi
   return true;
 }
 
+/** Whether a label was clear of the title of an expanded sub-process before the op (snapshot bounds; a format op renames nothing). */
+function clearBefore(snap: Snap, owner: DShape | DEdge, sub: DShape): boolean {
+  const label = snap.labels.get(owner.id);
+  const bounds = snap.bounds.get(sub.id);
+  const title = bounds ? titleBox(bounds, raw<string>(sub.el, 'name')) : undefined;
+  return !label || !title || !overlaps(label, title);
+}
+
 /**
  * After shapes moved on `plane`: connections whose ends moved by the same
- * offset are translated, broken ones routed again, labels cleared (see
- * module contract). Returns the rerouted connection ids.
+ * offset are translated, broken ones routed again, labels cleared, also off
+ * the titles of expanded sub-processes (see module contract). Returns the
+ * rerouted connection ids.
  */
 function settle(plane: Plane, snap: Snap): string[] {
   const delta = new Map<string, { dx: number; dy: number }>();
@@ -338,6 +364,7 @@ function settle(plane: Plane, snap: Snap): string[] {
     if (reroute(plane, e)) rerouted.push(e);
   }
   clearLabels(plane, rerouted);
+  clearTitles(plane, (owner, sub) => clearBefore(snap, owner, sub));
   return rerouted.map((e) => e.id);
 }
 
@@ -913,7 +940,7 @@ function colorOp(ctx: Ctx, op: ColorOp): string[] {
   return colored;
 }
 
-function labelOp(ctx: Ctx, op: LabelOp): string[] {
+function labelOp(ctx: Ctx, op: LabelOp, snap: Snap, notes: string[]): { labels: string[]; rerouted: string[] } {
   const el = ctx.doc.require(op.id);
   const name = raw<string>(el, 'name')?.trim();
   if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) {
@@ -930,7 +957,7 @@ function labelOp(ctx: Ctx, op: LabelOp): string[] {
     }
     const changed = !sameBox(edge.label, box);
     edge.label = box;
-    return changed ? [op.id] : [];
+    return { labels: changed ? [op.id] : [], rerouted: [] };
   }
   const { plane, shape } = drawnShape(ctx, op.id);
   if (!hasExternalLabel(shape)) {
@@ -941,10 +968,20 @@ function labelOp(ctx: Ctx, op: LabelOp): string[] {
   }
   if (!name) throw modelError('E_NO_LABEL', `${op.id} has no name, so it has no label`, { element: op.id, hint: `Name it first: \`bpmn set <file> ${op.id} name=...\`.` });
   const size = shape.label ? { width: shape.label.width, height: shape.label.height } : labelSizeOf(name);
-  const box = labelOnSide(plane, shape, op.side, size);
+  let box = labelOnSide(plane, shape, op.side, size);
+  let rerouted: string[] = [];
+  // above a shape at the top of an expanded sub-process, whose title takes the room there: room at the top of
+  // the sub-process first (its content moves down, it grows), so the label sits between the title and the shape
+  const frame = shape.kind === 'boundary' ? undefined : frameOf(plane, shape);
+  const room = op.side === 'above' && frame?.kind === 'subProcess' && !inside(box, labelArea(frame)) ? roomBelowTitle(plane, frame, labelAt(shape, size, 'above'), shape.id) : undefined;
+  if (room) {
+    rerouted = settle(plane, snap);
+    notes.push(`made ${room.delta} px of room above ${op.id} in its sub-process ${frame!.id} (for the label, below the title)`);
+    box = labelOnSide(plane, shape, op.side, size);
+  }
   const changed = !sameBox(shape.label, box);
   shape.label = box;
-  return changed ? [op.id] : [];
+  return { labels: changed ? [op.id] : [], rerouted };
 }
 
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
@@ -1466,9 +1503,12 @@ function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | u
     case 'color':
       extra.colored = colorOp(ctx, op);
       break;
-    case 'label':
-      extra.labels = labelOp(ctx, op);
+    case 'label': {
+      const r = labelOp(ctx, op, snap, notes);
+      extra.labels = r.labels;
+      rerouted = r.rerouted;
       break;
+    }
     case 'route':
       rerouted = routeOp(ctx, op);
       break;

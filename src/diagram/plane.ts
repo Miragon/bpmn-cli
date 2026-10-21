@@ -28,6 +28,7 @@
 import { is, type El } from '../model.js';
 import type { ShapeKind } from './router.js';
 import { unionAll, type Box, type Point } from './geom.js';
+import { titleBox, titleDepth } from './text.js';
 
 export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';
 
@@ -407,12 +408,20 @@ export function inFrame(plane: Plane, s: Pick<DShape, 'parentId' | 'laneId' | 'p
   return false;
 }
 
-/** Inner area of a frame where content may sit (headers and padding left out). */
+/**
+ * Inner area of a frame where content may sit (headers and padding left out;
+ * a sub-process keeps 25 px at the top, or its title and 4 px below it).
+ */
 export function frameInterior(frame: DShape, pad = 15): Box {
   const head = frame.kind === 'participant' || frame.kind === 'lane' ? 30 : 0;
-  const top = frame.kind === 'subProcess' ? Math.max(pad, 25) : pad;
   const b = frame.bounds;
+  const top = frame.kind === 'subProcess' ? Math.max(pad, 25, Math.round(titleDepth(raw<string>(frame.el, 'name'), b.width) + 4)) : pad;
   return { x: b.x + head + pad, y: b.y + top, width: Math.max(0, b.width - head - 2 * pad), height: Math.max(0, b.height - top - pad) };
+}
+
+/** Where the title of an expanded sub-process is drawn (text.ts titleBox); undefined for any other shape and without a name. */
+export function titleOf(s: DShape): Box | undefined {
+  return s.kind === 'subProcess' && s.container ? titleBox(s.bounds, raw<string>(s.el, 'name')) : undefined;
 }
 
 /** The leaf shapes of a plane (no containers, no groups). */

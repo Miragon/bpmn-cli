@@ -120,8 +120,9 @@
  *    its top), a flow's at the middle of its middle segment, 15 px above it
  *    (right of a vertical one).
  *    Embedded labels: 12 px, padding 7, centred in tasks and collapsed
- *    sub-processes, at the top of expanded ones, left-top in annotations;
- *    pool and lane names in their 30 px header band.
+ *    sub-processes, at the top of expanded ones (their title, text.ts
+ *    titleBox), left-top in annotations; pool and lane names in their 30 px
+ *    header band.
  *  - Off-viewport culling: shapes, connections and labels outside the view
  *    are left out of the SVG (a rasteriser never sees content far outside
  *    the image).
@@ -141,7 +142,7 @@ import type { Box, Point } from './geom.js';
 import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from './metrics.js';
 import { homePlane, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { pathOf } from './select.js';
-import { textWidth, wrapLines } from './text.js';
+import { textWidth, titleBox, wrapLines } from './text.js';
 import { planeColumns } from './view.js';
 
 /** What a halo marks: the CLI's `--render` colours created, changed and moved elements apart. */
@@ -1260,11 +1261,12 @@ function edgeBox(e: DEdge): Box {
   return unionOf([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
 }
 
-/** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's or expanded sub-process's name); undefined without one. */
+/** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's name; an expanded sub-process's title, text.ts titleBox); undefined without one. */
 function frameNameBox(s: DShape): Box | undefined {
   const name = s.kind === 'group' ? undefined : raw<string>(s.el, 'name');
   if (!name || !name.trim()) return undefined;
   const b = s.bounds;
+  if (s.kind === 'subProcess') return titleBox(b, name);
   const blackBox = s.kind === 'participant' && !raw(s.el, 'processRef');
   if ((s.kind === 'participant' || s.kind === 'lane') && !blackBox) {
     if (horizontal(s)) {

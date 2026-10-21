@@ -54,7 +54,13 @@
  *      drawing's gap (at most 40 px) to what follows on its row (shapes and
  *      their labels), the space tool makes room by the added width (anchored
  *      at the activity); an external label the grown box covers is placed
- *      again (step 9)
+ *      again (step 9); a renamed expanded sub-process whose title (text.ts
+ *      titleBox) now takes more lines than the old one did and comes closer
+ *      than 4 px to the shapes and labels drawn in it under the title
+ *      (inside the frame, below its top border: not a message flow's label
+ *      between the pools) makes room: its content moves down by the
+ *      difference, at most by the depth the title gained, and it grows
+ *      (space tool at its top in frame mode, a note says so)
  *   7. local overlap removal around everything placed or moved (separate.ts)
  *   8. connections: new ones are routed, kept ones are rerouted only when an
  *      end changed, was placed or moved away from it, or when they now cut a
@@ -65,7 +71,12 @@
  *   9. labels of new / renamed elements and rerouted named flows are placed;
  *      a kept label a new line runs over or a grown activity covers steps
  *      aside (and the label of a boundary event the placement moved to its
- *      host's top border)
+ *      host's top border), and so does a label now on the title of an
+ *      expanded sub-process that it was clear of before the ops (labels.ts
+ *      clearTitles: room made in a sub-process moves its centred title by
+ *      half the added width, a label beyond the line by all of it; a renamed
+ *      title can be wider), unless its new spot is on a title too or outside
+ *      its sub-process / pool
  *  10. local repair (repairCrossings, issue #18 (3)): for every crossing
  *      between a connection drawn in this run and an existing one, at most
  *      REPAIR_TRIALS trials per write: the new connection is routed again,
@@ -109,15 +120,15 @@ import { is, layoutRoot, parseXml, type El } from '../model.js';
 import { successorOf } from '../result.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from './containers.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from './geom.js';
-import { hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
+import { clearTitles, hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from './labels.js';
 import { layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from './metrics.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from './place.js';
-import { boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
+import { boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, titleOf, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { brokenEdge, DETACHED_GAP, detachedEnds, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from './reroute.js';
 import { separate } from './separate.js';
 import { attachedSide } from './router.js';
 import { closeStrip, fitInFrame, makeSpace } from './space.js';
-import { activitySize, BOTTOM_ROOM } from './text.js';
+import { activitySize, BOTTOM_ROOM, titleBox } from './text.js';
 import { pruneDi, pruneEdges, writePlanes } from './write.js';
 
 /* ------------------------------------------------------------------ */
@@ -1067,14 +1078,46 @@ function textRoom(plane: Plane, s: DShape): number {
   return marker || below ? BOTTOM_ROOM : 0;
 }
 
-/** Activities whose new name does not fit their box grow (module contract, step 6). */
+/**
+ * A renamed expanded sub-process whose title now takes more lines than the
+ * old one did and reaches down to what is drawn in it under the title
+ * (shapes and labels inside the frame below its top border, within the
+ * title's width, 4 px below it): the content moves down by the difference,
+ * at most by the depth the title gained, the sub-process grows (space tool
+ * in frame mode, module contract, step 6).
+ */
+function growForTitle(ctx: Ctx, plane: Plane, s: DShape): void {
+  const title = titleOf(s);
+  if (!title) return;
+  const old = oldTitle(ctx, s);
+  // the depth the title gained (text.ts titleDepth): its new lines, all of it where none was drawn
+  const gained = old ? title.height - old.height : bottom(title) - s.bounds.y;
+  if (gained <= 0) return;
+  const { shapes, edges } = contentOf(plane, s.id);
+  // a message flow's label between the pools is no content, even when the flow leaves a shape in the sub-process
+  const under = (b: Box): boolean => b.y >= s.bounds.y && b.y < bottom(s.bounds) && b.x < right(title) + 2 && right(b) > title.x - 2;
+  const boxes = [...shapes.flatMap((c) => [c.bounds, ...(c.label ? [c.label] : [])]), ...edges.flatMap((e) => (e.label ? [e.label] : []))].filter(under);
+  if (!boxes.length) return;
+  const delta = Math.ceil(Math.min(gained, bottom(title) + 4 - Math.min(...boxes.map((b) => b.y))));
+  if (delta <= 0) return;
+  const r = makeSpace(plane, { axis: 'y', line: s.bounds.y + 1, delta, anchors: [s.id], frame: s.id, within: copyBox(s.bounds) });
+  for (const x of [...r.moved, ...r.resized]) ctx.place.moved.add(x);
+  ctx.place.moved.add(s.id);
+  ctx.notes.push(`${s.id} made ${delta} px of room below its new title`);
+}
+
+/** Activities whose new name does not fit their box grow, so do expanded sub-processes for their title (module contract, step 6). */
 function growForNames(ctx: Ctx): void {
   for (const plane of ctx.planes) {
     const sp = ctx.place.spacing.get(plane) ?? spacingOf(plane);
     for (const s of [...plane.shapes.values()]) {
-      if (ctx.fromEngine.has(s.id) || s.container || (s.kind !== 'task' && s.kind !== 'subProcess')) continue;
+      if (ctx.fromEngine.has(s.id) || (s.kind !== 'task' && s.kind !== 'subProcess')) continue;
       const name = raw<string>(s.el, 'name');
       if (!name || name === ctx.snap.names.get(oldId(ctx, s))) continue;
+      if (s.container) {
+        growForTitle(ctx, plane, s);
+        continue;
+      }
       const size = activitySize(name, s.bounds, textRoom(plane, s));
       if (!size) continue;
       const old = copyBox(s.bounds);
@@ -1296,7 +1339,22 @@ function labels(ctx: Ctx, routed: ReadonlySet<string>): void {
       const now = raw<string>(e.el, 'name');
       if (now && now !== before) refitLabel(plane, e);
     }
+    // a label now on the title of an expanded sub-process that it was clear of (room made under it, a wider new title)
+    for (const [id, sub] of clearTitles(plane, (o, sub) => !ctx.fromEngine.has(o.id) && clearOfOldTitle(ctx, o, sub))) ctx.notes.push(`label of ${id} moved off the name of ${sub}`);
   }
+}
+
+/** The title an expanded sub-process had before the ops (text.ts titleBox of its snapshot bounds and name); undefined without one. */
+function oldTitle(ctx: Ctx, s: DShape): Box | undefined {
+  const was = s.di ? ctx.snap.byDi.get(s.di) : undefined;
+  return was?.bounds && was.kind === 'subProcess' && was.expanded === true ? titleBox(was.bounds, ctx.snap.names.get(was.id)) : undefined;
+}
+
+/** Whether a label was clear of the title of `sub` before the ops (a label or a title that did not exist was). */
+function clearOfOldTitle(ctx: Ctx, owner: DShape | DEdge, sub: DShape): boolean {
+  const label = owner.di ? ctx.snap.byDi.get(owner.di)?.label : undefined;
+  const title = oldTitle(ctx, sub);
+  return !label || !title || !overlaps(label, title);
 }
 
 /** at most this many repair trials per write (a reroute or a chain placed again, each measured) */
