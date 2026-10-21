@@ -61,6 +61,7 @@ them on a private corpus without copying it into the repository, are described i
   without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
   user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
   is `report/`; anything that touches the file system or `process` is `node/` or `cli.ts`.
+  `test/architecture.test.ts` keeps the root of `src/` to the three entries.
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
   examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.
