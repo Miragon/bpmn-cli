@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Miragon/bpmn-cli/compare/v0.7.0...v0.8.0) (2026-10-21)
+
+
+### Features
+
+* **layout:** joins entered from below, straight rises, labels off sub-process titles ([#72](https://github.com/Miragon/bpmn-cli/issues/72)) ([d6cf58f](https://github.com/Miragon/bpmn-cli/commit/d6cf58fd25ce2d24f70deb5b0079ad5f8b3432f5))
+
 ## [0.7.0](https://github.com/Miragon/bpmn-cli/compare/v0.6.0...v0.7.0) (2026-10-14)
 
 
