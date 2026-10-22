@@ -1589,7 +1589,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
 
   it('the examples of docs/bpmnlint.md: validate and a write on a Camunda 7 project with camunda-compat, @miragon/rules and a project plugin', async () => {
     const doc = readFileSync(join(ROOT, 'docs', 'bpmnlint.md'), 'utf8');
-    const blocks = [...doc.matchAll(/```\n(\$ bpmn [\s\S]*?)```/g)].map((m) => m[1]!.trimEnd().split('\n'));
+    const blocks = [...doc.matchAll(/```(?:console)?\n(\$ bpmn [\s\S]*?)```/g)].map((m) => m[1]!.trimEnd().split('\n'));
     expect(blocks.map((b) => b[0])).toEqual(['$ bpmn validate models/order.bpmn', '$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external', '$ bpmn show models/order.bpmn --conventions']);
     const dir = repo({
       extends: ['bpmnlint:recommended', 'plugin:camunda-compat/camunda-platform-7-24', 'plugin:@miragon/rules/recommended-for-automation', 'plugin:local/recommended'],

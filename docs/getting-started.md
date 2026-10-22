@@ -1,40 +1,70 @@
 # Getting started
 
-You need Node.js 22.12 or later (Homebrew installs it for you). To let Claude do the modelling, add
-the plugin in Claude Code. To work at the shell yourself, install the CLI and build a first model.
+Install bpmn-cli, then build, look at and validate a first model.
+
+**Requirements:** Node.js 22.12 or later (Homebrew brings it). For the plugin, also
+[Claude Code](https://code.claude.com/docs).
+
+::: tip Let Claude do the modelling
+With the [plugin](./claude-code-plugin.md), Claude runs these commands for you. Ask in plain words,
+for example _"Model the order process with lanes for sales, warehouse and accounting."_
+:::
+
+## 1. Install
 
 ::: code-group
+
+```sh [npm]
+npm install -g @miragon/bpmn-cli
+```
+
+```sh [Homebrew]
+brew install miragon/tap/bpmn-cli
+```
+
+```sh [npx (no install)]
+# then use `npx -y @miragon/bpmn-cli` in place of `bpmn`
+npx -y @miragon/bpmn-cli --version
+```
 
 ```txt [Claude Code]
 /plugin marketplace add Miragon/bpmn-cli
 /plugin install bpmn-cli@miragon-bpmn
 ```
 
-```sh [Shell]
-npm install -g @miragon/bpmn-cli   # or: brew install miragon/tap/bpmn-cli
+:::
+
+Check it with `bpmn --version`.
+
+## 2. Build a first model
+
+```sh
 bpmn new order.bpmn --name "Order handling"
 bpmn add order.bpmn start "Order received"
 bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
-bpmn show order.bpmn
-bpmn validate order.bpmn
-bpmn render order.bpmn -o order.png
 ```
 
-:::
+Each command prints the ids it created for the next one to use. The last one prints:
 
-## In Claude Code
+```txt
+created endEvent Event_Done "Done" - after Activity_CheckInvoice
+created sequenceFlow Flow_CheckInvoiceToDone - Activity_CheckInvoice -> Event_Done
+...
+resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
+...
+written: order.bpmn
+```
 
-The plugin's skill `bpmn` makes Claude use the CLI for every request that touches a `.bpmn` file.
-It runs `bpmn` from your PATH, or else `npx` pinned to the plugin's version. Ask in plain words, in
-English or German, for example _"Model the order process with lanes for sales, warehouse and
-accounting."_ [Claude Code plugin](./claude-code-plugin.md) covers updates and a setup for your
-whole team.
+A warning carries the command that fixes it; `resolved:` lists the ones this change fixed.
 
-## At the shell
+## 3. Look at it
 
-The commands above write `order.bpmn`, a normal BPMN file with a laid-out diagram that opens in
-Camunda Modeler and bpmn-js. `bpmn show` prints the model as text, without coordinates:
+`order.bpmn` opens in Camunda Modeler and bpmn-js. `bpmn show` prints it as text:
+
+```sh
+bpmn show order.bpmn
+```
 
 ```txt
 process Process_OrderHandling "Order handling" executable
@@ -44,12 +74,48 @@ process Process_OrderHandling "Order handling" executable
 problems: none
 ```
 
-`bpmn validate` checks the model, and `bpmn render` draws it as a PNG without a browser.
-`npx -y @miragon/bpmn-cli` works in place of `bpmn` without installing. `bpmn guide --short` prints
-the cheat sheet, and [A worked session](./walkthrough.md) builds a larger process step by step.
+`bpmn render` draws it:
 
-## For Camunda 7 or Camunda 8
+```sh
+bpmn render order.bpmn -o order.png
+```
 
-For an executable model, add `--target camunda7` (also for CIB seven and Operaton) or
-`--target camunda8` to `bpmn new`. The CLI then sets the engine's details by name and
-`bpmn validate` checks its deploy rules, as [Camunda 7 and Camunda 8](./camunda.md) shows.
+<figure class="diagram">
+  <img src="/shots/getting-started-order.svg" alt="The order process: start event Order received, user task Check invoice, end event Done" />
+  <figcaption>order.bpmn, drawn by <code>bpmn render</code></figcaption>
+</figure>
+
+## 4. Validate
+
+```sh
+bpmn validate order.bpmn
+```
+
+```txt
+platform: none (no executionPlatform and no vendor namespace)
+layout: ok
+valid, 0 warning(s)
+```
+
+For an executable model, pass `--target camunda7` or `--target camunda8` to `bpmn new`.
+`validate` then checks the engine's deploy rules ([Camunda 7 and Camunda 8](./camunda.md)).
+
+## Troubleshooting
+
+::: details `bpmn: command not found` after `npm install -g`
+Add the `bin` folder of `npm prefix -g` to your `PATH`, or use `npx -y @miragon/bpmn-cli`.
+:::
+
+::: details `bpmn` fails at start
+Check `node --version`: bpmn-cli needs 22.12 or later. Or install with Homebrew.
+:::
+
+::: details Claude edits the `.bpmn` XML by hand
+The plugin is not active. See [Check that it works](./claude-code-plugin.md#check-that-it-works).
+:::
+
+## Next steps
+
+- [A worked session](./walkthrough.md): a gateway, a batch and two pools.
+- [Camunda 7 and Camunda 8](./camunda.md): make the model deployable.
+- [Commands](./commands.md): every command. `bpmn guide --short` prints the cheat sheet.
