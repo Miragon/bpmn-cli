@@ -3,12 +3,11 @@
 [![npm version](https://img.shields.io/npm/v/@miragon/bpmn-cli.svg)](https://www.npmjs.com/package/@miragon/bpmn-cli)
 [![CI](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-miragon.github.io%2Fbpmn--cli-blue.svg)](https://miragon.github.io/bpmn-cli/)
 
 A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 models
 **semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
 no diagram coordinates.
-
-The documentation is at **[miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)**.
 
 ![One bpmn add command inserts a task into a small order process](docs/assets/demo.gif)
 
