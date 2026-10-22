@@ -21,11 +21,11 @@ export default miragonDocs({
     {
       text: "Getting started",
       link: "/getting-started",
-      activeMatch: "^/(getting-started|claude-code-plugin|walkthrough)",
+      activeMatch: "^/(getting-started|claude-code-plugin|walkthrough|contract)",
     },
     { text: "Commands", link: "/commands", activeMatch: "^/(commands|ops|camunda|layout|bpmnlint)" },
     { text: "Library", link: "/library", activeMatch: "^/(library|validators)" },
-    { text: "Reference", link: "/reference", activeMatch: "^/(reference|contract|migrating)" },
+    { text: "Reference", link: "/reference", activeMatch: "^/reference" },
   ],
 
   // One sidebar for every page: the CLI is small enough to show it all.
@@ -36,6 +36,7 @@ export default miragonDocs({
         { text: "Getting started", link: "/getting-started" },
         { text: "Claude Code plugin", link: "/claude-code-plugin" },
         { text: "A worked session", link: "/walkthrough" },
+        { text: "Guarantees and limits", link: "/contract" },
       ],
     },
     {
@@ -58,9 +59,7 @@ export default miragonDocs({
     {
       text: "Reference",
       items: [
-        { text: "Reference", link: "/reference" },
-        { text: "The contract and its limits", link: "/contract" },
-        { text: "Migrating", link: "/migrating" },
+        { text: "Ids, kinds and keys", link: "/reference" },
       ],
     },
   ],

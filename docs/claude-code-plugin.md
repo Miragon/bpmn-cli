@@ -1,50 +1,78 @@
 # Claude Code plugin
 
-This repository is also a Claude Code plugin marketplace, `miragon-bpmn`. Its plugin `bpmn-cli` has
-one skill, `bpmn` (invoked as `bpmn-cli:bpmn`). It makes Claude create, read, change, format and
-validate BPMN 2.0 models with the CLI instead of writing BPMN XML by hand.
+With the plugin, Claude creates and changes `.bpmn` files through the CLI: it names the elements,
+keeps your drawing and validates the model before it is done.
+
+**Requirements:** Claude Code and Node.js 22.12 or later. The skill runs `bpmn` when it is on your
+PATH, else `npx -y @miragon/bpmn-cli@<version>`.
 
 ## Install
 
-In Claude Code:
+::: code-group
 
-```txt
+```txt [In Claude Code]
 /plugin marketplace add Miragon/bpmn-cli
 /plugin install bpmn-cli@miragon-bpmn
 ```
 
-Or from your shell:
-
-```sh
+```sh [From your shell]
 claude plugin marketplace add Miragon/bpmn-cli
 claude plugin install bpmn-cli@miragon-bpmn
 ```
 
-The skill runs `bpmn` when it is on your PATH, else `npx -y @miragon/bpmn-cli@<version>` with the
-version of the plugin, so you need Node.js 22.12 or later. It pre-approves only these two commands.
+:::
+
+## Try it
+
+Open Claude Code in a folder and ask in plain words, in English or German:
+
+```txt
+Add a reminder timer on "Check invoice" that sends a reminder after 3 days.
+```
+
+Claude runs `bpmn` commands and never writes the XML itself. After a change to the drawing it
+renders the result and looks at it:
+
+<figure class="diagram">
+  <img src="/shots/plugin-change.svg" alt="The order process with a non-interrupting timer on Check invoice, followed by Send reminder and Reminder sent, the new elements marked green" />
+  <figcaption>The reminder added by one <code>bpmn apply</code> batch, new elements in green</figcaption>
+</figure>
+
+It then runs `bpmn validate`. With a `.bpmnlintrc` in the repository, it also fixes the
+[bpmnlint](./bpmnlint.md) findings its change added. Renders go to `.bpmn-render/`; add it to
+`.gitignore`.
+
+## Check that it works
+
+Run `/plugin`: `bpmn-cli@miragon-bpmn` is listed and enabled. When you ask for a model, the session
+shows the skill `bpmn-cli:bpmn`, and Claude's first step is `bpmn show` or `bpmn new`.
+
+| problem | fix |
+| --- | --- |
+| Claude writes the XML anyway | restart Claude Code after an install or update, or invoke the skill: `/bpmn-cli:bpmn <request>` |
+| the first command is slow | `npx` downloads the CLI; install it once with `npm install -g @miragon/bpmn-cli` |
 
 ## Update
 
-The plugin carries the version of the CLI it describes, and each release of bpmn-cli is a new
-plugin version. Claude Code does not fetch it on its own: refresh the marketplace, update the
-plugin and restart Claude Code.
+Claude Code does not fetch new versions on its own. Update, then restart Claude Code:
 
 ```sh
 claude plugin marketplace update miragon-bpmn
 claude plugin update bpmn-cli@miragon-bpmn
 ```
 
-Or turn on auto-update for the marketplace under `/plugin` > Marketplaces.
+Or turn on auto-update under `/plugin` > Marketplaces.
 
 ## For your team
 
-Commit the marketplace and the plugin to your repository's `.claude/settings.json`, so everyone who
-works in the repository gets them:
+Commit this to the repository's `.claude/settings.json`, so everyone gets the plugin:
 
-```json
+```json [.claude/settings.json]
 {
   "extraKnownMarketplaces": {
-    "miragon-bpmn": { "source": { "source": "github", "repo": "Miragon/bpmn-cli" } }
+    "miragon-bpmn": {
+      "source": { "source": "github", "repo": "Miragon/bpmn-cli" }
+    }
   },
   "enabledPlugins": {
     "bpmn-cli@miragon-bpmn": true
@@ -52,20 +80,13 @@ works in the repository gets them:
 }
 ```
 
-## What the skill does
+::: warning A repository you do not trust
+A `.bpmnlintrc` can run the project's own code ([bpmnlint: project code](./bpmnlint.md#project-code)).
+There, the skill tells Claude to pass `--no-lint-config`.
+:::
 
-- **Standing rules.** Claude never writes or patches `.bpmn` XML, addresses elements by id, gives
-  every new element a speaking id such as `Activity_CheckInvoice`, sends one `bpmn apply` batch per
-  change and keeps your drawing.
-- **The loop.** Claude reads the model with `bpmn show` and `bpmn find`, changes it in one batch,
-  reads the result, renders a change that drew something to a PNG in `.bpmn-render/` and fixes the
-  numbered layout problems, then runs `bpmn validate`. Delete `.bpmn-render/` or add it to
-  `.gitignore`.
-- **Your rules.** With a `.bpmnlintrc` in the repository, the results list the
-  [bpmnlint](./bpmnlint.md) findings a change added, and Claude fixes them in the same batch. In a
-  repository you do not trust, the skill tells Claude to pass `--no-lint-config`.
-- **Camunda 7 and Camunda 8.** Recipes for external tasks, job workers, mappings and error handling,
-  loaded only when a request needs them.
+## Next steps
 
-The skill, its reference files and its eval suite are in
-[plugins/bpmn-cli](https://github.com/Miragon/bpmn-cli/tree/main/plugins/bpmn-cli) on GitHub.
+- [Getting started](./getting-started.md): the same commands at the shell.
+- [A worked session](./walkthrough.md): what Claude does for a larger request.
+- [plugins/bpmn-cli](https://github.com/Miragon/bpmn-cli/tree/main/plugins/bpmn-cli): the skill and its evals on GitHub.

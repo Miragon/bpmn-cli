@@ -108,8 +108,7 @@ Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).
 
 The package is also a library that edits BPMN in memory, in Node and in the browser.
 
-Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators](https://miragon.github.io/bpmn-cli/validators),
-[migrating between versions](https://miragon.github.io/bpmn-cli/migrating).
+Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators](https://miragon.github.io/bpmn-cli/validators).
 
 ## Documentation
 
@@ -123,7 +122,7 @@ The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)
 - [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda): platform settings with worked examples
 - [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate and every write
 - [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
-- [Library use](https://miragon.github.io/bpmn-cli/library) and [migrating](https://miragon.github.io/bpmn-cli/migrating)
+- [Library use](https://miragon.github.io/bpmn-cli/library)
 - [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
 - For maintainers, in the repository only: [testing](docs/testing.md) and
   [releasing](docs/releasing.md)
