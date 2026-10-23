@@ -9,7 +9,7 @@ A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 
 **semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
 no diagram coordinates.
 
-![One bpmn add command inserts a task into a small order process](docs/assets/demo.gif)
+![bpmn commands grow a small order process: an approval step, a gateway with a rejection branch, a branch name the CLI asked for, and a clean validate](docs/assets/demo.gif)
 
 ## Why
 
