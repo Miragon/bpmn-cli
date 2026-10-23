@@ -77,6 +77,7 @@
     "archunit": "2.5.4",
     "camunda-bpmn-moddle": "8.0.2",
     "esbuild": "^0.28.2",
+    "playwright": "1.64.1",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2",
