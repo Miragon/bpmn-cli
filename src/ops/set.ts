@@ -572,7 +572,7 @@ function setDefaultKey(doc: Doc, el: El, value: string, cs: ChangeSet): void {
     return;
   }
   if (!descriptorOf(el).propertiesByName?.['default']) {
-    throw unknownKey(doc, el, 'default', 'only exclusive/inclusive gateways, activities and sequence flows have a default');
+    throw unknownKey(doc, el, 'default', 'only exclusive/inclusive/complex gateways, activities and sequence flows have a default');
   }
   if (!value) {
     el.set('default', undefined);

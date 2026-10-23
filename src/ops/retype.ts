@@ -14,8 +14,7 @@
  *    the write pipeline refuses it with E_WOULD_DROP_CONTENT unless --force,
  *    so an agent never deletes a whole subtree by asking for another kind.
  *  - allowed: task <-> task/subProcess/callActivity (activity family),
- *    gateway <-> gateway (also from an unsupported complexGateway to a
- *    supported gateway), event <-> event of the same position (start/end/
+ *    gateway <-> gateway, event <-> event of the same position (start/end/
  *    intermediate catch|throw/boundary), plus trigger changes via applyTrigger.
  *    Other combinations -> E_INVALID_RETYPE.
  *  - same kind & trigger -> no-op note; with trigger options the existing
@@ -114,18 +113,6 @@ const TRIGGER_OPTION_KEYS: Array<keyof TriggerOptions> = [
   'nonInterrupting',
 ];
 
-/**
- * The kind an element is retyped from. An unsupported gateway (complexGateway,
- * reported as E_UNSUPPORTED_KIND) counts as a gateway, so the validator's
- * advice to retype it to a supported gateway works.
- */
-function sourceKind(el: El): KindDef | undefined {
-  const def = kindOf(el);
-  if (def || !is(el, 'bpmn:Gateway')) return def;
-  const local = el.$type.split(':')[1] ?? el.$type;
-  return { kind: local.charAt(0).toLowerCase() + local.slice(1), type: el.$type, family: 'gateway', aliases: [], prefix: 'Gateway', description: '' };
-}
-
 function eventPosition(def: KindDef): string {
   return def.kind === 'intermediateCatchEvent' || def.kind === 'intermediateThrowEvent' ? 'intermediate' : def.kind;
 }
@@ -163,7 +150,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const cs = new ChangeSet();
   const el = doc.require(op.id);
   const id = idOf(el);
-  const from = sourceKind(el);
+  const from = kindOf(el);
   if (!from) {
     throw modelError('E_INVALID_RETYPE', `${el.$type} ${id} cannot be retyped`, {
       element: id,

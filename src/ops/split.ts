@@ -53,7 +53,7 @@ function gatewayKind(token: string | undefined): string {
   }
   if (def.family !== 'gateway') {
     throw modelError('E_INVALID_VALUE', `split needs a gateway kind, not ${def.kind}`, {
-      hint: 'Use exclusiveGateway (xor), parallelGateway (and), inclusiveGateway (or) or eventBasedGateway.',
+      hint: 'Use exclusiveGateway (xor), parallelGateway (and), inclusiveGateway (or), complexGateway (complex) or eventBasedGateway.',
     });
   }
   return def.kind;

@@ -157,6 +157,8 @@ const CASES: Case[] = [
     run: 'ok',
     before: true,
   },
+  { name: 'complex gateway with sequence flows', xml: xml(around('<bpmn:complexGateway id="SP" />')), codes: ['W_C7_DEPLOY_COMPLEX_GATEWAY'], engine: 'reject' },
+  { name: 'complex gateway that nothing connects', xml: xml(beside('<bpmn:complexGateway id="SP" />')), codes: [], engine: 'accept', run: 'ok' },
   { name: 'ad-hoc sub-process with a valid multi-instance loop', xml: xml(beside(`<bpmn:adHocSubProcess id="SP"><bpmn:multiInstanceLoopCharacteristics><bpmn:loopCardinality>2</bpmn:loopCardinality></bpmn:multiInstanceLoopCharacteristics>${UT('T')}</bpmn:adHocSubProcess>`)), codes: ['W_C7_DEPLOY_AD_HOC_SUBPROCESS'], engine: 'reject', operaton: 'accept', before: true },
   { name: 'ad-hoc sub-process with a multi-instance loop without cardinality', xml: xml(beside(`<bpmn:adHocSubProcess id="SP"><bpmn:multiInstanceLoopCharacteristics />${UT('T')}</bpmn:adHocSubProcess>`)), codes: ['W_C7_DEPLOY_AD_HOC_SUBPROCESS', 'W_C7_DEPLOY_MULTI_INSTANCE'], engine: 'reject', before: true },
   { name: 'Operaton file: ad-hoc sub-process with a valid multi-instance loop', xml: xml(beside(`<bpmn:adHocSubProcess id="SP"><bpmn:multiInstanceLoopCharacteristics><bpmn:loopCardinality>2</bpmn:loopCardinality></bpmn:multiInstanceLoopCharacteristics>${UT('T')}</bpmn:adHocSubProcess>`), { operaton: true }), codes: [], engine: 'reject', operaton: 'accept' },

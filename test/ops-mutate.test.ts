@@ -709,7 +709,7 @@ describe('retype', () => {
     expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Start', kind: 'endEvent' }))).toBe('E_INVALID_RETYPE');
     expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'catch' }))).toBe('E_INVALID_RETYPE');
     expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'F1', kind: 'task' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'complexGateway' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'choreographyTask' }))).toBe('E_UNKNOWN_KIND');
     expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'whatever' }))).toBe('E_UNKNOWN_KIND');
     expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Nope', kind: 'task' }))).toBe('E_NOT_FOUND');
     // trigger not allowed on the new kind without saying which one to use

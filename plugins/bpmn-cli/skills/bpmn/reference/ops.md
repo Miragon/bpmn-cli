@@ -153,7 +153,7 @@ Tasks: `task`, `userTask`, `serviceTask`, `sendTask`, `receiveTask`,
 `scriptTask`, `manualTask`, `businessRuleTask`. Sub-processes: `subProcess`,
 `eventSubProcess:<trigger>` (with its start event), `adHocSubProcess`,
 `transaction`; `callActivity` (`set calledElement=<processId>`). Gateways:
-`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `eventBasedGateway`
+`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `complexGateway`, `eventBasedGateway`
 (name exclusive gateways as a question, name their branches). Events:
 `startEvent`, `endEvent`, `intermediateCatchEvent`, `intermediateThrowEvent`,
 `boundaryEvent` with `:message`, `:timer`, `:error`, `:signal`, `:escalation`,

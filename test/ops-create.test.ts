@@ -282,7 +282,7 @@ describe('add: ids and options', () => {
 
   it('rejects unknown and unsupported kinds', async () => {
     const doc = await linearDoc();
-    expect(codeOf(() => add(doc, { kind: 'complexGateway' }))).toBe('E_UNSUPPORTED_KIND');
+    expect(codeOf(() => add(doc, { kind: 'choreographyTask' }))).toBe('E_UNSUPPORTED_KIND');
     expect(codeOf(() => add(doc, { kind: 'userTsk' }))).toBe('E_UNKNOWN_KIND');
     expect(codeOf(() => add(doc, { kind: 'userTask:timer' }))).toBe('E_INVALID_TRIGGER');
   });
@@ -853,7 +853,7 @@ describe('split', () => {
     expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
     add(doc, { kind: 'task', name: 'Alone', in: 'Process_1' });
     expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'complexGateway', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
+    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
   });
 
   it('typed ops (mutateDoc, no parseOps): a branch without a nodes array is E_USAGE in parseOps\' words, and the document stays as it was', async () => {
@@ -988,7 +988,7 @@ describe('add: event sub-processes with a trigger', () => {
     const doc = await linearDoc();
     for (const [kind, code] of [
       ['frobTask', 'E_UNKNOWN_KIND'],
-      ['complexGateway', 'E_UNSUPPORTED_KIND'],
+      ['choreographyTask', 'E_UNSUPPORTED_KIND'],
       ['startEvent:cancel', 'E_INVALID_TRIGGER'],
       ['userTask:timer', 'E_INVALID_TRIGGER'],
       ['eventSubProcess:terminate', 'E_INVALID_TRIGGER'],

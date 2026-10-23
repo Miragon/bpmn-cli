@@ -660,7 +660,7 @@ export function setDefaultFlow(doc: Doc, flow: El, isDefault: boolean): void {
   const source = flow.get<El>('sourceRef');
   if (isDefault) {
     if (!is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway') && !is(source, 'bpmn:Activity')) {
-      throw modelError('E_INVALID_DEFAULT', `Only exclusive/inclusive gateways and activities can have a default flow (${idOf(source)} is a ${kindLabel(source)})`, {
+      throw modelError('E_INVALID_DEFAULT', `Only exclusive/inclusive/complex gateways and activities can have a default flow (${idOf(source)} is a ${kindLabel(source)})`, {
         element: idOf(flow),
       });
     }
