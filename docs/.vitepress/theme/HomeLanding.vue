@@ -37,8 +37,8 @@ async function copyInstall() {
           <h1>bpmn-cli</h1>
           <p class="slogan">Your agent edits the model, not the XML.</p>
           <p class="lede">
-            A CLI and Claude Code plugin for BPMN 2.0. Your drawing stays, and Camunda 7 and 8 deploy
-            rules are checked before the engine sees the file.
+            A CLI and Claude Code plugin for BPMN 2.0. It keeps your drawing and checks Camunda 7 and 8
+            deploy rules.
           </p>
 
           <div class="install">
@@ -83,9 +83,8 @@ async function copyInstall() {
           <div class="point">
             <h2>Why</h2>
             <p>
-              As XML, the task in the demo is 1,254 bytes in 7 places, mostly coordinates: slow and costly
-              for a model to write, and easy to break. As a command it is 76 characters, and the CLI refuses
-              any change that would break the model.
+              BPMN XML is long and full of layout details, so agents are slow at it and break it easily.
+              A short command does the same, and the CLI refuses any broken change.
             </p>
           </div>
           <div class="point">
@@ -461,8 +460,8 @@ h1 {
     min-height: calc(100dvh - var(--vp-nav-height) - 53px);
   }
   .pitch {
-    padding-top: 20px;
-    padding-bottom: 20px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
   h1 {
     font-size: clamp(48px, 7vh, 72px);
@@ -472,10 +471,29 @@ h1 {
     margin-top: 10px;
   }
   .install {
-    margin-top: 20px;
+    margin-top: 16px;
   }
   .start {
-    margin-top: 16px;
+    margin-top: 12px;
+  }
+  .point {
+    padding-top: 8px;
+    padding-bottom: 10px;
+  }
+  .point p {
+    font-size: 14px;
+    line-height: 21px;
+  }
+  .step {
+    padding-bottom: 16px;
+  }
+  .step h3 {
+    margin: 0 0 8px;
+    font-size: 22px;
+  }
+  .step p {
+    margin-top: 8px;
+    font-size: 14px;
   }
   .stage {
     container-type: size;
