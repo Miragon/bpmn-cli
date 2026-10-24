@@ -13,11 +13,13 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { MAX_TILES, MIN_LABEL_SCALE, renderSvg, scaleText } from '../src/render/index.js';
-import { textWidth } from '../src/diagram/text.js';
-import { rasterize } from '../src/node/render.js';
+import { Doc } from '../src/model/Doc.js';
+import { MIN_LABEL_SCALE, renderSvg } from '../src/index.js';
+import { MAX_TILES } from '../src/render/types.js';
+import { scaleText } from '../src/render/utils/scale.js';
+import { textWidth } from '../src/diagram/utils/text.js';
+import { PngRenderer } from '../src/node/PngRenderer.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const GALLERY = join(ROOT, 'test', 'fixtures', 'render', 'gallery.bpmn');
@@ -92,7 +94,7 @@ describe('broken and far-flung coordinates', () => {
     expect(drawnIds(r.svg).sort()).toEqual(['Activity_Do', 'Event_Start']);
     expect(r.notes).toContain('1 element has broken coordinates (not a number, beyond ±1,000,000 px, or a negative size) and is not drawn: Flow_1 (`bpmn layout <file>` draws it again)');
     // the PNG shows the start event and the task (not a blank image)
-    const { pixels } = await rasterize(r.svg, { pixels: true });
+    const { pixels } = await new PngRenderer().rasterize(r.svg, { pixels: true });
     let dark = 0;
     for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
     expect(dark).toBeGreaterThan(200);
@@ -238,7 +240,7 @@ describe('message flows', () => {
 describe('a file without a diagram', () => {
   it('lists the problems `bpmn metrics` reports for the file, none in the image, and says so', async () => {
     const xml = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
-    const metrics = layoutProblems((await Doc.fromXml(xml)).definitions).problems;
+    const metrics = LayoutAnalysis.of((await Doc.fromXml(xml)).definitions).problems;
     expect(metrics.length).toBeGreaterThan(10);
     const r = await renderSvg(xml, { problems: true });
     expect(r.problems.map((p) => [p.kind, p.ids, p.detail])).toEqual(metrics.map((p) => [p.kind, p.ids, p.detail]));

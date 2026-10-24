@@ -9,14 +9,14 @@
  *    horizontal segments of the lines running under the anchor down (bypass
  *    and loop-back lines); a branch also tries the rows above its anchor, a
  *    boundary path its host's top border with the path above it. The row
- *    choice counts the chain that follows on the row (diagram/place.ts
+ *    choice counts the chain that follows on the row (diagram/NodePlacer.ts
  *    chainCost). Single commands and the batch give the same shapes.
  *  - a branch row keeps clear of the boundary events on its frame's bottom
  *    border (audit #63).
  *  - a crossing left between a new and an existing connection: the existing
  *    one is routed again with the new shapes as obstacles, else the chain
  *    starts at its next row candidate; a trial is kept only when it adds no
- *    hard problem and lowers the score (incremental.ts repairCrossings).
+ *    hard problem and lowers the score (CrossingRepair.ts repair).
  *
  * The later blocks hold the findings of the stage B verification, each
  * failing on the stage B build: the path of an event on its host's top
@@ -28,7 +28,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
-import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const fixture = (name: string): string => readFileSync(join(ROOT, 'test', 'fixtures', 'layout-room', name), 'utf8');
@@ -46,7 +47,7 @@ const waypoints = (xml: string, id: string): Array<{ x: number; y: number }> => 
   const edge = new RegExp(`<bpmndi:BPMNEdge [^>]*bpmnElement="${id}"[^>]*>([\\s\\S]*?)</bpmndi:BPMNEdge>`).exec(xml)![1]!;
   return [...edge.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
 };
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
 const cy = (b: { y: number; height: number }): number => b.y + b.height / 2;
 
 async function batch(xml: string, ops: object[]): Promise<string> {
@@ -314,7 +315,7 @@ describe('the guard of the local repair (stage B verification)', () => {
     const drawn = new Set([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!));
     // the crossings between two flows drawn before the edit
     const among = async (x: string): Promise<string[]> =>
-      (await layoutProblemsOfXml(x)).problems.filter((p) => p.kind === 'crossings' && p.ids.every((id) => drawn.has(id))).map((p) => p.ids.join(' x '));
+      (await LayoutAnalysis.ofXml(x)).problems.filter((p) => p.kind === 'crossings' && p.ids.every((id) => drawn.has(id))).map((p) => p.ids.join(' x '));
     expect(await among(r.xml)).toEqual(await among(xml));
     expect(r.result.layout?.rerouted ?? []).not.toContain('Flow_ApprovedNo');
   });

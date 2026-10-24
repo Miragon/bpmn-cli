@@ -13,9 +13,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
-import { poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool } from '../src/layout/clean/messages.js';
-import { is, many, parseXml, type El, type Model } from '../src/model/moddle.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
+import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from '../src/layout/clean/MessageFlowRouter.js';
+import { is, many, parseXml, type El, type Model } from '../src/model/utils/moddle.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const scenario = (name: string): string => readFileSync(join(HERE, '..', 'tools', 'scenarios', name), 'utf8');
@@ -46,7 +46,7 @@ const boxOf = (b: El): Box => ({ x: b.get<number>('x'), y: b.get<number>('y'), w
 
 async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
   const source = await parseXml(xml);
-  const { xml: out, warnings } = await layoutModel(source, opts);
+  const { xml: out, warnings } = await new FullLayout(source, opts).run();
   const model = await parseXml(out);
   const shapes: Drawn['shapes'] = new Map();
   const edges: Drawn['edges'] = new Map();
@@ -219,7 +219,7 @@ describe('message flows', () => {
     const target: Box = { x: 0, y: 480, width: 600, height: 60 };
     const lower: MessagePool = { box: target, obstacles: [], lines: [], contentLeft: 30 };
     const job = { el: fakeEl('bpmn:Task'), source: fakeEl('bpmn:Task'), target: fakeEl('bpmn:Participant'), sourceBox: source, targetBox: target, sourceOwn: [], targetOwn: [], sourcePool: upper, targetPool: lower } as unknown as MessageFlowJob;
-    const [route] = routeMessageFlows([job], [upper, lower]);
+    const [route] = new MessageFlowRouter([job], [upper, lower]).route();
     expect(segments(route!.points).some(([p, q]) => cuts(p, q, blocker))).toBe(false);
     expect(route!.points[0]).toEqual({ x: 250, y: 180 });
     for (const [p, q] of segments(route!.points)) expect(p.x === q.x || p.y === q.y).toBe(true);
@@ -229,7 +229,7 @@ describe('message flows', () => {
     const a: MessagePool = { box: { x: 0, y: 0, width: 600, height: 200 }, obstacles: [], lines: [], contentLeft: 30 };
     const b: MessagePool = { box: { x: 0, y: 280, width: 600, height: 60 }, obstacles: [], lines: [], contentLeft: 30 };
     const job = { el: fakeEl('bpmn:MessageFlow'), source: fakeEl('bpmn:Task'), target: fakeEl('bpmn:Participant'), sourceBox: { x: 100, y: 60, width: 100, height: 80 }, targetBox: b.box, sourceOwn: [], targetOwn: [], sourcePool: a, targetPool: b } as unknown as MessageFlowJob;
-    const order = poolOrder([a, b], [job]);
+    const order = new MessageFlowRouter([job], [a, b]).poolOrder();
     expect(order).toEqual([a, b]);
   });
 });

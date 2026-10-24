@@ -4,11 +4,12 @@
  * within 64 characters. Synthetic fixtures only.
  */
 import { describe, expect, it } from 'vitest';
-import { styledId } from '../src/diagram/write.js';
-import { Doc } from '../src/model/document.js';
-import { cutAt } from '../src/ids/slugs.js';
+import { styledId } from '../src/diagram/utils/di-ids.js';
+import { Doc } from '../src/model/Doc.js';
+import { cutAt } from '../src/ids/utils/slug.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions } from '../src/pipeline/index.js';
 
 const OPS: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },

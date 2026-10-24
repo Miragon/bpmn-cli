@@ -52,7 +52,7 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   kind: string;
   name?: string;
   id?: string;
-  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/aliases.ts) */
+  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/OpAliases.ts) */
   as?: string;
   /** batch alias of the flow into the new node (the flow the flow options describe) */
   flowAs?: string;
@@ -192,7 +192,7 @@ export interface SplitOp {
 }
 
 /* ------------------------------------------------------------------ */
-/* format operations: diagram only, see src/format/index.ts               */
+/* format operations: diagram only, see src/format/FormatOps.ts               */
 /* ------------------------------------------------------------------ */
 
 export type SideName = 'left' | 'right' | 'top' | 'bottom';
@@ -200,7 +200,7 @@ export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
 /**
- * Selectors of place / align / color / tidy (src/query/select.ts): they add
+ * Selectors of place / align / color / tidy (src/query/ElementSelector.ts): they add
  * elements to `ids` (connections only for color).
  */
 export interface Selectors {
@@ -281,23 +281,6 @@ export interface SpaceOp {
 export type SpaceAmount = 'column' | 'row' | '-column' | '-row' | number | `${number}${SpaceUnit}` | `${number} ${SpaceUnit}`;
 type SpaceUnit = 'col' | 'cols' | 'column' | 'columns' | 'row' | 'rows' | 'px';
 
-/**
- * A `space` amount read: `column` / `row` (one), `<n>col`, `<n>column(s)`,
- * `<n>row(s)` (n steps of the drawing's grid; a space before the unit is
- * fine), `<n>px` or a bare integer (pixels); a leading `-` closes. Undefined
- * for anything else (0 included).
- */
-export function parseSpaceAmount(value: unknown): { count: number; unit: 'column' | 'row' | 'px' } | undefined {
-  if (typeof value === 'number') return Number.isInteger(value) && value !== 0 ? { count: value, unit: 'px' } : undefined;
-  if (typeof value !== 'string') return undefined;
-  const m = /^\s*(-?)\s*(\d*)\s*(px|cols?|columns?|rows?)?\s*$/i.exec(value);
-  if (!m || (!m[2] && (!m[3] || /^px$/i.test(m[3])))) return undefined;
-  const count = (m[1] ? -1 : 1) * (m[2] ? Number(m[2]) : 1);
-  if (count === 0) return undefined;
-  const unit = !m[3] || /^px$/i.test(m[3]) ? 'px' : /^col/i.test(m[3]) ? 'column' : 'row';
-  return { count, unit };
-}
-
 export interface TidyOp extends Selectors {
   op: 'tidy';
   /** only these shapes (default: every shape of the diagram) */
@@ -313,12 +296,3 @@ export interface CompactOp {
 export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp | CompactOp;
 
 export type Op = AddOp | ConnectOp | SetOp | RemoveOp | RetypeOp | MoveOp | OrderOp | ExtOp | SplitOp | FormatOp;
-
-/** The diagram-only ops (they run after the semantic ops and the layout, in batch order). */
-export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact'];
-
-export const OP_NAMES: Array<Op['op']> = ['add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'split', ...FORMAT_OP_NAMES];
-
-export function isFormatOp(op: Op): op is FormatOp {
-  return (FORMAT_OP_NAMES as string[]).includes(op.op);
-}

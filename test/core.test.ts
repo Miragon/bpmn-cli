@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { IdRegistry, isValidId, slugify } from '../src/ids/slugs.js';
-import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids/style.js';
-import { kindByName } from '../src/model/kinds.js';
-import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
-import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
-import { many } from '../src/model/moddle.js';
-import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { ChangeSet } from '../src/model/change-set.js';
+import { Doc } from '../src/model/Doc.js';
+import { IdRegistry } from '../src/ids/IdRegistry.js';
+import { isValidId, slugify } from '../src/ids/utils/slug.js';
+import { connectionRequest, kindRequest, typeRequest } from '../src/ids/utils/requests.js';
+import { IdStyle } from '../src/ids/IdStyle.js';
+import { kindByName } from '../src/model/utils/kinds.js';
+import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/utils/kinds.js';
+import { FullLayout } from '../src/layout/FullLayout.js';
+import { diExpansionState, resolveExpanded } from '../src/diagram/utils/expansion.js';
+import { many } from '../src/model/utils/moddle.js';
+import { Bridge } from '../src/ops/Bridge.js';
+import { NodePlacement } from '../src/ops/NodePlacement.js';
+import { runOps } from '../src/index.js';
+import { mutateDoc } from '../src/index.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from './helpers.js';
+import { SequenceFlows } from '../src/ops/SequenceFlows.js';
 
 function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {
   try {
@@ -179,15 +184,15 @@ describe('flows & placement', () => {
     const doc = await linearDoc();
     const cs = new ChangeSet();
     const t = doc.create('bpmn:ServiceTask', { id: doc.newId('Activity', 'Check stock'), name: 'Check stock' });
-    placeNode(doc, t, { after: 'Task_A', flowName: 'ok' }, cs);
+    new NodePlacement(doc, { after: 'Task_A', flowName: 'ok' }).place(t, cs);
     expect(cs.notes).toContain('inserted between Task_A and End');
     expect(doc.outgoing(doc.get('Task_A')!).map((f) => f.get<any>('targetRef').id)).toEqual(['Activity_CheckStock']);
     expect(doc.get('F2')!.get('name')).toBe('ok');
     const gw = doc.create('bpmn:ExclusiveGateway', { id: 'G', name: 'ok?' });
-    placeNode(doc, gw, { after: 'Activity_CheckStock' }, new ChangeSet());
+    new NodePlacement(doc, { after: 'Activity_CheckStock' }).place(gw, new ChangeSet());
     const e2 = doc.create('bpmn:EndEvent', { id: 'E2' });
     const cs2 = new ChangeSet();
-    placeNode(doc, e2, { after: 'G', flowName: 'no', default: true }, cs2);
+    new NodePlacement(doc, { after: 'G', flowName: 'no', default: true }).place(e2, cs2);
     expect(cs2.notes).toContain('appended after G');
     expect(gw.get<any>('default').id).toBe(cs2.created[0]!.id);
     const xml = await doc.toXml();
@@ -197,36 +202,36 @@ describe('flows & placement', () => {
   it('refuses to fork a non-gateway silently', async () => {
     const doc = await linearDoc();
     const t = doc.create('bpmn:Task', { id: 'T2' });
-    placeNode(doc, t, { in: 'Process_1' }, new ChangeSet());
-    createSequenceFlow(doc, doc.get('Task_A')!, t, {});
+    new NodePlacement(doc, { in: 'Process_1' }).place(t, new ChangeSet());
+    new SequenceFlows(doc).create(doc.get('Task_A')!, t, {});
     const t3 = doc.create('bpmn:Task', { id: 'T3' });
-    expect(() => placeNode(doc, t3, { after: 'Task_A' }, new ChangeSet())).toThrow(/E_HAS_SUCCESSOR|outgoing flows/);
+    expect(() => new NodePlacement(doc, { after: 'Task_A' }).place(t3, new ChangeSet())).toThrow(/E_HAS_SUCCESSOR|outgoing flows/);
   });
 
   it('places before, between and into a flow; attaches boundary events', async () => {
     const doc = await linearDoc();
     const a = doc.create('bpmn:Task', { id: 'A' });
     const cs = new ChangeSet();
-    placeNode(doc, a, { before: 'End' }, cs);
+    new NodePlacement(doc, { before: 'End' }).place(a, cs);
     expect(cs.notes[0]).toMatch(/inserted between Task_A and End/);
     const b = doc.create('bpmn:Task', { id: 'B' });
-    placeNode(doc, b, { after: 'Start', before: 'Task_A' }, new ChangeSet());
+    new NodePlacement(doc, { after: 'Start', before: 'Task_A' }).place(b, new ChangeSet());
     expect(doc.outgoing(doc.get('Start')!)[0]!.get<any>('targetRef').id).toBe('B');
     const c = doc.create('bpmn:Task', { id: 'C' });
-    placeNode(doc, c, { flow: 'F1' }, new ChangeSet());
+    new NodePlacement(doc, { flow: 'F1' }).place(c, new ChangeSet());
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('C');
     const be = doc.create('bpmn:BoundaryEvent', { id: 'BE' });
-    placeNode(doc, be, { on: 'Task_A' }, new ChangeSet());
+    new NodePlacement(doc, { on: 'Task_A' }).place(be, new ChangeSet());
     expect(be.get<any>('attachedToRef').id).toBe('Task_A');
-    expect(() => placeNode(doc, doc.create('bpmn:Task', { id: 'D' }), { on: 'Task_A' }, new ChangeSet())).toThrow(/boundary/);
-    expect(() => placeNode(doc, doc.create('bpmn:BoundaryEvent', { id: 'BE2' }), { after: 'Task_A' }, new ChangeSet())).toThrow(/--on/);
+    expect(() => new NodePlacement(doc, { on: 'Task_A' }).place(doc.create('bpmn:Task', { id: 'D' }), new ChangeSet())).toThrow(/boundary/);
+    expect(() => new NodePlacement(doc, { after: 'Task_A' }).place(doc.create('bpmn:BoundaryEvent', { id: 'BE2' }), new ChangeSet())).toThrow(/--on/);
   });
 
   it('bridges on detach and carries labels over', async () => {
     const doc = await linearDoc();
     doc.get('F2')!.set('name', 'done');
     const cs = new ChangeSet();
-    detachNode(doc, doc.get('Task_A')!, true, cs);
+    new Bridge(doc, cs).single(doc.get('Task_A')!, true);
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('End');
     expect(doc.get('F1')!.get('name')).toBe('done');
     expect(doc.get('F2')).toBeUndefined();
@@ -240,16 +245,16 @@ describe('flows & placement', () => {
     <bpmn:endEvent id="E" />
     <bpmn:subProcess id="Sub"><bpmn:task id="Inner" /></bpmn:subProcess>`),
     );
-    expect(() => createSequenceFlow(doc, doc.get('E')!, doc.get('S')!, {})).toThrow(/End event/);
-    expect(() => createSequenceFlow(doc, doc.get('S')!, doc.get('Inner')!, {})).toThrow(/cross scopes/);
-    expect(() => createSequenceFlow(doc, doc.get('S')!, doc.get('E')!, { condition: '  ' })).toThrow(/empty/);
+    expect(() => new SequenceFlows(doc).create(doc.get('E')!, doc.get('S')!, {})).toThrow(/End event/);
+    expect(() => new SequenceFlows(doc).create(doc.get('S')!, doc.get('Inner')!, {})).toThrow(/cross scopes/);
+    expect(() => new SequenceFlows(doc).create(doc.get('S')!, doc.get('E')!, { condition: '  ' })).toThrow(/empty/);
   });
 
   it('applies flow options of --before to the flow INTO the new node', async () => {
     const doc = await linearDoc();
     const t = doc.create('bpmn:ServiceTask', { id: 'Book' });
     const cs = new ChangeSet();
-    placeNode(doc, t, { before: 'End', flowName: 'yes', condition: '${ok}' }, cs);
+    new NodePlacement(doc, { before: 'End', flowName: 'yes', condition: '${ok}' }).place(t, cs);
     const into = doc.get('F2')!; // Task_A -> Book, the spliced flow
     expect(into.get<any>('targetRef').id).toBe('Book');
     expect(into.get('name')).toBe('yes');
@@ -263,10 +268,10 @@ describe('flows & placement', () => {
   it('prepending applies flow options to the one flow it creates and says so', async () => {
     const doc = await linearDoc();
     const x = doc.create('bpmn:Task', { id: 'X' });
-    placeNode(doc, x, { in: 'Process_1' }, new ChangeSet());
+    new NodePlacement(doc, { in: 'Process_1' }).place(x, new ChangeSet());
     const y = doc.create('bpmn:Task', { id: 'Y' });
     const cs = new ChangeSet();
-    placeNode(doc, y, { before: 'X', flowName: 'go', flowId: 'Flow_Go' }, cs);
+    new NodePlacement(doc, { before: 'X', flowName: 'go', flowId: 'Flow_Go' }).place(y, cs);
     expect(doc.get('Flow_Go')!.get<any>('targetRef').id).toBe('X');
     expect(doc.get('Flow_Go')!.get('name')).toBe('go');
     expect(cs.notes.some((n) => /--flow-name, --flow-id applied to Flow_Go/.test(n))).toBe(true);
@@ -276,30 +281,30 @@ describe('flows & placement', () => {
     const doc = await linearDoc();
     const before = doc.flowElements(doc.processes()[0]!).length;
     const end = doc.create('bpmn:EndEvent', { id: 'E2' });
-    let err = caught(() => placeNode(doc, end, { after: 'Task_A' }, new ChangeSet()));
+    let err = caught(() => new NodePlacement(doc, { after: 'Task_A' }).place(end, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     expect(err.message).toMatch(/endEvent E2 cannot be inserted into the flow Task_A -> End/);
     expect(String(err.details['hint'])).toMatch(/--in Process_1/);
     expect(String(err.details['hint'])).toMatch(/bpmn connect <file> Task_A <newId>/);
     const start = doc.create('bpmn:StartEvent', { id: 'S2' });
-    err = caught(() => placeNode(doc, start, { before: 'Task_A' }, new ChangeSet()));
+    err = caught(() => new NodePlacement(doc, { before: 'Task_A' }).place(start, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     expect(err.message).toMatch(/cannot have incoming sequence flows/);
-    err = caught(() => placeNode(doc, start, { flow: 'F1' }, new ChangeSet()));
+    err = caught(() => new NodePlacement(doc, { flow: 'F1' }).place(start, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     // nothing was retargeted or created
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('Task_A');
     expect(doc.get('F2')!.get<any>('targetRef').id).toBe('End');
     expect(doc.flowElements(doc.processes()[0]!).length).toBe(before);
-    expect(caught(() => spliceIntoFlow(doc, doc.get('F2')!, end)).code).toBe('E_INVALID_SOURCE');
+    expect(caught(() => new SequenceFlows(doc).splice(doc.get('F2')!, end)).code).toBe('E_INVALID_SOURCE');
     expect(doc.get('F2')!.get<any>('targetRef').id).toBe('End');
   });
 
   it('removes and reports a self-loop flow once on detach', async () => {
     const doc = await linearDoc();
-    redirectFlow(doc, doc.get('F2')!, { target: doc.get('Task_A')! });
+    new SequenceFlows(doc).redirect(doc.get('F2')!, { target: doc.get('Task_A')! });
     const cs = new ChangeSet();
-    detachNode(doc, doc.get('Task_A')!, true, cs);
+    new Bridge(doc, cs).single(doc.get('Task_A')!, true);
     expect(cs.removed.map((c) => c.id)).toEqual(['F1', 'F2']);
     expect(doc.get('F2')).toBeUndefined();
   });
@@ -307,7 +312,7 @@ describe('flows & placement', () => {
   it('keeps declaration order: node after its source, flows after the node', async () => {
     const doc = await linearDoc();
     const t = doc.create('bpmn:Task', { id: 'T' });
-    spliceIntoFlow(doc, doc.get('F2')!, t);
+    new SequenceFlows(doc).splice(doc.get('F2')!, t);
     const order = doc.flowElements(doc.processes()[0]!).map((e) => e.get('id'));
     expect(order.indexOf('T')).toBeGreaterThan(order.indexOf('Task_A'));
     expect(order.indexOf(flowBetween(doc, 'T', 'End'))).toBeGreaterThan(order.indexOf('T'));
@@ -323,12 +328,12 @@ describe('layout', () => {
     <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="Sub" />`),
     );
     expect([...resolveExpanded(doc.model)]).toEqual(['Sub']);
-    const r1 = await layoutModel(doc.model);
+    const r1 = await new FullLayout(doc.model).run();
     expect(r1.expanded).toEqual(['Sub']);
     expect(r1.xml).toMatch(/BPMNShape_Sub" bpmnElement="Sub" isExpanded="true"/);
     const doc2 = await Doc.fromXml(r1.xml);
     expect(doc2.importWarnings).toHaveLength(0);
-    const r2 = await layoutModel(doc2.model, { collapse: ['Sub'] });
+    const r2 = await new FullLayout(doc2.model, { collapse: ['Sub'] }).run();
     expect(r2.expanded).toEqual([]);
     const doc3 = await Doc.fromXml(r2.xml);
     expect(diExpansionState(doc3.definitions).get('Sub')).toBe(false);
@@ -338,13 +343,13 @@ describe('layout', () => {
 
   it('maps layout errors to codes', async () => {
     const doc = await Doc.fromXml(definitionsXml(`<bpmn:complexGateway id="CG" />`));
-    await expect(layoutModel(doc.model, { engine: 'auto' })).rejects.toMatchObject({ code: 'LAYOUT_UNSUPPORTED_ELEMENT', details: { element: 'CG' } });
+    await expect(new FullLayout(doc.model, { engine: 'auto' }).run()).rejects.toMatchObject({ code: 'LAYOUT_UNSUPPORTED_ELEMENT', details: { element: 'CG' } });
   });
 
   it('ignores expand/collapse ids that are not sub-processes', async () => {
     const doc = await Doc.fromXml(definitionsXml(`<bpmn:subProcess id="Sub"><bpmn:task id="Inner" /></bpmn:subProcess><bpmn:task id="T" />`));
     expect([...resolveExpanded(doc.model, { expand: ['Nope', 'T'], collapse: ['AlsoNope'] })]).toEqual(['Sub']);
-    const r = await layoutModel(doc.model, { expand: ['Nope'] });
+    const r = await new FullLayout(doc.model, { expand: ['Nope'] }).run();
     expect(r.expanded).toEqual(['Sub']);
   });
 
@@ -362,7 +367,7 @@ describe('layout', () => {
     ]);
     const members = () => many(doc.get('Lane_L1')!, 'flowNodeRef').map((n) => n.get('id'));
     expect(members()).toEqual(['S', 'A', 'E']);
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.xml).toMatch(/BPMNShape_B"/);
     // the temporary membership used for the layout leaves no trace, in memory or in the written model
     expect(members()).toEqual(['S', 'A', 'E']);
@@ -374,7 +379,7 @@ describe('layout', () => {
 
   it('draws the compensation association and puts the handler below its boundary event', async () => {
     const doc = await compensationDoc();
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.warnings.filter((w) => w.code === 'DI_NOT_CREATED')).toEqual([]);
     const association = [...doc.byId().values()].find((e) => e.$type === 'bpmn:Association')!.get<string>('id');
     expect(r.xml).toContain(`BPMNEdge_${association}`);
@@ -397,7 +402,7 @@ describe('layout', () => {
     const association = cs.created.find((c) => c.kind === 'association')!.id;
     // F1 says nothing about its ends (a number): a flow
     expect(association).toBe('Association_FlowToOnTheFlow');
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.warnings).toEqual([]);
     expect(r.xml).toContain(`BPMNEdge_${association}`);
   });
@@ -418,7 +423,7 @@ describe('pipeline', () => {
     const again = await Doc.fromXml(r.xml);
     expect(again.importWarnings).toHaveLength(0);
     expect([...resolveExpanded(again.model)]).toEqual([]);
-    const laidOut = await layoutModel(again.model);
+    const laidOut = await new FullLayout(again.model).run();
     expect(laidOut.xml).toMatch(/BPMNPlane_Sub/);
   });
 });

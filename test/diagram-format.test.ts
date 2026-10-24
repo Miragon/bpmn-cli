@@ -1,5 +1,5 @@
 /**
- * Format operations (src/format/index.ts) through the write pipeline: place,
+ * Format operations (src/format/FormatOps.ts) through the write pipeline: place,
  * align, color, label, route, space, tidy and lane order, their refusals,
  * batch semantics (after the semantic ops, in batch order, all or nothing)
  * and the persistence of formatting over later writes; plus the read side
@@ -12,18 +12,18 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OPS_SCHEMA, parseOps } from '../src/ops/batch.js';
-import { kindsJson } from '../src/report/guide.js';
-import { FORMAT_OP_NAMES } from '../src/ops/types.js';
-import { Doc } from '../src/model/document.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { layoutView } from '../src/query/layout-view.js';
-import { isCliError } from '../src/shared/errors.js';
-import { renderLayoutView } from '../src/report/view-text.js';
-import type { El } from '../src/model/moddle.js';
+import { OPS_SCHEMA } from '../src/ops/OpsSchemaBuilder.js';
+import { parseOps, kindsJson, layoutView, renderLayoutView } from '../src/index.js';
+import { FORMAT_OP_NAMES } from '../src/ops/utils/op-names.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DEdge, DShape } from '../src/diagram/types.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateFile } from '../src/node/index.js';
+import { mutateDoc } from '../src/index.js';
+import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -114,13 +114,13 @@ async function failure(xml: string, ops: Op[], opts: MutationOptions = {}): Prom
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 

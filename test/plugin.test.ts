@@ -38,7 +38,7 @@ let cliFile: string;
 beforeAll(async () => {
   tmp = mkdtempSync(join(tmpdir(), 'bpmn-plugin-'));
   // relative to its own file the bundle reads ../package.json (src/cli.ts), the font from
-  // ../../assets (src/node/render.ts) and @resvg/resvg-wasm from node_modules above it
+  // ../../assets (src/node/PngRenderer.ts) and @resvg/resvg-wasm from node_modules above it
   mkdirSync(join(tmp, 'pkg', 'cli'), { recursive: true });
   copyFileSync(join(ROOT, 'package.json'), join(tmp, 'pkg', 'package.json'));
   symlinkSync(join(ROOT, 'assets'), join(tmp, 'assets'));

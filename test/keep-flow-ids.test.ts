@@ -11,16 +11,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml, newXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
-import type { El } from '../src/model/moddle.js';
-import type { Warning } from '../src/shared/errors.js';
-import { idNamesEnds } from '../src/ops/flows.js';
-import { runOp, runOps } from '../src/ops/index.js';
+import { Doc } from '../src/model/Doc.js';
+import type { El } from '../src/model/utils/moddle.js';
+import type { Warning } from '../src/shared/CliError.js';
+import { runOp, runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { renderMutation } from '../src/report/command-report.js';
-import type { ChangeSet } from '../src/model/change-set.js';
+import { mutateDoc, renderMutation } from '../src/index.js';
+import type { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween } from './helpers.js';
+import { FlowIdFollower } from '../src/ops/FlowIdFollower.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
 async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {
@@ -814,7 +813,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
     const naming = ops.flatMap((o) => {
       const id = (o as { values: { id: string } }).values.id;
       const flow = doc.get(id)!;
-      return idNamesEnds(doc, id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
+      return new FlowIdFollower(doc).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
     });
     return { followed: ops.map((o) => (o as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).idStyle.info().sequenceFlow, after: doc.idStyle.info().sequenceFlow };
   }

@@ -1,0 +1,25 @@
+import { InvalidArgumentError, type Command as CommandType } from 'commander';
+import { parseSpaceAmount } from '../ops/utils/space-amount.js';
+import type { SpaceOp } from '../ops/types.js';
+import type { RawOpts } from './CliCommand.js';
+import { FormatCommand } from './FormatCommand.js';
+
+export class SpaceCommand extends FormatCommand {
+  register(program: CommandType): void {
+    this.withMutationOptions(
+      this.define(program, 'space')
+        .option('--after <id>', 'horizontal space right of this element')
+        .option('--below <id>', 'vertical space below this element')
+        .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (v: string) => {
+          if (!parseSpaceAmount(v)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
+          return /^\s*-?\d+\s*$/.test(v) ? Number(v) : v;
+        }),
+    ).action((file: string, o: RawOpts) =>
+      this.cli.guarded(async () => {
+        this.checkFlagGroups(o, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
+        const op: SpaceOp = { op: 'space', ...this.pick(o, ['after', 'below'] as const), ...(o['by'] !== undefined ? { by: o['by'] as SpaceOp['by'] } : {}) };
+        await this.runFormat(file, op, o);
+      }, !!o['json']),
+    );
+  }
+}

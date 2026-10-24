@@ -18,12 +18,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { checkFile } from '../src/node/files.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { detectPlatform } from '../src/platform/detect.js';
-import { loadProfiles, runProfile, type ProfileFinding } from '../src/platform/profiles/profile.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { Doc } from '../src/model/Doc.js';
+import { checkFile } from '../src/node/index.js';
+import { mutateDoc, detectPlatform, loadProfiles, runProfile, type ProfileFinding } from '../src/index.js';
+import { validateDoc } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

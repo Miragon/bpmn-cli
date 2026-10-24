@@ -9,11 +9,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { readPlanes, type DShape } from '../src/diagram/plane.js';
-import type { El } from '../src/model/moddle.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DShape } from '../src/diagram/types.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 const ROOT = join(import.meta.dirname, '..');
 let dir: string;
@@ -58,7 +59,7 @@ async function handFile(name: string, mutate?: (doc: Doc) => void): Promise<stri
 async function shapesOf(file: string): Promise<Map<string, DShape>> {
   const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 

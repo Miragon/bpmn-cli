@@ -9,9 +9,9 @@
  * platform=browser (tools/iso/bundle.mjs) and exits 1 when
  *  - it imports a Node builtin or references a Node-only global (process,
  *    Buffer, global, require, __dirname, ...), naming the module;
- *  - the bundle contains the node layer (dist/node/) or the CLI (dist/cli.js);
+ *  - the bundle contains the node layer (dist/node/) or the CLI (dist/commands/, dist/cli.js);
  *  - a module of the engine rules that load on demand (ON_DEMAND: the
- *    Camunda 7 and Camunda 8 profile, src/platform/profiles/profile.ts LOADERS) is
+ *    Camunda 7 and Camunda 8 profile, src/platform/profiles/PlatformProfiles.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
  *    entry, naming the module, or is no chunk of its own;
  *  - a module of those rules imports (statically, also through another
@@ -48,8 +48,8 @@ const problems = [];
 
 /** What loads on demand, by the module that marks its chunk; `rules`: modules that must never be in the initial chunks. */
 const ON_DEMAND = [
-  { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/platform/profiles/c7.js', rules: ['dist/platform/profiles/c7.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
-  { name: 'c8', label: 'Camunda 8 rules', marker: 'dist/platform/profiles/c8.js', rules: ['dist/platform/profiles/c8.js', 'dist/platform/profiles/feel.js', 'dist/platform/profiles/schema-text.js'], when: "the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it)" },
+  { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/platform/profiles/C7Profile.js', rules: ['dist/platform/profiles/C7Profile.js', 'dist/platform/profiles/EngineProfile.js', 'dist/platform/profiles/utils/element.js', 'dist/platform/profiles/utils/hint.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
+  { name: 'c8', label: 'Camunda 8 rules', marker: 'dist/platform/profiles/C8Profile.js', rules: ['dist/platform/profiles/C8Profile.js', 'dist/platform/profiles/EngineProfile.js', 'dist/platform/profiles/utils/element.js', 'dist/platform/profiles/utils/hint.js', 'dist/platform/profiles/FeelExpression.js', 'dist/platform/profiles/FeelParser.js', 'dist/platform/profiles/FeelError.js', 'dist/platform/profiles/TimerValue.js', 'dist/platform/profiles/SchemaText.js', 'dist/platform/profiles/BpmnSchema.js'], when: "the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it)" },
   { name: 'bpmn-auto-layout', label: 'bpmn-auto-layout', marker: /node_modules\/bpmn-auto-layout\//, rules: [], when: "only for `engine: 'auto'`" },
 ];
 const ENTRIES = [
@@ -70,7 +70,7 @@ for (const v of full.violations) {
   problems.push(v.kind === 'global' ? `${v.file}: uses the Node-only global \`${v.what}\`` : `${v.file}${v.line ? `:${v.line}` : ''}: ${v.kind === 'builtin' ? `imports the Node builtin "${v.what}"` : v.text}`);
 }
 for (const f of full.inputs) {
-  if (/^dist\/(node\/|cli\.js$)/.test(f)) problems.push(`the core bundle contains ${f} (Node only)`);
+  if (/^dist\/(node\/|commands\/|cli\.js$)/.test(f)) problems.push(`the core bundle contains ${f} (Node only)`);
 }
 
 /* 2. what a host pays for the edit engine alone */
@@ -192,7 +192,7 @@ for (const entry of ENTRIES) {
   if (!s) continue;
   for (const part of ON_DEMAND) {
     for (const f of part.rules) {
-      if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profiles/profile.ts imports them, with import())`);
+      if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profiles/PlatformProfiles.ts imports them, with import())`);
     }
     if (part.rules.length && !s.onDemand.some((d) => d.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
     for (const { from, to } of s.onDemand.find((d) => d.name === part.name)?.importsOfEntry ?? []) {

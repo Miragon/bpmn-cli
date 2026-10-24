@@ -9,7 +9,7 @@
  *   node tools/gen-camunda-descriptor.mjs          # after updating camunda-bpmn-moddle or zeebe-bpmn-moddle
  *   node tools/gen-camunda-descriptor.mjs --check  # exit 1 when a file is stale
  *
- * Why a copy: src/platform/descriptor.ts used to read the JSON with
+ * Why a copy: src/platform/VendorDescriptor.ts used to read the JSON with
  * createRequire (node:module), which a browser bundle cannot resolve; a JSON
  * import attribute warns on Node 22, the oldest Node the package supports.
  * The constant needs neither. The data stays exactly the package's
@@ -25,8 +25,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'package.json'));
 
 const TARGETS = [
-  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/platform/descriptor.ts' },
-  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/platform/zeebe.ts' },
+  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/platform/CamundaDescriptor.ts' },
+  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/platform/ZeebeDescriptor.ts' },
 ];
 
 /** One line per type (and per association / enumeration), the rest as JSON. */

@@ -12,13 +12,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { detachedEnds } from '../src/diagram/reroute.js';
-import { is, type El } from '../src/model/moddle.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DEdge, DShape } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Drawing } from '../src/diagram/Drawing.js';
+import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -90,13 +92,13 @@ async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 
@@ -124,7 +126,7 @@ describe('layout modes', () => {
     const { r, after } = await run(xml, [{ op: 'set', id: 'A', values: { name: 'Check order' } }]);
     expect(r.layout).toMatchObject({ status: 'ok', mode: 'full', reason: expect.stringMatching(/no diagram/) });
     expect(r.layout.metrics?.before).toBeUndefined();
-    expect(layoutProblems(after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.missing).toBe(0);
   });
 
   it('auto redraws an engine-owned diagram in full (every CLI-built step stays engine-owned)', async () => {
@@ -210,7 +212,7 @@ describe('incremental placement', () => {
       }
     }
     expect(now.get('G')!.bounds.x).toBeGreaterThanOrEqual(right(n) + 20);
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.overlaps).toBe(0);
     expect(m.counts.missing).toBe(0);
     expect(m.score).toBe(0);
@@ -268,7 +270,7 @@ describe('incremental placement', () => {
         const { end, bottom: vertex } = entry(after, source);
         expect(end, source).toBe(vertex);
       }
-      expect(layoutProblems(after.definitions).counts.segmentOverlap).toBe(0);
+      expect(LayoutAnalysis.of(after.definitions).counts.segmentOverlap).toBe(0);
       expect(r.layout.metrics!.after.score).toBe(r.layout.metrics!.before!.score);
       expect(addedKinds(r)).toEqual([]);
     });
@@ -330,7 +332,7 @@ describe('incremental placement', () => {
       ], 13, 7, hookBundle);
       const into = (doc: Doc, source: string): DEdge => [...edges(doc).values()].find((x) => x.sourceId === source && x.targetId === 'GJ')!;
       const before = await Doc.fromXml(xml);
-      expect(layoutProblems(before.definitions).problems.filter((p) => ['through', 'overlaps'].includes(p.kind))).toEqual([]);
+      expect(LayoutAnalysis.of(before.definitions).problems.filter((p) => ['through', 'overlaps'].includes(p.kind))).toEqual([]);
       const hook = into(before, 'T2').points;
       const j = shapes(before).get('GJ')!;
       expect(hook.at(-1)).toEqual({ x: j.bounds.x + j.bounds.width / 2, y: bottom(j) });
@@ -419,7 +421,7 @@ describe('incremental placement', () => {
     const bridge = [...edges(after).values()].find((e) => e.sourceId === 'S')!;
     expect(bridge.targetId).toBe('G');
     expect(bridge.points).toHaveLength(2);
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('moves a node to another lane band keeping its x, everything else stays', async () => {
@@ -450,7 +452,7 @@ describe('incremental placement', () => {
     expect(l3.bounds.y).toBe(bottom(before.get('L2')!));
     expect(bottom(now.get('Pool')!)).toBe(bottom(l3));
     expect(inside(now.get('C')!, l3)).toBe(true);
-    expect(layoutProblems(after.definitions).counts.laneGap).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.laneGap).toBe(0);
     expect(r.layout.placed).toContain('L3');
   });
 
@@ -474,7 +476,7 @@ describe('incremental placement', () => {
     expect(now.get('Cust')!.bounds.width).toBe(now.get('Pool')!.bounds.width);
     const mf = [...edges(after).values()].find((e) => e.kind === 'messageFlow')!;
     expect(orthogonal(mf)).toBe(true);
-    expect(layoutProblems(after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.missing).toBe(0);
   });
 
   it('lays out a new pool with content as one block below the others', async () => {
@@ -486,7 +488,7 @@ describe('incremental placement', () => {
     const now = shapes(after);
     for (const id of ['SupS', 'SupT']) expect(inside(now.get(id)!, now.get('Sup')!)).toBe(true);
     expect(now.get('Sup')!.bounds.y).toBeGreaterThan(bottom(now.get('Pool')!));
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('places a new expanded sub-process with content as one block, a collapsed one on its own diagram', async () => {
@@ -500,11 +502,11 @@ describe('incremental placement', () => {
     expect(now.get('NS')).toMatchObject({ expanded: true });
     for (const id of ['NSS', 'NST']) expect(inside(now.get(id)!, now.get('NS')!)).toBe(true);
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(now.get('NS')!));
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
     ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as Op, ...sub.slice(1)]));
     now = shapes(after);
     expect(now.get('NS')).toMatchObject({ expanded: false, bounds: { width: 100, height: 80 } });
-    const planes = readPlanes(after.definitions);
+    const planes = new DiagramReader(after.definitions).planes();
     expect(planes.map((p) => p.rootId)).toEqual(['P', 'NS']);
     expect([...planes[1]!.shapes.keys()].sort()).toEqual(['NSS', 'NST']);
   });
@@ -523,18 +525,18 @@ describe('incremental placement', () => {
     const now = shapes(after);
     expect(now.get('Sub')).toMatchObject({ expanded: false, bounds: { x: before.get('Sub')!.bounds.x, width: 100, height: 80 } });
     expect(now.get('E')!.bounds.x).toBeLessThan(before.get('E')!.bounds.x);
-    const planes = readPlanes(after.definitions);
+    const planes = new DiagramReader(after.definitions).planes();
     expect(planes[1]!.rootId).toBe('Sub');
     expect([...planes[1]!.shapes.keys()].sort()).toEqual(['SE', 'SS', 'ST']);
     expect(r.layout.notes).toContain('Sub drawn collapsed');
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('expands a collapsed sub-process: its diagram moves in and the drawing makes room', async () => {
     const collapsed: Op[] = [...BASE.slice(0, 5), { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B', collapsed: true }, { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' }, { op: 'add', kind: 'task', id: 'ST', name: 'Inner', after: 'SS' }];
     const xml = await handXml(collapsed);
     const before = shapes(await Doc.fromXml(xml));
-    expect(readPlanes((await Doc.fromXml(xml)).definitions)).toHaveLength(2);
+    expect(new DiagramReader((await Doc.fromXml(xml)).definitions).planes()).toHaveLength(2);
     const { r, after } = await run(xml, [{ op: 'set', id: 'Sub', values: { expanded: 'true' } }]);
     const now = shapes(after);
     const sub = now.get('Sub')!;
@@ -542,9 +544,9 @@ describe('incremental placement', () => {
     expect(sub.bounds.x).toBe(before.get('Sub')!.bounds.x);
     for (const id of ['SS', 'ST']) expect(inside(now.get(id)!, sub)).toBe(true);
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(sub));
-    expect(readPlanes(after.definitions)).toHaveLength(1);
+    expect(new DiagramReader(after.definitions).planes()).toHaveLength(1);
     expect(r.layout.notes).toContain('Sub drawn expanded');
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.overlaps).toBe(0);
     expect(m.counts.outsideSub).toBe(0);
   });
@@ -555,7 +557,7 @@ describe('incremental placement', () => {
     expect(now.get('Sub')).toMatchObject({ kind: 'task', container: false, bounds: { width: 100, height: 80 } });
     expect(r.layout.pruned).toEqual(expect.arrayContaining(['SS', 'ST', 'SE']));
     expect(r.xml).not.toMatch(/bpmnElement="Sub" isExpanded/);
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('re-inserts a moved node at its new place, reusing its DI', async () => {
@@ -569,7 +571,7 @@ describe('incremental placement', () => {
     expect(now.get('G')!.bounds.x).toBeGreaterThan(right(now.get('C')!));
     expect(r.layout.moved).toContain('C');
     expect(r.layout.placed).not.toContain('C');
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('places artifacts next to their element: data below-right, annotations above-right', async () => {
@@ -583,7 +585,7 @@ describe('incremental placement', () => {
     expect(now.get('D')!.bounds.x).toBeGreaterThanOrEqual(a.bounds.x);
     expect(bottom(now.get('N')!)).toBeLessThan(a.bounds.y);
     expect(now.get('N')!.bounds.x).toBeGreaterThan(a.bounds.x);
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.missing).toBe(0);
     expect(m.counts.overlaps).toBe(0);
   });
@@ -608,7 +610,7 @@ describe('incremental placement', () => {
   });
 
   it('an engine drawing with a boundary event on its host\'s top border (its way over the top) stays editable: a task after its target, a task into its flow and a reroute keep the event there and its flow leaving it by its top', async () => {
-    // the clean engine puts Payment failed on Pick invoice's top border (layout/clean/place.ts boundariesOnTop); Rejected,
+    // the clean engine puts Payment failed on Pick invoice's top border (layout/clean/TopBorderTrial.ts); Rejected,
     // whose handler lies below, stays on the bottom border
     const ops: Op[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
@@ -629,7 +631,7 @@ describe('incremental placement', () => {
     const cx = (s: DShape): number => s.bounds.x + s.bounds.width / 2;
     expect(cy(ev), 'on the top border').toBe(drawn.get('A1')!.bounds.y);
     expect(cy(drawn.get('BE13')!), 'Rejected on the bottom border').toBe(bottom(drawn.get('A1')!));
-    expect(layoutProblems(doc.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(doc.definitions).score).toBe(0);
     const flow = flowFrom(doc, 'BE12', 'F');
     const top = { x: cx(ev), y: ev.bounds.y };
     expect(edges(doc).get(flow)!.points[0]).toEqual(top);
@@ -668,9 +670,9 @@ function flowFrom(doc: Doc, source: string, target: string): string {
   throw new Error(`no flow ${source} -> ${target}`);
 }
 
-/** The edges that do not reach their ends (reroute.ts detachedEnds), with the ends they miss. */
+/** The edges that do not reach their ends (EdgeRouter.ts detachedEnds), with the ends they miss. */
 function detached(doc: Doc): string[] {
-  return readPlanes(doc.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length).map((e) => `${e.id}->${detachedEnds(p, e).join(',')}`));
+  return new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length).map((e) => `${e.id}->${new Drawing(p).detachedEnds(e).join(',')}`));
 }
 
 /** `xml` with the waypoints of the edge of `flow` moved by (dx, dy): the line no longer reaches its ends. */
@@ -696,7 +698,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(next.r.layout.mode).toBe('incremental');
     expect(next.r.layout.placed).toContain(bridge);
     expect(edges(next.after).get(bridge)!.points[0]!.x).toBe(right(shapes(next.after).get('S')!));
-    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(next.after.definitions).counts.missing).toBe(0);
     expect(detached(next.after)).toEqual([]);
   });
 
@@ -708,7 +710,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(routed.r.layout.reason).toBe('format operations only: drawing kept');
     expect(routed.r.layout.format?.[0]?.rerouted).toEqual([bridge]);
     expect(edges(routed.after).get(bridge)!.points[0]!.x).toBe(right(shapes(routed.after).get('S')!));
-    expect(layoutProblems(routed.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(routed.after.definitions).counts.missing).toBe(0);
     for (const [id, s] of shapes(after)) expect(shapes(routed.after).get(id)!.bounds, id).toEqual(s.bounds);
     const batch = await run(xml, [{ op: 'remove', ids: ['A'] }, { op: 'route', id: bridge }], { layout: false });
     expect(edges(batch.after).has(bridge)).toBe(true);
@@ -740,7 +742,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     const next = await run(r.xml, [{ op: 'set', id: 'C', values: { name: 'Clarify it' } }]);
     expect(next.r.layout.placed).toContain('N');
     expect(next.r.layout.rerouted).toContain(spliced);
-    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(next.after.definitions).counts.missing).toBe(0);
     expect(detached(next.after)).toEqual([]);
   });
 
