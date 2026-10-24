@@ -40,7 +40,7 @@
  * is `next` itself (`mode: 'plain'` with a reason).
  */
 import { parseXml } from '../model/utils/moddle.js';
-import { attrKey, decodeXml, elementChildren, hasCharacterData, idOf, readXmlText, type XDocument, type XElement } from './text-reader.js';
+import { attrKey, decodeXml, elementChildren, hasCharacterData, idOf, readXmlText, type XDocument, type XElement } from './utils/text-reader.js';
 import { firstLine } from '../shared/utils/text.js';
 
 export interface PreservedText {

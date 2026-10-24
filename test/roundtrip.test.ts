@@ -28,7 +28,8 @@ import type { Op } from '../src/ops/types.js';
 import { mutateFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import { preserveText } from '../src/xml/preserve.js';
-import { readXmlText, XmlTextError } from '../src/xml/text-reader.js';
+import { readXmlText } from '../src/xml/utils/text-reader.js';
+import { XmlTextError } from '../src/xml/XmlTextError.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

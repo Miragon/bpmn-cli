@@ -15,7 +15,7 @@
  * targetRef is left to the structural check (E_DANGLING_REF).
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import type { XElement } from '../../xml/text-reader.js';
+import type { XElement } from '../../xml/utils/text-reader.js';
 import type { RuleKit } from './rule-kit.js';
 
 /* What the check uses of the core: handed over by the loader through c8.ts (useKit), never imported (platform/profiles/rule-kit.ts). */
