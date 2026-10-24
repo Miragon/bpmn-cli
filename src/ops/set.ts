@@ -96,6 +96,7 @@ import { addTo, is, localType, many, walk, type El } from '../model/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 import { about, ChangeSet, type Change } from '../model/change-set.js';
+import { groupName, setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
@@ -156,7 +157,7 @@ export function changeKind(el: El): string {
 
 /** ChangeSet entry for an element (about it: ChangeSet.rename). */
 export function changeOf(el: El, detail?: string): Change {
-  const name = el.get<string | undefined>('name');
+  const name = is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
   return about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
 }
 
@@ -210,7 +211,7 @@ const APPLIES_TO: Record<string, (el: El) => boolean> = {
 
 export const SET_KEYS: SetKeyDoc[] = [
   { key: 'id', appliesTo: 'any', description: 'Rename the element; every reference (flows, lanes, boundary hosts, calledElement) follows, and so does a DI id derived from the old id (BPMNShape_<id>, <id>_di)' },
-  { key: 'name', appliesTo: 'any', description: 'Display name (empty value removes it)' },
+  { key: 'name', appliesTo: 'any', description: 'Display name (empty value removes it; a group\'s name is the value of its category value)' },
   { key: 'doc', appliesTo: 'any', description: 'Documentation text (alias: documentation; empty removes it)' },
   { key: '<prefix>:<attr>', appliesTo: 'any', description: 'Vendor attribute, e.g. camunda:assignee=alice or zeebe:modelerTemplate=x (xmlns declared automatically for known prefixes)' },
   { key: '<property>', appliesTo: 'any', description: 'Any attribute of the BPMN type by property name, e.g. isExecutable, calledElement, scriptFormat, script, implementation, isForCompensation, completionQuantity, gatewayDirection, instantiate' },
@@ -455,7 +456,8 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     }
     case 'name':
       recordFormerEnd(doc, el);
-      el.set('name', value || undefined);
+      if (is(el, 'bpmn:Group')) setGroupName(doc, el, value);
+      else el.set('name', value || undefined);
       break;
     case 'doc':
       setDocumentation(doc, el, value);
@@ -1666,7 +1668,7 @@ export function renameId(doc: Doc, el: El, newId: string): void {
 /** Structured, settable view of an element's properties (used by `show <id>`). */
 export function readProperties(doc: Doc, el: El): Record<string, unknown> {
   const out: Record<string, unknown> = { id: idOf(el) };
-  const name = el.get<string | undefined>('name');
+  const name = is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
   if (name) out['name'] = name;
   const docs = (ownValue(el, 'documentation') as El[] | undefined) ?? [];
   const text = docs

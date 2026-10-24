@@ -15,7 +15,9 @@
  *    participants remain.
  *  - data object reference: also its bpmn:DataObject when no other reference
  *    uses it (same for the root bpmn:DataStore of a data store reference);
- *    text annotation: its associations.
+ *    text annotation: its associations; group: its category value when no
+ *    other group references it (the members' references to it go too),
+ *    then its category when no value is left.
  *  - op.ifExists: unknown ids are skipped with a note; else E_NOT_FOUND.
  *  - op.withBranch: a flow node or boundary event goes together with its
  *    exclusive downstream path (branchOf): every node it alone leads to
@@ -506,6 +508,14 @@ function afterDetach(doc: Doc, el: El, parent: El | undefined, cs: ChangeSet): v
   if (is(el, 'bpmn:DataStoreReference')) {
     const backing = el.get<El | undefined>('dataStoreRef');
     if (backing && isAttached(doc, backing) && !findReferences(doc.definitions, backing).length) cascadeRemove(doc, backing, cs);
+    return;
+  }
+  if (is(el, 'bpmn:Group')) {
+    const value = el.get<El | undefined>('categoryValueRef');
+    if (!value || !isAttached(doc, value) || findReferences(doc.definitions, value).some((r) => is(r.holder, 'bpmn:Group'))) return;
+    const category = value.$parent as El;
+    cascadeRemove(doc, value, cs);
+    if (is(category, 'bpmn:Category') && !many(category, 'categoryValue').length) cascadeRemove(doc, category, cs);
     return;
   }
   if (is(el, 'bpmn:Process')) {

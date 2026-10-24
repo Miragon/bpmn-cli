@@ -8,12 +8,24 @@
  * CONTRACT
  *  - rememberGroups(defs), before an engine replaces the DI: one entry per
  *    group BPMNShape with valid bounds, with the id of the element its plane
- *    shows (`root`), its bounds, label bounds and members: the elements of
- *    the other shapes of that plane whose centre lies inside the box (a
- *    pool, lane, expanded sub-process or group only when it lies inside
- *    whole), plus the flow elements that reference the group's category
- *    value. A drawing without a group shape gives [] after one pass over
- *    the plane elements; nothing else runs then.
+ *    shows (`root`), its bounds, label bounds and members: the flow
+ *    elements that reference the group's category value (a group `add
+ *    group` made), else (a group drawn in a modeler) the elements of the
+ *    other shapes of that plane whose centre lies inside the box (a pool,
+ *    lane, expanded sub-process or group only when it lies inside whole).
+ *    A drawing without a group shape gives [] after one pass over the
+ *    plane elements; nothing else runs then.
+ *  - undrawnGroups(defs): one entry per group without a shape whose
+ *    category value flow elements reference (a group `add group` made),
+ *    with those elements as members, no box (0 x 0) and, when the group
+ *    has a name, a label of the name's size; redrawGroups draws it around
+ *    its members (after a full redraw and after an incremental layout).
+ *  - groupMembers(defs): every group by id with its members (`show`):
+ *    those of rememberGroups for a drawn group, else of undrawnGroups,
+ *    else none.
+ *  - relabelGroup(moddle, defs, group, name), after a rename: each shape of
+ *    the group gets a label of the new name's size, centred at the top of
+ *    its box (an empty name: no label).
  *  - membersOf(groups): element id -> the ids of the groups that held it,
  *    outermost (largest old box) first; the clean engine keeps the parts of
  *    a scope no flow connects together by it (layout/clean/place.ts).
@@ -28,7 +40,7 @@
  *    activities) and of their labels, each label (in id order) only when
  *    it brings no other shape into the box; padded by GROUP_PAD on every
  *    side, at the top by GROUP_PAD plus NAME_ROOM when the group has a
- *    name. A side's padding stops half-way to a shape that is no member
+ *    name. The shape id comes from `shapeId` (default `BPMNShape_<id>`). A side's padding stops half-way to a shape that is no member
  *    and half-way to the border of a pool, lane or expanded sub-process
  *    around the members. Other groups' boxes play no part in the padding
  *    or the labels (the members of a neighbour group already stop a side
@@ -43,7 +55,8 @@
  *    apart can still overlap one that lies between them. The label (only when the group
  *    had label bounds and has a name) keeps its size, centred at the top
  *    of the box as bpmn-js places a group's label.
- *  - A group none of whose members is drawn goes, after all the others, to
+ *  - A group none of whose members is drawn and that had no box
+ *    (undrawnGroups) is left alone. Any other group none of whose members is drawn goes, after all the others, to
  *    the plane of its old root (else the first plane) and keeps its old
  *    bounds and label (named in `kept`), unless a shape or shape label of
  *    that plane (a frame that holds it whole aside) or another such group
@@ -59,6 +72,7 @@ import type { BpmnModdle } from 'bpmn-moddle';
 import { addTo, is, type El } from '../model/moddle.js';
 import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll, type Box, type Point } from './geom.js';
 import { idOf, raw, rawList } from './plane.js';
+import { labelSize } from './types.js';
 
 /** padding of a redrawn group around its members */
 export const GROUP_PAD = 20;
@@ -151,12 +165,36 @@ export function rememberGroups(defs: El): RememberedGroup[] {
     for (const g of shapes.values()) {
       if (!is(g.el, 'bpmn:Group')) continue;
       byValue ??= categoryMembers(defs);
-      const members = new Set([...shapes.values()].filter((s) => s !== g && holds(g.box, s)).map((s) => s.id));
       const value = raw<El>(g.el, 'categoryValueRef');
-      for (const id of (value && byValue.get(value)) || []) members.add(id);
-      out.push({ id: g.id, root: idOf(raw(plane, 'bpmnElement')), bounds: g.box, ...(g.label ? { label: g.label } : {}), members: [...members] });
+      const referenced = (value && byValue.get(value)) || [];
+      const members = referenced.length ? referenced : [...shapes.values()].filter((s) => s !== g && holds(g.box, s)).map((s) => s.id);
+      out.push({ id: g.id, root: idOf(raw(plane, 'bpmnElement')), bounds: g.box, ...(g.label ? { label: g.label } : {}), members });
     }
   }
+  return out;
+}
+
+/** The groups without a shape that flow elements reference by category value (see the module contract). */
+export function undrawnGroups(defs: El): RememberedGroup[] {
+  const drawn = new Set<string>();
+  for (const diagram of rawList(defs, 'diagrams')) for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) if (is(pe, 'bpmndi:BPMNShape')) drawn.add(idOf(raw(pe, 'bpmnElement')) ?? '');
+  const byValue = categoryMembers(defs);
+  const out: RememberedGroup[] = [];
+  for (const [id, group] of groupElements(defs)) {
+    const value = raw<El>(group, 'categoryValueRef');
+    const members = (value && byValue.get(value)) || [];
+    if (drawn.has(id) || !members.length) continue;
+    const name = raw<string>(value, 'value')?.trim();
+    const size = name ? labelSize(name) : undefined;
+    out.push({ id, bounds: { x: 0, y: 0, width: 0, height: 0 }, ...(size ? { label: { x: 0, y: 0, width: size.width, height: size.height } } : {}), members });
+  }
+  return out;
+}
+
+/** Every group by id with its members (see the module contract). */
+export function groupMembers(defs: El): Map<string, string[]> {
+  const out = new Map([...groupElements(defs).keys()].map((id): [string, string[]] => [id, []]));
+  for (const g of [...rememberGroups(defs), ...undrawnGroups(defs)]) if (!out.get(g.id)?.length) out.set(g.id, g.members);
   return out;
 }
 
@@ -280,8 +318,24 @@ function keptBounds(plane: El, shapes: Map<string, Item>, old: Box, placed: read
   return box;
 }
 
+/** A label of `size` centred at the top of `box`, where bpmn-js places a group's label. */
+function labelOn(box: Box, size: { width: number; height: number }): Box {
+  return { x: Math.round(cx(box) - size.width / 2), y: Math.round(box.y + Math.max(0, NAME_ROOM / 2 - size.height / 2)), width: size.width, height: size.height };
+}
+
+/** `set <group> name=`: every shape of the group gets a label of the new name's size at the top of its box (an empty name: none). */
+export function relabelGroup(moddle: BpmnModdle, defs: El, group: El, name: string): void {
+  for (const diagram of rawList(defs, 'diagrams')) {
+    for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
+      const box = is(pe, 'bpmndi:BPMNShape') && raw(pe, 'bpmnElement') === group ? boxOf(raw(pe, 'bounds')) : undefined;
+      if (!box) continue;
+      pe.set('label', name.trim() ? moddle.create('bpmndi:BPMNLabel', { bounds: boundsEl(moddle, labelOn(box, labelSize(name))) }) : undefined);
+    }
+  }
+}
+
 /** Draws the remembered groups again after a full redraw (see the module contract). */
-export function redrawGroups(moddle: BpmnModdle, defs: El, groups: readonly RememberedGroup[]): RedrawnGroups {
+export function redrawGroups(moddle: BpmnModdle, defs: El, groups: readonly RememberedGroup[], shapeId: (id: string) => string = (id) => `BPMNShape_${id}`): RedrawnGroups {
   const result: RedrawnGroups = { drawn: [], kept: [], moved: [] };
   if (!groups.length) return result;
   const elements = groupElements(defs);
@@ -297,7 +351,7 @@ export function redrawGroups(moddle: BpmnModdle, defs: El, groups: readonly Reme
   const empty: Array<{ g: RememberedGroup; el: El }> = [];
   const fitted: Array<{ g: RememberedGroup; el: El; home: (typeof planes)[number]; ids: Set<string>; top: number; box: Box; label?: Box }> = [];
   const add = (g: RememberedGroup, el: El, plane: El, box: Box, label: Box | undefined): void => {
-    const shape = moddle.create('bpmndi:BPMNShape', { id: `BPMNShape_${g.id}`, bpmnElement: el, bounds: boundsEl(moddle, box) }) as El;
+    const shape = moddle.create('bpmndi:BPMNShape', { id: shapeId(g.id), bpmnElement: el, bounds: boundsEl(moddle, box) }) as El;
     if (label) shape.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: boundsEl(moddle, label) }));
     shapes.set(g, { plane, shape });
   };
@@ -315,14 +369,14 @@ export function redrawGroups(moddle: BpmnModdle, defs: El, groups: readonly Reme
       }
     }
     if (!home) {
-      empty.push({ g, el });
+      if (g.bounds.width && g.bounds.height) empty.push({ g, el });
       continue;
     }
     const hasName = named(el);
     const ids = new Set(g.members.filter((id) => home!.shapes.has(id)));
     const top = GROUP_PAD + (hasName ? NAME_ROOM : 0);
     const box = round(fit(home.shapes, g.id, ids, top));
-    const label = hasName && g.label ? { x: Math.round(cx(box) - g.label.width / 2), y: Math.round(box.y + Math.max(0, NAME_ROOM / 2 - g.label.height / 2)), width: g.label.width, height: g.label.height } : undefined;
+    const label = hasName && g.label ? labelOn(box, g.label) : undefined;
     home.shapes.set(g.id, { id: g.id, el, box, whole: true, ...(label ? { label } : {}) });
     fitted.push({ g, el, home, ids, top, box, label });
     result.drawn.push(g.id);
@@ -338,7 +392,7 @@ export function redrawGroups(moddle: BpmnModdle, defs: El, groups: readonly Reme
       if (box.x === f.box.x && box.y === f.box.y && box.width === f.box.width && box.height === f.box.height) continue;
       changed.add(f.g.id);
       f.box = box;
-      if (f.label) f.label = { ...f.label, x: Math.round(cx(box) - f.label.width / 2), y: Math.round(box.y + Math.max(0, NAME_ROOM / 2 - f.label.height / 2)) };
+      if (f.label) f.label = labelOn(box, f.label);
       f.home.shapes.set(f.g.id, { id: f.g.id, el: f.el, box, whole: true, ...(f.label ? { label: f.label } : {}) });
     }
   }

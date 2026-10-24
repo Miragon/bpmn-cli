@@ -128,7 +128,7 @@ export const NODE_FIELDS: FieldsOf<SplitNode> = {
   process: ref('Participants: bind this existing (unbound) process instead of creating a new one.'),
   blackBox: bool('Participants: create no process (black-box pool).'),
   text: str('Text annotations: the annotation text.'),
-  members: list('Lanes: initial member node ids.'),
+  members: list('Lanes: initial member node ids. Groups (required): the elements the group is drawn around.'),
 };
 
 export const ADD_FIELDS: FieldsOf<AddOp> = {
