@@ -6,7 +6,7 @@
  *  - everything outside the changed elements keeps its text: prolog,
  *    comments, the root tag with its namespace order, vendor attributes in
  *    their place, CDATA, entities, quotes, indentation, the missing final
- *    line break (xml/preserve.ts);
+ *    line break (xml/TextPreservation.ts);
  *  - changed and new elements follow the file's style (attribute order,
  *    indentation unit, `/>`, a CDATA section stays one);
  *  - comments next to removed elements are reported, never dropped silently;
@@ -27,7 +27,7 @@ import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
-import { preserveText } from '../src/xml/preserve.js';
+import { preserveText } from '../src/index.js';
 import { readXmlText } from '../src/xml/utils/text-reader.js';
 import { XmlTextError } from '../src/xml/XmlTextError.js';
 import { definitionsXml } from './helpers.js';

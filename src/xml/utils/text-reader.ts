@@ -251,3 +251,8 @@ export function decodeXml(s: string): string {
     return String.fromCodePoint(code);
   });
 }
+
+/** The text of an element, start tag to end tag. */
+export function rawOf(doc: XDocument, el: XElement): string {
+  return doc.text.slice(el.start, el.end);
+}

@@ -10,10 +10,10 @@
  * Output text (outputText): incoming / outgoing entries are written the way
  * the file keeps them (model/mirror.ts; in memory they are complete), and for a
  * document read from XML every element the ops did not change keeps its
- * original text (xml/preserve.ts: prolog, comments, CDATA, attribute order,
+ * original text (xml/TextPreservation.ts: prolog, comments, CDATA, attribute order,
  * namespace declarations, indentation); changed and new elements follow the
  * file's style. A write is UTF-8: a changed result whose XML declaration
- * names another encoding declares UTF-8 (src/xml/encoding.ts, with a note). Comments the result cannot keep, and a fall-back to
+ * names another encoding declares UTF-8 (src/xml/utils/encoding.ts, with a note). Comments the result cannot keep, and a fall-back to
  * bpmn-moddle's plain serialisation, are reported as notes. A result equal
  * to the input text is `unchanged: true`; the node layer does not write it
  * back over its file (`written: false`; `--out` to another file still writes
@@ -138,7 +138,7 @@ import { isFormatOp, type Op } from '../ops/types.js';
 import { ChangeSet } from '../model/change-set.js';
 import { resolvePlatform } from '../platform/detect.js';
 import { ensureProfile, profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
-import { plainText, preserveText } from '../xml/preserve.js';
+import { TextPreservation } from '../xml/TextPreservation.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from '../validate/structural.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type Validator, type ValidatorContext, type ValidatorRun } from '../validate/validators.js';
 import { buildView, type ModelView } from '../query/model-view.js';
@@ -593,7 +593,7 @@ async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: bo
 /**
  * The text a mutation writes. The mirror entries the file does not keep are
  * left out (model/mirror.ts). For a document read from a file, the parts the ops
- * did not change keep their original text (xml/preserve.ts; `baseline` is the
+ * did not change keep their original text (xml/TextPreservation.ts; `baseline` is the
  * serialisation of the document as read); comments that could not be kept
  * and a fall-back to the plain serialisation are reported as notes.
  */
@@ -603,7 +603,8 @@ async function outputText(doc: Doc, xml: string, baseline: string | undefined, c
   const unkept = unkeptEntries(doc.definitions, source.mirror);
   if (unkept.length) xml = await withoutEntries(xml, unkept);
   // a forced write of a lossy import drops what bpmn-moddle could not read: the original text would keep it
-  const text = doc.lossyImportWarnings.length ? plainText(source.text, xml, 'the import was lossy') : await preserveText(source.text, baseline, xml);
+  const preservation = new TextPreservation(source.text, baseline, xml);
+  const text = doc.lossyImportWarnings.length ? preservation.plain('the import was lossy') : await preservation.result();
   if (text.mode === 'plain') {
     const comments = text.droppedComments ? `; ${text.droppedComments} XML comment(s) dropped` : '';
     changes.note(`the file's formatting was not kept (${text.reason}): written as bpmn-moddle serialises it${comments}`);
@@ -611,7 +612,7 @@ async function outputText(doc: Doc, xml: string, baseline: string | undefined, c
     changes.note(`${text.droppedComments} XML comment(s) dropped: they were inside or next to elements the change removed or rewrote`);
   }
   if (text.xml === source.text) return text.xml;
-  // a write is UTF-8 (src/xml/encoding.ts): the kept declaration must say so
+  // a write is UTF-8 (src/xml/utils/encoding.ts): the kept declaration must say so
   const declared = utf8Declaration(text.xml);
   if (declared.was !== undefined) changes.note(`the XML declaration named the encoding ${declared.was}; the text is written as UTF-8, so it now says UTF-8`);
   return declared.text;

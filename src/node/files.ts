@@ -25,7 +25,7 @@
  * Encoding: a file is read in the encoding its XML declaration names
  * (decodeXmlBytes: UTF-8 without one, UTF-16 by its byte order mark), so
  * that the characters of an ISO-8859-1 / Windows-1252 file survive; every
- * write is UTF-8, and a changed result declares UTF-8 (src/xml/encoding.ts).
+ * write is UTF-8, and a changed result declares UTF-8 (src/xml/utils/encoding.ts).
  *
  * Validators (MutationOptions.validators): they see the file being written
  * (the `out` target with `out`) or checked as `ctx.file`, unless `file` names

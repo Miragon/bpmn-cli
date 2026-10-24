@@ -596,7 +596,7 @@ draw the engine corpus with the same CLI.
 ## Roundtrip fidelity
 
 A write changes the text of the elements it changed and nothing else
-(src/xml/preserve.ts, src/model/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
+(src/xml/TextPreservation.ts, src/model/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
 - `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
@@ -628,7 +628,7 @@ not from the writer: a file without a diagram is drawn, the incremental
 layout completes missing DI (an edge, a shape, the plane's `bpmnElement`)
 and routes a line that does not reach its ends again (`detachedEdge`).
 With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
-above zero means xml/preserve.ts could not keep a file's text (the note says
+above zero means xml/TextPreservation.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.
 
 ## Speaking ids
