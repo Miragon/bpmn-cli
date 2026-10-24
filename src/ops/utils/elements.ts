@@ -2,6 +2,7 @@
  * The small reads every mutation shares: an element's moddle descriptor, its
  * own values (without moddle's lazy collections), its id, its vendor content.
  */
+import { kindLabel } from '../../model/kinds.js';
 import { localType, type El } from '../../model/utils/moddle.js';
 
 /** A moddle property descriptor (the subset the mutations rely on). */
@@ -34,6 +35,12 @@ export function ownValue(el: El, prop: string): unknown {
 /** The id of an element, `''` without one. */
 export function idOf(el: El): string {
   return el.get<string | undefined>('id') ?? '';
+}
+
+/** `userTask Activity_Check "Check"`: kind label, id and name, for messages. */
+export function labelOf(el: El): string {
+  const name = el.get<string | undefined>('name');
+  return `${kindLabel(el)} ${el.get<string>('id')}${name ? ` "${name}"` : ''}`;
 }
 
 /** True for moddle elements (typed or generic). */

@@ -37,9 +37,11 @@ import { withSuffix } from '../ids/utils/slug.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
-import { createSequenceFlow, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
+import { renamedNote } from '../model/utils/renames.js';
+import { insertAfterInScope } from './utils/declaration-order.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { AddOp, FlowOptions as FlowOptionValues, SplitOp } from './types.js';
+import { SequenceFlows } from './SequenceFlows.js';
 
 
 function gatewayKind(token: string | undefined): string {
@@ -165,12 +167,12 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const gateway = doc.require(gatewayId);
   cs.bind(op.as, gateway);
   if (spliced) {
-    const renamed = redirectFlow(doc, spliced, { target: gateway });
+    const renamed = new SequenceFlows(doc).redirect(spliced, { target: gateway });
     insertAfterInScope(scope, spliced, gateway);
     cs.change(ChangeSet.flowEntryOf(spliced, `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}`));
     cs.note(`inserted ${gatewayId} between ${op.after} and ${idOf(successor!)}`);
   } else {
-    const flow = createSequenceFlow(doc, anchor, gateway);
+    const flow = new SequenceFlows(doc).create(anchor, gateway);
     insertAfterInScope(scope, flow, gateway);
     cs.create(ChangeSet.flowEntryOf(flow));
     cs.note(`appended ${gatewayId} after ${op.after}`);

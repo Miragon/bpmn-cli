@@ -76,11 +76,14 @@ import { createAssociation, createDataAssociation, createDataObject, createDataS
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
-import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { FlowOptions } from './FlowOptions.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
+import { StaleFlowReport } from './StaleFlowReport.js';
+import { NodePlacement } from './NodePlacement.js';
+import { EventGatewayRule } from './EventGatewayRule.js';
+import { FlowRules } from '../model/FlowRules.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -148,7 +151,7 @@ function placementContext(doc: Doc, op: AddOp): AnchorContext | undefined {
     const el = id ? doc.get(id) : undefined;
     return el ? new ElementLabels(el).anchorContext(word) : { context: word };
   };
-  switch (placementMode(op)) {
+  switch (NodePlacement.modeOf(op)) {
     case 'after':
     case 'between':
       return at('After', op.after);
@@ -191,7 +194,7 @@ function bindOutAs(doc: Doc, op: AddOp, alias: string, node: El, cs: ChangeSet):
     cs.bind(alias, out[0]);
     return;
   }
-  const mode = placementMode(op);
+  const mode = NodePlacement.modeOf(op);
   if (!out.length) {
     const why = mode === 'after' ? `--after ${op.after} appends it` : mode === 'none' ? 'no placement' : `--${mode}`;
     throw usageError(`outAs ${alias}: ${id} gets no flow out of it from this placement (${why})`, {
@@ -277,15 +280,15 @@ function triggerOptionsOf(opts: TriggerOptions): TriggerOptions {
 }
 
 /** Rejects contradictory or empty flow options before anything is mutated (same rules as `apply`). */
-function checkFlowOptions(op: AddOp): void {
+function checkFlowOptions(doc: Doc, op: AddOp): void {
   new FlowOptions(op).assertConsistent();
-  assertCondition(op.condition);
+  new FlowRules(doc).assertCondition(op.condition);
 }
 
 /** W_OPTION_IGNORED for flow options the placement could not apply. */
 function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | undefined, cs: ChangeSet): void {
   const id = idOf(node);
-  const mode = placementMode(op);
+  const mode = NodePlacement.modeOf(op);
   if (mode === 'in' || mode === 'none' || mode === 'on') {
     const given = new FlowOptions(op).flags;
     if (given.length) {
@@ -310,7 +313,7 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
       message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
       element: id,
       ...(entry ? { related: [idOf(entry)] } : {}),
-      hint: flowIdIgnoredHint(op.flowId, entry && idOf(entry), kept),
+      hint: StaleFlowReport.flowIdIgnoredHint(op.flowId, entry && idOf(entry), kept),
     });
   }
 }
@@ -331,7 +334,7 @@ function isEventSubProcess(el: El | undefined): boolean {
 }
 
 function placementDetail(doc: Doc, op: AddOp): string {
-  switch (placementMode(op)) {
+  switch (NodePlacement.modeOf(op)) {
     case 'between':
       return `between ${op.after} and ${op.before}`;
     case 'after':
@@ -343,7 +346,7 @@ function placementDetail(doc: Doc, op: AddOp): string {
     case 'on':
       return `on ${op.on}`;
     default:
-      return `in ${idOf(placementScope(doc, op))}`;
+      return `in ${idOf(new NodePlacement(doc, op).scope())}`;
   }
 }
 
@@ -355,7 +358,7 @@ function placementDetail(doc: Doc, op: AddOp): string {
 function resolveLane(doc: Doc, op: AddOp): El | undefined {
   if (!op.lane) return undefined;
   const lane = doc.require(op.lane, 'bpmn:Lane', 'lane');
-  const scope = placementScope(doc, op);
+  const scope = new NodePlacement(doc, op).scope();
   if (!is(scope, 'bpmn:Process')) {
     throw modelError('E_INVALID_LANE_MEMBERSHIP', `Nodes inside sub-process ${idOf(scope)} cannot be lane members`, {
       element: op.lane,
@@ -366,7 +369,7 @@ function resolveLane(doc: Doc, op: AddOp): El | undefined {
 }
 
 function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: AnchorContext | undefined): El {
-  checkFlowOptions(op);
+  checkFlowOptions(doc, op);
   const explicitLane = resolveLane(doc, op);
   const id = allocateElementId(doc, elementRequest(doc, def, trigger ?? inferTrigger(op), op, context), op);
   const el = doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
@@ -393,13 +396,13 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   cs.create(entry);
   // before the placement: a splice may rename the flow op.flow names
   const inherited: InheritedLane = explicitLane ? {} : inheritedLane(doc, op);
-  const entryFlow = placeNode(doc, el, op, cs);
+  const entryFlow = new NodePlacement(doc, op).place(el, cs);
   warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
   if (op.flowAs) {
     // the flow the flow options describe: into the node, or out of it when `before` prepended it
-    const flow = entryFlow ?? (placementMode(op) === 'before' ? doc.outgoing(el)[0] : undefined);
+    const flow = entryFlow ?? (NodePlacement.modeOf(op) === 'before' ? doc.outgoing(el)[0] : undefined);
     if (!flow) {
-      throw usageError(`flowAs ${op.flowAs}: ${id} gets no flow from this placement (${placementMode(op) === 'none' ? 'no placement' : `--${placementMode(op)}`})`, {
+      throw usageError(`flowAs ${op.flowAs}: ${id} gets no flow from this placement (${NodePlacement.modeOf(op) === 'none' ? 'no placement' : `--${NodePlacement.modeOf(op)}`})`, {
         element: id,
         hint: 'Place the node with after / before / flow, or connect it with a connect op that has "as".',
       });
@@ -434,7 +437,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
   if (new Camunda8Defaults(doc).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
   // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
-  for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) warnEventGatewayFlow(doc, f, cs);
+  for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) new EventGatewayRule(doc).warnFlow(f, cs);
   if (op.collapsed && def.family === 'subProcess') {
     doc.layoutRequests.collapse(id);
     cs.note(`${id} will be laid out collapsed`);

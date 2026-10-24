@@ -23,13 +23,13 @@ import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
-import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
+import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -636,7 +636,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:userTask id="C_Task" />`,
     );
     const g = doc.require('Gateway_Wait');
-    const problem = (id: string) => eventGatewayTargetProblem(doc, g, doc.require(id));
+    const problem = (id: string) => new EventGatewayRule(doc).targetProblem(g, doc.require(id));
     expect(problem('C_Cond')).toBeUndefined();
     expect(problem('C_Link')).toMatch(/link catch event/);
     expect(problem('C_None')).toMatch(/plain catch event/);

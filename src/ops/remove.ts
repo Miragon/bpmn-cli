@@ -68,10 +68,13 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { kindOf, synchronises } from '../model/kinds.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { detachNode, eventGatewayRule, eventGatewayTargetProblem, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
+import { detachNode, type Bridge } from './flows.js';
+import { renamedNote } from '../model/utils/renames.js';
 
 import { descriptorOf, idOf, isEl, ownValue } from './utils/elements.js';
 import type { RemoveOp } from './types.js';
+import { EventGatewayRule } from './EventGatewayRule.js';
+import { SequenceFlows } from './SequenceFlows.js';
 
 /** Removes every element named in `op.ids` (cascading), bridging flows around single nodes. */
 export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
@@ -245,19 +248,19 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
   const outName = outFlow.get<string | undefined>('name');
   if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
   if (outFlow.get<El | undefined>('conditionExpression')) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
-  removeSequenceFlow(doc, outFlow, cs);
+  new SequenceFlows(doc).remove(outFlow, cs);
   cs.remove(ChangeSet.flowEntryOf(outFlow));
   const bridged: string[] = [];
   for (const inFlow of incoming) {
     const predecessor = inFlow.get<El>('sourceRef');
     const already = doc.outgoing(predecessor).some((f) => f !== inFlow && f.get<El | undefined>('targetRef') === successor);
     if (predecessor === successor || predecessor === node || already) {
-      removeSequenceFlow(doc, inFlow, cs);
+      new SequenceFlows(doc).remove(inFlow, cs);
       cs.remove(ChangeSet.flowEntryOf(inFlow));
       cs.note(`not bridged: ${idOf(predecessor)} ${predecessor === successor ? 'is the successor itself' : predecessor === node ? 'is the removed node' : `already flows to ${idOf(successor)}`}`);
       continue;
     }
-    const renamed = redirectFlow(doc, inFlow, { target: successor });
+    const renamed = new SequenceFlows(doc).redirect(inFlow, { target: successor });
     cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
     bridged.push(idOf(predecessor));
   }
@@ -336,10 +339,10 @@ export function assertBridgeAllowed(doc: Doc, node: El, inFlow: El, outFlow: El,
   const successor = outFlow.get<El>('targetRef');
   if (!is(predecessor, 'bpmn:EventBasedGateway') || successor === node) return;
   if (removing?.has(idOf(successor))) return;
-  const problem = eventGatewayTargetProblem(doc, predecessor, successor, [outFlow, inFlow]);
+  const problem = new EventGatewayRule(doc).targetProblem(predecessor, successor, [outFlow, inFlow]);
   if (!problem) return;
   const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${idOf(successor)} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${idOf(outFlow)} --timer PT1H\`)`;
-  const rejectedBy = eventGatewayRule(doc) === 'engines' ? 'which the engines reject' : 'which BPMN 2.0 does not allow';
+  const rejectedBy = new EventGatewayRule(doc).rule === 'engines' ? 'which the engines reject' : 'which BPMN 2.0 does not allow';
   throw modelError('E_INVALID_BRIDGE', `${command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${idOf(predecessor)} to ${idOf(successor)}, ${rejectedBy}: ${problem}`, {
     element: idOf(node),
     related: [idOf(predecessor), idOf(successor)],
@@ -450,7 +453,7 @@ function removedEntry(el: El) {
 export function cascadeRemove(doc: Doc, el: El, cs: ChangeSet): void {
   if (!isAttached(doc, el)) return;
   if (is(el, 'bpmn:SequenceFlow')) {
-    removeSequenceFlow(doc, el);
+    new SequenceFlows(doc).remove(el);
     cs.remove(ChangeSet.flowEntryOf(el));
     cleanupReferences(doc, new Set([el]), cs);
     return;

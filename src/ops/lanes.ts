@@ -20,8 +20,8 @@ import type { Doc } from '../model/Doc.js';
 import type { Warning } from '../shared/CliError.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { laneOf } from './containers.js';
-import { placementMode } from './flows.js';
 import type { Placement } from './types.js';
+import { NodePlacement } from './NodePlacement.js';
 
 export interface InheritedLane {
   lane?: El;
@@ -42,7 +42,7 @@ function laneAnchor(doc: Doc, p: Placement): El | undefined {
 /** The flow a placement will splice the node into (looked up before it is placed), if any (flows.ts placeNode). */
 function splicedFlow(doc: Doc, p: Placement): El | undefined {
   const get = (id: string | undefined): El | undefined => (id ? doc.get(id) : undefined);
-  switch (placementMode(p)) {
+  switch (NodePlacement.modeOf(p)) {
     case 'flow':
       return get(p.flow);
     case 'between': {

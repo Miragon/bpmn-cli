@@ -11,7 +11,6 @@ import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
-import { reportStaleFlows } from './flows.js';
 import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
 import { removeElements } from './remove.js';
@@ -19,6 +18,7 @@ import { retypeElement } from './retype.js';
 import { reportStaleIdPrefixes, setProperties } from './set.js';
 import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
+import { StaleFlowReport } from './StaleFlowReport.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -47,7 +47,7 @@ export class OpRunner {
     return this.within(() => {
       this.edit.begin();
       const cs = this.step(op);
-      reportStaleFlows(this.doc, cs, this.edit.flowsBefore);
+      new StaleFlowReport(this.doc).report(cs, this.edit.flowsBefore);
       reportStaleIdPrefixes(this.doc, cs);
       return cs;
     });
@@ -121,7 +121,7 @@ export class OpRunner {
       // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
       all.warnings = all.warnings.filter((w) => this.stillHolds(w));
       // a kept flow id is stale against the flow's final ends, a kept id's prefix against the element's final type and trigger
-      reportStaleFlows(this.doc, all, this.edit.flowsBefore);
+      new StaleFlowReport(this.doc).report(all, this.edit.flowsBefore);
       reportStaleIdPrefixes(this.doc, all);
       return { changes: all, ops: resolved, aliases: table.toRecord() };
     });

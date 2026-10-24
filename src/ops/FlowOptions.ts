@@ -7,7 +7,7 @@ import type { Doc } from '../model/Doc.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import type { El } from '../model/utils/moddle.js';
 import { usageError } from '../shared/utils/errors.js';
-import { setDefaultFlow, setFlowCondition, type FlowAttrs } from './flows.js';
+import { SequenceFlows, type FlowAttrs } from './SequenceFlows.js';
 import { defaultWithConditionViolation } from './rules.js';
 import type { ConnectOp, FlowOptions as FlowOptionValues } from './types.js';
 
@@ -72,11 +72,11 @@ export class FlowOptions {
       touched = true;
     }
     if (this.values.condition !== undefined) {
-      setFlowCondition(doc, flow, this.values.condition, this.values.language);
+      new SequenceFlows(doc).setCondition(flow, this.values.condition, this.values.language);
       touched = true;
     }
     if (this.values.default) {
-      setDefaultFlow(doc, flow, true);
+      new SequenceFlows(doc).setDefault(flow, true);
       touched = true;
     }
     if (touched) cs.change(ChangeSet.flowEntryOf(flow));

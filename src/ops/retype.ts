@@ -53,12 +53,12 @@ import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
-import { dropIgnoredConditions } from './flows.js';
 import { assertMessageFlowsFit, currentTrigger, idStateOf, interruptingOnly, messageFlowConflicts, recordIdState, warnNonInterruptingDropped } from './set.js';
 import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
+import { SequenceFlows } from './SequenceFlows.js';
 
 export { withoutProfileDuplicates } from './covers.js';
 
@@ -190,7 +190,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     }
     for (const w of applyTrigger(doc, target, trigger, opts)) cs.warn(w);
   }
-  dropIgnoredConditions(doc, target, cs);
+  new SequenceFlows(doc).dropIgnoredConditions(target, cs);
   if (isEvent) assertMessageFlowsFit(doc, target, conflictsBefore);
   if (dropNonInterrupting && trigger !== undefined) warnNonInterruptingDropped(cs, target, trigger);
   recordIdState(doc, target, before, oldLabel);

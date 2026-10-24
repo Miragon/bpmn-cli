@@ -82,19 +82,25 @@ import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
-import { carryAssociations, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
+import { type Bridge } from './flows.js';
+import { renamedNote } from '../model/utils/renames.js';
+import { insertAfterInScope } from './utils/declaration-order.js';
+import type { PlacementOptions } from './NodePlacement.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { renameId } from './set.js';
 import { idOf } from './utils/elements.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { MoveOp } from './types.js';
+import { NodePlacement } from './NodePlacement.js';
+import { EventGatewayRule } from './EventGatewayRule.js';
+import { SequenceFlows } from './SequenceFlows.js';
 
 /** Moves the nodes of `op.ids` (see module contract). */
 export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   const cs = new ChangeSet();
   if (!op.ids?.length) throw usageError('move needs at least one node id');
-  const mode = placementMode(op);
+  const mode = NodePlacement.modeOf(op);
   const hasLane = op.lane !== undefined;
   if (mode === 'none' && !hasLane) {
     throw usageError('move needs a placement (--after, --before, --flow, --in, --on) and/or --lane <laneId>');
@@ -217,7 +223,7 @@ function assertNotBoundary(node: El): void {
  * checked by assertFirstPlacement.
  */
 function assertChainAnchor(doc: Doc, nodes: El[], p: PlacementOptions): void {
-  const mode = placementMode(p);
+  const mode = NodePlacement.modeOf(p);
   const later = nodes.slice(1);
   const flow = mode === 'flow' ? doc.require(p.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
   const after = mode === 'after' || mode === 'between' ? doc.require(p.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
@@ -289,7 +295,7 @@ function inPlace(doc: Doc, nodes: El[], p: PlacementOptions): boolean {
   for (let i = 1; i < nodes.length; i++) if (is(nodes[i - 1]!, 'bpmn:Gateway') || onlyIn(nodes[i]!) !== nodes[i - 1]) return false;
   const first = nodes[0]!;
   const last = nodes[nodes.length - 1]!;
-  const mode = placementMode(p);
+  const mode = NodePlacement.modeOf(p);
   if (mode === 'after') {
     const x = doc.require(p.after!, 'bpmn:FlowNode');
     return !is(x, 'bpmn:Gateway') && onlyIn(first) === x;
@@ -346,7 +352,7 @@ function fixFlows(doc: Doc, moved: El[], scope: El, cs: ChangeSet): void {
         }
         continue;
       }
-      removeSequenceFlow(doc, flow, cs);
+      new SequenceFlows(doc).remove(flow, cs);
       cs.remove(ChangeSet.flowEntryOf(flow));
       cs.warn({
         code: 'W_FLOW_DROPPED',
@@ -415,11 +421,11 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   } else if (outCond) {
     cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
   }
-  carryAssociations(doc, outFlow, inFlow, cs);
-  removeSequenceFlow(doc, outFlow, cs);
+  new SequenceFlows(doc).carryAssociations(outFlow, inFlow, cs);
+  new SequenceFlows(doc).remove(outFlow, cs);
   cs.remove(ChangeSet.flowEntryOf(outFlow));
   reserveIds(doc, [idOf(outFlow)]);
-  const renamed = redirectFlow(doc, inFlow, { target: successor });
+  const renamed = new SequenceFlows(doc).redirect(inFlow, { target: successor });
   cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
@@ -473,7 +479,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   const anchors = anchorsOf(doc, p);
   for (const a of anchors) assertNotInside(node, a);
   const oldScope = doc.scopeOf(node);
-  const targetScope = placementScope(doc, p);
+  const targetScope = new NodePlacement(doc, p).scope();
   const boundaries = is(node, 'bpmn:Activity') ? doc.boundaryEventsOf(node) : [];
   const incoming = doc.incoming(node);
   const outgoing = doc.outgoing(node);
@@ -500,10 +506,10 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? inheritedLane(doc, p) : {};
   // the next node of the chain is appended to a gateway (a new branch): the gateway's out-flow waits for that append
   const holdOwn = !!next && is(node, 'bpmn:Gateway');
-  placeNode(doc, node, p, cs, (source) => (source === node && holdOwn ? undefined : spare.get(source)?.flow));
+  new NodePlacement(doc, p).place(node, cs, (source) => (source === node && holdOwn ? undefined : spare.get(source)?.flow));
   const dropped = reportPutBack(doc, spare, cs);
   // the new place may give an event-based gateway a target BPMN 2.0 does not allow (like add / connect)
-  for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) warnEventGatewayFlow(doc, f, cs);
+  for (const f of new Set([...doc.incoming(node), ...doc.outgoing(node)])) new EventGatewayRule(doc).warnFlow(f, cs);
   if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
   fixFlows(doc, boundaries, targetScope, cs);
   if (own) {
@@ -710,7 +716,7 @@ function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBe
 
 /** --in: append the nodes to the scope; the group is bridged, flows between its nodes survive, others are dropped. */
 function moveInto(doc: Doc, nodes: El[], p: PlacementOptions, cs: ChangeSet): void {
-  const scope = placementScope(doc, p);
+  const scope = new NodePlacement(doc, p).scope();
   const relocating: El[] = [];
   for (const node of nodes) {
     if (is(node, 'bpmn:BoundaryEvent')) {
@@ -754,7 +760,7 @@ function moveOnto(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void 
   const oldScope = doc.scopeOf(node);
   const scope = doc.scopeOf(host) ?? doc.defaultScope();
   leaveScope(doc, [node], oldScope, scope, cs);
-  placeNode(doc, node, { on: p.on! }, cs);
+  new NodePlacement(doc, { on: p.on! }).place(node, cs);
   fixFlows(doc, [node], scope, cs);
   inheritLane(doc, node, [], host, scope);
   cs.change(ChangeSet.entryOf(node, `moved onto ${idOf(host)}${oldHost ? ` (was ${idOf(oldHost)})` : ''}`));

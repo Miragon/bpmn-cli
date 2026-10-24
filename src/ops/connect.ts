@@ -33,9 +33,10 @@ import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { bindRefAs, ensureRootElement } from './events.js';
-import { createSequenceFlow, warnEventGatewayFlow } from './flows.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { ConnectOp } from './types.js';
+import { EventGatewayRule } from './EventGatewayRule.js';
+import { SequenceFlows } from './SequenceFlows.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
 
@@ -237,9 +238,9 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
 
   switch (kind) {
     case 'sequenceFlow': {
-      const flow = createSequenceFlow(doc, source, target, new FlowOptions({ flowId: op.id, flowName: op.name, condition: op.condition, language: op.language, default: op.default }).toAttrs(true));
+      const flow = new SequenceFlows(doc).create(source, target, new FlowOptions({ flowId: op.id, flowName: op.name, condition: op.condition, language: op.language, default: op.default }).toAttrs(true));
       cs.create(ChangeSet.flowEntryOf(flow));
-      warnEventGatewayFlow(doc, flow, cs);
+      new EventGatewayRule(doc).warnFlow(flow, cs);
       if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
       const out = doc.outgoing(source).length;
       const inc = doc.incoming(target).length;

@@ -32,7 +32,6 @@ import { Doc } from '../src/model/Doc.js';
 import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
-import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
 import { removeElements } from '../src/ops/remove.js';
 import { withoutProfileDuplicates } from '../src/ops/retype.js';
@@ -41,6 +40,7 @@ import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
+import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -489,7 +489,7 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
     );
     expect(caught(() => removeElements(mixed, { op: 'remove', ids: ['Event_M'] })).message).toMatch(/Event_X on another branch of Gateway_G is a message catch event; BPMN 2\.0 does not mix receive tasks and message catch events/);
     const g = mixed.require('Gateway_G');
-    expect(eventGatewayTargetProblem(mixed, g, mixed.require('Event_T'))).toMatch(/already has the incoming flow F_T/);
+    expect(new EventGatewayRule(mixed).targetProblem(g, mixed.require('Event_T'))).toMatch(/already has the incoming flow F_T/);
   });
 
   it('connect and add warn about the targets a bridge refuses (plain file: W_EVENT_GATEWAY_TARGET from the op)', async () => {

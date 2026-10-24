@@ -104,11 +104,14 @@ import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement } from './events.js';
 import { vendorContent } from './utils/elements.js';
 import { setCorrelationKey } from './ext.js';
-import { assertCondition, dropIgnoredConditions, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
+import { renamedNote } from '../model/utils/renames.js';
 import type { SetOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { VendorDescriptor } from '../platform/VendorDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
+import { SequenceFlows } from './SequenceFlows.js';
+import { FlowIdFollower } from './FlowIdFollower.js';
+import { FlowRules } from '../model/FlowRules.js';
 
 /* ------------------------------------------------------------------ */
 /* key documentation                                                    */
@@ -373,13 +376,13 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!value) throw invalidValue(el, key, 'an id cannot be empty');
       const old = idOf(el);
       // a flow whose id names it by its old id follows when a later op of the batch changes the flow's ends
-      recordFormerEnd(doc, el);
+      new FlowIdFollower(doc).recordFormerEnd(el);
       renameId(doc, el, value);
       cs.change(ChangeSet.entryOf(el, `renamed from ${old}`));
       return;
     }
     case 'name':
-      recordFormerEnd(doc, el);
+      new FlowIdFollower(doc).recordFormerEnd(el);
       if (is(el, 'bpmn:Group')) setGroupName(doc, el, value);
       else el.set('name', value || undefined);
       break;
@@ -394,8 +397,8 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!is(el, 'bpmn:SequenceFlow')) throw unknownKey(doc, el, key, 'applies to sequence flows');
       if (!value) throw invalidValue(el, key, 'a flow always needs a source and a target');
       const node = doc.require(value, 'bpmn:FlowNode');
-      const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
-      if (key === 'source') dropIgnoredConditions(doc, node, cs, [el]);
+      const renamed = new SequenceFlows(doc).redirect(el, key === 'source' ? { source: node } : { target: node });
+      if (key === 'source') new SequenceFlows(doc).dropIgnoredConditions(node, cs, [el]);
       cs.change(ChangeSet.flowEntryOf(el, `${ChangeSet.flowEntryOf(el).detail} (${key} changed)${renamedNote(renamed)}`));
       return;
     }
@@ -480,7 +483,7 @@ function makeDefaultFlow(doc: Doc, flow: El, cs: ChangeSet): void {
   const expr = flow.get<El | undefined>('conditionExpression');
   const resourceKey = resourceKeyOf(doc, expr);
   const condition = expr?.get<string | undefined>('body') ?? (resourceKey ? `${resourceKey}=${String(expr!.$attrs[resourceKey])}` : undefined);
-  setDefaultFlow(doc, flow, true);
+  new SequenceFlows(doc).setDefault(flow, true);
   if (condition) {
     cs.warn({
       code: 'W_CONDITION_DROPPED',
@@ -495,7 +498,7 @@ function makeDefaultFlow(doc: Doc, flow: El, cs: ChangeSet): void {
 function setDefaultKey(doc: Doc, el: El, value: string, cs: ChangeSet): void {
   if (is(el, 'bpmn:SequenceFlow')) {
     if (value && parseBool(el, 'default', value)) makeDefaultFlow(doc, el, cs);
-    else setDefaultFlow(doc, el, false);
+    else new SequenceFlows(doc).setDefault(el, false);
     return;
   }
   if (!descriptorOf(el).propertiesByName?.['default']) {
@@ -684,11 +687,11 @@ function applyCondition(doc: Doc, flow: El, keys: Map<string, string>, cs: Chang
   const condition = keys.get('condition') ?? '';
   if (!condition) {
     if (keys.get('language')) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
-    setFlowCondition(doc, flow, undefined);
+    new SequenceFlows(doc).setCondition(flow, undefined);
     cs.change(ChangeSet.entryOf(flow, 'condition removed'));
     return;
   }
-  assertCondition(condition);
+  new FlowRules(doc).assertCondition(condition);
   const dropped: string[] = [];
   let language: string | undefined;
   if (keys.has('language')) language = keys.get('language') || undefined;
@@ -696,7 +699,7 @@ function applyCondition(doc: Doc, flow: El, keys: Map<string, string>, cs: Chang
   else if (oldLanguage && isJuel(condition) && oldLanguage.toLowerCase() !== 'juel') dropped.push(`language ${oldLanguage}`);
   else language = oldLanguage;
   if (!existing || !is(existing, 'bpmn:FormalExpression')) {
-    setFlowCondition(doc, flow, condition, language);
+    new SequenceFlows(doc).setCondition(flow, condition, language);
   } else {
     if (resourceKey) {
       dropped.unshift(`${resourceKey} ${String(existing.$attrs[resourceKey])}`);
@@ -1159,11 +1162,11 @@ export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: strin
   const wanted = cutAt(stale.suggested, MAX_ID);
   const next = doc.edit.regeneratedId(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
   // the ends before the rename: what the flows named
-  const flows = flowsNamedAfter(doc, el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
+  const flows = new FlowIdFollower(doc).namedAfter(el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
   renameId(doc, el, next);
   doc.edit.markGenerated(next, wanted);
   doc.edit.recordRegenerated(id, next, undefined, el);
-  for (const { flow, was } of flows) followRenamedEnd(doc, flow, was);
+  for (const { flow, was } of flows) new FlowIdFollower(doc).followRenamedEnd(flow, was);
 }
 
 /**
