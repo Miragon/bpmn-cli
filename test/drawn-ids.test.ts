@@ -10,7 +10,7 @@ import { applyToXml, layoutXml } from '../src/api.js';
 import { Doc } from '../src/model/document.js';
 import { parseXml } from '../src/model/utils/moddle.js';
 import { mutateDoc } from '../src/pipeline/index.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
 const defs = (body: string): string => `<?xml version="1.0" encoding="UTF-8"?>

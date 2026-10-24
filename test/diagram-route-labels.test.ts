@@ -9,7 +9,7 @@ import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
 import { brokenEdge, edgeBefore, routeEdge, routingLines } from '../src/diagram/reroute.js';
 import { crossings } from '../src/diagram/router.js';
 import { clearTitles, labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
-import { renderLayout } from '../src/report/view-text.js';
+import { renderLayout } from '../src/report/utils/result-lines.js';
 import { Doc } from '../src/model/document.js';
 import type { El } from '../src/model/utils/moddle.js';
 

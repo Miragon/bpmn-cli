@@ -28,10 +28,46 @@ import { ModelViewBuilder } from './query/ModelViewBuilder.js';
 import { ElementDetailBuilder } from './query/ElementDetailBuilder.js';
 import { ElementFinder } from './query/ElementFinder.js';
 import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
+import type { LayoutMetrics } from './diagram/metrics.js';
+import { AroundText } from './report/AroundText.js';
+import { ContextText } from './report/ContextText.js';
+import { DetailText } from './report/DetailText.js';
+import { LayoutText } from './report/LayoutText.js';
+import { MetricsText } from './report/MetricsText.js';
+import { ModelViewText } from './report/ModelViewText.js';
+import type { CheckResult, MutationResult } from './pipeline/index.js';
+import type { Warning } from './shared/CliError.js';
+import type { MutationReport, MutationReportLike, MutationSummary, ValidationReport } from './report/command-report.js';
+import { MutationReportBuilder } from './report/MutationReportBuilder.js';
+import { MutationSummaryBuilder } from './report/MutationSummaryBuilder.js';
+import { MutationText } from './report/MutationText.js';
+import { SummaryText } from './report/SummaryText.js';
+import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
+import { ValidationText } from './report/ValidationText.js';
+import { WarningLines } from './report/WarningLines.js';
+import { advisoryOf } from './report/utils/findings.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
-export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
-export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './report/view-text.js';
+export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
+export { conventionsLines } from './report/utils/mutation-lines.js';
+export function mutationReport(result: MutationResult): MutationReport { return new MutationReportBuilder(result).report(); }
+export function mutationWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).warnings(); }
+export function opWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).opWarnings(); }
+export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string { return new MutationText(result, opts).text(); }
+export function mutationSummary(report: MutationReportLike): MutationSummary { return new MutationSummaryBuilder(report).summary(); }
+export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {}): string { return new SummaryText(summary, opts).text(); }
+export function advisoryValidators(report: Pick<MutationReportLike, 'validation'>): Set<string> { return advisoryOf(report.validation.validators); }
+export function warningLines(warnings: readonly Warning[], advisory: ReadonlySet<string> = new Set()): string[] { return new WarningLines(advisory).lines(warnings); }
+export function validationReport(check: CheckResult): ValidationReport { return new ValidationReportBuilder(check).report(); }
+export function renderValidation(report: ValidationReport): string { return new ValidationText(report).text(); }
+export { renderFind, renderExtensionList } from './report/utils/view-lines.js';
+export { renderProblems } from './report/utils/result-lines.js';
+export function renderView(view: ModelView): string { return new ModelViewText(view).text(); }
+export function renderDetail(detail: ElementDetail): string { return new DetailText(detail).text(); }
+export function renderAround(view: AroundView): string { return new AroundText(view).text(); }
+export function renderContext(c: ElementContext): string { return new ContextText(c).text(); }
+export function renderLayoutView(view: LayoutView): string { return new LayoutText(view).text(); }
+export function renderMetrics(m: LayoutMetrics): string { return new MetricsText(m).text(); }
 export { setLayoutDebug } from './api.js';
 export { type DebugSink } from './shared/LayoutDebug.js';
 export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, kindsSections, kindsSectionJson, kindsSectionText, ERROR_CATALOGUE } from './report/guide.js';

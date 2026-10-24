@@ -18,7 +18,7 @@ import { idNamesEnds } from '../src/ops/flows.js';
 import { runOp, runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
-import { renderMutation } from '../src/report/command-report.js';
+import { renderMutation } from '../src/index.js';
 import type { ChangeSet } from '../src/model/change-set.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 

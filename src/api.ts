@@ -50,14 +50,20 @@ import { conventionsView, type ConventionsView, type IdConventions, type Undecla
 import { Doc, type NewDocOptions } from './model/document.js';
 import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
-import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
+import { AroundText } from './report/AroundText.js';
+import { ContextText } from './report/ContextText.js';
+import { DetailText } from './report/DetailText.js';
+import { LayoutText } from './report/LayoutText.js';
+import { ModelViewText } from './report/ModelViewText.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import type { PlatformChoice } from './platform/profiles/profile.js';
-import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
+import type { MutationReport, ValidationReport } from './report/command-report.js';
+import { MutationReportBuilder } from './report/MutationReportBuilder.js';
+import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
 import type { ElementDetail, FindHit, ModelView } from './query/model-view.js';
 import { ModelViewBuilder } from './query/ModelViewBuilder.js';
@@ -108,7 +114,7 @@ export interface EditResult {
 
 function toEditResult(input: string | undefined, mutation: MutationResult): EditResult {
   const unchanged = input !== undefined && mutation.xml === input;
-  const { file: _file, written: _written, ...report } = mutationReport(mutation);
+  const { file: _file, written: _written, ...report } = new MutationReportBuilder(mutation).report();
   return { xml: unchanged ? input : mutation.xml, unchanged, result: report };
 }
 
@@ -181,7 +187,7 @@ export interface ValidateXmlOptions {
 
 /** `bpmn validate --json`: structure, lint, the platform profile, the validators and a layout dry run. `ok` is false on errors. */
 export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
-  return validationReport(await checkDoc(await Doc.fromXml(xml, opts.file), opts));
+  return new ValidationReportBuilder(await checkDoc(await Doc.fromXml(xml, opts.file), opts)).report();
 }
 
 /** What viewXml / showXml show: the model (default, optionally one scope), one element (in its context), the neighbourhood of one, or the drawing. */
@@ -244,7 +250,7 @@ export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
 /** The text of a view, as `bpmn show` prints it (without the final newline). */
 export function renderShown(v: ShownView): string {
   const text =
-    v.kind === 'layout' ? renderLayoutView(v.view) : v.kind === 'detail' ? renderDetail(v.view) : v.kind === 'context' ? renderContext(v.view) : v.kind === 'around' ? renderAround(v.view) : renderView(v.view);
+    v.kind === 'layout' ? new LayoutText(v.view).text() : v.kind === 'detail' ? new DetailText(v.view).text() : v.kind === 'context' ? new ContextText(v.view).text() : v.kind === 'around' ? new AroundText(v.view).text() : new ModelViewText(v.view).text();
   return text.replace(/\n$/, '');
 }
 

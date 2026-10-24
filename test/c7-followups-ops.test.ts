@@ -29,7 +29,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
-import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
+import { extensionLines } from '../src/report/utils/view-lines.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
@@ -39,7 +39,7 @@ import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
-import { buildView, elementDetail } from '../src/index.js';
+import { buildView, elementDetail, renderDetail, renderExtensionList, renderView } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

@@ -16,11 +16,10 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { opsExample } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
-import { renderView } from '../src/report/view-text.js';
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
-import { buildView, elementDetail } from '../src/index.js';
+import { buildView, elementDetail, renderView } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

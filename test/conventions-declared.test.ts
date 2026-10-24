@@ -14,7 +14,7 @@ import { Doc } from '../src/model/document.js';
 import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 
 const naming = bpmnlintEngine().plugin.naming;

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { renderMutation } from '../src/report/command-report.js';
+import { renderMutation } from '../src/index.js';
 import { OPS_SCHEMA, opsExample, parseOps } from '../src/ops/batch.js';
 import { idConventionsFromLint } from '../src/ids/conventions.js';
 import { Doc } from '../src/model/document.js';

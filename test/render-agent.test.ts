@@ -15,10 +15,9 @@ import { Doc } from '../src/model/document.js';
 import { layoutProblems, locateProblems, type LayoutProblem } from '../src/diagram/metrics.js';
 import { readPlanes, type Plane } from '../src/diagram/plane.js';
 import { ElementSelector } from '../src/query/ElementSelector.js';
-import { changeHighlight, CliError, HALO_COLORS, MIN_LABEL_SCALE, mutateDoc, parseOps, renderDocSvg, renderSvg, aroundView } from '../src/index.js';
+import { changeHighlight, CliError, HALO_COLORS, MIN_LABEL_SCALE, mutateDoc, parseOps, renderDocSvg, renderSvg, aroundView, mutationReport } from '../src/index.js';
 import { is } from '../src/model/utils/moddle.js';
 import { renderPng } from '../src/node/render.js';
-import { mutationReport } from '../src/report/command-report.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { libExecutor } from '../tools/fuzz/lib/exec.mjs';
 // @ts-expect-error plain ESM tooling without type declarations

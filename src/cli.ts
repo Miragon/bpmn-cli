@@ -38,7 +38,9 @@ import { conventionsView, renderConventions, type Undeclared } from './ids/conve
 import { assertProcessId, assertTarget, Doc } from './model/document.js';
 import { CliError, type Warning } from './shared/CliError.js';
 import { ioError, isCliError, usageError } from './shared/utils/errors.js';
-import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
+import { renderExtensionList, renderFind } from './report/utils/view-lines.js';
+import { MetricsText } from './report/MetricsText.js';
+import { ModelViewText } from './report/ModelViewText.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './report/guide.js';
 import { assertKindToken } from './model/kinds.js';
 import { ProjectBpmnlint } from './node/ProjectBpmnlint.js';
@@ -51,7 +53,14 @@ import { defaultWithConditionViolation, groupViolation, placementViolation } fro
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
-import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
+import type { MutationReport, MutationSummary } from './report/command-report.js';
+import { MutationReportBuilder } from './report/MutationReportBuilder.js';
+import { MutationSummaryBuilder } from './report/MutationSummaryBuilder.js';
+import { MutationText } from './report/MutationText.js';
+import { SummaryText } from './report/SummaryText.js';
+import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
+import { ValidationText } from './report/ValidationText.js';
+import { advisoryOf, validatorTag } from './report/utils/findings.js';
 import { ElementFinder } from './query/ElementFinder.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
@@ -98,16 +107,16 @@ function printJson(value: unknown, pretty?: boolean, out: Out = process.stdout):
 async function printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: Out = process.stdout): Promise<void> {
   const note = keptByEnvNote(result, opts.keepFlowIdsEnv);
   if (note) result.changes.note(note);
-  const report = mutationReport(result);
+  const report = new MutationReportBuilder(result).report();
   const shot = opts.render ? await renderMutationResult(result.xml, report, opts.render) : undefined;
   const shotText = shot ? `\n${shot.lines.join('\n')}` : '';
   if (opts.summary) {
-    const summary = mutationSummary(report);
+    const summary = new MutationSummaryBuilder(report).summary();
     if (opts.json) printJson({ ...summary, ...(note ? { notes: [note] } : {}), ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-    else print(summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryValidators(report) }, note) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
+    else print(summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf(report.validation.validators) }, note) + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
   } else if (opts.json) printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
-  else print(renderMutation(report, { dryRun: opts.dryRun }).replace(/\n$/, '') + shotText, out);
-  if (opts.strict && mutationWarnings(result).length) process.exitCode = 5;
+  else print(new MutationText(report, { dryRun: opts.dryRun }).text().replace(/\n$/, '') + shotText, out);
+  if (opts.strict && new MutationReportBuilder(result).warnings().length) process.exitCode = 5;
 }
 
 /**
@@ -143,11 +152,11 @@ function keptByEnvNote(result: MutationResult, value: string | undefined): strin
  * lines below them are what renderSummary prints for no changes, without
  * its `no changes` line.
  */
-function summaryText(summary: MutationSummary, opts: Parameters<typeof renderSummary>[1], note: string | undefined): string {
-  const text = renderSummary(summary, opts);
+function summaryText(summary: MutationSummary, opts: ConstructorParameters<typeof SummaryText>[1], note: string | undefined): string {
+  const text = new SummaryText(summary, opts).text();
   if (!note) return text;
   const { aliases: _aliases, renamed: _renamed, format: _format, ...rest } = summary;
-  const below = renderSummary({ ...rest, created: {}, changed: [], removed: [] }, opts).split('\n').length - 1;
+  const below = new SummaryText({ ...rest, created: {}, changed: [], removed: [] }, opts).text().split('\n').length - 1;
   const lines = text.split('\n');
   lines.splice(lines.length - below, 0, `note: ${note}`);
   return lines.join('\n');
@@ -1052,7 +1061,7 @@ withJsonOptions(program.command('metrics <file>').description('layout quality of
       const doc = await readDocArg(file);
       const m = layoutProblems(doc.definitions);
       if (o['json']) printJson({ file, score: m.score, counts: m.counts, problems: m.problems }, !!o['pretty']);
-      else print(renderMetrics(m));
+      else print(new MetricsText(m).text());
     }, !!o['json']);
   },
 );
@@ -1345,12 +1354,12 @@ withLintOptions(
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
       const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', ...lintOptions(o) };
-      const report = validationReport(file === '-' ? await new DocFile(await readDocArg(file)).check(checkOpts) : await new ModelFile(file).check(checkOpts));
+      const report = new ValidationReportBuilder(file === '-' ? await new DocFile(await readDocArg(file)).check(checkOpts) : await new ModelFile(file).check(checkOpts)).report();
       if (o['json']) {
         const { ok, ...rest } = report;
         printJson({ ok, file, ...rest }, !!o['pretty']);
       } else {
-        print(renderValidation(report));
+        print(new ValidationText(report).text());
       }
       // exit codes through process.exitCode: process.exit would cut off a large report in a pipe
       if (report.errors.length) process.exitCode = 2;

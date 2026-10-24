@@ -16,7 +16,7 @@ import { cutAt, cutName, IdRegistry, idWords, isFiller, keptTail, MAX_ID, slugif
 import { connectionRequest, IdStyle, kindRequest } from '../src/ids/style.js';
 import { kindByName } from '../src/model/kinds.js';
 import { runOps } from '../src/ops/index.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const ids = (xml: string): string[] => [...xml.matchAll(/<bpmn:\w+ id="([^"]+)"/g)].map((m) => m[1]!);

@@ -19,7 +19,8 @@ import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { checkFile, mutateFile } from '../src/node/index.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report/command-report.js';
+import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/index.js';
+import { validatorTag } from '../src/report/utils/findings.js';
 import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validate/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
