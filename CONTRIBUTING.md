@@ -66,8 +66,9 @@ them on a private corpus without copying it into the repository, are described i
   examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
-  `node tools/demo/make-demo.mjs` redraws the README demo (`docs/assets/demo.gif`; needs the
-  built CLI, `ffmpeg` and `gifsicle` on your PATH).
+  The README demo (`docs/assets/demo.gif`) comes from the `product-shots` skill of the
+  `miragon-brand` plugin ([Miragon/corporate-identity](https://github.com/Miragon/corporate-identity)),
+  journey `bpmn-cli-demo.mjs`; this repo keeps no script of its own for it.
 - `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
   VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
   `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
