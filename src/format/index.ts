@@ -103,7 +103,7 @@ import { CliError, type ErrorDetails } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { Reordering } from '../ops/Reordering.js';
-import { laneSetOf } from '../ops/utils/lane-set.js';
+import { laneSetOf } from '../ops/utils/lanes.js';
 import { parseSpaceAmount } from '../ops/utils/space-amount.js';
 import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';

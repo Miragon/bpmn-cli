@@ -36,7 +36,7 @@ import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
 import { withSuffix } from '../ids/utils/slug.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
-import { laneOf } from './containers.js';
+import { laneOf } from './utils/lanes.js';
 import { createSequenceFlow, flowChange, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
 import type { AddOp, FlowOptions, SplitBranch, SplitOp } from './types.js';
 

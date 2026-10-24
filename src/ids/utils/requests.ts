@@ -46,7 +46,7 @@ export interface IdRequest {
   targetLabel?: string;
   /**
    * a word after the body that a cut keeps (the backing bpmn:DataObject's
-   * `Object` where its id would else be its reference's: ops/artifacts.ts):
+   * `Object` where its id would else be its reference's: ops/ArtifactEditor.ts):
    * the body is cut so that the word fits beside it within the 64
    * characters, past the 40 of a name
    */

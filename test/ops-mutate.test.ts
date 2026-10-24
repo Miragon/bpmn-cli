@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { assignLane } from '../src/ops/containers.js';
+import { LaneEditor } from '../src/ops/LaneEditor.js';
 import { applyTrigger } from '../src/ops/events.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { moveElements } from '../src/ops/move.js';
@@ -144,7 +144,7 @@ const lanesReady = implemented(() => {
   const task = doc.create('bpmn:Task', { id: 'Probe' });
   many(doc.defaultScope(), 'flowElements').push(task);
   task.$parent = doc.defaultScope();
-  assignLane(doc, task, undefined, new ChangeSet());
+  new LaneEditor(doc).assign(task, undefined, new ChangeSet());
 });
 
 const itTriggers = triggersReady ? it : it.todo;

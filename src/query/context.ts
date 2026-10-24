@@ -37,7 +37,7 @@ import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/containers.js';
+import { laneOf } from '../ops/utils/lanes.js';
 import { listAllExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { flowOrder } from '../validate/structural.js';
 import {

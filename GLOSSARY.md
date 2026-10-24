@@ -18,6 +18,10 @@ a new concept gets its line here first.
 | **Reordering** | An `order` op on a document: the outgoing flows of a node, the lanes of a pool or lane, or the pools of a collaboration (`ops/Reordering.ts`). |
 | **Alias** | A `$name` an op gives to what it creates, so later ops of the batch can name it. |
 | **Change set** | What one op created, changed and removed, and the warnings it raised (`model/ChangeSet.ts`). |
+| **Pool editor** | Creates a participant (pool): wraps the one process, binds one, creates a new or a black-box one (`ops/PoolEditor.ts`). |
+| **Lane editor** | Creates lanes (nested ones inherit the parent's members) and assigns flow nodes to a lane (`ops/LaneEditor.ts`). |
+| **Artifact editor** | Creates data objects, data stores, text annotations and groups, and names a group (`ops/ArtifactEditor.ts`). |
+| **Association editor** | Creates and removes associations and data associations (`ops/AssociationEditor.ts`). |
 | **Kind** | The CLI's name for a BPMN element type, with an optional trigger (`userTask`, `boundaryEvent:timer`). |
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
 | **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader`, written by `DecisionLinkWriter` (`ops/`). |

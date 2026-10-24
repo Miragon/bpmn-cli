@@ -96,8 +96,8 @@ import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Tri
 import { diExpansionState } from '../layout/index.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
-import { setGroupName } from './artifacts.js';
-import { assignLane } from './containers.js';
+import { ArtifactEditor } from './ArtifactEditor.js';
+import { LaneEditor } from './LaneEditor.js';
 import { DecisionLinkWriter } from './DecisionLinkWriter.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { setCorrelationKey } from './ext.js';
@@ -434,7 +434,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     }
     case 'name':
       recordFormerEnd(doc, el);
-      if (is(el, 'bpmn:Group')) setGroupName(doc, el, value);
+      if (is(el, 'bpmn:Group')) new ArtifactEditor(doc).setGroupName(el, value);
       else el.set('name', value || undefined);
       break;
     case 'doc':
@@ -466,7 +466,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     }
     case 'lane': {
       if (!is(el, 'bpmn:FlowNode')) throw unknownKey(doc, el, key, 'applies to flow nodes');
-      assignLane(doc, el, value ? doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
+      new LaneEditor(doc).assign(el, value ? doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
       break;
     }
     case 'message':

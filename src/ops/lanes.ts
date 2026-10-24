@@ -19,7 +19,7 @@
 import type { Doc } from '../model/Doc.js';
 import type { Warning } from '../shared/CliError.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
-import { laneOf } from './containers.js';
+import { laneOf } from './utils/lanes.js';
 import { placementMode } from './flows.js';
 import type { Placement } from './types.js';
 

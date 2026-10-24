@@ -27,7 +27,7 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { insertInto, is, many, removeFrom, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { changeOf, idOf } from './set.js';
-import { laneSetOf } from './utils/lane-set.js';
+import { laneSetOf } from './utils/lanes.js';
 import type { OrderOp } from './types.js';
 
 export class Reordering {

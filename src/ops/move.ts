@@ -81,7 +81,8 @@ import { type Warning } from '../shared/CliError.js';
 import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { assignLane, laneOf } from './containers.js';
+import { LaneEditor } from './LaneEditor.js';
+import { laneOf } from './utils/lanes.js';
 import { applyFlowOptions, carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
@@ -126,7 +127,7 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
   }
   if (hasLane) {
     const lane = op.lane ? doc.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
-    for (const node of nodes) assignLane(doc, node, lane, cs);
+    for (const node of nodes) new LaneEditor(doc).assign(node, lane, cs);
   }
   doc.invalidate();
   return cs;
