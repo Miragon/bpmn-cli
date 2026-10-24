@@ -112,7 +112,7 @@
  */
 import type { IdConventions } from '../ids/conventions.js';
 import { LayoutDebug, type DebugSink } from '../shared/LayoutDebug.js';
-import { utf8Declaration } from '../xml/encoding.js';
+import { utf8Declaration } from '../xml/utils/encoding.js';
 import { Doc } from '../model/document.js';
 import { CliError, type Warning } from '../shared/CliError.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';

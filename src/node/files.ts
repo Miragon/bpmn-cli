@@ -43,7 +43,7 @@
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Doc } from '../model/document.js';
-import { declaredEncoding, isUtf8 } from '../xml/encoding.js';
+import { declaredEncoding, isUtf8 } from '../xml/utils/encoding.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline/index.js';
