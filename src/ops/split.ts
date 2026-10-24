@@ -33,7 +33,6 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import { IdStyle } from '../ids/IdStyle.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
-import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
 import { renamedNote } from '../model/utils/renames.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
@@ -41,6 +40,7 @@ import { FlowOptions } from './FlowOptions.js';
 import type { AddOp, FlowOptions as FlowOptionValues, SplitOp } from './types.js';
 import { SequenceFlows } from './SequenceFlows.js';
 import { ElementAdder } from './ElementAdder.js';
+import { ElementConnector } from './ElementConnector.js';
 
 
 function gatewayKind(token: string | undefined): string {
@@ -242,12 +242,12 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     for (const { end, flowOptions, direct } of continuing) {
       const opts = direct ? flowOptions : {};
       cs.merge(
-        connectElements(doc, { op: 'connect', source: end, target, ...new FlowOptions(opts).toConnect() }),
+        new ElementConnector(doc).connect({ op: 'connect', source: end, target, ...new FlowOptions(opts).toConnect() }),
       );
     }
   }
   if (joinId && successor) {
-    cs.merge(connectElements(doc, { op: 'connect', source: joinId, target: idOf(successor) }));
+    cs.merge(new ElementConnector(doc).connect({ op: 'connect', source: joinId, target: idOf(successor) }));
   }
 
   const branchIds = ends.map((e) => (e.direct ? '(direct)' : terminating.includes(e) ? `${e.end} (end event)` : e.end));

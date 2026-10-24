@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
-import { connectElements } from '../src/ops/connect.js';
 import { assignLane, laneOf } from '../src/ops/containers.js';
 import { EventTrigger } from '../src/ops/EventTrigger.js';
 import { splitFlow } from '../src/ops/split.js';
@@ -14,6 +13,7 @@ import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';
+import { ElementConnector } from '../src/ops/ElementConnector.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -32,7 +32,7 @@ function add(doc: Doc, op: Omit<AddOp, 'op'>): ChangeSet {
 }
 
 function connect(doc: Doc, op: Omit<ConnectOp, 'op'>): ChangeSet {
-  return connectElements(doc, { op: 'connect', ...op });
+  return new ElementConnector(doc).connect({ op: 'connect', ...op });
 }
 
 function ids(els: El[]): string[] {

@@ -8,7 +8,6 @@ import { type Warning } from '../shared/CliError.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
-import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
 import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
@@ -20,6 +19,7 @@ import { StaleFlowReport } from './StaleFlowReport.js';
 import { ElementRemover } from './ElementRemover.js';
 import { ElementRetyper } from './ElementRetyper.js';
 import { ElementAdder } from './ElementAdder.js';
+import { ElementConnector } from './ElementConnector.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -153,7 +153,7 @@ export class OpRunner {
       case 'add':
         return new ElementAdder(doc).add(op);
       case 'connect':
-        return connectElements(doc, op);
+        return new ElementConnector(doc).connect(op);
       case 'set':
         return setProperties(doc, op);
       case 'remove':

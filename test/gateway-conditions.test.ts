@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
-import { connectElements } from '../src/ops/connect.js';
 import { setProperties } from '../src/ops/set.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml, docFromXml } from './helpers.js';
 import { ElementRetyper } from '../src/ops/ElementRetyper.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';
+import { ElementConnector } from '../src/ops/ElementConnector.js';
 
 const forkXml = (gateway: string, conditionOnA = '') =>
   definitionsXml(`
@@ -52,7 +52,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
 
   it('connect from a parallel gateway with a condition is refused', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    expect(errorCodeOf(() => connectElements(doc, { op: 'connect', source: 'Gw', target: 'C', condition: '${x}' }))).toBe('E_INVALID_VALUE');
+    expect(errorCodeOf(() => new ElementConnector(doc).connect({ op: 'connect', source: 'Gw', target: 'C', condition: '${x}' }))).toBe('E_INVALID_VALUE');
   });
 
   it('removing the condition of such a flow still works', async () => {

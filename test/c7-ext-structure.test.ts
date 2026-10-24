@@ -21,7 +21,6 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
@@ -30,6 +29,7 @@ import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
+import { ElementConnector } from '../src/ops/ElementConnector.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -683,16 +683,16 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
 
   it('warns W_DUPLICATE_FLOW when connect adds a second flow between the same nodes', async () => {
     const doc = await compDoc();
-    const first = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
+    const first = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
     expect(first.warnings.map((w) => w.code)).not.toContain('W_DUPLICATE_FLOW');
-    const second = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
+    const second = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
     const dup = second.warnings.find((w) => w.code === 'W_DUPLICATE_FLOW');
     // the file numbers its flows F1, F2: new ones keep the prefix and name their ends; the second one takes a suffix
     expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F_StartToEnd\b/);
     expect(second.created.map((c) => c.id)).toEqual(['F_StartToEnd_2']);
     expect(second.warnings.map((w) => w.code)).toContain('W_ID_SUFFIXED');
     expect(dup?.hint).toMatch(/--if-absent/);
-    const skipped = connectElements(doc, { op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
+    const skipped = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);
     expect(skipped.created).toEqual([]);
     expect(many(doc.require('Process_1'), 'flowElements').filter((f) => is(f, 'bpmn:SequenceFlow') && f.get<El>('targetRef').get('id') === 'End')).toHaveLength(3);
