@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { showXml } from '../src/api.js';
-import { elementContext } from '../src/query/context.js';
+import { elementContext } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 
 /**

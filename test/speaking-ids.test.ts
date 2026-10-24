@@ -9,7 +9,7 @@ import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/model/Doc.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 /** Hashes, numbers and tool defaults: what a generated id never ends in. */

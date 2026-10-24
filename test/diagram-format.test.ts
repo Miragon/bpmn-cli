@@ -17,14 +17,13 @@ import { kindsJson } from '../src/index.js';
 import { FORMAT_OP_NAMES } from '../src/ops/types.js';
 import { Doc } from '../src/model/Doc.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { layoutView } from '../src/query/layout-view.js';
+import { layoutView, renderLayoutView } from '../src/index.js';
 import { isCliError } from '../src/shared/utils/errors.js';
-import { renderLayoutView } from '../src/report/view-text.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/files.js';
+import { mutateFile } from '../src/node/index.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */

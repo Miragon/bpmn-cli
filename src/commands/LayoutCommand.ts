@@ -1,5 +1,6 @@
 import type { Command as CommandType } from 'commander';
-import { layoutDocToFile, layoutFile } from '../node/files.js';
+import { DocFile } from '../node/DocFile.js';
+import { ModelFile } from '../node/ModelFile.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 import { splitList } from './utils/flags.js';
@@ -25,8 +26,8 @@ export class LayoutCommand extends MutationCommand {
       await this.runMutation(
         file,
         opts,
-        (fo) => layoutFile(file, { ...fo, ...layoutOpts }),
-        (doc, fo) => layoutDocToFile(doc, { ...fo, ...layoutOpts }),
+        (fo) => new ModelFile(file).layout({ ...fo, ...layoutOpts }),
+        (doc, fo) => new DocFile(doc).layout({ ...fo, ...layoutOpts }),
       );
     }, opts.json);
   }

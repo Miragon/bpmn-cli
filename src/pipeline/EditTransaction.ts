@@ -121,7 +121,7 @@ import type { Op } from '../ops/types.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidationResult } from '../validate/structural.js';
 import { FindingBaseline, type ValidationDelta } from '../validate/FindingBaseline.js';
-import { buildView } from '../query/model-view.js';
+import { ModelViewBuilder } from '../query/ModelViewBuilder.js';
 import { DiagramUpdate } from './DiagramUpdate.js';
 import { toCliError } from './utils/cli-error.js';
 import type { LayoutStatus, MutationOptions, MutationResult } from './index.js';
@@ -230,7 +230,7 @@ export class EditTransaction {
     };
     if (this.opts.show) {
       const fresh = await Doc.fromXml(xml, doc.file);
-      result.view = buildView(fresh);
+      result.view = new ModelViewBuilder(fresh).build();
     }
     return result;
   }

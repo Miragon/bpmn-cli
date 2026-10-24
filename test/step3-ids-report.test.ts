@@ -17,8 +17,7 @@ import { IdRegistry } from '../src/ids/IdRegistry.js';
 import { connectionRequest, kindRequest } from '../src/ids/utils/requests.js';
 import { IdStyle } from '../src/ids/IdStyle.js';
 import { kindByName } from '../src/model/kinds.js';
-import { runOps } from '../src/index.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { runOps, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const ids = (xml: string): string[] => [...xml.matchAll(/<bpmn:\w+ id="([^"]+)"/g)].map((m) => m[1]!);

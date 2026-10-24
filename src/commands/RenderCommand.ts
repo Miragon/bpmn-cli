@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
-import { decodeXmlBytes, readXml } from '../node/files.js';
+import { decodeXmlBytes, readXml } from '../node/utils/files.js';
 import { ImageWriter } from '../node/ImageWriter.js';
 import { ViewRequest } from '../query/ViewRequest.js';
-import { RENDER_MAX_SIZE, type RenderOptions } from '../render/index.js';
+import { RENDER_MAX_SIZE, type RenderOptions } from '../render/types.js';
 import { RenderReport } from '../report/RenderReport.js';
 import { usageError } from '../shared/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';

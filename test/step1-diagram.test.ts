@@ -29,9 +29,9 @@ import { writePlanes } from '../src/diagram/write.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/files.js';
+import { mutateFile } from '../src/node/index.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

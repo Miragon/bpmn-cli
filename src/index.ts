@@ -19,27 +19,80 @@ import { Relayout } from './pipeline/Relayout.js';
 import { DocCheck } from './pipeline/DocCheck.js';
 import { IdConventionsReader, type IdConventions, type IdNamingHelpers } from './ids/IdConventionsReader.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
-import type { BpmnlintRuleSetting, BpmnlintSeverity } from './validate/bpmnlint-validator.js';
-import type { ValidatorFinding } from './validate/validators.js';
+import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+import type { NamedValidator, ValidatorFinding } from './validate/validators.js';
+import type { El } from './model/utils/moddle.js';
+import type { LayoutMetrics } from './diagram/metrics.js';
+import type { Warning } from './shared/CliError.js';
 import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
 import { AgentGuide } from './report/AgentGuide.js';
 import { KindsReference } from './report/KindsReference.js';
-
+import { TextPreservation, type PreservedText } from './xml/TextPreservation.js';
+import { BpmnlintConfigResolution } from './validate/BpmnlintConfigResolution.js';
+import { BpmnlintValidator, type BpmnlintValidatorOptions } from './validate/BpmnlintValidator.js';
+import { DocRenderer } from './render/DocRenderer.js';
+import type { RenderOptions, RenderResult } from './render/types.js';
+import type { AroundOptions, AroundView, ElementContext, Implementation } from './query/context.js';
+import type { ElementDetail, FindHit, ModelView } from './query/model-view.js';
+import type { LayoutView } from './query/layout-view.js';
+import { AroundWindow } from './query/AroundWindow.js';
+import { ElementContextBuilder } from './query/ElementContextBuilder.js';
+import { ElementFacts } from './query/ElementFacts.js';
+import { ModelViewBuilder } from './query/ModelViewBuilder.js';
+import { ElementDetailBuilder } from './query/ElementDetailBuilder.js';
+import { ElementFinder } from './query/ElementFinder.js';
+import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
+import { AroundText } from './report/AroundText.js';
+import { ContextText } from './report/ContextText.js';
+import { DetailText } from './report/DetailText.js';
+import { LayoutText } from './report/LayoutText.js';
+import { MetricsText } from './report/MetricsText.js';
+import { ModelViewText } from './report/ModelViewText.js';
+import type { MutationReport, MutationReportLike, MutationSummary, ValidationReport } from './report/command-report.js';
+import { MutationReportBuilder } from './report/MutationReportBuilder.js';
+import { MutationSummaryBuilder } from './report/MutationSummaryBuilder.js';
+import { MutationText } from './report/MutationText.js';
+import { SummaryText } from './report/SummaryText.js';
+import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
+import { ValidationText } from './report/ValidationText.js';
+import { WarningLines } from './report/WarningLines.js';
+import { advisoryOf } from './report/utils/findings.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
-export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
-export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './report/view-text.js';
+export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
+export { conventionsLines } from './report/utils/mutation-lines.js';
+export function mutationReport(result: MutationResult): MutationReport { return new MutationReportBuilder(result).report(); }
+export function mutationWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).warnings(); }
+export function opWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).opWarnings(); }
+export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string { return new MutationText(result, opts).text(); }
+export function mutationSummary(report: MutationReportLike): MutationSummary { return new MutationSummaryBuilder(report).summary(); }
+export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {}): string { return new SummaryText(summary, opts).text(); }
+export function advisoryValidators(report: Pick<MutationReportLike, 'validation'>): Set<string> { return advisoryOf(report.validation.validators); }
+export function warningLines(warnings: readonly Warning[], advisory: ReadonlySet<string> = new Set()): string[] { return new WarningLines(advisory).lines(warnings); }
+export function validationReport(check: CheckResult): ValidationReport { return new ValidationReportBuilder(check).report(); }
+export function renderValidation(report: ValidationReport): string { return new ValidationText(report).text(); }
+export { renderFind, renderExtensionList } from './report/utils/view-lines.js';
+export { renderProblems } from './report/utils/result-lines.js';
+export function renderView(view: ModelView): string { return new ModelViewText(view).text(); }
+export function renderDetail(detail: ElementDetail): string { return new DetailText(detail).text(); }
+export function renderAround(view: AroundView): string { return new AroundText(view).text(); }
+export function renderContext(c: ElementContext): string { return new ContextText(c).text(); }
+export function renderLayoutView(view: LayoutView): string { return new LayoutText(view).text(); }
+export function renderMetrics(m: LayoutMetrics): string { return new MetricsText(m).text(); }
 export { setLayoutDebug } from './api.js';
 export { type DebugSink } from './shared/LayoutDebug.js';
 export { GUIDE_TOPICS } from './report/AgentGuide.js';
 export { ERROR_CATALOGUE } from './report/guide.js';
 /* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
-export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
+export { AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
+export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): AroundView { return new AroundWindow(doc, id, opts).view(); }
+export function elementContext(doc: Doc, id: string): ElementContext { return new ElementContextBuilder(doc, id).build(); }
+export function implementationOf(el: El): Implementation | undefined { return new ElementFacts(el).implementation(); }
 /* the building blocks */
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
-export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
+export { KINDS, parseKind, kindOf, kindLabel } from './model/utils/kinds.js';
 export { layoutModel } from './layout/index.js';
 export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
 export type {
@@ -65,11 +118,17 @@ export type {
 export { LAYOUT_MODES, type CheckOptions, type CheckResult, type ConventionsReport, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline/index.js';
 export type { ValidationDelta } from './validate/FindingBaseline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
-export { preserveText, type PreservedText } from './xml/preserve.js';
+export { type PreservedText } from './xml/TextPreservation.js';
+export function preserveText(original: string, baseline: string, next: string): Promise<PreservedText> { return new TextPreservation(original, baseline, next).result(); }
 /* a host's validators, run inside the write transaction (MutationOptions.validators) and by validate (CheckOptions.validators) */
 export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './validate/validators.js';
 /* the project's bpmnlint configuration as an advisory validator; bpmnlint itself is injected (@miragon/bpmn-cli/node loads it) */
-export { bpmnlintValidator, resolveBpmnlintConfig, BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinter, type BpmnlintLinterClass, type BpmnlintReport, type BpmnlintResolver, type BpmnlintRule, type BpmnlintRuleSetting, type BpmnlintSeverity, type BpmnlintUnavailable, type BpmnlintValidatorOptions, type ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+export { BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintValidatorOptions } from './validate/BpmnlintValidator.js';
+export type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinter, BpmnlintLinterClass, BpmnlintReport, BpmnlintResolver, BpmnlintRule, BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintUnavailable, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+/** The NamedValidator of a resolved configuration (BpmnlintValidator). */
+export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmnlintConfig, opts: BpmnlintValidatorOptions = {}): NamedValidator { return new BpmnlintValidator(engine, resolved, opts).named(); }
+/** The effective configuration (BpmnlintConfigResolution). `opts.moddleExtensions`: descriptors the host resolved for the module paths of `config.moddleExtensions`. */
+export async function resolveBpmnlintConfig(engine: BpmnlintEngine, config: BpmnlintConfig, opts: { moddleExtensions?: Record<string, object> } = {}): Promise<ResolvedBpmnlintConfig> { return new BpmnlintConfigResolution(engine, config, opts).resolve(); }
 /* declared id conventions: what element-id-naming of the project's .bpmnlintrc says about new ids (its naming helpers injected; @miragon/bpmn-cli/node reads the .bpmnlintrc) */
 export { renderConventions } from './ids/utils/conventions-text.js';
 export { ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode } from './ids/IdConventionsReader.js';
@@ -109,15 +168,26 @@ export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
 export type { ProfileFinding, Severity } from './platform/utils/finding.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
-export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
+export { type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
+export function buildView(doc: Doc): ModelView { return new ModelViewBuilder(doc).build(); }
+export function elementDetail(doc: Doc, el: El): ElementDetail { return new ElementDetailBuilder(doc, el).build(); }
+export function findElements(doc: Doc, text: string, kind?: string): FindHit[] { return new ElementFinder(doc).find(text, kind); }
+export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ModelViewBuilder(doc).scope(view, scopeId); }
 export { parseOps, OPS_SCHEMA } from './ops/batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
-export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
+export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
+export function layoutView(defs: El): LayoutView { return new LayoutViewBuilder(defs).build(); }
 export { runFormatOps, type FormatResult, type FormatEntry } from './format/index.js';
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
-export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/types.js';
+export { changeHighlight } from './render/utils/highlight.js';
+/** `bpmn render --format svg`: one plane of the document as SVG (see the contract in src/render/DocRenderer.ts). */
+export function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> { return DocRenderer.renderXml(xml, opts); }
+/** One plane of a parsed document as SVG (no layout). */
+export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult { return new DocRenderer(doc, opts).render(); }
+
 
 /** Runs one op on its own (src/ops/OpRunner.ts). */
 export function runOp(doc: Doc, op: Op): ChangeSet {

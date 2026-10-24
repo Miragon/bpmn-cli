@@ -1,8 +1,13 @@
 import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
-import { aroundView, elementContext, type AroundView, type ElementContext } from './context.js';
-import { layoutView, type LayoutView } from './layout-view.js';
-import { buildView, elementDetail, scopeView, type ElementDetail, type ModelView } from './model-view.js';
+import { type AroundView, type ElementContext } from './context.js';
+import { type LayoutView } from './layout-view.js';
+import { type ElementDetail, type ModelView } from './model-view.js';
+import { AroundWindow } from './AroundWindow.js';
+import { ElementContextBuilder } from './ElementContextBuilder.js';
+import { ElementDetailBuilder } from './ElementDetailBuilder.js';
+import { LayoutViewBuilder } from './LayoutViewBuilder.js';
+import { ModelViewBuilder } from './ModelViewBuilder.js';
 
 /** What viewXml / showXml show: the model (default, optionally one scope), one element (in its context), the neighbourhood of one, or the drawing. */
 export interface ViewOptions {
@@ -53,11 +58,11 @@ export class ViewRequest {
 
   of(doc: Doc): ShownView {
     const opts = this.opts;
-    if (opts.layout) return { kind: 'layout', view: layoutView(doc.definitions) };
-    if (opts.around !== undefined) return { kind: 'around', view: aroundView(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }) };
-    if (opts.id !== undefined && opts.context) return { kind: 'context', view: elementContext(doc, opts.id) };
-    if (opts.id !== undefined) return { kind: 'detail', view: elementDetail(doc, doc.require(opts.id)) };
-    const view = buildView(doc);
-    return { kind: 'model', view: opts.scope ? scopeView(doc, view, opts.scope) : view };
+    if (opts.layout) return { kind: 'layout', view: new LayoutViewBuilder(doc.definitions).build() };
+    if (opts.around !== undefined) return { kind: 'around', view: new AroundWindow(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }).view() };
+    if (opts.id !== undefined && opts.context) return { kind: 'context', view: new ElementContextBuilder(doc, opts.id).build() };
+    if (opts.id !== undefined) return { kind: 'detail', view: new ElementDetailBuilder(doc, doc.require(opts.id)).build() };
+    const view = new ModelViewBuilder(doc).build();
+    return { kind: 'model', view: opts.scope ? new ModelViewBuilder(doc).scope(view, opts.scope) : view };
   }
 }

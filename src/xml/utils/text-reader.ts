@@ -2,7 +2,7 @@
  * A small XML reader that keeps positions: every element knows where its
  * start tag, its content and its end tag are in the text, every attribute
  * where it is written and which whitespace precedes it. The text-preserving
- * writer (preserve.ts) uses it to copy unchanged parts of a file verbatim.
+ * writer (xml/PreservingWriter.ts) uses it to copy unchanged parts of a file verbatim.
  *
  * It reads well-formed XML as BPMN files use it: an optional prolog (XML
  * declaration, comments, processing instructions), one root element, text,
@@ -11,6 +11,7 @@
  * attribute) throws XmlTextError; the caller then falls back to the plain
  * serialisation. Entities are not expanded: values are compared as written.
  */
+import { XmlTextError } from '../XmlTextError.js';
 
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 
@@ -64,13 +65,6 @@ export interface XDocument {
   root: XElement;
   /** comments anywhere in the text (prolog and epilog included) */
   comments: number;
-}
-
-export class XmlTextError extends Error {
-  constructor(message: string, at: number) {
-    super(`${message} at offset ${at}`);
-    this.name = 'XmlTextError';
-  }
 }
 
 const isWs = (c: string | undefined): boolean => c === ' ' || c === '\n' || c === '\t' || c === '\r';
@@ -256,4 +250,9 @@ export function decodeXml(s: string): string {
     const code = e.startsWith('#x') ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
     return String.fromCodePoint(code);
   });
+}
+
+/** The text of an element, start tag to end tag. */
+export function rawOf(doc: XDocument, el: XElement): string {
+  return doc.text.slice(el.start, el.end);
 }

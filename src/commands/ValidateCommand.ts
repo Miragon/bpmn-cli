@@ -1,8 +1,10 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
-import { checkFile, checkLoadedDoc } from '../node/files.js';
+import { DocFile } from '../node/DocFile.js';
+import { ModelFile } from '../node/ModelFile.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from '../platform/PlatformDetection.js';
-import { renderValidation, validationReport } from '../report/command-report.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
+import { ValidationReportBuilder } from '../report/ValidationReportBuilder.js';
+import { ValidationText } from '../report/ValidationText.js';
 
 export class ValidateCommand extends CliCommand {
   register(program: CommandType): void {
@@ -16,12 +18,12 @@ export class ValidateCommand extends CliCommand {
     ).action((file: string, o: RawOpts) =>
       this.cli.guarded(async () => {
         const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', ...this.lintOptions(o) };
-        const report = validationReport(file === '-' ? await checkLoadedDoc(await this.cli.readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
+        const report = new ValidationReportBuilder(file === '-' ? await new DocFile(await this.cli.readDocArg(file)).check(checkOpts) : await new ModelFile(file).check(checkOpts)).report();
         if (o['json']) {
           const { ok, ...rest } = report;
           this.cli.printJson({ ok, file, ...rest }, !!o['pretty']);
         } else {
-          this.cli.print(renderValidation(report));
+          this.cli.print(new ValidationText(report).text());
         }
         if (report.errors.length) this.cli.exitCode = 2;
         // content the reader could not keep (duplicate elements, unknown elements, ...) fails --strict like a warning

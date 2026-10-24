@@ -18,7 +18,6 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/Doc.js';
-import { renderDetail, renderExtensionList } from '../src/report/view-text.js';
 import { kindsJson, kindsText } from '../src/index.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
@@ -27,7 +26,7 @@ import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
-import { elementDetail } from '../src/query/model-view.js';
+import { elementDetail, renderDetail, renderExtensionList } from '../src/index.js';
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 

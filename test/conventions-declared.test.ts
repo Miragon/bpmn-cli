@@ -9,13 +9,11 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../src/api.js';
 import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
-import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/index.js';
+import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions, mutateDoc, mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
-import { bpmnlintEngine } from '../src/node/bpmnlint.js';
+import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import type { MutationResult } from '../src/pipeline/index.js';
 import { definitionsXml } from './helpers.js';
 
 const naming = bpmnlintEngine().plugin.naming;

@@ -1,18 +1,25 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import type { Doc } from '../model/Doc.js';
 import { ImageWriter, type Shot } from '../node/ImageWriter.js';
-import { mutateDocToFile, mutateFile, type FileMutationOptions } from '../node/files.js';
+import { DocFile, type FileMutationOptions } from '../node/DocFile.js';
+import { ModelFile } from '../node/ModelFile.js';
 import { defaultWithConditionViolation, placementViolation } from '../ops/rules.js';
 import type { Op, TriggerOptions } from '../ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from '../pipeline/index.js';
-import { changeHighlight, RENDER_MAX_SIZE, type RenderOptions } from '../render/index.js';
-import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, type MutationReport, type MutationSummary } from '../report/command-report.js';
+import { RENDER_MAX_SIZE, type RenderOptions } from '../render/types.js';
+import { changeHighlight } from '../render/utils/highlight.js';
+import { type MutationReport, type MutationSummary } from '../report/command-report.js';
 import { RenderReport } from '../report/RenderReport.js';
-import { renderView } from '../report/view-text.js';
 import { isCliError, usageError } from '../shared/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import type { CliStream } from './Cli.js';
 import { flag, renderFormat, renderTarget } from './utils/flags.js';
+import { ModelViewText } from '../report/ModelViewText.js';
+import { MutationReportBuilder } from '../report/MutationReportBuilder.js';
+import { MutationSummaryBuilder } from '../report/MutationSummaryBuilder.js';
+import { MutationText } from '../report/MutationText.js';
+import { SummaryText } from '../report/SummaryText.js';
+import { advisoryOf } from '../report/utils/findings.js';
 
 export interface OutputOptions {
   json?: boolean;
@@ -137,10 +144,10 @@ export abstract class MutationCommand extends CliCommand {
       await this.runMutation(
         file,
         opts,
-        (o) => mutateFile(file, ops, o),
+        (o) => new ModelFile(file).mutate(ops, o),
         (doc, o) => {
           doc.assertLossless(o);
-          return mutateDocToFile(doc, ops, o);
+          return new DocFile(doc).mutate(ops, o);
         },
       );
     } catch (err) {
@@ -185,16 +192,16 @@ export abstract class MutationCommand extends CliCommand {
   private async printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: CliStream): Promise<void> {
     const note = this.keptByEnvNote(result, opts.keepFlowIdsEnv);
     if (note) result.changes.note(note);
-    const report = mutationReport(result);
+    const report = new MutationReportBuilder(result).report();
     const shot = opts.render ? await this.renderResult(result.xml, report, opts.render) : undefined;
     const shotText = shot ? `\n${shot.lines.join('\n')}` : '';
     if (opts.summary) {
-      const summary = mutationSummary(report);
+      const summary = new MutationSummaryBuilder(report).summary();
       if (opts.json) this.cli.printJson({ ...summary, ...(note ? { notes: [note] } : {}), ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-      else this.cli.print(this.summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryValidators(report) }, note) + shotText + (report.view ? `\n\n${renderView(report.view)}` : ''), out);
+      else this.cli.print(this.summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf((report).validation.validators) }, note) + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
     } else if (opts.json) this.cli.printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
-    else this.cli.print(renderMutation(report, { dryRun: opts.dryRun }).replace(/\n$/, '') + shotText, out);
-    if (opts.strict && mutationWarnings(result).length) this.cli.exitCode = 5;
+    else this.cli.print(new MutationText(report, { dryRun: opts.dryRun }).text().replace(/\n$/, '') + shotText, out);
+    if (opts.strict && new MutationReportBuilder(result).warnings().length) this.cli.exitCode = 5;
   }
 
   /** `--render <file>` of a mutating command: the result drawn with what the change touched and the problems it added; a render failure is reported, the mutation stands. */
@@ -244,11 +251,11 @@ export abstract class MutationCommand extends CliCommand {
    * lines below them are what renderSummary prints for no changes, without
    * its `no changes` line.
    */
-  private summaryText(summary: MutationSummary, opts: Parameters<typeof renderSummary>[1], note: string | undefined): string {
-    const text = renderSummary(summary, opts);
+  private summaryText(summary: MutationSummary, opts: ConstructorParameters<typeof SummaryText>[1], note: string | undefined): string {
+    const text = new SummaryText(summary, opts).text();
     if (!note) return text;
     const { aliases: _aliases, renamed: _renamed, format: _format, ...rest } = summary;
-    const below = renderSummary({ ...rest, created: {}, changed: [], removed: [] }, opts).split('\n').length - 1;
+    const below = new SummaryText({ ...rest, created: {}, changed: [], removed: [] }, opts).text().split('\n').length - 1;
     const lines = text.split('\n');
     lines.splice(lines.length - below, 0, `note: ${note}`);
     return lines.join('\n');

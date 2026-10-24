@@ -9,8 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml } from '../src/api.js';
 import { Doc } from '../src/model/Doc.js';
 import { parseXml } from '../src/model/utils/moddle.js';
-import { mutateDoc } from '../src/index.js';
-import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
+import { mutateDoc, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
 const defs = (body: string): string => `<?xml version="1.0" encoding="UTF-8"?>

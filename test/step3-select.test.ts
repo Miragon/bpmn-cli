@@ -1,5 +1,5 @@
 /**
- * Step 3: selectors of the format ops (src/query/select.ts): `path`
+ * Step 3: selectors of the format ops (src/query/ElementSelector.ts): `path`
  * (with `via`), `kind` and `branch` name the elements of place / align /
  * color / tidy, so a happy path is coloured, every end event aligned or a
  * branch moved in one call. Elements are addressed by id only.
@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/Doc.js';
-import { layoutView } from '../src/query/layout-view.js';
+import { layoutView } from '../src/index.js';
 import { readPlanes, type DShape } from '../src/diagram/plane.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';

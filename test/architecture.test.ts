@@ -42,7 +42,7 @@ describe('architecture', () => {
   it('only the kind definitions group gateway types by behaviour (the engine rule chunks load on demand and keep their own)', () => {
     const gatewayType = String.raw`'bpmn:(?:Exclusive|Inclusive|Parallel|Complex)Gateway'`;
     const groupedGatewayTypes = new RegExp(`${gatewayType}.*${gatewayType}`);
-    const ownedElsewhere = (file: string) => file === join('src', 'model', 'kinds.ts') || file.startsWith(join('src', 'platform', 'profiles'));
+    const ownedElsewhere = (file: string) => file === join('src', 'model', 'utils', 'kinds.ts') || file.startsWith(join('src', 'platform', 'profiles'));
     const offenders = sourceFiles
       .filter((file) => !ownedElsewhere(file))
       .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, i) => (groupedGatewayTypes.test(line) ? `${file}:${i + 1}` : undefined)))

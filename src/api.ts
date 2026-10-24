@@ -42,6 +42,9 @@ import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import type { LayoutView } from './query/layout-view.js';
 import type { AroundView, ElementContext } from './query/context.js';
+import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
+import { AroundWindow } from './query/AroundWindow.js';
+import { ElementContextBuilder } from './query/ElementContextBuilder.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { IdConventions } from './ids/IdConventionsReader.js';
@@ -49,7 +52,11 @@ import { Doc, type NewDocOptions } from './model/Doc.js';
 import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
 import { parseOpsJson } from './shared/utils/ops-json.js';
-import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
+import { AroundText } from './report/AroundText.js';
+import { ContextText } from './report/ContextText.js';
+import { DetailText } from './report/DetailText.js';
+import { LayoutText } from './report/LayoutText.js';
+import { ModelViewText } from './report/ModelViewText.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
@@ -59,12 +66,15 @@ import { EditTransaction } from './pipeline/EditTransaction.js';
 import { Relayout } from './pipeline/Relayout.js';
 import { DocCheck } from './pipeline/DocCheck.js';
 import type { PlatformChoice } from './platform/PlatformDetection.js';
-import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
+import { type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
-import { findElements, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
+import { type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
 import { ViewRequest, type ShownView, type ViewOptions } from './query/ViewRequest.js';
 import { newProcessChange } from './model/utils/new-process.js';
 import { metricsJson } from './report/utils/metrics-json.js';
+import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
+import { MutationReportBuilder } from './report/MutationReportBuilder.js';
+import { ElementFinder } from './query/ElementFinder.js';
 
 export type { ShownView, ViewOptions } from './query/ViewRequest.js';
 
@@ -112,7 +122,7 @@ export interface EditResult {
 
 function toEditResult(input: string | undefined, mutation: MutationResult): EditResult {
   const unchanged = input !== undefined && mutation.xml === input;
-  const { file: _file, written: _written, ...report } = mutationReport(mutation);
+  const { file: _file, written: _written, ...report } = new MutationReportBuilder(mutation).report();
   return { xml: unchanged ? input : mutation.xml, unchanged, result: report };
 }
 
@@ -179,7 +189,7 @@ export interface ValidateXmlOptions {
 
 /** `bpmn validate --json`: structure, lint, the platform profile, the validators and a layout dry run. `ok` is false on errors. */
 export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
-  return validationReport(await new DocCheck(opts).run(await Doc.fromXml(xml, opts.file)));
+  return new ValidationReportBuilder(await new DocCheck(opts).run(await Doc.fromXml(xml, opts.file))).report();
 }
 
 /** `bpmn show` on a parsed document: the view the options ask for (see ViewOptions). */
@@ -190,7 +200,7 @@ export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
 /** The text of a view, as `bpmn show` prints it (without the final newline). */
 export function renderShown(v: ShownView): string {
   const text =
-    v.kind === 'layout' ? renderLayoutView(v.view) : v.kind === 'detail' ? renderDetail(v.view) : v.kind === 'context' ? renderContext(v.view) : v.kind === 'around' ? renderAround(v.view) : renderView(v.view);
+    v.kind === 'layout' ? new LayoutText(v.view).text() : v.kind === 'detail' ? new DetailText(v.view).text() : v.kind === 'context' ? new ContextText(v.view).text() : v.kind === 'around' ? new AroundText(v.view).text() : new ModelViewText(v.view).text();
   return text.replace(/\n$/, '');
 }
 
@@ -240,7 +250,7 @@ export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'scor
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (case-insensitive), optionally of one kind. */
 export async function findXml(xml: string, text: string, opts: { kind?: string } = {}): Promise<FindHit[]> {
   if (opts.kind !== undefined) assertKindToken(opts.kind);
-  return findElements(await Doc.fromXml(xml), text, opts.kind);
+  return new ElementFinder(await Doc.fromXml(xml)).find(text, opts.kind);
 }
 
 /** `bpmn ext list --json`: the extension elements of an element (and of its event definition / loop / condition). */

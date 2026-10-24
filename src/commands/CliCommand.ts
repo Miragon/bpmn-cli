@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import type { FileMutationOptions } from '../node/files.js';
+import type { FileMutationOptions } from '../node/DocFile.js';
 import { CommandCatalogue, type CommandSignature } from '../report/CommandCatalogue.js';
 import type { Cli } from './Cli.js';
 

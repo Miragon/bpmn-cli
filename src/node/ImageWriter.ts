@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
-import { renderSvg, type RenderOptions, type RenderProblem } from '../render/index.js';
+import { type RenderOptions, type RenderProblem } from '../render/types.js';
 import { ioError } from '../shared/utils/errors.js';
 import { PngRenderer } from './PngRenderer.js';
+import { DocRenderer } from '../render/DocRenderer.js';
 
 export type ImageFormat = 'png' | 'svg';
 
@@ -46,7 +47,7 @@ export class ImageWriter {
     let parts: Array<{ bytes: string | Uint8Array; width: number; height: number; tokens: number; columns?: [number, number]; band?: number }>;
     let r: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
     if (format === 'svg') {
-      const svg = await renderSvg(xml, opts);
+      const svg = await DocRenderer.renderXml(xml, opts);
       parts = (svg.tiles ?? [svg]).map((t) => ({ bytes: t.svg, width: t.width, height: t.height, tokens: t.tokens, ...('columns' in t && t.columns ? { columns: t.columns } : {}), ...('band' in t && t.band ? { band: t.band } : {}) }));
       r = svg;
     } else {

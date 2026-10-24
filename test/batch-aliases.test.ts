@@ -9,14 +9,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { renderMutation } from '../src/report/command-report.js';
+import { renderMutation } from '../src/index.js';
 import { OPS_SCHEMA, opsExample, parseOps } from '../src/ops/batch.js';
 import { idConventionsFromLint } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { CliError } from '../src/shared/CliError.js';
 import { ERROR_CATALOGUE } from '../src/report/guide.js';
 import { guideShort, guideText } from '../src/index.js';
-import { bpmnlintEngine } from '../src/node/bpmnlint.js';
+import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 

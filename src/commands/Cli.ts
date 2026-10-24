@@ -26,8 +26,9 @@ import { Command, CommanderError, type Command as CommandType } from 'commander'
 import { Doc } from '../model/Doc.js';
 import { type Warning } from '../shared/CliError.js';
 import { ioError, isCliError, usageError } from '../shared/utils/errors.js';
-import { validatorTag } from '../report/command-report.js';
-import { decodeXmlBytes, readDoc } from '../node/files.js';
+import { validatorTag } from '../report/utils/findings.js';
+import { decodeXmlBytes } from '../node/utils/files.js';
+import { ModelFile } from '../node/ModelFile.js';
 import { AddCommand } from './AddCommand.js';
 import { AlignCommand } from './AlignCommand.js';
 import { ApplyCommand } from './ApplyCommand.js';
@@ -179,7 +180,7 @@ export class Cli {
 
   /** The document of a file argument: `-` reads it from stdin (it then has no file name). */
   async readDocArg(file: string): Promise<Doc> {
-    if (file !== '-') return readDoc(file);
+    if (file !== '-') return new ModelFile(file).read();
     return Doc.fromXml(decodeXmlBytes(await this.readStdin('the model'), 'stdin'));
   }
 

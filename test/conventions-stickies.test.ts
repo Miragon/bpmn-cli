@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
-import { renderLayout } from '../src/report/view-text.js';
+import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
+import { renderLayout } from '../src/report/utils/result-lines.js';
 
 const OPS: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },

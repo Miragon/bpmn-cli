@@ -1,10 +1,10 @@
 import type { Command as CommandType } from 'commander';
 import { listAllExtensions } from '../ops/ext.js';
 import type { ExtOp } from '../ops/types.js';
-import { renderExtensionList } from '../report/view-text.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 import { parseKeyValues } from './utils/flags.js';
+import { renderExtensionList } from '../report/utils/view-lines.js';
 
 export class ExtCommand extends MutationCommand {
   register(program: CommandType): void {

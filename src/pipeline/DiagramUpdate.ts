@@ -3,7 +3,7 @@
  * stickies in pipeline/EditTransaction.ts) and the text it writes: captured before the
  * ops run (capture), applied after them (apply).
  */
-import { utf8Declaration } from '../xml/encoding.js';
+import { utf8Declaration } from '../xml/utils/encoding.js';
 import { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutEngine } from '../layout/index.js';
@@ -22,7 +22,7 @@ import type { ChangeSet } from '../model/ChangeSet.js';
 import { OpRunner } from '../ops/OpRunner.js';
 import { ordersLanes, ordersPools } from '../ops/order.js';
 import { isFormatOp, type Op } from '../ops/types.js';
-import { plainText, preserveText } from '../xml/preserve.js';
+import { TextPreservation } from '../xml/TextPreservation.js';
 import { firstLine } from '../shared/utils/text.js';
 import { toCliError } from './utils/cli-error.js';
 import type { LayoutMode, LayoutStatus, MutationOptions } from './index.js';
@@ -236,7 +236,8 @@ export class DiagramUpdate {
     const unkept = unkeptEntries(doc.definitions, source.mirror);
     if (unkept.length) xml = await withoutEntries(xml, unkept);
     // a forced write of a lossy import drops what bpmn-moddle could not read: the original text would keep it
-    const text = doc.lossyImportWarnings.length ? plainText(source.text, xml, 'the import was lossy') : await preserveText(source.text, this.asRead, xml);
+    const preservation = new TextPreservation(source.text, this.asRead, xml);
+    const text = doc.lossyImportWarnings.length ? preservation.plain('the import was lossy') : await preservation.result();
     if (text.mode === 'plain') {
       const comments = text.droppedComments ? `; ${text.droppedComments} XML comment(s) dropped` : '';
       changes.note(`the file's formatting was not kept (${text.reason}): written as bpmn-moddle serialises it${comments}`);

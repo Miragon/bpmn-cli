@@ -2,7 +2,7 @@
  * The character encoding of what a write produces.
  *
  * The core works on strings, and every write is UTF-8: the node layer
- * writes the text as UTF-8 (src/node/files.ts), and the in-memory API
+ * writes the text as UTF-8 (src/node/ModelFile.ts), and the in-memory API
  * returns a string a host stores as UTF-8. A file may declare another
  * encoding (`<?xml version="1.0" encoding="ISO-8859-1"?>`); keeping that
  * declaration over UTF-8 bytes would make a parser that honours it read
@@ -19,7 +19,7 @@
  *  input (outputText) and notes it; an unchanged result is the input string
  *  itself and is not written, so a no-op keeps the file and its
  *  declaration. The node layer reads a file in the encoding it declares
- *  (src/node/files.ts readXml), so the characters it had survive a write.
+ *  (src/node/utils/files.ts readXml), so the characters it had survive a write.
  */
 
 /** An XML declaration up to the value of its encoding pseudo-attribute (a UTF-8 BOM before it allowed). */

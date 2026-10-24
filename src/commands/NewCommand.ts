@@ -2,7 +2,8 @@ import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { Doc } from '../model/Doc.js';
 import { newProcessChange } from '../model/utils/new-process.js';
 import { ConventionsLookup } from '../node/ConventionsLookup.js';
-import { assertNewFile, mutateDocToFile } from '../node/files.js';
+import { assertNewFile } from '../node/utils/files.js';
+import { DocFile } from '../node/DocFile.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 
@@ -46,7 +47,7 @@ export class NewCommand extends MutationCommand {
         },
         file === '-' ? undefined : file,
       );
-      const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
+      const result = await new DocFile(doc).mutate([], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
       result.changes.create(newProcessChange(doc, o['name'] as string | undefined));
       await this.emit(result, opts, stdout);
     }, opts.json);

@@ -1,5 +1,5 @@
 import type { BpmnModdle } from 'bpmn-moddle';
-import type { XElement } from '../../xml/text-reader.js';
+import type { XElement } from '../../xml/utils/text-reader.js';
 import { BpmnSchema, BPMNDI_NS } from './BpmnSchema.js';
 import type { RuleKit } from './rule-kit.js';
 

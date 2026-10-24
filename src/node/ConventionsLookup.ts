@@ -1,7 +1,7 @@
 import type { ConventionsXmlOptions } from '../api.js';
 import type { IdConventions } from '../ids/IdConventionsReader.js';
 import type { Undeclared } from '../ids/ConventionsTable.js';
-import { projectIdConventions, type FileBpmnlintOptions, type ProjectIdConventions } from './bpmnlint.js';
+import { ProjectBpmnlint, type FileBpmnlintOptions, type ProjectIdConventions } from './ProjectBpmnlint.js';
 
 export class ConventionsLookup {
   private constructor(
@@ -10,7 +10,7 @@ export class ConventionsLookup {
   ) {}
 
   static async of(file: string | undefined, opts: FileBpmnlintOptions): Promise<ConventionsLookup> {
-    return new ConventionsLookup(await projectIdConventions(file, opts), opts.lintConfig === false);
+    return new ConventionsLookup(await new ProjectBpmnlint(file, opts).idConventions(), opts.lintConfig === false);
   }
 
   get conventions(): IdConventions | undefined {

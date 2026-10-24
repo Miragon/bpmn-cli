@@ -1,6 +1,7 @@
 import type { Shot } from '../node/ImageWriter.js';
 import { AROUND_DEFAULT_DEPTH } from '../query/context.js';
-import { scaleText, type RenderHighlight, type RenderOptions } from '../render/index.js';
+import type { RenderHighlight, RenderOptions } from '../render/types.js';
+import { scaleText } from '../render/utils/scale.js';
 import type { CliError } from '../shared/CliError.js';
 
 export class RenderReport {

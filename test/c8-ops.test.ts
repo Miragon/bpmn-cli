@@ -16,11 +16,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { opsExample } from '../src/ops/batch.js';
 import { Doc } from '../src/model/Doc.js';
-import { renderView } from '../src/report/view-text.js';
-import { runOps } from '../src/index.js';
-import { mutateDoc } from '../src/index.js';
-import { loadProfiles, runProfile } from '../src/index.js';
-import { buildView, elementDetail } from '../src/query/model-view.js';
+import { renderView, runOps, mutateDoc, loadProfiles, runProfile, buildView, elementDetail } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
