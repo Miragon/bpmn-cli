@@ -6,13 +6,13 @@ import { assignLane } from '../src/ops/containers.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
-import { retypeElement } from '../src/ops/retype.js';
 import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { IdRenamer } from '../src/ops/IdRenamer.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
+import { ElementRetyper } from '../src/ops/ElementRetyper.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -608,7 +608,7 @@ describe('retype', () => {
   it('task -> serviceTask keeps id, flows, boundary events, lane, extensions, vendor attrs and data associations', async () => {
     const doc = await fullDoc();
     const old = doc.require('Task_A');
-    const cs = retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'service' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'service' });
     const task = doc.require('Task_A');
     expect(task).not.toBe(old);
     expect(task.$type).toBe('bpmn:ServiceTask');
@@ -640,17 +640,17 @@ describe('retype', () => {
 
   it('retypes across the activity family (task -> subProcess -> callActivity) and drops unknown properties with a warning', async () => {
     const doc = await fullDoc();
-    retypeElement(doc, { op: 'retype', id: 'Call', kind: 'subProcess' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Call', kind: 'subProcess' });
     expect(doc.require('Call').$type).toBe('bpmn:SubProcess');
-    retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'task' });
-    const cs = retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'callActivity' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
     expect(cs.warnings).toEqual([]);
     expect(doc.require('Sub').$type).toBe('bpmn:CallActivity');
     for (const id of ['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']) expect(doc.get(id), id).toBeUndefined();
     expect(ids(doc.incoming(doc.require('Sub')))).toEqual(['F3', 'F4']);
-    const cs2 = retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'task' });
+    const cs2 = new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     expect(cs2.warnings).toEqual([]);
-    retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'callActivity' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
     setProperties(doc, { op: 'set', id: 'Sub', values: { calledElement: 'X' } });
     expect(doc.require('Sub').get('calledElement')).toBe('X');
     expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Call', values: { calledElement: 'X' } }))).toBe('E_UNKNOWN_KEY');
@@ -659,10 +659,10 @@ describe('retype', () => {
 
   it('reports dropped children / attributes as W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
-    const cs = retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'userTask' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'userTask' });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(cs.removed.map((c) => c.id)).toEqual(expect.arrayContaining(['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']));
-    const cs2 = retypeElement(doc, { op: 'retype', id: 'Call', kind: 'task' });
+    const cs2 = new ElementRetyper(doc).retype({ op: 'retype', id: 'Call', kind: 'task' });
     expect(cs2.warnings[0]).toMatchObject({ code: 'W_PROPERTY_DROPPED', element: 'Call' });
     expect(cs2.warnings[0]!.message).toMatch(/calledElement/);
     await expectRoundTrip(doc);
@@ -670,7 +670,7 @@ describe('retype', () => {
 
   it('gateway -> gateway (default dropped for parallel, kept for inclusive)', async () => {
     const doc = await fullDoc();
-    const cs = retypeElement(doc, { op: 'retype', id: 'Gw', kind: 'parallelGateway' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Gw', kind: 'parallelGateway' });
     const gw = doc.require('Gw');
     expect(gw.$type).toBe('bpmn:ParallelGateway');
     expect(ids(doc.outgoing(gw))).toEqual(['F_yes', 'F_no']);
@@ -684,10 +684,10 @@ describe('retype', () => {
     expect(again.require('Gw').$type).toBe('bpmn:ParallelGateway');
 
     const doc2 = await fullDoc();
-    retypeElement(doc2, { op: 'retype', id: 'Gw', kind: 'or' });
+    new ElementRetyper(doc2).retype({ op: 'retype', id: 'Gw', kind: 'or' });
     expect(doc2.require('Gw').$type).toBe('bpmn:InclusiveGateway');
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');
-    const noop = retypeElement(doc2, { op: 'retype', id: 'Gw', kind: 'inclusiveGateway' });
+    const noop = new ElementRetyper(doc2).retype({ op: 'retype', id: 'Gw', kind: 'inclusiveGateway' });
     expect(noop.isEmpty).toBe(true);
     expect(noop.notes[0]).toMatch(/already/);
   });
@@ -695,32 +695,32 @@ describe('retype', () => {
   it('subProcess <-> eventSubProcess toggles triggeredByEvent in place', async () => {
     const doc = await docFromXml(definitionsXml(`<bpmn:subProcess id="Sub" name="S"><bpmn:startEvent id="S1" /></bpmn:subProcess>`));
     const sub = doc.require('Sub');
-    retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
     expect(doc.require('Sub')).toBe(sub);
     expect(sub.get('triggeredByEvent')).toBe(true);
     expect((await doc.toXml()).includes('triggeredByEvent="true"')).toBe(true);
-    retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'subProcess' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'subProcess' });
     expect(sub.get('triggeredByEvent')).toBeFalsy();
     expect((await doc.toXml()).includes('triggeredByEvent')).toBe(false);
     const connected = await fullDoc();
-    expect(errorCode(() => retypeElement(connected, { op: 'retype', id: 'Sub', kind: 'eventSubProcess' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementRetyper(connected).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' }))).toBe('E_INVALID_RETYPE');
   });
 
   it('rejects invalid retypes with helpful errors', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'xor' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Start', kind: 'endEvent' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'catch' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'F1', kind: 'task' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'choreographyTask' }))).toBe('E_UNKNOWN_KIND');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'whatever' }))).toBe('E_UNKNOWN_KIND');
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Nope', kind: 'task' }))).toBe('E_NOT_FOUND');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'xor' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Start', kind: 'endEvent' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'catch' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'F1', kind: 'task' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'choreographyTask' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'whatever' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Nope', kind: 'task' }))).toBe('E_NOT_FOUND');
     // trigger not allowed on the new kind without saying which one to use
     const doc2 = await docFromXml(
       definitionsXml(`<bpmn:intermediateCatchEvent id="Ev"><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1M</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>`),
     );
-    expect(errorCode(() => retypeElement(doc2, { op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' }))).toBe('E_INVALID_TRIGGER');
-    expect(errorCode(() => retypeElement(doc2, { op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent:timer' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementRetyper(doc2).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementRetyper(doc2).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent:timer' }))).toBe('E_UNKNOWN_KIND');
     expect(doc2.require('Ev').$type).toBe('bpmn:IntermediateCatchEvent');
   });
 
@@ -731,9 +731,9 @@ describe('retype', () => {
         extraRoots: '<bpmn:message id="Message_1" name="Msg" />',
       }),
     );
-    const noop = retypeElement(doc, { op: 'retype', id: 'Ev', kind: 'intermediateCatchEvent:message' });
+    const noop = new ElementRetyper(doc).retype({ op: 'retype', id: 'Ev', kind: 'intermediateCatchEvent:message' });
     expect(noop.isEmpty).toBe(true);
-    const cs = retypeElement(doc, { op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' });
     const ev = doc.require('Ev');
     expect(ev.$type).toBe('bpmn:IntermediateThrowEvent');
     expect(ev.get<El[]>('eventDefinitions')[0]!.get<El>('messageRef').get('id')).toBe('Message_1');
@@ -744,13 +744,13 @@ describe('retype', () => {
 
   itTriggers('changes an event trigger via applyTrigger', async () => {
     const doc = await fullDoc();
-    const cs = retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
     const ev = doc.require('Timer_A');
     expect(ev.$type).toBe('bpmn:BoundaryEvent');
     expect(readProperties(doc, ev)).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:message', detail: 'retyped from boundaryEvent:timer to boundaryEvent:message' });
     expect(doc.rootElementsOfType('bpmn:Message').some((m) => m.get('name') === 'Reminder')).toBe(true);
-    retypeElement(doc, { op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
     expect(readProperties(doc, doc.require('Start'))).toMatchObject({ trigger: 'timer', timer: 'R/PT1H' });
     await expectRoundTrip(doc);
   });
@@ -1076,7 +1076,7 @@ describe('mixed scenario', () => {
   it('serialises without import warnings after set / retype / move / order / ext / remove', async () => {
     const doc = await fullDoc();
     setProperties(doc, { op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
-    retypeElement(doc, { op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
     extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
     orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
     moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
@@ -1230,10 +1230,10 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     expect(isCliError(caught) && caught.details['hint']).toMatch(/bpmn remove <file> MF/);
 
     const doc2 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
-    expect(errorCode(() => retypeElement(doc2, { op: 'retype', id: 'Recv', kind: 'startEvent:timer', timer: 'PT1H' }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementRetyper(doc2).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:timer', timer: 'PT1H' }))).toBe('E_INVALID_TRIGGER');
     // staying a message event (or untyped) is fine
     const doc3 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
-    expect(retypeElement(doc3, { op: 'retype', id: 'Recv', kind: 'startEvent:message', message: 'Other' }).warnings).toEqual([]);
+    expect(new ElementRetyper(doc3).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:message', message: 'Other' }).warnings).toEqual([]);
     expect(setProperties(doc3, { op: 'set', id: 'Recv', values: { trigger: 'none' } }).warnings).toEqual([]);
     await expectRoundTrip(doc3);
   });
@@ -1248,13 +1248,13 @@ describe('set / retype: message flows must still fit the event afterwards', () =
 describe('retype: trigger details, dropped flags, ignored options, child diagrams', () => {
   it('same kind and trigger with options updates the trigger details instead of rebuilding them', async () => {
     const doc = await fullDoc();
-    const cs = retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timerKind: 'cycle' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timerKind: 'cycle' });
     expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
     expect(await doc.toXml()).toContain('<bpmn:timeCycle');
     expect(cs.changed).toEqual([{ id: 'Timer_A', kind: 'boundaryEvent:timer', detail: 'trigger options updated (timerKind=cycle)' }]);
 
     const errs = await docFromXml(EVENT_SUB);
-    const cs2 = retypeElement(errs, { op: 'retype', id: 'OnErr', kind: 'start:error', errorCode: 'E2' });
+    const cs2 = new ElementRetyper(errs).retype({ op: 'retype', id: 'OnErr', kind: 'start:error', errorCode: 'E2' });
     const def = errs.require('OnErr').get<El[]>('eventDefinitions')[0]!;
     expect(def.get<El>('errorRef').get('id')).toBe('Error_Boom');
     expect(errs.require('Error_Boom').get('errorCode')).toBe('E2');
@@ -1265,28 +1265,28 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
   it('clears a non-interrupting flag the new trigger cannot carry, with W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
     setProperties(doc, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const kept = retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Late' });
+    const kept = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Late' });
     expect(doc.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(kept.warnings).toEqual([]);
-    const cs = retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'Boom' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'Boom' });
     expect(doc.require('Timer_A').get('cancelActivity')).not.toBe(false);
     expect((await doc.toXml()).includes('cancelActivity')).toBe(false);
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_PROPERTY_DROPPED', element: 'Timer_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/nonInterrupting .* error boundary events are always interrupting/);
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:error', detail: 'retyped from boundaryEvent:message to boundaryEvent:error' });
     // an explicit --non-interrupting with an error trigger is still refused
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timer: 'PT1H', nonInterrupting: true }))).toBeUndefined();
-    expect(errorCode(() => retypeElement(doc, { op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'X', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timer: 'PT1H', nonInterrupting: true }))).toBeUndefined();
+    expect(errorCode(() => new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'X', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
   });
 
   it('warns W_OPTION_IGNORED for trigger options on a non-event and stays a no-op for the same kind', async () => {
     const doc = await fullDoc();
-    const cs = retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     // (W_PROPERTY_INAPPLICABLE for the camunda:assignee the serviceTask keeps is covered in test/c7-semantic.test.ts)
     expect(cs.warnings.filter((w) => w.code !== 'W_PROPERTY_INAPPLICABLE')).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/timer/);
     expect(cs.changed[0]!.detail).toBe('retyped from userTask to serviceTask');
-    const again = retypeElement(doc, { op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
+    const again = new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     expect(again.isEmpty).toBe(true);
     expect(again.notes[0]).toMatch(/already/);
     expect(again.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
@@ -1295,7 +1295,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
   it('a sub-process that becomes a task loses its child diagram (no BPMNPlane rooted at a task)', async () => {
     const doc = await docFromXml(COLLAPSED_WITH_DI);
     expect(many(doc.definitions, 'diagrams')).toHaveLength(2);
-    retypeElement(doc, { op: 'retype', id: 'Sub', kind: 'task' });
+    new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     const diagrams = many(doc.definitions, 'diagrams');
     expect(diagrams).toHaveLength(1);
     expect(diagrams[0]!.get<El>('plane').get<El>('bpmnElement').get('id')).toBe('Process_1');
@@ -1308,7 +1308,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
     // sub-process -> sub-process keeps it
     const doc2 = await docFromXml(COLLAPSED_WITH_DI);
     new ElementRemover(doc2).remove({ op: 'remove', ids: ['F1'] });
-    retypeElement(doc2, { op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
+    new ElementRetyper(doc2).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
     expect(many(doc2.definitions, 'diagrams')).toHaveLength(2);
     expect(many(doc2.definitions, 'diagrams')[1]!.get<El>('plane').get<El>('bpmnElement')).toBe(doc2.require('Sub'));
   });

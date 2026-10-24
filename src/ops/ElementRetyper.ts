@@ -1,0 +1,331 @@
+/**
+ * `retype`: change an element's kind keeping id, name, docs, extension
+ * elements, vendor attrs, flows, boundary events, lane membership.
+ *
+ * CONTRACT (implemented in the "mutation" work package):
+ *  - descriptor-driven: create the new type, copy every own property known to
+ *    the new type, re-parent moved children, swap in the parent collection at
+ *    the same index, re-point EVERY reference in the tree (sourceRef/targetRef,
+ *    incoming/outgoing are copied, attachedToRef, flowNodeRef, default,
+ *    dataObjectRef, processRef, messageFlows...). Dropped properties ->
+ *    W_PROPERTY_DROPPED (contained children with ids are cascade-removed and
+ *    reported). Such removed content (e.g. the flow elements of a sub-process
+ *    retyped to a task) is also recorded in the running edit (EditContext.droppedContent):
+ *    the write pipeline refuses it with E_WOULD_DROP_CONTENT unless --force,
+ *    so an agent never deletes a whole subtree by asking for another kind.
+ *  - allowed: task <-> task/subProcess/callActivity (activity family),
+ *    gateway <-> gateway, event <-> event of the same position (start/end/
+ *    intermediate catch|throw/boundary), plus trigger changes via TriggerChange.
+ *    Other combinations -> E_INVALID_RETYPE.
+ *  - same kind & trigger -> no-op note; with trigger options the existing
+ *    trigger details are merged with the given ones ("trigger options updated").
+ *  - a non-interrupting flag the new trigger cannot carry is cleared with
+ *    W_PROPERTY_DROPPED; trigger options on a non-event -> W_OPTION_IGNORED.
+ *  - message flows touching an event must still fit its new kind/trigger
+ *    (E_INVALID_TRIGGER otherwise, the same rule `connect` applies).
+ *  - the id stays (ids are API); where the declared id conventions
+ *    (element-id-naming) accept its prefix for the old kind / trigger and not
+ *    for the new one, W_ID_PREFIX_STALE names the `bpmn set` that renames it.
+ *  - a sub-process that stops being one loses its child diagram (DI), so a
+ *    --no-layout write never leaves a BPMNPlane rooted at a task.
+ *  - vendor attributes and extension elements are kept as they are (like the
+ *    BPMN content, they may still be wanted, and dropping them would lose
+ *    data); camunda attributes / extension elements the Camunda descriptor
+ *    does not allow on the new kind (camunda:assignee on a serviceTask,
+ *    camunda:topic on a userTask, a camunda:taskListener outside a userTask)
+ *    are named in one W_PROPERTY_INAPPLICABLE warning with the commands that
+ *    remove them; the same for zeebe content by the Zeebe descriptor
+ *    (zeebe:assignmentDefinition on a serviceTask, zeebe:taskDefinition on a
+ *    userTask). (Not W_PROPERTY_DROPPED: nothing was dropped.) In a Camunda 7
+ *    or 8 file the profile names each of them as well (W_C7_MISPLACED_ATTRIBUTE,
+ *    W_C7_MISPLACED_EXTENSION, W_C8_MISPLACED_ATTRIBUTE, W_C8_MISPLACED_EXTENSION);
+ *    withoutProfileDuplicates() drops the summary then, so
+ *    a write reports every item once. Retyped to a userTask in a Camunda 8
+ *    file, the task gets zeebe:userTask (platform/Camunda8Defaults.ts).
+ */
+import type { Doc } from '../model/Doc.js';
+import { modelError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
+import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
+import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
+import { ChangeSet } from '../model/ChangeSet.js';
+import { coversProfileSubjects } from './covers.js';
+import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
+import { EventTrigger } from './EventTrigger.js';
+import { TriggerChange } from './TriggerChange.js';
+import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
+import type { RetypeOp, TriggerOptions } from './types.js';
+import { CAMUNDA } from '../platform/CamundaDescriptor.js';
+import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
+import { SequenceFlows } from './SequenceFlows.js';
+import { RootElements } from './RootElements.js';
+import { ElementRemover } from './ElementRemover.js';
+
+const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
+
+export class ElementRetyper {
+  constructor(private readonly doc: Doc) {}
+
+  private static eventPosition(def: KindDef): string {
+    return def.kind === 'intermediateCatchEvent' || def.kind === 'intermediateThrowEvent' ? 'intermediate' : def.kind;
+  }
+
+  /** Why `from` cannot become `to`, or undefined when the retype is allowed. */
+  private static incompatibility(from: KindDef, to: KindDef): string | undefined {
+    if (ACTIVITY_FAMILIES.has(from.family) && ACTIVITY_FAMILIES.has(to.family)) return undefined;
+    if (from.family === 'gateway' && to.family === 'gateway') return undefined;
+    if (from.family === 'event' && to.family === 'event') {
+      return ElementRetyper.eventPosition(from) === ElementRetyper.eventPosition(to) ? undefined : `a ${from.kind} sits at a different position in the flow than a ${to.kind}`;
+    }
+    return `${from.family} and ${to.family} are different families`;
+  }
+
+  private static resolveTrigger(el: El, to: KindDef, requested: Trigger | undefined): Trigger | undefined {
+    if (to.family !== 'event') return undefined;
+    if (requested) return requested;
+    const current = triggerOf(el) ?? 'none';
+    const allowed = to.triggers ?? [];
+    if (allowed.includes(current)) return current;
+    throw modelError('E_INVALID_TRIGGER', `Trigger "${current}" is not allowed on ${to.kind}; say which trigger the ${to.kind} should have`, {
+      element: idOf(el),
+      hint: `Use \`bpmn retype <file> ${idOf(el)} ${to.kind}:<trigger>\` with one of: ${allowed.join(', ')}.`,
+    });
+  }
+
+  /** Changes the kind of an element (see module contract). */
+  retype(op: RetypeOp): ChangeSet {
+    const cs = new ChangeSet();
+    const el = this.doc.require(op.id);
+    const id = idOf(el);
+    const from = kindOf(el);
+    if (!from) {
+      throw modelError('E_INVALID_RETYPE', `${el.$type} ${id} cannot be retyped`, {
+        element: id,
+        hint: 'Only tasks, sub-processes, call activities, gateways and events can be retyped.',
+      });
+    }
+    let parsed;
+    try {
+      parsed = parseKind(op.kind);
+    } catch (err) {
+      if (err instanceof KindError) throw modelError('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.candidates, hint: 'Run `bpmn kinds` for the list of kinds.' });
+      throw err;
+    }
+    const to = parsed.def;
+    const reason = ElementRetyper.incompatibility(from, to);
+    if (reason) {
+      throw modelError('E_INVALID_RETYPE', `Cannot retype ${kindLabel(el)} ${id} to ${to.kind}: ${reason}`, {
+        element: id,
+        hint: `Remove the element and add a new one of the wanted kind instead (\`bpmn remove <file> ${id}\`, then \`bpmn add <file> <kind> ...\`).`,
+      });
+    }
+    const oldLabel = kindLabel(el);
+    const trigger = ElementRetyper.resolveTrigger(el, to, parsed.trigger);
+    const given = EventTrigger.optionsOf(op);
+    const givenKeys = Object.keys(given) as Array<keyof TriggerOptions>;
+    const isEvent = to.family === 'event';
+    if (!isEvent && givenKeys.length) {
+      cs.warn({
+        code: 'W_OPTION_IGNORED',
+        message: `Trigger options (${givenKeys.join(', ')}) are ignored for ${to.kind} ${id}`,
+        element: id,
+        hint: 'Trigger options apply to events only.',
+      });
+    }
+    const hasTriggerOptions = isEvent && givenKeys.length > 0;
+    const oldTrigger = triggerOf(el);
+    const sameTrigger = trigger === oldTrigger;
+    if (from === to && sameTrigger && !hasTriggerOptions) {
+      cs.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
+      new RootElements(this.doc).bindRefAs(cs, op.refAs, el);
+      return cs;
+    }
+    if (to.kind === 'eventSubProcess' && (this.doc.incoming(el).length || this.doc.outgoing(el).length)) {
+      throw modelError('E_INVALID_RETYPE', `${id} has sequence flows; event sub-processes cannot be connected by sequence flows`, {
+        element: id,
+        candidates: [...this.doc.incoming(el), ...this.doc.outgoing(el)].map(idOf),
+        hint: `Remove its flows first: \`bpmn remove <file> ${[...this.doc.incoming(el), ...this.doc.outgoing(el)].map(idOf).join(' ')}\`.`,
+      });
+    }
+
+    // read the old trigger state before the swap moves the definitions over
+    const change = new TriggerChange(this.doc, el);
+    const target = to.type === el.$type ? el : this.swapType(el, to, cs);
+    ElementRetyper.applyKindProps(target, from, to);
+    if (target !== el) {
+      // a batch alias of the element follows it to the new one (ops/aliases.ts AliasTable.rebind)
+      cs.replaced.push({ from: el, to: target });
+      const inapplicable = this.inapplicableCamundaContent(target, to);
+      if (inapplicable) cs.warn(inapplicable);
+      if (new Camunda8Defaults(this.doc).userTask(target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+    }
+    new SequenceFlows(this.doc).dropIgnoredConditions(target, cs);
+    // same trigger: update its details (keep what was not given); new trigger: build from the given options
+    change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, cs, { on: target });
+    this.doc.invalidate();
+    const detail =
+      from === to && sameTrigger
+        ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
+        : `retyped from ${oldLabel} to ${kindLabel(target)}`;
+    cs.change(ChangeSet.entryOf(target, detail));
+    new RootElements(this.doc).bindRefAs(cs, op.refAs, target);
+    return cs;
+  }
+
+  /** `camunda:<local>` when `name` is prefixed with a prefix bound to the camunda (or Operaton's) namespace. */
+  private camundaName(name: string): string | undefined {
+    const idx = name.indexOf(':');
+    if (idx <= 0 || !CAMUNDA.reads(this.doc.namespaceUri(name.slice(0, idx)))) return undefined;
+    return `camunda:${name.slice(idx + 1)}`;
+  }
+
+  /** The local name when `name` is prefixed with a prefix bound to the zeebe namespace. */
+  private zeebeLocal(name: string): string | undefined {
+    const idx = name.indexOf(':');
+    if (idx <= 0 || this.doc.namespaceUri(name.slice(0, idx)) !== ZEEBE_URI) return undefined;
+    return name.slice(idx + 1);
+  }
+
+  /**
+   * W_PROPERTY_INAPPLICABLE naming the camunda / zeebe attributes and extension
+   * elements the new kind cannot use (they stay), by the Camunda 7 and the
+   * Camunda 8 (zeebe) descriptor.
+   */
+  private inapplicableCamundaContent(el: El, to: KindDef): Warning | undefined {
+    const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
+      const name = this.camundaName(key);
+      if (name) return CAMUNDA.attrAppliesTo(name, el) === false;
+      const z = this.zeebeLocal(key);
+      const def = z ? ZEEBE.attr(z) : undefined;
+      return !!def && !def.owners.some((o) => is(el, o));
+    });
+    const exts: string[] = [];
+    for (const ext of el.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
+      const name = this.camundaName(ext.$type);
+      const z = name ? undefined : this.zeebeLocal(ext.$type);
+      const misplaced = name ? CAMUNDA.allowedOn(name, el) === false : z ? ZEEBE.allowedOn(z, el) === false && !ZEEBE.nestedOnly(z) : false;
+      if (misplaced && !exts.includes(ext.$type)) exts.push(ext.$type);
+    }
+    const names = [...attrs, ...exts];
+    if (!names.length) return undefined;
+    const id = idOf(el);
+    const fixes = [
+      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((a) => `${a}=`).join(' ')}\``] : []),
+      ...exts.map((t) => `\`bpmn ext remove <file> ${id} ${t}\``),
+    ];
+    const warning: Warning = {
+      code: 'W_PROPERTY_INAPPLICABLE',
+      message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
+      element: id,
+      hint: `The ${names.every((n) => this.zeebeLocal(n)) ? 'Zeebe (Camunda 8)' : names.some((n) => this.zeebeLocal(n)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
+    };
+    // what the Camunda 7 / 8 profile reports item by item (subjects of its misplaced-content findings), see withoutProfileDuplicates
+    return coversProfileSubjects(warning, [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)]);
+  }
+
+  /** Applies / clears the kind-specific creation props (e.g. triggeredByEvent for event sub-processes). */
+  private static applyKindProps(el: El, from: KindDef, to: KindDef): void {
+    for (const k of Object.keys(from.props ?? {})) if (!(to.props && k in to.props) && descriptorOf(el).propertiesByName?.[k]) el.set(k, undefined);
+    for (const [k, v] of Object.entries(to.props ?? {})) el.set(k, v);
+  }
+
+  private static copyProp(next: El, p: PropDescriptor, value: unknown): void {
+    if (p.isMany && Array.isArray(value)) {
+      const list = many(next, p.name);
+      for (const child of value) {
+        list.push(child as El);
+        if (!p.isReference && isEl(child)) child.$parent = next;
+      }
+      return;
+    }
+    next.set(p.name, value);
+    if (!p.isReference && isEl(value)) value.$parent = next;
+  }
+
+  private static describeValue(value: unknown): string {
+    if (Array.isArray(value)) return `${value.length} element(s)`;
+    if (isEl(value)) return idOf(value) || value.$type;
+    return String(value);
+  }
+
+  private dropProp(el: El, p: PropDescriptor, value: unknown, to: KindDef, cs: ChangeSet): void {
+    const detail = ElementRetyper.describeValue(value);
+    if (!p.isReference) {
+      const children = (Array.isArray(value) ? value : [value]).filter((c): c is El => isEl(c) && !!c.get<string | undefined>('id'));
+      const before = cs.removed.length;
+      for (const child of children) new ElementRemover(this.doc).cascade(child, cs);
+      const removed = cs.removed.slice(before).map((c) => c.id);
+      if (removed.length) this.doc.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
+    }
+    cs.warn({
+      code: 'W_PROPERTY_DROPPED',
+      message: `${p.name} of ${idOf(el)} (${detail}) was dropped: a ${to.kind} has no ${p.name}`,
+      element: idOf(el),
+      ...(p.name === 'default' ? { hint: 'The flow still exists but is no longer marked as default.' } : {}),
+    });
+  }
+
+  private dropDiagram(diagram: El | undefined): void {
+    if (!diagram || !is(diagram, 'bpmndi:BPMNDiagram')) return;
+    removeFrom(this.doc.definitions, 'diagrams', diagram);
+    for (const e of walk(diagram)) {
+      const id = e.get<string | undefined>('id');
+      if (id) this.doc.ids.release(id);
+    }
+  }
+
+  private static replaceInParent(parent: El, el: El, next: El): void {
+    for (const p of descriptorOf(parent).properties ?? []) {
+      if (p.isReference) continue;
+      const v = ownValue(parent, p.name);
+      if (Array.isArray(v)) {
+        const i = v.indexOf(el);
+        if (i !== -1) {
+          v[i] = next;
+          next.$parent = parent;
+          return;
+        }
+      } else if (v === el) {
+        parent.set(p.name, next);
+        next.$parent = parent;
+        return;
+      }
+    }
+  }
+
+  /** Creates the new element, moves every compatible property over and re-points all references. */
+  private swapType(el: El, to: KindDef, cs: ChangeSet): El {
+    const next = this.doc.moddle.create(to.type, { id: idOf(el) });
+    const nextProps = descriptorOf(next).propertiesByName ?? {};
+    for (const p of descriptorOf(el).properties ?? []) {
+      if (p.name === 'id') continue;
+      const value = ownValue(el, p.name);
+      if (value === undefined || value === null || (Array.isArray(value) && !value.length)) continue;
+      if (p.name === 'triggeredByEvent') continue; // kind prop, re-applied by applyKindProps
+      if (nextProps[p.name]) ElementRetyper.copyProp(next, p, value);
+      else this.dropProp(el, p, value, to, cs);
+    }
+    Object.assign(next.$attrs, el.$attrs);
+    const parent = el.$parent as El | undefined;
+    if (parent) ElementRetyper.replaceInParent(parent, el, next);
+    for (const ref of findReferences(this.doc.definitions, el)) {
+      if (is(ref.holder, 'bpmndi:BPMNPlane') && !is(next, 'bpmn:SubProcess')) {
+        // the child diagram of a (collapsed) sub-process: only processes, sub-processes and
+        // collaborations may root a plane, so it must go instead of being re-pointed
+        this.dropDiagram(ref.holder.$parent as El | undefined);
+        continue;
+      }
+      if (ref.isMany) {
+        const list = many(ref.holder, ref.prop);
+        const i = list.indexOf(el);
+        if (i !== -1) list[i] = next;
+      } else {
+        ref.holder.set(ref.prop, next);
+      }
+    }
+    // what the batch recorded about the element (its change entries, what it was called as a flow end) is about the new one
+    this.doc.edit.replaceElement(el, next);
+    this.doc.invalidate();
+    return next;
+  }
+}

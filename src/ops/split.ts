@@ -33,7 +33,6 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import { IdStyle } from '../ids/IdStyle.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
-import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
 import { renamedNote } from '../model/utils/renames.js';
@@ -41,6 +40,7 @@ import { insertAfterInScope } from './utils/declaration-order.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { AddOp, FlowOptions as FlowOptionValues, SplitOp } from './types.js';
 import { SequenceFlows } from './SequenceFlows.js';
+import { ElementAdder } from './ElementAdder.js';
 
 
 function gatewayKind(token: string | undefined): string {
@@ -159,7 +159,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const laneOpt = lane ? { lane: idOf(lane) } : {};
 
   // 1. split gateway
-  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, new ElementLabels(anchor).anchorContext('After'));
+  const gwCs = new ElementAdder(doc).add({ op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, new ElementLabels(anchor).anchorContext('After'));
   cs.merge(gwCs);
   const gatewayId = createdId(gwCs);
   const gateway = doc.require(gatewayId);
@@ -196,7 +196,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     branch.nodes.forEach((node, i) => {
       const own = FlowOptions.of(node);
       const addOp: AddOp = { ...node, ...(i === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: prev };
-      const nodeCs = addElement(doc, addOp);
+      const nodeCs = new ElementAdder(doc).add(addOp);
       cs.merge(nodeCs);
       prev = createdId(nodeCs);
     });
@@ -224,7 +224,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     cs.note(`only the branch ending at ${lone.direct ? gatewayId : lone.end} continues; no join gateway created${successor ? ` (it runs on to ${idOf(successor)})` : ''}`);
   } else if (withJoin) {
     const wanted = joinIdFor(doc, op, gateway, cs, kind);
-    const joinCs = addElement(doc, { op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
+    const joinCs = new ElementAdder(doc).add({ op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
     cs.merge(joinCs);
     joinId = createdId(joinCs);
     // generated, not the caller's (addElement claimed it as given)

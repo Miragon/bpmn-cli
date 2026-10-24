@@ -7,19 +7,19 @@ import { usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
 import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
-import { retypeElement } from './retype.js';
 import { setProperties } from './set.js';
 import { IdRenamer } from './IdRenamer.js';
 import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
 import { StaleFlowReport } from './StaleFlowReport.js';
 import { ElementRemover } from './ElementRemover.js';
+import { ElementRetyper } from './ElementRetyper.js';
+import { ElementAdder } from './ElementAdder.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -151,7 +151,7 @@ export class OpRunner {
     const doc = this.doc;
     switch (op.op) {
       case 'add':
-        return addElement(doc, op);
+        return new ElementAdder(doc).add(op);
       case 'connect':
         return connectElements(doc, op);
       case 'set':
@@ -159,7 +159,7 @@ export class OpRunner {
       case 'remove':
         return new ElementRemover(doc).remove(op);
       case 'retype':
-        return retypeElement(doc, op);
+        return new ElementRetyper(doc).retype(op);
       case 'move':
         return moveElements(doc, op);
       case 'order':

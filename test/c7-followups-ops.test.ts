@@ -33,7 +33,7 @@ import { extensionLines, renderDetail, renderExtensionList, renderView } from '.
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
-import { withoutProfileDuplicates } from '../src/ops/retype.js';
+import { withoutProfileDuplicates } from '../src/ops/covers.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';

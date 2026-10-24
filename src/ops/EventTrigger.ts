@@ -23,6 +23,9 @@ export interface TriggerDetails {
 /** Triggers that always interrupt: never on a non-interrupting boundary or start event. */
 export const ALWAYS_INTERRUPTING: Trigger[] = ['error', 'cancel', 'compensate'];
 
+/** The keys of the trigger options of an op (TriggerOptions). */
+export const TRIGGER_OPTION_KEYS: ReadonlyArray<keyof TriggerOptions> = ['timer', 'timerKind', 'message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode', 'when', 'link', 'nonInterrupting'];
+
 /** The expression property of each timer kind. */
 export const TIMER_PROPS: Record<'cycle' | 'duration' | 'date', string> = {
   cycle: 'timeCycle',
@@ -44,6 +47,13 @@ export class EventTrigger {
     if (is(el, 'bpmn:BoundaryEvent')) return ALWAYS_INTERRUPTING.includes(trigger);
     if (is(el, 'bpmn:StartEvent')) return ALWAYS_INTERRUPTING.includes(trigger) || trigger === 'none';
     return true;
+  }
+
+  /** Just the trigger options of an op (the ones it gives). */
+  static optionsOf(source: TriggerOptions): TriggerOptions {
+    const out: Record<string, unknown> = {};
+    for (const key of TRIGGER_OPTION_KEYS) if (source[key] !== undefined) out[key] = source[key];
+    return out as TriggerOptions;
   }
 
   /** The trigger of the event plus its details, as `set`/`add` options. */

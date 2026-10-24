@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
-import { addElement } from '../src/ops/add.js';
 import { connectElements } from '../src/ops/connect.js';
-import { retypeElement } from '../src/ops/retype.js';
 import { setProperties } from '../src/ops/set.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml, docFromXml } from './helpers.js';
+import { ElementRetyper } from '../src/ops/ElementRetyper.js';
+import { ElementAdder } from '../src/ops/ElementAdder.js';
 
 const forkXml = (gateway: string, conditionOnA = '') =>
   definitionsXml(`
@@ -47,7 +47,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
 
   it('add --after a parallel gateway with --condition is refused', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    expect(errorCodeOf(() => addElement(doc, { op: 'add', kind: 'task', name: 'D', after: 'Gw', condition: '${x}' }))).toBe('E_INVALID_VALUE');
+    expect(errorCodeOf(() => new ElementAdder(doc).add({ op: 'add', kind: 'task', name: 'D', after: 'Gw', condition: '${x}' }))).toBe('E_INVALID_VALUE');
   });
 
   it('connect from a parallel gateway with a condition is refused', async () => {
@@ -63,7 +63,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
 
   it('retype exclusive -> event-based drops the conditions with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('exclusiveGateway', CONDITION));
-    const cs = retypeElement(doc, { op: 'retype', id: 'Gw', kind: 'eventBasedGateway' });
+    const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Gw', kind: 'eventBasedGateway' });
     expect(cs.warnings.map((w) => [w.code, w.element])).toEqual([['W_CONDITION_DROPPED', 'FA']]);
     expect(conditionOf(doc, 'FA')).toBeUndefined();
   });

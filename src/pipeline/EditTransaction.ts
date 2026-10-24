@@ -42,7 +42,7 @@
  *    warnings; `validation.platform` has them as `added`, the ones the ops
  *    removed as `resolved`, and the totals (`bpmn validate` lists them all).
  *    An op warning that the added findings repeat item by item is dropped
- *    (retype's W_PROPERTY_INAPPLICABLE, ops/retype.ts withoutProfileDuplicates).
+ *    (retype's W_PROPERTY_INAPPLICABLE, ops/covers.ts withoutProfileDuplicates).
  *  - validators (src/validate/validators.ts, MutationOptions.validators): each runs
  *    on the document before the ops and on the candidate XML after the
  *    layout, the format ops and the text-preserving step, i.e. on exactly
@@ -116,7 +116,7 @@ import { modelError } from '../shared/utils/errors.js';
 import { EditContext } from '../model/EditContext.js';
 import { reportedImportWarnings } from '../ops/decision.js';
 import { OpRunner, type BatchRun } from '../ops/OpRunner.js';
-import { withoutProfileDuplicates } from '../ops/retype.js';
+import { withoutProfileDuplicates } from '../ops/covers.js';
 import type { Op } from '../ops/types.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidationResult } from '../validate/structural.js';

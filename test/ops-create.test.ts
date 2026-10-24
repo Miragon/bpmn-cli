@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { addElement } from '../src/ops/add.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
 import { connectElements } from '../src/ops/connect.js';
 import { assignLane, laneOf } from '../src/ops/containers.js';
@@ -14,6 +13,7 @@ import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
+import { ElementAdder } from '../src/ops/ElementAdder.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -28,7 +28,7 @@ async function roundTrip(doc: Doc): Promise<{ xml: string; doc: Doc }> {
 }
 
 function add(doc: Doc, op: Omit<AddOp, 'op'>): ChangeSet {
-  return addElement(doc, { op: 'add', ...op });
+  return new ElementAdder(doc).add({ op: 'add', ...op });
 }
 
 function connect(doc: Doc, op: Omit<ConnectOp, 'op'>): ChangeSet {
