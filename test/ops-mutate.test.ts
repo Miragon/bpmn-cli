@@ -4,7 +4,6 @@ import { isCliError } from '../src/shared/utils/errors.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { assignLane } from '../src/ops/containers.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
-import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
 import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { IdRenamer } from '../src/ops/IdRenamer.js';
@@ -13,6 +12,7 @@ import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
 import { ElementRetyper } from '../src/ops/ElementRetyper.js';
+import { NodeMover } from '../src/ops/NodeMover.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -763,7 +763,7 @@ describe('retype', () => {
 describe('move', () => {
   it('move --after detaches (bridging) and splices the node behind the anchor', async () => {
     const doc = await fullDoc();
-    const cs = moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Task_B' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['Task_Remind'], after: 'Task_B' });
     const remind = doc.require('Task_Remind');
     expect(doc.get('F_T')).toBeUndefined(); // 1 in / 0 out: nothing to bridge, flow removed
     expect(ids(doc.incoming(remind))).toEqual(['F3']);
@@ -780,7 +780,7 @@ describe('move', () => {
 
   it('move --after with several ids chains them and bridges around the gap', async () => {
     const doc = await fullDoc();
-    moveElements(doc, { op: 'move', ids: ['Task_B', 'Task_Send'], after: 'Start' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_B', 'Task_Send'], after: 'Start' });
     const start = doc.require('Start');
     const path: string[] = [];
     let cur: El | undefined = start;
@@ -801,7 +801,7 @@ describe('move', () => {
   it('move --in relocates nodes into another scope, dropping crossing flows and lane refs but keeping flows between moved nodes', async () => {
     const doc = await fullDoc();
     const sub = doc.require('Sub');
-    const cs = moveElements(doc, { op: 'move', ids: ['Task_A', 'Gw'], in: 'Sub' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['Task_A', 'Gw'], in: 'Sub' });
     const task = doc.require('Task_A');
     expect(task.$parent).toBe(sub);
     expect(doc.scopeOf(task)).toBe(sub);
@@ -819,25 +819,25 @@ describe('move', () => {
     expect(cs.changed.filter((c) => /moved into Sub/.test(c.detail ?? '')).map((c) => c.id)).toEqual(['Task_A', 'Gw']);
     await expectRoundTrip(doc);
     // moving out again into the other pool
-    moveElements(doc, { op: 'move', ids: ['Task_A'], in: 'P_Customer' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_A'], in: 'P_Customer' });
     expect(doc.scopeOf(doc.require('Task_A')).get('id')).toBe('Process_2');
     expect(doc.get('F2')).toBeUndefined();
-    expect(errorCode(() => moveElements(doc, { op: 'move', ids: ['Sub'], in: 'Sub' }))).toBe('E_INVALID_PLACEMENT');
-    expect(errorCode(() => moveElements(doc, { op: 'move', ids: ['Timer_A'], in: 'Process_1' }))).toBe('E_INVALID_PLACEMENT');
-    expect(errorCode(() => moveElements(doc, { op: 'move', ids: ['Gw'] }))).toBe('E_USAGE');
+    expect(errorCode(() => new NodeMover(doc).move({ op: 'move', ids: ['Sub'], in: 'Sub' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new NodeMover(doc).move({ op: 'move', ids: ['Timer_A'], in: 'Process_1' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new NodeMover(doc).move({ op: 'move', ids: ['Gw'] }))).toBe('E_USAGE');
     await expectRoundTrip(doc);
   });
 
   it('move --before / --flow and lane inheritance across processes', async () => {
     const doc = await fullDoc();
-    moveElements(doc, { op: 'move', ids: ['C_Task'], before: 'End' });
+    new NodeMover(doc).move({ op: 'move', ids: ['C_Task'], before: 'End' });
     const cTask = doc.require('C_Task');
     expect(doc.scopeOf(cTask).get('id')).toBe('Process_1');
     expect(doc.get('CF1')).toBeUndefined();
     expect(doc.require('F6').get<El>('targetRef')).toBe(cTask);
     expect(doc.outgoing(cTask)[0]!.get<El>('targetRef').get('id')).toBe('End');
     expect(ids(doc.lanesOf(cTask))).toEqual(['Lane_Ops']);
-    moveElements(doc, { op: 'move', ids: ['Task_Remind'], flow: 'F1', flowName: 'first' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_Remind'], flow: 'F1', flowName: 'first' });
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('Task_Remind');
     expect(doc.require('F1').get('name')).toBe('first');
     expect(doc.outgoing(doc.require('Task_Remind'))[0]!.get<El>('targetRef').get('id')).toBe('Task_A');
@@ -846,7 +846,7 @@ describe('move', () => {
 
   it('move --on re-attaches a boundary event (flows in the same scope survive)', async () => {
     const doc = await fullDoc();
-    const cs = moveElements(doc, { op: 'move', ids: ['Timer_A'], on: 'Task_B' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['Timer_A'], on: 'Task_B' });
     const ev = doc.require('Timer_A');
     expect(ev.get<El>('attachedToRef').get('id')).toBe('Task_B');
     expect(doc.boundaryEventsOf(doc.require('Task_A'))).toHaveLength(0);
@@ -856,9 +856,9 @@ describe('move', () => {
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('Timer_A')).toBe(order.indexOf('Task_B') + 1);
     expect(cs.changed[0]).toMatchObject({ id: 'Timer_A', kind: 'boundaryEvent:timer', detail: 'moved onto Task_B (was Task_A)' });
-    expect(errorCode(() => moveElements(doc, { op: 'move', ids: ['Task_A'], on: 'Task_B' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new NodeMover(doc).move({ op: 'move', ids: ['Task_A'], on: 'Task_B' }))).toBe('E_INVALID_PLACEMENT');
     // onto an activity in another scope: the outgoing flow crosses and is dropped
-    const cs2 = moveElements(doc, { op: 'move', ids: ['Timer_A'], on: 'SubTask' });
+    const cs2 = new NodeMover(doc).move({ op: 'move', ids: ['Timer_A'], on: 'SubTask' });
     expect(doc.scopeOf(ev).get('id')).toBe('Sub');
     expect(doc.get('F_T')).toBeUndefined();
     expect(cs2.warnings.map((w) => w.code)).toEqual(['W_FLOW_DROPPED']);
@@ -868,15 +868,15 @@ describe('move', () => {
   it('a chain whose --after anchor or --flow source is one of its later nodes (or inside one) is refused before anything changes', async () => {
     const doc = await fullDoc();
     const xml = await doc.toXml();
-    const refusals: Array<[Parameters<typeof moveElements>[1], string]> = [
+    const refusals: Array<[Parameters<NodeMover['move']>[0], string]> = [
       [{ op: 'move', ids: ['Call', 'End'], after: 'End' }, 'End cannot anchor the move of Call, End: it is one of the moved nodes'],
       [{ op: 'move', ids: ['Task_A', 'Gw', 'Task_B'], after: 'Gw' }, 'Gw cannot anchor the move of Task_A, Gw, Task_B: it is one of the moved nodes'],
       [{ op: 'move', ids: ['Task_A', 'Call'], flow: 'F6' }, 'F6 cannot anchor the move of Task_A, Call: its source Call is one of the moved nodes'],
       [{ op: 'move', ids: ['Task_B', 'Sub'], after: 'SubTask' }, 'SubTask cannot anchor the move of Task_B, Sub: it is inside Sub, one of the moved nodes'],
     ];
     for (const [op, message] of refusals) {
-      expect(() => moveElements(doc, op), JSON.stringify(op)).toThrow(message);
-      expect(errorCode(() => moveElements(doc, op))).toBe('E_INVALID_PLACEMENT');
+      expect(() => new NodeMover(doc).move(op), JSON.stringify(op)).toThrow(message);
+      expect(errorCode(() => new NodeMover(doc).move(op))).toBe('E_INVALID_PLACEMENT');
     }
     expect(await doc.toXml()).toBe(xml);
   });
@@ -884,7 +884,7 @@ describe('move', () => {
   it('a move that leaves its nodes where they are changes nothing and says so; after a gateway it appends as before', async () => {
     const doc = await fullDoc();
     const xml = await doc.toXml();
-    const inPlace: Array<[Parameters<typeof moveElements>[1], string]> = [
+    const inPlace: Array<[Parameters<NodeMover['move']>[0], string]> = [
       [{ op: 'move', ids: ['Call'], after: 'Sub' }, 'Call is already after Sub'],
       [{ op: 'move', ids: ['Call', 'End'], after: 'Sub' }, 'Call, End are already after Sub, in this order'],
       // Sub has two flows in: Task_B is before it all the same (a splice would fail with E_HAS_PREDECESSOR)
@@ -892,12 +892,12 @@ describe('move', () => {
       [{ op: 'move', ids: ['Task_B'], after: 'Gw', before: 'Sub' }, 'Task_B is already between Gw and Sub'],
     ];
     for (const [op, note] of inPlace) {
-      const cs = moveElements(doc, op);
+      const cs = new NodeMover(doc).move(op);
       expect([cs.created, cs.changed, cs.removed, cs.warnings, cs.notes], JSON.stringify(op)).toEqual([[], [], [], [], [note]]);
     }
     expect(await doc.toXml()).toBe(xml);
     // a gateway's successor moved after it becomes a new branch (append), as before: F_yes is bridged to Sub
-    const cs = moveElements(doc, { op: 'move', ids: ['Task_B'], after: 'Gw' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['Task_B'], after: 'Gw' });
     expect(cs.notes).toEqual(['bridged: Gw -> Sub', 'appended after Gw']);
     expect(doc.require('F_yes').get<El>('targetRef').get('id')).toBe('Sub');
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
@@ -905,9 +905,9 @@ describe('move', () => {
 
   itLanes('move --lane assigns lanes (alone and combined with a placement)', async () => {
     const doc = await fullDoc();
-    moveElements(doc, { op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });
     expect(ids(doc.lanesOf(doc.require('Task_B')))).toEqual(['Lane_Sales']);
-    moveElements(doc, { op: 'move', ids: ['Task_Send'], after: 'Start', lane: 'Lane_Sales' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_Send'], after: 'Start', lane: 'Lane_Sales' });
     expect(ids(doc.lanesOf(doc.require('Task_Send')))).toEqual(['Lane_Sales']);
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('Task_Send');
     await expectRoundTrip(doc);
@@ -1079,7 +1079,7 @@ describe('mixed scenario', () => {
     new ElementRetyper(doc).retype({ op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
     extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
     orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
-    moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
+    new NodeMover(doc).move({ op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
     new ElementRemover(doc).remove({ op: 'remove', ids: ['Call', 'Note_1'] });
     const again = await expectRoundTrip(doc);
     const a2 = again.require('Activity_A2');
@@ -1317,7 +1317,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
 describe('move: bridging with --in, no id recycling', () => {
   it('move --in bridges around a single node (predecessor -> successor) and only drops what still crosses', async () => {
     const doc = await fullDoc();
-    const cs = moveElements(doc, { op: 'move', ids: ['Call'], in: 'Sub' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['Call'], in: 'Sub' });
     const call = doc.require('Call');
     expect(call.$parent).toBe(doc.require('Sub'));
     expect(doc.require('F5').get<El>('targetRef').get('id')).toBe('End');
@@ -1343,7 +1343,7 @@ describe('move: bridging with --in, no id recycling', () => {
     <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
     <bpmn:subProcess id="X"><bpmn:startEvent id="XS" /></bpmn:subProcess>`),
     );
-    const cs = moveElements(doc, { op: 'move', ids: ['A', 'B'], in: 'X' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['A', 'B'], in: 'X' });
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('E');
     expect(doc.require('F1').get('name')).toBe('done'); // carried over from the exit flow
     expect(doc.require('F1').get<El>('conditionExpression').get('body')).toBe('${x}');
@@ -1369,7 +1369,7 @@ describe('move: bridging with --in, no id recycling', () => {
     <bpmn:sequenceFlow id="Flow_3" sourceRef="B" targetRef="C" />
     <bpmn:task id="C"><bpmn:incoming>Flow_3</bpmn:incoming></bpmn:task>`),
     );
-    const cs = moveElements(doc, { op: 'move', ids: ['X'], after: 'B' });
+    const cs = new NodeMover(doc).move({ op: 'move', ids: ['X'], after: 'B' });
     expect(cs.removed.map((c) => c.id)).toEqual(['Flow_4']);
     expect(cs.created.map((c) => c.id)).toEqual(['Flow_XToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
@@ -1395,7 +1395,7 @@ describe('remove / move: bridging policy', () => {
     // the same through move
     const doc2 = await fullDoc();
     setProperties(doc2, { op: 'set', id: 'F4', values: { condition: '${m}' } });
-    const cs2 = moveElements(doc2, { op: 'move', ids: ['Task_Send'], after: 'Start' });
+    const cs2 = new NodeMover(doc2).move({ op: 'move', ids: ['Task_Send'], after: 'Start' });
     expect(doc2.require('F_no').get('conditionExpression')).toBeUndefined();
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');
     expect(cs2.warnings.map((w) => w.code)).toEqual(['W_CONDITION_DROPPED']);
@@ -1421,7 +1421,7 @@ describe('remove / move: bridging policy', () => {
     await expectRoundTrip(doc);
 
     const doc2 = await docFromXml(viaGateway);
-    moveElements(doc2, { op: 'move', ids: ['B'], after: 'S' });
+    new NodeMover(doc2).move({ op: 'move', ids: ['B'], after: 'S' });
     expect(doc2.outgoing(doc2.require('Gw')).some((f) => f.get<El>('targetRef').get('id') === 'Gw')).toBe(false);
     expect(doc2.require('F1').get<El>('targetRef').get('id')).toBe('B');
     await expectRoundTrip(doc2);

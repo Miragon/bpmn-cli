@@ -23,13 +23,13 @@ import { kindsJson, kindsText } from '../src/index.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
-import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { elementDetail } from '../src/query/model-view.js';
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';
+import { NodeMover } from '../src/ops/NodeMover.js';
 
 const ROOT = join(__dirname, '..');
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
@@ -278,7 +278,7 @@ const GATEWAY = definitionsXml(
 describe('move: no bridge from an event-based gateway to a target the engines reject (#5)', () => {
   it('move --in refuses the group bridge (it used to bridge Gateway_Wait -> Activity_Ship)', async () => {
     const doc = await Doc.fromXml(GATEWAY);
-    const err = caught(() => moveElements(doc, { op: 'move', ids: ['Event_Paid'], in: 'Activity_Sub' }));
+    const err = caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Paid'], in: 'Activity_Sub' }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Moving Event_Paid would connect the event-based gateway Gateway_Wait to Activity_Ship/);
     expect(doc.require('F_A').get<El>('targetRef').get('id')).toBe('Event_Paid');
@@ -286,7 +286,7 @@ describe('move: no bridge from an event-based gateway to a target the engines re
 
   it('the move hint does not offer `move --no-bridge` (there is none)', async () => {
     const doc = await Doc.fromXml(GATEWAY);
-    const err = caught(() => moveElements(doc, { op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' }));
+    const err = caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.details['hint']).toMatch(/A move always bridges its old place/);
     expect(err.details['hint']).not.toMatch(/bpmn move [^`]*--no-bridge/);

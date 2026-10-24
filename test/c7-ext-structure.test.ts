@@ -23,13 +23,13 @@ import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
-import { moveElements } from '../src/ops/move.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
 import { ElementConnector } from '../src/ops/ElementConnector.js';
+import { NodeMover } from '../src/ops/NodeMover.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -622,7 +622,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => moveElements(doc, { op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
+    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
   });
 
   it('eventGatewayTargetProblem follows the engines: message/timer/signal/conditional catch events only', async () => {
@@ -674,7 +674,7 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
     const err = caught(() => runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_Revoke', timer: 'PT1H' } as Op]));
     expect(err.code).toBe('E_INVALID_HOST');
     expect(err.message).toMatch(/compensation handler/);
-    expect(caught(() => moveElements(doc, { op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_Other').get<El>('attachedToRef').get('id')).toBe('Activity_Book');
     // a normal activity still takes boundary events
     runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', id: 'Event_New', on: 'Activity_Book', timer: 'PT2H' } as Op]);

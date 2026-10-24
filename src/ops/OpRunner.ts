@@ -9,7 +9,6 @@ import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { extensionOp } from './ext.js';
-import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
 import { setProperties } from './set.js';
 import { IdRenamer } from './IdRenamer.js';
@@ -20,6 +19,7 @@ import { ElementRetyper } from './ElementRetyper.js';
 import { ElementAdder } from './ElementAdder.js';
 import { ElementConnector } from './ElementConnector.js';
 import { FlowSplitter } from './FlowSplitter.js';
+import { NodeMover } from './NodeMover.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -161,7 +161,7 @@ export class OpRunner {
       case 'retype':
         return new ElementRetyper(doc).retype(op);
       case 'move':
-        return moveElements(doc, op);
+        return new NodeMover(doc).move(op);
       case 'order':
         return orderFlows(doc, op);
       case 'ext':
