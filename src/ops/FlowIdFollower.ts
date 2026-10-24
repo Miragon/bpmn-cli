@@ -20,7 +20,7 @@ import { followDiIds } from '../diagram/write.js';
 import { connectionRequest, type IdRequest } from '../ids/utils/requests.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { speakingStem } from '../ids/utils/id-words.js';
-import { hasIdWords, isSuffix, slugify } from '../ids/utils/slug.js';
+import { hasIdWords, slugify } from '../ids/utils/slug.js';
 import { is, many, type El, idOf } from '../model/utils/moddle.js';
 
 export class FlowIdFollower {
@@ -45,18 +45,17 @@ export class FlowIdFollower {
    * suffix: the ends named by their names or (an end renamed since) by their
    * ids, also as earlier versions named an unnamed end (by its kind:
    * Flow_CheckToGateway), before the length cap and as 0.6 cut it
-   * (IdStyle.derivedBases, given `id`: only the styles it can be of); an end
+   * (IdAllocator.isDerived, given `id`: only the styles it can be of); an end
    * `set` renamed or named earlier in the batch also as it was called then
    * (its id and labels, EditContext.formerEndsOf). False for a flow without id. The
    * one test behind a rename (follow) and a stale id (StaleFlowReport).
    */
   namesEnds(id: string | undefined, source: El, target: El): boolean {
     if (!id) return false;
-    const derived = (base: string): boolean => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), 'either'));
     const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: this.endLabels(el) }, ...this.doc.edit.formerEndsOf(el)];
     const targets = names(target);
     return names(source).some((s) =>
-      targets.some((t) => s.labels.some((a) => t.labels.some((b) => this.doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b }), id).some(derived)))),
+      targets.some((t) => s.labels.some((a) => t.labels.some((b) => this.doc.edit.allocator.isDerived(id, connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b }))))),
     );
   }
 
@@ -81,8 +80,7 @@ export class FlowIdFollower {
     if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
     const old = idOf(flow);
     if (!old) {
-      if (wanted) doc.claimId(wanted);
-      flow.set('id', wanted || doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id);
+      flow.set('id', doc.edit.allocator.explicitOr(wanted, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)));
       doc.invalidate();
       return '';
     }
@@ -93,7 +91,7 @@ export class FlowIdFollower {
       return undefined;
     }
     doc.ids.release(old);
-    const id = doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
+    const id = doc.edit.allocator.allocate(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
     if (id === old) return undefined;
     flow.set('id', id);
     doc.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
@@ -103,8 +101,7 @@ export class FlowIdFollower {
 
   /**
    * The sequence and message flows at `node` whose id the batch (or the op on
-   * its own) generated from their ends as they are now (EditContext.generatedBase is
-   * the base their ends give): nobody's API yet, so they follow when the batch
+   * its own) generated from their ends as they are now (IdAllocator.generatedFrom): nobody's API yet, so they follow when the batch
    * gives `node` another id (IdRenamer.recordState; followRenamedEnd).
    * Call it before the rename.
    */
@@ -115,10 +112,7 @@ export class FlowIdFollower {
       if (!is(root, 'bpmn:Collaboration')) continue;
       for (const f of many(root, 'messageFlows')) if (f.get<El | undefined>('sourceRef') === node || f.get<El | undefined>('targetRef') === node) flows.add(f);
     }
-    return [...flows].filter((f) => {
-      const base = doc.edit.generatedBase(idOf(f));
-      return base !== undefined && !!f.get<El | undefined>('sourceRef') && !!f.get<El | undefined>('targetRef') && base === doc.idStyle.derivedBase(FlowIdFollower.connectionRequestOf(f));
-    });
+    return [...flows].filter((f) => !!f.get<El | undefined>('sourceRef') && !!f.get<El | undefined>('targetRef') && doc.edit.allocator.generatedFrom(idOf(f), FlowIdFollower.connectionRequestOf(f)));
   }
 
   /**
@@ -132,9 +126,9 @@ export class FlowIdFollower {
     const doc = this.doc;
     const old = idOf(flow);
     const req = FlowIdFollower.connectionRequestOf(flow);
-    if (doc.idStyle.derivedBase(req) === doc.edit.generatedBase(old)) return;
+    if (doc.edit.allocator.generatedFrom(old, req)) return;
     doc.ids.release(old);
-    const id = doc.allocateId(req).id;
+    const id = doc.edit.allocator.allocate(req).id;
     if (id === old) return;
     flow.set('id', id);
     doc.edit.recordRegenerated(old, id, was, flow);

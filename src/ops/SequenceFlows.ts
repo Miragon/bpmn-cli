@@ -67,9 +67,7 @@ export class SequenceFlows {
       flow.set('sourceRef', source);
       flow.set('targetRef', target);
     } else {
-      let id = attrs.id;
-      if (id) doc.claimId(id);
-      else id = doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
+      const id = doc.edit.allocator.explicitOr(attrs.id, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target));
       flow = doc.create('bpmn:SequenceFlow', {
         id,
         ...(attrs.name ? { name: attrs.name } : {}),

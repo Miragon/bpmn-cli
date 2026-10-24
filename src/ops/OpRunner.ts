@@ -15,7 +15,8 @@ import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
 import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
-import { reportStaleIdPrefixes, setProperties } from './set.js';
+import { setProperties } from './set.js';
+import { IdRenamer } from './IdRenamer.js';
 import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
 import { StaleFlowReport } from './StaleFlowReport.js';
@@ -48,7 +49,7 @@ export class OpRunner {
       this.edit.begin();
       const cs = this.step(op);
       new StaleFlowReport(this.doc).report(cs, this.edit.flowsBefore);
-      reportStaleIdPrefixes(this.doc, cs);
+      new IdRenamer(this.doc).reportStalePrefixes(cs);
       return cs;
     });
   }
@@ -122,7 +123,7 @@ export class OpRunner {
       all.warnings = all.warnings.filter((w) => this.stillHolds(w));
       // a kept flow id is stale against the flow's final ends, a kept id's prefix against the element's final type and trigger
       new StaleFlowReport(this.doc).report(all, this.edit.flowsBefore);
-      reportStaleIdPrefixes(this.doc, all);
+      new IdRenamer(this.doc).reportStalePrefixes(all);
       return { changes: all, ops: resolved, aliases: table.toRecord() };
     });
   }
@@ -141,7 +142,7 @@ export class OpRunner {
   /** Runs one op: W_ID_SUFFIXED for the ids it suffixed, and a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too). */
   private step(op: Op): ChangeSet {
     const cs = this.dispatch(op);
-    this.edit.reportSuffixed(cs);
+    this.edit.allocator.reportSuffixed(cs);
     cs.rename(this.edit.takeRenames());
     return cs;
   }

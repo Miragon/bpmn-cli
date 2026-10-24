@@ -455,9 +455,9 @@ export class Doc {
     this.style = undefined;
   }
 
-  /** A new id in the running edit's style for a kindRequest / typeRequest / connectionRequest / flowRequest; claims it (EditContext.allocateId). */
+  /** A new id in the running edit's style for a kindRequest / typeRequest / connectionRequest / flowRequest; claims it (IdAllocator.allocate). */
   allocateId(req: IdRequest): { id: string; base: string } {
-    return this.edit.allocateId(req);
+    return this.edit.allocator.allocate(req);
   }
 
   /** Next id for a prefix (the family of `bpmn kinds`, or a type name) and name in the document's style; claims it. */
@@ -465,7 +465,7 @@ export class Doc {
     return this.allocateId({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
   }
 
-  /** Validates and claims an explicit id: the caller's, so no longer generated (EditContext.generatedBase), also where an op before freed a generated one. */
+  /** Validates and claims an explicit id: the caller's, so no longer generated (IdAllocator.generatedBase), also where an op before freed a generated one. */
   claimId(id: string): void {
     if (!isValidId(id)) {
       throw modelError('E_INVALID_ID', `"${id}" is not a valid id: must match [A-Za-z_][A-Za-z0-9_.-]*`, { element: id });
@@ -474,7 +474,7 @@ export class Doc {
       throw modelError('E_DUPLICATE_ID', `An element with id "${id}" already exists`, { element: id, hint: 'Choose another --id or omit it.' });
     }
     this.ids.claim(id);
-    this.edit.forgetGenerated(id);
+    this.edit.allocator.forgetGenerated(id);
   }
 
   /** moddle.create wrapper that claims the id. */

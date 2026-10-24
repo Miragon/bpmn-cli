@@ -130,15 +130,6 @@ function resolveKind(token: string): ParsedKind {
   }
 }
 
-/** Allocates the element id: an explicit one is validated and claimed, else a speaking one in the file's style. */
-export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string }): string {
-  if (op.id) {
-    doc.claimId(op.id);
-    return op.id;
-  }
-  return doc.allocateId(req).id;
-}
-
 /**
  * What tells an unnamed element apart: its placement (`After <anchor>`,
  * `Before <anchor>`, `After <source of the flow>`, `On <host>`; `In <scope>`
@@ -371,7 +362,7 @@ function resolveLane(doc: Doc, op: AddOp): El | undefined {
 function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: AnchorContext | undefined): El {
   checkFlowOptions(doc, op);
   const explicitLane = resolveLane(doc, op);
-  const id = allocateElementId(doc, elementRequest(doc, def, trigger ?? inferTrigger(op), op, context), op);
+  const id = doc.edit.allocator.explicitOr(op.id, elementRequest(doc, def, trigger ?? inferTrigger(op), op, context));
   const el = doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
   const isEvent = def.family === 'event';
   const isEventSub = def.kind === 'eventSubProcess';
@@ -473,7 +464,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
   const { def, trigger } = resolveKind(op.kind);
 
   if (op.ifAbsent && !op.id) {
-    const base = doc.idStyle.derivedBase(elementRequest(doc, def, trigger, op));
+    const base = doc.edit.allocator.baseOf(elementRequest(doc, def, trigger, op));
     throw usageError('--if-absent needs an explicit --id to check for', {
       hint: `Pass --id ${base} (the id add generates${op.name ? ` for "${op.name}"` : ''}), or drop --if-absent.`,
     });
@@ -552,7 +543,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
   }
   cs.bind(op.as, el);
   bindRefAs(cs, op.refAs, el);
-  doc.edit.reportSuffixed(cs);
+  doc.edit.allocator.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }

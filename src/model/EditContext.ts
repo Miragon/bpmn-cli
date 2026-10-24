@@ -9,11 +9,10 @@
  * runs the document keeps one of its own for ops called directly.
  */
 import type { IdConventions } from '../ids/IdConventionsReader.js';
-import { withSuffix } from '../ids/utils/slug.js';
 import { IdStyle, type IdState } from '../ids/IdStyle.js';
-import type { IdRequest } from '../ids/utils/requests.js';
 import { ChangeSet, type Rename } from './ChangeSet.js';
 import type { Doc } from './Doc.js';
+import { IdAllocator } from './IdAllocator.js';
 import type { El } from './utils/moddle.js';
 
 /** What a running `apply` batch did so far (OpRunner.runBatch): E_NOT_FOUND points to it. */
@@ -83,28 +82,27 @@ export class EditContext {
   /** set while an `apply` batch runs (OpRunner.runBatch): E_NOT_FOUND names what it created and renamed */
   batch: BatchContext | undefined;
   private flows: ReadonlyMap<El, FlowEnds> | undefined;
-  /** generated ids that took a collision suffix since the last reportSuffixed() (W_ID_SUFFIXED) */
-  private suffixed: Array<{ id: string; base: string }> = [];
   /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
   private renames: Rename[] = [];
   /** flows that kept an id naming their old ends since the last takeKeptFlows() -> those ends (`A -> B`) and that id, for W_FLOW_ID_STALE */
   private keptFlows = new Map<El, KeptFlow>();
   /** nodes `set` gave another id or name since the batch or the op on its own began -> what they were called before, as flow ends */
   private readonly formerEnds = new Map<El, FormerEnd[]>();
-  /** generated ids under a declared prefix that the file's own style would give otherwise */
-  private readonly declared: string[] = [];
   /** elements a retype or a trigger change kept the id of since the last takeIdStates() -> their type and trigger before the first, for W_ID_PREFIX_STALE */
   private idStates = new Map<string, KeptIdState>();
-  /** the ids allocateId generated since the batch or the op on its own began -> the id each wanted: nobody's API yet */
-  private readonly generatedIds = new Map<string, string>();
   private readonly dropped: DroppedContent[] = [];
   /** the id style of the running batch or op on its own (begin), or the one learned for conventions of the call's own (see idStyle) */
   private style: IdStyle | undefined;
 
+  /** the ids the edit gives out, and what it recorded about them */
+  readonly allocator: IdAllocator;
+
   constructor(
     private readonly doc: Doc,
     private readonly settings: EditSettings = {},
-  ) {}
+  ) {
+    this.allocator = new IdAllocator(doc, () => this.idStyle);
+  }
 
   /** The declared id conventions new ids follow: the call's, else the document's (Doc.conventions). */
   get conventions(): IdConventions | undefined {
@@ -153,7 +151,7 @@ export class EditContext {
   begin(): void {
     this.keptFlows.clear();
     this.idStates.clear();
-    this.generatedIds.clear();
+    this.allocator.begin();
     this.formerEnds.clear();
     this.style = this.idStyle;
     this.flows = this.followFlowEnds ? undefined : new Map(this.doc.allSequenceFlows().map((f) => [f, [f.get<El | undefined>('sourceRef'), f.get<El | undefined>('targetRef')]] as const));
@@ -179,91 +177,6 @@ export class EditContext {
   }
 
   /**
-   * A new id in the style (idStyle) for a kindRequest / typeRequest /
-   * connectionRequest / flowRequest; claims it. `base` is the id the
-   * request wanted: when it was taken the id carries a suffix, which is
-   * recorded for W_ID_SUFFIXED (reportSuffixed). An id under a prefix the
-   * declared conventions name for the request (IdStyle.explain: `lint`;
-   * not one they only shaped, nor a message flow that borrows the sequence
-   * flows' prefix) that the file's own style would give otherwise is
-   * recorded for the result's `conventions:` line (declaredIds), in a file
-   * that has a style of its own there (IdStyle.ownStyleDiffers: ids the
-   * conventions check that do not follow them; not a new file, nor one
-   * whose checked ids all follow them).
-   */
-  allocateId(req: IdRequest): { id: string; base: string } {
-    const style = this.idStyle;
-    const ids = this.doc.ids;
-    const out = style.next(req, ids);
-    if (style.ownStyleDiffers && style.explain(req).source === 'lint' && out.base !== style.learnedOnly().next(req, ids).base) this.declared.push(out.id);
-    ids.claim(out.id);
-    this.generatedIds.set(out.id, out.base);
-    if (out.id !== out.base) this.suffixed.push(out);
-    return out;
-  }
-
-  /**
-   * The id `id` wanted (before a collision suffix) where allocateId (or
-   * markGenerated) generated it since the batch or the op on its own began
-   * and no explicit claim took it since (Doc.claimId): nobody's API yet
-   * (ops/set.ts recordIdState renames it where a retype leaves its prefix
-   * stale); undefined for every other id.
-   */
-  generatedBase(id: string): string | undefined {
-    return this.generatedIds.get(id);
-  }
-
-  /** Records `id` as generated from `base` outside allocateId (a split's join, an id recordIdState gave): generatedBase. */
-  markGenerated(id: string, base: string): void {
-    this.generatedIds.set(id, base);
-  }
-
-  /** An explicit claim took `id` (Doc.claimId): the caller's, so no longer generated (generatedBase). */
-  forgetGenerated(id: string): void {
-    this.generatedIds.delete(id);
-  }
-
-  /**
-   * A free id from `base` for an element whose generated id `old` a retype
-   * or a trigger change gave a stale prefix (ops/set.ts recordIdState): a
-   * taken one gets a collision suffix after `sep` (cut to stay within
-   * MAX_ID; W_ID_SUFFIXED); on the result's `conventions:` line where
-   * `old` was. Claims nothing (renameId does; markGenerated after it).
-   */
-  regeneratedId(old: string, base: string, sep: string): string {
-    let id = base;
-    for (let n = 2; this.doc.has(id) || this.doc.ids.has(id); n++) id = withSuffix(base, sep, n);
-    if (id !== base) this.suffixed.push({ id, base });
-    if (this.declared.includes(old)) this.declared.push(id);
-    return id;
-  }
-
-  /** Records an id under a declared prefix that the file's own style would give otherwise, outside allocateId (a split's join), where the file has a style of its own there (IdStyle.ownStyleDiffers). */
-  recordDeclaredId(id: string): void {
-    if (this.idStyle.ownStyleDiffers) this.declared.push(id);
-  }
-
-  /** The ids under a declared prefix recorded so far (allocateId; the edit transaction reports those still in the document). */
-  get declaredIds(): readonly string[] {
-    return this.declared;
-  }
-
-  /** W_ID_SUFFIXED on `cs` for every generated id that took a collision suffix since the last call (the id it wanted was taken). */
-  reportSuffixed(cs: ChangeSet): void {
-    const suffixed = this.suffixed;
-    this.suffixed = [];
-    for (const { id, base } of suffixed) {
-      if (cs.warnings.some((w) => w.code === 'W_ID_SUFFIXED' && w.element === id)) continue;
-      cs.warn({
-        code: 'W_ID_SUFFIXED',
-        message: `Id ${base} is already taken; using ${id}`,
-        element: id,
-        hint: 'Pass an explicit id to choose it yourself (--id, "id"; --flow-id / "flowId" for the flow into a new node, "joinId" for a join), or give the element a distinct name.',
-      });
-    }
-  }
-
-  /**
    * Records that an op renamed an element (OpRunner rewrites the op's
    * change entries; `el`: only those of that element, ChangeSet.rename);
    * `was`: what the old id named (a flow's old ends).
@@ -274,7 +187,7 @@ export class EditContext {
 
   /**
    * Records that an element the batch created took another id
-   * (regeneratedId), or a flow the batch named after it followed (`was`:
+   * (IdAllocator.regenerated), or a flow the batch named after it followed (`was`:
    * the flow's ends before): the entries, their details, notes and
    * warnings name it by the new one (Rename.regenerated).
    */

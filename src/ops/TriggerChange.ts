@@ -15,7 +15,7 @@ import { kindLabel, triggerOf, type Trigger } from '../model/kinds.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { applyTrigger } from './events.js';
 import { EventTrigger, ALWAYS_INTERRUPTING } from './EventTrigger.js';
-import { idStateOf, recordIdState } from './set.js';
+import { IdRenamer } from './IdRenamer.js';
 import { idOf } from './utils/elements.js';
 import type { TriggerOptions } from './types.js';
 
@@ -35,7 +35,7 @@ export class TriggerChange {
     this.before = is(el, 'bpmn:Event') ? new EventTrigger(el).read() : { trigger: 'none', opts: {} };
     this.was = triggerOf(el);
     this.conflicts = new Set(TriggerChange.messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
-    this.state = idStateOf(el);
+    this.state = IdRenamer.stateOf(el);
     this.label = kindLabel(el);
   }
 
@@ -70,7 +70,7 @@ export class TriggerChange {
     }
     this.assertMessageFlowsFit(on);
     if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(cs, on, trigger);
-    recordIdState(this.doc, on, this.state, this.label);
+    new IdRenamer(this.doc).recordState(on, this.state, this.label);
   }
 
   /** `set nonInterrupting=` alone: the flag of the element's current trigger. */

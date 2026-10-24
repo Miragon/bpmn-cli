@@ -123,7 +123,7 @@ function createMessageFlow(doc: Doc, source: El, target: El, op: ConnectOp, cs: 
       hint: 'Use a sequence flow inside a pool.',
     });
   }
-  const id = op.id ? (doc.claimId(op.id), op.id) : doc.allocateId(ElementLabels.flowRequest('bpmn:MessageFlow', source, target)).id;
+  const id = doc.edit.allocator.explicitOr(op.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
   const message = op.message ? ensureRootElement(doc, 'bpmn:Message', op.message) : undefined;
   if (message?.created) {
     const name = message.el.get<string | undefined>('name');
@@ -279,7 +279,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
   cs.bind(op.as, made ? doc.get(made.id) : undefined);
   // refAs: the message the new message flow carries
   bindRefAs(cs, op.refAs, made ? doc.get(made.id) : undefined);
-  doc.edit.reportSuffixed(cs);
+  doc.edit.allocator.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }

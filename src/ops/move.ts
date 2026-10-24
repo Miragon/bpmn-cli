@@ -86,7 +86,7 @@ import { Bridge, type BridgedFlow } from './Bridge.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
 import type { PlacementOptions } from './NodePlacement.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
-import { renameId } from './set.js';
+import { IdRenamer } from './IdRenamer.js';
 import { idOf } from './utils/elements.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { MoveOp } from './types.js';
@@ -260,7 +260,7 @@ function optionsOnInFlow(doc: Doc, flow: El | undefined, p: PlacementOptions, cs
   if (!flow) return;
   const old = idOf(flow);
   const renamed = p.flowId !== undefined && p.flowId !== old;
-  if (renamed) renameId(doc, flow, p.flowId!);
+  if (renamed) new IdRenamer(doc).rename(flow, p.flowId!);
   const options = new ChangeSet();
   new FlowOptions(p).apply(doc, flow, options);
   if (!renamed && !options.changed.length) return;

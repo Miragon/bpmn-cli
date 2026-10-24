@@ -9,7 +9,8 @@ import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
 import { cascadeRemove, removeElements } from '../src/ops/remove.js';
 import { retypeElement } from '../src/ops/retype.js';
-import { readProperties, renameId, setProperties, SET_KEYS } from '../src/ops/set.js';
+import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
+import { IdRenamer } from '../src/ops/IdRenamer.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
@@ -371,7 +372,7 @@ describe('set: id rename', () => {
     expect(xml).toContain('<bpmn:flowNodeRef>Activity_DoA</bpmn:flowNodeRef>');
     expect(xml).not.toContain('Task_A');
 
-    renameId(doc, doc.require('Process_2'), 'Process_Customer');
+    new IdRenamer(doc).rename(doc.require('Process_2'), 'Process_Customer');
     expect(doc.require('Call').get('calledElement')).toBe('Process_Customer');
     expect(doc.require('P_Customer').get<El>('processRef').get('id')).toBe('Process_Customer');
 

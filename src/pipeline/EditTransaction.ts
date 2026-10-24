@@ -211,7 +211,7 @@ export class EditTransaction {
     const doc = this.doc;
     const unchanged = doc.source !== undefined && xml === doc.source.text;
     // the generated ids under a declared prefix that the file's style would give otherwise (the ones the change kept)
-    const declared = this.edit.declaredIds.filter((id) => doc.has(id));
+    const declared = this.edit.allocator.declaredIds.filter((id) => doc.has(id));
     const conventions = this.edit.conventions;
     const result: MutationResult = {
       ok: true,
