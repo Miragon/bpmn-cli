@@ -32,7 +32,7 @@ import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHigh
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
-import { assertProcessId, assertTarget, Doc } from './model/Doc.js';
+import { Doc } from './model/Doc.js';
 import { CliError, type Warning } from './shared/CliError.js';
 import { ioError, isCliError, usageError } from './shared/utils/errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
@@ -505,7 +505,7 @@ withMutationOptions(
     .option('--no-executable', 'isExecutable=false')
     .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (v: string) => {
       try {
-        assertTarget(v);
+        Doc.assertTarget(v);
       } catch {
         throw new InvalidArgumentError('expected camunda8 or camunda7 (camunda7 also covers CIB seven and Operaton)');
       }
@@ -518,7 +518,7 @@ withMutationOptions(
     const stdout = file === '-' || opts.out === '-';
     // what fails without a .bpmnlintrc fails first, as before one was read: an invalid --id, a file that exists
     const processId = o['id'] as string | undefined;
-    if (processId !== undefined) assertProcessId(processId);
+    if (processId !== undefined) Doc.assertProcessId(processId);
     if (!stdout) await assertNewFile(opts.out ?? file, opts);
     // the id conventions of the .bpmnlintrc that applies to the file written (the process id only where they name bpmn:Process)
     const target = opts.out && opts.out !== '-' ? opts.out : file === '-' ? undefined : file;

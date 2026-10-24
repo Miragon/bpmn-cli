@@ -15,7 +15,7 @@ import { Doc } from '../src/model/Doc.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Warning } from '../src/shared/CliError.js';
 import { idNamesEnds } from '../src/ops/flows.js';
-import { runOp, runOps } from '../src/ops/index.js';
+import { runOp, runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { renderMutation } from '../src/report/command-report.js';

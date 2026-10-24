@@ -97,7 +97,7 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
   }
   // the result's `conventions:` line: a join under a prefix the declared conventions name, other than the file's style gives
   const style = doc.idStyle;
-  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.recordDeclaredId(id);
+  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.edit.recordDeclaredId(id);
   return { id, base };
 }
 
@@ -240,7 +240,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     cs.merge(joinCs);
     joinId = createdId(joinCs);
     // generated, not the caller's (addElement claimed it as given)
-    if (wanted.base !== undefined) doc.markGenerated(joinId, wanted.base);
+    if (wanted.base !== undefined) doc.edit.markGenerated(joinId, wanted.base);
     cs.bind(op.joinAs, doc.get(joinId));
     const joinEntry = cs.created.find((c) => c.id === joinId);
     if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;

@@ -6,7 +6,7 @@
  *    (doc.allocateId with kindRequest: kind, trigger, name, and the placement
  *    as the context of an unnamed element: Gateway_AfterCheckInvoice,
  *    Event_TimerOnReview; src/ids/style.ts); a taken id gets a `_2` suffix
- *    (W_ID_SUFFIXED, reported by ops/index.ts).
+ *    (W_ID_SUFFIXED, reported by OpRunner).
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).
  *  - flow options: default + condition -> E_USAGE, an empty condition ->
@@ -27,7 +27,7 @@
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
  *    a missing trigger is inferred from --timer/--message/... when given),
  *    documentation (op.doc), sub-process expansion (op.collapsed ->
- *    requestCollapse), lane: op.lane -> assignLane, else inherit the lane of
+ *    Doc.layoutRequests), lane: op.lane -> assignLane, else inherit the lane of
  *    the after/before anchor (or of the host for boundary events; --flow:
  *    of the flow's source). A splice into a flow whose ends are in different
  *    lanes takes the lane of the row the incremental layout puts the node
@@ -58,8 +58,8 @@
  *    root Message/Error/Signal/Escalation elements created by the trigger are
  *    reported too.
  *
- * Because 'expanded' lives in DI, explicit collapse requests are recorded per
- * Doc (collapseRequests) so the pipeline can hand them to the layouter.
+ * Because 'expanded' lives in DI, explicit collapse requests are recorded with
+ * the Doc (Doc.layoutRequests) so the pipeline can hand them to the layouter.
  */
 import type { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
@@ -67,7 +67,8 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
 import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
-import { ChangeSet, renamedNote, type Change } from '../model/ChangeSet.js';
+import { ChangeSet, type Change } from '../model/ChangeSet.js';
+import { renamedNote } from '../model/utils/renames.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
@@ -76,28 +77,6 @@ import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placement
 import { zeebeUserTaskDefault } from '../platform/defaults.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
-
-/* ------------------------------------------------------------------ */
-/* collapse registry                                                    */
-/* ------------------------------------------------------------------ */
-
-/** Sub-process ids the AI asked to collapse, per document (read by the pipeline). */
-export const collapseRequests = new WeakMap<Doc, Set<string>>();
-
-/** Records that sub-process `id` must be laid out collapsed. */
-export function requestCollapse(doc: Doc, id: string): void {
-  let set = collapseRequests.get(doc);
-  if (!set) {
-    set = new Set<string>();
-    collapseRequests.set(doc, set);
-  }
-  set.add(id);
-}
-
-/** Sub-process ids recorded for collapsing on `doc`. */
-export function collapsedIds(doc: Doc): string[] {
-  return [...(collapseRequests.get(doc) ?? [])];
-}
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -331,7 +310,7 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
   if (op.flowId && !cs.created.some(named) && !cs.changed.some((c) => named(c) && !!c.detail?.endsWith(renamedNote('')))) {
     const entry = entryFlow ?? doc.incoming(node)[0];
     // with flow ids kept, a splice kept the id of the flow into the node: its W_FLOW_ID_STALE suggests --flow-id, one command for one flow
-    const kept = !!entry && doc.preferFlowId(entry, op.flowId, node);
+    const kept = !!entry && doc.edit.preferFlowId(entry, op.flowId, node);
     cs.warn({
       code: 'W_OPTION_IGNORED',
       message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
@@ -468,7 +447,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
   for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) warnEventGatewayFlow(doc, f, cs);
   if (op.collapsed && def.family === 'subProcess') {
-    requestCollapse(doc, id);
+    doc.layoutRequests.collapse(id);
     cs.note(`${id} will be laid out collapsed`);
   }
   addDocumentation(doc, el, op.doc);
@@ -581,7 +560,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
   }
   cs.bind(op.as, el);
   bindRefAs(cs, op.refAs, el);
-  doc.reportSuffixed(cs);
+  doc.edit.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }

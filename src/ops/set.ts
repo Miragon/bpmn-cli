@@ -65,7 +65,7 @@
  *    condition without an inline body is E_INVALID_VALUE unless the same
  *    command sets condition= (flows; empty removes the condition) or when=
  *    (conditional events): an empty condition fails every evaluation.
- *  Sub-processes: expanded (true|false) -> recorded in `expansionRequests`
+ *  Sub-processes: expanded (true|false) -> recorded with the document (Doc.layoutRequests)
  *    (the pipeline merges it into the layouter options); triggeredByEvent.
  *  Flow nodes: lane (lane id or empty to remove).
  *  Rename (id=): every BPMN reference follows, plus string references
@@ -95,7 +95,7 @@ import { diExpansionState } from '../layout/index.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
-import { about, ChangeSet, type Change } from '../model/ChangeSet.js';
+import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
@@ -158,32 +158,7 @@ export function changeKind(el: El): string {
 /** ChangeSet entry for an element (about it: ChangeSet.rename). */
 export function changeOf(el: El, detail?: string): Change {
   const name = nameOf(el);
-  return about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
-}
-
-/* ------------------------------------------------------------------ */
-/* expansion requests (sub-process expanded/collapsed)                  */
-/* ------------------------------------------------------------------ */
-
-/** Sub-process expansion requested via `set <id> expanded=...`, per document. */
-export const expansionRequests = new WeakMap<Doc, Map<string, boolean>>();
-
-/** Records that a sub-process should be laid out expanded (true) or collapsed (false). */
-export function requestExpansion(doc: Doc, id: string, expanded: boolean): void {
-  let map = expansionRequests.get(doc);
-  if (!map) {
-    map = new Map();
-    expansionRequests.set(doc, map);
-  }
-  map.set(id, expanded);
-}
-
-/** The expansion requests recorded for a document, as layouter options. */
-export function requestedExpansion(doc: Doc): { expand: string[]; collapse: string[] } {
-  const expand: string[] = [];
-  const collapse: string[] = [];
-  for (const [id, expanded] of expansionRequests.get(doc) ?? []) (expanded ? expand : collapse).push(id);
-  return { expand, collapse };
+  return ChangeSet.about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
 }
 
 /* ------------------------------------------------------------------ */
@@ -483,7 +458,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       break;
     case 'expanded': {
       if (!is(el, 'bpmn:SubProcess')) throw unknownKey(doc, el, key, 'applies to sub-processes');
-      requestExpansion(doc, idOf(el), value ? parseBool(el, key, value) : true);
+      doc.layoutRequests.expand(idOf(el), value ? parseBool(el, key, value) : true);
       break;
     }
     case 'lane': {
@@ -1429,21 +1404,21 @@ export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: strin
   const style = doc.idStyle;
   if (!style.declared) return;
   const id = idOf(el);
-  const base = doc.generatedBase(id);
+  const base = doc.edit.generatedBase(id);
   if (base === undefined) {
-    doc.recordIdState(id, before, wasLabel);
+    doc.edit.recordIdState(id, before, wasLabel);
     return;
   }
   // from the id it wanted: a collision suffix under the old prefix is not the new one's
   const stale = style.stalePrefix(base, before, idStateOf(el), requestOf(el));
   if (!stale) return;
   const wanted = cutAt(stale.suggested, MAX_ID);
-  const next = doc.regeneratedId(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
+  const next = doc.edit.regeneratedId(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
   // the ends before the rename: what the flows named
   const flows = flowsNamedAfter(doc, el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
   renameId(doc, el, next);
-  doc.markGenerated(next, wanted);
-  doc.recordRegenerated(id, next, undefined, el);
+  doc.edit.markGenerated(next, wanted);
+  doc.edit.recordRegenerated(id, next, undefined, el);
   for (const { flow, was } of flows) followRenamedEnd(doc, flow, was);
 }
 
@@ -1458,7 +1433,7 @@ export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: strin
  * an element a later op renamed or removed, or that fits again.
  */
 export function reportStaleIdPrefixes(doc: Doc, cs: ChangeSet): void {
-  const states = doc.takeIdStates();
+  const states = doc.edit.takeIdStates();
   if (!states.size) return;
   const style = doc.idStyle;
   const hinted = new IdRegistry(doc.ids.values());
@@ -1470,7 +1445,7 @@ export function reportStaleIdPrefixes(doc: Doc, cs: ChangeSet): void {
     const sep = style.suffixSep(kindOf(el)?.kind ?? el.$type);
     for (let n = 2; hinted.has(suggested); n++) suggested = withSuffix(stale.suggested, sep, n, () => stale.suggested);
     hinted.claim(suggested);
-    const rule = `element-id-naming (${doc.conventions?.source ?? 'the host'})`;
+    const rule = `element-id-naming (${doc.edit.conventions?.source ?? 'the host'})`;
     const expects = `${stale.heads.join(' or ')} for ${aKind(kindLabel(el))}`;
     cs.warn({
       code: 'W_ID_PREFIX_STALE',
@@ -1723,7 +1698,7 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     if (own) out['completion'] = own;
   }
   if (is(el, 'bpmn:SubProcess')) {
-    const requested = expansionRequests.get(doc)?.get(idOf(el));
+    const requested = doc.layoutRequests.requested(idOf(el));
     out['expanded'] = requested ?? diExpansionState(doc.definitions).get(idOf(el)) ?? true;
   }
   if (is(el, 'bpmn:FlowNode')) {

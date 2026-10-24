@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { renderDetail, renderView } from '../src/report/view-text.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';

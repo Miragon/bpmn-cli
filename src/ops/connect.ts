@@ -289,7 +289,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
   cs.bind(op.as, made ? doc.get(made.id) : undefined);
   // refAs: the message the new message flow carries
   bindRefAs(cs, op.refAs, made ? doc.get(made.id) : undefined);
-  doc.reportSuffixed(cs);
+  doc.edit.reportSuffixed(cs);
   doc.invalidate();
   return cs;
 }

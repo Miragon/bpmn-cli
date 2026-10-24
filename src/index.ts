@@ -9,6 +9,11 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
+import type { Doc } from './model/Doc.js';
+import type { ChangeSet } from './model/ChangeSet.js';
+import type { Op } from './ops/types.js';
+import { OpRunner } from './ops/OpRunner.js';
+
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -23,7 +28,6 @@ export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
 export { layoutModel } from './layout/index.js';
-export { runOp, runOps } from './ops/index.js';
 export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
 export type {
   Op,
@@ -70,3 +74,13 @@ export { runFormatOps, type FormatResult, type FormatEntry } from './format/inde
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/** Runs one op on its own (src/ops/OpRunner.ts). */
+export function runOp(doc: Doc, op: Op): ChangeSet {
+  return new OpRunner(doc).runOp(op);
+}
+
+/** Runs a batch (OpRunner.runBatch) and returns what changed. */
+export function runOps(doc: Doc, ops: Op[]): ChangeSet {
+  return new OpRunner(doc).runBatch(ops).changes;
+}

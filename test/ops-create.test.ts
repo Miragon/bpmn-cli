@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { addElement, collapsedIds } from '../src/ops/add.js';
+import { addElement } from '../src/ops/add.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
 import { connectElements } from '../src/ops/connect.js';
 import { assignLane, laneOf } from '../src/ops/containers.js';
@@ -290,7 +290,7 @@ describe('add: ids and options', () => {
   it('adds documentation and records collapse requests for sub-processes', async () => {
     const doc = await linearDoc();
     add(doc, { kind: 'subProcess', name: 'Details', after: 'Task_A', collapsed: true, doc: 'Explains it' });
-    expect(collapsedIds(doc)).toEqual(['Activity_Details']);
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['Activity_Details']);
     expect(many(doc.require('Activity_Details'), 'documentation')[0]!.get('text')).toBe('Explains it');
     const cs = add(doc, { kind: 'task', name: 'T', in: 'Process_1', collapsed: true });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);

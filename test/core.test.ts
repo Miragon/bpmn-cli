@@ -7,7 +7,7 @@ import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/mo
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
 import { many } from '../src/model/utils/moddle.js';
 import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from './helpers.js';

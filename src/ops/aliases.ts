@@ -29,7 +29,7 @@
  *    alias, also when the new element got a new id); resolveOp(op)
  *    returns a copy of the op with every alias replaced by the element's
  *    current id (an alias of a removed element is E_NOT_FOUND). The format
- *    ops run after the layout: runBatch (ops/index.ts) resolves them with
+ *    ops run after the layout: OpRunner.runBatch resolves them with
  *    the ids at the end of the batch.
  *  - The result lists every alias with its element's final id
  *    (MutationResult.aliases, the `aliases:` line).

@@ -128,12 +128,11 @@ import { kindLabel } from '../model/kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/mirror.js';
 import { addTo, is, layoutRoot, many, parseXml, serialize, type El } from '../model/utils/moddle.js';
 import { ModelError } from '../model/ModelError.js';
-import { collapsedIds } from '../ops/add.js';
 import { reportedImportWarnings } from '../ops/decision.js';
-import { runBatch, runOps } from '../ops/index.js';
+import { OpRunner } from '../ops/OpRunner.js';
+import { EditContext, type DroppedContent } from '../model/EditContext.js';
 import { ordersLanes, ordersPools } from '../ops/order.js';
-import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from '../ops/retype.js';
-import { requestedExpansion } from '../ops/set.js';
+import { withoutProfileDuplicates } from '../ops/retype.js';
 import { isFormatOp, type Op } from '../ops/types.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { resolvePlatform } from '../platform/detect.js';
@@ -279,7 +278,7 @@ export function assertLossless(doc: Doc, opts: { force?: boolean } = {}): void {
 }
 
 /** Refuses content that retypes deleted (the agent asked for another kind, not for a deletion). */
-function refuseDroppedContent(drops: DroppedContent[]): void {
+function refuseDroppedContent(drops: readonly DroppedContent[]): void {
   const first = drops[0];
   if (!first) return;
   const removed = drops.flatMap((d) => d.removed);
@@ -475,19 +474,6 @@ export function pruneDanglingDi(doc: Doc): number {
   return removed;
 }
 
-function collectExpansion(doc: Doc, opts: MutationOptions): { expand: string[]; collapse: string[] } {
-  const expand = new Set<string>(opts.expand ?? []);
-  const collapse = new Set<string>(opts.collapse ?? []);
-  for (const id of collapsedIds(doc)) collapse.add(id);
-  const requested = requestedExpansion(doc);
-  for (const id of requested.expand) expand.add(id);
-  for (const id of requested.collapse) collapse.add(id);
-  // explicit expand wins over stale collapse requests and vice versa (last writer: options)
-  for (const id of opts.expand ?? []) collapse.delete(id);
-  for (const id of opts.collapse ?? []) expand.delete(id);
-  return { expand: [...expand], collapse: [...collapse] };
-}
-
 /**
  * With --no-layout the expansion requests (`set expanded=`, `add --collapsed`,
  * `layout --collapse/--expand`) would otherwise be lost: they live in
@@ -668,7 +654,7 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
       const reduced = await Doc.fromXml(xml);
       // the bridged flows keep their ids: the drawing is compared edge by edge
       reduced.followFlowEnds = false;
-      runOps(reduced, [{ op: 'remove', ids: [...undrawn], ifExists: true }]);
+      new OpRunner(reduced).runBatch([{ op: 'remove', ids: [...undrawn], ifExists: true }]);
       reference = await reduced.toXml();
     } catch {
       return false;
@@ -699,11 +685,11 @@ async function decideMode(requested: LayoutMode, before: Before, opts: MutationO
  * survive inside layoutModel, diagram/write.ts restoreDiIds; so do group
  * boxes, drawn again around what they held, diagram/groups.ts).
  */
-async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] }> {
+async function fullLayout(doc: Doc, edit: EditContext, opts: MutationOptions): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] }> {
   const colors = colorsOf(doc.definitions);
-  const expansion = collectExpansion(doc, opts);
+  const expansion = doc.layoutRequests.expansion(opts);
   // an element without id that the redraw draws gets one in the document's style and registry
-  const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine, allocateId: (req) => doc.allocateId(req).id });
+  const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine, allocateId: (req) => edit.allocateId(req).id });
   if (result.givenIds?.length) doc.invalidate();
   let xml = result.xml;
   let defs = doc.definitions;
@@ -717,8 +703,8 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
-async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
-  const expansion = collectExpansion(doc, opts);
+async function incrementalLayout(doc: Doc, edit: EditContext, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
+  const expansion = doc.layoutRequests.expansion(opts);
   const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated, created, ...expansion });
   const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), diIds(doc.definitions).shape);
   const xml = await doc.toXml();
@@ -748,13 +734,13 @@ async function incrementalLayout(doc: Doc, before: Before, relocated: string[], 
  * INCREMENTAL_FAILED, shown as W_LAYOUT_*); a requested incremental layout
  * that fails is a layout error instead (LAYOUT_INCREMENTAL, shown as E_LAYOUT_*).
  */
-async function runLayout(doc: Doc, requested: LayoutMode, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[] = []): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
+async function runLayout(doc: Doc, edit: EditContext, requested: LayoutMode, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[] = []): Promise<{ xml: string; layout: LayoutStatus; givenIds?: GivenId[] }> {
   const decision = await decideMode(requested, before, opts);
   let ran: { xml: string; status: LayoutStatus; after: LayoutMetrics; givenIds?: GivenId[] };
-  if (decision.mode === 'full') ran = await fullLayout(doc, opts);
+  if (decision.mode === 'full') ran = await fullLayout(doc, edit, opts);
   else {
     try {
-      ran = await incrementalLayout(doc, before, relocated, opts, created);
+      ran = await incrementalLayout(doc, edit, before, relocated, opts, created);
     } catch (err) {
       if (err instanceof CliError) throw err;
       if (requested === 'incremental') {
@@ -762,7 +748,7 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, reloca
           hint: 'Retry with --layout full (redraws the whole diagram) or --no-layout (writes without updating the diagram), and report the command and file.',
         });
       }
-      ran = await fullLayout(doc, opts);
+      ran = await fullLayout(doc, edit, opts);
       decision.mode = 'full';
       decision.reason = `incremental layout failed (${firstLine(err)}): redrawn`;
       ran.status.warnings.push({ code: 'INCREMENTAL_FAILED', elementId: '', message: `The incremental layout failed and the diagram was redrawn: ${firstLine(err)}`, relatedElementIds: [] });
@@ -779,22 +765,18 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, reloca
  * and leaves nothing half done: the caller keeps its input when it throws.
  */
 export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
-  return LayoutDebug.during(opts.debug, () => withConventions(doc, opts.conventions, () => mutate(doc, ops, opts)));
+  return LayoutDebug.during(opts.debug, async () => {
+    // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
+    const edit = new EditContext(doc, { conventions: opts.conventions, platformChoice: opts.platform && opts.platform !== 'auto' ? opts.platform : undefined, keepFlowIds: opts.keepFlowIds });
+    try {
+      return await mutate(doc, edit, ops, opts);
+    } finally {
+      edit.close();
+    }
+  });
 }
 
-/** Runs `fn` with the document's id conventions set for the call (MutationOptions.conventions), its own back afterwards. */
-async function withConventions<T>(doc: Doc, conventions: IdConventions | undefined, fn: () => Promise<T>): Promise<T> {
-  if (conventions === undefined) return fn();
-  const own = doc.conventions;
-  doc.conventions = conventions;
-  try {
-    return await fn();
-  } finally {
-    doc.conventions = own;
-  }
-}
-
-async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
+async function mutate(doc: Doc, edit: EditContext, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
   assertLossless(doc, opts);
   // the engine rules of the file's platform (a chunk of its own in a browser bundle): loaded before anything runs
   await ensureProfile(doc, opts.platform);
@@ -812,26 +794,17 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   const validatorsBefore: ValidatorRun[] = validators.length
     ? await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...vctx, phase: 'before' })
     : [];
-  takeDroppedContent(doc);
 
   let changes: ChangeSet;
   // the ops with their batch aliases resolved (ops/aliases.ts): what the layout and the format phase run
   let ran: Op[] = ops;
   let aliases: Record<string, string> = {};
-  // an explicit platform decides the engine rules of the ops too (event-gateway bridges, defaults of new processes)
-  doc.platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
-  // keepFlowIds decides for this call; the document's own setting is back afterwards
-  const follow = doc.followFlowEnds;
-  if (opts.keepFlowIds !== undefined) doc.followFlowEnds = !opts.keepFlowIds;
   try {
-    ({ changes, ops: ran, aliases } = runBatch(doc, ops));
+    ({ changes, ops: ran, aliases } = new OpRunner(doc, edit).runBatch(ops));
   } catch (err) {
     throw toCliError(err);
-  } finally {
-    doc.platformChoice = undefined;
-    doc.followFlowEnds = follow;
   }
-  if (!opts.force) refuseDroppedContent(takeDroppedContent(doc));
+  if (!opts.force) refuseDroppedContent(edit.droppedContent);
 
   const raw = validateDoc(doc);
   const structural = separatePreexisting(doc, raw, baseline);
@@ -858,7 +831,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     // the edge of a flow whose ends changed shows the old ends: removed too, the next write draws the flow like a new one
     const reEnded = pruneReEnded(doc.definitions, before.snapshot);
     if (pruned || reEnded.length) changes.note(staleDiNote(pruned, reEnded));
-    persistExpansionHints(doc, collectExpansion(doc, opts));
+    persistExpansionHints(doc, doc.layoutRequests.expansion(opts));
     xml = await doc.toXml();
     layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(before.metrics, layoutProblems(doc.definitions)) };
   } else if (formatOnly && requested !== 'full' && before.snapshot.flowNodeShapes > 0) {
@@ -869,7 +842,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   } else {
     let givenIds: GivenId[] | undefined;
     try {
-      ({ xml, layout, givenIds } = await runLayout(doc, requested, before, relocatedIds(ran, changes), opts, changes.created.map((c) => c.id)));
+      ({ xml, layout, givenIds } = await runLayout(doc, edit, requested, before, relocatedIds(ran, changes), opts, changes.created.map((c) => c.id)));
     } catch (err) {
       throw toCliError(err);
     }
@@ -913,7 +886,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
 
   const unchanged = doc.source !== undefined && xml === doc.source.text;
   // the generated ids under a declared prefix that the file's style would give otherwise (the ones the change kept)
-  const declared = doc.takeDeclaredIds().filter((id) => doc.has(id));
+  const declared = edit.declaredIds.filter((id) => doc.has(id));
 
   const result: MutationResult = {
     ok: true,
@@ -928,7 +901,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     // a document created in memory (`new`) has no file whose warnings were already there: everything is reported
     ...(doc.source ? { delta: validationDelta(doc, baseline, raw, validation, profileAfter, validatorCovered) } : {}),
     xml,
-    ...(declared.length ? { conventions: { ids: [...new Set(declared)], ...(doc.conventions?.source ? { source: doc.conventions.source } : {}) } } : {}),
+    ...(declared.length ? { conventions: { ids: [...new Set(declared)], ...(edit.conventions?.source ? { source: edit.conventions.source } : {}) } } : {}),
   };
   if (opts.show) {
     const fresh = await Doc.fromXml(xml, doc.file);

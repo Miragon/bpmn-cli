@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { addTo } from '../src/model/utils/moddle.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import type { Op } from '../src/ops/types.js';
 import { validateDoc } from '../src/validate/structural.js';

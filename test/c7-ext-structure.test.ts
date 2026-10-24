@@ -24,7 +24,7 @@ import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';

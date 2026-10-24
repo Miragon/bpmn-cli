@@ -33,7 +33,7 @@ import { extensionLines, renderDetail, renderExtensionList, renderView } from '.
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { removeElements } from '../src/ops/remove.js';
 import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';

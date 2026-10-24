@@ -22,7 +22,7 @@ import { renderDetail, renderExtensionList } from '../src/report/view-text.js';
 import { kindsJson, kindsText } from '../src/report/guide.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';

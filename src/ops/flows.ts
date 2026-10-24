@@ -24,7 +24,8 @@
  * speaks. A flow without id (valid BPMN, rare in files) whose ends change
  * gets an id from its new ends.
  */
-import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../model/Doc.js';
+import type { Doc } from '../model/Doc.js';
+import type { FlowEnds, FormerEnd, KeptFlow } from '../model/EditContext.js';
 import { followDiIds } from '../diagram/write.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
@@ -32,7 +33,8 @@ import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, ty
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
 import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
-import { about, renamedNote, type ChangeSet } from '../model/ChangeSet.js';
+import { ChangeSet } from '../model/ChangeSet.js';
+import { renamedNote } from '../model/utils/renames.js';
 import type { FlowOptions, Placement } from './types.js';
 
 export interface FlowAttrs {
@@ -61,7 +63,7 @@ export function flowChange(flow: El, detail?: string): { id: string; kind: strin
   const src = flow.get<El | undefined>('sourceRef');
   const tgt = flow.get<El | undefined>('targetRef');
   const name = flow.get<string | undefined>('name');
-  return about(
+  return ChangeSet.about(
     {
       id: idOf(flow),
       kind: 'sequenceFlow',
@@ -464,7 +466,7 @@ export function endLabels(el: El): string[] {
  */
 export function recordFormerEnd(doc: Doc, node: El): void {
   if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) return;
-  doc.recordFormerEnd(node, { id: idOf(node), labels: endLabels(node) });
+  doc.edit.recordFormerEnd(node, { id: idOf(node), labels: endLabels(node) });
 }
 
 /**
@@ -483,7 +485,7 @@ export function recordFormerEnd(doc: Doc, node: El): void {
 export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target: El): boolean {
   if (!id) return false;
   const derived = (base: string): boolean => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), 'either'));
-  const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: endLabels(el) }, ...doc.formerEndsOf(el)];
+  const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: endLabels(el) }, ...doc.edit.formerEndsOf(el)];
   const targets = names(target);
   return names(source).some((s) =>
     targets.some((t) => s.labels.some((a) => t.labels.some((b) => doc.idStyle.derivedBases(connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b }), id).some(derived)))),
@@ -517,15 +519,15 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   }
   if (!idNamesEnds(doc, old, oldSource, oldTarget)) return undefined;
   const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
-  if (doc.keepsFlowId(flow)) {
-    doc.recordKeptFlow(flow, `${oldIds[0]} -> ${oldIds[1]}`);
+  if (doc.edit.keepsFlowId(flow)) {
+    doc.edit.recordKeptFlow(flow, `${oldIds[0]} -> ${oldIds[1]}`);
     return undefined;
   }
   doc.ids.release(old);
   const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
   if (id === old) return undefined;
   flow.set('id', id);
-  doc.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
+  doc.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
   followEdgeId(doc, flow, old, id);
   return old;
 }
@@ -555,7 +557,7 @@ export function flowsNamedAfter(doc: Doc, node: El): El[] {
     for (const f of many(root, 'messageFlows')) if (f.get<El | undefined>('sourceRef') === node || f.get<El | undefined>('targetRef') === node) flows.add(f);
   }
   return [...flows].filter((f) => {
-    const base = doc.generatedBase(idOf(f));
+    const base = doc.edit.generatedBase(idOf(f));
     return base !== undefined && !!f.get<El | undefined>('sourceRef') && !!f.get<El | undefined>('targetRef') && base === doc.idStyle.derivedBase(connectionRequestOf(f));
   });
 }
@@ -570,12 +572,12 @@ export function flowsNamedAfter(doc: Doc, node: El): El[] {
 export function followRenamedEnd(doc: Doc, flow: El, was: string): void {
   const old = idOf(flow);
   const req = connectionRequestOf(flow);
-  if (doc.idStyle.derivedBase(req) === doc.generatedBase(old)) return;
+  if (doc.idStyle.derivedBase(req) === doc.edit.generatedBase(old)) return;
   doc.ids.release(old);
   const id = doc.allocateId(req).id;
   if (id === old) return;
   flow.set('id', id);
-  doc.recordRegenerated(old, id, was, flow);
+  doc.edit.recordRegenerated(old, id, was, flow);
   followEdgeId(doc, flow, old, id);
 }
 
@@ -613,14 +615,14 @@ export function staleFlowWarning(doc: Doc, flow: El, { was, id: keptId, preferre
 
 /**
  * W_FLOW_ID_STALE on `cs` for every flow kept since the last call whose id
- * no longer names its ends (ops/index.ts: once per batch, against its final
+ * no longer names its ends (OpRunner: once per batch, against its final
  * state; `before`: the flows and their ends when it began, Doc.flowsBefore).
  * Each hint's id is kept from the later ones, so two flows that now run
  * between the same ends get the id and the `_2` the default rename gives
  * them, and following every hint never collides.
  */
 export function reportStaleFlows(doc: Doc, cs: ChangeSet, before?: ReadonlyMap<El, FlowEnds>): void {
-  const kept = doc.takeKeptFlows();
+  const kept = doc.edit.takeKeptFlows();
   if (!kept.size) return;
   const hinted = new IdRegistry(doc.ids.values());
   for (const [flow, was] of kept) {

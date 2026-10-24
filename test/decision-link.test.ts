@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/report/guide.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';

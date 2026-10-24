@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/model/Doc.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
 import { definitionsXml, flowBetween } from './helpers.js';

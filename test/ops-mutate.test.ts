@@ -9,7 +9,7 @@ import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
 import { cascadeRemove, removeElements } from '../src/ops/remove.js';
 import { retypeElement } from '../src/ops/retype.js';
-import { expansionRequests, readProperties, renameId, requestedExpansion, setProperties, SET_KEYS } from '../src/ops/set.js';
+import { readProperties, renameId, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
@@ -313,14 +313,14 @@ describe('set: sub-process expansion', () => {
     const doc = await fullDoc();
     expect(readProperties(doc, doc.require('Sub'))['expanded']).toBe(true);
     setProperties(doc, { op: 'set', id: 'Sub', values: { expanded: 'false' } });
-    expect(requestedExpansion(doc)).toEqual({ expand: [], collapse: ['Sub'] });
+    expect(doc.layoutRequests.expansion()).toEqual({ expand: [], collapse: ['Sub'] });
     expect(readProperties(doc, doc.require('Sub'))['expanded']).toBe(false);
     setProperties(doc, { op: 'set', id: 'Sub', values: { expanded: 'true' } });
-    expect(requestedExpansion(doc)).toEqual({ expand: ['Sub'], collapse: [] });
-    expect(expansionRequests.get(doc)?.get('Sub')).toBe(true);
+    expect(doc.layoutRequests.expansion()).toEqual({ expand: ['Sub'], collapse: [] });
+    expect(doc.layoutRequests.requested('Sub')).toBe(true);
     expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { expanded: 'false' } }))).toBe('E_UNKNOWN_KEY');
     const other = await linearDoc();
-    expect(requestedExpansion(other)).toEqual({ expand: [], collapse: [] });
+    expect(other.layoutRequests.expansion()).toEqual({ expand: [], collapse: [] });
   });
 });
 
