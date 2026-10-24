@@ -49,3 +49,9 @@ a new concept gets its line here first.
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
 | **Vendor descriptor** | The read-only lookup over an engine's moddle descriptor: its attributes, extension element types, placement and the types an element holds once (`VendorDescriptor`, `CAMUNDA`, `ZEEBE`). |
 | **Camunda 8 defaults** | What the CLI writes for elements it creates in a Camunda 8 file, like Camunda Modeler (`platform/Camunda8Defaults.ts`). |
+| **Command catalogue** | The commands of `bpmn` with their arguments, `--help` text and guide usage, and the options of every write (`report/CommandCatalogue.ts`). |
+| **Shot** | The image or tiles one render wrote, with size, image tokens, plane and numbered problems: `node/ImageWriter.ts` writes it, `report/RenderReport.ts` prints it. |
+| **View request** | What `show` (and `viewXml` / `showXml`) is asked to show: the model, one element, its context, a neighbourhood or the drawing, checked like the CLI's flags (`query/ViewRequest.ts`). |
+| **Conventions lookup** | The id conventions the `.bpmnlintrc` that applies to a file declares, and why it declares none (`node/ConventionsLookup.ts`). |
+| **Agent guide** | `bpmn guide`: the cheat sheet for agents, whole, short or by topic (`report/AgentGuide.ts`). |
+| **Kinds reference** | `bpmn kinds`: the tables of kinds, triggers, keys, placement, ops and error codes, as text and JSON (`report/KindsReference.ts`). |

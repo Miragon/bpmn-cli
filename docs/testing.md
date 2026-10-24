@@ -372,8 +372,8 @@ bundle finds the font and `@resvg/resvg-wasm`.
 ## Isomorphism check
 
 The package's main entry (`src/index.ts`, published as `@miragon/bpmn-cli`)
-must run in a browser; only `src/node/` (`@miragon/bpmn-cli/node`) and
-`src/cli.ts` may touch files, `process` or other Node builtins.
+must run in a browser; only `src/node/` (`@miragon/bpmn-cli/node`), the CLI
+(`src/commands/`, `src/cli.ts`) may touch files, `process` or other Node builtins.
 
 ```
 npm run build && npm run check:iso     # node tools/iso/check.mjs [--json]
@@ -386,7 +386,7 @@ npx vitest run test/isomorphic.test.ts
   `__filename`, `setImmediate` / `clearImmediate`, naming the module
   (`tools/iso/bundle.mjs`: the globals are replaced through esbuild's `define`,
   which leaves local variables and properties of that name alone). It also
-  fails when the bundle contains `dist/node/` or `dist/cli.js`, when the
+  fails when the bundle contains `dist/node/`, `dist/commands/` or `dist/cli.js`, when the
   package `exports` do not resolve, or when a strict TypeScript consumer
   (`skipLibCheck: false`, no `@types/node`, lib ES2022) of both entries does
   not compile. It prints the minified and gzipped sizes, split like a host's

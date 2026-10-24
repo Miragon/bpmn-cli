@@ -60,7 +60,7 @@ describe('the core bundles for the browser', () => {
 
   it('without the node layer or the CLI', () => {
     expect(bundle.inputs.some((f) => f.startsWith('src/'))).toBe(true);
-    expect(bundle.inputs.filter((f) => /^src\/(node\/|cli\.ts$)/.test(f))).toEqual([]);
+    expect(bundle.inputs.filter((f) => /^src\/(node\/|commands\/|cli\.ts$)/.test(f))).toEqual([]);
   });
 
   it('the check sees a builtin import and a process read (it is not vacuous)', async () => {

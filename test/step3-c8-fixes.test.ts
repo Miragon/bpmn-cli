@@ -29,12 +29,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/report/guide.js';
 import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
 import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
 import { TimerValue } from '../src/platform/profiles/TimerValue.js';
 import { loadProfiles, runProfile } from '../src/index.js';
+import { guideText, kindsSections } from '../src/index.js';
+import { KINDS_SECTION_NAMES } from '../src/report/KindsReference.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

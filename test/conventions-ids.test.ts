@@ -13,8 +13,8 @@ import { Doc } from '../src/model/Doc.js';
 import { IdStyle } from '../src/ids/IdStyle.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
-import { guideText, kindsJson } from '../src/report/guide.js';
 import { mutateDoc } from '../src/index.js';
+import { guideText, kindsJson } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

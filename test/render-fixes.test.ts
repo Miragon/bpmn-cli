@@ -17,7 +17,7 @@ import { Doc } from '../src/model/Doc.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { MAX_TILES, MIN_LABEL_SCALE, renderSvg, scaleText } from '../src/render/index.js';
 import { textWidth } from '../src/diagram/text.js';
-import { rasterize } from '../src/node/render.js';
+import { PngRenderer } from '../src/node/PngRenderer.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const GALLERY = join(ROOT, 'test', 'fixtures', 'render', 'gallery.bpmn');
@@ -92,7 +92,7 @@ describe('broken and far-flung coordinates', () => {
     expect(drawnIds(r.svg).sort()).toEqual(['Activity_Do', 'Event_Start']);
     expect(r.notes).toContain('1 element has broken coordinates (not a number, beyond ±1,000,000 px, or a negative size) and is not drawn: Flow_1 (`bpmn layout <file>` draws it again)');
     // the PNG shows the start event and the task (not a blank image)
-    const { pixels } = await rasterize(r.svg, { pixels: true });
+    const { pixels } = await new PngRenderer().rasterize(r.svg, { pixels: true });
     let dark = 0;
     for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
     expect(dark).toBeGreaterThan(200);

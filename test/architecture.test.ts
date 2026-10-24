@@ -5,7 +5,7 @@
  * one source of truth for the E_/W_ codes src/ emits.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { projectFiles } from 'archunit';
 import { describe, expect, it } from 'vitest';
 import { ERROR_CATALOGUE } from '../src/report/guide.js';
@@ -72,7 +72,11 @@ describe('architecture', () => {
   });
 
   it('the CLI spells the op rules of ops/rules.ts with flags instead of restating them', () => {
-    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
-    for (const restatedRule of ['cannot be combined`', 'mutually exclusive', 'Use exactly one placement', 'Give at most one of']) expect(cli).not.toContain(restatedRule);
+    const cliFiles = [join('src', 'cli.ts'), ...sourceFiles.filter((file) => file.startsWith(join('src', 'commands') + sep))];
+    expect(cliFiles.length).toBeGreaterThan(1);
+    for (const file of cliFiles) {
+      const cli = readFileSync(file, 'utf8');
+      for (const restatedRule of ['cannot be combined`', 'mutually exclusive', 'Use exactly one placement', 'Give at most one of']) expect(cli, file).not.toContain(restatedRule);
+    }
   });
 });

@@ -7,7 +7,7 @@
  *    env BPMN_BIN overrides.
  *  - `loadMetrics()` imports dist/diagram/metrics.js (always this repo's build,
  *    whatever CLI is fuzzed) -> { measure, diff, hard, keys }.
- *  - `loadRender()` imports dist/node/render.js -> { draw(xml), maxSize }:
+ *  - `loadRender()` imports dist/node/index.js -> { draw(xml), maxSize }:
  *    the PNG of `bpmn render --problems --tiles` (the walk's render oracle).
  *  - `makeExecutor({ exec, via, workDir, bin })`: exec 'cli' (default, in
  *    CLI_ENV) or 'lib' (dist/index.js in-process).
@@ -46,7 +46,7 @@ export async function loadMetrics() {
 }
 
 export async function loadRender() {
-  const lib = await importDist(join('node', 'render.js'));
+  const lib = await importDist(join('node', 'index.js'));
   const core = await importDist(join('render', 'index.js'));
   return { draw: (xml) => lib.renderPng(xml, { problems: true, tiles: true }), maxSize: core.RENDER_MAX_SIZE };
 }
