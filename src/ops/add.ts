@@ -75,7 +75,7 @@ import { renamedNote } from '../model/utils/renames.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
-import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
+import { LaneInheritance } from './LaneInheritance.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { FlowOptions } from './FlowOptions.js';
 import { setProperties, setTaskMessage } from './set.js';
@@ -386,7 +386,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   const entry = { id, kind: def.kind, ...(op.name ? { name: op.name } : {}), detail: placementDetail(doc, op) };
   cs.create(entry);
   // before the placement: a splice may rename the flow op.flow names
-  const inherited: InheritedLane = explicitLane ? {} : inheritedLane(doc, op);
+  const inherited = explicitLane ? LaneInheritance.NONE : LaneInheritance.of(doc, op);
   const entryFlow = new NodePlacement(doc, op).place(el, cs);
   warnIgnoredFlowOptions(doc, op, el, entryFlow, cs);
   if (op.flowAs) {
@@ -441,7 +441,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     const scope = doc.scopeOf(el);
     if (inherited.lane && scope && is(scope, 'bpmn:Process')) {
       assignLane(doc, el, inherited.lane, cs);
-      const warning = laneInheritedWarning(id, inherited);
+      const warning = inherited.warning(id);
       if (warning) cs.warn(warning);
     }
   }

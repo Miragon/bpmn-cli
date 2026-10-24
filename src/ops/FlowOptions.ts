@@ -8,7 +8,7 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import type { El } from '../model/utils/moddle.js';
 import { usageError } from '../shared/utils/errors.js';
 import { SequenceFlows, type FlowAttrs } from './SequenceFlows.js';
-import { defaultWithConditionViolation } from './rules.js';
+import { defaultWithConditionViolation } from './utils/op-rules.js';
 import type { ConnectOp, FlowOptions as FlowOptionValues } from './types.js';
 
 const FLAGS: ReadonlyArray<readonly [keyof FlowOptionValues, string]> = [

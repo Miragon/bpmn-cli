@@ -2,7 +2,7 @@ import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import type { Doc } from '../model/Doc.js';
 import { ImageWriter, type Shot } from '../node/ImageWriter.js';
 import { mutateDocToFile, mutateFile, type FileMutationOptions } from '../node/files.js';
-import { defaultWithConditionViolation, placementViolation } from '../ops/rules.js';
+import { defaultWithConditionViolation, placementViolation } from '../ops/utils/op-rules.js';
 import type { Op, TriggerOptions } from '../ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from '../pipeline/index.js';
 import { changeHighlight, RENDER_MAX_SIZE, type RenderOptions } from '../render/index.js';

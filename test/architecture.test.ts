@@ -71,7 +71,7 @@ describe('architecture', () => {
     expect(touching.sort()).toEqual(owners.sort());
   });
 
-  it('the CLI spells the op rules of ops/rules.ts with flags instead of restating them', () => {
+  it('the CLI spells the op rules of ops/utils/op-rules.ts with flags instead of restating them', () => {
     const cliFiles = [join('src', 'cli.ts'), ...sourceFiles.filter((file) => file.startsWith(join('src', 'commands') + sep))];
     expect(cliFiles.length).toBeGreaterThan(1);
     for (const file of cliFiles) {
