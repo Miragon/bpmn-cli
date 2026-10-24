@@ -3,7 +3,7 @@ import { isUsablePrefix } from './utils/slug.js';
 import { PREFIXED, prefixClass } from './utils/id-words.js';
 import { kindTypeNames } from './utils/requests.js';
 import type { IdConventions } from './conventions.js';
-import type { Body, IdState } from './style.js';
+import type { Body, IdState } from './IdStyle.js';
 
 /** The declared prefixes as votes on the shape of a prefix nothing declares (DeclaredConventions.votes). */
 export interface Votes {

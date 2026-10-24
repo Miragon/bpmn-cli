@@ -3,7 +3,7 @@ import { Doc } from '../src/model/document.js';
 import { IdRegistry } from '../src/ids/IdRegistry.js';
 import { isValidId, slugify } from '../src/ids/utils/slug.js';
 import { connectionRequest, kindRequest, typeRequest } from '../src/ids/utils/requests.js';
-import { IdStyle } from '../src/ids/style.js';
+import { IdStyle } from '../src/ids/IdStyle.js';
 import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';

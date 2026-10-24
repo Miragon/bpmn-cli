@@ -8,7 +8,7 @@
  *    Process_<Slug>) unless op.process names an existing unbound process or
  *    op.blackBox is set. Participant ids: Participant_<Slug> (unnamed: the
  *    label of its process, or BlackBox). (Ids follow the file's style,
- *    src/ids/style.ts; the bpmn-cli default is given here.)
+ *    src/ids/IdStyle.ts; the bpmn-cli default is given here.)
  *  - createLane(): creates the process' laneSet when missing (id
  *    LaneSet_<Process>), lane id Lane_<Slug>; op.in may be a process, participant or a lane
  *    (-> nested childLaneSet); op.members assigns nodes. The first child lane

@@ -13,7 +13,7 @@
  *  draws or keys by id (processes, collaborations, participants, lanes,
  *  flow nodes, sequence and message flows, data object / store references,
  *  text annotations, groups, associations, data associations) that has no
- *  id one in the file's id style (src/ids/style.ts; `allocate` claims it in
+ *  id one in the file's id style (src/ids/IdStyle.ts; `allocate` claims it in
  *  the caller's registry, by default a registry of every id of `defs`), and
  *  returns them in document order: its name, else its kind and `In <parent>`;
  *  a connection names its ends. Nodes and containers get theirs first, so
@@ -23,7 +23,7 @@
  *  need it: it never draws an element without id (the element keeps no DI).
  */
 import { IdRegistry } from '../ids/IdRegistry.js';
-import { IdStyle } from '../ids/style.js';
+import { IdStyle } from '../ids/IdStyle.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { kindLabel, kindOf, triggerOf } from '../model/kinds.js';

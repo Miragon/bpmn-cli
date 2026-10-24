@@ -1,5 +1,5 @@
 /**
- * Declared id conventions in the core (issue #34; src/ids/style.ts DECLARED
+ * Declared id conventions in the core (issue #34; src/ids/IdStyle.ts DECLARED
  * CONVENTIONS): they fill the gaps a change opens and never rename what is
  * there; the rest of the file keeps its own style, stable over many writes;
  * W_ID_PREFIX_STALE after a retype or a trigger change; the `conventions`

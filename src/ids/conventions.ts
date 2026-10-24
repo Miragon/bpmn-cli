@@ -2,7 +2,7 @@
  * Declared id conventions (browser-safe): what a project's .bpmnlintrc says
  * about ids through @miragon/rules/element-id-naming, as plain data the core
  * takes (MutationOptions / EditOptions / NewDocOptions `conventions`;
- * src/ids/style.ts fills the gaps the file leaves with them), and the view of
+ * src/ids/IdStyle.ts fills the gaps the file leaves with them), and the view of
  * the conventions new ids follow in a file (`bpmn show <file> --conventions`).
  *
  *   idConventionsFromLint(setting, naming, { source })  -> { conventions, notes }
@@ -37,7 +37,7 @@
 import type { BpmnlintRuleSetting, BpmnlintSeverity } from '../validate/bpmnlint-validator.js';
 import { closestKey } from '../shared/utils/fuzzy.js';
 import type { Doc } from '../model/document.js';
-import { IdStyle, type Body, type FlowForm, type PrefixSource } from './style.js';
+import { IdStyle, type Body, type FlowForm, type PrefixSource } from './IdStyle.js';
 import { kindRequest, typeRequest, type IdRequest } from './utils/requests.js';
 import { isUsablePrefix } from './utils/slug.js';
 import { KINDS, TRIGGER_TYPES } from '../model/kinds.js';

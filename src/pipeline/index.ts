@@ -58,7 +58,7 @@
  * Declared id conventions (MutationOptions.conventions, src/ids/conventions.ts:
  * element-id-naming of the project's .bpmnlintrc, which the node layer reads)
  * are the document's for the call: the ids the ops and a full redraw
- * generate follow them where they declare a prefix (src/ids/style.ts); the
+ * generate follow them where they declare a prefix (src/ids/IdStyle.ts); the
  * result names those that differ from the file's own style
  * (`conventions`). Without them nothing changes.
  *

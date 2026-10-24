@@ -15,7 +15,7 @@ import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
 import { hasIdWords, isValidId, transliterate, withSuffix } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
 import type { IdConventions } from '../ids/conventions.js';
-import { IdStyle, type IdState } from '../ids/style.js';
+import { IdStyle, type IdState } from '../ids/IdStyle.js';
 import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
 import { kindLabel, suggestKinds } from './kinds.js';
@@ -475,7 +475,7 @@ export class Doc {
    * The project's declared id conventions (src/ids/conventions.ts; the pipeline
    * sets them for a call from MutationOptions.conventions): new ids follow
    * them where they declare a prefix, the file's own style elsewhere
-   * (src/ids/style.ts). Setting other ones learns the style again.
+   * (src/ids/IdStyle.ts). Setting other ones learns the style again.
    */
   get conventions(): IdConventions | undefined {
     return this.declared;
@@ -487,13 +487,13 @@ export class Doc {
     this.style = undefined;
   }
 
-  /** The id conventions of this document, learned from its ids on first use (src/ids/style.ts), the declared ones over them. */
+  /** The id conventions of this document, learned from its ids on first use (src/ids/IdStyle.ts), the declared ones over them. */
   get idStyle(): IdStyle {
     return (this.style ??= IdStyle.infer(this.definitions, this.declared));
   }
 
   /**
-   * A new id in the document's style (src/ids/style.ts) for a kindRequest /
+   * A new id in the document's style (src/ids/IdStyle.ts) for a kindRequest /
    * typeRequest / connectionRequest / ElementLabels.flowRequest; claims it. `base` is the
    * id the request wanted: when it was taken the id carries a suffix, which
    * is recorded for W_ID_SUFFIXED (takeSuffixed). An id under a prefix the

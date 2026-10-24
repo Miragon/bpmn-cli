@@ -5,7 +5,7 @@
  *  - id: op.id (claimId) or a speaking id in the file's style
  *    (doc.allocateId with kindRequest: kind, trigger, name, and the placement
  *    as the context of an unnamed element: Gateway_AfterCheckInvoice,
- *    Event_TimerOnReview; src/ids/style.ts); a taken id gets a `_2` suffix
+ *    Event_TimerOnReview; src/ids/IdStyle.ts); a taken id gets a `_2` suffix
  *    (W_ID_SUFFIXED, reported by ops/index.ts).
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).

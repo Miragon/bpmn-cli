@@ -30,7 +30,7 @@ import type { CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
-import { IdStyle } from '../ids/style.js';
+import { IdStyle } from '../ids/IdStyle.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
 import { withSuffix } from '../ids/utils/slug.js';

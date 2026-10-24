@@ -1,7 +1,7 @@
 /**
  * Data objects / stores, text annotations, associations, data associations.
  *
- *  Ids follow the file's style (src/ids/style.ts); the bpmn-cli default is
+ *  Ids follow the file's style (src/ids/IdStyle.ts); the bpmn-cli default is
  *  given here.
  *  - createDataObject(): bpmn:DataObject (id DataObject_<Slug>) + a
  *    bpmn:DataObjectReference (id DataObjectReference_<Slug>, the element the

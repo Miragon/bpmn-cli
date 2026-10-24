@@ -15,7 +15,7 @@ import { ID_CONVENTIONS } from '../src/report/guide.js';
 import { cutAt, cutName, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids/utils/slug.js';
 import { IdRegistry } from '../src/ids/IdRegistry.js';
 import { connectionRequest, kindRequest } from '../src/ids/utils/requests.js';
-import { IdStyle } from '../src/ids/style.js';
+import { IdStyle } from '../src/ids/IdStyle.js';
 import { kindByName } from '../src/model/kinds.js';
 import { runOps } from '../src/ops/index.js';
 import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';

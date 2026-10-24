@@ -2,7 +2,7 @@
  * Id building blocks: name words and slugs.
  *
  * Which id a new element gets is decided by the file's id style
- * (src/ids/style.ts): new ids follow the conventions the file already uses,
+ * (src/ids/IdStyle.ts): new ids follow the conventions the file already uses,
  * and a file without a convention gets the bpmn-cli default
  * (`Activity_CheckInvoice`, `Flow_CheckInvoiceToBookInvoice`).
  *
@@ -23,12 +23,12 @@
 /** The longest slug of a name or context (an id body before the prefix). */
 export const MAX_SLUG = 40;
 
-/** The longest id the id style generates, a collision suffix included (src/ids/style.ts). */
+/** The longest id the id style generates, a collision suffix included (src/ids/IdStyle.ts). */
 export const MAX_ID = 64;
 
 /**
  * Function words a cut never ends on (cutName, the ends of a flow:
- * src/ids/style.ts fitPair), German and English: `LieferantenbestellungVersenden`,
+ * src/ids/IdFitter.ts fitPair), German and English: `LieferantenbestellungVersenden`,
  * never `...VersendenUnd`.
  */
 const FILLERS = new Set(['und', 'oder', 'an', 'am', 'auf', 'aus', 'bei', 'mit', 'von', 'vom', 'zu', 'zum', 'zur', 'fuer', 'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'im', 'in', 'and', 'or', 'of', 'to', 'the', 'a', 'for', 'with', 'on', 'at', 'by']);

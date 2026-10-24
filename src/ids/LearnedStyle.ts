@@ -7,7 +7,7 @@ import { ElementLabels } from './ElementLabels.js';
 import { ID_FORMS, IdFitter, LEGACY_BASE, FORM_JOIN, type IdForm } from './IdFitter.js';
 import { MIN_EVIDENCE, Tally } from './Tally.js';
 import type { DeclaredConventions, Votes } from './DeclaredConventions.js';
-import type { Body, FlowForm, FlowStyle, PrefixSource } from './style.js';
+import type { Body, FlowForm, FlowStyle, PrefixSource } from './IdStyle.js';
 
 export const DEFAULT_FLOW: FlowStyle = { form: 'named', prefix: 'Flow' };
 
