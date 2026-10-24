@@ -24,3 +24,15 @@ a new concept gets its line here first.
 | **Id style** | The way a file spells its ids (prefixes, case, flow form), learned from the file. |
 | **Id conventions** | The id rules a project declares in the `element-id-naming` rule of its `.bpmnlintrc`. |
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
+| **Scope** | A process or sub-process the clean engine lays out on its own, in a fixed sequence of steps (`layout/clean/ScopePlacer.ts`). |
+| **Grid** | The columns (layers) and rows (bands) of a scope's nodes and where they put them (`layout/clean/ScopeGrid.ts`, the rows by `RowAssigner.ts`). |
+| **Arrangement** | Where the clean engine has put a scope's nodes, boundary events, flows and artifacts at one moment; an `ArrangementCheckpoint` saves it and puts it back. |
+| **Trial** | A move of an arrangement the clean engine keeps only when the routes then draw better, else undoes (`layout/clean/ArrangementTrial.ts`). |
+| **Join column** | The column under a node that its flows from below rise in on, kept free by moving the node right (`JoinColumnTrial`). |
+| **Chain lift** | A node and the nodes after it in its lane moved up onto the row of the flow into it (`ChainLiftTrial`). |
+| **Top border** | The upper border of a host, where a boundary event whose flows go up sits when that draws better (`TopBorderTrial`). |
+| **Router** | Draws the lines: `EdgeRouter` the sequence flows of a scope, `LinkRouter` its associations, `MessageFlowRouter` the message flows between pools. |
+| **DI writer** | Emits the BPMN DI of one plane from the laid-out scopes (`layout/clean/DiWriter.ts`). |
+| **Pool stack** | The pools of a collaboration, top to bottom in the order whose message flows cut the fewest shapes (`layout/clean/PoolStacker.ts`). |
+| **Declutter** | Moving labels that sit on a shape, a label or a line to a free spot (`layout/clean/LabelDeclutter.ts`). |
+| **Note** | A text annotation; the collaboration's are placed by `layout/clean/NotePlacer.ts`. |

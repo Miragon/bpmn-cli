@@ -904,7 +904,7 @@ describe('clean layout engine', () => {
   });
 
   it('a join\'s move that is not kept is undone exactly, also on a scope the passes after placement already ran on (as in a process with lanes)', async () => {
-    // controlflow__s22 laid out and routed; its join's column is still taken, so freeJoinColumns tries the move once more
+    // controlflow__s22 laid out and routed; its join's column is still taken, so JoinColumnTrial tries the move once more
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s22.bpmn'), 'utf8'));
     const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('Process_S22'));
     const state = (): string =>
@@ -1483,7 +1483,7 @@ describe('clean layout engine', () => {
   });
 
   /**
-   * The way of a boundary event over the top into its target (route.ts): down out of the event's bottom, a short run
+   * The way of a boundary event over the top into its target (EdgeRouter): down out of the event's bottom, a short run
    * into a column gap beside the host, up past the host's row, along a run at least 15 px from every shape and label
    * in its x range (but its own label), down into the target's top. Returns the run's y.
    */
@@ -1515,7 +1515,7 @@ describe('clean layout engine', () => {
   }
 
   /**
-   * A boundary event on its host's top border whose way goes over the top (place.ts boundariesOnTop, route.ts):
+   * A boundary event on its host's top border whose way goes over the top (TopBorderTrial, EdgeRouter):
    * straight up out of the event's top, along a run at least 15 px from every shape and label in its x range (its own
    * label above the host included), down into the target's top (`side`: into its left side from the column gap
    * before it). The event's label lies above the host, below the run. Returns the run's y.
@@ -1744,7 +1744,7 @@ describe('clean layout engine', () => {
   });
 
   it('lanes: a node that a boundary event\'s way enters over the top is not moved for a rise into its bottom it does not have (r013 with data objects in Pack data\'s column)', async () => {
-    // freeJoinColumns moved Pack data right past the data object under it, for the straight rise of a way it then
+    // JoinColumnTrial moved Pack data right past the data object under it, for the straight rise of a way it then
     // drew over the top
     const lines: string[] = [];
     const L = await LayoutDebug.during(
@@ -1753,7 +1753,7 @@ describe('clean layout engine', () => {
     );
     expect(lines.filter((l) => l.startsWith('[joins] F '))).toEqual(['[joins] F stays: entered over the top']);
     expect(L.report.through).toEqual([]);
-    // then the event goes to the top border (boundariesOnTop runs after the joins' moves)
+    // then the event goes to the top border (TopBorderTrial runs after the joins' moves)
     expectUpOverTop(L, 'BE12', 'F', 'A1', 'r013 with data');
   });
 
@@ -2033,7 +2033,7 @@ describe('clean layout engine', () => {
     expect(loop.points[3]!.y).toBe(bottom(a));
   });
 
-  // ENGINE DEFECT (route.ts flowLabel for back edges): the self-loop label is put left of the loop's right end,
+  // ENGINE DEFECT (EdgeRouter flowLabel for back edges): the self-loop label is put left of the loop's right end,
   // inside the loop, where the loop's left vertical line runs through the text.
   it('self loop label sits outside the loop, clear of its lines', async () => {
     const L = await layout('self-loop-label', selfLoopDoc());
@@ -2094,7 +2094,7 @@ describe('clean layout engine', () => {
     }
   });
 
-  // ENGINE DEFECT (route.ts elementLabel 'boundary'): every boundary label goes right of its event, so with two
+  // ENGINE DEFECT (ScopeLabels.of 'boundary'): every boundary label goes right of its event, so with two
   // named boundary events on one host the label of the left one runs into the right event and its label.
   it('two named boundary events on one host: their labels collide with nothing', async () => {
     const L = await layout('boundary-two-names', boundaryDoc('failed'));
@@ -2105,7 +2105,7 @@ describe('clean layout engine', () => {
     expect(boxesOverlap(xl, L.shape('T').label!)).toBe(false);
   });
 
-  // ENGINE DEFECT (route.ts elementLabel 'boundary' + label size estimate): a boundary name estimated at two
+  // ENGINE DEFECT (ScopeLabels.of 'boundary' + label size estimate): a boundary name estimated at two
   // lines is anchored at the event's bottom, so the label box rises into the host activity.
   it('a long boundary event name stays below its host', async () => {
     const doc = proc([
@@ -2354,7 +2354,7 @@ describe('clean layout engine', () => {
     expectLaneConventions(L, lanes);
   });
 
-  // ENGINE DEFECT (route.ts: entryX and exitX are both the node centre): at a peak (D: in from the lane below,
+  // ENGINE DEFECT (EdgeRouter: entryX and exitX are both the node centre): at a peak (D: in from the lane below,
   // out to the lane below) the incoming and the outgoing flow share the vertical line under D, which reads as
   // one line with an arrow in the middle.
   it('lanes zig-zag with a peak: the flows into and out of the peak do not share a line', async () => {
@@ -2742,7 +2742,7 @@ describe('clean layout engine', () => {
     expect(L.report.inOutOverlaps).toEqual([]);
   });
 
-  /** The rows of a scope laid out again by lane, as engine.ts applyLanes does (each lane's rows stacked from its top), the lanes in the order of `lanes`. */
+  /** The rows of a scope laid out again by lane, as LaneArranger does (each lane's rows stacked from its top), the lanes in the order of `lanes`. */
   function arrangeByLane(scope: ScopeLayout, lanes: string[][]): () => void {
     const of = lanes.map((ids) => scope.nodes.filter((n) => ids.includes(n.id)));
     return () => {
@@ -2767,7 +2767,7 @@ describe('clean layout engine', () => {
 
   it('a branch\'s move up that is not kept is undone exactly; one that is kept leaves the branch on the split\'s row', async () => {
     const laneIds = (doc: Doc): string[][] => many(many(doc.require('P'), 'laneSets')[0]!, 'lanes').map((l) => (l.get<El[] | undefined>('flowNodeRef') ?? []).map(idOf));
-    /** the scope arranged by lane, then liftChains on it: the debug lines, and whether it changed anything the arrangement sets */
+    /** the scope arranged by lane, then ChainLiftTrial on it: the debug lines, and whether it changed anything the arrangement sets */
     const run = async (doc: Doc): Promise<{ scope: ScopeLayout; changed: boolean; lines: string[] }> => {
       const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('P'));
       const state = (): string =>
@@ -2861,7 +2861,7 @@ describe('clean layout engine', () => {
     expect(assocs[0]!.points.some((p) => p.y === bottom(n1))).toBe(true);
   });
 
-  // ENGINE DEFECT (place.ts buildArtifacts/placeArtifacts): the anchor of an annotation on a sequence flow is
+  // ENGINE DEFECT (ArtifactPlacer build/placeAnnotations): the anchor of an annotation on a sequence flow is
   // captured before the annotation band shifts the content down, so the association ends exactly one band
   // (annotation height + vGap) above the flow, in mid-air, and may cut through the other annotation.
   it('text annotations on a task and on a flow: both above, the flow association ends on the flow', async () => {
