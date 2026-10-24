@@ -1,5 +1,5 @@
 /**
- * What the engine rules that load on demand (platform/profiles/c7.ts, c8.ts and
+ * What the engine rules that load on demand (platform/profiles/C7Profile.ts, c8.ts and
  * schema-text.ts, which comes with c8.ts) use of the core: the loader
  * (platform/profiles/profile.ts) hands them RULE_KIT right after the import
  * (`useKit`), they import nothing of the core themselves (type imports

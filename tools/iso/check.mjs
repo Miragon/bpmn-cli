@@ -48,7 +48,7 @@ const problems = [];
 
 /** What loads on demand, by the module that marks its chunk; `rules`: modules that must never be in the initial chunks. */
 const ON_DEMAND = [
-  { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/platform/profiles/c7.js', rules: ['dist/platform/profiles/c7.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
+  { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/platform/profiles/C7Profile.js', rules: ['dist/platform/profiles/C7Profile.js', 'dist/platform/profiles/EngineProfile.js', 'dist/platform/profiles/utils/element.js', 'dist/platform/profiles/utils/hint.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
   { name: 'c8', label: 'Camunda 8 rules', marker: 'dist/platform/profiles/c8.js', rules: ['dist/platform/profiles/c8.js', 'dist/platform/profiles/feel.js', 'dist/platform/profiles/schema-text.js'], when: "the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it)" },
   { name: 'bpmn-auto-layout', label: 'bpmn-auto-layout', marker: /node_modules\/bpmn-auto-layout\//, rules: [], when: "only for `engine: 'auto'`" },
 ];

@@ -664,7 +664,7 @@ flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
-The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/c7.ts`) states for
+The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/C7Profile.ts`) states for
 every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
 model per rule (82 models) with the expected codes and the engine verdict;
 by default it checks only the profile. To re-check the verdicts against live
