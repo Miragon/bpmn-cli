@@ -20,7 +20,8 @@ import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagra
 import type { Box, Point } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');

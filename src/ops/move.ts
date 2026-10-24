@@ -16,7 +16,7 @@
  *  - lane + placement may be combined.
  *  - ids of flows removed while moving stay claimed for the rest of the
  *    command, so a flow created by the placement never reuses one.
- *  - with flow ids kept (Doc.keepsFlowId, `--keep-flow-ids`) a moved node's one
+ *  - with flow ids kept (EditContext.keepsFlowId, `--keep-flow-ids`) a moved node's one
  *    out-flow, which the detach takes out, is put back as the first flow the
  *    placement creates out of that node (the flow node -> successor of a
  *    splice, node -> anchor of a prepend, or node -> next node when the next

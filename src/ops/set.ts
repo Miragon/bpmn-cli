@@ -1389,7 +1389,7 @@ function requestOf(el: El): IdRequest | undefined {
  * Records what `el` was (`before`, `wasLabel`) when a retype or a trigger
  * change kept its id, for W_ID_PREFIX_STALE (reportStaleIdPrefixes, at the
  * end of the op on its own or of the batch). An id the batch generated
- * (Doc.generatedBase) is nobody's API yet: where the change leaves it a
+ * (EditContext.generatedBase) is nobody's API yet: where the change leaves it a
  * prefix the declared conventions do not accept, the element takes the id
  * of what it is now (IdStyle.stalePrefix on the id it wanted:
  * serviceTask_checkInvoice, retyped to a user task, is
@@ -1424,7 +1424,7 @@ export function recordIdState(doc: Doc, el: El, before: IdState, wasLabel: strin
 
 /**
  * W_ID_PREFIX_STALE on `cs` for each element a retype or a trigger change
- * kept the id of (Doc.takeIdStates), whose prefix the declared id
+ * kept the id of (EditContext.takeIdStates), whose prefix the declared id
  * conventions (element-id-naming) accept for what it was before the first
  * change, or that they did not check then (none declared for it), and not
  * for what it is now, after the last: its prefix then, the prefixes for

@@ -17,7 +17,7 @@ import { IdStyle, speakingStem, typeRequest, type IdRequest } from '../ids/style
 import { EditContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
 import { kindLabel, suggestKinds } from './kinds.js';
-import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
+import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from '../platform/descriptor.js';
 import { C8_PLATFORM_VERSION } from '../platform/zeebe.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
@@ -95,7 +95,7 @@ export class Doc {
      * The text the document was read from and its incoming / outgoing lists
      * at that time (Doc.fromXml, also readDoc / loadDoc of the node layer;
      * undefined for Doc.create): the write pipeline keeps the file's
-     * formatting and mirror-list style (xml/preserve.ts, mirror.ts) and reports
+     * formatting and mirror-list style (xml/preserve.ts, utils/mirror.ts) and reports
      * a result equal to it as `unchanged`.
      */
     public readonly source?: DocSource,
@@ -181,7 +181,7 @@ export class Doc {
       throw err;
     }
     const ids = new IdRegistry(indexById(model.definitions).keys());
-    // the mirror lists as read decide what a write keeps (mirror.ts); in memory they are complete
+    // the mirror lists as read decide what a write keeps (utils/mirror.ts); in memory they are complete
     const mirror = takeMirrorSnapshot(model.definitions);
     completeMirrorLists(model.definitions);
     return new Doc(model, ids, file, { text: xml, mirror });
@@ -274,6 +274,17 @@ export class Doc {
   /** Import warnings that mean bpmn-moddle dropped content (unsafe to write back). */
   get lossyImportWarnings(): ImportWarning[] {
     return this.importWarnings.filter((w) => LOSSY_PATTERNS.some((p) => p.test(w.message)));
+  }
+
+  /** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content while importing the document (unless force). */
+  assertLossless(opts: { force?: boolean } = {}): void {
+    const lossy = this.lossyImportWarnings;
+    if (!lossy.length || opts.force) return;
+    throw ioError('E_IMPORT_LOSSY', `${this.file ?? 'The XML'} contains content bpmn-moddle cannot represent; writing it back would lose data`, {
+      ...(this.file ? { file: this.file } : {}),
+      warnings: lossy.map((w) => w.message.split('\n')[0]),
+      hint: 'Fix the XML, or pass --force (MutationOptions.force) to write anyway (the reported content will be dropped).',
+    });
   }
 
   /** Call after any structural mutation; lookups rebuild lazily. */

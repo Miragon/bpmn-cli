@@ -26,7 +26,7 @@
  *  Before checking, validateDoc normalises the derived incoming/outgoing
  *  mirror lists (optional in BPMN 2.0): a sequence flow missing from
  *  sourceRef.outgoing / targetRef.incoming is added there (repairFlowLinks),
- *  in memory only (a write keeps the file's lists, see model/mirror.ts);
+ *  in memory only (a write keeps the file's lists, see model/utils/mirror.ts);
  *  E_FLOW_LINKS is reserved for entries that contradict a flow's endpoints.
  *  Hints name real command lines (`bpmn <cmd> <file> ...`).
  *
@@ -55,16 +55,16 @@
  * W_EMPTY_SUBPROCESS).
  * Without the option nothing changes (show, library callers).
  * Mutations report only the profile findings a change introduced
- * (pipeline/index.ts, withProfile + profileDelta).
+ * (validate/FindingBaseline.ts, withProfile + profileDelta).
  */
 import type { Doc } from '../model/Doc.js';
 import { isCliError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
-import { completeMirrorLists } from '../model/mirror.js';
+import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { assertSequenceFlowEndpoints } from '../ops/flows.js';
-import { profileDelta, runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileBaseline, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
+import { runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
 import type { ValidatorReport } from './validators.js';
 
 export interface ValidationResult {
@@ -239,7 +239,7 @@ export function flowOrder(doc: Doc, scope: El): FlowOrder {
  * derivable from sourceRef/targetRef) and hand-written or generated files
  * routinely omit them, while the placement grammar, the view and the lint
  * read them. The completion is in memory only: a write keeps the lists the
- * way the file kept them (model/mirror.ts unkeptEntries), so no entry is written
+ * way the file kept them (model/utils/mirror.ts unkeptEntries), so no entry is written
  * for an unchanged flow of a file that omits it. Doc.fromXml completes the
  * lists when it reads a document; this repeats it for a model changed in
  * memory. Idempotent; returns the number of entries added. Entries that
@@ -746,7 +746,7 @@ function checkDuplicateNames(ctx: Ctx): void {
  * findings about modelling conventions. Missing incoming/outgoing mirror
  * entries are added first (see repairFlowLinks): the only change this makes
  * to the model is derived data every later stage relies on, and it is not
- * written where the file omits it (model/mirror.ts). With
+ * written where the file omits it (model/utils/mirror.ts). With
  * `opts.platform` the platform profile runs too (see the module header).
  */
 export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult {
@@ -762,7 +762,7 @@ export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationRes
  * event-gateway finding, a W_NO_START / W_EMPTY_SUBPROCESS about the same
  * (sub-)process as a missing-start finding ("(sub-)process X has no start
  * event; the engines refuse the file"). withProfile drops them from the
- * warnings, pipeline/index.ts validationDelta from the resolved ones.
+ * warnings, FindingBaseline.delta from the resolved ones.
  */
 export function lintCoveredBy(findings: readonly Warning[]): (w: Warning) => boolean {
   const gateway = new Set(findings.filter((f) => (f.code.startsWith('W_C7_') || f.code.startsWith('W_C8_')) && f.code.includes('EVENT_GATEWAY')).map((f) => `${f.element}|${f.related?.[0] ?? ''}`));
@@ -797,16 +797,6 @@ export function withProfile(result: ValidationResult, report: ProfileReport, sho
   const warnings = result.warnings.filter((w) => !covered(w));
   const platform: PlatformSummary = { ...summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
   return { errors: result.errors, warnings: [...warnings, ...shown], platform };
-}
-
-/**
- * A mutation's view of the profile: runs it on the changed document and adds
- * only the findings the change introduced (`before` is the run before the
- * ops); `result.platform` lists them with the resolved ones and the totals.
- */
-export function withProfileChanges(doc: Doc, result: ValidationResult, before: ProfileBaseline, choice: PlatformChoice = 'auto', after: ProfileReport = runProfile(doc, choice)): ValidationResult {
-  const delta = profileDelta(doc, before, after);
-  return withProfile(result, after, delta.added, delta);
 }
 
 function validateStructure(doc: Doc): ValidationResult {

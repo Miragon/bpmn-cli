@@ -15,12 +15,12 @@
  * splice, a bridge, a move or `set source= / target=` changes them
  * (followEnds; its DI edge id follows when it was `<id>_di`, `BPMNEdge_<id>`
  * or `Edge_<id>`, also cut: diagram/write.ts followDiIds, which `set id=`
- * uses too). Every other id stays. With Doc.followFlowEnds false
+ * uses too). Every other id stays. With EditContext.followFlowEnds false
  * (`--keep-flow-ids`, where flow ids are API) a flow the document had keeps
  * its id, and the batch reports each one whose id no longer names its ends
  * (W_FLOW_ID_STALE, reportStaleFlows). An end `set` gave another id or
  * name earlier in the batch (or the op on its own) is recognised by what it
- * was called too (Doc.recordFormerEnd), and by its name also where its id
+ * was called too (EditContext.recordFormerEnd), and by its name also where its id
  * speaks. A flow without id (valid BPMN, rare in files) whose ends change
  * gets an id from its new ends.
  */
@@ -460,7 +460,7 @@ export function endLabels(el: El): string[] {
 
 /**
  * Records what `node` is called as a flow end before `set` gives it another
- * id or name (ops/set.ts; Doc.recordFormerEnd): a flow whose id named it so
+ * id or name (ops/set.ts; EditContext.recordFormerEnd): a flow whose id named it so
  * is still renamed, or with ids kept reported, when a later op of the batch
  * changes its ends. Only a node with sequence flows.
  */
@@ -479,7 +479,7 @@ export function recordFormerEnd(doc: Doc, node: El): void {
  * Flow_CheckToGateway), before the length cap and as 0.6 cut it
  * (IdStyle.derivedBases, given `id`: only the styles it can be of); an end
  * `set` renamed or named earlier in the batch also as it was called then
- * (its id and labels, Doc.formerEndsOf). False for a flow without id. The
+ * (its id and labels, EditContext.formerEndsOf). False for a flow without id. The
  * one test behind a rename (followEnds) and a stale id (staleFlowWarning).
  */
 export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target: El): boolean {
@@ -496,8 +496,8 @@ export function idNamesEnds(doc: Doc, id: string | undefined, source: El, target
  * Renames a flow whose id named its old ends (idNamesEnds) after its new
  * ends, together with a DI edge id derived from it; returns the old id when
  * it renamed the flow. A flow with any other id keeps it. With ids kept
- * (Doc.followFlowEnds false) a flow the document had before the batch or the
- * op on its own (Doc.flowsBefore) keeps its id too and is recorded for
+ * (EditContext.followFlowEnds false) a flow the document had before the batch or the
+ * op on its own (EditContext.flowsBefore) keeps its id too and is recorded for
  * W_FLOW_ID_STALE (reportStaleFlows); one the batch created is nobody's API
  * yet and still follows its ends. A flow without id gets one in both modes
  * (its change entry and the layout name it by it): `wanted`, the id an op
@@ -545,7 +545,7 @@ function connectionRequestOf(flow: El): IdRequest {
 
 /**
  * The sequence and message flows at `node` whose id the batch (or the op on
- * its own) generated from their ends as they are now (Doc.generatedBase is
+ * its own) generated from their ends as they are now (EditContext.generatedBase is
  * the base their ends give): nobody's API yet, so they follow when the batch
  * gives `node` another id (ops/set.ts recordIdState; followRenamedEnd).
  * Call it before the rename.
@@ -616,7 +616,7 @@ export function staleFlowWarning(doc: Doc, flow: El, { was, id: keptId, preferre
 /**
  * W_FLOW_ID_STALE on `cs` for every flow kept since the last call whose id
  * no longer names its ends (OpRunner: once per batch, against its final
- * state; `before`: the flows and their ends when it began, Doc.flowsBefore).
+ * state; `before`: the flows and their ends when it began, EditContext.flowsBefore).
  * Each hint's id is kept from the later ones, so two flows that now run
  * between the same ends get the id and the `_2` the default rename gives
  * them, and following every hint never collides.
@@ -636,7 +636,7 @@ export function reportStaleFlows(doc: Doc, cs: ChangeSet, before?: ReadonlyMap<E
  * The hint of add's W_OPTION_IGNORED for `--flow-id <flowId>` on a splice,
  * whose flow into the node is the existing `entry`: the command that renames
  * it; `deferred` (with ids kept, a splice that kept the flow,
- * Doc.preferFlowId): that its W_FLOW_ID_STALE names the command, one for the
+ * EditContext.preferFlowId): that its W_FLOW_ID_STALE names the command, one for the
  * flow (reportStaleFlows puts the command back where none comes).
  */
 export function flowIdIgnoredHint(flowId: string, entry: string | undefined, deferred = false): string {

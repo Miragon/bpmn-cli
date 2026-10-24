@@ -40,7 +40,7 @@ import { kindsJson, kindsText } from '../src/report/guide.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 import { validateDoc } from '../src/validate/structural.js';
 

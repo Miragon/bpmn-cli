@@ -13,6 +13,10 @@ import type { Doc } from './model/Doc.js';
 import type { ChangeSet } from './model/ChangeSet.js';
 import type { Op } from './ops/types.js';
 import { OpRunner } from './ops/OpRunner.js';
+import type { CheckOptions, CheckResult, LayoutDocOptions, MutationOptions, MutationResult } from './pipeline/index.js';
+import { EditTransaction } from './pipeline/EditTransaction.js';
+import { Relayout } from './pipeline/Relayout.js';
+import { DocCheck } from './pipeline/DocCheck.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
@@ -49,7 +53,8 @@ export type {
   SpaceOp,
   TidyOp,
 } from './ops/types.js';
-export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type ConventionsReport, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult, type ValidationDelta } from './pipeline/index.js';
+export { LAYOUT_MODES, type CheckOptions, type CheckResult, type ConventionsReport, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline/index.js';
+export type { ValidationDelta } from './validate/FindingBaseline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
 export { preserveText, type PreservedText } from './xml/preserve.js';
 /* a host's validators, run inside the write transaction (MutationOptions.validators) and by validate (CheckOptions.validators) */
@@ -83,4 +88,24 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
 /** Runs a batch (OpRunner.runBatch) and returns what changed. */
 export function runOps(doc: Doc, ops: Op[]): ChangeSet {
   return new OpRunner(doc).runBatch(ops).changes;
+}
+
+/** Applies ops to an in-memory document (src/pipeline/EditTransaction.ts). */
+export function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
+  return new EditTransaction(doc, ops, opts).run();
+}
+
+/** `bpmn layout` on an in-memory document (src/pipeline/Relayout.ts). */
+export function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
+  return new Relayout(opts).run(doc);
+}
+
+/** What `bpmn validate` finds in a document (src/pipeline/DocCheck.ts). */
+export function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
+  return new DocCheck(opts).run(doc);
+}
+
+/** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content while importing the document (unless force; Doc.assertLossless). */
+export function assertLossless(doc: Doc, opts: { force?: boolean } = {}): void {
+  doc.assertLossless(opts);
 }

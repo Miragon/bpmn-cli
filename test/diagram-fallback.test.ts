@@ -13,7 +13,7 @@ vi.mock('../src/layout/incremental.js', async (importOriginal) => ({
 }));
 
 const { Doc } = await import('../src/model/Doc.js');
-const { mutateDoc } = await import('../src/pipeline/index.js');
+const { mutateDoc } = await import('../src/index.js');
 const { CliError } = await import('../src/shared/CliError.js');
 
 /** A drawn file the clean engine would not reproduce (every shape moved by 30 px). */

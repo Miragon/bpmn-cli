@@ -8,7 +8,7 @@ import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/in
 import { many } from '../src/model/utils/moddle.js';
 import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from './helpers.js';
 

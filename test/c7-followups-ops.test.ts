@@ -38,7 +38,7 @@ import { removeElements } from '../src/ops/remove.js';
 import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
 

@@ -13,7 +13,7 @@ import { Doc } from '../src/model/Doc.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 const ROOT = join(import.meta.dirname, '..');
 let dir: string;

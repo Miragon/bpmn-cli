@@ -43,7 +43,7 @@ import type { GNode, ScopeLayout } from '../src/diagram/types.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
-import { layoutDoc, mutateDoc } from '../src/pipeline/index.js';
+import { layoutDoc, mutateDoc } from '../src/index.js';
 
 /* ------------------------------------------------------------------ */
 /* DI reading                                                           */

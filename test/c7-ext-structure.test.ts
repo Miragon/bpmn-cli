@@ -28,7 +28,7 @@ import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';

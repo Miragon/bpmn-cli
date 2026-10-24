@@ -18,7 +18,7 @@ import { opsExample } from '../src/ops/batch.js';
 import { Doc } from '../src/model/Doc.js';
 import { renderView } from '../src/report/view-text.js';
 import { runOps } from '../src/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 

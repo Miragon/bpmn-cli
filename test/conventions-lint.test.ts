@@ -13,7 +13,7 @@ import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions } from '../sr
 import { Doc } from '../src/model/Doc.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 const engine = bpmnlintEngine();
 const naming = engine.plugin.naming;

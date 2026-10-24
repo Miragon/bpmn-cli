@@ -16,7 +16,8 @@ import { readPlanes, semantics } from '../src/diagram/plane.js';
 import { inside } from '../src/diagram/geom.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 
 /** S -> Sub (S1 -> T1 -> E1) -> G -> B -> E, G -> C -> E2: the sub-process's end event E1 lies left of the outer end events. */
 const MODEL: Op[] = [

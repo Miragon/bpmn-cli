@@ -9,7 +9,7 @@ import type { El } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml } from './helpers.js';
 

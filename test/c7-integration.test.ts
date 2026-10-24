@@ -25,7 +25,7 @@ import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { elementDetail } from '../src/query/model-view.js';
 import * as lib from '../src/index.js';

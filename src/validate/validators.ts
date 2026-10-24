@@ -1,6 +1,7 @@
 /**
  * Pluggable validators: checks a host runs inside the write transaction, on
- * the XML that would be written.
+ * the XML that would be written (ValidatorSet runs them, FindingBaseline
+ * compares their findings before and after a change).
  *
  *   mutateDoc(doc, ops, { validators: [fn, { name: 'host', validate: fn }] })
  *   fn(xml, ctx) => ValidatorFinding[] | Promise<ValidatorFinding[]>
@@ -48,12 +49,9 @@
  * nothing to compare (an advisory validator of a created document).
  */
 import type { Doc } from '../model/Doc.js';
-import { modelError } from '../shared/utils/errors.js';
-import { type Warning } from '../shared/CliError.js';
-import type { El } from '../model/utils/moddle.js';
+import type { Warning } from '../shared/CliError.js';
 import type { Op } from '../ops/types.js';
 import type { Platform } from '../platform/detect.js';
-import type { ValidationResult } from './structural.js';
 
 export type ValidatorSeverity = 'error' | 'warning';
 
@@ -143,233 +141,9 @@ export interface ValidatorRun {
   covers?: Record<string, string>;
 }
 
-/** Hidden identity of an issue (not serialised). */
-const KEY: unique symbol = Symbol('validator-issue-key');
-/** Hidden reason why a write leaves an issue out of the comparison (ValidatorFinding.leftOut; not serialised). */
-const LEFT_OUT: unique symbol = Symbol('validator-issue-left-out');
-type Keyed = ValidatorIssue & { [KEY]?: string; [LEFT_OUT]?: string };
-
-/** Why a write leaves the issue out of the comparison (ValidatorFinding.leftOut), or undefined. */
-function leftOutOf(issue: ValidatorIssue): string | undefined {
-  return (issue as Keyed)[LEFT_OUT];
-}
-
-/** The validators with their names: a function is named by its function name, else `validator<n>` (1-based). */
-export function namedValidators(list: readonly Validator[] | undefined): NamedValidator[] {
-  return (list ?? []).map((v, i) => {
-    if (typeof v === 'function') return { name: v.name || `validator${i + 1}`, validate: v };
-    if (!v || typeof v !== 'object' || (typeof v.validate !== 'function' && typeof v.validateDoc !== 'function')) {
-      throw modelError('E_VALIDATOR_FAILED', `Validator ${i + 1} is neither a function nor an object with a validate function`, {
-        hint: 'Pass `validators: [(xml, ctx) => findings]` or `[{ name, validate: (xml, ctx) => findings }]`.',
-      });
-    }
-    return { ...v, name: v.name || `validator${i + 1}` };
-  });
-}
-
-function severityOf(raw: unknown): ValidatorSeverity {
-  return String(raw ?? '').trim().toLowerCase() === 'error' ? 'error' : 'warning';
-}
-
-function toIssue(name: string, f: ValidatorFinding): ValidatorIssue {
-  const issue: Keyed = { code: String(f.code ?? f.ruleId ?? 'FINDING'), message: String(f.message ?? ''), validator: name, severity: severityOf(f.severity) };
-  if (f.element) issue.element = String(f.element);
-  if (f.related?.length) issue.related = f.related.map(String);
-  if (f.hint) issue.hint = String(f.hint);
-  if (f.key) Object.defineProperty(issue, KEY, { value: String(f.key), enumerable: false });
-  if (f.leftOut) Object.defineProperty(issue, LEFT_OUT, { value: String(f.leftOut), enumerable: false });
-  return issue;
-}
-
 export interface ValidatorInput {
   /** the XML (computed once, only for a validator that reads XML) */
   xml(): Promise<string>;
   /** the parsed document */
   doc(): Promise<Doc>;
-}
-
-/** Runs every validator on one document; a throwing validator fails the whole run (E_VALIDATOR_FAILED, nothing is written). */
-export async function runValidators(validators: readonly NamedValidator[], input: ValidatorInput, ctx: Omit<ValidatorContext, 'doc'>): Promise<ValidatorRun[]> {
-  const runs: ValidatorRun[] = [];
-  const context: ValidatorContext = { ...ctx, doc: input.doc };
-  for (const v of validators) {
-    let found: ValidatorFinding[];
-    try {
-      found = v.validateDoc ? await v.validateDoc(await input.doc(), context) : await v.validate!(await input.xml(), context);
-    } catch (err) {
-      throw modelError('E_VALIDATOR_FAILED', `Validator ${v.name} failed on the ${ctx.phase === 'before' ? 'document before the change' : ctx.phase === 'after' ? 'changed document' : 'file'}: ${String((err as Error)?.message ?? err).split('\n')[0]}; nothing was written`, {
-        validator: v.name,
-        hint: 'The validator threw instead of returning findings. Fix the validator (or the input it cannot read), or run without it.',
-      });
-    }
-    if (!Array.isArray(found)) {
-      throw modelError('E_VALIDATOR_FAILED', `Validator ${v.name} returned ${typeof found} instead of an array of findings; nothing was written`, { validator: v.name });
-    }
-    runs.push({ name: v.name, ...(v.detail ? { detail: v.detail } : {}), ...(v.blocks === false ? { blocks: false as const } : {}), issues: found.map((f) => toIssue(v.name, f)), ...(v.covers ? { covers: v.covers } : {}) });
-  }
-  return runs;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Replaces whole ids (XML NCName boundaries) by their new ids, in one pass (ids swapped in one batch stay apart). */
-function renamer(renames: Map<string, string>): (text: string) => string {
-  if (!renames.size) return (text) => text;
-  const ids = [...renames.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
-  const re = new RegExp(`(?<![\\w.-])(?:${ids.join('|')})(?![\\w.-])`, 'g');
-  return (text) => text.replace(re, (id) => renames.get(id) ?? id);
-}
-
-function identity(issue: ValidatorIssue, rename: (text: string) => string, renames: Map<string, string>): string {
-  const key = (issue as Keyed)[KEY];
-  if (key !== undefined) return `k|${issue.code}|${rename(key)}`;
-  if (issue.element) return `e|${issue.code}|${renames.get(issue.element) ?? issue.element}`;
-  return `m|${issue.code}|${rename(issue.message)}`;
-}
-
-/**
- * The ids the ops renamed: `before` maps every id before the ops to its
- * element; an element that is still in the document under another id was
- * renamed (`set <id> id=<new>`).
- */
-export function renamesOf(doc: Doc, before: Map<string, El>): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const [id, el] of before) {
-    const now = (el as unknown as { id?: unknown }).id;
-    if (typeof now === 'string' && now !== id && doc.get(now) === el) out.set(id, now);
-  }
-  return out;
-}
-
-function counts(issues: ValidatorIssue[]): { errors: number; warnings: number } {
-  const errors = issues.filter((i) => i.severity === 'error').length;
-  return { errors, warnings: issues.length - errors };
-}
-
-/**
- * Compares each validator's findings before and after a change: what the
- * change introduced (errors, warnings), what the document already had
- * (pre-existing errors) and what it removed (resolved). Each finding before
- * matches at most one after; the n-th run of a name after compares with the
- * n-th run of that name before. An advisory run (`blocks: false`) reports
- * the errors it introduced among the warnings and only counts its old ones.
- * A left-out finding (ValidatorFinding.leftOut) is not compared, before or
- * after: it is in `counts` and in `leftOut`; one after takes its finding
- * before out of `resolved` (it is still in the result). A run with no run
- * before (an advisory validator of a created document) reports every
- * finding, left-out ones too.
- */
-export function compareRuns(before: ValidatorRun[], after: ValidatorRun[], renames: Map<string, string> = new Map()): ValidatorReport[] {
-  const rename = renamer(renames);
-  const none = new Map<string, string>();
-  const seen = new Map<string, number>();
-  return after.map((run) => {
-    const nth = seen.get(run.name) ?? 0;
-    seen.set(run.name, nth + 1);
-    const prev = before.filter((b) => b.name === run.name)[nth];
-    // a run without one before (an advisory validator of a created document) has nothing to compare: it reports every finding
-    const reasonOf = (issue: ValidatorIssue) => (prev ? leftOutOf(issue) : undefined);
-    const left = (prev?.issues ?? []).filter((issue) => reasonOf(issue) === undefined).map((issue) => ({ issue, id: identity(issue, rename, renames) }));
-    const blocking = run.blocks !== false;
-    const report: ValidatorReport = { name: run.name, ...(run.detail ? { detail: run.detail } : {}), ...(blocking ? {} : { blocks: false as const }), errors: [], warnings: [], preexisting: [], resolved: [], counts: counts(run.issues) };
-    const leftOut = new Map<string, number>();
-    const marked: ValidatorIssue[] = [];
-    for (const issue of run.issues) {
-      const reason = reasonOf(issue);
-      if (reason !== undefined) {
-        leftOut.set(reason, (leftOut.get(reason) ?? 0) + 1);
-        marked.push(issue);
-        continue;
-      }
-      const id = identity(issue, (text) => text, none);
-      const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
-      if (i !== -1) {
-        left.splice(i, 1);
-        if (issue.severity === 'error' && blocking) report.preexisting.push(issue);
-        continue;
-      }
-      if (issue.severity === 'error' && blocking) report.errors.push(issue);
-      else report.warnings.push(issue);
-    }
-    // a finding the file had that is still in the result, now left out (a node the change gave a flow, in a file without the lists): not resolved
-    for (const issue of marked) {
-      const id = identity(issue, (text) => text, none);
-      const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
-      if (i !== -1) left.splice(i, 1);
-    }
-    report.resolved = left.map((b) => b.issue);
-    if (leftOut.size) report.leftOut = [...leftOut].map(([reason, count]) => ({ reason, count }));
-    return report;
-  });
-}
-
-/** validate / checkFile: every finding of a run is reported. */
-export function checkReports(runs: ValidatorRun[]): ValidatorReport[] {
-  return runs.map((run) => ({
-    name: run.name,
-    ...(run.detail ? { detail: run.detail } : {}),
-    ...(run.blocks === false ? { blocks: false as const } : {}),
-    errors: run.issues.filter((i) => i.severity === 'error'),
-    warnings: run.issues.filter((i) => i.severity === 'warning'),
-    preexisting: [],
-    resolved: [],
-    counts: counts(run.issues),
-  }));
-}
-
-/** A pre-existing error as a warning (like the structural W_PREEXISTING_ERROR): it does not block the write. */
-export function preexistingWarning(issue: ValidatorIssue): ValidatorIssue {
-  return { ...issue, code: 'W_PREEXISTING_ERROR', message: `${issue.code}: ${issue.message} (already in the model before this change)`, severity: 'warning' };
-}
-
-/** The E_VALIDATION error for errors validators found in a change. */
-export function validatorRefusal(errors: ValidatorIssue[]) {
-  const names = [...new Set(errors.map((e) => e.validator))];
-  return modelError('E_VALIDATION', `The change would introduce ${errors.length} error(s) reported by ${names.map((n) => `validator ${n}`).join(', ')}; nothing was written`, {
-    errors,
-    hint: `Fix the listed problems (each names its validator in brackets), make the edit in one transaction (\`bpmn apply <file> ops.json\`) so that it ends in a valid model, or pass --force to write anyway.${names.includes('bpmnlint') ? " The project's bpmnlint blocks here because the host asked for it (lintBlocks)." : ''}`,
-  });
-}
-
-/**
- * Adds validator reports to a validation result: `validators`, the errors
- * (a mutation: only those it introduced, present when forced; validate:
- * all) among `errors`, the introduced warnings and the pre-existing errors
- * (as W_PREEXISTING_ERROR) among `warnings`. A lint warning a validator's
- * finding repeats about the same element (`covers`) is dropped; a finding
- * without a hint of its own takes the dropped warning's hint.
- */
-export function withValidatorReports(result: ValidationResult, reports: ValidatorReport[], runs: ValidatorRun[]): ValidationResult {
-  if (!reports.length) return result;
-  const covering = new Map<string, ValidatorIssue[]>();
-  runs.forEach((run, i) => {
-    // a finding a write left out is not reported, so it covers nothing (a check's report never has leftOut: it reports every finding)
-    const write = reports[i]?.leftOut !== undefined;
-    for (const issue of run.issues) {
-      const lint = run.covers?.[issue.code];
-      if (!lint || !issue.element || (write && leftOutOf(issue) !== undefined)) continue;
-      const key = `${lint}|${issue.element}`;
-      covering.set(key, [...(covering.get(key) ?? []), issue]);
-    }
-  });
-  const warnings = result.warnings.filter((w) => {
-    const by = covering.get(`${w.code}|${w.element ?? ''}`);
-    if (!by) return true;
-    for (const issue of by) if (!issue.hint && w.hint) issue.hint = w.hint;
-    return false;
-  });
-  return {
-    ...result,
-    errors: [...result.errors, ...reports.flatMap((r) => r.errors)],
-    warnings: [...warnings, ...reports.flatMap((r) => [...r.preexisting.map(preexistingWarning), ...r.warnings])],
-    validators: reports,
-  };
-}
-
-/** A promise-returning function that runs `fn` once. */
-export function once<T>(fn: () => Promise<T>): () => Promise<T> {
-  let p: Promise<T> | undefined;
-  return () => (p ??= fn());
 }

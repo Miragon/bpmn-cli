@@ -83,7 +83,7 @@ function createdId(cs: ChangeSet): string {
  * gateway's label, gateway_checkJoin); a taken one gets `_2` (a declared
  * camelCase / PascalCase: `2`), cut so that it stays within MAX_ID (the
  * join kept); with the id it wanted (`base`), which a generated one has
- * (Doc.markGenerated: a retype in the same batch gives it the new prefix).
+ * (EditContext.markGenerated: a retype in the same batch gives it the new prefix).
  */
 function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: string): { id: string; base?: string } {
   if (op.joinId) return { id: op.joinId };

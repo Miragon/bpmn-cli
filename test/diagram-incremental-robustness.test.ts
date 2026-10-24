@@ -13,7 +13,8 @@ import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { detachedEnds } from '../src/diagram/reroute.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

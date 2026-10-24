@@ -44,7 +44,7 @@ import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './ops/rules.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
-import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
+import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
 import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
 import { findElements } from './query/model-view.js';
@@ -210,7 +210,7 @@ async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & Ou
       opts,
       (o) => mutateFile(file, ops, o),
       (doc, o) => {
-        assertLossless(doc, o);
+        doc.assertLossless(o);
         return mutateDocToFile(doc, ops, o);
       },
     );

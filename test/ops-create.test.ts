@@ -10,7 +10,7 @@ import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
 import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
 import type { CliError } from '../src/shared/CliError.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 

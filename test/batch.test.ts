@@ -9,7 +9,7 @@ import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort,
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
 import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 /** Runs parseOps and returns the thrown CliError. */
 function failure(input: unknown): { code: string; message: string; op?: number; hint?: string; candidates?: string[] } {

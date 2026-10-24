@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { checkFile } from '../src/node/files.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { detectPlatform } from '../src/platform/detect.js';
 import { loadProfiles, runProfile, type ProfileFinding } from '../src/platform/profiles/profile.js';
 import { validateDoc } from '../src/validate/structural.js';

@@ -52,7 +52,10 @@ import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
-import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline/index.js';
+import type { LayoutMode, MutationResult } from './pipeline/index.js';
+import { EditTransaction } from './pipeline/EditTransaction.js';
+import { Relayout } from './pipeline/Relayout.js';
+import { DocCheck } from './pipeline/DocCheck.js';
 import type { PlatformChoice } from './platform/profiles/profile.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
@@ -121,7 +124,7 @@ function readOps(ops: unknown): Op[] {
 /** Parses a document for a write: E_PARSE, and E_IMPORT_LOSSY unless force (like the CLI's loadDoc). */
 async function loadXml(xml: string, opts: { force?: boolean }): Promise<Doc> {
   const doc = await Doc.fromXml(xml);
-  assertLossless(doc, opts);
+  doc.assertLossless(opts);
   return doc;
 }
 
@@ -133,13 +136,13 @@ async function loadXml(xml: string, opts: { force?: boolean }): Promise<Doc> {
 export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = {}): Promise<EditResult> {
   const list = readOps(ops);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await mutateDoc(doc, list, opts));
+  return toEditResult(xml, await new EditTransaction(doc, list, opts).run());
 }
 
 /** `bpmn new`: a document with one empty process (processName, processId, executable, target, conventions), laid out. */
 export async function newXml(opts: NewDocOptions & EditOptions = {}): Promise<EditResult> {
   const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(opts.conventions ? { conventions: opts.conventions } : {}) });
-  const mutation = await mutateDoc(doc, [], opts);
+  const mutation = await new EditTransaction(doc, [], opts).run();
   mutation.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: opts.processName });
   return toEditResult(undefined, mutation);
 }
@@ -156,9 +159,10 @@ export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
 
 /** `bpmn layout`: redraws the diagram (with expand / collapse), or with `tidy` keeps it and removes overlaps. */
 export async function layoutXml(xml: string, opts: LayoutXmlOptions = {}): Promise<EditResult> {
-  assertLayoutOptions(opts);
+  const relayout = new Relayout(opts);
+  relayout.assertOptions();
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await layoutDoc(doc, opts));
+  return toEditResult(xml, await relayout.run(doc));
 }
 
 /** Options of validateXml (`bpmn validate`). */
@@ -175,7 +179,7 @@ export interface ValidateXmlOptions {
 
 /** `bpmn validate --json`: structure, lint, the platform profile, the validators and a layout dry run. `ok` is false on errors. */
 export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
-  return validationReport(await checkDoc(await Doc.fromXml(xml, opts.file), opts));
+  return validationReport(await new DocCheck(opts).run(await Doc.fromXml(xml, opts.file)));
 }
 
 /** What viewXml / showXml show: the model (default, optionally one scope), one element (in its context), the neighbourhood of one, or the drawing. */

@@ -27,7 +27,7 @@ import type { Op } from '../src/ops/types.js';
 import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/bpmnlint.js';
 import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/files.js';
 import { gitRoot } from '../src/node/find-up.js';
-import { checkDoc } from '../src/pipeline/index.js';
+import { checkDoc } from '../src/index.js';
 import { advisoryValidators, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/report/command-report.js';
 import type { ValidatorFinding, ValidatorIssue } from '../src/validate/validators.js';
 

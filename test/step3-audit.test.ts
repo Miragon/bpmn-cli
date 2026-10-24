@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { readPlanes, semantics, type DShape } from '../src/diagram/plane.js';
 import { makeSpace } from '../src/diagram/space.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
 const sh = (id: string, x: number, y: number, w: number, h: number, extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;

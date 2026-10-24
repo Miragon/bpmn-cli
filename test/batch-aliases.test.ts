@@ -17,7 +17,7 @@ import { CliError } from '../src/shared/CliError.js';
 import { ERROR_CATALOGUE, guideShort, guideText } from '../src/report/guide.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 function failure(fn: () => unknown): CliError {
   try {

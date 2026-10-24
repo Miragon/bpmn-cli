@@ -22,7 +22,7 @@
  * core entry loads, naming both.
  */
 import { kindLabel } from '../../model/kinds.js';
-import { unkeptEntries } from '../../model/mirror.js';
+import { unkeptEntries } from '../../model/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
 import { decisionLinkOf } from '../../ops/decision.js';
 import { decodeXml, elementChildren, readXmlText, XmlTextError } from '../../xml/text-reader.js';

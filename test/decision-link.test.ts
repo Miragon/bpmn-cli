@@ -17,7 +17,8 @@ import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/report/g
 import { runOps } from '../src/index.js';
 import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions } from '../src/pipeline/index.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
 
