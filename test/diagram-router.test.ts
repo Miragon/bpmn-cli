@@ -107,7 +107,7 @@ function rng(seed: number): () => number {
   };
 }
 
-describe('routeOrthogonal: basic shapes', () => {
+describe('OrthogonalRouter: basic shapes', () => {
   it('draws a straight horizontal line between facing boxes on one row', () => {
     const pts = route({ source: box(0, 0), target: box(300, 0), obstacles: [], sourceSides: TASK_OUT, targetSides: TASK_IN });
     expect(pts).toEqual([{ x: 100, y: 40 }, { x: 300, y: 40 }]);
@@ -144,7 +144,7 @@ describe('routeOrthogonal: basic shapes', () => {
   });
 });
 
-describe('routeOrthogonal: obstacles', () => {
+describe('OrthogonalRouter: obstacles', () => {
   it('goes around a wall between source and target (U-route) without cutting it', () => {
     const wall = box(200, -60, 40, 400);
     const req = { source: box(0, 100), target: box(400, 100), obstacles: [wall], sourceSides: TASK_OUT, targetSides: TASK_IN };
@@ -220,7 +220,7 @@ describe('routeOrthogonal: obstacles', () => {
   });
 });
 
-describe('routeOrthogonal: lines, frame, fallback', () => {
+describe('OrthogonalRouter: lines, frame, fallback', () => {
   it('prefers a route that crosses no existing line when one of similar length exists', () => {
     const line = [{ x: 200, y: 150 }, { x: 200, y: 400 }];
     const req = { source: box(0, 0), target: box(300, 200), obstacles: [], lines: [line], sourceSides: TASK_OUT, targetSides: TASK_IN };
@@ -373,7 +373,7 @@ describe('routeOrthogonal: lines, frame, fallback', () => {
   });
 });
 
-describe('routeOrthogonal: performance', () => {
+describe('OrthogonalRouter: performance', () => {
   it('routes in a 200-obstacle plane quickly', () => {
     const rand = rng(3);
     const shapes: Box[] = [];

@@ -3,13 +3,13 @@
  * edges the incremental engine can move around without touching moddle.
  *
  * CONTRACT
- *  - readPlanes(defs, sem) returns one Plane per BPMNDiagram (document order).
+ *  - new DiagramReader(defs, sem?).planes() returns one Plane per BPMNDiagram (document order).
  *    Every BPMNShape / BPMNEdge whose bpmnElement resolves to an element with
  *    an id becomes a DShape / DEdge keyed by that id; bounds, waypoints and
- *    label bounds are COPIED (write.ts writes them back), `el` / `di` point at
+ *    label bounds are COPIED (PlaneWriter.ts writes them back), `el` / `di` point at
  *    the live moddle objects.
  *    A plane without bpmnElement shows displayRoot(defs) (as in bpmn-js);
- *    write.ts then records that root on it.
+ *    PlaneWriter.ts then records that root on it.
  *    A BPMNShape without valid bounds is not a shape: its element counts as
  *    undrawn, the DI is kept in `unbounded` for the placement to reuse.
  *  - Membership comes from the semantic model, never from geometry:
@@ -22,7 +22,7 @@
  *      hostId   the activity a boundary event is attached to
  *  - Reading is side-effect free: properties are read directly, never through
  *    `get()` (which would materialise empty collections on the model).
- *  - semantics(defs) indexes the semantic model once (ids, lanes, pools,
+ *  - Semantics.of(defs) (Semantics.ts) indexes the semantic model once (ids, lanes, pools,
  *    scopes); homePlane() says on which plane an element's DI belongs.
  */
 import { is, type El } from '../model/utils/moddle.js';

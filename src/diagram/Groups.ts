@@ -33,7 +33,7 @@
  *    the old boxes' areas (smallest first, so a group inside another one is
  *    drawn first and counts as its member): a group whose element is gone,
  *    or that the engine drew itself, is left alone. The others get one
- *    BPMNShape (id `BPMNShape_<id>`; restoreDiIds gives the old id back),
+ *    BPMNShape (id `BPMNShape_<id>`; DiIdMemo restore gives the old id back),
  *    appended in the order of the old DI to the plane that holds most of
  *    their members (ties: the plane of the old root). Its box is the union
  *    of those members' new bounds (with the boundary events of member

@@ -72,7 +72,7 @@ function bounds(doc: Doc, id: string): Record<string, number> | undefined {
   return undefined;
 }
 
-describe('readPlanes', () => {
+describe('DiagramReader', () => {
   it('reads shapes, edges and membership from the semantic model', async () => {
     const { planes } = await load();
     expect(planes).toHaveLength(1);
@@ -110,7 +110,7 @@ describe('readPlanes', () => {
   });
 });
 
-describe('writePlanes', () => {
+describe('PlaneWriter', () => {
   it('updates geometry in place and keeps every other DI attribute', async () => {
     const { doc, planes } = await load();
     const p = planes[0]!;

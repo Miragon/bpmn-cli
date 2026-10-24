@@ -1,7 +1,7 @@
 /**
  * The geometry tools of the incremental engine on hand-built planes:
- * src/diagram/space.ts (space tool, strip closing, frame growth) and
- * src/diagram/separate.ts (local overlap removal, tidy).
+ * src/diagram/SpaceTool.ts (space tool, strip closing, frame growth) and
+ * src/diagram/Separation.ts (local overlap removal, tidy).
  */
 import { describe, expect, it } from 'vitest';
 import type { Box, Point } from '../src/diagram/types.js';

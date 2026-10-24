@@ -3,7 +3,7 @@
  *
  * CONTRACT
  *  - routeEdge(edge, {lines, sourceSides?, targetSides?}) returns new
- *    waypoints for one connection, from the router (router.ts) with the BPMN
+ *    waypoints for one connection, from the router (OrthogonalRouter.ts) with the BPMN
  *    side conventions (activities / gateways exit right/bottom/top and enter
  *    left/bottom/top, events any side, a boundary event leaves through the
  *    border it sits on, message flows leave / enter vertically). A gateway
@@ -20,7 +20,7 @@
  *    no overlap when the flow follows it into the vertex (the router's
  *    `targetMerge`; crossing it still costs), so entries from below join the
  *    bundle and share the bottom vertex as bpmn-js draws them. A route
- *    touches its target gateway only at its own vertex (router.ts). An
+ *    touches its target gateway only at its own vertex (OrthogonalRouter.ts). An
  *    outgoing connection takes any vertex, an incoming one the left or right
  *    vertex (sharing it would merge onto its line). Sharing never costs a
  *    further crossing: when another entry docks on the top / bottom vertex,

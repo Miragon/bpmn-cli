@@ -1,5 +1,5 @@
 /**
- * The space tool of the modeler, on a plane (src/diagram/plane.ts).
+ * The space tool of the modeler, on a plane (src/diagram/types.ts).
  *
  * CONTRACT
  *  makeSpace({axis, line, delta, within?, frame?, keep?, anchors?})

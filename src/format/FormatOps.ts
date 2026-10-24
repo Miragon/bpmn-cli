@@ -28,7 +28,7 @@
  *     (makeRoom); its outgoing flows are routed again.
  *   - align: every id moves on its own onto the centre line (row) or centre
  *     column of `to` (default: the first id, which then stays).
- *   - color: a SWATCHES colour (diagram/write.ts setSwatch) on shapes and edges;
+ *   - color: a SWATCHES colour (diagram/utils/colors.ts setSwatch) on shapes and edges;
  *     'default' removes every colour. The bioc / color namespaces are
  *     declared on the definitions when missing.
  *   - label: the external label box on one side of its element (diagram/LabelPlacer.ts
@@ -152,7 +152,7 @@ export interface FormatEntry {
   index: number;
 }
 
-/** A change of one plane must not add a hard layout problem or raise the score (compact.ts Attempt). */
+/** A change of one plane must not add a hard layout problem or raise the score (Compaction.ts Attempt). */
 const GUARDED: TrialPolicy = { key: (p) => (isHardProblem(p) ? problemKey(p) : undefined), lower: false, rebase: false };
 
 export class FormatOps {

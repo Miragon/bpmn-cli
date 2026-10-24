@@ -126,7 +126,7 @@ export function namesRoot(kind: 'Plane' | 'Diagram', diId: string | undefined, r
   return diId === `BPMN${kind}_${root}` || diId === rootDiId(kind, root) || diId === rootDiId(kind, root, true);
 }
 
-/** Whether every DI id derived from an id of `defs` fits uncut (no id is longer than the room `BPMNDiagram_` leaves): restoreDiIds then keeps the engine's ids of a drawing without old DI. */
+/** Whether every DI id derived from an id of `defs` fits uncut (no id is longer than the room `BPMNDiagram_` leaves): DiIdMemo restore then keeps the engine's ids of a drawing without old DI. */
 export function diIdsFit(defs: El): boolean {
   for (const id of allIds(defs)) if (id.length > MAX_DI - 'BPMNDiagram_'.length) return false;
   return true;

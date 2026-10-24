@@ -23,7 +23,7 @@
  *     `compact` can close), `gaps` of a group the places in its rows where
  *     two neighbours are that far apart (index of the node after the gap):
  *     such a row holds unrelated clusters that merely share a y.
- *   - colors: every coloured shape / edge with its swatch name (diagram/write.ts
+ *   - colors: every coloured shape / edge with its swatch name (diagram/utils/colors.ts
  *     SWATCHES) or 'custom' plus the raw fill / stroke.
  *   - labels: external labels (events, gateways, data, flows) that are not on
  *     the default side (diagram/utils/labels.ts defaultLabelSide; flows: above), with the

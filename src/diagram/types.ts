@@ -147,7 +147,7 @@ export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAss
 export interface DShape {
   id: string;
   el: El;
-  /** the BPMNShape; undefined for an element placed by the engine until write.ts creates it */
+  /** the BPMNShape; undefined for an element placed by the engine until PlaneWriter.ts creates it */
   di?: El;
   bounds: Box;
   kind: ShapeKind;
@@ -175,21 +175,21 @@ export interface DEdge {
 export interface Plane {
   /** BPMNPlane id */
   id: string;
-  /** the BPMNPlane; undefined for a plane the engine creates until write.ts writes it */
+  /** the BPMNPlane; undefined for a plane the engine creates until PlaneWriter.ts writes it */
   di?: El;
   /** id of the element the plane shows: collaboration, process or collapsed sub-process */
   rootId: string;
   root: El;
   shapes: Map<string, DShape>;
   edges: Map<string, DEdge>;
-  /** DI elements write.ts deletes */
+  /** DI elements PlaneWriter.ts deletes */
   dropped: El[];
   /**
    * BPMNShapes without valid bounds (missing, NaN), by element id: the
    * element counts as undrawn and is placed, reusing this DI (and its colours)
    */
   unbounded?: Map<string, El>;
-  /** write.ts deletes the whole diagram (its content moved elsewhere) */
+  /** PlaneWriter.ts deletes the whole diagram (its content moved elsewhere) */
   deleted?: boolean;
 }
 

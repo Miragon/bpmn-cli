@@ -14,11 +14,11 @@
  * that lists the expanded sub-processes.
  *
  * Both engines write new DI; the ids the file's DI had are given back to it
- * afterwards (diagram/write.ts restoreDiIds: same DI, plane and diagram ids,
+ * afterwards (diagram/DiIdMemo.ts restore: same DI, plane and diagram ids,
  * new DI in the file's DI id style, a long element id cut so that every DI
  * id stays within 64 characters), so a redraw only changes geometry.
  * Neither engine knows where a group's box goes: every drawn group is drawn
- * again around the elements its box held (diagram/groups.ts; one without
+ * again around the elements its box held (diagram/Groups.ts; one without
  * any of them drawn keeps its box, or its size below the drawing when the
  * redraw put shapes on it; LayoutResult.notes says so). The clean engine
  * keeps the unconnected parts of a group together.
@@ -130,7 +130,7 @@ export class FullLayout {
       const { xml } = await this.model.moddle.toXML(this.model.definitions, { format: true });
       return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
     }
-    // without old DI the layouter's ids stand unless an element id is long enough to need a cut (restoreDiIds)
+    // without old DI the layouter's ids stand unless an element id is long enough to need a cut (DiIdMemo restore)
     const cut = !diIds.diagrams.length && !diIdsFit(this.model.definitions);
     this.injectLayoutHints(expanded);
     const temporary = TemporaryLaneMembers.add(this.model.definitions);
@@ -160,7 +160,7 @@ export class FullLayout {
     };
   }
 
-  /** The notes of the groups around nothing a redraw kept at their old place or moved below the drawing (diagram/groups.ts). */
+  /** The notes of the groups around nothing a redraw kept at their old place or moved below the drawing (diagram/Groups.ts). */
   private groupNotes({ kept, moved }: RedrawnGroups): { notes?: string[] } {
     const stay = kept.filter((id) => !moved.includes(id));
     const notes: string[] = [];

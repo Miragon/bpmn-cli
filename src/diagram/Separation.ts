@@ -1,5 +1,5 @@
 /**
- * Local overlap removal on a plane (src/diagram/plane.ts).
+ * Local overlap removal on a plane (src/diagram/types.ts).
  *
  * CONTRACT
  *  separate({active, movable, gap?, grow?})

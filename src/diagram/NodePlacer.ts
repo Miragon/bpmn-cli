@@ -598,7 +598,7 @@ export class NodePlacer {
 
   /**
    * What connecting `from` to a candidate box would cost: a trial route through
-   * the drawing (router.ts), charged for cut shapes, crossed lines, labels hit,
+   * the drawing (OrthogonalRouter.ts), charged for cut shapes, crossed lines, labels hit,
    * bends and length. `shift` approximates a row opened by the space tool.
    */
   private connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, shift?: Shift): number {
