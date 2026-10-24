@@ -2,10 +2,11 @@ import { LAYOUT_MODES } from '../pipeline/index.js';
 import { Doc } from '../model/Doc.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/kinds.js';
 import { SWATCHES } from '../diagram/write.js';
-import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
-import { SINGLE_TOP } from '../ops/ext.js';
+import { OPS_SCHEMA } from '../ops/OpsSchemaBuilder.js';
+import { OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/utils/op-fields.js';
+import { EXTENSION_STRUCTURE } from '../ops/ExtensionStructure.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
-import { OP_NAMES } from '../ops/types.js';
+import { OP_NAMES } from '../ops/utils/op-names.js';
 import { ZEEBE } from '../platform/ZeebeDescriptor.js';
 import { usageError } from '../shared/utils/errors.js';
 import { ERROR_CATALOGUE, EXIT_CODE_DOCS, ID_CONVENTIONS, NESTED_SELECTORS, NON_INTERRUPTING_DOC, PLACEMENT_DOCS, PLACEMENT_NOTES, TRIGGER_OPTIONS } from './guide.js';
@@ -34,8 +35,8 @@ export interface ZeebeElementDoc {
   single: boolean;
 }
 
-/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ext.ts SINGLE_TOP). */
-const ZEEBE_SINGLE = [...SINGLE_TOP].filter((t) => t.startsWith('zeebe:'));
+/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ExtensionStructure.ts singleTop). */
+const ZEEBE_SINGLE = [...EXTENSION_STRUCTURE.singleTop].filter((t) => t.startsWith('zeebe:'));
 
 /** The parts of `bpmn kinds` / `kinds --json` by their JSON key: the JSON keys of each (section renders its text). */
 const SECTION_KEYS: Record<string, string[]> = {

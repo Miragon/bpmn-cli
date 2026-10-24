@@ -102,8 +102,10 @@ import type { Doc } from '../model/Doc.js';
 import { CliError, type ErrorDetails } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { is, type El } from '../model/utils/moddle.js';
-import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
-import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
+import { Reordering } from '../ops/Reordering.js';
+import { laneSetOf } from '../ops/utils/lanes.js';
+import { parseSpaceAmount } from '../ops/utils/space-amount.js';
+import type { AlignOp, ColorOp, CompactOp, FormatOp, LabelOp, OrderOp, PlaceOp, RouteOp, SpaceOp, TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/geom.js';
 import { clearTitles, edgeLabelAt, hasExternalLabel, labelArea, labelAt, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from '../diagram/labels.js';
@@ -1464,7 +1466,7 @@ function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | u
   const index = entry.index;
   const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : resolveSelection(ctx, entry.op);
   const op = resolved.op;
-  if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
+  if (op.op === 'order' && !new Reordering(ctx.doc, op).ordersBands()) return undefined;
   const snap = snapshot(ctx.planes);
   const notes: string[] = [];
   let rerouted: string[] = [];
@@ -1498,7 +1500,7 @@ function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | u
       rerouted = compactOp(ctx, op, snap, notes);
       break;
     case 'order':
-      rerouted = ordersPools(ctx.doc, op) ? orderPoolBands(ctx, op, snap, notes) : orderBands(ctx, op, snap, notes);
+      rerouted = new Reordering(ctx.doc, op).ordersPools() ? orderPoolBands(ctx, op, snap, notes) : orderBands(ctx, op, snap, notes);
       break;
   }
   const routed = unique(rerouted);

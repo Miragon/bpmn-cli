@@ -96,11 +96,11 @@ import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Tri
 import { diExpansionState } from '../layout/index.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
-import { setGroupName } from './artifacts.js';
-import { assignLane } from './containers.js';
-import { setDecisionLink } from './decision.js';
+import { ArtifactEditor } from './ArtifactEditor.js';
+import { LaneEditor } from './LaneEditor.js';
+import { DecisionLinkWriter } from './DecisionLinkWriter.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
-import { setCorrelationKey } from './ext.js';
+import { ZeebeSubscription } from './ZeebeSubscription.js';
 import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
@@ -434,7 +434,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     }
     case 'name':
       recordFormerEnd(doc, el);
-      if (is(el, 'bpmn:Group')) setGroupName(doc, el, value);
+      if (is(el, 'bpmn:Group')) new ArtifactEditor(doc).setGroupName(el, value);
       else el.set('name', value || undefined);
       break;
     case 'doc':
@@ -466,7 +466,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     }
     case 'lane': {
       if (!is(el, 'bpmn:FlowNode')) throw unknownKey(doc, el, key, 'applies to flow nodes');
-      assignLane(doc, el, value ? doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
+      new LaneEditor(doc).assign(el, value ? doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
       break;
     }
     case 'message':
@@ -476,7 +476,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     case 'calledDecision':
       // another element: an unprefixed calledDecision="..." BPMN does not define can only be removed (W_C7_DEPLOY_SCHEMA)
       if (is(el, 'bpmn:BusinessRuleTask') || value) {
-        cs.change(changeOf(el, setDecisionLink(doc, el, value, cs)));
+        cs.change(changeOf(el, new DecisionLinkWriter(doc).write(el, value, cs)));
         return;
       }
       setModelProperty(doc, el, key, value);
@@ -484,7 +484,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     default:
       if (key.includes(':')) {
         // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ext.ts)
-        if (value && setCorrelationKey(doc, el, key, value, cs)) return;
+        if (value && new ZeebeSubscription(doc).setCorrelationKey(el, key, value, cs)) return;
         if (value) assertVendorHost(doc, el, key, value);
         if (value) assertZeebeHost(doc, el, key, value);
         setVendorAttribute(doc, el, key, value);

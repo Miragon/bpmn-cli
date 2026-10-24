@@ -11,8 +11,8 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { is, peek, walk, type El } from '../model/utils/moddle.js';
-import { decisionLinkOf } from '../ops/decision.js';
-import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
+import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
+import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
 import { nestedEntries } from '../ops/set.js';
 import { ElementFacts } from './ElementFacts.js';
 import type { FindHit } from './model-view.js';
@@ -70,7 +70,7 @@ export class ElementFinder {
   /** The first vendor value of `el` containing `q`: an attribute (also of a nested element) or an extension element attribute / body. */
   private static vendorMatch(el: El, q: string): string | undefined {
     for (const [k, v] of Object.entries(new ElementFacts(el).vendorValues() ?? {})) if (v.toLowerCase().includes(q)) return `${k}=${v}`;
-    const decision = decisionLinkOf(el);
+    const decision = new DecisionLinkReader().linkOf(el);
     if (decision && decision.value.toLowerCase().includes(q)) return `calledDecision=${decision.value}`;
     const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
       for (const e of exts ?? []) {
@@ -81,10 +81,10 @@ export class ElementFinder {
       }
       return undefined;
     };
-    const own = visit(listExtensions(el), '');
+    const own = visit(new ExtensionLister().list(el), '');
     if (own) return own;
     for (const { prefix, el: nested } of nestedEntries(el)) {
-      const hit = visit(listExtensions(nested), `${prefix}.`);
+      const hit = visit(new ExtensionLister().list(nested), `${prefix}.`);
       if (hit) return hit;
     }
     return undefined;

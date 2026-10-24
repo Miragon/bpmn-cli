@@ -102,7 +102,7 @@ export interface MutationResult {
   /** the result is the input text byte for byte (the ops changed nothing that is written) */
   unchanged: boolean;
   changes: ChangeSet;
-  /** batch aliases (`"as": "$name"`, ops/aliases.ts) -> the final id of their element; absent without aliases */
+  /** batch aliases (`"as": "$name"`, ops/OpAliases.ts) -> the final id of their element; absent without aliases */
   aliases?: Record<string, string>;
   layout: LayoutStatus;
   validation: ValidationResult;

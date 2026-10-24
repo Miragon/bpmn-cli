@@ -1,5 +1,6 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
-import { parseSpaceAmount, type SpaceOp } from '../ops/types.js';
+import { parseSpaceAmount } from '../ops/utils/space-amount.js';
+import type { SpaceOp } from '../ops/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';
 

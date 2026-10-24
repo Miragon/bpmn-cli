@@ -1,5 +1,5 @@
 import { Option, type Command as CommandType } from 'commander';
-import { LABEL_SIDE_VALUES } from '../ops/batch.js';
+import { LABEL_SIDE_VALUES } from '../ops/utils/op-fields.js';
 import type { LabelOp } from '../ops/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';

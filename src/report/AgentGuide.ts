@@ -1,5 +1,5 @@
-import { OP_FIELDS } from '../ops/batch.js';
-import { OP_NAMES } from '../ops/types.js';
+import { OP_FIELDS } from '../ops/utils/op-fields.js';
+import { OP_NAMES } from '../ops/utils/op-names.js';
 import { usageError } from '../shared/utils/errors.js';
 import { COMMANDS, COMMON_OPTIONS } from './CommandCatalogue.js';
 import { COMMON_ERRORS, ERROR_CATALOGUE, TOP_ERRORS, TRIGGER_OPTIONS } from './guide.js';

@@ -1,7 +1,7 @@
 /**
  * The Camunda 8 (Zeebe) descriptor (`zeebe-bpmn-moddle`, resources/zeebe.json,
  * inlined as zeebe-descriptor.ts; see VendorDescriptor), used for validation
- * (platform/profiles/C8Profile.ts) and for placing zeebe extension elements (ops/ext.ts).
+ * (platform/profiles/C8Profile.ts) and for placing zeebe extension elements (ops/ExtensionStructure.ts).
  *
  *  - type(name)                 -> { name, type, allowedIn, attributes, children } of a zeebe
  *                                  extension element type, or undefined (mixins are no element types)

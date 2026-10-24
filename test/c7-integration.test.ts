@@ -16,11 +16,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseOps } from '../src/ops/batch.js';
+import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { kindsJson, kindsText } from '../src/index.js';
 import { is, type El } from '../src/model/utils/moddle.js';
-import { extensionOp, listAllExtensions } from '../src/ops/ext.js';
+import { listAllExtensions } from '../src/index.js';
+import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
@@ -149,9 +150,9 @@ describe('show <id> and ext list print extension content as an indented tree (#1
 describe('ext on nested elements: definition. / loop. / condition. (#3)', () => {
   it('adds a retry cycle to the multi-instance loop and camunda:in to the signal definition', async () => {
     const doc = await nestedDoc();
-    const cs = extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const cs = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
     expect(cs.changed[0]).toMatchObject({ id: 'Activity_Review', detail: 'ext added loop.camunda:failedJobRetryTimeCycle' });
-    extensionOp(doc, { op: 'ext', id: 'Event_Go', action: 'add', slot: 'definition', type: 'camunda:in', attrs: { variables: 'all' } });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', slot: 'definition', type: 'camunda:in', attrs: { variables: 'all' } });
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics [^>]*>\s*<bpmn:extensionElements>\s*<camunda:failedJobRetryTimeCycle>R3\/PT5M<\/camunda:failedJobRetryTimeCycle>/);
     expect(xml).toMatch(/<bpmn:signalEventDefinition [^>]*>\s*<bpmn:extensionElements>\s*<camunda:in variables="all" \/>/);
@@ -165,36 +166,36 @@ describe('ext on nested elements: definition. / loop. / condition. (#3)', () => 
 
   it('merges / refuses like on the element itself, with hints that use the prefix', async () => {
     const doc = await nestedDoc();
-    extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
-    const dup = caught(() => extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M' }));
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const dup = caught(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M' }));
     expect(dup.code).toBe('E_DUPLICATE_EXTENSION');
     expect(dup.message).toMatch(/the loop characteristics of Activity_Review already has a camunda:failedJobRetryTimeCycle/);
     expect(dup.details['element']).toBe('Activity_Review');
     expect(dup.details['hint']).toMatch(/bpmn ext remove <file> Activity_Review loop\.<selector>/);
-    extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M', replace: true });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M', replace: true });
     expect(await doc.toXml()).toContain('<camunda:failedJobRetryTimeCycle>R5/PT5M</camunda:failedJobRetryTimeCycle>');
   });
 
   it('removes by selector and by index; the empty container goes', async () => {
     const doc = await nestedDoc();
-    extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
-    const cs = extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'remove', type: 'loop.camunda:failedJobRetryTimeCycle' });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const cs = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'remove', type: 'loop.camunda:failedJobRetryTimeCycle' });
     expect(cs.changed[0]!.detail).toBe('ext removed loop.camunda:failedJobRetryTimeCycle');
     expect(doc.require('Activity_Review').get<El>('loopCharacteristics').get('extensionElements')).toBeUndefined();
-    extensionOp(doc, { op: 'ext', id: 'Event_Go', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } });
-    extensionOp(doc, { op: 'ext', id: 'Event_Go', action: 'remove', slot: 'definition', index: 0 });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Event_Go', action: 'remove', slot: 'definition', index: 0 });
     expect(listAllExtensions(doc.require('Event_Go'))).toEqual([]);
   });
 
   it('explains a missing or impossible nested element', async () => {
     const doc = await nestedDoc();
-    const noLoop = caught(() => extensionOp(doc, { op: 'ext', id: 'Event_Go', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
+    const noLoop = caught(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
     expect(noLoop.code).toBe('E_WRONG_KIND');
-    const noDefinition = caught(() => extensionOp(doc, { op: 'ext', id: 'Event_Start', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } }));
+    const noDefinition = caught(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Event_Start', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } }));
     expect(noDefinition.code).toBe('E_NO_NESTED_ELEMENT');
     expect(noDefinition.details['hint']).toMatch(/trigger=/);
     runOps(doc, [{ op: 'set', id: 'Activity_Review', values: { loop: 'none' } }]);
-    const removed = caught(() => extensionOp(doc, { op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
+    const removed = caught(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
     expect(removed.code).toBe('E_NO_NESTED_ELEMENT');
     expect(removed.details['hint']).toMatch(/loop=parallel/);
   });

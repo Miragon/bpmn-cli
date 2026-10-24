@@ -27,11 +27,11 @@
  *     (withoutProfileDuplicates).
  */
 import { describe, expect, it } from 'vitest';
-import { parseOps } from '../src/ops/batch.js';
+import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { extensionLines } from '../src/report/utils/view-lines.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { listAllExtensions } from '../src/ops/ext.js';
+import { listAllExtensions } from '../src/index.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
 import { removeElements } from '../src/ops/remove.js';

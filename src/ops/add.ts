@@ -71,8 +71,11 @@ import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger,
 import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { renamedNote } from '../model/utils/renames.js';
-import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
-import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
+import { AssociationEditor } from './AssociationEditor.js';
+import { ArtifactEditor } from './ArtifactEditor.js';
+import { LaneEditor } from './LaneEditor.js';
+import { PoolEditor } from './PoolEditor.js';
+import { laneOf } from './utils/lanes.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
@@ -455,11 +458,11 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
   addDocumentation(doc, el, op.doc);
 
   if (explicitLane) {
-    assignLane(doc, el, explicitLane, cs);
+    new LaneEditor(doc).assign(el, explicitLane, cs);
   } else {
     const scope = doc.scopeOf(el);
     if (inherited.lane && scope && is(scope, 'bpmn:Process')) {
-      assignLane(doc, el, inherited.lane, cs);
+      new LaneEditor(doc).assign(el, inherited.lane, cs);
       const warning = laneInheritedWarning(id, inherited);
       if (warning) cs.warn(warning);
     }
@@ -516,34 +519,34 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
     case 'participant': {
       rejectPlacement(op, [], 'participant');
       const before = new Set(doc.processes());
-      el = createParticipant(doc, op, cs);
+      el = new PoolEditor(doc).createParticipant(op, cs);
       // platform defaults for the process a new pool brings (C7: history time to live)
       for (const p of doc.processes()) if (!before.has(p)) doc.initProcess(p);
       break;
     }
     case 'lane':
       rejectPlacement(op, ['in'], 'lane');
-      el = createLane(doc, op, cs);
+      el = new LaneEditor(doc).createLane(op, cs);
       break;
     case 'data': {
       rejectPlacement(op, ['in', 'to'], def.kind);
       const scope = doc.requireScope(op.in);
       const opts = { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}) };
-      el = def.kind === 'dataStore' ? createDataStore(doc, scope, opts, cs) : createDataObject(doc, scope, opts, cs);
-      if (op.to) createDataAssociation(doc, el, doc.require(op.to), {}, cs);
+      el = def.kind === 'dataStore' ? new ArtifactEditor(doc).createDataStore(scope, opts, cs) : new ArtifactEditor(doc).createDataObject(scope, opts, cs);
+      if (op.to) new AssociationEditor(doc).createDataAssociation(el, doc.require(op.to), {}, cs);
       break;
     }
     case 'artifact': {
       if (def.kind === 'group') {
         rejectPlacement(op, [], def.kind);
-        el = createGroup(doc, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(op.members ? { members: op.members } : {}) }, cs);
+        el = new ArtifactEditor(doc).createGroup({ ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(op.members ? { members: op.members } : {}) }, cs);
         break;
       }
       rejectPlacement(op, ['in', 'to'], def.kind);
       const scope = doc.requireScope(op.in);
       const text = op.text ?? op.name;
-      el = createTextAnnotation(doc, scope, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(text ? { text } : {}) }, cs);
-      if (op.to) createAssociation(doc, doc.require(op.to), el, {}, cs);
+      el = new ArtifactEditor(doc).createTextAnnotation(scope, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(text ? { text } : {}) }, cs);
+      if (op.to) new AssociationEditor(doc).createAssociation(doc.require(op.to), el, {}, cs);
       break;
     }
     default:

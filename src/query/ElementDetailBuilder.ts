@@ -1,6 +1,6 @@
 /**
  * `bpmn show <id>`: everything about one element incl. readProperties()
- * from ops/set.js, listExtensions() from ops/ext.js, flows in/out with
+ * from ops/set.js, new ExtensionLister().list() from ops/ext.js, flows in/out with
  * labels/conditions, host, attached boundary events, lane, scope. It first
  * adds missing incoming/outgoing mirror entries (repairFlowLinks in
  * validate/structural.ts) so flows of hand-written files show up.
@@ -9,9 +9,9 @@ import type { Doc } from '../model/Doc.js';
 import { triggerOf } from '../model/utils/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/containers.js';
+import { laneOf } from '../ops/utils/lanes.js';
 import { groupMembers } from '../diagram/groups.js';
-import { listExtensions } from '../ops/ext.js';
+import { ExtensionLister } from '../ops/ExtensionLister.js';
 import { nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
 import { flowOrder, repairFlowLinks } from '../validate/structural.js';
 import { ElementFacts } from './ElementFacts.js';
@@ -48,11 +48,11 @@ export class ElementDetailBuilder {
     });
     const nested: Record<string, NestedDetail> = {};
     for (const { prefix, el: n } of nestedEntries(el)) {
-      nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttributes(n), extensions: listExtensions(n) });
+      nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttributes(n), extensions: new ExtensionLister().list(n) });
     }
     const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(shownId) : [];
     const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(shownId) : [];
-    const listed = listExtensions(el);
+    const listed = new ExtensionLister().list(el);
     const extensions: unknown[] = listed.length ? listed : this.facts.extensionTypes().map((type, index) => ({ index, type }));
     const host = peek<El>(el, 'attachedToRef');
     const associations = this.links.associations();

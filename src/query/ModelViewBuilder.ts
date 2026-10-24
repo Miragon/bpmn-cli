@@ -24,7 +24,7 @@ import type { Doc } from '../model/Doc.js';
 import { kindLabel } from '../model/utils/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/containers.js';
+import { laneOf } from '../ops/utils/lanes.js';
 import { groupMembers } from '../diagram/groups.js';
 import { flowOrder, validateDoc } from '../validate/structural.js';
 import { ElementFacts } from './ElementFacts.js';

@@ -22,7 +22,11 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
-import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
+import { listExtensions, type ExtensionInfo } from '../src/index.js';
+import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
+import { SelectorParser } from '../src/ops/SelectorParser.js';
+import { NESTED_HOSTS } from '../src/ops/NestedHosts.js';
+import { EXTENSION_STRUCTURE } from '../src/ops/ExtensionStructure.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
@@ -46,7 +50,7 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
 }
 
 function ext(doc: Doc, op: Omit<ExtOp, 'op'>) {
-  return extensionOp(doc, { op: 'ext', ...op } as ExtOp);
+  return new ExtensionEditor(doc).apply({ op: 'ext', ...op } as ExtOp);
 }
 
 function add(doc: Doc, id: string, type: string, attrs: Record<string, string> = {}, extra: Partial<ExtOp> = {}) {
@@ -168,11 +172,11 @@ describe('ext add: single-instance containers are merged, not duplicated (1a)', 
 
   it('documents the single-instance list (engine-verified for camunda)', () => {
     for (const t of ['camunda:inputOutput', 'camunda:formData', 'camunda:connector', 'camunda:failedJobRetryTimeCycle', 'camunda:properties', 'zeebe:ioMapping', 'zeebe:taskDefinition']) {
-      expect(SINGLE_TOP.has(t)).toBe(true);
+      expect(EXTENSION_STRUCTURE.singleTop.has(t)).toBe(true);
     }
     // repeatable ones stay repeatable (the engines accept several)
     for (const t of ['camunda:executionListener', 'camunda:taskListener', 'camunda:in', 'camunda:out', 'camunda:field', 'camunda:potentialStarter', 'camunda:errorEventDefinition', 'camunda:formProperty']) {
-      expect(SINGLE_TOP.has(t)).toBe(false);
+      expect(EXTENSION_STRUCTURE.singleTop.has(t)).toBe(false);
     }
   });
 
@@ -379,12 +383,12 @@ describe('ext remove: one nested item by selector (1c)', () => {
   it('parses selectors', async () => {
     const doc = await c7Doc();
     const el = doc.require('Activity_Call');
-    expect(parseSelector("a:b[name='x/y']/c:d[2]", el)).toEqual([
+    expect(new SelectorParser(NESTED_HOSTS).parse("a:b[name='x/y']/c:d[2]", el)).toEqual([
       { name: 'a:b', attr: 'name', value: 'x/y', text: "a:b[name='x/y']" },
       { name: 'c:d', index: 2, text: 'c:d[2]' },
     ]);
-    expect(caught(() => parseSelector('a:b//c:d', el)).code).toBe('E_INVALID_VALUE');
-    expect(caught(() => parseSelector('a:b[]', el)).code).toBe('E_INVALID_VALUE');
+    expect(caught(() => new SelectorParser(NESTED_HOSTS).parse('a:b//c:d', el)).code).toBe('E_INVALID_VALUE');
+    expect(caught(() => new SelectorParser(NESTED_HOSTS).parse('a:b[]', el)).code).toBe('E_INVALID_VALUE');
   });
 });
 

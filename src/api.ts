@@ -37,7 +37,7 @@
  * candidates, hint, op), exactly what the CLI prints with --json; the input
  * string is never modified.
  */
-import { parseOps } from './ops/batch.js';
+import { OpsParser } from './ops/OpsParser.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import type { LayoutView } from './query/layout-view.js';
@@ -59,7 +59,7 @@ import { LayoutText } from './report/LayoutText.js';
 import { ModelViewText } from './report/ModelViewText.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
-import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
+import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 import type { Op } from './ops/types.js';
 import type { LayoutMode, MutationResult } from './pipeline/index.js';
 import { EditTransaction } from './pipeline/EditTransaction.js';
@@ -128,7 +128,7 @@ function toEditResult(input: string | undefined, mutation: MutationResult): Edit
 
 /** The ops of applyToXml: an array, `{ ops: [...] }` or the JSON text of either, checked like `bpmn apply`. */
 function readOps(ops: unknown): Op[] {
-  return parseOps(typeof ops === 'string' ? parseOpsJson(ops) : ops);
+  return new OpsParser().parse(typeof ops === 'string' ? parseOpsJson(ops) : ops);
 }
 
 /** Parses a document for a write: E_PARSE, and E_IMPORT_LOSSY unless force (like the CLI's loadDoc). */
@@ -256,7 +256,7 @@ export async function findXml(xml: string, text: string, opts: { kind?: string }
 /** `bpmn ext list --json`: the extension elements of an element (and of its event definition / loop / condition). */
 export async function extensionsXml(xml: string, id: string): Promise<ExtensionInfo[]> {
   const doc = await Doc.fromXml(xml);
-  return listAllExtensions(doc.require(id));
+  return new ExtensionLister().listAll(doc.require(id));
 }
 
 /** Sets (or, without an argument, clears) the process-wide sink of the layout engines' diagnostic lines. */

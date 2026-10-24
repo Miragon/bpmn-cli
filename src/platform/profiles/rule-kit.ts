@@ -23,7 +23,7 @@
 import { kindLabel } from '../../model/kinds.js';
 import { unkeptEntries } from '../../model/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
-import { decisionLinkOf } from '../../ops/decision.js';
+import { DecisionLinkReader } from '../../ops/DecisionLinkReader.js';
 import { decodeXml, elementChildren, readXmlText } from '../../xml/utils/text-reader.js';
 import { XmlTextError } from '../../xml/XmlTextError.js';
 import { CAMUNDA, OPERATON_URI } from '../CamundaDescriptor.js';
@@ -42,7 +42,7 @@ export const RULE_KIT = {
   kindLabel,
   makeFinding,
   unkeptEntries,
-  decisionLinkOf,
+  DecisionLinkReader,
   // namespaces and vendor descriptors
   OPERATON_URI,
   DocumentNamespaces,

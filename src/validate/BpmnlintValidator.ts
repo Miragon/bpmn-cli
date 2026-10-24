@@ -1,5 +1,5 @@
 import { BpmnModdle, type ImportWarning } from 'bpmn-moddle';
-import { isDecisionLinkWarning, reportedImportWarnings } from '../ops/decision.js';
+import { isDecisionLinkWarning, reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import type { BpmnlintEngine, BpmnlintUnavailable, ResolvedBpmnlintConfig } from './bpmnlint-validator.js';
 import { bpmnlintUnavailableFindings } from './utils/bpmnlint.js';
 import { LintRun } from './LintRun.js';

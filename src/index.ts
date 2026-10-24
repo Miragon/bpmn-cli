@@ -58,6 +58,9 @@ import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
 import { ValidationText } from './report/ValidationText.js';
 import { WarningLines } from './report/WarningLines.js';
 import { advisoryOf } from './report/utils/findings.js';
+import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
+import { OpsParser } from './ops/OpsParser.js';
+import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -94,7 +97,7 @@ export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/utils/kinds.js';
 export { layoutModel } from './layout/index.js';
-export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
+export { FORMAT_OP_NAMES, isFormatOp } from './ops/utils/op-names.js';
 export type {
   Op,
   AddOp,
@@ -160,20 +163,26 @@ export function conventionsView(
   return new ConventionsTable(doc, conventions).view(opts);
 }
 
-export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
+export type { DecisionLink } from './ops/DecisionLinkReader.js';
+
+/** The decision link of a business rule task in any spelling (undefined for other elements or without one). */
+export function decisionLinkOf(el: El, doc?: Doc): DecisionLink | undefined {
+  return new DecisionLinkReader(doc).linkOf(el);
+}
+
 export { ChangeSet, type Change } from './model/ChangeSet.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
 export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
 export type { ProfileFinding, Severity } from './platform/utils/finding.js';
-export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
+export type { ExtensionInfo } from './ops/ExtensionLister.js';
 export { type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
 export function buildView(doc: Doc): ModelView { return new ModelViewBuilder(doc).build(); }
 export function elementDetail(doc: Doc, el: El): ElementDetail { return new ElementDetailBuilder(doc, el).build(); }
 export function findElements(doc: Doc, text: string, kind?: string): FindHit[] { return new ElementFinder(doc).find(text, kind); }
 export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ModelViewBuilder(doc).scope(view, scopeId); }
-export { parseOps, OPS_SCHEMA } from './ops/batch.js';
+export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
 export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
@@ -189,6 +198,16 @@ export function renderSvg(xml: string, opts: RenderOptions = {}): Promise<Render
 export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult { return new DocRenderer(doc, opts).render(); }
 
 
+/** The extension elements of an element, in order. */
+export function listExtensions(el: El): ExtensionInfo[] {
+  return new ExtensionLister().list(el);
+}
+
+/** `ext list`: the element's own extension elements, then those of its nested elements, each with its slot. */
+export function listAllExtensions(el: El): ExtensionInfo[] {
+  return new ExtensionLister().listAll(el);
+}
+
 /** Runs one op on its own (src/ops/OpRunner.ts). */
 export function runOp(doc: Doc, op: Op): ChangeSet {
   return new OpRunner(doc).runOp(op);
@@ -197,6 +216,14 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
 /** Runs a batch (OpRunner.runBatch) and returns what changed. */
 export function runOps(doc: Doc, ops: Op[]): ChangeSet {
   return new OpRunner(doc).runBatch(ops).changes;
+}
+
+/**
+ * Validates the ops JSON (an array or `{ ops: [...] }`) and returns typed
+ * ops. Throws a usage error (exit 1) naming the op index for every problem.
+ */
+export function parseOps(input: unknown): Op[] {
+  return new OpsParser().parse(input);
 }
 
 /** Applies ops to an in-memory document (src/pipeline/EditTransaction.ts). */

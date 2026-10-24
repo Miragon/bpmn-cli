@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/containers.js';
+import { laneOf } from '../ops/utils/lanes.js';
 import type { DetailData, DetailMessageFlow, ViewAnnotation } from './model-view.js';
 import { compact, nameOf, nonEmpty, refLabel, scopesWithin } from './utils/view.js';
 

@@ -31,7 +31,8 @@ import { ElementLabels } from '../ids/ElementLabels.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
+import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
+import { AssociationEditor } from './AssociationEditor.js';
 import { bindRefAs, ensureRootElement } from './events.js';
 import { createSequenceFlow, flowChange, warnEventGatewayFlow } from './flows.js';
 import type { ConnectOp } from './types.js';
@@ -276,10 +277,10 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
       createMessageFlow(doc, source, target, op, cs);
       break;
     case 'association':
-      createAssociation(doc, source, target, op.id ? { id: op.id } : {}, cs);
+      new AssociationEditor(doc).createAssociation(source, target, op.id ? { id: op.id } : {}, cs);
       break;
     case 'dataAssociation':
-      createDataAssociation(doc, source, target, op.id ? { id: op.id } : {}, cs);
+      new AssociationEditor(doc).createDataAssociation(source, target, op.id ? { id: op.id } : {}, cs);
       break;
     default:
       break;

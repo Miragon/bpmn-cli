@@ -1,8 +1,8 @@
 import { TRIGGER_TYPES } from '../model/utils/kinds.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { decisionLinkOf } from '../ops/decision.js';
+import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
 import { describeTrigger } from '../ops/events.js';
-import { listAllExtensions, type ExtensionInfo } from '../ops/ext.js';
+import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
 import { definitionsOf, nestedEntries, vendorAttributes } from '../ops/set.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import type { Implementation } from './context.js';
@@ -71,7 +71,7 @@ export class ElementFacts {
     const called = peek<string>(el, 'calledElement');
     if (called) props['calledElement'] = called;
     // the decision link of a business rule task, whatever the spelling (no engine: calledDecision, C7: camunda:decisionRef, C8: zeebe:calledDecision)
-    const decision = decisionLinkOf(el);
+    const decision = new DecisionLinkReader().linkOf(el);
     if (decision) props['calledDecision'] = decision.value;
     if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
     const messageRef = peek<El>(el, 'messageRef');
@@ -134,7 +134,7 @@ export class ElementFacts {
   /** Vendor values and a compact summary of the extension elements of the element (and of its nested elements). */
   implementation(): Implementation | undefined {
     const attrs = this.vendorValues();
-    const all = listAllExtensions(this.el);
+    const all = new ExtensionLister().listAll(this.el);
     const groups = new Map<string, ExtensionInfo[]>();
     for (const e of all) {
       const key = `${e.slot ? `${e.slot}.` : ''}${e.type}`;

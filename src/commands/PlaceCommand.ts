@@ -1,5 +1,5 @@
 import { Option, type Command as CommandType } from 'commander';
-import { BOUNDARY_SIDE_VALUES } from '../ops/batch.js';
+import { BOUNDARY_SIDE_VALUES } from '../ops/utils/op-fields.js';
 import type { PlaceOp } from '../ops/types.js';
 import { usageError } from '../shared/utils/errors.js';
 import type { RawOpts } from './CliCommand.js';

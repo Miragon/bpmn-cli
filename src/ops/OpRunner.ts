@@ -8,17 +8,19 @@ import { type Warning } from '../shared/CliError.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { addElement } from './add.js';
-import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
+import { AliasTable } from './AliasTable.js';
+import { OpAliases } from './OpAliases.js';
 import { connectElements } from './connect.js';
-import { extensionOp } from './ext.js';
+import { ExtensionEditor } from './ExtensionEditor.js';
 import { reportStaleFlows } from './flows.js';
 import { moveElements } from './move.js';
-import { orderFlows } from './order.js';
+import { Reordering } from './Reordering.js';
 import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
 import { reportStaleIdPrefixes, setProperties } from './set.js';
 import { splitFlow } from './split.js';
-import { isFormatOp, type Op } from './types.js';
+import { isFormatOp } from './utils/op-names.js';
+import type { Op } from './types.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -54,7 +56,7 @@ export class OpRunner {
   }
 
   /**
-   * Runs a batch in order. Batch aliases (ops/aliases.ts): an op's aliases
+   * Runs a batch in order. Batch aliases (ops/OpAliases.ts): an op's aliases
    * are replaced by the current ids of their elements before it runs, the
    * aliases it defines are bound afterwards; the format ops (which run after
    * the layout) get the ids at the end of the batch. With flow ids kept
@@ -83,12 +85,12 @@ export class OpRunner {
           this.atOp(i, () => {
             if (isFormatOp(op)) {
               // checked now (an alias defined later is an error), resolved at the end
-              for (const { key, alias } of referencesOf(op)) table.idOf(alias, i, op, key);
+              for (const { key, alias } of new OpAliases(op).references()) table.idOf(alias, i, op, key);
               resolved.push(op);
               deferred.push(i);
               return;
             }
-            const ready = resolveOp(op, table, i);
+            const ready = new OpAliases(op).resolve(table, i);
             resolved.push(ready);
             const cs = this.step(ready);
             all.merge(cs);
@@ -107,10 +109,10 @@ export class OpRunner {
         );
         for (const i of deferred) {
           this.atOp(i, () => {
-            const ready = (resolved[i] = resolveOp(ops[i]!, table, i));
+            const ready = (resolved[i] = new OpAliases(ops[i]!).resolve(table, i));
             // an id an op of the batch renamed or removed is reported now, while E_NOT_FOUND can say what happened to it
             // (the format phase runs after the layout, outside the batch); its kind is checked there
-            for (const id of referencedIds(ready)) if (!this.doc.get(id)) this.doc.require(id);
+            for (const id of new OpAliases(ready).referencedIds()) if (!this.doc.get(id)) this.doc.require(id);
           });
         }
       } finally {
@@ -162,9 +164,9 @@ export class OpRunner {
       case 'move':
         return moveElements(doc, op);
       case 'order':
-        return orderFlows(doc, op);
+        return new Reordering(doc, op).apply();
       case 'ext':
-        return extensionOp(doc, op);
+        return new ExtensionEditor(doc).apply(op);
       case 'split':
         return splitFlow(doc, op);
       case 'place':

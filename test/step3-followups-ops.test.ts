@@ -21,10 +21,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { parseOps } from '../src/ops/batch.js';
+import { parseOps } from '../src/index.js';
 import { CliError } from '../src/shared/CliError.js';
 import { Doc } from '../src/model/Doc.js';
-import { parseSpaceAmount } from '../src/ops/types.js';
+import { parseSpaceAmount } from '../src/ops/utils/space-amount.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const BIN = join(ROOT, 'dist', 'cli.js');

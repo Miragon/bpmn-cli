@@ -1517,7 +1517,7 @@ export class C7Profile extends EngineProfile {
         // a decision link without prefix (bpmn-cli's calledDecision for a model without an engine, or calledElement read as one): `set calledDecision=` writes the engines' spelling
         // (not next to another implementation: class, delegateExpression, expression or type=external stay, the attribute just goes)
         const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && this.kit.camunda.reads(this.ns.uriOfName(a)));
-        const link = el === owner && !!id && !implemented && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? this.kit.decisionLinkOf(el, this.doc) : undefined;
+        const link = el === owner && !!id && !implemented && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
         const hint = link
           ? `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.p}:decisionRef; the unprefixed ${k} is removed).`
           : fits

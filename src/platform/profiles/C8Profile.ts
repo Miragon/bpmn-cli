@@ -1147,7 +1147,7 @@ export class C8Profile extends EngineProfile {
       const addr = di ? undefined : el === owner ? (id ? { id, prefix: '' } : undefined) : owner ? this.addressOf(el, owner) : undefined;
       for (const k of bare) {
         const where = el === owner ? this.describe(el) : `${el.$type}${id ? ` in ${id}` : ''}`;
-        const link = el === owner && !!id && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? this.kit.decisionLinkOf(el, this.doc) : undefined;
+        const link = el === owner && !!id && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
         const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
         const hint = link
           ? `Write the decision link the Camunda 8 way: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.z('calledDecision')}; the unprefixed ${k} is removed; give it a resultVariable).`

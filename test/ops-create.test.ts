@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { addElement } from '../src/ops/add.js';
-import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
+import { AssociationEditor, PLACEHOLDER_PROPERTY } from '../src/ops/AssociationEditor.js';
 import { connectElements } from '../src/ops/connect.js';
-import { assignLane, laneOf } from '../src/ops/containers.js';
+import { LaneEditor } from '../src/ops/LaneEditor.js';
+import { laneOf } from '../src/ops/utils/lanes.js';
 import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events.js';
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
-import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from '../src/ops/utils/op-fields.js';
+import { parseOps } from '../src/index.js';
 import type { CliError } from '../src/shared/CliError.js';
 import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
@@ -541,7 +543,7 @@ describe('lanes', () => {
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('Lane_Outbound');
     expect(ids(doc.allLanes(doc.require('Process_1')))).toEqual(['Lane_Sales', 'Lane_Inbound', 'Lane_Outbound', 'Lane_Backoffice']);
     // parent lanes with children cannot take members directly
-    expect(codeOf(() => assignLane(doc, doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
+    expect(codeOf(() => new LaneEditor(doc).assign(doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
     // nodes added after a member inherit the nested lane
     add(doc, { kind: 'task', name: 'Ship', after: 'Task_A' });
     expect(laneOf(doc, doc.require('Task_Ship'))?.get('id')).toBe('Lane_Outbound');
@@ -549,14 +551,14 @@ describe('lanes', () => {
     expect(xml).toMatch(/<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:childLaneSet id="LaneSet_Sales">\s*<bpmn:lane id="Lane_Inbound" name="Inbound">/);
   });
 
-  it('assignLane moves nodes with their boundary events and rejects sub-process children', async () => {
+  it('LaneEditor.assign moves nodes with their boundary events and rejects sub-process children', async () => {
     const doc = await docFromXml(WITH_LANES);
     add(doc, { kind: 'boundaryEvent:timer', name: 'BE', on: 'Task_A', timer: 'PT1H' });
     const cs = new ChangeSet();
-    assignLane(doc, doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
+    new LaneEditor(doc).assign(doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
     expect(ids(many(doc.require('Lane_Backoffice'), 'flowNodeRef'))).toEqual(['End', 'Task_A', 'Event_BE']);
     expect(ids(many(doc.require('Lane_Sales'), 'flowNodeRef'))).toEqual(['Start']);
-    assignLane(doc, doc.require('Task_A'), undefined, cs);
+    new LaneEditor(doc).assign(doc.require('Task_A'), undefined, cs);
     expect(doc.lanesOf(doc.require('Task_A'))).toHaveLength(0);
     expect(doc.lanesOf(doc.require('Event_BE'))).toHaveLength(0);
     expect(cs.changed.some((c) => c.id === 'Task_A' && c.detail === 'removed from lanes')).toBe(true);
@@ -612,7 +614,7 @@ describe('data objects, stores and annotations', () => {
     expect(xml).toMatch(new RegExp(`<bpmn:dataOutputAssociation id="${outId}">\\s*<bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>`));
 
     // removal cleans the placeholder property
-    removeDataAssociation(doc, doc.require(inId));
+    new AssociationEditor(doc).removeDataAssociation(doc.require(inId));
     expect(many(task, 'properties')).toHaveLength(0);
     expect(many(task, 'dataInputAssociations')).toHaveLength(0);
     expect(doc.has(inId)).toBe(false);
@@ -679,9 +681,9 @@ describe('data objects, stores and annotations', () => {
     const doc = await linearDoc();
     add(doc, { kind: 'dataObject', name: 'D' });
     const cs = new ChangeSet();
-    expect(codeOf(() => createDataAssociation(doc, doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
-    expect(codeOf(() => createDataAssociation(doc, doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
-    expect(codeOf(() => createDataAssociation(doc, doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
     await roundTrip(doc);
   });
 });
@@ -894,7 +896,7 @@ describe('split', () => {
     const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
     expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
     expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
-    // no TypeError: the batch aliases read only arrays of objects (ops/aliases.ts), the split checks the shape
+    // no TypeError: the batch aliases read only arrays of objects (ops/OpAliases.ts), the split checks the shape
     expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
     expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
     expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);
