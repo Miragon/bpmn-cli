@@ -2,11 +2,12 @@ import { basename } from 'node:path';
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { decodeXmlBytes, readXml } from '../node/files.js';
 import { ImageWriter } from '../node/ImageWriter.js';
+import { ViewRequest } from '../query/ViewRequest.js';
 import { RENDER_MAX_SIZE, type RenderOptions } from '../render/index.js';
 import { RenderReport } from '../report/RenderReport.js';
 import { usageError } from '../shared/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
-import { depthArg, RENDER_FORMATS, renderFormat, splitList } from './utils/flags.js';
+import { assertPathFlags, depthArg, RENDER_FORMATS, renderFormat, splitList } from './utils/flags.js';
 
 export class RenderCommand extends CliCommand {
   register(program: CommandType): void {
@@ -40,11 +41,10 @@ export class RenderCommand extends CliCommand {
     }
     if (out === '-' && o['tiles']) throw usageError('--tiles writes several images; they do not go to stdout', { hint: 'Pass -o <file.png> (the tiles become <file>-1.png, <file>-2.png, ...).' });
     const around = o['around'] as string | undefined;
-    if (around === undefined && (o['depth'] !== undefined || o['inner'])) throw usageError(`${o['depth'] !== undefined ? '--depth' : '--inner'} goes only with --around <id>`, { hint: 'Use `bpmn render <file> --around <id> --depth <n>`.' });
+    ViewRequest.assertAroundFlags(around, o['depth'] !== undefined ? ['--depth'] : o['inner'] ? ['--inner'] : [], 'render');
     const path = o['path'] as string[] | undefined;
-    if (path && path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${path.length}`, { hint: 'Put element ids before --path, or end the list with --: `bpmn render f.bpmn --path Event_Start Event_Done -o path.png`.' });
     const via = o['via'] as string[] | undefined;
-    if (via && !path) throw usageError('--via needs --path', { hint: 'Example: --path Event_Start Event_Done --via Flow_Yes.' });
+    assertPathFlags(path, via, { path: 'Put element ids before --path, or end the list with --: `bpmn render f.bpmn --path Event_Start Event_Done -o path.png`.', via: 'Example: --path Event_Start Event_Done --via Flow_Yes.' });
     const highlight = o['highlight'] as string[] | undefined;
     const opts: RenderOptions = {
       maxSize: (o['maxSize'] as number | undefined) ?? RENDER_MAX_SIZE,

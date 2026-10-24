@@ -1,6 +1,7 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { assertProcessId, assertTarget, Doc } from '../model/document.js';
-import { projectIdConventions } from '../node/bpmnlint.js';
+import { newProcessChange } from '../model/utils/new-process.js';
+import { ConventionsLookup } from '../node/ConventionsLookup.js';
 import { assertNewFile, mutateDocToFile } from '../node/files.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
@@ -34,7 +35,7 @@ export class NewCommand extends MutationCommand {
       if (!stdout) await assertNewFile(opts.out ?? file, opts);
       // the id conventions of the .bpmnlintrc that applies to the file written (the process id only where they name bpmn:Process)
       const target = opts.out && opts.out !== '-' ? opts.out : file === '-' ? undefined : file;
-      const conventions = (await projectIdConventions(target, opts))?.conventions;
+      const conventions = (await ConventionsLookup.of(target, opts)).conventions;
       const doc = Doc.create(
         {
           processName: o['name'] as string | undefined,
@@ -46,7 +47,7 @@ export class NewCommand extends MutationCommand {
         file === '-' ? undefined : file,
       );
       const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
-      result.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: o['name'] as string | undefined });
+      result.changes.create(newProcessChange(doc, o['name'] as string | undefined));
       await this.emit(result, opts, stdout);
     }, opts.json);
   }

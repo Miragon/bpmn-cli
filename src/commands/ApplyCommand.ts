@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import type { Command as CommandType } from 'commander';
 import { parseOps } from '../ops/batch.js';
 import type { Op } from '../ops/types.js';
-import { CliError } from '../shared/CliError.js';
 import { ioError, usageError } from '../shared/utils/errors.js';
+import { parseOpsJson } from '../shared/utils/ops-json.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 
@@ -15,14 +15,7 @@ export class ApplyCommand extends MutationCommand {
   private async run(file: string, opsFile: string | undefined, o: RawOpts): Promise<void> {
     const opts = this.mutationOptions(o);
     await this.cli.guarded(async () => {
-      const text = await this.readOpsText(file, opsFile);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch (err) {
-        throw new CliError('E_USAGE', `Ops are not valid JSON: ${(err as Error).message}`, 'usage');
-      }
-      const ops: Op[] = parseOps(parsed);
+      const ops: Op[] = parseOps(parseOpsJson(await this.readOpsText(file, opsFile)));
       await this.mutate(file, ops, opts);
     }, opts.json);
   }

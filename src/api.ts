@@ -40,13 +40,12 @@
 import { parseOps } from './ops/batch.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
-import { layoutView, type LayoutView } from './query/layout-view.js';
-import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
+import type { LayoutView } from './query/layout-view.js';
+import type { AroundView, ElementContext } from './query/context.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
 import { Doc, type NewDocOptions } from './model/document.js';
-import { CliError } from './shared/CliError.js';
-import { usageError } from './shared/utils/errors.js';
+import { parseOpsJson } from './shared/utils/ops-json.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
@@ -56,7 +55,12 @@ import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, ty
 import type { PlatformChoice } from './platform/profiles/profile.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
-import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
+import { findElements, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
+import { ViewRequest, type ShownView, type ViewOptions } from './query/ViewRequest.js';
+import { newProcessChange } from './model/utils/new-process.js';
+import { metricsJson } from './report/utils/metrics-json.js';
+
+export type { ShownView, ViewOptions } from './query/ViewRequest.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
 export interface EditOptions {
@@ -108,14 +112,7 @@ function toEditResult(input: string | undefined, mutation: MutationResult): Edit
 
 /** The ops of applyToXml: an array, `{ ops: [...] }` or the JSON text of either, checked like `bpmn apply`. */
 function readOps(ops: unknown): Op[] {
-  if (typeof ops !== 'string') return parseOps(ops);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(ops);
-  } catch (err) {
-    throw new CliError('E_USAGE', `Ops are not valid JSON: ${(err as Error).message}`, 'usage');
-  }
-  return parseOps(parsed);
+  return parseOps(typeof ops === 'string' ? parseOpsJson(ops) : ops);
 }
 
 /** Parses a document for a write: E_PARSE, and E_IMPORT_LOSSY unless force (like the CLI's loadDoc). */
@@ -140,7 +137,7 @@ export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = 
 export async function newXml(opts: NewDocOptions & EditOptions = {}): Promise<EditResult> {
   const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(opts.conventions ? { conventions: opts.conventions } : {}) });
   const mutation = await mutateDoc(doc, [], opts);
-  mutation.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: opts.processName });
+  mutation.changes.create(newProcessChange(doc, opts.processName));
   return toEditResult(undefined, mutation);
 }
 
@@ -178,60 +175,9 @@ export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): P
   return validationReport(await checkDoc(await Doc.fromXml(xml, opts.file), opts));
 }
 
-/** What viewXml / showXml show: the model (default, optionally one scope), one element (in its context), the neighbourhood of one, or the drawing. */
-export interface ViewOptions {
-  /** one element in detail (`bpmn show <file> <id>`) */
-  id?: string;
-  /** with `id`: the element in its context instead of its details (`--context`) */
-  context?: boolean;
-  /** only the neighbourhood of this element (`--around <id>`) */
-  around?: string;
-  /** with `around`: flow steps from the element (`--depth`, default 2) */
-  depth?: number;
-  /** with `around`: also enter sub-processes from outside (`--inner`) */
-  inner?: boolean;
-  /** only this process / participant / sub-process (`--scope`) */
-  scope?: string;
-  /** the drawing instead of the model: rows, colours, label sides, layout problems (`--layout`) */
-  layout?: boolean;
-}
-
-/** What `show` shows, by kind (viewDoc). */
-export type ShownView =
-  | { kind: 'model'; view: ModelView }
-  | { kind: 'detail'; view: ElementDetail }
-  | { kind: 'context'; view: ElementContext }
-  | { kind: 'around'; view: AroundView }
-  | { kind: 'layout'; view: LayoutView };
-
-/** E_USAGE for show options that do not go together (the CLI's flags and the API's options alike). */
-function assertViewOptions(opts: ViewOptions): void {
-  const used = (keys: Array<keyof ViewOptions>) => keys.filter((k) => opts[k] !== undefined && opts[k] !== false);
-  const flag = (k: string) => (k === 'id' ? 'the element id' : `--${k}`);
-  if (opts.layout) {
-    const extra = used(['id', 'scope', 'around', 'context']);
-    if (extra.length) throw usageError(`--layout shows the whole drawing; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
-  }
-  if (opts.around !== undefined) {
-    const extra = used(['id', 'scope', 'context']);
-    if (extra.length) throw usageError(`--around <id> names the element itself; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --around <id> [--depth n]`, or `bpmn show <file> <id> --context` for one element in its context.' });
-  } else {
-    const extra = used(['depth', 'inner']);
-    if (extra.length) throw usageError(`${extra.map(flag).join(' and ')} ${extra.length > 1 ? 'go' : 'goes'} only with --around <id>`, { hint: 'Use `bpmn show <file> --around <id> --depth <n>`.' });
-  }
-  if (opts.context && opts.id === undefined) throw usageError('--context needs an element id', { hint: 'Use `bpmn show <file> <id> --context`.' });
-  if (opts.context && opts.scope !== undefined) throw usageError('--context shows one element; drop --scope', { hint: 'Use `bpmn show <file> <id> --context`.' });
-}
-
 /** `bpmn show` on a parsed document: the view the options ask for (see ViewOptions). */
 export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
-  assertViewOptions(opts);
-  if (opts.layout) return { kind: 'layout', view: layoutView(doc.definitions) };
-  if (opts.around !== undefined) return { kind: 'around', view: aroundView(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }) };
-  if (opts.id !== undefined && opts.context) return { kind: 'context', view: elementContext(doc, opts.id) };
-  if (opts.id !== undefined) return { kind: 'detail', view: elementDetail(doc, doc.require(opts.id)) };
-  const view = buildView(doc);
-  return { kind: 'model', view: opts.scope ? scopeView(doc, view, opts.scope) : view };
+  return new ViewRequest(opts).of(doc);
 }
 
 /** The text of a view, as `bpmn show` prints it (without the final newline). */
@@ -248,14 +194,24 @@ export function viewXml(xml: string, opts: ViewOptions & { id: string; context: 
 export function viewXml(xml: string, opts: ViewOptions & { id: string }): Promise<ElementDetail>;
 export function viewXml(xml: string, opts?: ViewOptions): Promise<ModelView>;
 export async function viewXml(xml: string, opts: ViewOptions = {}): Promise<ModelView | ElementDetail | ElementContext | AroundView | LayoutView> {
-  assertViewOptions(opts);
-  return viewDoc(await Doc.fromXml(xml), opts).view;
+  const request = new ViewRequest(opts);
+  return request.of(await Doc.fromXml(xml)).view;
 }
 
 /** `bpmn show`: the same as text, exactly as the CLI prints it (without the final newline). */
 export async function showXml(xml: string, opts: ViewOptions = {}): Promise<string> {
-  assertViewOptions(opts);
-  return renderShown(viewDoc(await Doc.fromXml(xml), opts));
+  const request = new ViewRequest(opts);
+  return renderShown(request.of(await Doc.fromXml(xml)));
+}
+
+/** Options of conventionsXml; ConventionsLookup (src/node/ConventionsLookup.ts) gives them from the project's .bpmnlintrc. */
+export interface ConventionsXmlOptions {
+  conventions?: IdConventions;
+  file?: string;
+  severity?: BpmnlintSeverity;
+  notes?: ValidatorFinding[];
+  where?: string;
+  undeclared?: Undeclared;
 }
 
 /**
@@ -265,18 +221,14 @@ export async function showXml(xml: string, opts: ViewOptions = {}): Promise<stri
  * configuration give them, `where` and `undeclared` where the configuration
  * is and why it declares none.
  */
-export async function conventionsXml(
-  xml: string | undefined,
-  opts: { conventions?: IdConventions; file?: string; severity?: BpmnlintSeverity; notes?: ValidatorFinding[]; where?: string; undeclared?: Undeclared } = {},
-): Promise<ConventionsView> {
+export async function conventionsXml(xml: string | undefined, opts: ConventionsXmlOptions = {}): Promise<ConventionsView> {
   const { conventions, ...rest } = opts;
   return conventionsView(xml === undefined ? undefined : await Doc.fromXml(xml, opts.file), conventions, rest);
 }
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */
 export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'score' | 'counts' | 'problems'>> {
-  const m = layoutProblems((await Doc.fromXml(xml)).definitions);
-  return { score: m.score, counts: m.counts, problems: m.problems };
+  return metricsJson(layoutProblems((await Doc.fromXml(xml)).definitions));
 }
 
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (case-insensitive), optionally of one kind. */

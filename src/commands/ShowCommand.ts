@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
 import type { Command as CommandType } from 'commander';
-import { renderShown, viewDoc, type ViewOptions } from '../api.js';
-import { conventionsView, renderConventions, type Undeclared } from '../ids/conventions.js';
-import { projectIdConventions } from '../node/bpmnlint.js';
+import { renderShown } from '../api.js';
+import { conventionsView, renderConventions } from '../ids/conventions.js';
+import { ConventionsLookup } from '../node/ConventionsLookup.js';
+import { ViewRequest, type ViewOptions } from '../query/ViewRequest.js';
 import { usageError } from '../shared/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { depthArg } from './utils/flags.js';
@@ -29,16 +30,9 @@ export class ShowCommand extends CliCommand {
     if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
     // a file that does not exist yet: the conventions a new model there gets (before `bpmn new`)
     const doc = file === '-' || existsSync(file) ? await this.cli.readDocArg(file) : undefined;
-    const found = await projectIdConventions(file === '-' ? undefined : file, this.lintOptions(o));
-    // why none are declared, where none are
-    const undeclared: Undeclared = o['lintConfig'] === false ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : !found.setting || found.setting.severity === 'off' ? 'off' : 'no prefixes';
-    const view = conventionsView(doc, found?.conventions, {
-      ...(file !== '-' ? { file } : {}),
-      ...(found?.setting ? { severity: found.setting.severity } : {}),
-      notes: found?.notes ?? [],
-      ...(found ? { where: found.where } : {}),
-      undeclared,
-    });
+    const lookup = await ConventionsLookup.of(file === '-' ? undefined : file, this.lintOptions(o));
+    const { conventions, ...rest } = lookup.options(file === '-' ? undefined : file);
+    const view = conventionsView(doc, conventions, rest);
     if (o['json']) this.cli.printJson(view, !!o['pretty']);
     else this.cli.print(renderConventions(view));
   }
@@ -57,7 +51,8 @@ export class ShowCommand extends CliCommand {
       ...(o['scope'] !== undefined ? { scope: String(o['scope']) } : {}),
       ...(o['layout'] ? { layout: true } : {}),
     };
-    const shown = viewDoc(await this.cli.readDocArg(file), opts);
+    const doc = await this.cli.readDocArg(file);
+    const shown = new ViewRequest(opts).of(doc);
     if (o['json']) this.cli.printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!o['pretty']);
     else this.cli.print(renderShown(shown));
   }
