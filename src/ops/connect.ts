@@ -26,10 +26,10 @@
  *    default together with condition is E_USAGE (a default flow has none)
  */
 import type { Doc } from '../model/document.js';
-import { modelError, usageError } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
 import { flowRequest } from '../ids/style.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
-import { addTo, is, many, type El } from '../model/moddle.js';
+import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { bindRefAs, ensureRootElement } from './events.js';
@@ -38,9 +38,6 @@ import type { ConnectOp } from './types.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 function label(el: El): string {
   return `${idOf(el)} (${kindLabel(el)})`;

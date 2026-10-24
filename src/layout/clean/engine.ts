@@ -34,8 +34,8 @@
  *    (declutterLabels)
  */
 import { titleBox } from '../../diagram/text.js';
-import { addTo, is, many, type El, type Model } from '../../model/moddle.js';
-import { layoutRoot } from '../../model/moddle.js';
+import { addTo, is, many, type El, type Model, idOf } from '../../model/utils/moddle.js';
+import { layoutRoot } from '../../model/utils/moddle.js';
 import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
@@ -59,7 +59,6 @@ interface PoolLayout {
   di?: El[];
 }
 
-const idOf = (el: El): string => el.get<string>('id');
 
 /* ------------------------------------------------------------------ */
 /* lanes                                                                */

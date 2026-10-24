@@ -17,8 +17,8 @@
  *    the lane of the row the layout would draw a new node on.
  */
 import type { Doc } from '../model/document.js';
-import type { Warning } from '../shared/errors.js';
-import { is, type El } from '../model/moddle.js';
+import type { Warning } from '../shared/CliError.js';
+import { is, type El, idOf } from '../model/utils/moddle.js';
 import { laneOf } from './containers.js';
 import { placementMode } from './flows.js';
 import type { Placement } from './types.js';
@@ -29,7 +29,6 @@ export interface InheritedLane {
   cross?: { source: El; target: El; from?: El; to?: El; branching: boolean };
 }
 
-const idOf = (el: El): string => el.get<string>('id');
 
 /** The node whose lane a placed node inherits (host / anchor / flow source). */
 function laneAnchor(doc: Doc, p: Placement): El | undefined {

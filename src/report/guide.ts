@@ -8,7 +8,8 @@
  * the error catalogue, exit codes, trigger options, placement rules and the
  * command reference are written by hand.
  */
-import { EXIT_CODES, usageError } from '../shared/errors.js';
+import { EXIT_CODES } from '../shared/CliError.js';
+import { usageError } from '../shared/utils/errors.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/kinds.js';
 import { Doc } from '../model/document.js';
 import { SINGLE_TOP } from '../ops/ext.js';

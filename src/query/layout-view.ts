@@ -31,7 +31,7 @@
  *   - metrics: layoutProblems(defs) (counts, score, problems with ids).
  *  Read-only.
  */
-import { is, type El } from '../model/moddle.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { cx, cy, median, right } from '../diagram/geom.js';
 import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type LabelSide } from '../diagram/labels.js';
 import { layoutProblems, type LayoutMetrics } from '../diagram/metrics.js';

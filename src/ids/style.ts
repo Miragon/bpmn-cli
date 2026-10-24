@@ -188,7 +188,7 @@
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, SUFFIX_WORD, withLetter, withSuffix, type IdRegistry } from './slugs.js';
 import type { IdConventions } from './conventions.js';
 import { kindByName, kindOf, KINDS, triggerOf, type KindDef } from '../model/kinds.js';
-import { is, isBpmnElement, walk, type El } from '../model/moddle.js';
+import { is, isBpmnElement, walk, type El } from '../model/utils/moddle.js';
 
 /** The case of the bodies of new ids. */
 export type Body = 'pascal' | 'camel' | 'snake' | 'pascalSnake';

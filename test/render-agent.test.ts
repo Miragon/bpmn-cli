@@ -18,7 +18,7 @@ import { readPlanes, type Plane } from '../src/diagram/plane.js';
 import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/render/index.js';
 import { pathOf } from '../src/query/select.js';
 import { CliError, parseOps, mutateDoc } from '../src/index.js';
-import { is } from '../src/model/moddle.js';
+import { is } from '../src/model/utils/moddle.js';
 import { renderPng } from '../src/node/render.js';
 import { mutationReport } from '../src/report/command-report.js';
 // @ts-expect-error plain ESM tooling without type declarations

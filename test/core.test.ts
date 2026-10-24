@@ -5,7 +5,7 @@ import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids
 import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
-import { many } from '../src/model/moddle.js';
+import { many } from '../src/model/utils/moddle.js';
 import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline/index.js';

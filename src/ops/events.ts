@@ -27,10 +27,11 @@
  *  - triggerDetails(): the same as structured data for --json views.
  */
 import type { Doc } from '../model/document.js';
-import { modelError, usageError, type Warning } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
 import { typeRequest } from '../ids/style.js';
 import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
-import { addTo, is, many, walk, type El } from '../model/moddle.js';
+import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
 import { isC7Uri } from '../platform/descriptor.js';
 import type { ChangeSet } from '../model/change-set.js';
 import { definitionIdDefault } from '../platform/defaults.js';
@@ -63,9 +64,6 @@ const INTERRUPTING_ONLY: Trigger[] = ['error', 'cancel', 'compensate'];
 /** Start event triggers that are only valid inside an event sub-process. */
 const EVENT_SUBPROCESS_ONLY: Trigger[] = ['error', 'escalation', 'compensate'];
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 /* ------------------------------------------------------------------ */
 /* root elements (Message / Error / Signal / Escalation)                */

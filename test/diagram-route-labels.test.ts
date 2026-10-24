@@ -11,7 +11,7 @@ import { crossings } from '../src/diagram/router.js';
 import { clearTitles, labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
 import { renderLayout } from '../src/report/view-text.js';
 import { Doc } from '../src/model/document.js';
-import type { El } from '../src/model/moddle.js';
+import type { El } from '../src/model/utils/moddle.js';
 
 /** A real element for `type` with `name` (labels read the name, routing the type). */
 const els = Doc.create({ processId: 'P' });

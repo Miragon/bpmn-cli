@@ -99,8 +99,9 @@
  *  one the hint names the shapes to move first.
  */
 import type { Doc } from '../model/document.js';
-import { CliError, modelError, usageError, type ErrorDetails } from '../shared/errors.js';
-import { is, type El } from '../model/moddle.js';
+import { CliError, type ErrorDetails } from '../shared/CliError.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
 import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
@@ -116,6 +117,7 @@ import { fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from '../d
 import { selection } from '../query/select.js';
 import { titleBox } from '../diagram/text.js';
 import { setSwatch, writePlanes } from '../diagram/write.js';
+import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
 
 export interface FormatResult {
   op: FormatOp['op'] | 'order';
@@ -522,32 +524,6 @@ function fitLabel(plane: Plane, s: DShape, keep: string[]): void {
   makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : pool ? { within: copyBox(pool.bounds) } : {}) });
 }
 
-/** Everything a plane draws (bounds, labels, waypoints), to try something and undo it. */
-interface PlaneState {
-  shapes: Map<DShape, { bounds: Box; label?: Box }>;
-  edges: Map<DEdge, { points: Point[]; label?: Box }>;
-}
-
-function saveState(plane: Plane): PlaneState {
-  const st: PlaneState = { shapes: new Map(), edges: new Map() };
-  for (const s of plane.shapes.values()) st.shapes.set(s, { bounds: copyBox(s.bounds), ...(s.label ? { label: copyBox(s.label) } : {}) });
-  for (const e of plane.edges.values()) st.edges.set(e, { points: copyPoints(e.points), ...(e.label ? { label: copyBox(e.label) } : {}) });
-  return st;
-}
-
-function restoreState(st: PlaneState): void {
-  for (const [s, v] of st.shapes) {
-    s.bounds = copyBox(v.bounds);
-    if (v.label) s.label = copyBox(v.label);
-    else delete s.label;
-  }
-  for (const [e, v] of st.edges) {
-    e.points = copyPoints(v.points);
-    if (v.label) e.label = copyBox(v.label);
-    else delete e.label;
-  }
-}
-
 /**
  * Shapes moved on request stay; the others give way (diagram/separate.ts). First the
  * references stay too; when the request then does not hold (`holds`, e.g.
@@ -621,10 +597,10 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
     const stray = strayed();
     return { ok: !sw.length && !gone.length && !collided.length && !stray.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: stray };
   };
-  const start = saveState(plane);
+  const start = new PlaneCheckpoint(plane);
   let r = attempt(refIds);
   if (!r.ok && refIds.length) {
-    restoreState(start);
+    start.restore();
     r = attempt([]);
   }
   if (!r.ok) {
@@ -1050,11 +1026,11 @@ function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProb
   let problems = start.problems;
   const rejected: LayoutProblem[] = [];
   const attempt: Attempt = (change, force = []) => {
-    const st = saveState(plane);
+    const st = new PlaneCheckpoint(plane);
     const before = new Map([...plane.edges.values()].map((e) => [e, edgeBefore(plane, e)] as const));
     const r = change();
     if (!r || (!r.moved.size && !r.resized.size)) {
-      restoreState(st);
+      st.restore();
       return false;
     }
     const edges = [...plane.edges.values()].sort((p, q) => routeRank(plane, p) - routeRank(plane, q));
@@ -1069,7 +1045,7 @@ function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProb
     });
     if (added.length || m.score > score) {
       rejected.push(...(added.length ? added : diffProblems(problems, m.problems).added));
-      restoreState(st);
+      st.restore();
       return false;
     }
     score = m.score;
@@ -1444,7 +1420,7 @@ const spaceCommand = (c: SpaceOp): string => `bpmn space <file> ${c.after ? `--a
  * Without one, the hint names the shapes in the way, to be moved first.
  */
 function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[], asFile: boolean): string[] {
-  const states = ctx.planes.map(saveState);
+  const states = ctx.planes.map((p) => new PlaneCheckpoint(p));
   try {
     return run();
   } catch (err) {
@@ -1452,7 +1428,7 @@ function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[], asFi
     let found: SpaceOp | undefined;
     let best = Infinity;
     for (const c of roomCandidates(ctx, op)) {
-      states.forEach(restoreState);
+      states.forEach((st) => st.restore());
       try {
         spaceOp(ctx, c, snapshot(ctx.planes), []);
         if (op.op === 'place') placeOp(ctx, op, snapshot(ctx.planes), []);
@@ -1466,7 +1442,7 @@ function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[], asFi
         found = c;
       }
     }
-    states.forEach(restoreState);
+    states.forEach((st) => st.restore());
     const again = op.op === 'place' ? 'place' : 'align';
     if (found && asFile) {
       err.details['command'] = spaceCommand(found);

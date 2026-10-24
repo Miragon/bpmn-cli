@@ -21,7 +21,7 @@
  * A document created by the CLI (`new`) has no snapshot: every entry the ops
  * maintain is written, like the Modeler does.
  */
-import { addTo, indexById, is, parseXml, serialize, walk, type El, type Model } from './moddle.js';
+import { addTo, indexById, is, parseXml, serialize, walk, type El, type Model } from './utils/moddle.js';
 
 type Direction = 'incoming' | 'outgoing';
 

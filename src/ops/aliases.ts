@@ -38,9 +38,10 @@
  *    objects, so a malformed one reaches splitFlow's own check (E_USAGE).
  */
 import type { Doc } from '../model/document.js';
-import { CliError, usageError } from '../shared/errors.js';
-import { editDistance, typoTolerance } from '../ids/slugs.js';
-import type { El } from '../model/moddle.js';
+import { CliError } from '../shared/CliError.js';
+import { usageError } from '../shared/utils/errors.js';
+import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
+import type { El } from '../model/utils/moddle.js';
 import type { Op } from './types.js';
 
 export const ALIAS = /^\$[A-Za-z_][A-Za-z0-9_-]*$/;

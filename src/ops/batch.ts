@@ -14,8 +14,9 @@
  * ops/aliases.ts) are checked before anything runs: defined once, used only
  * after the op that defines them.
  */
-import { usageError, type CliError } from '../shared/errors.js';
-import { editDistance } from '../ids/slugs.js';
+import { usageError } from '../shared/utils/errors.js';
+import { type CliError } from '../shared/CliError.js';
+import { closestKey, editDistance } from '../shared/utils/fuzzy.js';
 import { FLOW_NODE_FAMILIES, KindError, gatewayKindList, kindByName, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
 import { ALIAS, checkAliases } from './aliases.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './rules.js';
@@ -389,24 +390,6 @@ function describe(v: unknown): string {
   if (Array.isArray(v)) return 'an array';
   if (typeof v === 'object') return 'an object';
   return `${typeof v} ${JSON.stringify(v)}`;
-}
-
-/** kebab-case / snake_case / wrong-case spellings and small typos of an allowed key. */
-export function closestKey(key: string, allowed: readonly string[]): string | undefined {
-  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const n = norm(key);
-  const exact = allowed.find((k) => norm(k) === n) ?? allowed.find((k) => norm(k).startsWith(n) || n.startsWith(norm(k)));
-  if (exact || !n) return exact;
-  let best: string | undefined;
-  let bestD = Infinity;
-  for (const k of allowed) {
-    const d = editDistance(n, norm(k));
-    if (d < bestD) {
-      best = k;
-      bestD = d;
-    }
-  }
-  return bestD <= (n.length >= 5 ? 2 : 1) ? best : undefined;
 }
 
 function checkString(ctx: Ctx, key: string, spec: FieldSpec, value: unknown): string {

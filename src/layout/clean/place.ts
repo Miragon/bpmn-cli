@@ -62,13 +62,12 @@
  *    group): a group is drawn around its members again, so they stay
  *    together
  */
-import { layoutDebug, layoutDebugOn } from '../../shared/debug.js';
+import { LayoutDebug } from '../../shared/LayoutDebug.js';
 import { titleBox, titleDepth } from '../../diagram/text.js';
-import { is, many, type El } from '../../model/moddle.js';
+import { is, many, type El, idOf } from '../../model/utils/moddle.js';
 import { RISE_KEEP, XIndex, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments, segmentHitsBox } from './route.js';
 import { METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type LinkEnd, type Point, type ScopeLayout } from '../../diagram/types.js';
 
-const idOf = (el: El): string => el.get<string>('id');
 
 /* ------------------------------------------------------------------ */
 /* graph extraction                                                     */
@@ -364,7 +363,7 @@ function assignRows(layout: ScopeLayout, groups?: ReadonlyMap<string, readonly s
   const placed = new Set<GNode>();
   const branches: Branch[] = [];
   const debug = (msg: string): void => {
-    if (layoutDebugOn()) layoutDebug(`[rows] ${msg}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[rows] ${msg}`);
   };
   /** the placed branches of each row (a placed branch only moves down: the lowest row is the deepest one yet) */
   const rows = new Map<number, Branch[]>();
@@ -869,7 +868,7 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
     const before = routed ?? route();
     // an entry the routes draw over the top enters the node's top: the column below it is not taken for that one
     if (before.above.size && !takenColumns(layout, before.above).has(j)) {
-      if (layoutDebugOn()) layoutDebug(`[joins] ${j.id} stays: entered over the top`);
+      if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${j.id} stays: entered over the top`);
       routed = before;
       continue;
     }
@@ -917,7 +916,7 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
         }
         arrange(shifts);
       }
-      if (layoutDebugOn()) others = layout.nodes.filter((n) => n !== j && step(n)).map((n) => `${n.id} ${step(n)}`).join(', ');
+      if (LayoutDebug.on()) others = layout.nodes.filter((n) => n !== j && step(n)).map((n) => `${n.id} ${step(n)}`).join(', ');
       return [...shifts].some(([n, k]) => k !== alone.get(n));
     };
     const back = (): void => {
@@ -948,7 +947,7 @@ export function freeJoinColumns(layout: ScopeLayout, arrange: (shifts: ReadonlyM
         } else back();
       }
     }
-    if (layoutDebugOn()) layoutDebug(`[joins] ${j.id} ${keep ? `moves ${step(j)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${j.id} ${keep ? `moves ${step(j)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
     if (keep) {
       routed = after;
       taken = last;
@@ -1144,7 +1143,7 @@ export function liftChains(layout: ScopeLayout, arrange: () => void): void {
       return lift.chain.some((m) => m.box.x < x && x < m.box.x + m.box.width) && above([lane(t), t.row], to) && !above([lane(s), s.row], to);
     });
     if (bent) {
-      if (layoutDebugOn()) layoutDebug(`[lifts] ${n.id} stays: ${bent.id} would no longer rise straight`);
+      if (LayoutDebug.on()) LayoutDebug.log(`[lifts] ${n.id} stays: ${bent.id} would no longer rise straight`);
       continue;
     }
     const undo = keepArrangement(layout);
@@ -1162,7 +1161,7 @@ export function liftChains(layout: ScopeLayout, arrange: () => void): void {
       !after.sharing.has(lift.flow) &&
       [...before.rises].every((e) => after.rises.has(e) || after.straight.has(e)) &&
       [...before.straight].every((e) => after.straight.has(e) || moved.has(e.source) || moved.has(e.target));
-    if (layoutDebugOn()) layoutDebug(`[lifts] ${n.id} ${keep ? `moves up onto row ${lift.row}` : 'stays'}${lift.chain.length > 1 ? ` (with ${lift.chain.slice(1).map((m) => m.id).join(', ')})` : ''}: ${show(before)} -> ${show(after)}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[lifts] ${n.id} ${keep ? `moves up onto row ${lift.row}` : 'stays'}${lift.chain.length > 1 ? ` (with ${lift.chain.slice(1).map((m) => m.id).join(', ')})` : ''}: ${show(before)} -> ${show(after)}`);
     if (keep) routed = after;
     else undo();
   }
@@ -1270,7 +1269,7 @@ export function boundariesOnTop(layout: ScopeLayout): void {
     placeBoundaryEvents(host);
     const title = host.child ? titleBox(host.box, nameOf(host)) : undefined;
     if (title && boxesOverlap(title, b.box, 2)) {
-      if (layoutDebugOn()) layoutDebug(`[boundary] ${b.id} stays on the bottom border: the title of ${host.id} is in the way`);
+      if (LayoutDebug.on()) LayoutDebug.log(`[boundary] ${b.id} stays on the bottom border: the title of ${host.id} is in the way`);
       undo();
       continue;
     }
@@ -1295,9 +1294,9 @@ export function boundariesOnTop(layout: ScopeLayout): void {
       after.hits <= before.hits &&
       after.labels <= before.labels &&
       (after.crossings < before.crossings || after.hits < before.hits || after.labels < before.labels || (now.length < was.length && now.bends < was.bends));
-    if (layoutDebugOn()) {
+    if (LayoutDebug.on()) {
       const why = [now.up ? '' : 'not up', now.box ? '' : 'a line through it', now.label ? '' : 'its label not clear', b.labelLeft ? 'label left' : ''].filter(Boolean).join(', ');
-      layoutDebug(`[boundary] ${b.id} ${keep ? 'moves to the top border' : 'stays on the bottom border'}: ${showRoutes(before)} ${was.length} px ${was.bends} bends -> ${showRoutes(after)} ${now.length} px ${now.bends} bends${why ? ` (${why})` : ''}`);
+      LayoutDebug.log(`[boundary] ${b.id} ${keep ? 'moves to the top border' : 'stays on the bottom border'}: ${showRoutes(before)} ${was.length} px ${was.bends} bends -> ${showRoutes(after)} ${now.length} px ${now.bends} bends${why ? ` (${why})` : ''}`);
     }
     if (keep) before = after;
     else {

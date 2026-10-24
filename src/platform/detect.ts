@@ -23,7 +23,7 @@
  * does (platform/profiles/c7.ts).
  */
 import { KNOWN_NAMESPACES, type Doc } from '../model/document.js';
-import { isBpmnElement, walk, type El } from '../model/moddle.js';
+import { isBpmnElement, walk, type El } from '../model/utils/moddle.js';
 import { CAMUNDA_URI, C7_URIS, OPERATON_URI, ZEEBE_URI } from './descriptor.js';
 
 export { C7_URIS, OPERATON_URI } from './descriptor.js';

@@ -117,7 +117,7 @@
  * would delete its siblings (extHint).
  */
 import type { Doc } from '../../model/document.js';
-import type { El } from '../../model/moddle.js';
+import type { El } from '../../model/utils/moddle.js';
 import type { CamundaElementType } from '../descriptor.js';
 import type { ProfileFinding, Severity } from '../finding.js';
 import type { RuleKit } from './rule-kit.js';

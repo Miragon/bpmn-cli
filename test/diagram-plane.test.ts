@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { readPlanes, semantics, homePlane, frameOf, type Plane } from '../src/diagram/plane.js';
 import { applyColors, colorsOf, diIds, pruneDi, writePlanes } from '../src/diagram/write.js';
-import { is, type El } from '../src/model/moddle.js';
+import { is, type El } from '../src/model/utils/moddle.js';
 import { BPMN_NS } from './helpers.js';
 
 const NS = `xmlns:bpmn="${BPMN_NS}" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"`;

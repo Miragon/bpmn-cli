@@ -35,11 +35,11 @@
  * prefix).
  */
 import type { BpmnlintRuleSetting, BpmnlintSeverity } from '../validate/bpmnlint-validator.js';
-import { closestKey } from '../ops/batch.js';
+import { closestKey } from '../shared/utils/fuzzy.js';
 import type { Doc } from '../model/document.js';
 import { IdStyle, isUsablePrefix, kindRequest, typeRequest, type Body, type FlowForm, type IdRequest, type PrefixSource } from './style.js';
 import { KINDS, TRIGGER_TYPES } from '../model/kinds.js';
-import { createModdle } from '../model/moddle.js';
+import { createModdle } from '../model/utils/moddle.js';
 import type { ValidatorFinding } from '../validate/validators.js';
 
 /** The rule's name as a resolved .bpmnlintrc keys it (resolveBpmnlintConfig `rules`). */

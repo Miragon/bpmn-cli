@@ -32,7 +32,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { withLayoutDebug } from '../src/shared/debug.js';
+import { LayoutDebug } from '../src/shared/LayoutDebug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { titleBox } from '../src/diagram/text.js';
@@ -40,7 +40,7 @@ import { Doc } from '../src/model/document.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
 import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
 import type { GNode, ScopeLayout } from '../src/diagram/types.js';
-import { is, many, type El } from '../src/model/moddle.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
 import { collapsedIds } from '../src/ops/add.js';
 import { runOps } from '../src/ops/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
@@ -911,7 +911,7 @@ describe('clean layout engine', () => {
       });
     const drawn = state();
     const lines: string[] = [];
-    await withLayoutDebug(
+    await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         freeJoinColumns(scope, (shifts) => {
@@ -1175,7 +1175,7 @@ describe('clean layout engine', () => {
   it('lanes: a handler stays where moving it right would add a crossing (Inform\'s way up would cross Failed\'s into Fix), and Fix moves instead', async () => {
     // generated: two boundary paths into the lane above, Inform (Late on Pick) and Fix (Failed on Invoice), both in the column of Pack
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1296,7 +1296,7 @@ describe('clean layout engine', () => {
     // generated (r048): moving J4 right of the boundary path's end was rejected as it gained no straight rise; Check
     // customer's way into J4 then crossed Book case's flow and hooked into the join
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1590,7 +1590,7 @@ describe('clean layout engine', () => {
     // the run below lane 0's content crossed the split's drop, Notify data's into Book data, Pack order's way up and Book
     // data's into the join (score 25); from the bottom border the way over the top crossed Start -> Pick invoice (score 10)
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-over-top', paymentFailedDoc()),
     );
@@ -1742,7 +1742,7 @@ describe('clean layout engine', () => {
     // freeJoinColumns moved Pack data right past the data object under it, for the straight rise of a way it then
     // drew over the top
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-over-top-no-move', paymentFailedDoc(true)),
     );
@@ -1862,7 +1862,7 @@ describe('clean layout engine', () => {
     for (const sub of [false, true]) {
       const what = sub ? 'an expanded sub-process as host' : 'a task as host';
       const lines: string[] = [];
-      const L = await withLayoutDebug(
+      const L = await LayoutDebug.during(
         (line) => lines.push(line),
         async () => layout(`boundary-top-border-one-of-two${sub ? '-sub' : ''}`, twoEventsDoc(sub)),
       );
@@ -1913,7 +1913,7 @@ describe('clean layout engine', () => {
     // its column on the row above, so a way up out of the top border cuts it; the way below crosses Wait for goods' way
     // into the join and stays
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1997,7 +1997,7 @@ describe('clean layout engine', () => {
     const doc = paymentFailedDoc();
     runOps(doc, [{ op: 'add', kind: 'textAnnotation', id: 'N', text: 'Reminder after two days', to: 'BE12' }]);
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-note-bottom', doc),
     );
@@ -2627,7 +2627,7 @@ describe('clean layout engine', () => {
     for (const full of [false, true]) {
       const what = full ? 'r013' : 'r013 without its boundary paths';
       const lines: string[] = [];
-      const L = await withLayoutDebug(
+      const L = await LayoutDebug.during(
         (line) => lines.push(line),
         async () => layout(`lanes-split-branch-up${full ? '-r013' : ''}`, splitLanesDoc(true, full)),
       );
@@ -2669,7 +2669,7 @@ describe('clean layout engine', () => {
     // agent__o2c without its other lanes: ok runs from Credit ok? straight along the row to the parallel split; not ok's
     // Request prepayment would take a cell of that row (moved up, it bent the happy path into a band under the row)
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -2725,7 +2725,7 @@ describe('clean layout engine', () => {
   it('lanes: a branch stays below where its flow, moved up, would leave the split through the vertex the happy path\'s way down takes (p035)', async () => {
     // moved up, Pick order's flow would run on b0's first piece out of the right vertex, its label on b0's
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-split-branch-stays-shared-vertex', sharedVertexDoc()),
     );
@@ -2777,7 +2777,7 @@ describe('clean layout engine', () => {
       arrange();
       const arranged = state();
       const lines: string[] = [];
-      await withLayoutDebug(
+      await LayoutDebug.during(
         (line) => lines.push(line),
         async () => liftChains(scope, arrange),
       );

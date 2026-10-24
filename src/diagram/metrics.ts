@@ -134,7 +134,7 @@
  *    ids (order-free for symmetric kinds) and the detail unless it is a
  *    measurement (parallelRun length). Duplicates are matched one to one.
  */
-import { is, parseXml, type El } from '../model/moddle.js';
+import { is, parseXml, type El } from '../model/utils/moddle.js';
 import type { Box, Point } from './types.js';
 import { titleBox } from './text.js';
 

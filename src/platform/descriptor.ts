@@ -44,7 +44,7 @@
  * Two placement lists of the descriptor are corrected to what the engines
  * accept (ALLOWED_IN_OVERRIDES): camunda:executionListener and camunda:potentialStarter.
  */
-import { createModdle, type El } from '../model/moddle.js';
+import { createModdle, type El } from '../model/utils/moddle.js';
 import { CAMUNDA_DESCRIPTOR } from './camunda-descriptor.js';
 import { detectPlatformOf } from './detect.js';
 

@@ -44,7 +44,8 @@ import { membersOf, redrawGroups, rememberGroups, undrawnGroups, type RedrawnGro
 import { diIdsFit, rememberDiIds, restoreDiIds } from '../diagram/write.js';
 import type { IdRequest } from '../ids/style.js';
 import { layoutClean } from './clean/engine.js';
-import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, ModelError } from '../model/moddle.js';
+import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, idOf } from '../model/utils/moddle.js';
+import { ModelError } from '../model/ModelError.js';
 
 export interface LayoutWarningInfo {
   code: string;
@@ -82,9 +83,6 @@ function subProcesses(root: El): El[] {
   return [...walk(root)].filter((e) => SUB_PROCESS_TYPES.some((t) => is(e, t)) && !!e.get('id'));
 }
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 /** Reads the expansion state recorded in the current DI. */
 export function diExpansionState(defs: El): Map<string, boolean> {

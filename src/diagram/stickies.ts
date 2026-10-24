@@ -24,7 +24,7 @@
  *  Anchors name processes and nodes by element (resolveAnchors maps them to
  *  their ids after the ops, so a renamed node is still followed).
  */
-import { is, type El } from '../model/moddle.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { idOf, raw, rawList } from './plane.js';
 
 export const BPMIQ_URI = 'https://bpmiq.io/schema/1.0/bpmiq';

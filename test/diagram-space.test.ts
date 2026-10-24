@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Box, Point } from '../src/diagram/types.js';
-import type { El } from '../src/model/moddle.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
 import { closeStrip, fitInFrame, makeSpace, shiftShape } from '../src/diagram/space.js';
 import { separate, tidy } from '../src/diagram/separate.js';

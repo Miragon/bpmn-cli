@@ -33,10 +33,10 @@
  * message; a message, signal, error or escalation names what uses it.
  */
 import type { Doc } from '../model/document.js';
-import { usageError } from '../shared/errors.js';
+import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
-import { is, walk, type El } from '../model/moddle.js';
+import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
 import { listAllExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { flowOrder } from '../validate/structural.js';
@@ -72,18 +72,8 @@ export const AROUND_DEFAULT_DEPTH = 2;
 /* small helpers                                                        */
 /* ------------------------------------------------------------------ */
 
-function peek<T>(el: El, prop: string): T | undefined {
-  return (el as Record<string, unknown>)[prop] as T | undefined;
-}
 
-function list(el: El, prop: string): El[] {
-  const v = peek<unknown>(el, prop);
-  return Array.isArray(v) ? (v as El[]) : [];
-}
 
-function idOf(el: El | undefined): string {
-  return el ? (peek<string>(el, 'id') ?? '?') : '?';
-}
 
 function nameOf(el: El | undefined): string | undefined {
   const n = el ? peek<unknown>(el, 'name') : undefined;
@@ -401,18 +391,18 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
     const from = doc
       .incoming(n)
       .filter((f) => !inWindow(peek<El>(f, 'sourceRef')))
-      .map((f) => compact({ id: idOf(f), source: idOf(peek<El>(f, 'sourceRef')), name: nameOf(f) }));
+      .map((f) => compact({ id: shownId(f), source: shownId(peek<El>(f, 'sourceRef')), name: nameOf(f) }));
     return compact<AroundNode>({
-      id: idOf(n),
+      id: shownId(n),
       kind: kindLabel(n),
       name: nameOf(n),
-      scope: idOf(doc.scopeOf(n)),
+      scope: shownId(doc.scopeOf(n)),
       distance: distance.get(n)!,
-      host: is(n, 'bpmn:BoundaryEvent') ? idOf(peek<El>(n, 'attachedToRef')) : undefined,
+      host: is(n, 'bpmn:BoundaryEvent') ? shownId(peek<El>(n, 'attachedToRef')) : undefined,
       lane: is(n, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, n)?.get<string>('id'),
       trigger: is(n, 'bpmn:Event') ? triggerText(n) : undefined,
       nonInterrupting: nonInterruptingOf(n),
-      expanded: sub ? expansion.get(idOf(n)) !== false : undefined,
+      expanded: sub ? expansion.get(shownId(n)) !== false : undefined,
       content: sub && children.length && !children.some((c) => inWindow(c)) ? children.length : undefined,
       // the zeebe settings are in impl, complete (no job= next to zeebe:taskDefinition type=...)
       props: nodeProps(n, { zeebe: false }),
@@ -449,10 +439,10 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
   };
   const scopeEntry = (s: El, shown: boolean): AroundScope =>
     compact<AroundScope>({
-      id: idOf(s),
+      id: shownId(s),
       kind: is(s, 'bpmn:Process') ? 'process' : kindLabel(s),
       name: nameOf(s),
-      parent: is(s, 'bpmn:Process') ? undefined : idOf(doc.scopeOf(s)),
+      parent: is(s, 'bpmn:Process') ? undefined : shownId(doc.scopeOf(s)),
       lane: is(s, 'bpmn:Process') ? undefined : effectiveLane(doc, s)?.lane.get<string>('id'),
       inWindow: shown,
     });
@@ -472,11 +462,11 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
       const target = peek<El>(mf, 'targetRef');
       const message = peek<El>(mf, 'messageRef');
       return compact<ViewMessageFlow>({
-        id: idOf(mf),
-        source: idOf(source),
-        target: idOf(target),
+        id: shownId(mf),
+        source: shownId(source),
+        target: shownId(target),
         name: nameOf(mf),
-        message: message ? (nameOf(message) ?? idOf(message)) : undefined,
+        message: message ? (nameOf(message) ?? shownId(message)) : undefined,
         sourceName: nameOf(source),
         targetName: nameOf(target),
       });
@@ -487,8 +477,8 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
   for (const n of windowEls) {
     for (const a of annotationsOf(doc, n, associations)) {
       const known = annotations.find((x) => x.id === a.id);
-      if (known) known.attachedTo.push(idOf(n));
-      else annotations.push(compact<ViewAnnotation>({ id: a.id, text: a.text, attachedTo: [idOf(n)] }));
+      if (known) known.attachedTo.push(shownId(n));
+      else annotations.push(compact<ViewAnnotation>({ id: a.id, text: a.text, attachedTo: [shownId(n)] }));
     }
   }
 
@@ -503,7 +493,7 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
           entry = compact<ViewData>({ id: r.id, kind: ref && is(ref, 'bpmn:DataStoreReference') ? 'dataStore' : 'dataObject', name: r.name, from: [], to: [] });
           data.push(entry);
         }
-        entry[side].push(idOf(n));
+        entry[side].push(shownId(n));
       }
     }
   }
@@ -513,7 +503,7 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
     around: id,
     depth,
     inner,
-    process: compact({ id: idOf(process), name: nameOf(process), participant: participant ? idOf(participant) : undefined, participantName: nameOf(participant) }),
+    process: compact({ id: shownId(process), name: nameOf(process), participant: participant ? shownId(participant) : undefined, participantName: nameOf(participant) }),
     scopes,
     nodes,
     messageFlows,
@@ -615,7 +605,7 @@ export interface ElementContext {
 }
 
 function refOf(el: El): ContextRef {
-  return compact<ContextRef>({ id: idOf(el), kind: labelOf(el), name: nameOf(el) });
+  return compact<ContextRef>({ id: shownId(el), kind: labelOf(el), name: nameOf(el) });
 }
 
 function conditionOf(flow: El): string | undefined {
@@ -627,7 +617,7 @@ function linkOf(node: El, flow: El): ContextLink {
   const source = peek<El>(flow, 'sourceRef');
   return compact<ContextLink>({
     ...refOf(node),
-    flow: idOf(flow),
+    flow: shownId(flow),
     flowName: nameOf(flow),
     condition: conditionOf(flow),
     default: source && peek<El>(source, 'default') === flow ? true : undefined,
@@ -636,15 +626,15 @@ function linkOf(node: El, flow: El): ContextLink {
 
 function catchOf(doc: Doc, ev: El): ContextCatch {
   const host = is(ev, 'bpmn:BoundaryEvent') ? peek<El>(ev, 'attachedToRef') : undefined;
-  const to = doc.outgoing(ev).map((f) => idOf(peek<El>(f, 'targetRef')));
-  return compact<ContextCatch>({ ...refOf(ev), trigger: triggerText(ev), nonInterrupting: nonInterruptingOf(ev), on: host ? idOf(host) : undefined, to: nonEmpty(to) });
+  const to = doc.outgoing(ev).map((f) => shownId(peek<El>(f, 'targetRef')));
+  return compact<ContextCatch>({ ...refOf(ev), trigger: triggerText(ev), nonInterrupting: nonInterruptingOf(ev), on: host ? shownId(host) : undefined, to: nonEmpty(to) });
 }
 
 /** An end of a message flow, with its pool when it is inside one. */
 function messageEndOf(doc: Doc, node: El, flow: El): ContextLink {
   const pool = poolOf(doc, node);
   const inPool = pool && pool !== node ? pool : undefined;
-  return compact<ContextLink>({ ...refOf(node), flow: idOf(flow), pool: inPool ? idOf(inPool) : undefined, poolName: nameOf(inPool) });
+  return compact<ContextLink>({ ...refOf(node), flow: shownId(flow), pool: inPool ? shownId(inPool) : undefined, poolName: nameOf(inPool) });
 }
 
 /** The message of a message event (its message definition), a send / receive task or a message flow. */
@@ -679,7 +669,7 @@ function poolMessageFlows(doc: Doc, el: El): DetailMessageFlow[] {
     if (peek<El>(mf, direction === 'in' ? 'targetRef' : 'sourceRef') !== pool) continue;
     const ref = peek<El>(mf, 'messageRef');
     if (ref ? ref !== message : !name || nameOf(mf) !== name) continue;
-    out.push({ ...messageFlowEntry(doc, mf, direction), at: idOf(pool) });
+    out.push({ ...messageFlowEntry(doc, mf, direction), at: shownId(pool) });
   }
   return out;
 }
@@ -718,7 +708,7 @@ export function elementContext(doc: Doc, id: string): ElementContext {
   }
   const process = doc.processOf(el);
   if (process && !chain.includes(process) && process !== el) chain.push(process);
-  const ancestors = [...chain].reverse().map((s) => (is(s, 'bpmn:Process') ? compact<ContextRef>({ id: idOf(s), kind: 'process', name: nameOf(s) }) : refOf(s)));
+  const ancestors = [...chain].reverse().map((s) => (is(s, 'bpmn:Process') ? compact<ContextRef>({ id: shownId(s), kind: 'process', name: nameOf(s) }) : refOf(s)));
   const isMessageFlow = is(el, 'bpmn:MessageFlow');
   // a message flow lives in the collaboration
   const collaboration = isMessageFlow ? (el.$parent as El | undefined) : undefined;
@@ -755,14 +745,14 @@ export function elementContext(doc: Doc, id: string): ElementContext {
       // the element itself, or an event sub-process it is inside of, does not catch it
       if (!isEventSubProcess(n) || n === el || chain.includes(n)) continue;
       const start = doc.flowNodes(n).find((c) => is(c, 'bpmn:StartEvent'));
-      eventSubProcesses.push(compact<ContextEventSubProcess>({ ...refOf(n), in: idOf(s), start: start ? catchOf(doc, start) : undefined }));
+      eventSubProcesses.push(compact<ContextEventSubProcess>({ ...refOf(n), in: shownId(s), start: start ? catchOf(doc, start) : undefined }));
     }
   }
 
   const laneEl = lane?.lane;
-  const parents = laneEl ? parentLanes(laneEl).map((l) => compact({ id: idOf(l), name: nameOf(l) })) : [];
+  const parents = laneEl ? parentLanes(laneEl).map((l) => compact({ id: shownId(l), name: nameOf(l) })) : [];
   return compact<ElementContext>({
-    id: idOf(el),
+    id: shownId(el),
     kind: labelOf(el),
     name: nameOf(el),
     trigger: is(el, 'bpmn:Event') ? triggerText(el) : undefined,
@@ -772,8 +762,8 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     documentation: documentationOf(el),
     implementation: implementationOf(el),
     ancestors,
-    pool: pool && pool !== el ? compact({ id: idOf(pool), name: nameOf(pool) }) : undefined,
-    lane: laneEl ? compact({ id: idOf(laneEl), name: nameOf(laneEl), via: lane?.via ? idOf(lane.via) : undefined, parents: nonEmpty(parents) }) : undefined,
+    pool: pool && pool !== el ? compact({ id: shownId(pool), name: nameOf(pool) }) : undefined,
+    lane: laneEl ? compact({ id: shownId(laneEl), name: nameOf(laneEl), via: lane?.via ? shownId(lane.via) : undefined, parents: nonEmpty(parents) }) : undefined,
     host: host ? refOf(host) : undefined,
     from,
     to,
@@ -782,7 +772,7 @@ export function elementContext(doc: Doc, id: string): ElementContext {
     eventSubProcesses,
     annotations: annotationsOf(doc, el),
     messageFlows: isMessageFlow ? [] : [...messageFlowsOf(doc, el), ...poolMessageFlows(doc, el)],
-    message: message ? compact<ContextMessage>({ id: idOf(message), name: nameOf(message), correlationKey: correlationKeyOf(message) }) : undefined,
+    message: message ? compact<ContextMessage>({ id: shownId(message), name: nameOf(message), correlationKey: correlationKeyOf(message) }) : undefined,
     usedBy: nonEmpty(usersOf(doc, el) ?? []),
     data: dataLinksOf(doc, el),
   });

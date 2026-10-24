@@ -26,11 +26,12 @@
  */
 import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../model/document.js';
 import { followDiIds } from '../diagram/write.js';
-import { modelError, type Warning } from '../shared/errors.js';
+import { modelError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
 import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
-import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
+import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import { about, renamedNote, type ChangeSet } from '../model/change-set.js';
 import type { FlowOptions, Placement } from './types.js';
 
@@ -49,9 +50,6 @@ export interface FlowAttrs {
   reuse?: El;
 }
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 function label(el: El): string {
   const name = el.get<string | undefined>('name');

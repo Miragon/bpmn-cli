@@ -27,7 +27,7 @@
  *  - deterministic; obstacles are leaf shapes (no pools, lanes or expanded
  *    sub-process frames), `lines` the edges already drawn inside a pool.
  */
-import { is, type El } from '../../model/moddle.js';
+import { is, type El } from '../../model/utils/moddle.js';
 import { SIZES, center, type Box, type Point } from '../../diagram/types.js';
 
 export type Seg = [Point, Point];

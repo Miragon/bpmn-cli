@@ -104,7 +104,7 @@
  * attributes, form ids and correlation keys of white space are refused.
  */
 import type { Doc } from '../../model/document.js';
-import type { El } from '../../model/moddle.js';
+import type { El } from '../../model/utils/moddle.js';
 import { feelSyntaxError } from './feel.js';
 import type { ProfileFinding, Severity } from '../finding.js';
 import type { RuleKit } from './rule-kit.js';

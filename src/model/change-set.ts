@@ -1,8 +1,8 @@
 /**
  * What a mutation did. Rendered as text or JSON after every write.
  */
-import type { Warning } from '../shared/errors.js';
-import type { El } from './moddle.js';
+import type { Warning } from '../shared/CliError.js';
+import type { El } from './utils/moddle.js';
 
 export interface Change {
   id: string;

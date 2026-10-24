@@ -62,6 +62,14 @@ them on a private corpus without copying it into the repository, are described i
   user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
   is `report/`; anything that touches the file system or `process` is `node/` or `cli.ts`.
   `test/architecture.test.ts` keeps the root of `src/` to the three entries.
+
+  **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
+  named like the class (`model/ModelError.ts`, `diagram/PlaneCheckpoint.ts`). Stateless helper
+  functions live in a `utils/` folder of their stage (`model/utils/moddle.ts`,
+  `shared/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
+  error classes. Outside the entries (`api.ts`, `index.ts`, `node/index.ts`, which keep the
+  package's public functions and delegate to the classes) there are no free functions. The
+  domain terms the classes are named after are in [GLOSSARY.md](GLOSSARY.md).
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
   examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.

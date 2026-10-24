@@ -9,32 +9,18 @@
  */
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
-import { modelError, ioError, usageError } from '../shared/errors.js';
+import { modelError, ioError, usageError } from '../shared/utils/errors.js';
 import { about, replaced, type ChangeSet, type Rename } from './change-set.js';
-import { editDistance, hasIdWords, IdRegistry, isValidId, transliterate, typoTolerance, withSuffix } from '../ids/slugs.js';
+import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
+import { hasIdWords, IdRegistry, isValidId, transliterate, withSuffix } from '../ids/slugs.js';
 import type { IdConventions } from '../ids/conventions.js';
 import { IdStyle, speakingStem, typeRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from '../platform/descriptor.js';
 import { C8_PLATFORM_VERSION } from '../platform/zeebe.js';
-import {
-  createDefinitions,
-  createModdle,
-  indexById,
-  is,
-  isBpmnElement,
-  many,
-  parseXml,
-  processes as rootProcesses,
-  collaboration as rootCollaboration,
-  layoutRoot as pickLayoutRoot,
-  serialize,
-  walk,
-  type El,
-  type Model,
-  ModelError,
-} from './moddle.js';
+import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
+import { ModelError } from './ModelError.js';
 
 export const KNOWN_NAMESPACES: Record<string, string> = {
   camunda: 'http://camunda.org/schema/1.0/bpmn',

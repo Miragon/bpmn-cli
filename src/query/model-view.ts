@@ -36,10 +36,11 @@
  *  element types in document order, repeated ones included).
  */
 import type { Doc } from '../model/document.js';
-import { usageError, type Warning } from '../shared/errors.js';
+import { usageError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
-import { groupName, is, localType, walk, type El } from '../model/moddle.js';
+import { groupName, is, localType, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
 import { groupMembers } from '../diagram/groups.js';
 import { decisionLinkOf } from '../ops/decision.js';
@@ -246,18 +247,8 @@ export interface DetailData {
 /** xmlns prefixes that are part of BPMN itself (not vendor namespaces). */
 const STANDARD_NS = new Set(['bpmn', 'bpmndi', 'di', 'dc', 'xsi', 'xml']);
 
-function peek<T>(el: El, prop: string): T | undefined {
-  return (el as Record<string, unknown>)[prop] as T | undefined;
-}
 
-function list(el: El, prop: string): El[] {
-  const v = peek<unknown>(el, prop);
-  return Array.isArray(v) ? (v as El[]) : [];
-}
 
-function idOf(el: El | undefined): string {
-  return el ? (peek<string>(el, 'id') ?? '?') : '?';
-}
 
 function nameOf(el: El): string | undefined {
   if (is(el, 'bpmn:Group')) return groupName(el);
@@ -296,7 +287,7 @@ export function documentationOf(el: El): string | undefined {
 
 function refLabel(ref: El | undefined): string {
   if (!ref) return '?';
-  return nameOf(ref) ?? idOf(ref);
+  return nameOf(ref) ?? shownId(ref);
 }
 
 function bodyOf(expr: El | undefined): string | undefined {
@@ -450,8 +441,8 @@ export function flowView(flow: El): ViewFlow {
   const cond = peek<El>(flow, 'conditionExpression');
   const resource = resourceOf(cond);
   return compact({
-    id: idOf(flow),
-    target: idOf(peek<El>(flow, 'targetRef')),
+    id: shownId(flow),
+    target: shownId(peek<El>(flow, 'targetRef')),
     name: nameOf(flow),
     condition: bodyOf(cond),
     conditionResource: resource?.value,
@@ -479,7 +470,7 @@ function buildNodes(ctx: ViewCtx, scope: El): ViewNode[] {
 
 function buildNode(ctx: ViewCtx, el: El, unreachable: Set<El>): ViewNode {
   const { doc } = ctx;
-  const id = idOf(el);
+  const id = shownId(el);
   const isSub = is(el, 'bpmn:SubProcess');
   const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((b) => buildNode(ctx, b, unreachable)) : [];
   return compact<ViewNode>({
@@ -491,7 +482,7 @@ function buildNode(ctx: ViewCtx, el: El, unreachable: Set<El>): ViewNode {
     nonInterrupting: nonInterruptingOf(el),
     documentation: documentationOf(el),
     outgoing: doc.outgoing(el).map(flowView),
-    incoming: doc.incoming(el).map(idOf),
+    incoming: doc.incoming(el).map(shownId),
     lane: is(el, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, el)?.get<string>('id'),
     boundary: boundary.length ? boundary : undefined,
     children: isSub ? buildNodes(ctx, el) : undefined,
@@ -513,9 +504,9 @@ function buildLanes(laneSet: El | undefined): ViewLane[] {
   return list(laneSet, 'lanes').map((lane) => {
     const nested = buildLanes(peek<El>(lane, 'childLaneSet'));
     return compact<ViewLane>({
-      id: idOf(lane),
+      id: shownId(lane),
       name: nameOf(lane),
-      members: list(lane, 'flowNodeRef').map(idOf),
+      members: list(lane, 'flowNodeRef').map(shownId),
       lanes: nested.length ? nested : undefined,
     });
   });
@@ -537,10 +528,10 @@ function buildData(doc: Doc, process: El): ViewData[] {
       const from: string[] = [];
       const to: string[] = [];
       for (const node of nodes) {
-        if (list(node, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)) from.push(idOf(node));
-        if (list(node, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))) to.push(idOf(node));
+        if (list(node, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)) from.push(shownId(node));
+        if (list(node, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))) to.push(shownId(node));
       }
-      out.push(compact<ViewData>({ id: idOf(el), kind, name: nameOf(el), from, to }));
+      out.push(compact<ViewData>({ id: shownId(el), kind, name: nameOf(el), from, to }));
     }
   }
   return out;
@@ -563,11 +554,11 @@ function annotationsIn(owners: El[], associations: El[]): ViewAnnotation[] {
       for (const a of associations) {
         const source = peek<El>(a, 'sourceRef');
         const target = peek<El>(a, 'targetRef');
-        if (source === el && target) attachedTo.push(idOf(target));
-        else if (target === el && source) attachedTo.push(idOf(source));
+        if (source === el && target) attachedTo.push(shownId(target));
+        else if (target === el && source) attachedTo.push(shownId(source));
       }
       const text = peek<string>(el, 'text');
-      out.push(compact<ViewAnnotation>({ id: idOf(el), text: text ? String(text) : undefined, attachedTo }));
+      out.push(compact<ViewAnnotation>({ id: shownId(el), text: text ? String(text) : undefined, attachedTo }));
     }
   }
   return out;
@@ -584,9 +575,9 @@ export function annotationsOf(doc: Doc, el: El, associations: El[] = association
     const source = peek<El>(a, 'sourceRef');
     const target = peek<El>(a, 'targetRef');
     const other = source === el ? target : target === el ? source : undefined;
-    if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((o) => o.id === idOf(other))) continue;
+    if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((o) => o.id === shownId(other))) continue;
     const text = peek<string>(other, 'text');
-    out.push(compact({ id: idOf(other), text: text ? String(text) : undefined }));
+    out.push(compact({ id: shownId(other), text: text ? String(text) : undefined }));
   }
   return out;
 }
@@ -615,24 +606,24 @@ export function messageFlowEntry(doc: Doc, mf: El, direction: 'in' | 'out'): Det
   const message = peek<El>(mf, 'messageRef');
   return compact<DetailMessageFlow>({
     direction,
-    id: idOf(mf),
+    id: shownId(mf),
     name: nameOf(mf),
     message: message ? refLabel(message) : undefined,
-    partner: idOf(partner),
+    partner: shownId(partner),
     partnerName: partner ? nameOf(partner) : undefined,
-    pool: pool && pool !== partner ? idOf(pool) : undefined,
+    pool: pool && pool !== partner ? shownId(pool) : undefined,
     poolName: pool && pool !== partner ? nameOf(pool) : undefined,
   });
 }
 
 /** Data associations of a node (what it reads and writes) or of a data object / store (who reads and writes it). */
 export function dataLinksOf(doc: Doc, el: El): DetailData | undefined {
-  const ref = (d: El | undefined) => (d ? compact({ id: idOf(d), name: nameOf(d) }) : undefined);
+  const ref = (d: El | undefined) => (d ? compact({ id: shownId(d), name: nameOf(d) }) : undefined);
   if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference')) {
     const process = doc.processOf(el);
     const nodes = process ? scopesWithin(process).flatMap((s) => doc.flowNodes(s)) : [];
-    const writtenBy = nodes.filter((n) => list(n, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)).map(idOf);
-    const readBy = nodes.filter((n) => list(n, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))).map(idOf);
+    const writtenBy = nodes.filter((n) => list(n, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)).map(shownId);
+    const readBy = nodes.filter((n) => list(n, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))).map(shownId);
     return readBy.length || writtenBy.length ? compact<DetailData>({ readBy: nonEmpty(readBy), writtenBy: nonEmpty(writtenBy) }) : undefined;
   }
   const isData = (d: El | undefined): d is El => !!d && (is(d, 'bpmn:DataObjectReference') || is(d, 'bpmn:DataStoreReference'));
@@ -644,7 +635,7 @@ export function dataLinksOf(doc: Doc, el: El): DetailData | undefined {
 function buildProcess(ctx: ViewCtx, process: El): ViewProcess {
   const { doc } = ctx;
   return compact<ViewProcess>({
-    id: idOf(process),
+    id: shownId(process),
     name: nameOf(process),
     executable: peek<boolean>(process, 'isExecutable') === true,
     participant: doc.participantOf(process)?.get<string>('id'),
@@ -675,7 +666,7 @@ function buildRootElements(doc: Doc): ModelView['rootElements'] {
     const match = ROOT_KINDS.find(([type]) => is(el, type));
     if (!match) continue;
     const code = peek<string>(el, 'errorCode') ?? peek<string>(el, 'escalationCode');
-    out.push(compact({ id: idOf(el), kind: match[1], name: nameOf(el), code: code || undefined, correlationKey: correlationKeyOf(el) }));
+    out.push(compact({ id: shownId(el), kind: match[1], name: nameOf(el), code: code || undefined, correlationKey: correlationKeyOf(el) }));
   }
   return out;
 }
@@ -685,15 +676,15 @@ function buildCollaboration(doc: Doc): ModelView['collaboration'] {
   if (!collab) return undefined;
   const annotations = annotationsIn([collab], associationsOf(doc));
   return compact({
-    id: idOf(collab),
-    participants: doc.participants().map((p) => compact({ id: idOf(p), name: nameOf(p), process: peek<El>(p, 'processRef')?.get<string>('id') })),
+    id: shownId(collab),
+    participants: doc.participants().map((p) => compact({ id: shownId(p), name: nameOf(p), process: peek<El>(p, 'processRef')?.get<string>('id') })),
     messageFlows: doc.messageFlows().map((mf) => {
       const source = peek<El>(mf, 'sourceRef');
       const target = peek<El>(mf, 'targetRef');
       return compact<ViewMessageFlow>({
-        id: idOf(mf),
-        source: idOf(source),
-        target: idOf(target),
+        id: shownId(mf),
+        source: shownId(source),
+        target: shownId(target),
         name: nameOf(mf),
         message: peek<El>(mf, 'messageRef') ? refLabel(peek<El>(mf, 'messageRef')) : undefined,
         sourceName: source ? nameOf(source) : undefined,
@@ -724,7 +715,7 @@ export function buildView(doc: Doc): ModelView {
   return compact<ModelView>({
     file: doc.file,
     definitions: compact({
-      id: idOf(doc.definitions),
+      id: shownId(doc.definitions),
       targetNamespace: peek<string>(doc.definitions, 'targetNamespace'),
       namespaces: vendorNamespaces(doc),
     }),
@@ -787,13 +778,13 @@ function baseProperties(doc: Doc, el: El): Record<string, unknown> {
     if (nonInterruptingOf(el)) props['nonInterrupting'] = true;
   }
   if (is(el, 'bpmn:SubProcess')) {
-    props['expanded'] = diExpansionState(doc.definitions).get(idOf(el)) !== false;
+    props['expanded'] = diExpansionState(doc.definitions).get(shownId(el)) !== false;
     if (isEventSubProcess(el)) props['triggeredByEvent'] = true;
   }
   Object.assign(props, nodeProps(el) ?? {});
   if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow') || is(el, 'bpmn:Association')) {
-    props['source'] = idOf(peek<El>(el, 'sourceRef'));
-    props['target'] = idOf(peek<El>(el, 'targetRef'));
+    props['source'] = shownId(peek<El>(el, 'sourceRef'));
+    props['target'] = shownId(peek<El>(el, 'targetRef'));
   }
   if (is(el, 'bpmn:SequenceFlow')) {
     const cond = peek<El>(el, 'conditionExpression');
@@ -807,11 +798,11 @@ function baseProperties(doc: Doc, el: El): Record<string, unknown> {
   if (is(el, 'bpmn:MessageFlow') && peek<El>(el, 'messageRef')) props['message'] = refLabel(peek<El>(el, 'messageRef'));
   if (is(el, 'bpmn:Participant')) {
     const process = peek<El>(el, 'processRef');
-    props['process'] = process ? idOf(process) : undefined;
+    props['process'] = process ? shownId(process) : undefined;
     if (!process) props['blackBox'] = true;
   }
-  if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(idOf);
-  if (is(el, 'bpmn:Group')) props['members'] = groupMembers(doc.definitions).get(idOf(el)) ?? [];
+  if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(shownId);
+  if (is(el, 'bpmn:Group')) props['members'] = groupMembers(doc.definitions).get(shownId(el)) ?? [];
   if (is(el, 'bpmn:TextAnnotation')) props['text'] = peek<string>(el, 'text');
   if (is(el, 'bpmn:Process')) props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
   if (is(el, 'bpmn:Error')) props['errorCode'] = peek<string>(el, 'errorCode');
@@ -819,7 +810,7 @@ function baseProperties(doc: Doc, el: El): Record<string, unknown> {
   if (is(el, 'bpmn:DataStoreReference')) props['dataStore'] = peek<El>(el, 'dataStoreRef') ? refLabel(peek<El>(el, 'dataStoreRef')) : undefined;
   if (is(el, 'bpmn:FlowNode')) {
     const def = peek<El>(el, 'default');
-    if (def) props['default'] = idOf(def);
+    if (def) props['default'] = shownId(def);
   }
   return compact(props);
 }
@@ -831,8 +822,8 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
   const incoming = doc.incoming(el).map((f) => {
     const source = peek<El>(f, 'sourceRef');
     return compact({
-      id: idOf(f),
-      source: idOf(source),
+      id: shownId(f),
+      source: shownId(source),
       name: nameOf(f),
       condition: bodyOf(peek<El>(f, 'conditionExpression')),
       conditionResource: resourceOf(peek<El>(f, 'conditionExpression'))?.value,
@@ -843,8 +834,8 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
   for (const { prefix, el: n } of nestedEntries(el)) {
     nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: listExtensions(n) });
   }
-  const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(idOf) : [];
-  const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(idOf) : [];
+  const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(shownId) : [];
+  const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(shownId) : [];
   const listed = listExtensions(el);
   const extensions: unknown[] = listed.length ? listed : extensionTypes(el).map((type, index) => ({ index, type }));
   const host = peek<El>(el, 'attachedToRef');
@@ -855,18 +846,18 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
     ? associations.flatMap((a) => {
         const source = peek<El>(a, 'sourceRef');
         const target = peek<El>(a, 'targetRef');
-        return source === el && target ? [idOf(target)] : target === el && source ? [idOf(source)] : [];
+        return source === el && target ? [shownId(target)] : target === el && source ? [shownId(source)] : [];
       })
     : [];
   return compact<ElementDetail>({
-    id: idOf(el),
+    id: shownId(el),
     kind: labelOf(el),
     type: el.$type,
     name: nameOf(el),
     scope: is(el, 'bpmn:Process') ? undefined : doc.scopeOf(el)?.get<string>('id'),
     process: is(el, 'bpmn:Participant') ? peek<El>(el, 'processRef')?.get<string>('id') : doc.processOf(el)?.get<string>('id'),
     lane: isNode && !is(el, 'bpmn:BoundaryEvent') ? laneOf(doc, el)?.get<string>('id') : undefined,
-    host: host ? idOf(host) : undefined,
+    host: host ? shownId(host) : undefined,
     properties: { ...baseProperties(doc, el), ...readProperties(doc, el) },
     incoming,
     outgoing: doc.outgoing(el).map(flowView),

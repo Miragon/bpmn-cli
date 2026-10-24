@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
 import { poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool } from '../src/layout/clean/messages.js';
-import { is, many, parseXml, type El, type Model } from '../src/model/moddle.js';
+import { is, many, parseXml, type El, type Model } from '../src/model/utils/moddle.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const scenario = (name: string): string => readFileSync(join(HERE, '..', 'tools', 'scenarios', name), 'utf8');

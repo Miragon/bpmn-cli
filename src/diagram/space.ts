@@ -87,7 +87,7 @@
  *  frame mode, anchored at `anchor`). Returns the pixels and what moved;
  *  undefined when the label fits.
  */
-import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
+import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './geom.js';
 import { defaultLabelSide, hasExternalLabel, labelArea, labelAt, labelSizeOf } from './labels.js';
 import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, raw, type DShape, type Plane } from './plane.js';
@@ -623,7 +623,7 @@ function spaceInFrame(plane: Plane, base: Omit<Pass, 'band' | 'scope'>, frame: D
     }
     const over = swallowers(pass, decision);
     if (!over.length) return applyPass(pass, decision);
-    if (layoutDebugOn()) layoutDebug(`[space] ${over.map((r) => r.id).join(',')} would grow over a shape: room one level out`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[space] ${over.map((r) => r.id).join(',')} would grow over a shape: room one level out`);
     scope = widen(plane, scope, over);
   }
   // above the outermost frame: the whole plane
@@ -810,7 +810,7 @@ export function closeStrip(plane: Plane, req: StripRequest): SpaceResult | undef
     if (!s || !isLeaf(s)) continue;
     const hit = leaves.find((o) => o !== s && o.hostId !== s.id && s.hostId !== o.id && overlaps(o.bounds, s.bounds) && !overlaps(shapesBefore.get(o)!.bounds, shapesBefore.get(s)!.bounds));
     if (!hit) continue;
-    if (layoutDebugOn()) layoutDebug(`[strip] closing would put ${s.id} onto ${hit.id}: kept open`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[strip] closing would put ${s.id} onto ${hit.id}: kept open`);
     for (const [sh, v] of shapesBefore) {
       sh.bounds = v.bounds;
       if (v.label) sh.label = v.label;

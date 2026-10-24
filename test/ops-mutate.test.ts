@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { isCliError } from '../src/shared/errors.js';
-import { is, many, type El } from '../src/model/moddle.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
 import { assignLane } from '../src/ops/containers.js';
 import { applyTrigger } from '../src/ops/events.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';

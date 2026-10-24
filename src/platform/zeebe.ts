@@ -34,7 +34,7 @@
  *    send task and in a message event definition (it does not execute it yet:
  *    platform/profiles/c8.ts W_C8_UNSUPPORTED_IMPLEMENTATION).
  */
-import { is, type El } from '../model/moddle.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { typeIs } from './descriptor.js';
 import { ZEEBE_DESCRIPTOR } from './zeebe-descriptor.js';
 

@@ -32,8 +32,8 @@
  *    selectors found (explicit ids stay, the op reports them).
  */
 import type { Doc } from '../model/document.js';
-import { modelError, usageError } from '../shared/errors.js';
-import { is, type El } from '../model/moddle.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { kindFilter } from './model-view.js';
 
 export interface Selection {

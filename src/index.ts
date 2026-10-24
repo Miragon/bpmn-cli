@@ -13,13 +13,14 @@
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
 export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './report/view-text.js';
-export { setLayoutDebug, type DebugSink } from './shared/debug.js';
+export { setLayoutDebug } from './api.js';
+export { type DebugSink } from './shared/LayoutDebug.js';
 export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, kindsSections, kindsSectionJson, kindsSectionText, ERROR_CATALOGUE } from './report/guide.js';
 /* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
 export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
 /* the building blocks */
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/document.js';
-export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/errors.js';
+export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
 export { layoutModel } from './layout/index.js';
 export { runOp, runOps } from './ops/index.js';

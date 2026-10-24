@@ -14,7 +14,7 @@ vi.mock('../src/layout/incremental.js', async (importOriginal) => ({
 
 const { Doc } = await import('../src/model/document.js');
 const { mutateDoc } = await import('../src/pipeline/index.js');
-const { CliError } = await import('../src/shared/errors.js');
+const { CliError } = await import('../src/shared/CliError.js');
 
 /** A drawn file the clean engine would not reproduce (every shape moved by 30 px). */
 async function handXml(): Promise<string> {

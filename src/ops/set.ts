@@ -87,12 +87,12 @@
  */
 import { followDiIds } from '../diagram/write.js';
 import type { Doc } from '../model/document.js';
-import { modelError, usageError } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
 import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
 import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
-import { addTo, is, localType, many, nameOf, walk, type El } from '../model/moddle.js';
+import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 import { about, ChangeSet, type Change } from '../model/change-set.js';

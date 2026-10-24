@@ -5,7 +5,7 @@
  * Every command works on one .bpmn file. Mutating commands run the pipeline
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
  * The file I/O is src/node/files.ts, everything else the browser-safe core;
- * this module maps flags to its options (BPMN_LAYOUT_DEBUG to setLayoutDebug,
+ * this module maps flags to its options (BPMN_LAYOUT_DEBUG to LayoutDebug.setProcessSink,
  * BPMN_KEEP_FLOW_IDS to keepFlowIds; a result the variable's kept flow ids
  * changed says so) and is the only one that reads the environment. Mutating
  * commands and `validate` run the project's
@@ -26,14 +26,15 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
 import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './ops/batch.js';
-import { setLayoutDebug } from './shared/debug.js';
+import { LayoutDebug } from './shared/LayoutDebug.js';
 import { layoutProblems } from './diagram/metrics.js';
 import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
 import { assertProcessId, assertTarget, Doc } from './model/document.js';
-import { CliError, ioError, isCliError, usageError, type Warning } from './shared/errors.js';
+import { CliError, type Warning } from './shared/CliError.js';
+import { ioError, isCliError, usageError } from './shared/utils/errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './report/guide.js';
 import { assertKindToken } from './model/kinds.js';
@@ -52,7 +53,7 @@ import { findElements } from './query/model-view.js';
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 // placement candidates, reroute reasons, [strip] / [rows] lines of the layout engines
-if (process.env['BPMN_LAYOUT_DEBUG']) setLayoutDebug((line) => process.stderr.write(`${line}\n`));
+if (process.env['BPMN_LAYOUT_DEBUG']) LayoutDebug.setProcessSink((line) => process.stderr.write(`${line}\n`));
 
 /* ------------------------------------------------------------------ */
 /* output                                                               */

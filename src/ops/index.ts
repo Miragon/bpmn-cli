@@ -2,8 +2,9 @@
  * Op dispatcher. Every CLI command and `apply` go through here.
  */
 import type { BatchContext, Doc, FlowEnds } from '../model/document.js';
-import { usageError, type Warning } from '../shared/errors.js';
-import { is, type El } from '../model/moddle.js';
+import { usageError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
 import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';

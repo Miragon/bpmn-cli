@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { readPlanes, semantics } from '../src/diagram/plane.js';
 import { inside } from '../src/diagram/geom.js';
-import { isCliError } from '../src/shared/errors.js';
+import { isCliError } from '../src/shared/utils/errors.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 

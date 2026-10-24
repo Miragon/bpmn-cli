@@ -31,8 +31,9 @@
  * keeps its findings) and subject (e.g. the attribute name).
  */
 import type { Doc } from '../../model/document.js';
-import { CliError, ioError, usageError } from '../../shared/errors.js';
-import type { El } from '../../model/moddle.js';
+import { CliError } from '../../shared/CliError.js';
+import { ioError, usageError } from '../../shared/utils/errors.js';
+import type { El } from '../../model/utils/moddle.js';
 import { resolvePlatform, type Platform, type PlatformChoice, type PlatformInfo } from '../detect.js';
 import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from '../finding.js';
 import { RULE_KIT } from './rule-kit.js';

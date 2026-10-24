@@ -48,8 +48,9 @@
  * nothing to compare (an advisory validator of a created document).
  */
 import type { Doc } from '../model/document.js';
-import { modelError, type Warning } from '../shared/errors.js';
-import type { El } from '../model/moddle.js';
+import { modelError } from '../shared/utils/errors.js';
+import { type Warning } from '../shared/CliError.js';
+import type { El } from '../model/utils/moddle.js';
 import type { Op } from '../ops/types.js';
 import type { Platform } from '../platform/detect.js';
 import type { ValidationResult } from './structural.js';

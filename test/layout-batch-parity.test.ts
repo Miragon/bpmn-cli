@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml } from '../src/api.js';
-import { CliError } from '../src/shared/errors.js';
+import { CliError } from '../src/shared/CliError.js';
 import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
 
 const ROOT = join(import.meta.dirname, '..');

@@ -1,7 +1,7 @@
 /**
  * Shared types of the "clean" layout engine.
  */
-import type { El } from '../model/moddle.js';
+import type { El } from '../model/utils/moddle.js';
 
 export interface Box {
   x: number;

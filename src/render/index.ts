@@ -134,9 +134,9 @@
  */
 import { aroundView } from '../query/context.js';
 import { Doc } from '../model/document.js';
-import { ioError, modelError, usageError } from '../shared/errors.js';
+import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel } from '../layout/index.js';
-import { groupName, is, type El } from '../model/moddle.js';
+import { groupName, is, type El } from '../model/utils/moddle.js';
 import type { MutationReport } from '../report/command-report.js';
 import type { Box, Point } from '../diagram/geom.js';
 import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from '../diagram/metrics.js';

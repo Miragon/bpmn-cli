@@ -26,8 +26,8 @@ import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/
 import { brokenEdge, detachedEnds, edgeBefore } from '../src/diagram/reroute.js';
 import { makeSpace } from '../src/diagram/space.js';
 import { writePlanes } from '../src/diagram/write.js';
-import { isCliError } from '../src/shared/errors.js';
-import type { El } from '../src/model/moddle.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateFile } from '../src/node/files.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';

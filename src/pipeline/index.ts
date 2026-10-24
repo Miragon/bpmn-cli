@@ -111,10 +111,11 @@
  * the stickies that moved.
  */
 import type { IdConventions } from '../ids/conventions.js';
-import { withLayoutDebug, type DebugSink } from '../shared/debug.js';
+import { LayoutDebug, type DebugSink } from '../shared/LayoutDebug.js';
 import { utf8Declaration } from '../xml/encoding.js';
 import { Doc } from '../model/document.js';
-import { CliError, ioError, modelError, usageError, type Warning } from '../shared/errors.js';
+import { CliError, type Warning } from '../shared/CliError.js';
+import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from '../layout/index.js';
 import type { GivenId } from '../diagram/drawn-ids.js';
 import { diagramGeometry, engineOwned, layoutIncremental, pruneReEnded, takeSnapshot, type IncrementalReport, type Snapshot } from '../layout/incremental.js';
@@ -125,7 +126,8 @@ import { applyColors, colorsOf, diIds } from '../diagram/write.js';
 import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
 import { kindLabel } from '../model/kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/mirror.js';
-import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from '../model/moddle.js';
+import { addTo, is, layoutRoot, many, parseXml, serialize, type El } from '../model/utils/moddle.js';
+import { ModelError } from '../model/ModelError.js';
 import { collapsedIds } from '../ops/add.js';
 import { reportedImportWarnings } from '../ops/decision.js';
 import { runBatch, runOps } from '../ops/index.js';
@@ -140,6 +142,7 @@ import { plainText, preserveText } from '../xml/preserve.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from '../validate/structural.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type Validator, type ValidatorContext, type ValidatorRun } from '../validate/validators.js';
 import { buildView, type ModelView } from '../query/model-view.js';
+import { firstLine } from '../shared/utils/text.js';
 
 /**
  * Options of the in-memory pipeline. Writing (out, dryRun, backup,
@@ -162,7 +165,7 @@ export interface MutationOptions {
   engine?: LayoutEngine;
   /** platform profile whose new findings are reported: 'auto' (default) detects it, 'none' switches it off */
   platform?: PlatformChoice;
-  /** receives the layout engines' diagnostic lines during this call (src/shared/debug.ts; the CLI: BPMN_LAYOUT_DEBUG) */
+  /** receives the layout engines' diagnostic lines during this call (src/shared/LayoutDebug.ts; the CLI: BPMN_LAYOUT_DEBUG) */
   debug?: DebugSink;
   /** validators run on the candidate XML inside the transaction (src/validate/validators.ts); errors they find in the change block the write */
   validators?: Validator[];
@@ -738,9 +741,6 @@ async function incrementalLayout(doc: Doc, before: Before, relocated: string[], 
 }
 
 /** The first line of an error message. */
-function firstLine(err: unknown): string {
-  return String((err as Error).message ?? err).split('\n')[0]!;
-}
 
 /**
  * Lays the document out in the decided mode. In auto mode a failing
@@ -779,7 +779,7 @@ async function runLayout(doc: Doc, requested: LayoutMode, before: Before, reloca
  * and leaves nothing half done: the caller keeps its input when it throws.
  */
 export async function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
-  return withLayoutDebug(opts.debug, () => withConventions(doc, opts.conventions, () => mutate(doc, ops, opts)));
+  return LayoutDebug.during(opts.debug, () => withConventions(doc, opts.conventions, () => mutate(doc, ops, opts)));
 }
 
 /** Runs `fn` with the document's id conventions set for the call (MutationOptions.conventions), its own back afterwards. */
@@ -999,7 +999,7 @@ export interface CheckResult {
  * document: pass a document of its own (validateXml and checkFile parse one).
  */
 export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
-  return withLayoutDebug(opts.debug, async () => {
+  return LayoutDebug.during(opts.debug, async () => {
     await ensureProfile(doc, opts.platform ?? 'auto');
     let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
     const structuralErrors = validation.errors.length;

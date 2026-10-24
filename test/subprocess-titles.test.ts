@@ -33,7 +33,7 @@ import { applyToXml, metricsXml, newXml } from '../src/api.js';
 import { layoutProblems, locateProblems } from '../src/diagram/metrics.js';
 import { renderSvg } from '../src/render/index.js';
 import { titleBox } from '../src/diagram/text.js';
-import { parseXml } from '../src/model/moddle.js';
+import { parseXml } from '../src/model/utils/moddle.js';
 
 interface Box {
   x: number;

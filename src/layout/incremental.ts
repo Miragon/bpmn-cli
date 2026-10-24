@@ -111,12 +111,12 @@
  *  model in `laidOut`: the same shapes and connections, every bound, label
  *  and waypoint within 2 px.
  */
-import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
+import { LayoutDebug } from '../shared/LayoutDebug.js';
 import type { Doc } from '../model/document.js';
 import { resolveExpanded } from './index.js';
 import { layoutClean } from './clean/engine.js';
 import { SIZES } from '../diagram/types.js';
-import { is, layoutRoot, parseXml, type El } from '../model/moddle.js';
+import { is, layoutRoot, parseXml, type El } from '../model/utils/moddle.js';
 import { successorOf } from '../model/change-set.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from '../diagram/containers.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/geom.js';
@@ -130,6 +130,7 @@ import { attachedSide } from '../diagram/router.js';
 import { closeStrip, fitInFrame, makeSpace } from '../diagram/space.js';
 import { activitySize, BOTTOM_ROOM, titleBox } from '../diagram/text.js';
 import { pruneDi, pruneEdges, writePlanes } from '../diagram/write.js';
+import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
 
 /* ------------------------------------------------------------------ */
 /* snapshot                                                             */
@@ -713,28 +714,8 @@ function closeStrips(ctx: Ctx, strips: Array<{ plane: Plane; box: Box; poolId?: 
     const beyond = [...st.plane.shapes.values()].some((s) => isLeaf(s) && s.bounds.x >= to && (!band || (cy(s.bounds) >= band.y && cy(s.bounds) <= band.y + band.height)) && !keep?.has(s.id));
     if (!beyond) continue;
     const r = closeStrip(st.plane, { axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
-    if (layoutDebugOn()) layoutDebug(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${r ? `closed, moved ${[...r.moved].join(',')}` : 'kept'}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${r ? `closed, moved ${[...r.moved].join(',')}` : 'kept'}`);
     if (r) r.moved.forEach((x) => ctx.place.moved.add(x));
-  }
-}
-
-type PlaneState = { shapes: Map<DShape, { bounds: Box; label?: Box }>; edges: Map<DEdge, { points: Point[]; label?: Box }> };
-
-function saveState(plane: Plane): PlaneState {
-  const st: PlaneState = { shapes: new Map(), edges: new Map() };
-  for (const s of plane.shapes.values()) st.shapes.set(s, { bounds: copyBox(s.bounds), ...(s.label ? { label: copyBox(s.label) } : {}) });
-  for (const e of plane.edges.values()) st.edges.set(e, { points: copyPoints(e.points), ...(e.label ? { label: copyBox(e.label) } : {}) });
-  return st;
-}
-
-function restoreState(st: PlaneState): void {
-  for (const [s, v] of st.shapes) {
-    s.bounds = v.bounds;
-    if (v.label) s.label = v.label;
-  }
-  for (const [e, v] of st.edges) {
-    e.points = v.points;
-    if (v.label) e.label = v.label;
   }
 }
 
@@ -756,11 +737,11 @@ function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: numbe
   // the strip on this row ends where the next shape starts (the drawing's gap there may be smaller than the median)
   const end = Math.min(to, ...onRow.filter((s) => s.bounds.x >= right(box) - 1).map((s) => s.bounds.x));
   if (!onRow.some((s) => s.bounds.x >= end - 3)) return undefined;
-  const saved = saveState(plane);
+  const saved = new PlaneCheckpoint(plane);
   const r = closeStrip(plane, { axis: 'x', from, to: end, gap, ignore, within: row });
   if (!r) return undefined;
   const leaves = [...plane.shapes.values()].filter(isLeaf);
-  const before = (s: DShape): Box => saved.shapes.get(s)!.bounds;
+  const before = (s: DShape): Box => saved.boundsOf(s);
   const moved = leaves.filter((m) => r.moved.has(m.id));
   const clash = moved.some((m) => leaves.some((o) => !r.moved.has(o.id) && o.id !== m.hostId && o.hostId !== m.id && overlaps(m.bounds, o.bounds, 10) && !overlaps(before(m), before(o), 10)));
   // a moved expanded sub-process must not come over a shape that stays (a shape of another row below its border)
@@ -784,7 +765,7 @@ function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: numbe
     return e.kind === 'association' || e.kind === 'dataAssociation' || behind(stayed);
   });
   if (clash || covers || crossed || tethered || r.resized.size) {
-    restoreState(saved);
+    saved.restore();
     return undefined;
   }
   return r;
@@ -945,7 +926,7 @@ function pullJoins(ctx: Ctx): void {
     (ctx.place.joins ??= new Map()).set(join.id, S.id);
     ctx.relocated.add(join.id);
     for (const e of plane.edges.values()) if (e.sourceId === join.id || e.targetId === join.id) ctx.reroute.add(e.id);
-    if (layoutDebugOn()) layoutDebug(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${S.id}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${S.id}`);
   }
 }
 
@@ -1042,7 +1023,7 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
       e.sourceId = ends.sourceId;
       e.targetId = ends.targetId;
     }
-    if (layoutDebugOn()) layoutDebug(`[route] ${fid}: ${ctx.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[route] ${fid}: ${ctx.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
     routeKept(ctx, plane, e);
   }
   // what the placement broke (the space tool, a new shape on a line) is routed again now, like at the end of a single command
@@ -1054,7 +1035,7 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
     if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
     const was = ctx.routedNow.get(e.id) ?? ctx.edgesBefore.get(e);
     if (!was || (!brokenEdge(plane, e, was, { detached }) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
-    if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken when ${id} was placed`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[route] ${e.id}: broken when ${id} was placed`);
     routeKept(ctx, plane, e);
   }
   if (!s.label && hasExternalLabel(s) && raw<string>(el, 'name')) placeShapeLabel(plane, s);
@@ -1226,7 +1207,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
         const ends = edgeEnds(e.el);
         if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now, { detached }) && !grazes(plane, e, ctx.place.continued)) continue;
         ctx.reroute.add(e.id);
-        if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: broken after it was routed`);
+        if (LayoutDebug.on()) LayoutDebug.log(`[route] ${e.id}: broken after it was routed`);
         continue;
       }
       if (ctx.newEdges.has(e.id)) {
@@ -1250,7 +1231,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
                 : undefined;
       if (why) {
         ctx.reroute.add(e.id);
-        if (layoutDebugOn()) layoutDebug(`[route] ${e.id}: ${why}`);
+        if (LayoutDebug.on()) LayoutDebug.log(`[route] ${e.id}: ${why}`);
       }
     }
   }
@@ -1597,7 +1578,7 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
     const now = hardCounts(m);
     const added = [...now].filter(([k, c]) => c > (hard!.get(k) ?? 0)).map(([k]) => k);
     const ok = !added.length && m.score < base!.score;
-    if (layoutDebugOn()) layoutDebug(`[repair] ${what}: score ${base!.score} -> ${m.score}${added.length ? `, added ${added.join(' ')}` : ''}: ${ok ? 'kept' : 'undone'}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${what}: score ${base!.score} -> ${m.score}${added.length ? `, added ${added.join(' ')}` : ''}: ${ok ? 'kept' : 'undone'}`);
     if (ok) {
       base = m;
       hard = now;
@@ -1615,7 +1596,7 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
         // another drawn line it did not cross before (the guard would undo it)
         const other = target === n ? e : n;
         if (polylinesCross(pts, other.points) || (target === e && crossesNewDrawnLine(plane, target, pts))) {
-          if (layoutDebugOn()) layoutDebug(`[repair] ${target.id} routed again (it crossed: ${n.id} x ${e.id}): still crossing, not measured`);
+          if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${n.id} x ${e.id}): still crossing, not measured`);
           continue;
         }
         trials++;

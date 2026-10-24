@@ -16,7 +16,7 @@
  */
 import type { Doc } from '../model/document.js';
 import { labelOf, speakingStem, typeRequest } from '../ids/style.js';
-import { addTo, is, many, type El } from '../model/moddle.js';
+import { addTo, is, many, type El } from '../model/utils/moddle.js';
 import { ZEEBE_URI } from './descriptor.js';
 
 /** Adds `<zeebe:userTask />` to a user task of a Camunda 8 file that has none; true when it did. */

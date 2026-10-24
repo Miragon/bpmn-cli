@@ -40,18 +40,15 @@
  *    property cleanup when unused.
  */
 import type { Doc } from '../model/document.js';
-import { modelError, usageError } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
 import { kindByName, kindLabel, triggerOf } from '../model/kinds.js';
 import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
-import { addTo, collaboration, is, many, removeFrom, type El } from '../model/moddle.js';
+import { addTo, collaboration, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/change-set.js';
 import { relabelGroup } from '../diagram/groups.js';
 
 export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): string {
   if (explicit) {

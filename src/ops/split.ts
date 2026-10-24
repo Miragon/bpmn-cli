@@ -25,9 +25,10 @@
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
 import type { Doc } from '../model/document.js';
-import { modelError, usageError, type CliError } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
+import { type CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
-import { is, type El } from '../model/moddle.js';
+import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
 import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
@@ -38,9 +39,6 @@ import { laneOf } from './containers.js';
 import { createSequenceFlow, flowChange, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
 import type { AddOp, FlowOptions, SplitBranch, SplitOp } from './types.js';
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 function gatewayKind(token: string | undefined): string {
   const kind = token ?? 'exclusiveGateway';

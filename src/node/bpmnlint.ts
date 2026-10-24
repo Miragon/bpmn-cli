@@ -101,9 +101,10 @@ import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../validate/bpmnlint-validator.js';
 import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../ids/conventions.js';
-import { ioError } from '../shared/errors.js';
+import { ioError } from '../shared/utils/errors.js';
 import type { NamedValidator, Validator, ValidatorFinding } from '../validate/validators.js';
 import { findUp, gitRoot } from './find-up.js';
+import { firstLine } from '../shared/utils/text.js';
 
 export const BPMNLINT_CONFIG_FILE = '.bpmnlintrc';
 
@@ -167,9 +168,6 @@ interface LoadFailure {
 
 let libs: Libs | LoadFailure | undefined;
 
-function firstLine(err: unknown): string {
-  return String((err as Error)?.message ?? err).split('\n')[0]!;
-}
 
 function versionOf(req: Require, pkg: string): { version: string; dir: string } | undefined {
   try {

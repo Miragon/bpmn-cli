@@ -38,14 +38,15 @@
  * string is never modified.
  */
 import { parseOps } from './ops/batch.js';
-import type { DebugSink } from './shared/debug.js';
+import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import { layoutView, type LayoutView } from './query/layout-view.js';
 import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
 import { Doc, type NewDocOptions } from './model/document.js';
-import { CliError, usageError } from './shared/errors.js';
+import { CliError } from './shared/CliError.js';
+import { usageError } from './shared/utils/errors.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
@@ -288,4 +289,9 @@ export async function findXml(xml: string, text: string, opts: { kind?: string }
 export async function extensionsXml(xml: string, id: string): Promise<ExtensionInfo[]> {
   const doc = await Doc.fromXml(xml);
   return listAllExtensions(doc.require(id));
+}
+
+/** Sets (or, without an argument, clears) the process-wide sink of the layout engines' diagnostic lines. */
+export function setLayoutDebug(sink?: DebugSink): void {
+  LayoutDebug.setProcessSink(sink);
 }

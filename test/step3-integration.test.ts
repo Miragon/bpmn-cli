@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, showXml } from '../src/api.js';
-import { CliError } from '../src/shared/errors.js';
+import { CliError } from '../src/shared/CliError.js';
 import { mutationSummary, renderSummary } from '../src/report/command-report.js';
 
 /** The bounds of an element's shape. */

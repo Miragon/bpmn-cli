@@ -22,7 +22,7 @@ import { applyToXml, newXml } from '../src/api.js';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/validate/bpmnlint-validator.js';
 import { idConventionsFromLint, ID_NAMING_RULE } from '../src/ids/conventions.js';
 import { Doc } from '../src/model/document.js';
-import type { CliError } from '../src/shared/errors.js';
+import type { CliError } from '../src/shared/CliError.js';
 import type { Op } from '../src/ops/types.js';
 import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/bpmnlint.js';
 import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/files.js';

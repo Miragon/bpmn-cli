@@ -30,7 +30,7 @@ import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
 import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
-import { is, many, type El } from '../src/model/moddle.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/ops/index.js';

@@ -27,7 +27,7 @@
  */
 import type { LayoutProblem } from '../diagram/metrics.js';
 import type { FormatResult } from '../format/index.js';
-import type { Warning } from '../shared/errors.js';
+import type { Warning } from '../shared/CliError.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './view-text.js';
 import type { CheckResult, ConventionsReport, LayoutStatus, MutationResult } from '../pipeline/index.js';
 import type { PlatformSummary } from '../platform/profiles/profile.js';

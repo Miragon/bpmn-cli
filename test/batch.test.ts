@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
-import { isCliError } from '../src/shared/errors.js';
+import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
 import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';

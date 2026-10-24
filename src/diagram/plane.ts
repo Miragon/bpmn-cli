@@ -25,7 +25,7 @@
  *  - semantics(defs) indexes the semantic model once (ids, lanes, pools,
  *    scopes); homePlane() says on which plane an element's DI belongs.
  */
-import { is, type El } from '../model/moddle.js';
+import { is, type El } from '../model/utils/moddle.js';
 import type { ShapeKind } from './router.js';
 import { unionAll, type Box, type Point } from './geom.js';
 import { titleBox, titleDepth } from './text.js';

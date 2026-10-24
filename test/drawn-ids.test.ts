@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml } from '../src/api.js';
 import { Doc } from '../src/model/document.js';
-import { parseXml } from '../src/model/moddle.js';
+import { parseXml } from '../src/model/utils/moddle.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
 

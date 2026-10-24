@@ -63,6 +63,7 @@
 import { BpmnModdle } from 'bpmn-moddle';
 import { isDecisionLinkWarning, reportedImportWarnings } from '../ops/decision.js';
 import type { NamedValidator, ValidatorContext, ValidatorFinding } from './validators.js';
+import { firstLine } from '../shared/utils/text.js';
 
 export const BPMNLINT_VALIDATOR = 'bpmnlint';
 
@@ -165,9 +166,6 @@ const MAX_DEPTH = 16;
 /** The reason of an extends that closes a cycle. */
 const CYCLE = 'it extends itself, directly or through the configs it extends (a cycle; bpmnlint fails on the whole file with it); its rules apply once';
 
-function firstLine(err: unknown): string {
-  return String((err as Error)?.message ?? err).split('\n')[0]!;
-}
 
 /**
  * The descriptors BpmnModdle rejects (prefix -> its first line), added one

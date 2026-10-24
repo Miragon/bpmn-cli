@@ -22,16 +22,13 @@
  *  - laneOf(): the (deepest) lane referencing a node.
  */
 import type { Doc } from '../model/document.js';
-import { modelError } from '../shared/errors.js';
+import { modelError } from '../shared/utils/errors.js';
 import { kindByName, kindLabel } from '../model/kinds.js';
 import { contextOf, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
-import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
+import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/change-set.js';
 import type { AddOp } from './types.js';
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 function nameOf(el: El): string | undefined {
   return el.get<string | undefined>('name');

@@ -20,7 +20,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { is, many, type El } from '../src/model/moddle.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';

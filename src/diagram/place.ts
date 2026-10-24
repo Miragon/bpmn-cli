@@ -102,10 +102,10 @@
  *  associated with, data object / store below-right of the activity it is
  *  connected to (unconnected: like an unconnected node).
  */
-import { layoutDebug, layoutDebugOn } from '../shared/debug.js';
+import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { annotationSize } from '../layout/clean/place.js';
 import { SIZES } from './types.js';
-import { is, type El } from '../model/moddle.js';
+import { is, type El } from '../model/utils/moddle.js';
 import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, type Box, type Point } from './geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf, labelSizeOf } from './labels.js';
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
@@ -624,10 +624,10 @@ function chainCost(plane: Plane, box: Box, cand: Cand): number {
       const q = line[j + 1]!;
       if (run && properCross(run[0], run[1], p, q)) {
         cost += CROSSING;
-        if (layoutDebugOn()) layoutDebug(`[place]   chain at c=${cand.c} crosses ${e.id}`);
+        if (LayoutDebug.on()) LayoutDebug.log(`[place]   chain at c=${cand.c} crosses ${e.id}`);
       } else if ((rest && segmentHits(p, q, rest, 2)) || (head && segmentHits(p, q, head, 2))) {
         cost += LINE_HIT;
-        if (layoutDebugOn()) layoutDebug(`[place]   chain at c=${cand.c} is hit by ${e.id}`);
+        if (LayoutDebug.on()) LayoutDebug.log(`[place]   chain at c=${cand.c} is hit by ${e.id}`);
       }
     }
   }
@@ -647,14 +647,14 @@ function cheapest(ctx: PlaceCtx, id: string, plane: Plane, from: DShape, kind: S
     const box = { x: cand.x, y: cand.c - cand.size.height / 2, ...cand.size };
     const source = { ...from, bounds: cand.top ?? shiftedBox(from.bounds, cand.insert ?? cand.grow) };
     const cost = connectionCost(plane, source, box, kind, cand.insert ?? cand.grow) + chainCost(plane, box, cand) + cand.penalty;
-    if (layoutDebugOn()) layoutDebug(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[place] from ${from.id} x=${cand.x} c=${cand.c} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
     ranked.push({ cand, cost });
   }
   // stable: equal costs keep the candidates' order
   ranked.sort((a, b) => a.cost - b.cost);
   (ctx.heads ??= new Map()).set(id, ranked.length);
   const k = Math.min(ctx.skip?.get(id) ?? 0, ranked.length - 1);
-  if (k > 0 && layoutDebugOn()) layoutDebug(`[place] ${id}: candidate ${k + 1} of ${ranked.length} (the local repair retries the chain)`);
+  if (k > 0 && LayoutDebug.on()) LayoutDebug.log(`[place] ${id}: candidate ${k + 1} of ${ranked.length} (the local repair retries the chain)`);
   return ranked[k]?.cand ?? cands[0]!;
 }
 
@@ -720,7 +720,7 @@ function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>,
   const top = Math.min(...tops);
   if (top <= floor) return cands;
   const insert: Shift = { line: top - 0.5, delta: Math.ceil(bottom(box) + 20 - top), ...band };
-  if (layoutDebugOn()) layoutDebug(`[place] open row c=${first} floor=${Math.round(floor)} line=${insert.line} delta=${insert.delta} lines=${lines.join(',')} blockers=${blockers.map((b) => b.y).join(',')}`);
+  if (LayoutDebug.on()) LayoutDebug.log(`[place] open row c=${first} floor=${Math.round(floor)} line=${insert.line} delta=${insert.delta} lines=${lines.join(',')} blockers=${blockers.map((b) => b.y).join(',')}`);
   const n = Math.min(OPEN_MAX_SHAPES, moving(insert.line));
   cands.push({ x, c: first, size, extent, penalty: basePenalty + OPEN_ROW + OPEN_PER_SHAPE * n + insert.delta * 0.2, insert });
   return cands;
@@ -1078,7 +1078,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
       const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, Math.max(sp.gap, sGap)) ?? full);
       recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
-    if (layoutDebugOn()) layoutDebug(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
     if (!S) (ctx.continued ??= new Set()).add(id);
     return;
@@ -1286,7 +1286,7 @@ function pullPlacedJoins(ctx: PlaceCtx, plane: Plane, id: string, pending: Reado
     if (!preds.some((p) => cx(join.bounds) < p.bounds.x && !leadsTo(ctx, jid, p.id))) continue;
     plane.shapes.delete(jid);
     (ctx.joins ??= new Map()).set(jid, S.id);
-    if (layoutDebugOn()) layoutDebug(`[join] ${jid}: a flow from ${preds.map((p) => p.id).join(', ')} would enter it backwards: placed again before ${S.id}`);
+    if (LayoutDebug.on()) LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((p) => p.id).join(', ')} would enter it backwards: placed again before ${S.id}`);
     placeAfter(ctx, plane, jid, preds, pending);
   }
 }

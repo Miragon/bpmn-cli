@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Doc } from '../src/model/document.js';
-import { isCliError } from '../src/shared/errors.js';
+import { isCliError } from '../src/shared/utils/errors.js';
 import { addElement } from '../src/ops/add.js';
 import { connectElements } from '../src/ops/connect.js';
 import { retypeElement } from '../src/ops/retype.js';

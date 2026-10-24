@@ -25,7 +25,7 @@
 import { IdRegistry } from '../ids/slugs.js';
 import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
 import { kindLabel, kindOf, triggerOf } from '../model/kinds.js';
-import { indexById, is, isDiElement, walk, type El } from '../model/moddle.js';
+import { indexById, is, isDiElement, walk, type El } from '../model/utils/moddle.js';
 
 /** Element types a full redraw draws (shape, edge or plane) or keys by id. */
 const DRAWN = [

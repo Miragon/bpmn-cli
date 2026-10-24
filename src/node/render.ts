@@ -24,7 +24,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { RENDER_MAX_SIZE, renderSvg, type RenderOptions, type RenderProblem, type RenderTile } from '../render/index.js';
-import { CliError } from '../shared/errors.js';
+import { CliError } from '../shared/CliError.js';
 
 export interface PngImage {
   png: Uint8Array;

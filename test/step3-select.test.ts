@@ -13,8 +13,8 @@ import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
 import { layoutView } from '../src/query/layout-view.js';
 import { readPlanes, type DShape } from '../src/diagram/plane.js';
-import { isCliError } from '../src/shared/errors.js';
-import type { El } from '../src/model/moddle.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 

@@ -59,7 +59,7 @@
  *    longest vertical one (undefined when the flow has none).
  */
 import { labelSize } from './types.js';
-import { is } from '../model/moddle.js';
+import { is } from '../model/utils/moddle.js';
 import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from './geom.js';
 import { frameOf, raw, titleOf, type DEdge, type DShape, type Plane } from './plane.js';
 import { attachedSide } from './router.js';

@@ -23,7 +23,7 @@
  */
 import { kindLabel } from '../../model/kinds.js';
 import { unkeptEntries } from '../../model/mirror.js';
-import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/moddle.js';
+import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
 import { decisionLinkOf } from '../../ops/decision.js';
 import { decodeXml, elementChildren, readXmlText, XmlTextError } from '../../xml/text-reader.js';
 import { C7_URIS, CAMUNDA_URI, camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, OPERATON_URI, ZEEBE_URI } from '../descriptor.js';

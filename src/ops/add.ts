@@ -62,10 +62,11 @@
  * Doc (collapseRequests) so the pipeline can hand them to the layouter.
  */
 import type { Doc } from '../model/document.js';
-import { CliError, modelError, usageError } from '../shared/errors.js';
+import { CliError } from '../shared/CliError.js';
+import { modelError, usageError } from '../shared/utils/errors.js';
 import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
-import { addTo, is, localType, many, type El } from '../model/moddle.js';
+import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet, renamedNote, type Change } from '../model/change-set.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
@@ -102,9 +103,6 @@ export function collapsedIds(doc: Doc): string[] {
 /* helpers                                                              */
 /* ------------------------------------------------------------------ */
 
-function idOf(el: El): string {
-  return el.get<string>('id');
-}
 
 /** Start triggers an event sub-process can be created with (`eventSubProcess:<trigger>`). */
 const EVENT_SUBPROCESS_TRIGGERS: Trigger[] = (kindByName('startEvent')?.triggers ?? []).filter((t) => t !== 'none');

@@ -39,8 +39,9 @@
  * ambiguous or unsupported (a DOCTYPE, differing root elements), the result
  * is `next` itself (`mode: 'plain'` with a reason).
  */
-import { parseXml } from '../model/moddle.js';
+import { parseXml } from '../model/utils/moddle.js';
 import { attrKey, decodeXml, elementChildren, hasCharacterData, idOf, readXmlText, type XDocument, type XElement } from './text-reader.js';
+import { firstLine } from '../shared/utils/text.js';
 
 export interface PreservedText {
   xml: string;
@@ -94,15 +95,12 @@ export async function preserveText(original: string, baseline: string, next: str
   return plainText(original, next, reason);
 }
 
-function firstLine(err: unknown): string {
-  return String((err as Error)?.message ?? err).split('\n')[0]!;
-}
 
 /** Whether bpmn-moddle reads `xml` as the model `next` was serialised from. */
 async function readsAs(xml: string, next: string): Promise<boolean> {
   const write = async (text: string): Promise<string | undefined> => {
     try {
-      // read like Doc.fromXml reads (model/moddle.ts parseXml: references with whitespace around the id resolve)
+      // read like Doc.fromXml reads (model/utils/moddle.ts parseXml: references with whitespace around the id resolve)
       const { moddle, definitions } = await parseXml(text);
       return (await moddle.toXML(definitions, { format: true })).xml;
     } catch {

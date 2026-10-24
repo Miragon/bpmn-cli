@@ -16,6 +16,7 @@
  */
 import { BpmnModdle, type ImportResult, type ImportWarning } from 'bpmn-moddle';
 import type { ModdleElement } from 'moddle';
+import { ModelError } from '../ModelError.js';
 
 export type El = ModdleElement;
 
@@ -29,19 +30,33 @@ export interface Model {
   importWarnings: ImportWarning[];
 }
 
-export class ModelError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly details: Record<string, unknown> = {},
-  ) {
-    super(message);
-    this.name = 'ModelError';
-  }
-}
-
 export function createModdle(): BpmnModdle {
   return new BpmnModdle();
+}
+
+/* ------------------------------------------------------------------ */
+/* raw property reads (never create a lazy collection)                 */
+/* ------------------------------------------------------------------ */
+
+/** The id of an element (bpmn-moddle's accessor). */
+export function idOf(el: El): string {
+  return el.get<string>('id');
+}
+
+/** A property as it is stored, without bpmn-moddle creating an empty collection for it. */
+export function peek<T>(el: El | undefined, prop: string): T | undefined {
+  return el ? ((el as unknown as Record<string, unknown>)[prop] as T | undefined) : undefined;
+}
+
+/** A collection property as it is stored; none: an empty list. */
+export function list(el: El | undefined, prop: string): El[] {
+  const v = peek<unknown>(el, prop);
+  return Array.isArray(v) ? (v as El[]) : [];
+}
+
+/** The id to show for an element in a message: `?` without one. */
+export function shownId(el: El | undefined): string {
+  return peek<string>(el, 'id') ?? '?';
 }
 
 /* ------------------------------------------------------------------ */
