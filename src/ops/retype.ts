@@ -10,7 +10,7 @@
  *    dataObjectRef, processRef, messageFlows...). Dropped properties ->
  *    W_PROPERTY_DROPPED (contained children with ids are cascade-removed and
  *    reported). Such removed content (e.g. the flow elements of a sub-process
- *    retyped to a task) is also recorded per document (takeDroppedContent):
+ *    retyped to a task) is also recorded in the running edit (EditContext.droppedContent):
  *    the write pipeline refuses it with E_WOULD_DROP_CONTENT unless --force,
  *    so an agent never deletes a whole subtree by asking for another kind.
  *  - allowed: task <-> task/subProcess/callActivity (activity family),
@@ -43,14 +43,14 @@
  *    a write reports every item once. Retyped to a userTask in a Camunda 8
  *    file, the task gets zeebe:userTask (platform/defaults.ts).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { zeebeUserTaskDefault } from '../platform/defaults.js';
@@ -77,29 +77,6 @@ import type { RetypeOp, TriggerOptions } from './types.js';
 export { withoutProfileDuplicates } from './covers.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
-
-/** Content a retype removed because the new kind cannot hold it. */
-export interface DroppedContent {
-  /** the retyped element */
-  element: string;
-  /** its new kind */
-  kind: string;
-  /** ids of every removed element (children, nested content, their flows) */
-  removed: string[];
-}
-
-const droppedContent = new WeakMap<Doc, DroppedContent[]>();
-
-/** Returns and forgets the content retypes removed from `doc` since the last call. */
-export function takeDroppedContent(doc: Doc): DroppedContent[] {
-  const drops = droppedContent.get(doc) ?? [];
-  droppedContent.delete(doc);
-  return drops;
-}
-
-function recordDroppedContent(doc: Doc, drop: DroppedContent): void {
-  droppedContent.set(doc, [...(droppedContent.get(doc) ?? []), drop]);
-}
 
 const TRIGGER_OPTION_KEYS: Array<keyof TriggerOptions> = [
   'timer',
@@ -328,7 +305,7 @@ function dropProp(doc: Doc, el: El, p: PropDescriptor, value: unknown, to: KindD
     const before = cs.removed.length;
     for (const child of children) cascadeRemove(doc, child, cs);
     const removed = cs.removed.slice(before).map((c) => c.id);
-    if (removed.length) recordDroppedContent(doc, { element: idOf(el), kind: to.kind, removed });
+    if (removed.length) doc.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
   }
   cs.warn({
     code: 'W_PROPERTY_DROPPED',
@@ -397,7 +374,7 @@ function swapType(doc: Doc, el: El, to: KindDef, cs: ChangeSet): El {
     }
   }
   // what the batch recorded about the element (its change entries, what it was called as a flow end) is about the new one
-  doc.replaceElement(el, next);
+  doc.edit.replaceElement(el, next);
   doc.invalidate();
   return next;
 }

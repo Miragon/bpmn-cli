@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { IdRegistry, isValidId, slugify } from '../src/ids/slugs.js';
 import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids/style.js';
 import { kindByName } from '../src/model/kinds.js';
@@ -7,9 +7,9 @@ import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/mo
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
 import { many } from '../src/model/utils/moddle.js';
 import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { ChangeSet } from '../src/model/change-set.js';
+import { runOps } from '../src/index.js';
+import { mutateDoc } from '../src/index.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from './helpers.js';
 
 function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {

@@ -30,7 +30,7 @@
  * Findings are matched by code, element (by identity, so a renamed element
  * keeps its findings) and subject (e.g. the attribute name).
  */
-import type { Doc } from '../../model/document.js';
+import type { Doc } from '../../model/Doc.js';
 import { CliError } from '../../shared/CliError.js';
 import { ioError, usageError } from '../../shared/utils/errors.js';
 import type { El } from '../../model/utils/moddle.js';

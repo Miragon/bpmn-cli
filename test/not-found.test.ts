@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { CliError } from '../src/shared/CliError.js';
-import { Doc } from '../src/model/document.js';
-import { runOps } from '../src/ops/index.js';
+import { Doc } from '../src/model/Doc.js';
+import { runOps } from '../src/index.js';
 
 async function invoice(): Promise<string> {
   return (
@@ -88,6 +88,6 @@ describe('E_NOT_FOUND candidates', () => {
     }
     expect(err?.details.candidates?.[0]).toBe('Activity_CheckInvoice');
     expect(err?.details.hint).toBe('Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.');
-    expect(doc.batch).toBeUndefined();
+    expect(doc.edit.batch).toBeUndefined();
   });
 });

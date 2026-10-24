@@ -22,10 +22,10 @@
  * order. Rewrites `collaboration.participants`; a kept diagram gets its pool
  * bands reordered in the diagram phase (src/format/index.ts, orderPools).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { insertInto, is, many, removeFrom, type El } from '../model/utils/moddle.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { changeOf, idOf } from './set.js';
 import type { OrderOp } from './types.js';
 

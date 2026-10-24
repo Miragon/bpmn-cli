@@ -32,7 +32,7 @@ import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHigh
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
-import { assertProcessId, assertTarget, Doc } from './model/document.js';
+import { Doc } from './model/Doc.js';
 import { CliError, type Warning } from './shared/CliError.js';
 import { ioError, isCliError, usageError } from './shared/utils/errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
@@ -44,7 +44,7 @@ import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './ops/rules.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
-import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
+import { LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
 import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
 import { findElements } from './query/model-view.js';
@@ -210,7 +210,7 @@ async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & Ou
       opts,
       (o) => mutateFile(file, ops, o),
       (doc, o) => {
-        assertLossless(doc, o);
+        doc.assertLossless(o);
         return mutateDocToFile(doc, ops, o);
       },
     );
@@ -505,7 +505,7 @@ withMutationOptions(
     .option('--no-executable', 'isExecutable=false')
     .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (v: string) => {
       try {
-        assertTarget(v);
+        Doc.assertTarget(v);
       } catch {
         throw new InvalidArgumentError('expected camunda8 or camunda7 (camunda7 also covers CIB seven and Operaton)');
       }
@@ -518,7 +518,7 @@ withMutationOptions(
     const stdout = file === '-' || opts.out === '-';
     // what fails without a .bpmnlintrc fails first, as before one was read: an invalid --id, a file that exists
     const processId = o['id'] as string | undefined;
-    if (processId !== undefined) assertProcessId(processId);
+    if (processId !== undefined) Doc.assertProcessId(processId);
     if (!stdout) await assertNewFile(opts.out ?? file, opts);
     // the id conventions of the .bpmnlintrc that applies to the file written (the process id only where they name bpmn:Process)
     const target = opts.out && opts.out !== '-' ? opts.out : file === '-' ? undefined : file;

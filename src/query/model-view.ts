@@ -35,7 +35,7 @@
  *  attribute names, deduplicated) and `extensionElements` (the extension
  *  element types in document order, repeated ones included).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../model/kinds.js';

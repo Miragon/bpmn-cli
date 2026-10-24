@@ -24,12 +24,12 @@
  *    is checked when addElement creates it.
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
 import { withSuffix } from '../ids/slugs.js';
@@ -83,7 +83,7 @@ function createdId(cs: ChangeSet): string {
  * gateway's label, gateway_checkJoin); a taken one gets `_2` (a declared
  * camelCase / PascalCase: `2`), cut so that it stays within MAX_ID (the
  * join kept); with the id it wanted (`base`), which a generated one has
- * (Doc.markGenerated: a retype in the same batch gives it the new prefix).
+ * (EditContext.markGenerated: a retype in the same batch gives it the new prefix).
  */
 function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: string): { id: string; base?: string } {
   if (op.joinId) return { id: op.joinId };
@@ -97,7 +97,7 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
   }
   // the result's `conventions:` line: a join under a prefix the declared conventions name, other than the file's style gives
   const style = doc.idStyle;
-  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.recordDeclaredId(id);
+  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.edit.recordDeclaredId(id);
   return { id, base };
 }
 
@@ -240,7 +240,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     cs.merge(joinCs);
     joinId = createdId(joinCs);
     // generated, not the caller's (addElement claimed it as given)
-    if (wanted.base !== undefined) doc.markGenerated(joinId, wanted.base);
+    if (wanted.base !== undefined) doc.edit.markGenerated(joinId, wanted.base);
     cs.bind(op.joinAs, doc.get(joinId));
     const joinEntry = cs.created.find((c) => c.id === joinId);
     if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;

@@ -42,11 +42,14 @@
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
-import { Doc } from '../model/document.js';
+import { Doc } from '../model/Doc.js';
 import { declaredEncoding, isUtf8 } from '../xml/encoding.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { Op } from '../ops/types.js';
-import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline/index.js';
+import type { CheckOptions, CheckResult, LayoutDocOptions, MutationOptions, MutationResult } from '../pipeline/index.js';
+import { EditTransaction } from '../pipeline/EditTransaction.js';
+import { Relayout } from '../pipeline/Relayout.js';
+import { DocCheck } from '../pipeline/DocCheck.js';
 import type { IdConventions } from '../ids/conventions.js';
 import type { Validator } from '../validate/validators.js';
 import { projectLint, type FileBpmnlintOptions } from './bpmnlint.js';
@@ -114,7 +117,7 @@ export async function readDoc(file: string): Promise<Doc> {
 /** Loads a file and refuses to continue when bpmn-moddle dropped content (E_IMPORT_LOSSY unless force). */
 export async function loadDoc(file: string, opts: { force?: boolean } = {}): Promise<Doc> {
   const doc = await readDoc(file);
-  assertLossless(doc, opts);
+  doc.assertLossless(opts);
   return doc;
 }
 
@@ -199,7 +202,7 @@ async function toFile(
 
 /** Applies ops to a loaded (or created) document and writes the result to opts.out ?? doc.file. */
 export async function mutateDocToFile(doc: Doc, ops: Op[], opts: FileMutationOptions = {}): Promise<MutationResult> {
-  return toFile(doc, opts, (context) => mutateDoc(doc, ops, { ...opts, ...context }));
+  return toFile(doc, opts, (context) => new EditTransaction(doc, ops, { ...opts, ...context }).run());
 }
 
 /** Loads a file, applies ops, writes back (or to opts.out). */
@@ -210,15 +213,15 @@ export async function mutateFile(file: string, ops: Op[], opts: FileMutationOpti
 
 /** `bpmn layout`: loads a file, redraws it (or with `tidy` removes overlaps), writes back. */
 export async function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> {
-  assertLayoutOptions(opts);
+  new Relayout(opts).assertOptions();
   return layoutDocToFile(await loadDoc(file, opts), opts);
 }
 
 /** `bpmn layout` on a loaded document (E_IMPORT_LOSSY unless force), written to opts.out ?? doc.file unless dryRun. */
 export async function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): Promise<MutationResult> {
-  assertLayoutOptions(opts);
-  assertLossless(doc, opts);
-  return toFile(doc, opts, (context) => layoutDoc(doc, { ...opts, ...context }));
+  new Relayout(opts).assertOptions();
+  doc.assertLossless(opts);
+  return toFile(doc, opts, (context) => new Relayout({ ...opts, ...context }).run(doc));
 }
 
 /**
@@ -228,10 +231,10 @@ export async function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): P
  */
 export async function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> {
   const doc = await readDoc(file);
-  return checkDoc(doc, { ...opts, ...(await fileContext(file, opts)) });
+  return new DocCheck({ ...opts, ...(await fileContext(file, opts)) }).run(doc);
 }
 
 /** checkFile for a document read elsewhere (`bpmn validate -`): a document without a file looks up its .bpmnlintrc from `opts.lintFrom`. */
 export async function checkLoadedDoc(doc: Doc, opts: FileCheckOptions = {}): Promise<CheckResult> {
-  return checkDoc(doc, { ...opts, ...(await fileContext(doc.file, opts)) });
+  return new DocCheck({ ...opts, ...(await fileContext(doc.file, opts)) }).run(doc);
 }

@@ -3,6 +3,7 @@
  */
 import type { Warning } from '../shared/CliError.js';
 import type { El } from './utils/moddle.js';
+import { renamedNote } from './utils/renames.js';
 
 export interface Change {
   id: string;
@@ -36,56 +37,45 @@ export interface Rename {
   regenerated?: true;
 }
 
-/**
- * The element a change entry or a rename is about (ops/flows.ts flowChange,
- * ops/set.ts changeOf, Doc.recordRename): ChangeSet.rename renames only the
- * entries of the renamed element, not those of an element that took the id
- * the rename freed. Kept out of the objects, so JSON and the entries' shape
- * stay as they are.
- */
-const elements = new WeakMap<object, El>();
-
-/** Records that `entry` (a change entry or a rename) is about `el`; returns `entry`. */
-export function about<T extends object>(entry: T, el: El | undefined): T {
-  if (el) elements.set(entry, el);
-  return entry;
-}
-
-/** An element a retype replaced (Doc.replaceElement) -> the element that took its place. */
-const successors = new WeakMap<El, El>();
-
-/**
- * Records that `next` took the place of `old` (a retype that changes the
- * type builds a new element, ops/retype.ts swapType): an entry about `old`
- * is about `next` (ChangeSet.rename), so a rename recorded for `next` (its
- * id regenerated) renames the entries an earlier op made for `old`.
- */
-export function replaced(old: El, next: El): void {
-  if (old !== next) successors.set(old, next);
-}
-
-/** The element `el` is now: the last one that took its place (replaced), or itself (also read by layout/incremental.ts changedEnds). */
-export function successorOf(el: El): El {
-  const seen = new Set<El>([el]);
-  for (let next = successors.get(el); next && !seen.has(next); next = successors.get(el)) {
-    seen.add(next);
-    el = next;
-  }
-  return el;
-}
-
-/**
- * The detail a change entry gets from what followEnds did to a flow whose
- * ends changed: ` (renamed from <old>: ...)` when it renamed the flow; for
- * `''`, ` (id added: it had none)`: a flow without id got one from its new
- * ends.
- */
-export function renamedNote(old: string | undefined): string {
-  if (old === '') return ' (id added: it had none)';
-  return old ? ` (renamed from ${old}: its id named its old ends)` : '';
-}
-
 export class ChangeSet {
+  /**
+   * The element a change entry or a rename is about (ops/flows.ts flowChange,
+   * ops/set.ts changeOf, EditContext.recordRename): rename renames only the
+   * entries of the renamed element, not those of an element that took the id
+   * the rename freed. Kept out of the objects, so JSON and the entries' shape
+   * stay as they are.
+   */
+  private static readonly elements = new WeakMap<object, El>();
+
+  /** An element a retype replaced (EditContext.replaceElement) -> the element that took its place. */
+  private static readonly successors = new WeakMap<El, El>();
+
+  /** Records that `entry` (a change entry or a rename) is about `el`; returns `entry`. */
+  static about<T extends object>(entry: T, el: El | undefined): T {
+    if (el) ChangeSet.elements.set(entry, el);
+    return entry;
+  }
+
+  /**
+   * Records that `next` took the place of `old` (a retype that changes the
+   * type builds a new element, ops/retype.ts swapType): an entry about `old`
+   * is about `next` (rename), so a rename recorded for `next` (its id
+   * regenerated) renames the entries an earlier op made for `old`.
+   */
+  static recordReplacement(old: El, next: El): void {
+    if (old !== next) ChangeSet.successors.set(old, next);
+  }
+
+  /** The element `el` is now: the last one that took its place (recordReplacement), or itself (also read by layout/incremental.ts changedEnds). */
+  static successorOf(el: El): El {
+    const seen = new Set<El>([el]);
+    for (let next = ChangeSet.successors.get(el); next && !seen.has(next); next = ChangeSet.successors.get(el)) {
+      seen.add(next);
+      el = next;
+    }
+    return el;
+  }
+
   created: Change[] = [];
   changed: Change[] = [];
   removed: Change[] = [];
@@ -143,10 +133,10 @@ export class ChangeSet {
    */
   rename(renames: Rename[]): this {
     for (const r of renames) {
-      const el = elements.get(r);
-      const renamed = el && successorOf(el);
+      const el = ChangeSet.elements.get(r);
+      const renamed = el && ChangeSet.successorOf(el);
       const created = this.created.some((c) => c.id === r.from || c.id === r.to);
-      for (const c of [...this.created, ...this.changed]) if (c.id === r.from && (!renamed || successorOf(elements.get(c) ?? renamed) === renamed)) c.id = r.to;
+      for (const c of [...this.created, ...this.changed]) if (c.id === r.from && (!renamed || ChangeSet.successorOf(ChangeSet.elements.get(c) ?? renamed) === renamed)) c.id = r.to;
       if (r.regenerated) {
         const old = new RegExp(`(?<![A-Za-z0-9_.-])${r.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
         for (const c of [...this.created, ...this.changed]) if (c.detail) c.detail = c.detail.replace(old, r.to);
@@ -165,12 +155,12 @@ export class ChangeSet {
       for (let i = this.renames.length - 1; i >= 0; i--) if (this.renames[i]!.to === origin && !this.renames[i]!.takeover) origin = this.renames[i]!.from;
       this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(r.was && origin === r.from ? { detail: r.was } : {}) };
       for (const c of this.changed) if (c.id === r.to && c.detail) c.detail = c.detail.replace(renamedNote(r.from), '');
-      this.renames.push(about({ ...r, takeover: true as const }, el));
+      this.renames.push(ChangeSet.about({ ...r, takeover: true as const }, el));
     }
     return this;
   }
 
-  /** Binds a batch alias to an element (ops/index.ts registers it). */
+  /** Binds a batch alias to an element (OpRunner registers it). */
   bind(alias: string | undefined, el: El | undefined): this {
     if (alias && el) this.bindings.push({ alias, el });
     return this;

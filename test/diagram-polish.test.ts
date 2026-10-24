@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
 import { routeOrthogonal } from '../src/diagram/router.js';
@@ -20,7 +20,8 @@ import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagra
 import type { Box, Point } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');

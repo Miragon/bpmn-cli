@@ -11,7 +11,7 @@
  *    indentation unit, `/>`, a CDATA section stays one);
  *  - comments next to removed elements are reported, never dropped silently;
  *  - incoming / outgoing lists are written the way the file keeps them
- *    (model/mirror.ts), never added for flows that did not change;
+ *    (model/utils/mirror.ts), never added for flows that did not change;
  *  - the safety net: a text that would not read back as the changed model
  *    falls back to bpmn-moddle's serialisation.
  *
@@ -22,11 +22,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import { preserveText } from '../src/xml/preserve.js';
 import { readXmlText, XmlTextError } from '../src/xml/text-reader.js';
 import { definitionsXml } from './helpers.js';

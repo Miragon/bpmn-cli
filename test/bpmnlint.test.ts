@@ -21,13 +21,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/validate/bpmnlint-validator.js';
 import { idConventionsFromLint, ID_NAMING_RULE } from '../src/ids/conventions.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import type { CliError } from '../src/shared/CliError.js';
 import type { Op } from '../src/ops/types.js';
 import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/bpmnlint.js';
 import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/files.js';
 import { gitRoot } from '../src/node/find-up.js';
-import { checkDoc } from '../src/pipeline/index.js';
+import { checkDoc } from '../src/index.js';
 import { advisoryValidators, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/report/command-report.js';
 import type { ValidatorFinding, ValidatorIssue } from '../src/validate/validators.js';
 

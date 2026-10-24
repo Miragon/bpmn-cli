@@ -19,16 +19,16 @@
  * 2.2 and Operaton 2.1 (deployment and, for 1b/1c, an external task fetch).
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';

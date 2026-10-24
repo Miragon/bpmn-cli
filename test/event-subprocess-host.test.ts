@@ -4,12 +4,12 @@
  * attach as well). add --on and move --on refuse it, validate reports it.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import type { El } from '../src/model/utils/moddle.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml } from './helpers.js';
 

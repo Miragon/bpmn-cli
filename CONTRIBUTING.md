@@ -51,9 +51,9 @@ them on a private corpus without copying it into the repository, are described i
   | `layout/` | the layout engines: `clean/` redraws, `incremental.ts` keeps a hand-made drawing |
   | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
   | `render/` | the SVG of a diagram |
-  | `validate/` | structural validation, the validator hook, the bpmnlint validator |
+  | `validate/` | structural validation, the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with |
   | `query/` | the read views: `show`, `find`, `--around`, `--context`, the selectors |
-  | `pipeline/` | the transactions: `mutateDoc`, `layoutDoc`, `checkDoc` |
+  | `pipeline/` | the transactions: `EditTransaction` (`mutateDoc`) with its `DiagramUpdate`, `Relayout` (`layoutDoc`), `DocCheck` (`checkDoc`) |
   | `report/` | what a command prints, as text and JSON, and the guide |
   | `node/` | the Node-only layer (`@miragon/bpmn-cli/node`): files, the `.bpmnlintrc`, PNG |
 

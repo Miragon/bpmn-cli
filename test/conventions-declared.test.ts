@@ -10,10 +10,11 @@ import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../src/api.js';
 import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
 import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/ids/conventions.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';
 import { definitionsXml } from './helpers.js';
 
@@ -232,7 +233,7 @@ describe('new ids take the declared prefix and case', () => {
       { op: 'add', kind: 'serviceTask', name: 'Phase 22', in: 'Process_1' },
     ], declared({ prefixes: { 'bpmn:ServiceTask': 'ServiceTask_' }, case: 'PascalCase' }));
     expect(createdIds(pascal)).toEqual(['ServiceTask_Phase2', 'ServiceTask_Phase2No2', 'ServiceTask_Phase22']);
-    // snake_case keeps `_2`; the id a retype in the batch gives (Doc.regeneratedId) and the W_ID_PREFIX_STALE hint take No too
+    // snake_case keeps `_2`; the id a retype in the batch gives (EditContext.regeneratedId) and the W_ID_PREFIX_STALE hint take No too
     const snake = await run(definitionsXml(''), [{ op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }, { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }], declared({ case: 'snake_case' }));
     expect(createdIds(snake)).toEqual(['serviceTask_step_1', 'serviceTask_step_1_2']);
     const retyped = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/>'), [{ op: 'add', kind: 'task', name: 'Step 1', in: 'Process_1', as: '$t' }, { op: 'retype', id: '$t', kind: 'serviceTask' }]);

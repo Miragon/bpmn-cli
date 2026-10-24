@@ -32,7 +32,7 @@
  * at the element; a message flow names its ends with their pools and its
  * message; a message, signal, error or escalation names what uses it.
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';

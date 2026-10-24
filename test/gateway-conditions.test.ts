@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Doc } from '../src/model/document.js';
+import type { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { addElement } from '../src/ops/add.js';
 import { connectElements } from '../src/ops/connect.js';

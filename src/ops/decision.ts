@@ -36,12 +36,12 @@
  * its zeebe:calledDecision with its resultVariable).
  */
 import type { ImportWarning } from 'bpmn-moddle';
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { kindLabel } from '../model/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { C7_URIS, CAMUNDA_URI, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
-import type { ChangeSet } from '../model/change-set.js';
+import type { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './covers.js';
 
 export interface DecisionLink {

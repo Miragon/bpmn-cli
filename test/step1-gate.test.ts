@@ -22,12 +22,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { diffProblems, layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DShape } from '../src/diagram/plane.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

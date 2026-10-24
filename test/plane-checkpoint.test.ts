@@ -3,7 +3,7 @@
  * incremental layout and the format ops.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { PlaneCheckpoint } from '../src/diagram/PlaneCheckpoint.js';
 import { BPMN_NS } from './helpers.js';

@@ -3,7 +3,7 @@
  * (writing it back, pruning, colours) on hand-written DI fixtures.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { readPlanes, semantics, homePlane, frameOf, type Plane } from '../src/diagram/plane.js';
 import { applyColors, colorsOf, diIds, pruneDi, writePlanes } from '../src/diagram/write.js';
 import { is, type El } from '../src/model/utils/moddle.js';

@@ -29,7 +29,7 @@
  *    alias, also when the new element got a new id); resolveOp(op)
  *    returns a copy of the op with every alias replaced by the element's
  *    current id (an alias of a removed element is E_NOT_FOUND). The format
- *    ops run after the layout: runBatch (ops/index.ts) resolves them with
+ *    ops run after the layout: OpRunner.runBatch resolves them with
  *    the ids at the end of the batch.
  *  - The result lists every alias with its element's final id
  *    (MutationResult.aliases, the `aliases:` line).
@@ -37,7 +37,7 @@
  *    (`branches`, their `nodes`) are read only where they are arrays of
  *    objects, so a malformed one reaches splitFlow's own check (E_USAGE).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
 import { usageError } from '../shared/utils/errors.js';
 import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';

@@ -2,14 +2,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
 import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
 import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 /** Runs parseOps and returns the thrown CliError. */
 function failure(input: unknown): { code: string; message: string; op?: number; hint?: string; candidates?: string[] } {

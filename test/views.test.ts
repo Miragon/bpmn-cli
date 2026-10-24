@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { showXml, viewXml } from '../src/api.js';
 import { aroundView, elementContext, implementationOf } from '../src/query/context.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 
 const ROOT = join(import.meta.dirname, '..');

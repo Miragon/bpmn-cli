@@ -596,7 +596,7 @@ draw the engine corpus with the same CLI.
 ## Roundtrip fidelity
 
 A write changes the text of the elements it changed and nothing else
-(src/xml/preserve.ts, src/model/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
+(src/xml/preserve.ts, src/model/utils/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
 - `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic

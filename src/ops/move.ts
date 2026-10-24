@@ -16,7 +16,7 @@
  *  - lane + placement may be combined.
  *  - ids of flows removed while moving stay claimed for the rest of the
  *    command, so a flow created by the placement never reuses one.
- *  - with flow ids kept (Doc.keepsFlowId, `--keep-flow-ids`) a moved node's one
+ *  - with flow ids kept (EditContext.keepsFlowId, `--keep-flow-ids`) a moved node's one
  *    out-flow, which the detach takes out, is put back as the first flow the
  *    placement creates out of that node (the flow node -> successor of a
  *    splice, node -> anchor of a prepend, or node -> next node when the next
@@ -75,12 +75,12 @@
  *    unless op.lane names one. --on re-attaches a boundary event (it takes
  *    its host's lane).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
-import { about, ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
 import { applyFlowOptions, carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
@@ -115,7 +115,7 @@ export function moveElements(doc: Doc, op: MoveOp): ChangeSet {
       const dropped: DroppedLabel[] = [];
       // every bridge the detaches made, in order, and (flow ids kept) what the moved nodes' out-flows had before
       const bridges: BridgeMade[] = [];
-      const before = doc.followFlowEnds ? undefined : labelsBefore(doc, nodes);
+      const before = doc.edit.followFlowEnds ? undefined : labelsBefore(doc, nodes);
       nodes.forEach((node, i) => {
         const prev = nodes[i - 1];
         dropped.push(...moveNode(doc, node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1], bridges }));
@@ -478,12 +478,12 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   const outgoing = doc.outgoing(node);
   const flowIds = [...incoming, ...outgoing].map(idOf);
   // with flow ids kept: the node's one out-flow, which the detach takes out, is put back at the new place
-  const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && doc.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
+  const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && doc.edit.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
   const oldTarget = oldOut?.get<El>('targetRef');
   const outLabel = oldOut && labelOf(oldOut, node);
   // ... and the flow from the node moved before (a -> b of `move a b`): when the detach takes it out (this node is not
   // bridged: an end event, a join), the append after that node puts it back as it was
-  const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && doc.keepsFlowId(f));
+  const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && doc.edit.keepsFlowId(f));
   const prevLabel = fromPrev && labelOf(fromPrev, prev!);
   const bridge = detachWithBridge(doc, node, true, cs, undefined, 'move');
   if (bridge) chain.bridges?.push({ node, target: bridge.flow.get<El>('targetRef'), bridge });
@@ -617,7 +617,7 @@ interface LabelBefore {
 function labelsBefore(doc: Doc, nodes: El[]): Map<El, LabelBefore> {
   const out = new Map<El, LabelBefore>();
   for (const n of nodes) {
-    for (const f of doc.outgoing(n)) if (doc.keepsFlowId(f)) out.set(f, { name: f.get<string | undefined>('name'), condition: f.get<El | undefined>('conditionExpression'), associations: [] });
+    for (const f of doc.outgoing(n)) if (doc.edit.keepsFlowId(f)) out.set(f, { name: f.get<string | undefined>('name'), condition: f.get<El | undefined>('conditionExpression'), associations: [] });
   }
   if (!out.size) return out;
   for (const a of doc.byId().values()) {
@@ -702,8 +702,8 @@ function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBe
     const entry = last === -1 ? flowChange(flow) : cs.changed[last]!;
     const detail = entry.detail ?? '';
     const said = /\(was -> [^()]*\)$/.test(detail) ? `${detail.slice(0, -1)}; ${clause})` : `${detail}${detail ? ' ' : ''}(${clause})`;
-    if (last === -1) cs.change(about({ ...entry, detail: said }, flow));
-    else cs.changed[last] = about({ ...entry, detail: said }, flow);
+    if (last === -1) cs.change(ChangeSet.about({ ...entry, detail: said }, flow));
+    else cs.changed[last] = ChangeSet.about({ ...entry, detail: said }, flow);
   });
 }
 

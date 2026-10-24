@@ -9,6 +9,15 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
+import type { Doc } from './model/Doc.js';
+import type { ChangeSet } from './model/ChangeSet.js';
+import type { Op } from './ops/types.js';
+import { OpRunner } from './ops/OpRunner.js';
+import type { CheckOptions, CheckResult, LayoutDocOptions, MutationOptions, MutationResult } from './pipeline/index.js';
+import { EditTransaction } from './pipeline/EditTransaction.js';
+import { Relayout } from './pipeline/Relayout.js';
+import { DocCheck } from './pipeline/DocCheck.js';
+
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -19,11 +28,10 @@ export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, 
 /* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
 export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
 /* the building blocks */
-export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/document.js';
+export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
 export { layoutModel } from './layout/index.js';
-export { runOp, runOps } from './ops/index.js';
 export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
 export type {
   Op,
@@ -45,7 +53,8 @@ export type {
   SpaceOp,
   TidyOp,
 } from './ops/types.js';
-export { mutateDoc, layoutDoc, checkDoc, assertLossless, LAYOUT_MODES, type CheckOptions, type CheckResult, type ConventionsReport, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult, type ValidationDelta } from './pipeline/index.js';
+export { LAYOUT_MODES, type CheckOptions, type CheckResult, type ConventionsReport, type LayoutDocOptions, type LayoutMode, type LayoutStatus, type MutationOptions, type MutationResult } from './pipeline/index.js';
+export type { ValidationDelta } from './validate/FindingBaseline.js';
 /* text-preserving output: what mutateDoc uses to keep a file's formatting (for hosts that serialise models themselves) */
 export { preserveText, type PreservedText } from './xml/preserve.js';
 /* a host's validators, run inside the write transaction (MutationOptions.validators) and by validate (CheckOptions.validators) */
@@ -55,7 +64,7 @@ export { bpmnlintValidator, resolveBpmnlintConfig, BPMNLINT_COVERS, BPMNLINT_VAL
 /* declared id conventions: what element-id-naming of the project's .bpmnlintrc says about new ids (its naming helpers injected; @miragon/bpmn-cli/node reads the .bpmnlintrc) */
 export { idConventionsFromLint, conventionsView, renderConventions, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode, type ConventionsView, type ConventionsRow, type Undeclared } from './ids/conventions.js';
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
-export { ChangeSet, type Change } from './model/change-set.js';
+export { ChangeSet, type Change } from './model/ChangeSet.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
 export { runProfile, loadProfile, loadProfiles, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profiles/profile.js';
@@ -70,3 +79,33 @@ export { runFormatOps, type FormatResult, type FormatEntry } from './format/inde
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/** Runs one op on its own (src/ops/OpRunner.ts). */
+export function runOp(doc: Doc, op: Op): ChangeSet {
+  return new OpRunner(doc).runOp(op);
+}
+
+/** Runs a batch (OpRunner.runBatch) and returns what changed. */
+export function runOps(doc: Doc, ops: Op[]): ChangeSet {
+  return new OpRunner(doc).runBatch(ops).changes;
+}
+
+/** Applies ops to an in-memory document (src/pipeline/EditTransaction.ts). */
+export function mutateDoc(doc: Doc, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
+  return new EditTransaction(doc, ops, opts).run();
+}
+
+/** `bpmn layout` on an in-memory document (src/pipeline/Relayout.ts). */
+export function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
+  return new Relayout(opts).run(doc);
+}
+
+/** What `bpmn validate` finds in a document (src/pipeline/DocCheck.ts). */
+export function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
+  return new DocCheck(opts).run(doc);
+}
+
+/** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content while importing the document (unless force; Doc.assertLossless). */
+export function assertLossless(doc: Doc, opts: { force?: boolean } = {}): void {
+  doc.assertLossless(opts);
+}

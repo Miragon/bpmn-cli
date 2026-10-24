@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { aroundView } from '../src/query/context.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutProblems, locateProblems, type LayoutProblem } from '../src/diagram/metrics.js';
 import { readPlanes, type Plane } from '../src/diagram/plane.js';
 import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/render/index.js';

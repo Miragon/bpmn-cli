@@ -14,7 +14,7 @@
  * Camunda 7 defaults (camunda:historyTimeToLive of a new process) are
  * Doc.initProcess.
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { labelOf, speakingStem, typeRequest } from '../ids/style.js';
 import { addTo, is, many, type El } from '../model/utils/moddle.js';
 import { ZEEBE_URI } from './descriptor.js';

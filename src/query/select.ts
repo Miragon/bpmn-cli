@@ -31,7 +31,7 @@
  *    shapes; boundary events too, they follow their host), and elements that are not drawn are left out of what the
  *    selectors found (explicit ids stay, the op reports them).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { kindFilter } from './model-view.js';

@@ -28,10 +28,10 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/report/guide.js';
-import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { runOps } from '../src/index.js';
+import { mutateDoc } from '../src/index.js';
 import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/profiles/c8.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 

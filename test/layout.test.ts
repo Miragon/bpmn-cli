@@ -36,15 +36,14 @@ import { LayoutDebug } from '../src/shared/LayoutDebug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { titleBox } from '../src/diagram/text.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
 import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
 import type { GNode, ScopeLayout } from '../src/diagram/types.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { collapsedIds } from '../src/ops/add.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
-import { layoutDoc, mutateDoc } from '../src/pipeline/index.js';
+import { layoutDoc, mutateDoc } from '../src/index.js';
 
 /* ------------------------------------------------------------------ */
 /* DI reading                                                           */
@@ -1416,8 +1415,8 @@ describe('clean layout engine', () => {
       { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'H', 'EH', 'H2', 'EH2'] },
       { op: 'add', kind: 'lane', id: 'L2', name: 'Logistics', in: 'P', members: ['A', 'SP', 'B', 'E'] },
     ]);
-    expect(collapsedIds(doc)).toEqual(['SP']);
-    const L = await layout('lanes-collapsed-boundary-labels', doc, { collapse: collapsedIds(doc) });
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['SP']);
+    const L = await layout('lanes-collapsed-boundary-labels', doc, { collapse: doc.layoutRequests.expansion().collapse });
     expect(L.report.through).toEqual([]);
     expect(L.report.labelClashes).toEqual([]);
     expectLabelsClear(L);
@@ -2191,8 +2190,8 @@ describe('clean layout engine', () => {
       task('T2', 'Two', 'T1'),
       end('E2', 'T2'),
     ]);
-    expect(collapsedIds(doc)).toEqual(['Sub']);
-    const L = await layout('collapsed-sub', doc, { collapse: collapsedIds(doc) });
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['Sub']);
+    const L = await layout('collapsed-sub', doc, { collapse: doc.layoutRequests.expansion().collapse });
     expectClean(L);
     expectLabelsClear(L);
     expect(L.planes).toHaveLength(2);

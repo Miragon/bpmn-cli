@@ -11,7 +11,7 @@
 import { EXIT_CODES } from '../shared/CliError.js';
 import { usageError } from '../shared/utils/errors.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/kinds.js';
-import { Doc } from '../model/document.js';
+import { Doc } from '../model/Doc.js';
 import { SINGLE_TOP } from '../ops/ext.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
 import { OP_NAMES } from '../ops/types.js';

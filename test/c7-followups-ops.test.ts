@@ -28,17 +28,17 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
-import { runOps } from '../src/ops/index.js';
+import { runOps } from '../src/index.js';
 import { removeElements } from '../src/ops/remove.js';
 import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
 
