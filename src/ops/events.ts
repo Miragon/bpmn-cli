@@ -22,33 +22,19 @@
  *    with opts.timerKind). `nonInterrupting` sets cancelActivity=false on
  *    boundary events and isInterrupting=false on start events (rejected for
  *    error/cancel/compensate boundary events: E_INVALID_TRIGGER).
- *  - describeTrigger(): short human text of the trigger details, e.g.
- *    "PT2D", "message OrderReceived", "error PaymentFailed (PAY-001)", "" when none.
- *  - triggerDetails(): the same as structured data for --json views.
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { typeRequest } from '../ids/utils/requests.js';
-import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
-import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
+import { kindLabel, kindOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
+import { addTo, is, walk, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import type { TriggerOptions } from './types.js';
 import { vendorContent } from './utils/elements.js';
+import { ALWAYS_INTERRUPTING, TIMER_PROPS } from './EventTrigger.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
-
-export interface TriggerDetails {
-  trigger: Trigger;
-  timer?: { kind: 'cycle' | 'duration' | 'date'; value: string };
-  message?: { id: string; name?: string };
-  error?: { id: string; name?: string; code?: string };
-  signal?: { id: string; name?: string };
-  escalation?: { id: string; name?: string; code?: string };
-  condition?: string;
-  link?: string;
-  nonInterrupting?: boolean;
-}
 
 /** Root element types a trigger may reference, with their id prefix. */
 export type RootRefType = 'bpmn:Message' | 'bpmn:Error' | 'bpmn:Signal' | 'bpmn:Escalation';
@@ -60,8 +46,6 @@ const ROOT_PREFIX: Record<RootRefType, string> = {
   'bpmn:Escalation': 'Escalation',
 };
 
-/** Triggers that must interrupt (never non-interrupting). */
-const INTERRUPTING_ONLY: Trigger[] = ['error', 'cancel', 'compensate'];
 /** Start event triggers that are only valid inside an event sub-process. */
 const EVENT_SUBPROCESS_ONLY: Trigger[] = ['error', 'escalation', 'compensate'];
 
@@ -161,12 +145,6 @@ export function classifyTimer(value: string, override?: string): TimerKind {
   if (/^P/i.test(v)) return 'duration';
   return 'date';
 }
-
-const TIMER_PROPS: Record<'cycle' | 'duration' | 'date', string> = {
-  cycle: 'timeCycle',
-  duration: 'timeDuration',
-  date: 'timeDate',
-};
 
 function expression(doc: Doc, body: string): El {
   return doc.moddle.create('bpmn:FormalExpression', { body });
@@ -377,7 +355,7 @@ function isEventSubProcess(el: El | undefined): boolean {
 
 function applyInterrupting(doc: Doc, event: El, trigger: Trigger, opts: TriggerOptions): void {
   const want = opts.nonInterrupting;
-  const interruptingOnly = INTERRUPTING_ONLY.includes(trigger);
+  const interruptingOnly = ALWAYS_INTERRUPTING.includes(trigger);
   if (is(event, 'bpmn:BoundaryEvent')) {
     if (want === true) {
       if (interruptingOnly) {
@@ -463,102 +441,4 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   }
   doc.invalidate();
   return warnings;
-}
-
-/* ------------------------------------------------------------------ */
-/* description                                                          */
-/* ------------------------------------------------------------------ */
-
-function refInfo(ref: El | undefined, codeProp?: string): { id: string; name?: string; code?: string } | undefined {
-  if (!ref) return undefined;
-  const name = ref.get<string | undefined>('name');
-  const code = codeProp ? ref.get<string | undefined>(codeProp) : undefined;
-  return { id: idOf(ref), ...(name ? { name } : {}), ...(code ? { code } : {}) };
-}
-
-function bodyOf(expr: El | undefined): string | undefined {
-  return expr?.get<string | undefined>('body');
-}
-
-/** Structured trigger details of an event (undefined for non-events). */
-export function triggerDetails(event: El): TriggerDetails | undefined {
-  if (!is(event, 'bpmn:Event')) return undefined;
-  const trigger = triggerOf(event) ?? 'none';
-  const details: TriggerDetails = { trigger };
-  const def = many(event, 'eventDefinitions')[0];
-  if (def) {
-    switch (trigger) {
-      case 'timer': {
-        for (const kind of ['cycle', 'duration', 'date'] as const) {
-          const value = bodyOf(def.get<El | undefined>(TIMER_PROPS[kind]));
-          if (value) details.timer = { kind, value };
-        }
-        break;
-      }
-      case 'message': {
-        const info = refInfo(def.get<El | undefined>('messageRef'));
-        if (info) details.message = info;
-        break;
-      }
-      case 'error': {
-        const info = refInfo(def.get<El | undefined>('errorRef'), 'errorCode');
-        if (info) details.error = info;
-        break;
-      }
-      case 'signal': {
-        const info = refInfo(def.get<El | undefined>('signalRef'));
-        if (info) details.signal = info;
-        break;
-      }
-      case 'escalation': {
-        const info = refInfo(def.get<El | undefined>('escalationRef'), 'escalationCode');
-        if (info) details.escalation = info;
-        break;
-      }
-      case 'conditional': {
-        const condition = bodyOf(def.get<El | undefined>('condition'));
-        if (condition) details.condition = condition;
-        break;
-      }
-      case 'link': {
-        const link = def.get<string | undefined>('name');
-        if (link) details.link = link;
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  if (is(event, 'bpmn:BoundaryEvent') && event.get<boolean>('cancelActivity') === false) details.nonInterrupting = true;
-  if (is(event, 'bpmn:StartEvent') && event.get<boolean>('isInterrupting') === false) details.nonInterrupting = true;
-  return details;
-}
-
-function named(info: { id: string; name?: string; code?: string } | undefined, fallback: string): string {
-  if (!info) return fallback;
-  return `${fallback} ${info.name ?? info.id}${info.code ? ` (${info.code})` : ''}`;
-}
-
-/** Short human text of the trigger, e.g. "PT2D", "message OrderReceived"; "" when none. */
-export function describeTrigger(event: El): string {
-  const d = triggerDetails(event);
-  if (!d || d.trigger === 'none') return '';
-  switch (d.trigger) {
-    case 'timer':
-      return d.timer ? d.timer.value : 'timer';
-    case 'message':
-      return named(d.message, 'message');
-    case 'error':
-      return named(d.error, 'error');
-    case 'signal':
-      return named(d.signal, 'signal');
-    case 'escalation':
-      return named(d.escalation, 'escalation');
-    case 'conditional':
-      return d.condition ? `condition ${d.condition}` : 'conditional';
-    case 'link':
-      return d.link ? `link ${d.link}` : 'link';
-    default:
-      return d.trigger;
-  }
 }

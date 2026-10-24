@@ -101,7 +101,9 @@ import { definitionsOf, nestedEntries, parseSlotRef, resolveNested, slotsOf, SLO
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
-import { applyTrigger, bindRefAs, ensureRootElement } from './events.js';
+import { bindRefAs, ensureRootElement } from './events.js';
+import { EventTrigger } from './EventTrigger.js';
+import { TriggerChange } from './TriggerChange.js';
 import { vendorContent } from './utils/elements.js';
 import { setCorrelationKey } from './ext.js';
 import { renamedNote } from '../model/utils/renames.js';
@@ -1041,79 +1043,6 @@ function assertCompensationInScope(doc: Doc, event: El, activity: El, full: stri
 /* events                                                               */
 /* ------------------------------------------------------------------ */
 
-/** The trigger of an event plus its details, as `set`/`add` options (read from the model). */
-export function currentTrigger(el: El): { trigger: Trigger; opts: TriggerOptions } {
-  const trigger = triggerOf(el) ?? 'none';
-  const opts: TriggerOptions = {};
-  const def = (el.get<El[] | undefined>('eventDefinitions') ?? [])[0];
-  const body = (p: string): string | undefined => def?.get<El | undefined>(p)?.get<string | undefined>('body');
-  const ref = (p: string): El | undefined => def?.get<El | undefined>(p);
-  const named = (p: string): string | undefined => ref(p)?.get<string | undefined>('name') ?? ref(p)?.get<string | undefined>('id');
-  if (def) {
-    switch (trigger) {
-      case 'timer': {
-        const cycle = body('timeCycle');
-        const duration = body('timeDuration');
-        const date = body('timeDate');
-        if (cycle) Object.assign(opts, { timer: cycle, timerKind: 'cycle' });
-        else if (duration) Object.assign(opts, { timer: duration, timerKind: 'duration' });
-        else if (date) Object.assign(opts, { timer: date, timerKind: 'date' });
-        break;
-      }
-      case 'message':
-        opts.message = named('messageRef');
-        break;
-      case 'error':
-        opts.error = named('errorRef');
-        opts.errorCode = ref('errorRef')?.get<string | undefined>('errorCode');
-        break;
-      case 'signal':
-        opts.signal = named('signalRef');
-        break;
-      case 'escalation':
-        opts.escalation = named('escalationRef');
-        opts.escalationCode = ref('escalationRef')?.get<string | undefined>('escalationCode');
-        break;
-      case 'conditional':
-        opts.when = body('condition');
-        break;
-      case 'link':
-        opts.link = def.get<string | undefined>('name');
-        break;
-      default:
-        break;
-    }
-  }
-  if (is(el, 'bpmn:BoundaryEvent') && el.get<boolean | undefined>('cancelActivity') === false) opts.nonInterrupting = true;
-  if (is(el, 'bpmn:StartEvent') && el.get<boolean | undefined>('isInterrupting') === false) opts.nonInterrupting = true;
-  for (const k of Object.keys(opts) as Array<keyof TriggerOptions>) if (opts[k] === undefined) delete opts[k];
-  return { trigger, opts };
-}
-
-const ALWAYS_INTERRUPTING: Trigger[] = ['error', 'cancel', 'compensate'];
-
-/**
- * True when an event with this trigger can never be non-interrupting:
- * error/cancel/compensate boundary events, error/compensate and untyped
- * start events, and every event that is neither a boundary nor a start event.
- */
-export function interruptingOnly(el: El, trigger: Trigger): boolean {
-  if (is(el, 'bpmn:BoundaryEvent')) return ALWAYS_INTERRUPTING.includes(trigger);
-  if (is(el, 'bpmn:StartEvent')) return ALWAYS_INTERRUPTING.includes(trigger) || trigger === 'none';
-  return true;
-}
-
-/** W_PROPERTY_DROPPED for a non-interrupting flag that a trigger change had to clear. */
-export function warnNonInterruptingDropped(cs: ChangeSet, el: El, trigger: Trigger): void {
-  const position = is(el, 'bpmn:BoundaryEvent') ? 'boundary' : 'start';
-  cs.warn({
-    code: 'W_PROPERTY_DROPPED',
-    message: `nonInterrupting of ${idOf(el)} was dropped: ${trigger === 'none' ? 'untyped' : trigger} ${position} events are always interrupting`,
-    element: idOf(el),
-    hint: `${idOf(el)} now interrupts${position === 'boundary' ? ' its host activity' : ' the enclosing process'}; pick a message, timer, signal, escalation or conditional trigger to keep it non-interrupting.`,
-  });
-}
-
 /** A kind with its article: `an endEvent`, `an intermediateCatchEvent:message`, `a userTask` (userTask is the one kind with a u, said like `you`). */
 const aKind = (kind: string): string => `${/^[aeio]/i.test(kind) ? 'an' : 'a'} ${kind}`;
 
@@ -1203,91 +1132,11 @@ export function reportStaleIdPrefixes(doc: Doc, cs: ChangeSet): void {
   }
 }
 
-/** Throws unless `el` may be non-interrupting with the given trigger. */
-function assertNonInterruptingAllowed(doc: Doc, el: El, trigger: Trigger): void {
-  if (is(el, 'bpmn:BoundaryEvent')) {
-    if (ALWAYS_INTERRUPTING.includes(trigger)) {
-      throw modelError('E_INVALID_TRIGGER', `${trigger} boundary events are always interrupting (${idOf(el)})`, {
-        element: idOf(el),
-        hint: 'Only message, timer, signal, escalation and conditional boundary events can be non-interrupting.',
-      });
-    }
-    return;
-  }
-  if (is(el, 'bpmn:StartEvent')) {
-    const scope = doc.scopeOf(el);
-    if (!scope || !is(scope, 'bpmn:SubProcess') || !scope.get<boolean | undefined>('triggeredByEvent')) {
-      throw modelError('E_INVALID_TRIGGER', `Start event ${idOf(el)} is not inside an event sub-process and cannot be non-interrupting`, {
-        element: idOf(el),
-        hint: 'Only start events of an eventSubProcess can be non-interrupting.',
-      });
-    }
-    if (interruptingOnly(el, trigger)) {
-      throw modelError('E_INVALID_TRIGGER', `A${trigger === 'none' ? 'n untyped' : ` ${trigger}`} start event cannot be non-interrupting (${idOf(el)})`, {
-        element: idOf(el),
-        hint: 'Only message, timer, signal, escalation and conditional start events can be non-interrupting.',
-      });
-    }
-    return;
-  }
-  throw invalidValue(el, 'nonInterrupting', 'only boundary events and start events of event sub-processes can be non-interrupting');
-}
-
-function setNonInterrupting(doc: Doc, el: El, value: boolean): void {
-  if (value) assertNonInterruptingAllowed(doc, el, triggerOf(el) ?? 'none');
-  if (is(el, 'bpmn:BoundaryEvent')) el.set('cancelActivity', !value);
-  else if (is(el, 'bpmn:StartEvent')) el.set('isInterrupting', !value);
-  else assertNonInterruptingAllowed(doc, el, 'none');
-}
-
-/**
- * Message flows touching `event` that its current kind/trigger cannot serve
- * (the rules `connect` applies when creating one): only untyped or message
- * events take part, throw events send, catch events receive.
- */
-export function messageFlowConflicts(doc: Doc, event: El): Array<{ flow: El; why: string }> {
-  if (!is(event, 'bpmn:Event')) return [];
-  const trigger = triggerOf(event) ?? 'none';
-  const out: Array<{ flow: El; why: string }> = [];
-  for (const flow of doc.messageFlows()) {
-    const sends = flow.get<El | undefined>('sourceRef') === event;
-    const receives = flow.get<El | undefined>('targetRef') === event;
-    if (!sends && !receives) continue;
-    let why: string | undefined;
-    if (trigger !== 'none' && trigger !== 'message') why = `a ${trigger} event cannot ${sends ? 'send' : 'receive'} messages`;
-    else if (sends && !is(event, 'bpmn:ThrowEvent')) why = 'catching events cannot send messages';
-    else if (receives && !is(event, 'bpmn:CatchEvent')) why = 'throwing events cannot receive messages';
-    if (why) out.push({ flow, why });
-  }
-  return out;
-}
-
-/**
- * After a kind/trigger change: throws E_INVALID_TRIGGER when a message flow
- * that fitted `event` before (`before` = conflicting flow ids beforehand) no
- * longer does, so the model never ends up with a message flow `connect` would refuse.
- */
-export function assertMessageFlowsFit(doc: Doc, event: El, before: Set<string>): void {
-  const broken = messageFlowConflicts(doc, event).filter((c) => !before.has(idOf(c.flow)));
-  const first = broken[0];
-  if (!first) return;
-  const src = first.flow.get<El | undefined>('sourceRef');
-  const tgt = first.flow.get<El | undefined>('targetRef');
-  throw modelError(
-    'E_INVALID_TRIGGER',
-    `${kindLabel(event)} ${idOf(event)} would break message flow ${idOf(first.flow)} (${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}): ${first.why}`,
-    {
-      element: idOf(event),
-      related: broken.map((c) => idOf(c.flow)),
-      hint: `Remove the message flow first (\`bpmn remove <file> ${broken.map((c) => idOf(c.flow)).join(' ')}\`) or keep a message / untyped event.`,
-    },
-  );
-}
-
 function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeSet): void {
   const def = kindOf(el);
   const allowed = def?.triggers ?? [];
-  const current = currentTrigger(el);
+  const change = new TriggerChange(doc, el);
+  const current = change.current;
   let requested: Trigger | undefined;
   if (keys.has('trigger')) {
     const raw = keys.get('trigger') ?? '';
@@ -1312,7 +1161,7 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
   }
   const trigger = requested ?? current.trigger;
   if (nonInterrupting !== undefined && requested === undefined && !Object.keys(given).length) {
-    setNonInterrupting(doc, el, nonInterrupting);
+    change.setNonInterrupting(nonInterrupting);
     cs.change(ChangeSet.entryOf(el, `nonInterrupting=${nonInterrupting}`));
     return;
   }
@@ -1322,25 +1171,7 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
       hint: `Allowed triggers: ${allowed.join(', ') || 'none'}.`,
     });
   }
-  const merged: TriggerOptions = trigger === current.trigger ? { ...current.opts, ...given } : { ...given };
-  // a new timer value is classified again (R... cycle, P... duration, else date)
-  if (given['timer'] !== undefined) delete merged.timerKind;
-  // the existing non-interrupting flag follows the event unless the new trigger cannot have it
-  let dropNonInterrupting = false;
-  if (nonInterrupting !== undefined) merged.nonInterrupting = nonInterrupting;
-  else if (current.opts.nonInterrupting && interruptingOnly(el, trigger)) {
-    merged.nonInterrupting = false;
-    dropNonInterrupting = true;
-  } else if (current.opts.nonInterrupting) merged.nonInterrupting = true;
-  else delete merged.nonInterrupting;
-  if (merged.nonInterrupting) assertNonInterruptingAllowed(doc, el, trigger);
-  const conflictsBefore = new Set(messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
-  const before = idStateOf(el);
-  const wasLabel = kindLabel(el);
-  for (const w of applyTrigger(doc, el, trigger, merged)) cs.warn(w);
-  assertMessageFlowsFit(doc, el, conflictsBefore);
-  if (dropNonInterrupting) warnNonInterruptingDropped(cs, el, trigger);
-  recordIdState(doc, el, before, wasLabel);
+  change.change(trigger, { ...given, ...(nonInterrupting !== undefined ? { nonInterrupting } : {}) } as TriggerOptions, cs, { strict: true });
   const details = Object.entries(given)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}=${String(v)}`);
@@ -1425,7 +1256,7 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
     if (isEl(def)) out['default'] = idOf(def);
   }
   if (is(el, 'bpmn:Event')) {
-    const { trigger, opts } = currentTrigger(el);
+    const { trigger, opts } = new EventTrigger(el).read();
     out['trigger'] = trigger;
     const { timerKind: _ignored, ...rest } = opts;
     Object.assign(out, rest);

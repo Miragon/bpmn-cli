@@ -49,11 +49,11 @@ import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { applyTrigger, bindRefAs } from './events.js';
+import { bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
-import { assertMessageFlowsFit, currentTrigger, idStateOf, interruptingOnly, messageFlowConflicts, recordIdState, warnNonInterruptingDropped } from './set.js';
+import { TriggerChange } from './TriggerChange.js';
 import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
@@ -167,9 +167,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   }
 
   // read the old trigger state before the swap moves the definitions over
-  const existing = isEvent ? currentTrigger(el) : undefined;
-  const before = idStateOf(el);
-  const conflictsBefore = new Set(messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
+  const change = new TriggerChange(doc, el);
   const target = to.type === el.$type ? el : swapType(doc, el, to, cs);
   applyKindProps(target, from, to);
   if (target !== el) {
@@ -179,21 +177,9 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     if (inapplicable) cs.warn(inapplicable);
     if (new Camunda8Defaults(doc).userTask(target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
   }
-  let dropNonInterrupting = false;
-  if (trigger !== undefined && (!sameTrigger || hasTriggerOptions)) {
-    // same trigger: update its details (keep what was not given); new trigger: build from the given options
-    const opts: TriggerOptions = sameTrigger ? { ...existing?.opts, ...given } : { ...given };
-    if (sameTrigger && given.timer !== undefined && given.timerKind === undefined) delete opts.timerKind;
-    if (existing?.opts.nonInterrupting && given.nonInterrupting === undefined && interruptingOnly(target, trigger)) {
-      opts.nonInterrupting = false;
-      dropNonInterrupting = true;
-    }
-    for (const w of applyTrigger(doc, target, trigger, opts)) cs.warn(w);
-  }
   new SequenceFlows(doc).dropIgnoredConditions(target, cs);
-  if (isEvent) assertMessageFlowsFit(doc, target, conflictsBefore);
-  if (dropNonInterrupting && trigger !== undefined) warnNonInterruptingDropped(cs, target, trigger);
-  recordIdState(doc, target, before, oldLabel);
+  // same trigger: update its details (keep what was not given); new trigger: build from the given options
+  change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, cs, { on: target });
   doc.invalidate();
   const detail =
     from === to && sameTrigger

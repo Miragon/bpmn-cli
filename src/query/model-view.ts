@@ -44,7 +44,7 @@ import { groupName, is, localType, walk, type El, peek, list, shownId } from '..
 import { laneOf } from '../ops/containers.js';
 import { groupMembers } from '../diagram/groups.js';
 import { decisionLinkOf } from '../ops/decision.js';
-import { describeTrigger } from '../ops/events.js';
+import { EventTrigger } from '../ops/EventTrigger.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
 import { readProperties } from '../ops/set.js';
@@ -300,7 +300,7 @@ function bodyOf(expr: El | undefined): string | undefined {
 
 /** Trigger details from the first event definition (fallback while events.ts is a stub). */
 export function triggerText(el: El): string | undefined {
-  const described = describeTrigger(el);
+  const described = new EventTrigger(el).describe();
   if (described) return described;
   const def = list(el, 'eventDefinitions')[0];
   if (!def) return undefined;

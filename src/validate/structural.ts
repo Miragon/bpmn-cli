@@ -64,6 +64,7 @@ import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel,
 import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { FlowRules } from '../model/FlowRules.js';
+import { ALWAYS_INTERRUPTING as NON_INTERRUPTING_FORBIDDEN } from '../ops/EventTrigger.js';
 import type { PlatformChoice } from '../platform/PlatformDetection.js';
 import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
@@ -404,7 +405,6 @@ function checkFlowLinks(ctx: Ctx, node: El): void {
   }
 }
 
-const NON_INTERRUPTING_FORBIDDEN: Trigger[] = ['error', 'cancel', 'compensate'];
 const EVENT_SUBPROCESS_ONLY_STARTS: Trigger[] = ['error', 'escalation', 'compensate'];
 
 function checkEvent(ctx: Ctx, el: El, scope: El): void {
