@@ -2,7 +2,7 @@ import type { Box } from '../diagram/geom.js';
 import type { LayoutProblem } from '../diagram/metrics.js';
 import type { DShape } from '../diagram/plane.js';
 import { is } from '../model/utils/moddle.js';
-import { planeColumns } from '../query/layout-view.js';
+import { DiagramColumns } from '../query/DiagramColumns.js';
 import { MARGIN, MAX_TILES, type Frame, type Item } from './types.js';
 import { contains, meets } from './utils/boxes.js';
 
@@ -43,7 +43,7 @@ export class TileGrid {
     const drawnShape = (s: DShape): boolean => (!frame.drawn || frame.drawn.has(s.id)) && !s.container && s.kind !== 'group' && meets(s.bounds, view);
     const leaves = [...plane.shapes.values()].filter(drawnShape);
     const leafIds = new Set(leaves.map((s) => s.id));
-    const columns = planeColumns(plane)
+    const columns = new DiagramColumns(plane).spans()
       .map((c) => {
         const boxes = c.ids.filter((id) => leafIds.has(id)).map((id) => plane.shapes.get(id)!.bounds);
         return { index: c.index, a: Math.min(...boxes.map((b) => b.x)), b: Math.max(...boxes.map((b) => b.x + b.width)), n: boxes.length };

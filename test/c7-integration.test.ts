@@ -27,7 +27,7 @@ import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { validateDoc } from '../src/validate/structural.js';
-import { elementDetail } from '../src/query/model-view.js';
+import { elementDetail } from '../src/index.js';
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 

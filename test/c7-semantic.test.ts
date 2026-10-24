@@ -21,7 +21,7 @@ import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { allowedOn, allowedParents, attrAppliesTo, camundaAttr, camundaAttrsFor, containersOf, idReferenceAttrs, isCamundaType, platformOf, typeIs } from '../src/platform/descriptor.js';
-import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
+import { buildView, elementDetail, findElements } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

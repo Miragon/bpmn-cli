@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { layoutView } from '../src/query/layout-view.js';
+import { layoutView } from '../src/index.js';
 import { renderLayoutView } from '../src/report/view-text.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';

@@ -114,7 +114,7 @@ import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBe
 import { attachedSide, type Side } from '../diagram/router.js';
 import { separate, tidy } from '../diagram/separate.js';
 import { fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from '../diagram/space.js';
-import { selection } from '../query/select.js';
+import { ElementSelector } from '../query/ElementSelector.js';
 import { titleBox } from '../diagram/text.js';
 import { setSwatch, writePlanes } from '../diagram/write.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
@@ -1351,7 +1351,7 @@ function resolveSelection<T extends FormatOp>(ctx: Ctx, op: T): { op: T; picked:
   if (!op.path && !op.kind && !op.branch) return none;
   if (!ctx.planes.length) throw noDiagram();
   const shapeOf = (id: string): DShape | undefined => ctx.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
-  const ids = selection(ctx.doc, op, {
+  const ids = new ElementSelector(ctx.doc).select(op, {
     shapesOnly: op.op !== 'color',
     drawn: (id) => ctx.planes.some((p) => p.shapes.has(id) || p.edges.has(id)),
     centreX: (id) => {

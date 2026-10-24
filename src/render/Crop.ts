@@ -1,8 +1,8 @@
 import type { Plane, Semantics } from '../diagram/plane.js';
 import type { Doc } from '../model/document.js';
 import { is } from '../model/utils/moddle.js';
-import { aroundView } from '../query/context.js';
-import { pathOf } from '../query/select.js';
+import { AroundWindow } from '../query/AroundWindow.js';
+import { ElementSelector } from '../query/ElementSelector.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import type { RenderOptions } from './types.js';
 import { planeOfId } from './utils/planes.js';
@@ -37,14 +37,14 @@ export class Crop {
     const first = (ids: string[]): string | undefined => ids.find((id) => planeOfId(planes, id));
     let crop: Crop;
     if (kind === 'around') {
-      const view = aroundView(doc, opts.around!.id, { ...(opts.around!.depth !== undefined ? { depth: opts.around!.depth } : {}), inner: !!opts.around!.inner });
+      const view = new AroundWindow(doc, opts.around!.id, { ...(opts.around!.depth !== undefined ? { depth: opts.around!.depth } : {}), inner: !!opts.around!.inner }).view();
       const nodes = view.nodes.map((n) => n.id);
       crop = new Crop(nodes, nodes, true);
       const seed = planeOfId(planes, opts.around!.id) ? opts.around!.id : first(nodes);
       return { crop, ...Crop.planeHint(planes, seed, nodes, `--around ${opts.around!.id}`) };
     }
     if (kind === 'path') {
-      const els = pathOf(doc, opts.path!.from, opts.path!.to, opts.path!.via ?? []);
+      const els = new ElementSelector(doc).path(opts.path!.from, opts.path!.to, opts.path!.via ?? []);
       const ids = els.map((el) => el.get<string>('id'));
       crop = new Crop(ids, els.filter((el) => is(el, 'bpmn:FlowNode')).map((el) => el.get<string>('id')), true);
       return { crop, ...Crop.planeHint(planes, first(ids), ids, `--path ${opts.path!.from} ${opts.path!.to}`) };

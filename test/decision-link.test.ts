@@ -19,7 +19,7 @@ import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/index.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
-import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
+import { buildView, elementDetail, findElements } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

@@ -52,7 +52,7 @@ import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactO
 import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
 import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
-import { findElements } from './query/model-view.js';
+import { ElementFinder } from './query/ElementFinder.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -619,7 +619,7 @@ withJsonOptions(
 ).action(async (file: string, text: string, o: RawOpts) => {
   await run(async () => {
     const doc = await readDocArg(file);
-    const hits = findElements(doc, text, o['kind'] as string | undefined);
+    const hits = new ElementFinder(doc).find(text, o['kind'] as string | undefined);
     if (o['json']) printJson(hits, !!o['pretty']);
     else print(renderFind(hits));
   }, !!o['json']);

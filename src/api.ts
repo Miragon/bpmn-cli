@@ -40,8 +40,11 @@
 import { parseOps } from './ops/batch.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
-import { layoutView, type LayoutView } from './query/layout-view.js';
-import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
+import type { LayoutView } from './query/layout-view.js';
+import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
+import type { AroundView, ElementContext } from './query/context.js';
+import { AroundWindow } from './query/AroundWindow.js';
+import { ElementContextBuilder } from './query/ElementContextBuilder.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
 import { Doc, type NewDocOptions } from './model/document.js';
@@ -56,7 +59,10 @@ import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, ty
 import type { PlatformChoice } from './platform/profiles/profile.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
-import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
+import type { ElementDetail, FindHit, ModelView } from './query/model-view.js';
+import { ModelViewBuilder } from './query/ModelViewBuilder.js';
+import { ElementDetailBuilder } from './query/ElementDetailBuilder.js';
+import { ElementFinder } from './query/ElementFinder.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
 export interface EditOptions {
@@ -226,12 +232,13 @@ function assertViewOptions(opts: ViewOptions): void {
 /** `bpmn show` on a parsed document: the view the options ask for (see ViewOptions). */
 export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
   assertViewOptions(opts);
-  if (opts.layout) return { kind: 'layout', view: layoutView(doc.definitions) };
-  if (opts.around !== undefined) return { kind: 'around', view: aroundView(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }) };
-  if (opts.id !== undefined && opts.context) return { kind: 'context', view: elementContext(doc, opts.id) };
-  if (opts.id !== undefined) return { kind: 'detail', view: elementDetail(doc, doc.require(opts.id)) };
-  const view = buildView(doc);
-  return { kind: 'model', view: opts.scope ? scopeView(doc, view, opts.scope) : view };
+  if (opts.layout) return { kind: 'layout', view: new LayoutViewBuilder(doc.definitions).build() };
+  if (opts.around !== undefined) return { kind: 'around', view: new AroundWindow(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }).view() };
+  if (opts.id !== undefined && opts.context) return { kind: 'context', view: new ElementContextBuilder(doc, opts.id).build() };
+  if (opts.id !== undefined) return { kind: 'detail', view: new ElementDetailBuilder(doc, doc.require(opts.id)).build() };
+  const builder = new ModelViewBuilder(doc);
+  const view = builder.build();
+  return { kind: 'model', view: opts.scope ? builder.scope(view, opts.scope) : view };
 }
 
 /** The text of a view, as `bpmn show` prints it (without the final newline). */
@@ -282,7 +289,7 @@ export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'scor
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (case-insensitive), optionally of one kind. */
 export async function findXml(xml: string, text: string, opts: { kind?: string } = {}): Promise<FindHit[]> {
   if (opts.kind !== undefined) assertKindToken(opts.kind);
-  return findElements(await Doc.fromXml(xml), text, opts.kind);
+  return new ElementFinder(await Doc.fromXml(xml)).find(text, opts.kind);
 }
 
 /** `bpmn ext list --json`: the extension elements of an element (and of its event definition / loop / condition). */

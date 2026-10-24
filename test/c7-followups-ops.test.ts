@@ -39,7 +39,7 @@ import { withoutProfileDuplicates } from '../src/ops/retype.js';
 import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
-import { buildView, elementDetail } from '../src/query/model-view.js';
+import { buildView, elementDetail } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

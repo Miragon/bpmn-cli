@@ -26,10 +26,10 @@
  *    image-token estimate width * height / 784.
  *  - Crops (at most one of them, E_USAGE otherwise; elements by id only):
  *      around {id, depth, inner}  exactly the flow nodes of `show --around`
- *                                 (query/context.ts aroundView; a sequence flow:
+ *                                 (query/AroundWindow.ts; a sequence flow:
  *                                 both its ends)
  *      path {from, to, via}       the nodes and flows of the shortest
- *                                 sequence-flow path (query/select.ts pathOf, the
+ *                                 sequence-flow path (query/ElementSelector.ts path, the
  *                                 --path selector)
  *      scope                      a pool, lane or expanded sub-process and
  *                                 every shape whose centre lies inside it; a
@@ -69,7 +69,7 @@
  *    moves aside within the bounding box of the problem's elements.
  *  - tiles: when the image would draw its labels below MIN_LABEL_SCALE, it is
  *    split into tiles at `scale` (default 1) within maxSize: cut between the
- *    plane's columns (query/layout-view.ts planeColumns, `show --layout`'s c<n>) and,
+ *    plane's columns (query/DiagramColumns.ts, `show --layout`'s c<n>) and,
  *    when too tall, between rows of shapes. Only tiles holding a shape, a
  *    label (or a frame's name) or a numbered problem are kept: stretches of
  *    half a tile and more with nothing but empty space or connections

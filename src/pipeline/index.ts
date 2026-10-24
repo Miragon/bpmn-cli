@@ -141,7 +141,8 @@ import { ensureProfile, profileBaseline, runProfile, type PlatformChoice, type P
 import { TextPreservation } from '../xml/TextPreservation.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from '../validate/structural.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type Validator, type ValidatorContext, type ValidatorRun } from '../validate/validators.js';
-import { buildView, type ModelView } from '../query/model-view.js';
+import type { ModelView } from '../query/model-view.js';
+import { ModelViewBuilder } from '../query/ModelViewBuilder.js';
 import { firstLine } from '../shared/utils/text.js';
 
 /**
@@ -933,7 +934,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   };
   if (opts.show) {
     const fresh = await Doc.fromXml(xml, doc.file);
-    result.view = buildView(fresh);
+    result.view = new ModelViewBuilder(fresh).build();
   }
   return result;
 }
