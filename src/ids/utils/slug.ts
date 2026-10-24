@@ -297,3 +297,12 @@ export function isSuffix(base: string, rest: string, sep: string | 'either'): bo
 export function isValidId(id: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(id);
 }
+
+/**
+ * Whether a declared prefix can start a new id: a string that an XML id can
+ * begin with (bpmn-cli's NCName subset: a letter or `_` first, then letters,
+ * digits, `_ . -`) and that leaves 8 of the 64 characters for the body.
+ */
+export function isUsablePrefix(prefix: unknown): prefix is string {
+  return typeof prefix === 'string' && prefix.length <= MAX_ID - 8 && isValidId(`${prefix}a`);
+}

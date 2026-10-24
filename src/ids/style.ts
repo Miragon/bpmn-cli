@@ -188,9 +188,11 @@
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, SUFFIX_WORD, withSuffix } from './utils/slug.js';
 import type { IdRegistry } from './IdRegistry.js';
 import { FORM_JOIN, ID_FORMS, IdFitter, LEGACY_BASE, type IdForm } from './IdFitter.js';
-import { beginAlike, CONTEXT_WORDS, GLUED, HASH, lcfirst, localName, PREFIXED, speakingStem, stem, stemWords, TOOL_DEFAULTS, ucfirst, type ContextWord } from './utils/id-words.js';
+import { beginAlike, CONTEXT_WORDS, GENERIC, GLUED, HASH, lcfirst, localName, PREFIXED, prefixClass, speakingStem, stem, stemWords, TOOL_DEFAULTS, ucfirst, type ContextWord, type PrefixClass } from './utils/id-words.js';
+import { kindTypeNames } from './utils/requests.js';
 import type { IdConventions } from './conventions.js';
-import { kindByName, kindOf, KINDS, triggerOf, type KindDef } from '../model/kinds.js';
+import { DeclaredConventions, type Votes } from './DeclaredConventions.js';
+import { kindByName, kindOf, triggerOf, type KindDef } from '../model/kinds.js';
 import { is, isBpmnElement, walk, type El } from '../model/utils/moddle.js';
 
 /** The case of the bodies of new ids. */
@@ -252,18 +254,6 @@ export interface IdStyleInfo {
   body: Body;
   sequenceFlow: FlowStyle;
   messageFlow: FlowStyle;
-}
-
-/**
- * Names a type-named prefix of the kind could use: the kind and its BPMN
- * type (`userTask`; `eventSubProcess`, `subProcess`). A data reference's
- * kind is the type of the element it stands for (`dataObject`, whose
- * bpmn:DataObject a file names `dataObject_`), so its own type comes first
- * (`dataObjectReference_invoice` next to `dataObject_invoice`).
- */
-function kindTypeNames(def: KindDef): string[] {
-  const type = lcfirst(localName(def.type));
-  return [...new Set(type === `${def.kind}Reference` ? [type, def.kind] : [def.kind, type])];
 }
 
 /** The request for an element of a kind of `bpmn kinds`. */
@@ -359,31 +349,6 @@ function bodyClass(body: string): BodyClass {
   if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(b)) return 'snake';
   if (/^[A-Z][A-Za-z0-9]*(_[A-Za-z0-9]+)+$/.test(b)) return 'pascalSnake';
   return 'other';
-}
-
-type PrefixClass = 'kind' | 'triggerKind' | 'literal';
-
-/**
- * Prefixes that name a type but are also the usual generic prefix of their
- * family: `Task_` on a plain task may be the old modeler's type name or a
- * `Task_` for every task. Such a prefix counts as the family's prefix, and
- * on its own type it says nothing about type-named prefixes.
- */
-const GENERIC = new Set(['task']);
-
-/**
- * `kind`: the prefix names the element's type (serviceTask_, EndEvent_),
- * `triggerKind`: its trigger and type (messageBoundaryEvent_), else a
- * `literal` (Task_, End_, Activity_). The bpmn-cli prefix of the family is a
- * literal even where it is the type name (Lane_, Message_, LaneSet_): it says
- * nothing about type-named prefixes; so is `Task_` (GENERIC).
- */
-function prefixClass(prefix: string, typeNames: string[], trigger: string | undefined, family: string): PrefixClass {
-  const p = prefix.toLowerCase();
-  if (p === family.toLowerCase() || GENERIC.has(p)) return 'literal';
-  if (typeNames.some((n) => n.toLowerCase() === p)) return 'kind';
-  if (trigger && typeNames.some((n) => `${trigger}${n}`.toLowerCase() === p)) return 'triggerKind';
-  return 'literal';
 }
 
 /** A literal prefix that abbreviates its own kind (End, Start, Call, Sub, Boundary, Timer) says nothing about other kinds. */
@@ -697,7 +662,7 @@ function sampleOf(el: El, id: string): Sample | undefined {
  * lower-case words alone show no case (lane_sales: the declared camelCase's
  * as much as snake_case's).
  */
-function learn(defs: El | undefined, d?: Declared): Learned {
+function learn(defs: El | undefined, d?: DeclaredConventions): Learned {
   const l: Learned = {
     byKey: new Map(),
     byKeyTrigger: new Map(),
@@ -759,12 +724,12 @@ function learn(defs: El | undefined, d?: Declared): Learned {
     if (!id) continue;
     if (CONNECTIONS.has(el.$type)) {
       // a flow of a type the conventions check that does not follow them: the file has a style of its own there
-      if (d && !l.unconforming && rejects(d, { type: el.$type }, id)) l.unconforming = true;
+      if (d && !l.unconforming && d.rejects({ type: el.$type }, id)) l.unconforming = true;
       const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
       const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
       // a message flow under the prefix it borrows from the sequence flows (flowOf) does not vote: bpmn-cli wrote it
       // from the declared conventions, so it never ends the borrowing
-      const borrowed = d && el.$type === 'bpmn:MessageFlow' ? borrowedHead(d, el.$type) : undefined;
+      const borrowed = d && el.$type === 'bpmn:MessageFlow' ? d.borrowedHead(el.$type) : undefined;
       if (borrowed !== undefined && id.startsWith(borrowed)) continue;
       let v = flowVotes.get(el.$type);
       if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: [], gluedNamed: [], joined: [], forms: new Tally(), prefixes: new Map(), any: new Tally(), uses: new Tally(), seps: new Map(), scopes: new Tally() }));
@@ -803,8 +768,8 @@ function learn(defs: El | undefined, d?: Declared): Learned {
     if (d) {
       const trigger = triggerOf(el);
       const state = { type: el.$type, ...(trigger ? { trigger } : {}) };
-      const heads = headsOf(d, state);
-      if (!l.unconforming && !IGNORED.some((t) => is(el, t)) && rejects(d, state, id, heads)) l.unconforming = true;
+      const heads = d.headsOf(state);
+      if (!l.unconforming && !IGNORED.some((t) => is(el, t)) && d.rejects(state, id, heads)) l.unconforming = true;
       // an id that already starts with a prefix the conventions accept for its element does not vote
       if (heads.some((h) => id.startsWith(h))) continue;
     }
@@ -1010,20 +975,6 @@ export interface IdState {
   trigger?: string;
 }
 
-/** The declared conventions as the style uses them (IdConventions: the usable prefixes, the body case). */
-interface Declared {
-  prefixes: Record<string, string>;
-  qualifier: 'off' | 'optional' | 'required';
-  case?: Body;
-  /** IdConventions.ignored: the types the rule checks with a prefix new ids cannot have (`bpmn:ReceiveTask`), and the event types and triggers whose qualified prefix it requires and new ids cannot have (`bpmn:EndEvent:escalation`) */
-  ignored: Set<string>;
-}
-
-const BODY_OF_CASE: Record<string, Body> = { camelCase: 'camel', PascalCase: 'pascal', snake_case: 'snake' };
-
-/** The bodies element-id-naming accepts after the prefix under a declared case (its CASES patterns). */
-const CASE_BODY: Partial<Record<Body, RegExp>> = { camel: /^[a-z][A-Za-z0-9]*$/, pascal: /^[A-Z][A-Za-z0-9]*$/, snake: /^[a-z0-9]+(_[a-z0-9]+)*$/ };
-
 /**
  * The process and the definitions under declared conventions: their ids are
  * bpmn-cli's own (Process_<Name>, Definitions_<Name>) unless the declared
@@ -1034,74 +985,6 @@ const CASE_BODY: Partial<Record<Body, RegExp>> = { camel: /^[a-z][A-Za-z0-9]*$/,
  * process_back_office).
  */
 const FILE_LEVEL = new Set(['bpmn:Process', 'bpmn:Definitions']);
-
-/**
- * Whether a declared prefix can start a new id: a string that an XML id can
- * begin with (bpmn-cli's NCName subset: a letter or `_` first, then letters,
- * digits, `_ . -`) and that leaves 8 of the 64 characters for the body.
- */
-export function isUsablePrefix(prefix: unknown): prefix is string {
-  return typeof prefix === 'string' && prefix.length <= MAX_ID - 8 && isValidId(`${prefix}a`);
-}
-
-/** The declared conventions a style uses: undefined where they declare no usable prefix. */
-function declaredOf(c: IdConventions | undefined): Declared | undefined {
-  const prefixes: Record<string, string> = {};
-  for (const [key, prefix] of Object.entries(c?.prefixes ?? {})) if (isUsablePrefix(prefix)) prefixes[key] = prefix;
-  if (!Object.keys(prefixes).length) return undefined;
-  const body = c?.case ? BODY_OF_CASE[c.case] : undefined;
-  return { prefixes, qualifier: c?.qualifier ?? 'optional', ...(body ? { case: body } : {}), ignored: new Set(c?.ignored) };
-}
-
-/**
- * The prefixes declared conventions accept for an element of a type and
- * trigger, as element-id-naming does: the type's entry, the qualified one of
- * its trigger too (`required`: only that one; `off`: never). [] where
- * nothing is declared for the type, and under `required` where the
- * qualified one is too long for new ids (Declared.ignored: the rule
- * accepts no prefix they can have).
- */
-function headsOf(d: Declared, { type, trigger }: IdState): string[] {
-  const plain = d.prefixes[type];
-  if (plain === undefined) return [];
-  const key = `${type}:${trigger}`;
-  const qualified = trigger && trigger !== 'none' && d.qualifier !== 'off' ? d.prefixes[key] : undefined;
-  if (!qualified) return d.qualifier === 'required' && d.ignored.has(key) ? [] : [plain];
-  return d.qualifier === 'required' ? [qualified] : [plain, qualified];
-}
-
-/** The prefix message flows without an entry of their own borrow from the sequence flows (flowOf); undefined for sequence flows and where nothing is borrowed. */
-function borrowedHead(d: Declared, type: string): string | undefined {
-  return type !== 'bpmn:SequenceFlow' && d.prefixes[type] === undefined ? d.prefixes['bpmn:SequenceFlow'] : undefined;
-}
-
-/**
- * Whether an id passes element-id-naming with the prefixes `heads` the
- * declared conventions accept for its element: it starts with one, and its
- * body after the longest of them is in the declared case (CASE_BODY; none
- * declared: any body).
- */
-function passes(d: Declared, heads: string[], id: string): boolean {
-  const head = heads.filter((h) => id.startsWith(h)).sort((a, b) => b.length - a.length)[0];
-  if (head === undefined) return false;
-  const pattern = d.case && CASE_BODY[d.case];
-  return !pattern || pattern.test(id.slice(head.length));
-}
-
-/**
- * Whether element-id-naming rejects an id under the declared conventions
- * (learn: Learned.unconforming): with the prefixes `heads` they accept for
- * its element, one it does not pass; where the rule checks the element with
- * a prefix new ids cannot have (Declared.ignored: a type whose prefix is
- * ignored; a type with an entry but no heads: under `required` an event
- * whose qualified prefix is too long), every id (no id starts with a prefix
- * that cannot start one or leaves no room, in practice); false where it
- * does not check the element.
- */
-function rejects(d: Declared, state: IdState, id: string, heads = headsOf(d, state)): boolean {
-  if (heads.length) return !passes(d, heads, id);
-  return d.ignored.has(state.type) || d.prefixes[state.type] !== undefined;
-}
 
 /** The BPMN type of a request's key (a kind of `bpmn kinds`: its type, eventSubProcess bpmn:SubProcess). */
 function typeOf(key: string): string {
@@ -1120,7 +1003,7 @@ export class IdStyle {
   private constructor(
     private readonly l: Learned,
     /** the declared conventions (undefined: the file's own style) */
-    private readonly d?: Declared,
+    private readonly d?: DeclaredConventions,
     /** the file's own style over every id (learnedOnly); with declared conventions `l` leaves out the ids a declared prefix covers */
     private readonly all: Learned = l,
   ) {}
@@ -1130,14 +1013,14 @@ export class IdStyle {
 
   /** Learns the conventions of a document (see the module contract); declared conventions fill the gaps they cover (DECLARED CONVENTIONS). */
   static infer(defs: El, conventions?: IdConventions): IdStyle {
-    const d = declaredOf(conventions);
+    const d = DeclaredConventions.of(conventions);
     if (!d) return new IdStyle(learn(defs));
     return new IdStyle(learn(defs, d), d, learn(defs));
   }
 
   /** The style of a document without ids yet (`new`): the declared conventions over the default. */
   static of(conventions?: IdConventions): IdStyle {
-    const d = declaredOf(conventions);
+    const d = DeclaredConventions.of(conventions);
     return d ? new IdStyle(learn(undefined), d) : IdStyle.DEFAULT;
   }
 
@@ -1224,32 +1107,16 @@ export class IdStyle {
   private flowOf(type: string): FlowStyle {
     const d = this.d;
     if (!d) return this.learnedFlow(type);
-    const borrowed = this.l.flowVoted.has(type) ? undefined : borrowedHead(d, type);
+    const borrowed = this.l.flowVoted.has(type) ? undefined : d.borrowedHead(type);
     const learned = this.learnedFlow(borrowed === undefined ? type : 'bpmn:SequenceFlow');
     const head = d.prefixes[type] ?? borrowed;
     if (head === undefined) return learned;
     return { ...learned, form: d.case ? 'named' : learned.form, head };
   }
 
-  /**
-   * The declared prefix of a request (with its separator): the entry of
-   * its BPMN type; under the qualifier `required` an event with a trigger
-   * takes the qualified one (timerStartEvent_); undefined where nothing is
-   * declared, and where the required qualified prefix is too long for new
-   * ids (Declared.ignored: such events follow the learned style, like
-   * a type whose prefix is ignored).
-   */
+  /** The declared prefix of a request (DeclaredConventions.headFor its BPMN type and trigger). */
   private declaredHead(req: IdRequest): string | undefined {
-    const d = this.d;
-    if (!d) return undefined;
-    const type = typeOf(req.key);
-    const plain = d.prefixes[type];
-    if (plain === undefined) return undefined;
-    if (d.qualifier === 'required' && req.trigger && req.trigger !== 'none') {
-      const key = `${type}:${req.trigger}`;
-      return d.prefixes[key] ?? (d.ignored.has(key) ? undefined : plain);
-    }
-    return plain;
+    return this.d?.headFor(typeOf(req.key), req.trigger);
   }
 
   /** Whether a declared prefix speaks about the request's id (its type's, or the flow prefix of a connection). */
@@ -1285,7 +1152,7 @@ export class IdStyle {
   private otherShape(): boolean {
     const l = this.l;
     if (l.lowerFirst + l.upperFirst < MIN_EVIDENCE) return false;
-    const v = this.declaredVotes();
+    const v = this.d!.votes;
     return l.lowerFirst > l.upperFirst ? v.upper > v.lower : l.upperFirst > l.lowerFirst && v.lower > v.upper;
   }
 
@@ -1323,7 +1190,7 @@ export class IdStyle {
     const l = this.l;
     // the shape of a prefix nothing declares (type-named, first letter): the file's ids decide; a file without evidence
     // of its own takes the declared prefixes' (a new file looks like one that follows the conventions)
-    const dv = this.d && l.lowerFirst + l.upperFirst < MIN_EVIDENCE ? this.declaredVotes() : NO_VOTES;
+    const dv = this.d && l.lowerFirst + l.upperFirst < MIN_EVIDENCE ? this.d.votes : NO_VOTES;
     const lowerFile = l.lowerFirst + dv.lower >= MIN_EVIDENCE && l.lowerFirst + dv.lower > l.upperFirst + dv.upper;
     const min = l.strong ? 1 : MIN_EVIDENCE;
     const typeName = req.typeNames[0]!;
@@ -1357,25 +1224,6 @@ export class IdStyle {
     const source: PrefixSource = dv.kind + dv.literal > 0 ? 'lint shape' : l.classes.total + l.lowerFirst + l.upperFirst > 0 ? 'file' : 'default';
     if (kindish >= MIN_EVIDENCE && kindish > l.classes.get('literal') + dv.literal) return { prefix: this.caseLike(typeName, lowerFile), source };
     return { prefix: this.caseLike(req.prefix, lowerFile), source };
-  }
-
-  private votes: Votes | undefined;
-
-  /** The declared prefixes of the kinds as votes on the shape of a prefix nothing declares (prefixClass, first letter); a prefix several kinds share (gateway_) votes once. */
-  private declaredVotes(): Votes {
-    if (this.votes) return this.votes;
-    const v = { kind: 0, literal: 0, lower: 0, upper: 0 };
-    const voted = new Set<string>();
-    for (const def of KINDS) {
-      const m = PREFIXED.exec(`${this.d!.prefixes[def.type] ?? ''}x`);
-      if (!m || voted.has(m[1]!)) continue;
-      voted.add(m[1]!);
-      if (prefixClass(m[1]!, kindTypeNames(def), undefined, def.prefix) === 'literal') v.literal++;
-      else v.kind++;
-      if (/^[a-z]/.test(m[1]!)) v.lower++;
-      else v.upper++;
-    }
-    return (this.votes = v);
   }
 
   /** A name or a context as an id body in a case (default: the file's; '' when it has no usable words). */
@@ -1602,37 +1450,13 @@ export class IdStyle {
     return { style, ...effectiveHead(style, body), source, body };
   }
 
-  /** The prefixes the declared conventions accept for an element of a type and trigger (headsOf); [] without declared conventions. */
-  private acceptedHeads(state: IdState): string[] {
-    return this.d ? headsOf(this.d, state) : [];
-  }
-
-  /** Whether an id starts with a prefix the declared conventions accept for the state (also: they declare none for it). */
-  private acceptsId(id: string, state: IdState): boolean {
-    const heads = this.acceptedHeads(state);
-    return !heads.length || heads.some((h) => id.startsWith(h));
-  }
-
-  /** The longest prefix the declared conventions accept for the state that the id starts with (undefined: none). */
-  private headOf(id: string, state: IdState): string | undefined {
-    return this.acceptedHeads(state)
-      .filter((h) => id.startsWith(h))
-      .sort((a, b) => b.length - a.length)[0];
-  }
-
-  /** acceptsId, and under a declared case its body after the prefix is in that case too (element-id-naming's pattern: passes), so `<id>Join` / `<id>_join` is. */
-  private declaredCaseId(id: string, state: IdState): boolean {
-    const heads = this.acceptedHeads(state);
-    return !heads.length || passes(this.d!, heads, id);
-  }
-
   /**
    * W_ID_PREFIX_STALE: an element kept its id through a change of its type
    * or trigger (`from` -> `to`), and the id starts with none of the
    * prefixes the declared conventions accept for `to`, but with one they
    * accept for `from`: that prefix (`was`) and the id with the prefix new
    * ids of `to` get and the rest of the id (`suggested`, not claimed), where
-   * the id passed the rule for `from` (declaredCaseId: its body in the
+   * the id passed the rule for `from` (inDeclaredCase: its body in the
    * declared case too); one that did not (serviceTask_shipGoods under
    * PascalCase), or that starts with a `was` without separator by accident
    * (userTask_checkOrder under a prefix `user`, also under the case any:
@@ -1649,17 +1473,19 @@ export class IdStyle {
    * as the context. Undefined otherwise (an id that never fitted `from`).
    */
   stalePrefix(id: string, from: IdState, to: IdState, now?: IdRequest): { was?: string; heads: string[]; suggested: string } | undefined {
-    const heads = this.acceptedHeads(to);
-    if (!heads.length || this.acceptsId(id, to)) return undefined;
-    const was = this.headOf(id, from);
-    if (was === undefined && this.acceptedHeads(from).length) return undefined;
+    const d = this.d;
+    if (!d) return undefined;
+    const heads = d.headsOf(to);
+    if (!heads.length || d.acceptsId(id, to)) return undefined;
+    const was = d.headOf(id, from);
+    if (was === undefined && d.headsOf(from).length) return undefined;
     // the rest after `was`; after a `was` without separator, a prefix of its own that completes it into the old type's
     // name (Task_ of userTask_checkOrder under `user`) says the id starts with it by accident: what follows that
     // prefix is its body, whatever the case
     const rest = was === undefined ? undefined : id.slice(was.length);
     const own = rest !== undefined && /[A-Za-z0-9]$/.test(was!) ? PREFIXED.exec(rest) : null;
     const accidental = own && `${was}${own[1]}`.toLowerCase() === from.type.slice(from.type.indexOf(':') + 1).toLowerCase() ? own : null;
-    if (now && (rest === undefined || accidental || !this.declaredCaseId(id, from))) {
+    if (now && (rest === undefined || accidental || !d.inDeclaredCase(id, from))) {
       // an unnamed one: the words of its id after `was` as the context (serviceTask_1: 1, never the old kind's words),
       // of its speaking part where the rule did not check it
       const words = rest === undefined ? (speakingStem(id) ?? '') : accidental ? accidental[2]! : rest;
@@ -1667,7 +1493,7 @@ export class IdStyle {
       return isValidId(suggested) ? { ...(was !== undefined ? { was } : {}), heads, suggested } : undefined;
     }
     if (was === undefined) return undefined;
-    const head = this.declaredHead({ key: to.type, prefix: '', typeNames: [], ...(to.trigger ? { trigger: to.trigger } : {}) })!;
+    const head = d.headFor(to.type, to.trigger)!;
     const suggested = `${head}${id.slice(was.length)}`;
     return isValidId(suggested) ? { was, heads, suggested } : undefined;
   }
@@ -1687,9 +1513,9 @@ export class IdStyle {
     const req = keyRequest(key);
     const head = this.declaredHead(req);
     const state = { type: typeOf(key) };
-    if (head !== undefined && !this.declaredCaseId(gatewayId, state)) {
+    if (head !== undefined && !this.d!.inDeclaredCase(gatewayId, state)) {
       const c = this.caseFor(req);
-      const own = this.headOf(gatewayId, state);
+      const own = this.d!.headOf(gatewayId, state);
       const body = own === undefined ? '' : stemWords(gatewayId.slice(own.length)).join(' ');
       return `${head}${this.withWord(this.declaredBody(hasIdWords(body) ? body : label, req, head, c), 'Join', MAX_ID - head.length, c)}`;
     }
@@ -1869,13 +1695,6 @@ function effectiveHead(style: FlowStyle, c: Body): { head: string; form: FlowFor
   return room < 2 ? { head: fallback, form: 'named' } : { head: `${prefix}_`, form, fallback };
 }
 
-/** The declared prefixes as votes on the shape of a prefix nothing declares (IdStyle.declaredVotes). */
-interface Votes {
-  kind: number;
-  literal: number;
-  lower: number;
-  upper: number;
-}
 /** No such votes: a file with evidence of its own, or no declared conventions. */
 const NO_VOTES: Votes = { kind: 0, literal: 0, lower: 0, upper: 0 };
 

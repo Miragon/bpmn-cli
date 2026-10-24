@@ -68,3 +68,28 @@ export function beginAlike(a: string, b: string): boolean {
   const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
   return first(a) === first(b);
 }
+
+export type PrefixClass = 'kind' | 'triggerKind' | 'literal';
+
+/**
+ * Prefixes that name a type but are also the usual generic prefix of their
+ * family: `Task_` on a plain task may be the old modeler's type name or a
+ * `Task_` for every task. Such a prefix counts as the family's prefix, and
+ * on its own type it says nothing about type-named prefixes.
+ */
+export const GENERIC = new Set(['task']);
+
+/**
+ * `kind`: the prefix names the element's type (serviceTask_, EndEvent_),
+ * `triggerKind`: its trigger and type (messageBoundaryEvent_), else a
+ * `literal` (Task_, End_, Activity_). The bpmn-cli prefix of the family is a
+ * literal even where it is the type name (Lane_, Message_, LaneSet_): it says
+ * nothing about type-named prefixes; so is `Task_` (GENERIC).
+ */
+export function prefixClass(prefix: string, typeNames: string[], trigger: string | undefined, family: string): PrefixClass {
+  const p = prefix.toLowerCase();
+  if (p === family.toLowerCase() || GENERIC.has(p)) return 'literal';
+  if (typeNames.some((n) => n.toLowerCase() === p)) return 'kind';
+  if (trigger && typeNames.some((n) => `${trigger}${n}`.toLowerCase() === p)) return 'triggerKind';
+  return 'literal';
+}
