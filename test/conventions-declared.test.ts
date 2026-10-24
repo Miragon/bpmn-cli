@@ -11,7 +11,7 @@ import { applyToXml, conventionsXml } from '../src/api.js';
 import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
 import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/ids/conventions.js';
 import { Doc } from '../src/model/document.js';
-import { bpmnlintEngine } from '../src/node/bpmnlint.js';
+import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
 import { mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/report/command-report.js';

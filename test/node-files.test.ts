@@ -1,5 +1,5 @@
 /**
- * The node layer (src/node/files.ts, `@miragon/bpmn-cli/node`) owns every
+ * The node layer (src/node/ModelFile.ts, DocFile.ts, `@miragon/bpmn-cli/node`) owns every
  * file access: reading (E_FILE_NOT_FOUND / E_IO), the lossy-import guard of
  * loadDoc, the atomic write with -o / --dry-run / --backup / new's
  * existing-file guard. The core's mutateDoc never writes.
@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as node from '../src/node/index.js';
-import { checkFile, layoutFile, loadDoc, mutateDocToFile, mutateFile, readDoc, readXml, writeAtomic } from '../src/node/files.js';
+import { checkFile, layoutFile, loadDoc, mutateDocToFile, mutateFile, readDoc, readXml, writeAtomic } from '../src/node/index.js';
 import { Doc } from '../src/model/document.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { definitionsXml, LINEAR } from './helpers.js';

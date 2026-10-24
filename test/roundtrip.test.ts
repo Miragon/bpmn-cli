@@ -25,7 +25,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/files.js';
+import { mutateFile } from '../src/node/index.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import { preserveText } from '../src/index.js';
 import { readXmlText } from '../src/xml/utils/text-reader.js';

@@ -1,6 +1,6 @@
 /**
  * The project's bpmnlint configuration (issue #33): src/validate/ (the core:
- * BpmnlintConfigResolution, the advisory BpmnlintValidator) and src/node/bpmnlint.ts (lookup,
+ * BpmnlintConfigResolution, the advisory BpmnlintValidator) and src/node/ (ConfigLookup, BpmnlintLoader, ChainResolver: lookup,
  * loading, the resolver chain), with the real bpmnlint and
  * @miragon/bpmnlint-plugin-rules, offline.
  *
@@ -25,8 +25,8 @@ import { idConventionsFromLint, ID_NAMING_RULE } from '../src/ids/conventions.js
 import { Doc } from '../src/model/document.js';
 import type { CliError } from '../src/shared/CliError.js';
 import type { Op } from '../src/ops/types.js';
-import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/bpmnlint.js';
-import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/files.js';
+import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/index.js';
+import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/index.js';
 import { gitRoot } from '../src/node/find-up.js';
 import { checkDoc } from '../src/pipeline/index.js';
 import { advisoryValidators, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/report/command-report.js';
@@ -1186,7 +1186,7 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     expect(mutationSummary(failed).leftOut).toEqual([{ validator: 'bpmnlint', reason: 'W_LINT_FAILED, no rule ran', count: 1 }]);
     expect(renderSummary(mutationSummary(failed), { dryRun: true }).split('\n')).toContain('validator bpmnlint: 1 left out (W_LINT_FAILED, no rule ran; `bpmn validate <file>` lists it)');
     // a new file has nothing to compare: it lists the W_LINT_FAILED with its cause and hint
-    const { mutateDocToFile } = await import('../src/node/files.js');
+    const { mutateDocToFile } = await import('../src/node/index.js');
     const created = mutationReport(await mutateDocToFile(Doc.create({ processName: 'Order' }, join(broken, 'new.bpmn')), [], { mustNotExist: true, dryRun: true, lintFrom: broken }));
     expect(codes(lintOf(created.warnings.added))).toEqual(['W_LINT_FAILED']);
     expect(created.validation.validators![0]).not.toHaveProperty('leftOut');
@@ -1204,7 +1204,7 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
   it('`new` lists the findings of the new model; lintBlocks makes bpmnlint block a write like a validator, old errors do not', async () => {
     const dir = repo({ extends: 'bpmnlint:recommended' });
     const doc = Doc.create({ processName: 'Order' }, join(dir, 'new.bpmn'));
-    const { mutateDocToFile } = await import('../src/node/files.js');
+    const { mutateDocToFile } = await import('../src/node/index.js');
     const created = await mutateDocToFile(doc, [], { mustNotExist: true });
     expect(codes(lintOf(mutationReport(created).warnings.added))).toEqual(['end-event-required Process_Order', 'start-event-required Process_Order']);
     expect(created.validation.validators?.[0]?.counts).toEqual({ errors: 2, warnings: 0 });
@@ -1277,7 +1277,7 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
     const report = mutationReport(write);
     expect(notes(report.warnings.added)).toEqual([]);
     expect(renderMutation(report)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .; 2 element-id-naming values ignored (W_CONFIG_IGNORED; bpmn validate lists them)): ');
-    const { mutateDocToFile } = await import('../src/node/files.js');
+    const { mutateDocToFile } = await import('../src/node/index.js');
     const created = await mutateDocToFile(Doc.create({ processName: 'Order' }, join(dir, 'new.bpmn')), [], { dryRun: true, lintFrom: dir });
     expect(notes(mutationReport(created).warnings.added)).toHaveLength(2);
     // stdin: looked up from lintFrom
@@ -1285,7 +1285,7 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
   });
 
   it('projectIdConventions: the conventions, the notes, the setting; nothing without a .bpmnlintrc or with lintConfig false', async () => {
-    const { projectIdConventions } = await import('../src/node/bpmnlint.js');
+    const { projectIdConventions } = await import('../src/node/index.js');
     const dir = repo(AUTOMATION, { 'x.bpmn': await model(LINE) });
     const found = await projectIdConventions(join(dir, 'x.bpmn'), { lintFrom: dir });
     expect(found).toMatchObject({ notes: [], where: '.bpmnlintrc in .', setting: { severity: 'warn', config: {} }, conventions: { case: 'camelCase', qualifier: 'optional', source: '.bpmnlintrc in .' } });

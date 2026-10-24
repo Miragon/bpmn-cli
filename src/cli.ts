@@ -4,7 +4,7 @@
  *
  * Every command works on one .bpmn file. Mutating commands run the pipeline
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
- * The file I/O is src/node/files.ts, everything else the browser-safe core;
+ * The file I/O is src/node/ (ModelFile, DocFile), everything else the browser-safe core;
  * this module maps flags to its options (BPMN_LAYOUT_DEBUG to LayoutDebug.setProcessSink,
  * BPMN_KEEP_FLOW_IDS to keepFlowIds; a result the variable's kept flow ids
  * changed says so) and is the only one that reads the environment. Mutating
@@ -38,8 +38,10 @@ import { ioError, isCliError, usageError } from './shared/utils/errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';
 import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from './report/guide.js';
 import { assertKindToken } from './model/kinds.js';
-import { projectIdConventions } from './node/bpmnlint.js';
-import { assertNewFile, checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
+import { ProjectBpmnlint } from './node/ProjectBpmnlint.js';
+import { DocFile, type FileMutationOptions } from './node/DocFile.js';
+import { ModelFile } from './node/ModelFile.js';
+import { assertNewFile, decodeXmlBytes, readXml } from './node/utils/files.js';
 import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './ops/rules.js';
@@ -175,7 +177,7 @@ async function readStdin(what: string): Promise<Buffer> {
 
 /** The document of a file argument: `-` reads it from stdin (it then has no file name). */
 async function readDocArg(file: string): Promise<Doc> {
-  if (file !== '-') return readDoc(file);
+  if (file !== '-') return new ModelFile(file).read();
   return Doc.fromXml(decodeXmlBytes(await readStdin('the model'), 'stdin'));
 }
 
@@ -208,10 +210,10 @@ async function mutateArg(file: string, ops: Op[], opts: FileMutationOptions & Ou
     await runMutation(
       file,
       opts,
-      (o) => mutateFile(file, ops, o),
+      (o) => new ModelFile(file).mutate(ops, o),
       (doc, o) => {
         assertLossless(doc, o);
-        return mutateDocToFile(doc, ops, o);
+        return new DocFile(doc).mutate(ops, o);
       },
     );
   } catch (err) {
@@ -522,7 +524,7 @@ withMutationOptions(
     if (!stdout) await assertNewFile(opts.out ?? file, opts);
     // the id conventions of the .bpmnlintrc that applies to the file written (the process id only where they name bpmn:Process)
     const target = opts.out && opts.out !== '-' ? opts.out : file === '-' ? undefined : file;
-    const conventions = (await projectIdConventions(target, opts))?.conventions;
+    const conventions = (await new ProjectBpmnlint(target, opts).idConventions())?.conventions;
     const doc = Doc.create(
       {
         processName: o['name'] as string | undefined,
@@ -533,7 +535,7 @@ withMutationOptions(
       },
       file === '-' ? undefined : file,
     );
-    const result = await mutateDocToFile(doc, [], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
+    const result = await new DocFile(doc).mutate([], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
     result.changes.create({ id: doc.processes()[0]!.get<string>('id'), kind: 'process', name: o['name'] as string | undefined });
     const xmlOut = stdout && !opts.dryRun;
     if (xmlOut) {
@@ -572,7 +574,7 @@ withJsonOptions(
       if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
       // a file that does not exist yet: the conventions a new model there gets (before `bpmn new`)
       const doc = file === '-' || existsSync(file) ? await readDocArg(file) : undefined;
-      const found = await projectIdConventions(file === '-' ? undefined : file, lintOptions(o));
+      const found = await new ProjectBpmnlint(file === '-' ? undefined : file, lintOptions(o)).idConventions();
       // why none are declared, where none are
       const undeclared: Undeclared = o['lintConfig'] === false ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : !found.setting || found.setting.severity === 'off' ? 'off' : 'no prefixes';
       const view = conventionsView(doc, found?.conventions, {
@@ -1340,7 +1342,7 @@ withLintOptions(
   .action(async (file: string, o: RawOpts) => {
     await run(async () => {
       const checkOpts = { platform: (o['platform'] as PlatformChoice | undefined) ?? 'auto', ...lintOptions(o) };
-      const report = validationReport(file === '-' ? await checkLoadedDoc(await readDocArg(file), checkOpts) : await checkFile(file, checkOpts));
+      const report = validationReport(file === '-' ? await new DocFile(await readDocArg(file)).check(checkOpts) : await new ModelFile(file).check(checkOpts));
       if (o['json']) {
         const { ok, ...rest } = report;
         printJson({ ok, file, ...rest }, !!o['pretty']);
@@ -1373,8 +1375,8 @@ withMutationOptions(
     await runMutation(
       file,
       opts,
-      (fo) => layoutFile(file, { ...fo, ...layoutOpts }),
-      (doc, fo) => layoutDocToFile(doc, { ...fo, ...layoutOpts }),
+      (fo) => new ModelFile(file).layout({ ...fo, ...layoutOpts }),
+      (doc, fo) => new DocFile(doc).layout({ ...fo, ...layoutOpts }),
     );
   }, opts.json);
 });

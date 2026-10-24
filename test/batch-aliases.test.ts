@@ -15,7 +15,7 @@ import { idConventionsFromLint } from '../src/ids/conventions.js';
 import { Doc } from '../src/model/document.js';
 import { CliError } from '../src/shared/CliError.js';
 import { ERROR_CATALOGUE, guideShort, guideText } from '../src/report/guide.js';
-import { bpmnlintEngine } from '../src/node/bpmnlint.js';
+import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 

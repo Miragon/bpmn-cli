@@ -17,7 +17,7 @@ import { ERROR_CATALOGUE } from '../src/report/guide.js';
 import type { CliError, Warning } from '../src/shared/CliError.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { checkFile, mutateFile } from '../src/node/files.js';
+import { checkFile, mutateFile } from '../src/node/index.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
 import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report/command-report.js';
 import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validate/validators.js';

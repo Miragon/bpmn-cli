@@ -2,7 +2,7 @@
  * A small XML reader that keeps positions: every element knows where its
  * start tag, its content and its end tag are in the text, every attribute
  * where it is written and which whitespace precedes it. The text-preserving
- * writer (xml/preserve.ts) uses it to copy unchanged parts of a file verbatim.
+ * writer (xml/PreservingWriter.ts) uses it to copy unchanged parts of a file verbatim.
  *
  * It reads well-formed XML as BPMN files use it: an optional prolog (XML
  * declaration, comments, processing instructions), one root element, text,
