@@ -99,7 +99,7 @@ export class Doc {
      * The text the document was read from and its incoming / outgoing lists
      * at that time (Doc.fromXml, also readDoc / loadDoc of the node layer;
      * undefined for Doc.create): the write pipeline keeps the file's
-     * formatting and mirror-list style (xml/preserve.ts, utils/mirror.ts) and reports
+     * formatting and mirror-list style (xml/TextPreservation.ts, utils/mirror.ts) and reports
      * a result equal to it as `unchanged`.
      */
     public readonly source?: DocSource,
@@ -174,7 +174,7 @@ export class Doc {
 
   /**
    * Parses a document. `file` only names it in messages and results (the
-   * core never touches the file system; src/node/files.ts readDoc reads one).
+   * core never touches the file system; src/node/ModelFile.ts readDoc reads one).
    */
   static async fromXml(xml: string, file?: string): Promise<Doc> {
     let model: Model;
@@ -445,7 +445,7 @@ export class Doc {
     return this.edit.idStyle;
   }
 
-  /** The id conventions of this document, learned from its ids on first use (src/ids/style.ts), the declared ones over them. */
+  /** The id conventions of this document, learned from its ids on first use (src/ids/IdStyle.ts), the declared ones over them. */
   get ownIdStyle(): IdStyle {
     return (this.style ??= IdStyle.infer(this.definitions, this.declared));
   }

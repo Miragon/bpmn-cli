@@ -3,7 +3,7 @@
  *
  * Every command works on one .bpmn file. Mutating commands run the pipeline
  * (load -> ops -> validate -> layout -> atomic write) and print what changed.
- * The file I/O is src/node/files.ts, everything else the browser-safe core;
+ * The file I/O is src/node/ModelFile.ts, everything else the browser-safe core;
  * the commands (one class each, in this folder) map flags to its options
  * (BPMN_KEEP_FLOW_IDS to keepFlowIds; a result the variable's kept flow ids
  * changed says so) and are the only ones that read the environment. Mutating

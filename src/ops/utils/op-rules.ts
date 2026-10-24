@@ -1,5 +1,5 @@
 /**
- * Op rules shared by `apply` (ops JSON, ops/batch.ts) and the CLI flags (src/commands/);
+ * Op rules shared by `apply` (ops JSON, ops/OpsParser.ts) and the CLI flags (src/commands/);
  * `name` spells a field the way the caller's user wrote it ("after" or --after).
  */
 export interface RuleViolation {

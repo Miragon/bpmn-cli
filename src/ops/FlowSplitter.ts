@@ -16,7 +16,7 @@
  *         reach it: when one continues, its end connects to the old
  *         successor directly (no pass-through gateway), when none does no
  *         join is created either.
- *  - Typed ops of the library skip parseOps (src/ops/batch.ts): before the split
+ *  - Typed ops of the library skip parseOps (src/ops/OpsParser.ts): before the split
  *    changes anything, `branches` must be an array of objects, each with a
  *    `nodes` array (empty allowed) of objects with a string `kind`, else
  *    E_USAGE in parseOps' words (the path starts with `split`, not

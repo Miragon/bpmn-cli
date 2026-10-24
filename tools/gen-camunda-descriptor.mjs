@@ -9,7 +9,7 @@
  *   node tools/gen-camunda-descriptor.mjs          # after updating camunda-bpmn-moddle or zeebe-bpmn-moddle
  *   node tools/gen-camunda-descriptor.mjs --check  # exit 1 when a file is stale
  *
- * Why a copy: src/platform/descriptor.ts used to read the JSON with
+ * Why a copy: src/platform/VendorDescriptor.ts used to read the JSON with
  * createRequire (node:module), which a browser bundle cannot resolve; a JSON
  * import attribute warns on Node 22, the oldest Node the package supports.
  * The constant needs neither. The data stays exactly the package's

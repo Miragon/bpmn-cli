@@ -6,7 +6,7 @@
  * on its own ($parent links, lazy collections).
  *
  * No file access here (the core also runs in the browser): reading and the
- * atomic write live in src/node/files.ts.
+ * atomic write live in src/node/utils/files.ts.
  *
  * Ids: only BPMN and DI elements (bpmn:, bpmndi:, dc:, di:) form the id space
  * (indexById, the duplicate-id check). Vendor extension elements (camunda:,

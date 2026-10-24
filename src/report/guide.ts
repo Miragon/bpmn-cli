@@ -302,7 +302,7 @@ export const PLACEMENT_DOCS: PlacementDoc[] = [
   { option: '--to <T>', key: 'to', rule: 'Additionally connect node -> T (a branch that re-joins the main path).' },
 ];
 
-/** How new ids are made (docs/reference.md "Ids", src/ids/style.ts); `bpmn kinds --json` -> `ids`. */
+/** How new ids are made (docs/reference.md "Ids", src/ids/IdStyle.ts); `bpmn kinds --json` -> `ids`. */
 export const ID_CONVENTIONS = {
   rule: 'Elements are addressed by id only (names may repeat). New ids speak (never a hash or a running number) and follow the id style of the file (prefix, case, flow form), and the id conventions the project declares where it declares them (see declared); explicit ids (--id, "id") are taken as given. A rule needs two ids that follow it (one id of a kind in a file whose ids are mostly prefixed).',
   declared: 'where element-id-naming of the project\'s .bpmnlintrc declares a prefix for a BPMN type, new ids of it take that prefix and the declared case (serviceTask_checkInvoice, flow_checkInvoiceToBookInvoice; required qualifier: timerStartEvent_monthly); under a declared camelCase / PascalCase a taken id gets a glued 2 (serviceTask_checkInvoice2; after a digit No2: serviceTask_step1No2) and a split\'s join is <gatewayId>Join (gateway_approvedJoin); the rest follows the file, learned without the ids that already follow the rule; process and definitions ids stay bpmn-cli\'s unless named exactly (a new pool\'s process: the prefix the file\'s process ids share, see prefixes); existing ids never change (W_ID_PREFIX_STALE); `bpmn show <file> --conventions` lists them, `bpmn guide conventions` has the rules',

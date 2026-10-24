@@ -124,7 +124,7 @@ export class EditContext {
   }
 
   /**
-   * The id style new ids follow (src/ids/style.ts): the document's own
+   * The id style new ids follow (src/ids/IdStyle.ts): the document's own
    * (Doc.ownIdStyle), or, for declared conventions of the call other than
    * the document's, one learned for them on first use.
    */

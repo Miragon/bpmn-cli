@@ -41,7 +41,7 @@
  *    calledDecision= without an engine; with an explicit platform none the
  *    task's own engine spelling, else the one engine spelling of the file's
  *    other links, else the unprefixed one; the other spellings are removed,
- *    empty removes the link; see decision.ts).
+ *    empty removes the link; see DecisionLinkWriter.ts).
  *  Nested elements without an id of their own are addressed with a prefix:
  *    `definition.<key>` (the event definition), `loop.<key>` (the loop
  *    characteristics; a parallel multi-instance loop is created when missing),
@@ -273,7 +273,7 @@ export class PropertySetter {
         break;
       default:
         if (key.includes(':')) {
-          // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ext.ts)
+          // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ZeebeSubscription.ts)
           if (value && new ZeebeSubscription(this.doc).setCorrelationKey(el, key, value, cs)) return;
           if (value) this.assertVendorHost(el, key, value);
           if (value) this.assertZeebeHost(el, key, value);
@@ -590,7 +590,7 @@ export class PropertySetter {
     if (!here.length && !loop && !message) return;
     const target = here[0] ?? (loop ? 'zeebe:loopCharacteristics' : 'zeebe:subscription');
     const type = `${prefix}:${target.slice('zeebe:'.length)}`;
-    // (an element that waits for a message never gets here: set writes the key into the message's subscription, ext.ts setCorrelationKey)
+    // (an element that waits for a message never gets here: set writes the key into the message's subscription, ZeebeSubscription.ts setCorrelationKey)
     const command = here.length
       ? `\`bpmn ext add <file> ${id} ${type} ${pair}\``
       : loop

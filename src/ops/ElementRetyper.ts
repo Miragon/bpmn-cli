@@ -154,7 +154,7 @@ export class ElementRetyper {
     const target = to.type === el.$type ? el : this.swapType(el, to, cs);
     ElementRetyper.applyKindProps(target, from, to);
     if (target !== el) {
-      // a batch alias of the element follows it to the new one (ops/aliases.ts AliasTable.rebind)
+      // a batch alias of the element follows it to the new one (ops/AliasTable.ts AliasTable.rebind)
       cs.replaced.push({ from: el, to: target });
       const inapplicable = this.inapplicableCamundaContent(target, to);
       if (inapplicable) cs.warn(inapplicable);

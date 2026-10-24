@@ -200,7 +200,7 @@ export class PropertyCoercer {
    * reader kept (`assignee="..."` on a user task: the engines validate against
    * the schema and refuse the file, W_C7_DEPLOY_SCHEMA). Only removal: such a
    * key cannot be set. (A business rule task's `calledDecision` is its decision
-   * link, see decision.ts.)
+   * link, see DecisionLinkWriter.ts.)
    */
   static removeUndefined(el: El, key: string, value: string): boolean {
     if (value || key.includes(':') || descriptorOf(el).propertiesByName?.[key]) return false;

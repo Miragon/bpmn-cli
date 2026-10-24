@@ -35,12 +35,12 @@
  *    then the target's lane; else the anchor's) and warns W_LANE_INHERITED
  *    naming the other lane (decided before the placement, which may rename
  *    the flow).
- *  - participant / lane -> containers.ts; dataObject / dataStore /
- *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
+ *  - participant / lane -> PoolEditor.ts / LaneEditor.ts; dataObject / dataStore /
+ *    textAnnotation -> ArtifactEditor.ts (scope from --in or default; `--after`
  *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them);
- *    group -> artifacts.ts createGroup (op.members; no placement options).
+ *    group -> ArtifactEditor.ts createGroup (op.members; no placement options).
  *  - op.set -> PropertySetter.set() on the new element.
- *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
+ *  - batch aliases (ops/AliasTable.ts): op.as binds the new element (with
  *    --if-absent and an existing one: that one), op.flowAs the flow the flow
  *    options describe (into the node; a prepend before a join / unconnected
  *    node: out of it); flowAs without such a flow is E_USAGE. op.outAs binds
@@ -53,7 +53,7 @@
  *  - a new flow out of an event-based gateway (--after, --flow, --before,
  *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
  *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
- *    files get the profile's W_C7_DEPLOY_EVENT_GATEWAY, flows.ts).
+ *    files get the profile's W_C7_DEPLOY_EVENT_GATEWAY, EventGatewayRule.ts).
  *  - ChangeSet: the node's create entry comes first, flows follow (NodePlacement.place),
  *    root Message/Error/Signal/Escalation elements created by the trigger are
  *    reported too.

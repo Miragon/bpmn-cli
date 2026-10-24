@@ -16,7 +16,7 @@
  *  - a crossing left between a new and an existing connection: the existing
  *    one is routed again with the new shapes as obstacles, else the chain
  *    starts at its next row candidate; a trial is kept only when it adds no
- *    hard problem and lowers the score (incremental.ts repairCrossings).
+ *    hard problem and lowers the score (CrossingRepair.ts repair).
  *
  * The later blocks hold the findings of the stage B verification, each
  * failing on the stage B build: the path of an event on its host's top

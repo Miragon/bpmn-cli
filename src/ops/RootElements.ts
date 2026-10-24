@@ -58,7 +58,7 @@ export class RootElements {
   }
 
   /**
-   * Binds the batch alias `refAs` (ops/aliases.ts) to the root element `el`
+   * Binds the batch alias `refAs` (ops/AliasTable.ts) to the root element `el`
    * references after the op; E_USAGE when it references none or several.
    */
   bindRefAs(cs: ChangeSet, alias: string | undefined, el: El | undefined): void {

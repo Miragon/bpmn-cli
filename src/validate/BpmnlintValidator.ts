@@ -37,7 +37,7 @@ export interface BpmnlintValidatorOptions {
   blocks?: boolean;
   /** what the host left out besides the configuration's own (moddle extensions) */
   unavailable?: BpmnlintUnavailable[];
-  /** findings about the configuration itself, reported in every run like W_LINT_UNAVAILABLE (W_CONFIG_IGNORED: values of element-id-naming new ids do not follow, src/ids/conventions.ts) */
+  /** findings about the configuration itself, reported in every run like W_LINT_UNAVAILABLE (W_CONFIG_IGNORED: values of element-id-naming new ids do not follow, src/ids/IdConventionsReader.ts) */
   notes?: ValidatorFinding[];
 }
 

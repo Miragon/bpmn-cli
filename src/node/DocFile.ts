@@ -54,7 +54,7 @@ type ContextOptions = FileBpmnlintOptions & { file?: string; validators?: Valida
  * another. The project's bpmnlint (ProjectBpmnlint) of that file runs as an
  * advisory validator next to the host's (`lintBlocks`: a blocking one); its
  * @miragon/rules/element-id-naming gives the id conventions new ids follow
- * (src/ids/conventions.ts), unless the host passes `conventions` itself (or a
+ * (src/ids/IdConventionsReader.ts), unless the host passes `conventions` itself (or a
  * validator named bpmnlint: then its own conventions, if any).
  */
 export class DocFile {

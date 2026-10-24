@@ -57,7 +57,7 @@
  *    `ext list` and for `show <id>`.
  *  - nested elements: a `definition.` / `loop.` / `condition.` prefix (or
  *    op.slot); one of several event definitions: `definition[<n>].` /
- *    `definition[<trigger>].` (E_AMBIGUOUS_NESTED without it, see set.ts).
+ *    `definition[<trigger>].` (E_AMBIGUOUS_NESTED without it, see ops/utils/nested-slots.ts).
  *
  * Selectors: ops/SelectorParser.ts.
  *

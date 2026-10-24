@@ -14,7 +14,7 @@
  *  2.0, see StructuralValidator.repairFlowLinks) so flows of hand-written files
  *  show up; a file with complete mirrors is left untouched.
  *  The decision link of a business rule task is shown as the node fact
- *  `calledDecision` in every spelling (ops/decision.ts). The Camunda 8
+ *  `calledDecision` in every spelling (ops/DecisionLinkReader.ts). The Camunda 8
  *  settings that say what a node does are node facts too (`job`,
  *  `calledElement`, `script`, `form`, `assignee` / `candidateGroups` /
  *  `candidateUsers`, `inputCollection` / `inputElement` / `outputCollection`

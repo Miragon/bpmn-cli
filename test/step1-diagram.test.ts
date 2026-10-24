@@ -4,7 +4,7 @@
  * that report frame defects (src/diagram/).
  *
  *  - a frame that grows never grows over a shape that is not its content
- *    (space.ts frame mode): nested sub-processes, branch rows, expansion
+ *    (SpaceTool.ts frame mode): nested sub-processes, branch rows, expansion
  *  - an unconnected node is placed below its own container's content
  *  - place / align never push a reference's frames away (E_NO_ROOM)
  *  - metrics: frameIntrusion, frameOverlap, degenerateEdge, detachedEdge, a

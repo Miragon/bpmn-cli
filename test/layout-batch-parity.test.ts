@@ -12,10 +12,10 @@
  *    of new nodes stays a splice through a split (diagram/NodePlacer.ts
  *    spliceTarget, chainReaches), exception paths wait for the normal flow,
  *    and the flows of a node are routed as soon as the next one is placed
- *    (incremental.ts routeNow), like the next single command sees them.
+ *    (IncrementalLayout.ts routeNow), like the next single command sees them.
  *  - a `connect` into a merge an earlier command spliced, that would enter it
  *    backwards, places the merge again right of its rightmost predecessor
- *    (incremental.ts pullJoins); a loop return does not.
+ *    (IncrementalLayout.ts pullJoins); a loop return does not.
  *  - `place <boundaryEventId> --side top|bottom` (op key "side") moves the
  *    event to that border of its host, routes its flow again and brings its
  *    exception path along: the reminder path above the approval, score 0.

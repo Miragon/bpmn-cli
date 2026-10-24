@@ -15,7 +15,7 @@ const MAX_CHILDREN = 6;
 export class ElementFacts {
   constructor(private readonly el: El) {}
 
-  /** Trigger details from the first event definition (fallback while events.ts is a stub). */
+  /** Trigger details from the first event definition (EventTrigger.describe). */
   trigger(): string | undefined {
     const described = new EventTrigger(this.el).describe();
     if (described) return described;

@@ -17,7 +17,7 @@ interface Item {
 
 /**
  * Moves labels that sit on a shape, on another label, on a line or on the
- * title of an expanded sub-process (text.ts titleBox) to the next free spot
+ * title of an expanded sub-process (diagram/utils/text.ts titleBox) to the next free spot
  * around their element: of the spots next to it (below / above, also
  * shifted, and beside it) in an expanded sub-process one below its title
  * first, else one inside the element's frame (in a sub-process always:

@@ -86,7 +86,7 @@ const CAMUNDA8 = [
   '  gateway is never taken, camunda:* content is ignored, ...',
 ];
 
-/** BPMNLINT: the project's .bpmnlintrc in validate and every write (src/validate/bpmnlint-validator.ts, src/node/bpmnlint.ts). */
+/** BPMNLINT: the project's .bpmnlintrc in validate and every write (src/validate/bpmnlint-validator.ts, src/node/ProjectBpmnlint.ts). */
 const BPMNLINT = [
   '  A .bpmnlintrc in the model\'s directory or above, up to the repository root (the directory with .git), runs in',
   '  `bpmn validate` and in every write; --lint-config <path> names another one, --no-lint-config switches it off.',
@@ -129,7 +129,7 @@ const BPMNLINT = [
   '  says what to fix. E_LINT_CONFIG (exit 4): --lint-config names a file that cannot be read or is not strict JSON.',
 ];
 
-/** CONVENTIONS: the id conventions element-id-naming of the project's .bpmnlintrc declares (src/ids/conventions.ts, src/ids/style.ts). */
+/** CONVENTIONS: the id conventions element-id-naming of the project's .bpmnlintrc declares (src/ids/IdConventionsReader.ts, src/ids/IdStyle.ts). */
 const CONVENTIONS = [
   '  A .bpmnlintrc that runs @miragon/rules/element-id-naming (plugin:@miragon/rules/recommended-for-automation and the',
   '  plugin\'s engine defaults turn it on) declares the prefix of each BPMN type, the case of the body and the',

@@ -154,7 +154,7 @@ export class C8Profile extends EngineProfile {
   /** The schema-text issues of a document's text, read once per text (the profile runs before and after an edit). */
   private readonly textIssues = new WeakMap<object, SchemaTextIssue[]>();
   private readonly schemaText = new SchemaText(this.kit);
-  /** flows whose source does not list them as written (model/mirror.ts unkeptEntries): flow -> source */
+  /** flows whose source does not list them as written (model/utils/mirror.ts unkeptEntries): flow -> source */
   private unlisted = new Map<El, El>();
 
   protected override checkDocument(): void {
@@ -798,7 +798,7 @@ export class C8Profile extends EngineProfile {
   private checkEventGateway(gw: El): void {
     const id = idOf(gw)!;
     const flows = this.outgoing.get(gw) ?? [];
-    // the engine counts the <bpmn:outgoing> entries of the gateway, which a file may leave out (model/mirror.ts writes them the file's way)
+    // the engine counts the <bpmn:outgoing> entries of the gateway, which a file may leave out (model/utils/mirror.ts writes them the file's way)
     const listed = flows.filter((f) => !this.unlisted.has(f) || this.unlisted.get(f) !== gw);
     if (flows.length < 2) {
       this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, 'branches', `Event-based gateway ${id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${id} --timer PT1H\`.`);

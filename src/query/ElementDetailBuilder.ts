@@ -1,6 +1,6 @@
 /**
  * `bpmn show <id>`: everything about one element incl. ElementProperties.read()
- * from ops/ElementProperties.ts, new ExtensionLister().list() from ops/ext.js, flows in/out with
+ * from ops/ElementProperties.ts, new ExtensionLister().list() from ops/ExtensionLister.ts, flows in/out with
  * labels/conditions, host, attached boundary events, lane, scope. It first
  * adds missing incoming/outgoing mirror entries (StructuralValidator.repairFlowLinks) so flows of hand-written files show up.
  */

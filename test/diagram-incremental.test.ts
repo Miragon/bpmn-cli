@@ -670,7 +670,7 @@ function flowFrom(doc: Doc, source: string, target: string): string {
   throw new Error(`no flow ${source} -> ${target}`);
 }
 
-/** The edges that do not reach their ends (reroute.ts detachedEnds), with the ends they miss. */
+/** The edges that do not reach their ends (EdgeRouter.ts detachedEnds), with the ends they miss. */
 function detached(doc: Doc): string[] {
   return new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length).map((e) => `${e.id}->${new Drawing(p).detachedEnds(e).join(',')}`));
 }

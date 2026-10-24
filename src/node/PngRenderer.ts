@@ -1,6 +1,6 @@
 /**
  * PNG images of a diagram (Node only; `@miragon/bpmn-cli/node`): the SVG of
- * the core renderer (src/render/index.ts) rasterised by resvg compiled to
+ * the core renderer (src/render/DocRenderer.ts) rasterised by resvg compiled to
  * WebAssembly (@resvg/resvg-wasm, imported on the first call, like
  * bpmn-auto-layout) with the bundled Arimo font (assets/fonts, SIL OFL 1.1;
  * metric-compatible with Arial, so the SVG's line breaks hold). No system

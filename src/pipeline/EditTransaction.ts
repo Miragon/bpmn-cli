@@ -10,10 +10,10 @@
  * Output text (outputText): incoming / outgoing entries are written the way
  * the file keeps them (model/utils/mirror.ts; in memory they are complete), and for a
  * document read from XML every element the ops did not change keeps its
- * original text (xml/preserve.ts: prolog, comments, CDATA, attribute order,
+ * original text (xml/TextPreservation.ts: prolog, comments, CDATA, attribute order,
  * namespace declarations, indentation); changed and new elements follow the
  * file's style. A write is UTF-8: a changed result whose XML declaration
- * names another encoding declares UTF-8 (src/xml/encoding.ts, with a note). Comments the result cannot keep, and a fall-back to
+ * names another encoding declares UTF-8 (src/xml/utils/encoding.ts, with a note). Comments the result cannot keep, and a fall-back to
  * bpmn-moddle's plain serialisation, are reported as notes. A result equal
  * to the input text is `unchanged: true`; the node layer does not write it
  * back over its file (`written: false`; `--out` to another file still writes
@@ -21,7 +21,7 @@
  *
  * This class is the in-memory part (everything but load and write): it
  * never touches the file system or the environment, so it runs in the
- * browser too. src/node/files.ts reads the file, runs the transaction and writes
+ * browser too. src/node/ModelFile.ts reads the file, runs the transaction and writes
  * the result atomically (mutateFile, the CLI); src/api.ts wraps it for
  * strings (applyToXml).
  *
@@ -55,10 +55,10 @@
  *    introduced among the warnings and never blocks; for a created document
  *    (`new`) it reports everything it finds in the new model.
  *
- * Declared id conventions (MutationOptions.conventions, src/ids/conventions.ts:
+ * Declared id conventions (MutationOptions.conventions, src/ids/IdConventionsReader.ts:
  * element-id-naming of the project's .bpmnlintrc, which the node layer reads)
  * are the document's for the call: the ids the ops and a full redraw
- * generate follow them where they declare a prefix (src/ids/style.ts); the
+ * generate follow them where they declare a prefix (src/ids/IdStyle.ts); the
  * result names those that differ from the file's own style
  * (`conventions`). Without them nothing changes.
  *
@@ -128,7 +128,7 @@ import type { LayoutStatus, MutationOptions, MutationResult } from './index.js';
 
 /**
  * One mutateDoc call: applies ops to an in-memory document, the whole
- * pipeline except reading and writing (src/node/files.ts mutateFile /
+ * pipeline except reading and writing (src/node/ModelFile.ts mutateFile /
  * mutateDocToFile write the result), in the edit context of the call
  * (src/model/EditContext.ts: its declared conventions, explicit platform and
  * keepFlowIds).

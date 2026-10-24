@@ -8,7 +8,7 @@ import { assertPathFlags, flag } from './utils/flags.js';
 
 /* format operations (diagram only) */
 export abstract class FormatCommand extends MutationCommand {
-  /** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/query/select.ts). */
+  /** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/query/ElementSelector.ts). */
   protected withSelectors(cmd: CommandType, what: string): CommandType {
     return cmd
       .option('--path <ids...>', `${what} every node${what === 'colour' ? ' and flow' : ''} on the shortest sequence-flow path <fromId> <toId>`)

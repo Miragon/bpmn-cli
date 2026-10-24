@@ -22,7 +22,7 @@ export interface FileBpmnlintOptions {
 
 /** What the .bpmnlintrc of a file declares about ids (ProjectBpmnlint.idConventions). */
 export interface ProjectIdConventions {
-  /** the id conventions of its element-id-naming (src/ids/conventions.ts); absent: the rule is off or not configured, or every prefix is switched off */
+  /** the id conventions of its element-id-naming (src/ids/IdConventionsReader.ts); absent: the rule is off or not configured, or every prefix is switched off */
   conventions?: IdConventions;
   /** W_CONFIG_IGNORED: values of the rule's options new ids do not follow (the validator reports them); W_LINT_UNAVAILABLE: what the configuration leaves out, or why it could not be loaded */
   notes: ValidatorFinding[];

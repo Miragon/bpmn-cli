@@ -18,7 +18,7 @@ import type { ModelView } from '../query/model-view.js';
 
 /**
  * Options of the in-memory pipeline. Writing (out, dryRun, backup,
- * mustNotExist) is the node layer's: FileMutationOptions in src/node/files.ts.
+ * mustNotExist) is the node layer's: FileMutationOptions in src/node/DocFile.ts.
  */
 export interface MutationOptions {
   /**

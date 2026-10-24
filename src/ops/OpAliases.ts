@@ -53,7 +53,7 @@ const REF_KEYS: Record<Op['op'], readonly string[]> = {
   order: ['id', 'flows', 'lanes', 'pools'],
   ext: ['id'],
   split: ['after'],
-  // the selectors of place / align / color / tidy (query/select.ts) name elements too: path, via, branch
+  // the selectors of place / align / color / tidy (query/ElementSelector.ts) name elements too: path, via, branch
   place: ['ids', 'path', 'via', 'branch', 'rowOf', 'below', 'above', 'columnOf', 'after', 'before'],
   align: ['ids', 'path', 'via', 'branch', 'to'],
   color: ['ids', 'path', 'via', 'branch'],

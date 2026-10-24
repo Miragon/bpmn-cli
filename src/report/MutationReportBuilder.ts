@@ -47,7 +47,7 @@ export class MutationReportBuilder {
   /**
    * old id -> final id of what the ops renamed of the file's elements (a chain
    * A -> B -> C as A -> C); absent without renames. A takeover (the id of an
-   * element the change removed, model/change-set.ts Rename.takeover) is no rename: the
+   * element the change removed, model/ChangeSet.ts Rename.takeover) is no rename: the
    * old id is listed as removed, the taken one as changed.
    */
   private renamedIds(): Record<string, string> | undefined {

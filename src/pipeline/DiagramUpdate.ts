@@ -231,7 +231,7 @@ export class DiagramUpdate {
   /**
    * The text a mutation writes. The mirror entries the file does not keep are
    * left out (model/utils/mirror.ts). For a document read from a file, the parts the ops
-   * did not change keep their original text (xml/preserve.ts; asRead is the
+   * did not change keep their original text (xml/TextPreservation.ts; asRead is the
    * serialisation of the document as read); comments that could not be kept
    * and a fall-back to the plain serialisation are reported as notes.
    */
@@ -251,7 +251,7 @@ export class DiagramUpdate {
       changes.note(`${text.droppedComments} XML comment(s) dropped: they were inside or next to elements the change removed or rewrote`);
     }
     if (text.xml === source.text) return text.xml;
-    // a write is UTF-8 (src/xml/encoding.ts): the kept declaration must say so
+    // a write is UTF-8 (src/xml/utils/encoding.ts): the kept declaration must say so
     const declared = utf8Declaration(text.xml);
     if (declared.was !== undefined) changes.note(`the XML declaration named the encoding ${declared.was}; the text is written as UTF-8, so it now says UTF-8`);
     return declared.text;
