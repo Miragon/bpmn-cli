@@ -47,6 +47,10 @@ export interface KindDef {
   triggers?: Trigger[];
   /** extra properties set on creation */
   props?: Record<string, unknown>;
+  /** gateways only: evaluates conditions and may have a default flow */
+  branchesByCondition?: true;
+  /** gateways only: a join waits for its incoming paths */
+  synchronises?: true;
   description: string;
 }
 
@@ -87,10 +91,10 @@ export const KINDS: KindDef[] = [
   { kind: 'transaction', type: 'bpmn:Transaction', family: 'subProcess', aliases: [], prefix: 'Activity', description: 'Transaction sub-process' },
   { kind: 'callActivity', type: 'bpmn:CallActivity', family: 'callActivity', aliases: ['call'], prefix: 'Activity', description: 'Calls another process (set calledElement=<processId>)' },
   // gateways
-  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
-  { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', description: 'AND: all outgoing paths' },
-  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', description: 'OR: one or more outgoing paths' },
-  { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
+  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', branchesByCondition: true, description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
+  { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', synchronises: true, description: 'AND: all outgoing paths' },
+  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'OR: one or more outgoing paths' },
+  { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
   { kind: 'eventBasedGateway', type: 'bpmn:EventBasedGateway', family: 'gateway', aliases: ['eventBased', 'event-based', 'eventGateway'], prefix: 'Gateway', description: 'Waits for the first of several catching events' },
   // events
   { kind: 'startEvent', type: 'bpmn:StartEvent', family: 'event', aliases: ['start'], prefix: 'Event', triggers: ['none', 'message', 'timer', 'signal', 'conditional', 'error', 'escalation', 'compensate'], description: 'Start event (error/escalation/compensate only inside an eventSubProcess)' },
@@ -240,6 +244,20 @@ export function kindOf(el: El): KindDef | undefined {
     return el.get<boolean | undefined>('triggeredByEvent') ? kindByName('eventSubProcess') : kindByName('subProcess');
   }
   return KINDS.find((k) => k.type === el.$type);
+}
+
+export function branchesByCondition(el: El): boolean {
+  return !!kindOf(el)?.branchesByCondition;
+}
+
+export function synchronises(el: El): boolean {
+  return !!kindOf(el)?.synchronises;
+}
+
+/** `exclusiveGateway (xor), parallelGateway (and), ...` for hints. */
+export function gatewayKindList(): string {
+  const gateways = KINDS.filter((k) => k.family === 'gateway').map((k) => (k.aliases[0] ? `${k.kind} (${k.aliases[0]})` : k.kind));
+  return `${gateways.slice(0, -1).join(', ')} or ${gateways.at(-1)}`;
 }
 
 /** Trigger of an event element, derived from its (first) event definition. */

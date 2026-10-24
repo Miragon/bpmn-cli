@@ -16,7 +16,7 @@
  */
 import { usageError, type CliError } from '../shared/errors.js';
 import { editDistance } from '../ids/slugs.js';
-import { FLOW_NODE_FAMILIES, KindError, kindByName, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
+import { FLOW_NODE_FAMILIES, KindError, gatewayKindList, kindByName, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
 import { ALIAS, checkAliases } from './aliases.js';
 import {
   OP_NAMES,
@@ -601,7 +601,7 @@ function checkKind(ctx: Ctx, obj: Record<string, unknown>, expectFamily?: string
     throw err;
   }
   if (expectFamily && family !== expectFamily) {
-    throw fail(ctx, `"kind" must be a ${expectFamily} kind, "${kind}" is a ${family}`, expectFamily === 'gateway' ? 'Use exclusiveGateway, parallelGateway, inclusiveGateway, complexGateway or eventBasedGateway.' : undefined);
+    throw fail(ctx, `"kind" must be a ${expectFamily} kind, "${kind}" is a ${family}`, expectFamily === 'gateway' ? `Use ${gatewayKindList()}.` : undefined);
   }
   // send and receive tasks reference a message too (`add sendTask --message X`, ops/add.ts)
   const messageTask = ['sendTask', 'receiveTask'].includes(parseKind(kind).def.kind);

@@ -29,7 +29,7 @@ import { followDiIds } from '../diagram/write.js';
 import { modelError, type Warning } from '../shared/errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
-import { kindLabel, triggerOf } from '../model/kinds.js';
+import { branchesByCondition, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
 import { about, renamedNote, type ChangeSet } from '../model/change-set.js';
 import type { FlowOptions, Placement } from './types.js';
@@ -659,7 +659,7 @@ export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: E
 export function setDefaultFlow(doc: Doc, flow: El, isDefault: boolean): void {
   const source = flow.get<El>('sourceRef');
   if (isDefault) {
-    if (!is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway') && !is(source, 'bpmn:Activity')) {
+    if (!branchesByCondition(source) && !is(source, 'bpmn:Activity')) {
       throw modelError('E_INVALID_DEFAULT', `Only exclusive/inclusive/complex gateways and activities can have a default flow (${idOf(source)} is a ${kindLabel(source)})`, {
         element: idOf(flow),
       });
