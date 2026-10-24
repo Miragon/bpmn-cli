@@ -127,16 +127,10 @@ export function assertFlowNodeRoles(source: El, target: El): void {
     throw modelError('E_INVALID_TARGET', `Start event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
   }
   if (isLinkThrow(source)) {
-    throw modelError('E_INVALID_SOURCE', `Link throw event ${idOf(source)} cannot have outgoing sequence flows`, {
-      element: idOf(source),
-      hint: 'A link throw event ends its path; the flow continues at the link catch event of the same name. Connect from that catch event instead.',
-    });
+    throw modelError('E_INVALID_SOURCE', `Link throw event ${idOf(source)} cannot have outgoing sequence flows`, { element: idOf(source) });
   }
   if (isLinkCatch(target)) {
-    throw modelError('E_INVALID_TARGET', `Link catch event ${idOf(target)} cannot have incoming sequence flows`, {
-      element: idOf(target),
-      hint: 'A link catch event starts its path; the flow arrives through the link throw event of the same name. Connect to that throw event instead.',
-    });
+    throw modelError('E_INVALID_TARGET', `Link catch event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
   }
   if (is(target, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_TARGET', `Boundary event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
