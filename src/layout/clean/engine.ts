@@ -37,8 +37,9 @@ import { titleBox } from '../../diagram/text.js';
 import { addTo, is, many, type El, type Model, idOf } from '../../model/utils/moddle.js';
 import { layoutRoot } from '../../model/utils/moddle.js';
 import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
-import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
-import { placeCollaborationNotes, type NoteJob } from './notes.js';
+import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from './MessageFlowRouter.js';
+import { NotePlacer, type NoteJob } from './NotePlacer.js';
+import type { Segment as Seg } from './utils/geometry.js';
 import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
 import { METRICS, SIZES, boxesOverlap, center, type Box, type GEdge, type GNode, type LaneBox, type Point, type ScopeLayout } from '../../diagram/types.js';
 
@@ -487,16 +488,16 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
     const flows = collectMessageFlows(root, pools, absBoxes, warnings);
     // pools in the order whose message flows cut the fewest shapes, then the routes
     let views = new Map(pools.map((p) => [p, messageView(p, absBoxes)]));
-    const order = poolOrder(pools.map((p) => views.get(p)!), messageJobs(flows, views));
+    const order = new MessageFlowRouter(messageJobs(flows, views), pools.map((p) => views.get(p)!)).poolOrder();
     const reordered = order.map((view) => pools.find((p) => views.get(p) === view)!);
     if (reordered.some((p, i) => p !== pools[i])) {
       restackPools(reordered, absBoxes);
       pools.splice(0, pools.length, ...reordered);
       views = new Map(pools.map((p) => [p, messageView(p, absBoxes)]));
     }
-    for (const route of routeMessageFlows(messageJobs(flows, views), pools.map((p) => views.get(p)!))) {
+    for (const route of new MessageFlowRouter(messageJobs(flows, views), pools.map((p) => views.get(p)!)).route()) {
       const name = route.el.get<string | undefined>('name');
-      edge(route.el, route.points, name ? messageLabel(route.points, name, route.channelY) : undefined);
+      edge(route.el, route.points, name ? MessageFlowRouter.label(route.points, name, route.channelY) : undefined);
     }
     // text annotations owned by the collaboration: next to their element, after everything else
     for (const note of collaborationNotes(root, pools, di, absBoxes)) {
@@ -831,7 +832,7 @@ function collaborationNotes(root: El, pools: PoolLayout[], di: El[], absBoxes: M
     return { ...size };
   });
   const world = { ...drawnWorld(di, absBoxes), pools: pools.map((p) => p.box) };
-  const boxes = placeCollaborationNotes(jobs, world);
+  const boxes = new NotePlacer(world).place(jobs);
   return [...notes.map((el, i) => ({ el, box: boxes[i] })), ...artifacts.filter((a) => !is(a, 'bpmn:Association') && !is(a, 'bpmn:TextAnnotation') && !is(a, 'bpmn:Group')).map((el) => ({ el }))];
 }
 

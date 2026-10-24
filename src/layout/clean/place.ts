@@ -65,7 +65,8 @@
 import { LayoutDebug } from '../../shared/LayoutDebug.js';
 import { titleBox, titleDepth } from '../../diagram/text.js';
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { RISE_KEEP, XIndex, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments, segmentHitsBox } from './route.js';
+import { XIndex } from './XIndex.js';
+import { RISE_KEEP, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments, segmentHitsBox } from './route.js';
 import { METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type LinkEnd, type Point, type ScopeLayout } from '../../diagram/types.js';
 
 
