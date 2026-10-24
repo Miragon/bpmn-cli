@@ -29,7 +29,7 @@ import { followDiIds } from '../diagram/write.js';
 import { modelError, type Warning } from '../shared/errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
-import { branchesByCondition, ignoresConditions, kindLabel, triggerOf } from '../model/kinds.js';
+import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
 import { about, renamedNote, type ChangeSet } from '../model/change-set.js';
 import type { FlowOptions, Placement } from './types.js';
@@ -104,12 +104,12 @@ function isEventSubProcess(el: El): boolean {
 
 /** True when the node may have outgoing sequence flows. */
 export function canBeFlowSource(node: El): boolean {
-  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:EndEvent') && !isEventSubProcess(node);
+  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:EndEvent') && !isLinkThrow(node) && !isEventSubProcess(node);
 }
 
 /** True when the node may have incoming sequence flows. */
 export function canBeFlowTarget(node: El): boolean {
-  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !isEventSubProcess(node);
+  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !isLinkCatch(node) && !isEventSubProcess(node);
 }
 
 /** The kind-based part of the endpoint rules (no scope check). */
@@ -125,6 +125,18 @@ export function assertFlowNodeRoles(source: El, target: El): void {
   }
   if (is(target, 'bpmn:StartEvent')) {
     throw modelError('E_INVALID_TARGET', `Start event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
+  }
+  if (isLinkThrow(source)) {
+    throw modelError('E_INVALID_SOURCE', `Link throw event ${idOf(source)} cannot have outgoing sequence flows`, {
+      element: idOf(source),
+      hint: 'A link throw event ends its path; the flow continues at the link catch event of the same name. Connect from that catch event instead.',
+    });
+  }
+  if (isLinkCatch(target)) {
+    throw modelError('E_INVALID_TARGET', `Link catch event ${idOf(target)} cannot have incoming sequence flows`, {
+      element: idOf(target),
+      hint: 'A link catch event starts its path; the flow arrives through the link throw event of the same name. Connect to that throw event instead.',
+    });
   }
   if (is(target, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_TARGET', `Boundary event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });

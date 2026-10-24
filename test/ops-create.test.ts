@@ -707,6 +707,17 @@ describe('connect', () => {
     await roundTrip(doc);
   });
 
+  it('refuses a flow out of a link throw event and into a link catch event', async () => {
+    const doc = await linearDoc();
+    add(doc, { kind: 'intermediateThrowEvent:link', name: 'To shipping', link: 'Shipping', in: 'Process_1' });
+    add(doc, { kind: 'intermediateCatchEvent:link', name: 'From order', link: 'Shipping', in: 'Process_1' });
+    expect(codeOf(() => connect(doc, { source: 'Event_ToShipping', target: 'End' }))).toBe('E_INVALID_SOURCE');
+    expect(codeOf(() => connect(doc, { source: 'Start', target: 'Event_FromOrder' }))).toBe('E_INVALID_TARGET');
+    expect(codeOf(() => add(doc, { kind: 'endEvent', name: 'Done', after: 'Event_ToShipping' }))).toBe('E_INVALID_SOURCE');
+    expect(connect(doc, { source: 'Task_A', target: 'Event_ToShipping' }).created).toHaveLength(1);
+    expect(connect(doc, { source: 'Event_FromOrder', target: 'End' }).created).toHaveLength(1);
+  });
+
   it('gateway sources do not warn about splits, joins through gateways neither', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
     const cs = connect(doc, { source: 'GW', target: 'Loose', default: true });
