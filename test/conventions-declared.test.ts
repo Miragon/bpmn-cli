@@ -907,7 +907,7 @@ describe('bpmn show --conventions (the view)', () => {
     const view = conventionsView(await Doc.fromXml(PASCAL), declared({ prefixes: { 'bpmn:UserTask': 'user task_', 'bpmn:Gateway': 'a gate_' } }));
     const row = (kind: string) => view.rows.find((r) => r.kinds.includes(kind));
     expect(row('userTask')).toMatchObject({ source: 'file', note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
-    expect(row('exclusiveGateway')).toMatchObject({ source: 'file', kinds: ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway'], note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
+    expect(row('exclusiveGateway')).toMatchObject({ source: 'file', kinds: ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'complexGateway', 'eventBasedGateway'], note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
     expect(row('lane')?.note).toBe('not checked');
     // under required, the triggers whose qualified prefix is too long for new ids: they follow the file's style
     const long = conventionsView(undefined, declared({ case: 'snake_case', eventDefinitionQualifier: 'required', prefixes: { 'bpmn:EndEvent': 'endEventWithAVeryLongPrefixThatIsFiftyCharactersX_' } }));

@@ -123,7 +123,7 @@ conventions of models/order.bpmn
 element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional
   <kind>_{name:camel}                lint        task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent
   subProcess_{name:camel}            lint        eventSubProcess adHocSubProcess transaction
-  gateway_{name:camel}               lint        exclusiveGateway parallelGateway inclusiveGateway eventBasedGateway
+  gateway_{name:camel}               lint        exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
   event_{name:camel}                 lint        intermediateCatchEvent intermediateThrowEvent boundaryEvent
   <Kind>_{name:pascal}               file        participant lane textAnnotation collaboration message (not checked)
   DataObjectReference_{name:pascal}  file        dataObject (not checked)

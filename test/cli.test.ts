@@ -231,7 +231,7 @@ describe('bpmn cli session', () => {
     let r = bpmn('add', file, 'userTask', 'X', '--after', 'Nope');
     expect(r.code, r.err).toBe(2);
     expect(r.err).toMatch(/error E_NOT_FOUND/);
-    r = bpmn('add', file, 'complexGateway', 'X');
+    r = bpmn('add', file, 'choreographyTask', 'X');
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/error E_UNSUPPORTED_KIND/);
     r = bpmn('show', join(dir, 'missing.bpmn'));
@@ -251,6 +251,30 @@ describe('bpmn cli session', () => {
     expect(k.kinds.map((x: any) => x.kind)).toContain('userTask');
     expect(ok('guide').out).toMatch(/apply/);
     expect(ok('kinds').out).toMatch(/boundaryEvent/);
+  });
+});
+
+describe('complex gateways (#74)', () => {
+  it('are modelled in a plain file; the Camunda 7 / 8 profiles report them', () => {
+    const f = join(dir, 'complex.bpmn');
+    ok('new', f, '--id', 'P');
+    ok('add', f, 'start', 'S');
+    expect(ok('add', f, 'complex', 'Enough reviews?', '--after', 'Event_S').out).toMatch(/created complexGateway Gateway_EnoughReviews/);
+    ok('add', f, 'task', 'Legal', '--after', 'Gateway_EnoughReviews');
+    ok('add', f, 'task', 'Finance', '--after', 'Gateway_EnoughReviews');
+    ok('add', f, 'parallelGateway', '--after', 'Activity_Legal', '--id', 'Join');
+    ok('connect', f, 'Activity_Finance', 'Join');
+    ok('add', f, 'end', 'Done', '--after', 'Join');
+    ok('retype', f, 'Join', 'complexGateway');
+    expect(ok('retype', f, 'Gateway_EnoughReviews', 'inclusiveGateway').out).toMatch(/changed inclusiveGateway Gateway_EnoughReviews/);
+    ok('retype', f, 'Gateway_EnoughReviews', 'complex');
+    expect(ok('validate', f).out).toMatch(/valid, 0 warning/);
+    expect(ok('layout', f).code).toBe(0);
+    expect(ok('render', f, '-o', join(dir, 'complex.svg')).out).toMatch(/wrote/);
+    expect(bpmn('validate', f, '--platform', 'c7').out).toMatch(/W_C7_DEPLOY_COMPLEX_GATEWAY Gateway_EnoughReviews/);
+    expect(bpmn('validate', f, '--platform', 'c8').out).toMatch(/W_C8_DEPLOY_UNSUPPORTED Join/);
+    expect(bpmn('remove', f, 'Join').err).toMatch(/E_AMBIGUOUS_BRIDGE: Join is a complex join/);
+    expect(ok('remove', f, 'Join', '--bridge-all').out).toMatch(/note: Join synchronised Activity_Legal, Activity_Finance/);
   });
 });
 

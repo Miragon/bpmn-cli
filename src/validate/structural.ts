@@ -828,7 +828,7 @@ function validateStructure(doc: Doc): ValidationResult {
       const rejected = isRejectedType(el.$type);
       if (rejected) {
         pushFinding(ctx.errors, 'E_UNSUPPORTED_KIND', `${el.$type} ${idOf(el)} is not supported: ${rejected}`, idOf(el), {
-          hint: `Retype it (\`bpmn retype <file> ${idOf(el)} <kind>\`) or remove it.`,
+          hint: `Remove it: \`bpmn remove <file> ${idOf(el)}\`.`,
         });
       }
       if (is(el, 'bpmn:SequenceFlow')) checkSequenceFlow(ctx, el, scope);

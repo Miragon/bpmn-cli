@@ -242,7 +242,7 @@ const CASES: Case[] = [
   { name: 'event-based gateway with one branch', xml: xml(eventGateway([TIMER_CATCH]), { roots: MSG() }), codes: ['W_C8_DEPLOY_EVENT_GATEWAY'], engine: 'reject' },
   { name: 'event-based gateway leading to a receive task', xml: xml(eventGateway([TIMER_CATCH, '<bpmn:receiveTask id="{id}" messageRef="M1">{in}</bpmn:receiveTask>']), { roots: MSG() }), codes: ['W_C8_DEPLOY_EVENT_GATEWAY'], engine: 'reject', structural: undefined },
   { name: 'event-based gateway with one message on two branches', xml: xml(eventGateway([msgCatch('M1'), msgCatch('M1'), TIMER_CATCH]), { roots: MSG() }), codes: ['W_C8_DEPLOY_MESSAGE'], engine: 'reject' },
-  { name: 'complex gateway', xml: xml(gateway(['= x &gt; 1', null], 'S1', 'complexGateway')), codes: [], engine: 'reject', structural: 'E_UNSUPPORTED_KIND' },
+  { name: 'complex gateway', xml: xml(gateway(['= x &gt; 1', null], 'S1', 'complexGateway')), codes: ['W_C8_DEPLOY_UNSUPPORTED'], engine: 'reject' },
   // multi-instance and loops
   { name: 'multi-instance without zeebe:loopCharacteristics', xml: xml(chain(ST(ext(TD()) + MI(undefined, '', '<bpmn:loopCardinality xsi:type="bpmn:tFormalExpression">3</bpmn:loopCardinality>')))), codes: ['W_C8_DEPLOY_MULTI_INSTANCE'], engine: 'reject' },
   { name: 'multi-instance without inputCollection', xml: xml(chain(ST(ext(TD()) + MI(ZLOOP('inputElement="item"'))))), codes: ['W_C8_DEPLOY_MULTI_INSTANCE'], engine: 'reject' },

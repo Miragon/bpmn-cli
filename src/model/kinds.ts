@@ -90,6 +90,7 @@ export const KINDS: KindDef[] = [
   { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
   { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', description: 'AND: all outgoing paths' },
   { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', description: 'OR: one or more outgoing paths' },
+  { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
   { kind: 'eventBasedGateway', type: 'bpmn:EventBasedGateway', family: 'gateway', aliases: ['eventBased', 'event-based', 'eventGateway'], prefix: 'Gateway', description: 'Waits for the first of several catching events' },
   // events
   { kind: 'startEvent', type: 'bpmn:StartEvent', family: 'event', aliases: ['start'], prefix: 'Event', triggers: ['none', 'message', 'timer', 'signal', 'conditional', 'error', 'escalation', 'compensate'], description: 'Start event (error/escalation/compensate only inside an eventSubProcess)' },
@@ -107,7 +108,6 @@ export const KINDS: KindDef[] = [
 ];
 
 const REJECTED_TYPES: Record<string, string> = {
-  'bpmn:ComplexGateway': 'the layout engine cannot draw complex gateways; use exclusiveGateway or inclusiveGateway',
   'bpmn:ChoreographyTask': 'choreographies are not supported',
   'bpmn:SubChoreography': 'choreographies are not supported',
   'bpmn:CallChoreography': 'choreographies are not supported',

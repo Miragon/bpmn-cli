@@ -156,7 +156,8 @@
  *  which they cannot be, they read as camelCase), unless their prefixes
  *  show the other first letter than the declared ones (Lane_, Participant_
  *  next to serviceTask_: bpmn-cli's PascalCase); where they show no prefix
- *  shape, the declared prefixes' shape (type-named, first letter) is. The
+ *  shape, the declared prefixes' shape (type-named, first letter; a prefix
+ *  several kinds share, gateway_, counts once) is. The
  *  process and the definitions take bpmn-cli's style (Process_<Name>, also
  *  a new pool's process) unless the table names their type exactly; a new
  *  process takes the prefix the file's process ids share (two at least,
@@ -1430,13 +1431,15 @@ export class IdStyle {
 
   private votes: Votes | undefined;
 
-  /** The declared prefixes of the kinds as votes on the shape of a prefix nothing declares (prefixClass, first letter). */
+  /** The declared prefixes of the kinds as votes on the shape of a prefix nothing declares (prefixClass, first letter); a prefix several kinds share (gateway_) votes once. */
   private declaredVotes(): Votes {
     if (this.votes) return this.votes;
     const v = { kind: 0, literal: 0, lower: 0, upper: 0 };
+    const voted = new Set<string>();
     for (const def of KINDS) {
       const m = PREFIXED.exec(`${this.d!.prefixes[def.type] ?? ''}x`);
-      if (!m) continue;
+      if (!m || voted.has(m[1]!)) continue;
+      voted.add(m[1]!);
       if (prefixClass(m[1]!, kindTypeNames(def), undefined, def.prefix) === 'literal') v.literal++;
       else v.kind++;
       if (/^[a-z]/.test(m[1]!)) v.lower++;
@@ -2148,6 +2151,7 @@ const SPELLABLE = new Set([
   'exclusiveGateway',
   'parallelGateway',
   'inclusiveGateway',
+  'complexGateway',
   'eventBasedGateway',
 ]);
 

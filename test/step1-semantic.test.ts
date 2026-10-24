@@ -317,44 +317,40 @@ describe('retype of a sub-process with content', () => {
 /* 6. pre-existing validation errors                                    */
 /* ------------------------------------------------------------------ */
 
-const COMPLEX = definitionsXml(`
+const PREEXISTING = definitionsXml(`
     <bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
-    <bpmn:complexGateway id="Gw"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:complexGateway>
+    <bpmn:choreographyTask id="Ch"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:choreographyTask>
     <bpmn:task id="Task_A"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
     <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
     <bpmn:subProcess id="Esp" triggeredByEvent="true"><bpmn:startEvent id="EspStart" /></bpmn:subProcess>
-    <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="Gw" />
-    <bpmn:sequenceFlow id="F2" sourceRef="Gw" targetRef="Task_A" />
+    <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="Ch" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Ch" targetRef="Task_A" />
     <bpmn:sequenceFlow id="F3" sourceRef="Task_A" targetRef="E" />`);
 
 describe('pre-existing validation errors', () => {
   it('do not block an unrelated write; they are reported as warnings', async () => {
-    const doc = await Doc.fromXml(COMPLEX);
+    const doc = await Doc.fromXml(PREEXISTING);
     expect(validateDoc(doc).errors.map((e) => e.code).sort()).toEqual(['E_EVENT_SUBPROCESS_PLAIN_START', 'E_UNSUPPORTED_KIND']);
-    const r = await mutate(COMPLEX, [{ op: 'set', id: 'Task_A', values: { name: 'Renamed' } }]);
+    const r = await mutate(PREEXISTING, [{ op: 'set', id: 'Task_A', values: { name: 'Renamed' } }]);
     expect(r.validation.errors).toEqual([]);
     const pre = r.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR');
-    expect(pre.map((w) => w.element).sort()).toEqual(['EspStart', 'Gw']);
-    expect(pre.find((w) => w.element === 'Gw')!.message).toMatch(/^E_UNSUPPORTED_KIND/);
+    expect(pre.map((w) => w.element).sort()).toEqual(['Ch', 'EspStart']);
+    expect(pre.find((w) => w.element === 'Ch')!.message).toMatch(/^E_UNSUPPORTED_KIND/);
     expect(r.xml).toContain('<bpmn:task id="Task_A" name="Renamed">');
   });
 
-  it('stay pre-existing when the ops rename or retype the element they are about', async () => {
-    const renamed = await mutate(COMPLEX, [{ op: 'set', id: 'EspStart', values: { id: 'EspBegin' } }]);
+  it('stay pre-existing when the ops rename the element they are about', async () => {
+    const renamed = await mutate(PREEXISTING, [{ op: 'set', id: 'EspStart', values: { id: 'EspBegin' } }]);
     expect(renamed.validation.errors).toEqual([]);
-    expect(renamed.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR').map((w) => w.element).sort()).toEqual(['EspBegin', 'Gw']);
-    const fixed = await mutate(COMPLEX, [{ op: 'retype', id: 'Gw', kind: 'exclusiveGateway' }]);
-    // the validator's advice works: an unsupported complexGateway can be retyped to a supported gateway
-    expect(fixed.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR').map((w) => w.element)).toEqual(['EspStart']);
-    expect(fixed.xml).toMatch(/<bpmn:exclusiveGateway id="Gw">\s*<bpmn:incoming>F1<\/bpmn:incoming>\s*<bpmn:outgoing>F2<\/bpmn:outgoing>/);
+    expect(renamed.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR').map((w) => w.element).sort()).toEqual(['Ch', 'EspBegin']);
   });
 
   it('errors the ops introduce still block (and --force still overrides)', async () => {
     const ops: Op[] = [{ op: 'add', kind: 'subProcess', id: 'Esp2', in: 'Process_1', set: { triggeredByEvent: 'true' } }];
-    const err = await rejected(mutate(COMPLEX, ops));
+    const err = await rejected(mutate(PREEXISTING, ops));
     expect(err.code).toBe('E_VALIDATION');
     expect((err.details.errors as Array<{ code: string; element?: string }>).map((e) => `${e.code} ${e.element}`)).toEqual(['E_EVENT_SUBPROCESS_NO_START Esp2']);
-    const forced = await mutate(COMPLEX, ops, { force: true });
+    const forced = await mutate(PREEXISTING, ops, { force: true });
     expect(forced.validation.errors.map((e) => e.element)).toEqual(['Esp2']);
   });
 });

@@ -50,13 +50,15 @@ type (`bpmn:UserTask`). Events take a trigger suffix (`startEvent:message`, `bou
 | tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | `Activity_` |
 | sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `Activity_` |
 | call activity | `callActivity` (`call`) | `Activity_` |
-| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `eventBasedGateway` | `Gateway_` |
+| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `Gateway_` |
 | events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `Event_` |
 | pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `Participant_`, `Lane_` |
 | data | `dataObject` (`data`), `dataStore` (`store`) | `DataObjectReference_`, `DataStoreReference_` |
 | artifacts | `textAnnotation` (`note`) | `TextAnnotation_` |
 
-`complexGateway`, choreographies and groups are rejected (`E_UNSUPPORTED_KIND`).
+Choreographies and groups are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
+`complexGateway`: the Camunda profiles report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
+`W_C8_DEPLOY_UNSUPPORTED`); use `exclusiveGateway` or `inclusiveGateway` there.
 
 ## Triggers
 

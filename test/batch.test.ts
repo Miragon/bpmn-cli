@@ -358,7 +358,7 @@ describe('parseOps: rejections name the op index', () => {
     const e = failure([{ op: 'add', kind: 'usertask' }, { op: 'add', kind: 'userTsk' }]);
     expect(e.message).toMatch(/^ops\[1\] \(add\): Unknown kind "userTsk"/);
     expect(e.candidates).toContain('userTask');
-    expect(failure([{ op: 'add', kind: 'complexGateway' }]).message).toMatch(/rejected/);
+    expect(failure([{ op: 'add', kind: 'choreographyTask' }]).message).toMatch(/rejected/);
     expect(failure([{ op: 'add', kind: 'userTask:message' }]).message).toMatch(/not an event/);
     expect(failure([{ op: 'add', kind: 'userTask', timer: 'PT1M' }]).message).toMatch(/"timer" only apply to events, but "userTask" is a task/);
     expect(failure([{ op: 'retype', id: 'a', kind: 'serviceTask', message: 'M' }]).message).toMatch(/only apply to events/);

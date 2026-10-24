@@ -30,7 +30,7 @@
  *    successor (each incoming flow is re-pointed, keeping its id unless it
  *    named its ends, its label and condition; a predecessor already
  *    connected to the successor, or the successor itself, gets no second
- *    flow); a parallel / inclusive join loses its synchronisation
+ *    flow); a parallel / inclusive / complex join loses its synchronisation
  *    (W_IMPLICIT_JOIN says so). Several outgoing flows are refused
  *    (E_AMBIGUOUS_BRIDGE: which predecessor to which successor?).
  *  - a plain remove (bridging on) of such a node (several incoming flows,
@@ -201,16 +201,19 @@ function synchronises(node: El): boolean {
   return is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
 }
 
+function joinKind(node: El): string {
+  return is(node, 'bpmn:ParallelGateway') ? 'parallel' : is(node, 'bpmn:InclusiveGateway') ? 'inclusive' : 'complex';
+}
+
 /** A plain remove of a synchronising join: E_AMBIGUOUS_BRIDGE (see the module contract). */
 function refuseSynchronisingJoin(doc: Doc, node: El): void {
   if (!synchronises(node)) return;
   const incoming = doc.incoming(node);
   const successor = doc.outgoing(node)[0]!.get<El>('targetRef');
-  const kind = is(node, 'bpmn:ParallelGateway') ? 'parallel' : is(node, 'bpmn:InclusiveGateway') ? 'inclusive' : 'complex';
   const preds = [...new Set(incoming.map((f) => idOf(f.get<El>('sourceRef'))))];
   throw modelError(
     'E_AMBIGUOUS_BRIDGE',
-    `${idOf(node)} is a ${kind} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
+    `${idOf(node)} is a ${joinKind(node)} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
     {
       element: idOf(node),
       candidates: incoming.map(idOf),
@@ -267,10 +270,10 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
     cs.warn({
       code: 'W_IMPLICIT_JOIN',
       message: sync
-        ? `${idOf(successor)} now has ${count} incoming flows: the ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
+        ? `${idOf(successor)} now has ${count} incoming flows: the ${joinKind(node)} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
         : `${idOf(successor)} now has ${count} incoming flows (implicit join)`,
       element: idOf(successor),
-      hint: sync ? `Keep a ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
+      hint: sync ? `Keep a ${joinKind(node)} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
     });
   }
 }
