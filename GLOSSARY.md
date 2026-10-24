@@ -55,3 +55,15 @@ a new concept gets its line here first.
 | **Conventions lookup** | The id conventions the `.bpmnlintrc` that applies to a file declares, and why it declares none (`node/ConventionsLookup.ts`). |
 | **Agent guide** | `bpmn guide`: the cheat sheet for agents, whole, short or by topic (`report/AgentGuide.ts`). |
 | **Kinds reference** | `bpmn kinds`: the tables of kinds, triggers, keys, placement, ops and error codes, as text and JSON (`report/KindsReference.ts`). |
+| **Scope** | A process or sub-process the clean engine lays out on its own, in a fixed sequence of steps (`layout/clean/ScopePlacer.ts`). |
+| **Grid** | The columns (layers) and rows (bands) of a scope's nodes and where they put them (`layout/clean/ScopeGrid.ts`, the rows by `RowAssigner.ts`). |
+| **Arrangement** | Where the clean engine has put a scope's nodes, boundary events, flows and artifacts at one moment; an `ArrangementCheckpoint` saves it and puts it back. |
+| **Trial** | A move of an arrangement the clean engine keeps only when the routes then draw better, else undoes (`layout/clean/ArrangementTrial.ts`). |
+| **Join column** | The column under a node that its flows from below rise in on, kept free by moving the node right (`JoinColumnTrial`). |
+| **Chain lift** | A node and the nodes after it in its lane moved up onto the row of the flow into it (`ChainLiftTrial`). |
+| **Top border** | The upper border of a host, where a boundary event whose flows go up sits when that draws better (`TopBorderTrial`). |
+| **Router** | Draws the lines: `EdgeRouter` the sequence flows of a scope, `LinkRouter` its associations, `MessageFlowRouter` the message flows between pools. |
+| **DI writer** | Emits the BPMN DI of one plane from the laid-out scopes (`layout/clean/DiWriter.ts`). |
+| **Pool stack** | The pools of a collaboration, top to bottom in the order whose message flows cut the fewest shapes (`layout/clean/PoolStacker.ts`). |
+| **Declutter** | Moving labels that sit on a shape, a label or a line to a free spot (`layout/clean/LabelDeclutter.ts`). |
+| **Note** | A text annotation; the collaboration's are placed by `layout/clean/NotePlacer.ts`. |
