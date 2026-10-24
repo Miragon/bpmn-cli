@@ -25,11 +25,11 @@ import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
 import { moveElements } from '../src/ops/move.js';
-import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
+import { ElementRemover } from '../src/ops/ElementRemover.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -533,7 +533,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const err = caught(() => removeElements(doc, { op: 'remove', ids: ['Event_Paid'] }));
+    const err = caught(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_Paid'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Gateway_Wait to End_A/);
     expect(String(err.details['hint'])).toMatch(/--no-bridge/);
@@ -545,13 +545,13 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    removeElements(nb, { op: 'remove', ids: ['Event_Paid'], bridge: false });
+    new ElementRemover(nb).remove({ op: 'remove', ids: ['Event_Paid'], bridge: false });
     expect(nb.outgoing(nb.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
     const both = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    removeElements(both, { op: 'remove', ids: ['Event_Paid', 'End_A'] });
+    new ElementRemover(both).remove({ op: 'remove', ids: ['Event_Paid', 'End_A'] });
     expect(both.outgoing(both.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
   });
 
@@ -567,7 +567,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_FinishedB" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    const err = caught(() => removeElements(doc, { op: 'remove', ids: ['Event_Received'] }));
+    const err = caught(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_Received'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Event_FinishedB .* already waits for the message "Finished"/);
   });
@@ -579,7 +579,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:receiveTask id="Task_Receive" messageRef="Message_Confirmed" />
     <bpmn:sequenceFlow id="F_A3" sourceRef="Task_Receive" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => removeElements(receive, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
+    expect(caught(() => new ElementRemover(receive).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
 
     const joined = await gatewayDoc(
       `
@@ -589,7 +589,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:endEvent id="End_A" />`,
       `<bpmn:sequenceFlow id="F_X" sourceRef="End_T_Pre" targetRef="Event_Confirmed" /><bpmn:task id="End_T_Pre" />`,
     );
-    expect(caught(() => removeElements(joined, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
+    expect(caught(() => new ElementRemover(joined).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
 
     const signals = await gatewayDoc(
       `
@@ -604,14 +604,14 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_Go2" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    expect(caught(() => removeElements(signals, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
+    expect(caught(() => new ElementRemover(signals).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
 
     const ok = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="Event_Confirmed" />${catchMsg('Event_Confirmed', 'Message_Confirmed')}
     <bpmn:sequenceFlow id="F_A3" sourceRef="Event_Confirmed" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const cs = removeElements(ok, { op: 'remove', ids: ['Event_Paid'] });
+    const cs = new ElementRemover(ok).remove({ op: 'remove', ids: ['Event_Paid'] });
     expect(cs.notes).toContain('bridged: Gateway_Wait -> Event_Confirmed');
     const r = await mutateDoc(ok, [], { dryRun: true, layout: false });
     expect(r.validation.errors).toEqual([]);

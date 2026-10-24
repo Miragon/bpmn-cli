@@ -6,13 +6,13 @@ import { assignLane } from '../src/ops/containers.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
-import { cascadeRemove, removeElements } from '../src/ops/remove.js';
 import { retypeElement } from '../src/ops/retype.js';
 import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { IdRenamer } from '../src/ops/IdRenamer.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
+import { ElementRemover } from '../src/ops/ElementRemover.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -428,7 +428,7 @@ describe('set: readProperties', () => {
 describe('remove', () => {
   it('removes a node with bridging and cascades boundary events, associations, lane refs and data associations', async () => {
     const doc = await fullDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['Task_A'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Task_A'] });
     expect(doc.get('Task_A')).toBeUndefined();
     expect(doc.ids.has('Task_A')).toBe(false);
     const f1 = doc.require('F1');
@@ -456,7 +456,7 @@ describe('remove', () => {
 
   it('removes a node without bridging', async () => {
     const doc = await linearDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['Task_A'], bridge: false });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Task_A'], bridge: false });
     expect(doc.get('F1')).toBeUndefined();
     expect(doc.get('F2')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Start')))).toEqual([]);
@@ -469,7 +469,7 @@ describe('remove', () => {
   it('removes a sub-process with its children (ids released) and a gateway default', async () => {
     const doc = await fullDoc();
     // Sub has two incoming flows: a plain remove would bridge them (a merge, see test/remove-join.test.ts)
-    const cs = removeElements(doc, { op: 'remove', ids: ['Sub'], bridge: false });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Sub'], bridge: false });
     for (const id of ['Sub', 'SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2', 'F3', 'F4', 'F5']) {
       expect(doc.get(id), id).toBeUndefined();
       expect(doc.ids.has(id), id).toBe(false);
@@ -482,20 +482,20 @@ describe('remove', () => {
     // a new id follows the file: its tasks are Task_*
     expect(doc.newId('Activity', 'Sub')).toBe('Task_Sub');
     // a gateway default is cleared when the default flow goes
-    removeElements(doc, { op: 'remove', ids: ['F_no'] });
+    new ElementRemover(doc).remove({ op: 'remove', ids: ['F_no'] });
     expect(doc.require('Gw').get('default')).toBeUndefined();
     await expectRoundTrip(doc);
   });
 
   it('removes lanes (members unassigned, empty lane set dropped)', async () => {
     const doc = await fullDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['Lane_Sales'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Lane_Sales'] });
     expect(doc.get('Lane_Sales')).toBeUndefined();
     expect(doc.get('Start')).toBeDefined();
     expect(ids(doc.lanesOf(doc.require('Start')))).toEqual([]);
     expect(ids(many(doc.require('LaneSet_1'), 'lanes'))).toEqual(['Lane_Ops']);
     expect(cs.removed).toEqual([{ id: 'Lane_Sales', kind: 'lane', name: 'Sales' }]);
-    removeElements(doc, { op: 'remove', ids: ['Lane_Ops'] });
+    new ElementRemover(doc).remove({ op: 'remove', ids: ['Lane_Ops'] });
     expect(doc.get('LaneSet_1')).toBeUndefined();
     expect(many(doc.require('Process_1'), 'laneSets')).toHaveLength(0);
     expect((await doc.toXml()).includes('laneSet')).toBe(false);
@@ -504,7 +504,7 @@ describe('remove', () => {
 
   it('removes a participant with its process and message flows; the collaboration goes with the last one', async () => {
     const doc = await fullDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['P_Customer'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['P_Customer'] });
     for (const id of ['P_Customer', 'Process_2', 'C_Start', 'C_Task', 'CF1', 'MF1', 'MF2']) expect(doc.get(id), id).toBeUndefined();
     expect(doc.get('Collab')).toBeDefined();
     expect(ids(doc.participants())).toEqual(['P_Shop']);
@@ -515,7 +515,7 @@ describe('remove', () => {
     expect(cs.warnings.map((w) => w.code)).toContain('W_DANGLING_CALLED_ELEMENT');
     await expectRoundTrip(doc);
 
-    const cs2 = removeElements(doc, { op: 'remove', ids: ['P_Shop'] });
+    const cs2 = new ElementRemover(doc).remove({ op: 'remove', ids: ['P_Shop'] });
     expect(doc.collaboration()).toBeUndefined();
     expect(doc.get('Process_1')).toBeUndefined();
     expect(doc.processes()).toHaveLength(0);
@@ -525,7 +525,7 @@ describe('remove', () => {
 
   it('removes a data object reference with its backing object, data associations and placeholder property', async () => {
     const doc = await fullDoc();
-    const cs = removeElements(doc, { op: 'remove', ids: ['DOR_Order'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['DOR_Order'] });
     expect(doc.get('DOR_Order')).toBeUndefined();
     expect(doc.get('DO_Order')).toBeUndefined();
     expect(doc.get('DOA1')).toBeUndefined();
@@ -543,11 +543,11 @@ describe('remove', () => {
 
   it('removes a text annotation with its association, and flows / message flows on their own', async () => {
     const doc = await fullDoc();
-    removeElements(doc, { op: 'remove', ids: ['Note_1'] });
+    new ElementRemover(doc).remove({ op: 'remove', ids: ['Note_1'] });
     expect(doc.get('Note_1')).toBeUndefined();
     expect(doc.get('Assoc_1')).toBeUndefined();
     expect(many(doc.require('Process_1'), 'artifacts')).toHaveLength(0);
-    const cs = removeElements(doc, { op: 'remove', ids: ['F_yes', 'MF2'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['F_yes', 'MF2'] });
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual(['F_no']);
     expect(ids(doc.incoming(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.messageFlows())).toEqual(['MF1']);
@@ -562,7 +562,7 @@ describe('remove', () => {
         { extraRoots: '<bpmn:message id="Message_1" name="Msg" />' },
       ),
     );
-    const cs = removeElements(doc, { op: 'remove', ids: ['Message_1'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Message_1'] });
     expect(doc.get('Message_1')).toBeUndefined();
     expect(doc.require('Start').get<El[]>('eventDefinitions')[0]!.get('messageRef')).toBeUndefined();
     expect(cs.removed[0]).toEqual({ id: 'Message_1', kind: 'message', name: 'Msg' });
@@ -572,23 +572,23 @@ describe('remove', () => {
 
   it('handles ifExists, unknown ids and ids already removed by a cascade', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => removeElements(doc, { op: 'remove', ids: ['Nope'] }))).toBe('E_NOT_FOUND');
-    const cs = removeElements(doc, { op: 'remove', ids: ['Nope', 'Sub', 'SubTask'], ifExists: true });
+    expect(errorCode(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Nope'] }))).toBe('E_NOT_FOUND');
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Nope', 'Sub', 'SubTask'], ifExists: true });
     expect(cs.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Nope does not exist/), expect.stringMatching(/SubTask was already removed/)]));
     expect(doc.get('Sub')).toBeUndefined();
-    expect(errorCode(() => removeElements(doc, { op: 'remove', ids: ['Definitions_1'] }))).toBe('E_INVALID_REMOVE');
-    expect(errorCode(() => removeElements(doc, { op: 'remove', ids: [] }))).toBe('E_USAGE');
+    expect(errorCode(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Definitions_1'] }))).toBe('E_INVALID_REMOVE');
+    expect(errorCode(() => new ElementRemover(doc).remove({ op: 'remove', ids: [] }))).toBe('E_USAGE');
   });
 
   it('cascadeRemove works on a boundary event and on a whole process', async () => {
     const doc = await fullDoc();
     const cs = new ChangeSet();
-    cascadeRemove(doc, doc.require('Timer_A'), cs);
+    new ElementRemover(doc).cascade(doc.require('Timer_A'), cs);
     expect(doc.get('Timer_A')).toBeUndefined();
     expect(doc.get('F_T')).toBeUndefined();
     expect(doc.get('Task_Remind')).toBeDefined();
     expect(doc.boundaryEventsOf(doc.require('Task_A'))).toHaveLength(0);
-    cascadeRemove(doc, doc.require('Process_2'), cs);
+    new ElementRemover(doc).cascade(doc.require('Process_2'), cs);
     expect(doc.get('Process_2')).toBeUndefined();
     expect(doc.get('C_Task')).toBeUndefined();
     // message flows end at the participant (now a black box), so they survive
@@ -1080,7 +1080,7 @@ describe('mixed scenario', () => {
     extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
     orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
     moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
-    removeElements(doc, { op: 'remove', ids: ['Call', 'Note_1'] });
+    new ElementRemover(doc).remove({ op: 'remove', ids: ['Call', 'Note_1'] });
     const again = await expectRoundTrip(doc);
     const a2 = again.require('Activity_A2');
     expect(a2.$type).toBe('bpmn:ServiceTask');
@@ -1307,7 +1307,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
     await expectRoundTrip(doc);
     // sub-process -> sub-process keeps it
     const doc2 = await docFromXml(COLLAPSED_WITH_DI);
-    removeElements(doc2, { op: 'remove', ids: ['F1'] });
+    new ElementRemover(doc2).remove({ op: 'remove', ids: ['F1'] });
     retypeElement(doc2, { op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
     expect(many(doc2.definitions, 'diagrams')).toHaveLength(2);
     expect(many(doc2.definitions, 'diagrams')[1]!.get<El>('plane').get<El>('bpmnElement')).toBe(doc2.require('Sub'));
@@ -1384,7 +1384,7 @@ describe('remove / move: bridging policy', () => {
   it('a condition is not carried onto the predecessor\'s default flow (W_CONDITION_DROPPED, flow stays default)', async () => {
     const doc = await fullDoc();
     setProperties(doc, { op: 'set', id: 'F4', values: { condition: '${c}' } });
-    const cs = removeElements(doc, { op: 'remove', ids: ['Task_Send'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Task_Send'] });
     const fNo = doc.require('F_no');
     expect(fNo.get<El>('targetRef').get('id')).toBe('Sub');
     expect(fNo.get('conditionExpression')).toBeUndefined();
@@ -1411,7 +1411,7 @@ describe('remove / move: bridging policy', () => {
     <bpmn:task id="B"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
     <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="Gw" />`);
     const doc = await docFromXml(viaGateway);
-    const cs = removeElements(doc, { op: 'remove', ids: ['B'] });
+    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['B'] });
     expect(doc.get('F2')).toBeUndefined();
     expect(doc.get('F3')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual([]);
@@ -1435,7 +1435,7 @@ describe('remove / move: bridging policy', () => {
     <bpmn:task id="B"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
     <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="A" />`);
     const doc3 = await docFromXml(viaTask);
-    const cs3 = removeElements(doc3, { op: 'remove', ids: ['B'] });
+    const cs3 = new ElementRemover(doc3).remove({ op: 'remove', ids: ['B'] });
     expect(doc3.require('F2').get<El>('targetRef').get('id')).toBe('A');
     expect(cs3.notes).toContain('bridged: A -> A');
     await expectRoundTrip(doc3);

@@ -51,7 +51,6 @@ import { findReferences, is, many, removeFrom, walk, type El } from '../model/ut
 import { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
-import { cascadeRemove } from './remove.js';
 import { TriggerChange } from './TriggerChange.js';
 import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
@@ -59,6 +58,7 @@ import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import { SequenceFlows } from './SequenceFlows.js';
 import { RootElements } from './RootElements.js';
+import { ElementRemover } from './ElementRemover.js';
 
 export { withoutProfileDuplicates } from './covers.js';
 
@@ -275,7 +275,7 @@ function dropProp(doc: Doc, el: El, p: PropDescriptor, value: unknown, to: KindD
   if (!p.isReference) {
     const children = (Array.isArray(value) ? value : [value]).filter((c): c is El => isEl(c) && !!c.get<string | undefined>('id'));
     const before = cs.removed.length;
-    for (const child of children) cascadeRemove(doc, child, cs);
+    for (const child of children) new ElementRemover(doc).cascade(child, cs);
     const removed = cs.removed.slice(before).map((c) => c.id);
     if (removed.length) doc.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
   }

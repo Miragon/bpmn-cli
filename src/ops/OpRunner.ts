@@ -13,13 +13,13 @@ import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
 import { moveElements } from './move.js';
 import { orderFlows } from './order.js';
-import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
 import { setProperties } from './set.js';
 import { IdRenamer } from './IdRenamer.js';
 import { splitFlow } from './split.js';
 import { isFormatOp, type Op } from './types.js';
 import { StaleFlowReport } from './StaleFlowReport.js';
+import { ElementRemover } from './ElementRemover.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -157,7 +157,7 @@ export class OpRunner {
       case 'set':
         return setProperties(doc, op);
       case 'remove':
-        return removeElements(doc, op);
+        return new ElementRemover(doc).remove(op);
       case 'retype':
         return retypeElement(doc, op);
       case 'move':
