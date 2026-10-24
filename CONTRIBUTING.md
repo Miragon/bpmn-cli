@@ -36,8 +36,10 @@ them on a private corpus without copying it into the repository, are described i
 ## How the package is laid out
 
 - `src/`: the three entries (`cli.ts`, `api.ts`, the browser-safe `index.ts`) and one folder per
-  stage of the pipeline. `src/report/guide.ts` is the source of `bpmn guide`, `bpmn kinds` and
-  `--help`.
+  stage of the pipeline. `src/report/CommandCatalogue.ts` lists every command with its arguments,
+  its `--help` text and its guide usage, and the options of every write: the commander wiring in
+  `src/commands/` and `bpmn guide` both read it. `src/report/guide.ts` holds the error catalogue
+  and the other tables of `bpmn guide` and `bpmn kinds`.
 
   | folder | holds |
   | --- | --- |
@@ -56,11 +58,13 @@ them on a private corpus without copying it into the repository, are described i
   | `pipeline/` | the transactions: `mutateDoc`, `layoutDoc`, `checkDoc` |
   | `report/` | what a command prints, as text and JSON, and the guide |
   | `node/` | the Node-only layer (`@miragon/bpmn-cli/node`): files, the `.bpmnlintrc`, PNG |
+  | `commands/` | the CLI: the `Cli` (commander, streams, exit codes, errors) and one class per command |
 
   Where new code goes: a change of the model's semantics is an op (`ops/`); reading the model
   without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
   user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
-  is `report/`; anything that touches the file system or `process` is `node/` or `cli.ts`.
+  is `report/`; anything that touches the file system or `process` is `node/`; mapping flags to
+  options and printing a command's result is `commands/` (`cli.ts` only starts the `Cli`).
   `test/architecture.test.ts` keeps the root of `src/` to the three entries.
 
   **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
@@ -120,7 +124,7 @@ names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
   generated from them via [release-please](https://github.com/googleapis/release-please), so a
   `feat` or `fix` title is what users read in the release notes.
 - **Documentation moves with the code.** A change to a command, an option or an output also
-  changes `src/report/guide.ts` and the matching page in `docs/`.
+  changes `src/report/CommandCatalogue.ts` or `src/report/guide.ts` and the matching page in `docs/`.
 
 ## Before opening a PR
 

@@ -9,7 +9,7 @@
  * platform=browser (tools/iso/bundle.mjs) and exits 1 when
  *  - it imports a Node builtin or references a Node-only global (process,
  *    Buffer, global, require, __dirname, ...), naming the module;
- *  - the bundle contains the node layer (dist/node/) or the CLI (dist/cli.js);
+ *  - the bundle contains the node layer (dist/node/) or the CLI (dist/commands/, dist/cli.js);
  *  - a module of the engine rules that load on demand (ON_DEMAND: the
  *    Camunda 7 and Camunda 8 profile, src/platform/profiles/profile.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
@@ -70,7 +70,7 @@ for (const v of full.violations) {
   problems.push(v.kind === 'global' ? `${v.file}: uses the Node-only global \`${v.what}\`` : `${v.file}${v.line ? `:${v.line}` : ''}: ${v.kind === 'builtin' ? `imports the Node builtin "${v.what}"` : v.text}`);
 }
 for (const f of full.inputs) {
-  if (/^dist\/(node\/|cli\.js$)/.test(f)) problems.push(`the core bundle contains ${f} (Node only)`);
+  if (/^dist\/(node\/|commands\/|cli\.js$)/.test(f)) problems.push(`the core bundle contains ${f} (Node only)`);
 }
 
 /* 2. what a host pays for the edit engine alone */

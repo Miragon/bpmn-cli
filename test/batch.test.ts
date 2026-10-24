@@ -5,6 +5,7 @@ import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js
 import { Doc } from '../src/model/document.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
+import { Cli } from '../src/commands/Cli.js';
 import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
 import { ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
@@ -55,7 +56,7 @@ function codesInSource(): string[] {
 /**
  * Every `bpmn <command> <arguments>` in backticks in `text` whose first
  * argument, the second for ext, is not the file: `<file>`, a *.bpmn name,
- * `-` (stdin) or `${quoted}` (cli.ts withFile puts the file's name in). A
+ * `-` (stdin) or `${quoted}` (MutationCommand withFile puts the file's name in). A
  * command named without arguments or with an option first (`bpmn ext add`,
  * `bpmn layout --tidy`, `bpmn validate --platform c7`) is a name, not a
  * command to paste.
@@ -458,10 +459,14 @@ describe('guide', () => {
     for (const e of ERROR_CATALOGUE) expect(text).toContain(e.code);
   });
 
+  it('the guide lists every command commander registers, and no other', () => {
+    const registered = new Cli('test').program.commands.map((c) => c.name());
+    expect([...COMMANDS.map((c) => c.name)].sort()).toEqual([...registered].sort());
+  });
+
   it('guideText mentions every command with usage and an example', () => {
     const text = guideText();
-    const names = ['new', 'show', 'find', 'add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'apply', 'place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact', 'validate', 'layout', 'metrics', 'render', 'kinds', 'guide'];
-    expect(COMMANDS.map((c) => c.name)).toEqual(names);
+    const names = COMMANDS.map((c) => c.name);
     for (const name of names) {
       expect(text).toContain(`bpmn ${name}`);
       expect(text).toContain(`$ bpmn ${name}`);
@@ -561,7 +566,7 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     }
     // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
     expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);
-    // a result whose flow ids the variable kept says so (src/cli.ts keptByEnvNote): the reader may not see the variable
+    // a result whose flow ids the variable kept says so (src/commands/MutationCommand.ts keptByEnvNote): the reader may not see the variable
     for (const [name, text] of Object.entries({ guide: guideText(), DOCS, skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') })) {
       expect(text, name).toContain('`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (');
     }
