@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/Miragon/bpmn-cli/compare/v0.8.0...v0.9.0) (2026-10-24)
+
+
+### Features
+
+* **kinds:** support complex gateways in plain BPMN ([#74](https://github.com/Miragon/bpmn-cli/issues/74)) ([#91](https://github.com/Miragon/bpmn-cli/issues/91)) ([d535609](https://github.com/Miragon/bpmn-cli/commit/d535609efca08648767ed538f0185156d806b986))
+* **kinds:** support groups with members tied by category value ([#73](https://github.com/Miragon/bpmn-cli/issues/73)) ([#92](https://github.com/Miragon/bpmn-cli/issues/92)) ([de47b90](https://github.com/Miragon/bpmn-cli/commit/de47b90781bc081ec489bf9edd74431e3b01164f))
+
+
+### Bug Fixes
+
+* **flows:** keep conditions off flows out of parallel and event-based gateways ([#94](https://github.com/Miragon/bpmn-cli/issues/94)) ([5b7e7a6](https://github.com/Miragon/bpmn-cli/commit/5b7e7a6cc9a3fb5e50eb891ce2aaffa64f340d01))
+* **flows:** refuse sequence flows out of link throw and into link catch events ([#95](https://github.com/Miragon/bpmn-cli/issues/95)) ([8bc7e52](https://github.com/Miragon/bpmn-cli/commit/8bc7e52d117bcee3738c7ad24100400c51d22750))
+* **validate:** refuse boundary events on event sub-processes ([#84](https://github.com/Miragon/bpmn-cli/issues/84)) ([9e68e25](https://github.com/Miragon/bpmn-cli/commit/9e68e25d66d7ae31a63064b42ff0abd1c1c496d2))
+
 ## [0.8.0](https://github.com/Miragon/bpmn-cli/compare/v0.7.0...v0.8.0) (2026-10-21)
 
 
