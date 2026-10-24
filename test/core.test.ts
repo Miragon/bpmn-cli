@@ -8,7 +8,7 @@ import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
 import { many } from '../src/model/utils/moddle.js';
-import { detachNode } from '../src/ops/flows.js';
+import { Bridge } from '../src/ops/Bridge.js';
 import { NodePlacement } from '../src/ops/NodePlacement.js';
 import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
@@ -230,7 +230,7 @@ describe('flows & placement', () => {
     const doc = await linearDoc();
     doc.get('F2')!.set('name', 'done');
     const cs = new ChangeSet();
-    detachNode(doc, doc.get('Task_A')!, true, cs);
+    new Bridge(doc, cs).single(doc.get('Task_A')!, true);
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('End');
     expect(doc.get('F1')!.get('name')).toBe('done');
     expect(doc.get('F2')).toBeUndefined();
@@ -303,7 +303,7 @@ describe('flows & placement', () => {
     const doc = await linearDoc();
     new SequenceFlows(doc).redirect(doc.get('F2')!, { target: doc.get('Task_A')! });
     const cs = new ChangeSet();
-    detachNode(doc, doc.get('Task_A')!, true, cs);
+    new Bridge(doc, cs).single(doc.get('Task_A')!, true);
     expect(cs.removed.map((c) => c.id)).toEqual(['F1', 'F2']);
     expect(doc.get('F2')).toBeUndefined();
   });

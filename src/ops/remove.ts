@@ -66,14 +66,10 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
-import { kindOf, synchronises } from '../model/kinds.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { detachNode, type Bridge } from './flows.js';
-import { renamedNote } from '../model/utils/renames.js';
-
+import { Bridge } from './Bridge.js';
 import { descriptorOf, idOf, isEl, ownValue } from './utils/elements.js';
 import type { RemoveOp } from './types.js';
-import { EventGatewayRule } from './EventGatewayRule.js';
 import { SequenceFlows } from './SequenceFlows.js';
 
 /** Removes every element named in `op.ids` (cascading), bridging flows around single nodes. */
@@ -101,7 +97,7 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
       );
       for (const el of branch.nodes) {
         if (gone.has(idOf(el))) continue;
-        detachNode(doc, el, false, cs);
+        new Bridge(doc, cs).single(el, false);
         cascadeRemove(doc, el, cs);
         for (const r of cs.removed) gone.add(r.id);
       }
@@ -127,11 +123,7 @@ export function removeElements(doc: Doc, op: RemoveOp): ChangeSet {
       throw modelError('E_INVALID_REMOVE', 'The definitions element cannot be removed', { element: id, hint: 'Delete the file instead.' });
     }
     if (is(el, 'bpmn:FlowNode')) {
-      if (op.bridgeAll) bridgeAll(doc, el, cs, removing);
-      else if (bridge && isMerge(doc, el)) {
-        refuseSynchronisingJoin(doc, el);
-        bridgeAll(doc, el, cs, removing);
-      } else detachWithBridge(doc, el, bridge, cs, removing);
+      new Bridge(doc, cs).forRemoval(el, bridge, !!op.bridgeAll, removing);
     }
     cascadeRemove(doc, el, cs);
     for (const r of cs.removed) gone.add(r.id);
@@ -196,161 +188,6 @@ function compensationHandlers(doc: Doc, n: El): El[] {
 /** The boundary events whose compensation associations point to a handler. */
 function compensationSources(doc: Doc, handler: El): El[] {
   return [...doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('targetRef') === handler).map((a) => a.get<El>('sourceRef')).filter((s): s is El => !!s && is(s, 'bpmn:BoundaryEvent'));
-}
-
-/** A join or merge: several incoming flows, one outgoing (what --bridge-all bridges). */
-function isMerge(doc: Doc, node: El): boolean {
-  return doc.incoming(node).length > 1 && doc.outgoing(node).length === 1;
-}
-
-function joinKind(node: El): string {
-  return kindOf(node)!.kind.replace('Gateway', '');
-}
-
-/** A plain remove of a synchronising join: E_AMBIGUOUS_BRIDGE (see the module contract). */
-function refuseSynchronisingJoin(doc: Doc, node: El): void {
-  if (!synchronises(node)) return;
-  const incoming = doc.incoming(node);
-  const successor = doc.outgoing(node)[0]!.get<El>('targetRef');
-  const preds = [...new Set(incoming.map((f) => idOf(f.get<El>('sourceRef'))))];
-  throw modelError(
-    'E_AMBIGUOUS_BRIDGE',
-    `${idOf(node)} is a ${joinKind(node)} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
-    {
-      element: idOf(node),
-      candidates: incoming.map(idOf),
-      hint: `Say which: \`bpmn remove <file> ${idOf(node)} --bridge-all\` (each path runs on to ${idOf(successor)} on its own), or \`bpmn remove <file> ${idOf(node)} --no-bridge\` and connect what should stay with \`bpmn connect\`.`,
-    },
-  );
-}
-
-/**
- * --bridge-all (see the module contract): every predecessor of a join gets
- * the join's successor. One incoming flow is the ordinary bridge.
- */
-function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<string>): void {
-  const incoming = doc.incoming(node);
-  const outgoing = doc.outgoing(node);
-  if (outgoing.length > 1) {
-    throw modelError('E_AMBIGUOUS_BRIDGE', `${idOf(node)} has ${outgoing.length} outgoing flows (${outgoing.map(idOf).join(', ')}): --bridge-all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
-      element: idOf(node),
-      candidates: outgoing.map(idOf),
-      hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${idOf(node)} without bridging (\`--no-bridge\`) and connect what should stay with \`bpmn connect\`.`,
-    });
-  }
-  if (incoming.length <= 1 || !outgoing.length) {
-    detachWithBridge(doc, node, true, cs, removing);
-    return;
-  }
-  const outFlow = outgoing[0]!;
-  const successor = outFlow.get<El>('targetRef');
-  for (const inFlow of incoming) assertBridgeAllowed(doc, node, inFlow, outFlow, removing);
-  const outName = outFlow.get<string | undefined>('name');
-  if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
-  if (outFlow.get<El | undefined>('conditionExpression')) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
-  new SequenceFlows(doc).remove(outFlow, cs);
-  cs.remove(ChangeSet.flowEntryOf(outFlow));
-  const bridged: string[] = [];
-  for (const inFlow of incoming) {
-    const predecessor = inFlow.get<El>('sourceRef');
-    const already = doc.outgoing(predecessor).some((f) => f !== inFlow && f.get<El | undefined>('targetRef') === successor);
-    if (predecessor === successor || predecessor === node || already) {
-      new SequenceFlows(doc).remove(inFlow, cs);
-      cs.remove(ChangeSet.flowEntryOf(inFlow));
-      cs.note(`not bridged: ${idOf(predecessor)} ${predecessor === successor ? 'is the successor itself' : predecessor === node ? 'is the removed node' : `already flows to ${idOf(successor)}`}`);
-      continue;
-    }
-    const renamed = new SequenceFlows(doc).redirect(inFlow, { target: successor });
-    cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
-    bridged.push(idOf(predecessor));
-  }
-  cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
-  const sync = synchronises(node);
-  if (sync) cs.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
-  const count = doc.incoming(successor).length;
-  if (count > 1 && (sync || !is(successor, 'bpmn:Gateway'))) {
-    cs.warn({
-      code: 'W_IMPLICIT_JOIN',
-      message: sync
-        ? `${idOf(successor)} now has ${count} incoming flows: the ${joinKind(node)} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
-        : `${idOf(successor)} now has ${count} incoming flows (implicit join)`,
-      element: idOf(successor),
-      hint: sync ? `Keep a ${joinKind(node)} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
-    });
-  }
-}
-
-/** The self-loop rule of `connect`: only activities may loop back to themselves with a sequence flow. */
-export function canLoopToItself(node: El): boolean {
-  return is(node, 'bpmn:Activity');
-}
-
-/**
- * detachNode() with the bridging policy of the module contract: a bridge that
- * would create a self-loop `connect` refuses (non-activities) is skipped (both
- * flows removed, noted), and a condition that bridging carried onto the
- * predecessor's default flow is dropped again with W_CONDITION_DROPPED (a
- * default flow has no condition). Returns the bridge (what it carried), or
- * undefined when it did not bridge.
- */
-export function detachWithBridge(doc: Doc, node: El, bridge: boolean, cs: ChangeSet, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove'): Bridge | undefined {
-  const incoming = doc.incoming(node);
-  const outgoing = doc.outgoing(node);
-  if (!bridge || incoming.length !== 1 || outgoing.length !== 1) return detachNode(doc, node, bridge, cs);
-  const inFlow = incoming[0]!;
-  const outFlow = outgoing[0]!;
-  const predecessor = inFlow.get<El>('sourceRef');
-  const successor = outFlow.get<El>('targetRef');
-  if (predecessor === successor && !canLoopToItself(predecessor)) {
-    detachNode(doc, node, false, cs);
-    if (predecessor !== node) cs.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
-    return undefined;
-  }
-  assertBridgeAllowed(doc, node, inFlow, outFlow, removing, command);
-  const outCond = outFlow.get<El | undefined>('conditionExpression');
-  const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
-  const inHadCondition = !!inFlow.get<El | undefined>('conditionExpression');
-  const bridged = detachNode(doc, node, true, cs);
-  if (bridged && outCond && inFlowIsDefault && !inHadCondition && inFlow.get<El | undefined>('conditionExpression') === outCond && predecessor.get<El | undefined>('default') === inFlow) {
-    inFlow.set('conditionExpression', undefined);
-    delete bridged.took.condition;
-    cs.warn({
-      code: 'W_CONDITION_DROPPED',
-      message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}: ${idOf(inFlow)} is the default flow of ${idOf(predecessor)}`,
-      element: idOf(outFlow),
-      related: [idOf(inFlow)],
-      hint: `A default flow has no condition; use \`bpmn set <file> ${idOf(inFlow)} condition=...\` if the condition should replace the default marker.`,
-    });
-  }
-  return bridged;
-}
-
-/** The command that detaches (its hint differs: `move` has no --no-bridge). */
-export type BridgeCommand = 'remove' | 'move';
-
-/**
- * Refuses a bridge that would give an event-based gateway a target the
- * engines reject (eventGatewayTargetProblem): E_INVALID_BRIDGE. A successor
- * that the same command removes as well is not checked (its own removal
- * decides). `via` names what is bridged (the node, or a moved group).
- */
-export function assertBridgeAllowed(doc: Doc, node: El, inFlow: El, outFlow: El, removing?: ReadonlySet<string>, command: BridgeCommand = 'remove', via: string = idOf(node)): void {
-  const predecessor = inFlow.get<El>('sourceRef');
-  const successor = outFlow.get<El>('targetRef');
-  if (!is(predecessor, 'bpmn:EventBasedGateway') || successor === node) return;
-  if (removing?.has(idOf(successor))) return;
-  const problem = new EventGatewayRule(doc).targetProblem(predecessor, successor, [outFlow, inFlow]);
-  if (!problem) return;
-  const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${idOf(successor)} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${idOf(outFlow)} --timer PT1H\`)`;
-  const rejectedBy = new EventGatewayRule(doc).rule === 'engines' ? 'which the engines reject' : 'which BPMN 2.0 does not allow';
-  throw modelError('E_INVALID_BRIDGE', `${command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${idOf(predecessor)} to ${idOf(successor)}, ${rejectedBy}: ${problem}`, {
-    element: idOf(node),
-    related: [idOf(predecessor), idOf(successor)],
-    hint:
-      command === 'move'
-        ? `A move always bridges its old place: ${catchFirst}, or take ${via} out without a bridge (\`bpmn remove <file> ${via.split(', ').join(' ')} --no-bridge\`) and add it again at the new place.`
-        : `Remove without bridging (\`bpmn remove <file> ${idOf(node)} --no-bridge\`; the gateway loses that branch) and wire the gateway yourself, or ${catchFirst}, or remove ${idOf(successor)} in the same command.`,
-  });
 }
 
 /* ------------------------------------------------------------------ */

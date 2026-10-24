@@ -82,12 +82,10 @@ import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
-import { type Bridge } from './flows.js';
-import { renamedNote } from '../model/utils/renames.js';
+import { Bridge, type BridgedFlow } from './Bridge.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
 import type { PlacementOptions } from './NodePlacement.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
-import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { renameId } from './set.js';
 import { idOf } from './utils/elements.js';
 import { FlowOptions } from './FlowOptions.js';
@@ -383,54 +381,6 @@ function reserveIds(doc: Doc, ids: string[]): void {
 }
 
 /**
- * Before a group of nodes leaves its scope: when exactly one flow enters the
- * group from outside and exactly one leaves it, the outer predecessor is
- * connected straight to the outer successor (what detachNode's bridging does
- * for a single node). Exception paths of the group's boundary events are not
- * exits: they are dropped by fixFlows like with --after.
- */
-function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
-  const inside = new Set<El>();
-  for (const n of group) {
-    inside.add(n);
-    if (is(n, 'bpmn:Activity')) for (const b of doc.boundaryEventsOf(n)) inside.add(b);
-  }
-  const entries: El[] = [];
-  const exits: El[] = [];
-  for (const n of inside) {
-    for (const f of doc.incoming(n)) if (!inside.has(f.get<El>('sourceRef'))) entries.push(f);
-    if (is(n, 'bpmn:BoundaryEvent')) continue;
-    for (const f of doc.outgoing(n)) if (!inside.has(f.get<El>('targetRef'))) exits.push(f);
-  }
-  if (entries.length !== 1 || exits.length !== 1) return;
-  const inFlow = entries[0]!;
-  const outFlow = exits[0]!;
-  const predecessor = inFlow.get<El>('sourceRef');
-  const successor = outFlow.get<El>('targetRef');
-  if ((predecessor === successor && !canLoopToItself(predecessor)) || doc.scopeOf(predecessor) !== doc.scopeOf(successor)) return;
-  const via = group.map(idOf).join(', ');
-  assertBridgeAllowed(doc, outFlow.get<El>('sourceRef'), inFlow, outFlow, undefined, 'move', via);
-  const outName = outFlow.get<string | undefined>('name');
-  const outCond = outFlow.get<El | undefined>('conditionExpression');
-  if (outName && !inFlow.get<string | undefined>('name')) inFlow.set('name', outName);
-  else if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
-  const inFlowIsDefault = predecessor.get<El | undefined>('default') === inFlow;
-  if (outCond && !inFlow.get<El | undefined>('conditionExpression') && !inFlowIsDefault) {
-    inFlow.set('conditionExpression', outCond);
-    outCond.$parent = inFlow;
-  } else if (outCond) {
-    cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
-  }
-  new SequenceFlows(doc).carryAssociations(outFlow, inFlow, cs);
-  new SequenceFlows(doc).remove(outFlow, cs);
-  cs.remove(ChangeSet.flowEntryOf(outFlow));
-  reserveIds(doc, [idOf(outFlow)]);
-  const renamed = new SequenceFlows(doc).redirect(inFlow, { target: successor });
-  cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
-  cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
-}
-
-/**
  * A flow the detach took out (flow ids kept), filed under the moved node it
  * leaves, and the target it had. `label`: the name, condition and default
  * marker no bridge took (the node was not bridged; for the flow from the node
@@ -492,7 +442,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
   // bridged: an end event, a join), the append after that node puts it back as it was
   const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && doc.edit.keepsFlowId(f));
   const prevLabel = fromPrev && labelOf(fromPrev, prev!);
-  const bridge = detachWithBridge(doc, node, true, cs, undefined, 'move');
+  const bridge = new Bridge(doc, cs, 'move').single(node, true);
   if (bridge) chain.bridges?.push({ node, target: bridge.flow.get<El>('targetRef'), bridge });
   reserveIds(doc, flowIds);
   // a bridge took the out-flow's name and condition (or warned); without one nothing did
@@ -610,7 +560,7 @@ function giveBackLate(doc: Doc, dropped: DroppedLabel[], cs: ChangeSet): void {
 interface BridgeMade {
   node: El;
   target: El;
-  bridge: Bridge;
+  bridge: BridgedFlow;
 }
 
 /** What a flow had when the move started: its name, condition and the associations of its annotations. */
@@ -654,7 +604,7 @@ function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBe
     const had = before.get(flow);
     if (!had || !alive(flow)) return;
     // where a value the bridge took is now: later bridges of the chain take it over; undefined when one did not take it
-    const holder = (took: (b: Bridge) => boolean): El | undefined => {
+    const holder = (took: (b: BridgedFlow) => boolean): El | undefined => {
       let at = bridge.flow;
       for (const later of made.slice(i + 1)) {
         if (later.bridge.from !== at) continue;
@@ -729,7 +679,7 @@ function moveInto(doc: Doc, nodes: El[], p: PlacementOptions, cs: ChangeSet): vo
     }
     relocating.push(node);
   }
-  bridgeGroup(doc, relocating, cs);
+  new Bridge(doc, cs, 'move').group(relocating);
   const moved: El[] = [];
   for (const node of relocating) {
     const oldScope = doc.scopeOf(node);
