@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { styledId } from '../src/diagram/write.js';
 import { Doc } from '../src/model/document.js';
-import { cutAt } from '../src/ids/slugs.js';
+import { cutAt } from '../src/ids/utils/slug.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
 

@@ -22,7 +22,7 @@
  *  id-less elements it changes nothing. The incremental layout does not
  *  need it: it never draws an element without id (the element keeps no DI).
  */
-import { IdRegistry } from '../ids/slugs.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
 import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
 import { kindLabel, kindOf, triggerOf } from '../model/kinds.js';
 import { indexById, is, isDiElement, walk, type El } from '../model/utils/moddle.js';

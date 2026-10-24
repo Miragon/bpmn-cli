@@ -88,7 +88,8 @@
 import { followDiIds } from '../diagram/write.js';
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
+import { cutAt, MAX_ID, withSuffix } from '../ids/utils/slug.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
 import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';

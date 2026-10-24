@@ -32,7 +32,7 @@ import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
 import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
-import { withSuffix } from '../ids/slugs.js';
+import { withSuffix } from '../ids/utils/slug.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { IdRegistry, isValidId, slugify } from '../src/ids/slugs.js';
+import { IdRegistry } from '../src/ids/IdRegistry.js';
+import { isValidId, slugify } from '../src/ids/utils/slug.js';
 import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids/style.js';
 import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';

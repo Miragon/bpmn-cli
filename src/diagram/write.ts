@@ -53,7 +53,7 @@
  *    back (the swatch name, or 'custom').
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import { cutAt, MAX_ID } from '../ids/slugs.js';
+import { cutAt, MAX_ID } from '../ids/utils/slug.js';
 import { addTo, is, removeFrom, type El } from '../model/utils/moddle.js';
 import { roundPoints, sameBox, samePoints, type Box, type Point } from './geom.js';
 import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
@@ -136,7 +136,7 @@ const MAX_DI = MAX_ID - 3;
 /**
  * The DI id of an element in a style (`<id>_di`, `BPMNShape_<id>`,
  * `Edge_<id>`), at most MAX_ID characters less room for a collision suffix:
- * a long element id is cut at a word boundary (src/ids/slugs.ts cutAt), like the
+ * a long element id is cut at a word boundary (src/ids/utils/slug.ts cutAt), like the
  * element ids themselves. `legacy`: cut as 0.6 cut (recognising the DI ids
  * it wrote).
  */
@@ -173,7 +173,7 @@ export function diIdsFit(defs: El): boolean {
   return true;
 }
 
-/** What followDiIds asks and changes: the document's id registry (src/ids/slugs.ts IdRegistry). */
+/** What followDiIds asks and changes: the document's id registry (src/ids/IdRegistry.ts). */
 export interface IdClaims {
   has(id: string): boolean;
   claim(id: string): void;

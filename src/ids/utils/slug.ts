@@ -1,5 +1,5 @@
 /**
- * Id building blocks: name words, slugs, the id registry.
+ * Id building blocks: name words and slugs.
  *
  * Which id a new element gets is decided by the file's id style
  * (src/ids/style.ts): new ids follow the conventions the file already uses,
@@ -296,30 +296,4 @@ export function isSuffix(base: string, rest: string, sep: string | 'either'): bo
 /** BPMN ids must be XML NCNames. */
 export function isValidId(id: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(id);
-}
-
-/** Every id of the document (BPMN, DI and vendor ids), so that a new id never collides. */
-export class IdRegistry {
-  private readonly used = new Set<string>();
-
-  constructor(existing: Iterable<string> = []) {
-    for (const id of existing) this.used.add(id);
-  }
-
-  has(id: string): boolean {
-    return this.used.has(id);
-  }
-
-  claim(id: string): void {
-    this.used.add(id);
-  }
-
-  release(id: string): void {
-    this.used.delete(id);
-  }
-
-  /** The ids in use. */
-  values(): IterableIterator<string> {
-    return this.used.values();
-  }
 }

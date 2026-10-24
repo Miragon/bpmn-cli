@@ -70,9 +70,9 @@
  *  names its ends (labelOf: the speaking part of an end's id, also an
  *  unnamed end's own context, AfterCheck, and CheckJoin for the join of the
  *  split after Check; else its name, else a word for its kind). Names and
- *  contexts are transliterated (ä -> ae, ø -> oe, å -> aa, src/ids/slugs.ts). A
+ *  contexts are transliterated (ä -> ae, ø -> oe, å -> aa, src/ids/utils/slug.ts). A
  *  name or context gives at most MAX_SLUG (40) characters of words (a single
- *  longer word is cut at 40, src/ids/slugs.ts; a cut never ends on a filler word,
+ *  longer word is cut at 40, src/ids/utils/slug.ts; a cut never ends on a filler word,
  *  cutName: und, an, the). A generated id has at most MAX_ID
  *  (64) characters, a collision suffix included; an id within that is not
  *  cut again. A longer one loses whole words: a long body its last words, a
@@ -185,7 +185,8 @@
  *  (ops/set.ts recordIdState). Without declared conventions nothing of
  *  this runs.
  */
-import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, SUFFIX_WORD, withLetter, withSuffix, type IdRegistry } from './slugs.js';
+import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, SUFFIX_WORD, withLetter, withSuffix } from './utils/slug.js';
+import type { IdRegistry } from './IdRegistry.js';
 import type { IdConventions } from './conventions.js';
 import { kindByName, kindOf, KINDS, triggerOf, type KindDef } from '../model/kinds.js';
 import { is, isBpmnElement, walk, type El } from '../model/utils/moddle.js';
