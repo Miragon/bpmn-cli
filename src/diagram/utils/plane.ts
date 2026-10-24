@@ -4,7 +4,7 @@
  * materialises an empty collection on the model.
  */
 import { is, type El } from '../../model/utils/moddle.js';
-import type { DEdge, DShape, EdgeKind, Plane, ShapeKind } from '../types.js';
+import type { DEdge, DShape, EdgeKind, Plane, Semantics, ShapeKind } from '../types.js';
 import { clamp, cy, median, right, unionAll, type Box } from './geom.js';
 import { titleBox, titleDepth } from './text.js';
 
@@ -185,4 +185,20 @@ export function spacingOf(plane: Plane): Spacing {
   const gap = Math.round(clamp(median(gaps) ?? 60, 40, 100));
   const row = Math.round(clamp(median(rows) ?? 140, 80, 150));
   return { gap, row, rowTol: Math.max(5, row / 4) };
+}
+
+export function sequenceFlows(el: El | undefined, prop: 'incoming' | 'outgoing'): El[] {
+  return rawList(el, prop).filter((f) => is(f, 'bpmn:SequenceFlow'));
+}
+
+export function predecessors(sem: Semantics, id: string): string[] {
+  return sequenceFlows(sem.byId.get(id), 'incoming')
+    .map((f) => idOf(raw(f, 'sourceRef')))
+    .filter((x): x is string => !!x);
+}
+
+export function successors(sem: Semantics, id: string): string[] {
+  return sequenceFlows(sem.byId.get(id), 'outgoing')
+    .map((f) => idOf(raw(f, 'targetRef')))
+    .filter((x): x is string => !!x);
 }

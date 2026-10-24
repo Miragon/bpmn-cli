@@ -9,7 +9,7 @@
  *    horizontal segments of the lines running under the anchor down (bypass
  *    and loop-back lines); a branch also tries the rows above its anchor, a
  *    boundary path its host's top border with the path above it. The row
- *    choice counts the chain that follows on the row (diagram/place.ts
+ *    choice counts the chain that follows on the row (diagram/NodePlacer.ts
  *    chainCost). Single commands and the batch give the same shapes.
  *  - a branch row keeps clear of the boundary events on its frame's bottom
  *    border (audit #63).

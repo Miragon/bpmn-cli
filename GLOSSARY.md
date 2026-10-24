@@ -26,6 +26,7 @@ a new concept gets its line here first.
 | **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`diagram/DrawingSnapshot.ts`). |
 | **Layout analysis** | The measurement of a drawing's layout problems, one plane analysis per BPMNPlane (`diagram/LayoutAnalysis.ts`, `diagram/PlaneAnalysis.ts`; kinds and weights in `diagram/utils/problems.ts`). |
 | **Problem locator** | Finds where a layout problem shows on its plane, for the numbered badges of `render --problems` (`diagram/ProblemLocator.ts`). |
+| **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`diagram/NodePlacer.ts`). |
 | **Layout mode** | How a write updates the drawing: `full` redraws, `incremental` keeps a hand-made drawing and places only what changed. |
 | **Engine** | A layout engine: the clean engine redraws, the incremental engine keeps a drawing. |
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |

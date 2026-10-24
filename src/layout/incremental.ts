@@ -36,7 +36,7 @@
  *      centre left of the flow's source, which it does not lead back to)
  *      is placed again right of its rightmost source, before its one
  *      successor (pullJoins; its DI is reused, it is reported as moved)
- *   6. new flow nodes and artifacts are placed (diagram/place.ts) in op order
+ *   6. new flow nodes and artifacts are placed (diagram/NodePlacer.ts) in op order
  *      (opts.created) where their neighbours allow; while more follow, the
  *      sequence flows of each placed node are routed right away, and so are
  *      the connections the placement broke (sequence flows, associations and
@@ -122,8 +122,8 @@ import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, p
 import { hasExternalLabel } from '../diagram/utils/labels.js';
 import { isHardProblem, problemKey, type LayoutMetrics } from '../diagram/utils/problems.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
-import { changeLane, placeArtifact, placeFlowNodes, predecessors, successors, newShape, type PlaceCtx } from '../diagram/place.js';
-import { spacingOf, type Spacing, boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, titleOf } from '../diagram/utils/plane.js';
+import { NodePlacer, type PlacementHooks, type PlacerState } from '../diagram/NodePlacer.js';
+import { predecessors, successors, spacingOf, boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, titleOf } from '../diagram/utils/plane.js';
 import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
 import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
 import { DETACHED_GAP, type EdgeBefore } from '../diagram/EdgeRouter.js';
@@ -515,7 +515,7 @@ function adoptBlock(ctx: Ctx, plane: Plane, block: Block, dx: number, dy: number
   const rebindShape = (s: DShape, target: Plane, ox: number, oy: number): void => {
     const el = ctx.sem.byId.get(s.id);
     if (!el || target.shapes.has(s.id)) return;
-    const copy = newShape(ctx.place, target, s.id, { x: s.bounds.x + ox, y: s.bounds.y + oy, width: s.bounds.width, height: s.bounds.height });
+    const copy = ctx.place.newShape(target, s.id, { x: s.bounds.x + ox, y: s.bounds.y + oy, width: s.bounds.width, height: s.bounds.height });
     if (s.label) copy.label = { ...s.label, x: s.label.x + ox, y: s.label.y + oy };
     if (s.kind === 'subProcess') {
       copy.expanded = s.expanded === true;
@@ -562,7 +562,8 @@ interface Ctx {
   sem: Semantics;
   snap: Snapshot;
   planes: Plane[];
-  place: PlaceCtx;
+  place: NodePlacer;
+  hooks: PlacementHooks;
   /** edges (by id) that must be (re)routed */
   reroute: Set<string>;
   /** connections created in this run */
@@ -840,7 +841,7 @@ async function placeContainers(ctx: Ctx, wrapped: string | undefined, blocks: ()
     if (is(el, 'bpmn:Participant')) {
       const plane = homePlane(ctx.planes, ctx.sem, id);
       if (!plane) continue;
-      const s = newShape(ctx.place, plane, id, { x: 0, y: 0, width: 0, height: 0 });
+      const s = ctx.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
       const proc = raw<El>(el, 'processRef');
       // a new pool whose process has content: the engine lays that content out as one block
       const content = id !== wrapped && proc ? rawList(proc, 'flowElements').filter(isFlowNode) : [];
@@ -854,7 +855,7 @@ async function placeContainers(ctx: Ctx, wrapped: string | undefined, blocks: ()
     } else if (is(el, 'bpmn:Lane')) {
       const plane = homePlane(ctx.planes, ctx.sem, id);
       if (!plane) continue;
-      const s = newShape(ctx.place, plane, id, { x: 0, y: 0, width: 0, height: 0 });
+      const s = ctx.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
       if (!drawingOf(ctx, plane).placeLane(s)) {
         ctx.notes.push(`lane ${id} not drawn: its process has no pool in the diagram`);
         continue;
@@ -872,7 +873,7 @@ function laneChanges(ctx: Ctx): void {
       if (!isFlowNode(s.el) || s.kind === 'boundary' || ctx.place.placed.has(s.id)) continue;
       const now = ctx.sem.laneOf.get(s.id);
       if (now === cur(ctx, ctx.snap.laneOf.get(oldId(ctx, s))) || !now) continue;
-      if (changeLane(ctx.place, plane, s.id)) ctx.active.add(s.id);
+      if (ctx.place.changeLane(plane, s.id)) ctx.active.add(s.id);
     }
   }
 }
@@ -981,22 +982,21 @@ async function placeNodes(ctx: Ctx, blocks: () => Promise<{ planes: Plane[]; sem
     adoptBlock(ctx, ctx.planes[0]!, { box: { x: 0, y: 0, width: 0, height: 0 }, shapes: [], edges: [], planes: [enginePlane] }, 0, 0);
     for (const s of enginePlane.shapes.values()) inBlock.add(s.id);
   }
-  ctx.place.afterPlace = (plane: Plane, s: DShape): void => {
+  ctx.hooks.afterPlace = (plane: Plane, s: DShape): void => {
     const block = blocksByRoot.get(s.id);
     if (block) adoptBlock(ctx, plane, block, s.bounds.x - block.box.x, s.bounds.y - block.box.y);
   };
-  ctx.place.afterNode = (plane: Plane, id: string): void => routeNow(ctx, plane, id);
-  const skipped = placeFlowNodes(
-    ctx.place,
+  ctx.hooks.afterNode = (plane: Plane, id: string): void => routeNow(ctx, plane, id);
+  const skipped = ctx.place.placeFlowNodes(
     pendingNodes.filter((id) => !inBlock.has(id)),
   );
-  delete ctx.place.afterPlace;
-  delete ctx.place.afterNode;
+  delete ctx.hooks.afterPlace;
+  delete ctx.hooks.afterNode;
   for (const id of skipped) ctx.notes.push(`${id} not drawn: it belongs to no diagram`);
   for (const el of order) {
     const id = idOf(el);
     if (!id || !isArtifactShape(el) || drawn(id) || inBlock.has(id)) continue;
-    if (!placeArtifact(ctx.place, id)) ctx.notes.push(`${id} not drawn: it belongs to no diagram`);
+    if (!ctx.place.placeArtifact(id)) ctx.notes.push(`${id} not drawn: it belongs to no diagram`);
   }
 }
 
@@ -1247,7 +1247,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
  * Whether a connection runs along the border of one of `ids` or touches it:
  * no `through` (the line does not enter the box), but it reads as docking
  * on the shape. Checked for the nodes that continue a chain (placed on their
- * anchor's row without a row choice, PlaceCtx.continued: an end event placed
+ * anchor's row without a row choice, NodePlacer.continued: an end event placed
  * on a line an earlier command routed down there). Its own ends, their
  * boundary events and hosts do not count.
  */
@@ -1369,7 +1369,7 @@ interface Checkpoint {
   members: Map<Plane, { shapes: DShape[]; edges: DEdge[] }>;
   shapes: Map<DShape, { bounds: Box; label?: Box }>;
   edges: Map<DEdge, { points: Point[]; label?: Box; sourceId?: string; targetId?: string }>;
-  place: Pick<PlaceCtx, 'placed' | 'moved' | 'spacing' | 'reuse' | 'blockSize' | 'spliced' | 'joins' | 'relabel' | 'heads' | 'skip' | 'continued'>;
+  placer: PlacerState;
   sets: Pick<Ctx, 'reroute' | 'newEdges' | 'fromEngine' | 'active' | 'relocated' | 'grown' | 'routedNow'>;
   notes: string[];
 }
@@ -1381,19 +1381,7 @@ function checkpoint(ctx: Ctx): Checkpoint {
     members: new Map(),
     shapes: new Map(),
     edges: new Map(),
-    place: {
-      placed: new Set(ctx.place.placed),
-      moved: new Set(ctx.place.moved),
-      spacing: new Map(ctx.place.spacing),
-      reuse: new Map(ctx.place.reuse),
-      blockSize: new Map(ctx.place.blockSize),
-      ...(ctx.place.spliced ? { spliced: new Map(ctx.place.spliced) } : {}),
-      ...(ctx.place.joins ? { joins: new Map(ctx.place.joins) } : {}),
-      ...(ctx.place.relabel ? { relabel: new Set(ctx.place.relabel) } : {}),
-      ...(ctx.place.continued ? { continued: new Set(ctx.place.continued) } : {}),
-      ...(ctx.place.heads ? { heads: new Map(ctx.place.heads) } : {}),
-      ...(ctx.place.skip ? { skip: new Map(ctx.place.skip) } : {}),
-    },
+    placer: ctx.place.checkpoint(),
     sets: {
       reroute: new Set(ctx.reroute),
       newEdges: new Set(ctx.newEdges),
@@ -1445,16 +1433,7 @@ function restore(ctx: Ctx, cp: Checkpoint): void {
     if (g.targetId) e.targetId = g.targetId;
     else delete e.targetId;
   }
-  const p = cp.place;
-  Object.assign(ctx.place, { placed: new Set(p.placed), moved: new Set(p.moved), spacing: new Map(p.spacing), reuse: new Map(p.reuse), blockSize: new Map(p.blockSize) });
-  for (const key of ['spliced', 'joins', 'heads', 'skip'] as const) {
-    if (p[key]) ctx.place[key] = new Map(p[key] as Map<string, never>);
-    else delete ctx.place[key];
-  }
-  if (p.relabel) ctx.place.relabel = new Set(p.relabel);
-  else delete ctx.place.relabel;
-  if (p.continued) ctx.place.continued = new Set(p.continued);
-  else delete ctx.place.continued;
+  ctx.place.restore(cp.placer);
   const s = cp.sets;
   Object.assign(ctx, { reroute: new Set(s.reroute), newEdges: new Set(s.newEdges), fromEngine: new Set(s.fromEngine), active: new Set(s.active), relocated: new Set(s.relocated), grown: new Set(s.grown), routedNow: new Map(s.routedNow) });
   ctx.notes.splice(0, ctx.notes.length, ...cp.notes);
@@ -1495,7 +1474,7 @@ function giveDi(ctx: Ctx, di: ReadonlyMap<string, El>): void {
 /**
  * The head of the chain a new connection belongs to: a node placed in this
  * run at the cheapest of several row candidates (a branch or exception path,
- * PlaceCtx.heads), found back from the connection's ends through nodes
+ * NodePlacer.heads), found back from the connection's ends through nodes
  * placed in this run.
  */
 function chainHead(ctx: Ctx, from: readonly (string | undefined)[]): string | undefined {
@@ -1521,7 +1500,7 @@ function chainHead(ctx: Ctx, from: readonly (string | undefined)[]): string | un
  *     (the hand drawing stays as it is), else the existing one, with the new
  *     shapes as obstacles;
  *  2. a crossing left: the chain the new connection belongs to (a branch or
- *     exception path, PlaceCtx.heads) starts at its next row candidate
+ *     exception path, NodePlacer.heads) starts at its next row candidate
  *     instead: the new elements are drawn again from the checkpoint taken
  *     before them (`start`, by `redraw`), at most CHAIN_RETRIES times.
  * A trial is kept only under the guard `compact` uses: it adds no hard layout
@@ -1709,7 +1688,6 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   const counts = diCounts(defs);
   // a further diagram showing an element another diagram already shows is a second view of it: left as it is
   const planes = readPlanes(defs, sem).filter((p, i, all) => all.findIndex((q) => q.rootId === p.rootId) === i);
-  const spacing = new Map<Plane, Spacing>(planes.map((p) => [p, spacingOf(p)]));
   const oldSource = new Map<string, string>();
   const oldTarget = new Map<string, string>();
   for (const [oldFlowId, ends] of snap.flowEnds) {
@@ -1725,6 +1703,7 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   }
   const notes: string[] = [];
   if (stale.length) notes.push(`edge(s) of ${[...new Set(stale)].join(', ')} removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out`);
+  const hooks: PlacementHooks = { planeFor: (id) => ensurePlane(ctx, id) };
   const ctx: Ctx = {
     doc,
     sem,
@@ -1741,20 +1720,8 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
     routedNow: new Map(),
     edgesBefore: new Map(),
     notes,
-    place: {
-      planes,
-      sem,
-      spacing,
-      placed: new Set(),
-      moved: new Set(),
-      oldSource,
-      oldTarget,
-      reuse: new Map(),
-      blockSize: new Map(),
-      collapsed: new Set(opts.collapse ?? []),
-      planeFor: (id) => ensurePlane(ctx, id),
-      notes,
-    },
+    hooks,
+    place: new NodePlacer(planes, sem, oldSource, oldTarget, new Set(opts.collapse ?? []), notes, hooks),
   };
   let engine: Promise<{ planes: Plane[]; sem: Semantics }> | undefined;
   const blocks = (): Promise<{ planes: Plane[]; sem: Semantics }> => (engine ??= enginePlanes(doc, opts));
