@@ -122,3 +122,5 @@ export function kindWord(key: string, trigger: string | undefined, withContext =
   if (key === 'bpmn:Process' || key === 'bpmn:Collaboration' || key === 'bpmn:Definitions') return 'Main';
   return ucfirst(localName(key));
 }
+
+export const caseLike = (name: string, lowerFirst: boolean): string => (lowerFirst ? lcfirst(name) : ucfirst(name));
