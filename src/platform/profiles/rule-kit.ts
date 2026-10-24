@@ -1,7 +1,7 @@
 /**
  * What the engine rules that load on demand (platform/profiles/C7Profile.ts,
  * C8Profile.ts and the modules they import) use of the core: the loader
- * (platform/profiles/profile.ts) hands them RULE_KIT right after the import
+ * (platform/profiles/PlatformProfiles.ts) hands them RULE_KIT right after the import
  * (`new C7Profile(RULE_KIT)`), they import nothing of the core themselves
  * (type imports only).
  *

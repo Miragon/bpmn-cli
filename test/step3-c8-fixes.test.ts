@@ -34,7 +34,7 @@ import { runOps } from '../src/ops/index.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
 import { TimerValue } from '../src/platform/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

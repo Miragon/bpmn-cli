@@ -421,7 +421,7 @@ npx vitest run test/isomorphic.test.ts
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
-  esbuild make of the `import()` in `src/platform/profiles/profile.ts`), writes a
+  esbuild make of the `import()` in `src/platform/profiles/PlatformProfiles.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
   chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
   error and covered lint warning come out like Node's) and

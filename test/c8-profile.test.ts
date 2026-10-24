@@ -22,7 +22,7 @@ import { Doc } from '../src/model/document.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
 import { TimerValue } from '../src/platform/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeContainersOf, zeebeNestedOnly, zeebeType } from '../src/platform/zeebe.js';
 import { validateDoc } from '../src/validate/structural.js';
 

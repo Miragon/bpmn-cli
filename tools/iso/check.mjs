@@ -11,7 +11,7 @@
  *    Buffer, global, require, __dirname, ...), naming the module;
  *  - the bundle contains the node layer (dist/node/) or the CLI (dist/cli.js);
  *  - a module of the engine rules that load on demand (ON_DEMAND: the
- *    Camunda 7 and Camunda 8 profile, src/platform/profiles/profile.ts LOADERS) is
+ *    Camunda 7 and Camunda 8 profile, src/platform/profiles/PlatformProfiles.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
  *    entry, naming the module, or is no chunk of its own;
  *  - a module of those rules imports (statically, also through another
@@ -192,7 +192,7 @@ for (const entry of ENTRIES) {
   if (!s) continue;
   for (const part of ON_DEMAND) {
     for (const f of part.rules) {
-      if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profiles/profile.ts imports them, with import())`);
+      if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profiles/PlatformProfiles.ts imports them, with import())`);
     }
     if (part.rules.length && !s.onDemand.some((d) => d.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
     for (const { from, to } of s.onDemand.find((d) => d.name === part.name)?.importsOfEntry ?? []) {

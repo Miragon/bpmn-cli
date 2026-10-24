@@ -53,7 +53,7 @@ import type { LayoutEngine } from './layout/index.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline/index.js';
-import type { PlatformChoice } from './platform/profiles/profile.js';
+import type { PlatformChoice } from './platform/detect.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
 import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';

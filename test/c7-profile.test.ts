@@ -22,7 +22,7 @@ import { Doc } from '../src/model/document.js';
 import { checkFile } from '../src/node/files.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { detectPlatform } from '../src/platform/detect.js';
-import { loadProfiles, runProfile, type ProfileFinding } from '../src/platform/profiles/profile.js';
+import { loadProfiles, runProfile, type ProfileFinding } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

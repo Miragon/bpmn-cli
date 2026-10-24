@@ -137,7 +137,9 @@ import { requestedExpansion } from '../ops/set.js';
 import { isFormatOp, type Op } from '../ops/types.js';
 import { ChangeSet } from '../model/change-set.js';
 import { resolvePlatform } from '../platform/detect.js';
-import { ensureProfile, profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
+import type { PlatformChoice } from '../platform/detect.js';
+import type { ProfileFinding } from '../platform/finding.js';
+import { PLATFORM_PROFILES, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import { plainText, preserveText } from '../xml/preserve.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from '../validate/structural.js';
 import { checkReports, compareRuns, namedValidators, once, renamesOf, runValidators, validatorRefusal, withValidatorReports, type Validator, type ValidatorContext, type ValidatorRun } from '../validate/validators.js';
@@ -311,7 +313,7 @@ export interface ErrorBaseline {
  */
 export function errorBaseline(doc: Doc, platform: PlatformChoice = 'auto'): ErrorBaseline {
   const { errors, warnings } = validateDoc(doc);
-  const profile = profileBaseline(doc, platform);
+  const profile = PLATFORM_PROFILES.baseline(doc, platform);
   return { errors, warnings, index: new Map(doc.byId()), profile: doc.source ? profile : { report: { ...profile.report, findings: [] }, elements: [] } };
 }
 
@@ -797,7 +799,7 @@ async function withConventions<T>(doc: Doc, conventions: IdConventions | undefin
 async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<MutationResult> {
   assertLossless(doc, opts);
   // the engine rules of the file's platform (a chunk of its own in a browser bundle): loaded before anything runs
-  await ensureProfile(doc, opts.platform);
+  await PLATFORM_PROFILES.ensure(doc, opts.platform);
   // the document as read (entries a caller's validateDoc added in memory left out): unchanged parts keep their text
   const asRead = doc.source ? await serializeWithout(doc.model, unkeptEntries(doc.definitions, doc.source.mirror)) : undefined;
   const requested = requestedMode(opts.layout);
@@ -837,8 +839,8 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   const structural = separatePreexisting(doc, raw, baseline);
   // the profile after the ops: its added findings are reported, the others counted (validationDelta);
   // the ops can change the platform (the first camunda: / zeebe: content of a plain file), so its rules may load now
-  if (baseline.profile) await ensureProfile(doc, opts.platform);
-  const profileAfter = baseline.profile ? runProfile(doc, opts.platform) : undefined;
+  if (baseline.profile) await PLATFORM_PROFILES.ensure(doc, opts.platform);
+  const profileAfter = baseline.profile ? PLATFORM_PROFILES.run(doc, opts.platform) : undefined;
   let validation = baseline.profile ? withProfileChanges(doc, structural, baseline.profile, opts.platform, profileAfter) : structural;
   // an op warning the added platform findings repeat item by item (retype: W_PROPERTY_INAPPLICABLE) is reported once
   changes.warnings = withoutProfileDuplicates(changes.warnings, validation.warnings);
@@ -1000,7 +1002,7 @@ export interface CheckResult {
  */
 export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
   return LayoutDebug.during(opts.debug, async () => {
-    await ensureProfile(doc, opts.platform ?? 'auto');
+    await PLATFORM_PROFILES.ensure(doc, opts.platform ?? 'auto');
     let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
     const structuralErrors = validation.errors.length;
     const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);

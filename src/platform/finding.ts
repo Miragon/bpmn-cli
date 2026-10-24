@@ -1,5 +1,5 @@
 /**
- * A finding of a platform validation profile (src/platform/profiles/profile.ts): a
+ * A finding of a platform validation profile (src/platform/profiles/PlatformProfiles.ts): a
  * Warning with a severity, so an agent can tell what a deployment will
  * refuse from what only misbehaves at run time.
  *
@@ -10,7 +10,7 @@
  *
  * Every finding carries a subject (what exactly is wrong on its element,
  * e.g. the attribute name) under a symbol, so that a mutation can tell the
- * findings it introduced from those the file already had (profileDelta)
+ * findings it introduced from those the file already had (PlatformProfiles.delta)
  * without the subject showing up in JSON output.
  */
 import type { Warning } from '../shared/CliError.js';

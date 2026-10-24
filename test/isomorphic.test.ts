@@ -321,7 +321,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       return seen;
     };
     const core = reach('src/index.ts');
-    expect(core.has('src/model/utils/moddle.ts') && core.has('src/platform/profiles/profile.ts')).toBe(true);
+    expect(core.has('src/model/utils/moddle.ts') && core.has('src/platform/profiles/PlatformProfiles.ts')).toBe(true);
     for (const rules of ['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']) {
       const own = [...reach(rules)];
       expect(own.filter((f) => core.has(f)), rules).toEqual([]);

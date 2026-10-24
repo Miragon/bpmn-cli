@@ -9,6 +9,10 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
+import type { Doc } from './model/document.js';
+import type { Platform, PlatformChoice } from './platform/detect.js';
+import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
+
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -58,7 +62,9 @@ export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './model/change-set.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
-export { runProfile, loadProfile, loadProfiles, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profiles/profile.js';
+export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/detect.js';
+export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
+export type { ProfileFinding, Severity } from './platform/finding.js';
 export { detectPlatform } from './platform/detect.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
@@ -70,3 +76,28 @@ export { runFormatOps, type FormatResult, type FormatEntry } from './format/inde
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/**
+ * Loads the engine rules of `platform` (cached; `'none'` resolves at once).
+ * The async API loads them itself; call it before the synchronous building
+ * blocks (runProfile, validateDoc(doc, { platform })), or to prefetch the
+ * chunk when a host opens a Camunda 7 / 8 file. Rejects with E_PROFILE_LOAD
+ * (category io) when the module cannot be loaded; a later call tries again.
+ */
+export function loadProfile(platform: Platform): Promise<void> {
+  return PLATFORM_PROFILES.load(platform);
+}
+
+/** Loads the engine rules of several platforms (default: all), e.g. once before synchronous runProfile / validateDoc calls. */
+export function loadProfiles(platforms?: readonly Exclude<Platform, 'none'>[]): Promise<void> {
+  return PLATFORM_PROFILES.loadAll(platforms);
+}
+
+/**
+ * Runs the profile of the document's platform (or of `choice`). Throws
+ * E_PROFILE_NOT_LOADED when that platform's rules are not loaded
+ * (loadProfile; the async API loads them itself).
+ */
+export function runProfile(doc: Doc, choice?: PlatformChoice): ProfileReport {
+  return PLATFORM_PROFILES.run(doc, choice);
+}

@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { platformOf } from '../src/platform/descriptor.js';
 import { detectPlatform } from '../src/platform/detect.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
