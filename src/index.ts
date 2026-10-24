@@ -19,7 +19,7 @@ export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, 
 /* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
 export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
 /* the building blocks */
-export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/document.js';
+export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
 export { layoutModel } from './layout/index.js';
@@ -55,7 +55,7 @@ export { bpmnlintValidator, resolveBpmnlintConfig, BPMNLINT_COVERS, BPMNLINT_VAL
 /* declared id conventions: what element-id-naming of the project's .bpmnlintrc says about new ids (its naming helpers injected; @miragon/bpmn-cli/node reads the .bpmnlintrc) */
 export { idConventionsFromLint, conventionsView, renderConventions, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode, type ConventionsView, type ConventionsRow, type Undeclared } from './ids/conventions.js';
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
-export { ChangeSet, type Change } from './model/change-set.js';
+export { ChangeSet, type Change } from './model/ChangeSet.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
 export { runProfile, loadProfile, loadProfiles, PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo, type PlatformSummary, type ProfileFinding, type ProfileReport, type Severity } from './platform/profiles/profile.js';

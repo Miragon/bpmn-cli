@@ -113,7 +113,7 @@
 import type { IdConventions } from '../ids/conventions.js';
 import { LayoutDebug, type DebugSink } from '../shared/LayoutDebug.js';
 import { utf8Declaration } from '../xml/encoding.js';
-import { Doc } from '../model/document.js';
+import { Doc } from '../model/Doc.js';
 import { CliError, type Warning } from '../shared/CliError.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from '../layout/index.js';
@@ -135,7 +135,7 @@ import { ordersLanes, ordersPools } from '../ops/order.js';
 import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } from '../ops/retype.js';
 import { requestedExpansion } from '../ops/set.js';
 import { isFormatOp, type Op } from '../ops/types.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { resolvePlatform } from '../platform/detect.js';
 import { ensureProfile, profileBaseline, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
 import { plainText, preserveText } from '../xml/preserve.js';

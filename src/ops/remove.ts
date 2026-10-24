@@ -63,11 +63,11 @@
  * events fall with their host, many-valued references are pruned and
  * single-valued ones cleared (reported as a change).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { kindOf, synchronises } from '../model/kinds.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
 import type { RemoveOp } from './types.js';

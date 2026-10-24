@@ -44,7 +44,7 @@ import { layoutView, type LayoutView } from './query/layout-view.js';
 import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
-import { Doc, type NewDocOptions } from './model/document.js';
+import { Doc, type NewDocOptions } from './model/Doc.js';
 import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';

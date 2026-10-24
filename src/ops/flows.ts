@@ -24,7 +24,7 @@
  * speaks. A flow without id (valid BPMN, rare in files) whose ends change
  * gets an id from its new ends.
  */
-import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../model/document.js';
+import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../model/Doc.js';
 import { followDiIds } from '../diagram/write.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
@@ -32,7 +32,7 @@ import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, ty
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
 import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
-import { about, renamedNote, type ChangeSet } from '../model/change-set.js';
+import { about, renamedNote, type ChangeSet } from '../model/ChangeSet.js';
 import type { FlowOptions, Placement } from './types.js';
 
 export interface FlowAttrs {
@@ -658,7 +658,7 @@ function restoreFlowIdHints(doc: Doc, cs: ChangeSet, flow: El, id: string): void
   });
 }
 
-/** ` (renamed from <old>)` for a change detail when followEnds renamed the flow (model/change-set.ts, where a takeover drops it again). */
+/** ` (renamed from <old>)` for a change detail when followEnds renamed the flow (model/ChangeSet.ts, where a takeover drops it again). */
 export { renamedNote };
 
 export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: El }): string | undefined {

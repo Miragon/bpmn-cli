@@ -353,7 +353,7 @@ function elementText(el: El, tag = false): string {
  * twice where the schema allows one (two loopCharacteristics on a task, two
  * extensionElements, two conditionExpressions) is silently overwritten by
  * the reader, the first one is lost. Each overwrite becomes an import warning
- * (`duplicate element: ...`), which document.ts counts as lossy: the file can
+ * (`duplicate element: ...`), which Doc.ts counts as lossy: the file can
  * be read and shown, but writing it back (and losing the first element)
  * needs --force (E_IMPORT_LOSSY). Only the semantic model is watched (diagram
  * interchange is redrawn anyway).

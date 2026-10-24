@@ -31,7 +31,7 @@ import type { Warning } from '../shared/CliError.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './view-text.js';
 import type { CheckResult, ConventionsReport, LayoutStatus, MutationResult } from '../pipeline/index.js';
 import type { PlatformSummary } from '../platform/profiles/profile.js';
-import { ChangeSet, type Change } from '../model/change-set.js';
+import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import type { ValidationResult } from '../validate/structural.js';
 import type { ValidatorReport } from '../validate/validators.js';
 import type { ModelView } from '../query/model-view.js';
@@ -116,7 +116,7 @@ export function mutationWarnings(result: MutationResult): Warning[] {
 /**
  * old id -> final id of what the ops renamed of the file's elements (a chain
  * A -> B -> C as A -> C); absent without renames. A takeover (the id of an
- * element the change removed, model/change-set.ts Rename.takeover) is no rename: the
+ * element the change removed, model/ChangeSet.ts Rename.takeover) is no rename: the
  * old id is listed as removed, the taken one as changed.
  */
 function renamedIds(result: MutationResult): Record<string, string> | undefined {

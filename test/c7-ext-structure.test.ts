@@ -19,7 +19,7 @@
  * 2.2 and Operaton 2.1 (deployment and, for 1b/1c, an external task fetch).
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { connectElements } from '../src/ops/connect.js';
 import { extensionOp, listExtensions, parseSelector, SINGLE_TOP, type ExtensionInfo } from '../src/ops/ext.js';

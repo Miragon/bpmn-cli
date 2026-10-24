@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { addElement, collapsedIds } from '../src/ops/add.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
@@ -11,7 +11,7 @@ import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
 import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
 import type { CliError } from '../src/shared/CliError.js';
 import { mutateDoc } from '../src/pipeline/index.js';
-import { ChangeSet } from '../src/model/change-set.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */

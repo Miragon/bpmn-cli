@@ -8,7 +8,7 @@
  *  - pre-existing validation errors do not block unrelated writes
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { addTo } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/ops/index.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';

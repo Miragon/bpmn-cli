@@ -98,7 +98,7 @@
  *  format ops only), details.command (`bpmn space <file> ...`); without
  *  one the hint names the shapes to move first.
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { CliError, type ErrorDetails } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { is, type El } from '../model/utils/moddle.js';

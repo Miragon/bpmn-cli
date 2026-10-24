@@ -112,12 +112,12 @@
  *  and waypoint within 2 px.
  */
 import { LayoutDebug } from '../shared/LayoutDebug.js';
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { resolveExpanded } from './index.js';
 import { layoutClean } from './clean/engine.js';
 import { SIZES } from '../diagram/types.js';
 import { is, layoutRoot, parseXml, type El } from '../model/utils/moddle.js';
-import { successorOf } from '../model/change-set.js';
+import { successorOf } from '../model/ChangeSet.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from '../diagram/containers.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/geom.js';
 import { clearTitles, hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from '../diagram/labels.js';
@@ -272,7 +272,7 @@ export function changedEnds(snap: Snapshot, edge: El): ChangedEnd[] {
   return out;
 }
 
-/** The id now of an end known by its id before the ops: follows `set id=` and a retype (model/change-set.ts successorOf), so a retyped and renamed end is still the same end. */
+/** The id now of an end known by its id before the ops: follows `set id=` and a retype (model/ChangeSet.ts successorOf), so a retyped and renamed end is still the same end. */
 function endNow(snap: Snapshot, oldId: string | undefined): string | undefined {
   const el = oldId === undefined ? undefined : snap.els.get(oldId);
   return (el && idOf(successorOf(el))) ?? oldId;

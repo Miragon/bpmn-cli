@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { assignLane } from '../src/ops/containers.js';
@@ -10,7 +10,7 @@ import { orderFlows } from '../src/ops/order.js';
 import { cascadeRemove, removeElements } from '../src/ops/remove.js';
 import { retypeElement } from '../src/ops/retype.js';
 import { expansionRequests, readProperties, renameId, requestedExpansion, setProperties, SET_KEYS } from '../src/ops/set.js';
-import { ChangeSet } from '../src/model/change-set.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */

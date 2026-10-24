@@ -14,7 +14,7 @@
  *  + the shared descriptor lookup (src/platform/descriptor.ts)
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { renderDetail, renderView } from '../src/report/view-text.js';
 import { runOps } from '../src/ops/index.js';
 import { readProperties } from '../src/ops/set.js';

@@ -22,7 +22,7 @@
  * (and the detail line), and the profile reads its content the way Operaton
  * does (platform/profiles/c7.ts).
  */
-import { KNOWN_NAMESPACES, type Doc } from '../model/document.js';
+import { KNOWN_NAMESPACES, type Doc } from '../model/Doc.js';
 import { isBpmnElement, walk, type El } from '../model/utils/moddle.js';
 import { CAMUNDA_URI, C7_URIS, OPERATON_URI, ZEEBE_URI } from './descriptor.js';
 

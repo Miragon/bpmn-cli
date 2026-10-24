@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
 import { brokenEdge, detachedEnds, edgeBefore } from '../src/diagram/reroute.js';

@@ -37,7 +37,7 @@
  *    (`branches`, their `nodes`) are read only where they are arrays of
  *    objects, so a malformed one reaches splitFlow's own check (E_USAGE).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
 import { usageError } from '../shared/utils/errors.js';
 import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';

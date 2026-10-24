@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OPS_SCHEMA, parseOps } from '../src/ops/batch.js';
 import { kindsJson } from '../src/report/guide.js';
 import { FORMAT_OP_NAMES } from '../src/ops/types.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { layoutView } from '../src/query/layout-view.js';
 import { isCliError } from '../src/shared/utils/errors.js';

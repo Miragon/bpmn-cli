@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Doc } from '../src/model/document.js';
+import type { Doc } from '../src/model/Doc.js';
 import { addTo, removeFrom } from '../src/model/utils/moddle.js';
 import { flowOrder, repairFlowLinks, validateDoc } from '../src/validate/structural.js';
 import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';

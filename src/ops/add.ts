@@ -61,13 +61,13 @@
  * Because 'expanded' lives in DI, explicit collapse requests are recorded per
  * Doc (collapseRequests) so the pipeline can hand them to the layouter.
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
 import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
-import { ChangeSet, renamedNote, type Change } from '../model/change-set.js';
+import { ChangeSet, renamedNote, type Change } from '../model/ChangeSet.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';

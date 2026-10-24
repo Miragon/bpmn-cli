@@ -36,7 +36,7 @@ import { LayoutDebug } from '../src/shared/LayoutDebug.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
 import { titleBox } from '../src/diagram/text.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
 import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
 import type { GNode, ScopeLayout } from '../src/diagram/types.js';

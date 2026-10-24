@@ -24,12 +24,12 @@
  *    is checked when addElement creates it.
  *  - Returns the merged ChangeSet (notes: which ids were created).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
 import { withSuffix } from '../ids/slugs.js';

@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { readPlanes, semantics } from '../src/diagram/plane.js';
 import { inside } from '../src/diagram/geom.js';
 import { isCliError } from '../src/shared/utils/errors.js';

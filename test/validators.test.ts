@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { ERROR_CATALOGUE } from '../src/report/guide.js';
 import type { CliError, Warning } from '../src/shared/CliError.js';
 import { is, type El } from '../src/model/utils/moddle.js';

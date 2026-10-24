@@ -57,7 +57,7 @@
  * Mutations report only the profile findings a change introduced
  * (pipeline/index.ts, withProfile + profileDelta).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { isCliError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';

@@ -16,7 +16,7 @@
  *    lane, neither of the two lanes the flow connects: says so and names
  *    the lane of the row the layout would draw a new node on.
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import type { Warning } from '../shared/CliError.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { laneOf } from './containers.js';

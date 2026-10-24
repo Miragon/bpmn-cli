@@ -28,7 +28,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/ops/batch.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';

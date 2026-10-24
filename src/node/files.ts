@@ -42,7 +42,7 @@
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
-import { Doc } from '../model/document.js';
+import { Doc } from '../model/Doc.js';
 import { declaredEncoding, isUtf8 } from '../xml/encoding.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { Op } from '../ops/types.js';

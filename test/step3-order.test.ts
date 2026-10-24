@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from "vitest";
 import { parseOps } from '../src/ops/batch.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { isCliError } from '../src/shared/utils/errors.js';

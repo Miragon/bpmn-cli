@@ -1,11 +1,11 @@
 /**
  * Op dispatcher. Every CLI command and `apply` go through here.
  */
-import type { BatchContext, Doc, FlowEnds } from '../model/document.js';
+import type { BatchContext, Doc, FlowEnds } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { is, type El } from '../model/utils/moddle.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { addElement } from './add.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { connectElements } from './connect.js';
@@ -133,7 +133,7 @@ export function runBatch(doc: Doc, ops: Op[]): BatchRun {
   const table = new AliasTable(doc);
   const resolved: Op[] = [];
   const deferred: number[] = [];
-  // what the batch did so far, for E_NOT_FOUND (model/document.ts require / suggest)
+  // what the batch did so far, for E_NOT_FOUND (model/Doc.ts require / suggest)
   const context: BatchContext = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => table.toRecord() };
   readIdStyle(doc);
   doc.takeKeptFlows();

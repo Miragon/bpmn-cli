@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { IdStyle } from '../src/ids/style.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';

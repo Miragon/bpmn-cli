@@ -116,7 +116,7 @@
  * with its own selector and adding it again, never with `--replace`, which
  * would delete its siblings (extHint).
  */
-import type { Doc } from '../../model/document.js';
+import type { Doc } from '../../model/Doc.js';
 import type { El } from '../../model/utils/moddle.js';
 import type { CamundaElementType } from '../descriptor.js';
 import type { ProfileFinding, Severity } from '../finding.js';

@@ -59,7 +59,7 @@ import type { FormatResult } from '../format/index.js';
 import type { LayoutView } from '../query/layout-view.js';
 import type { Warning } from '../shared/CliError.js';
 import type { LayoutStatus } from '../pipeline/index.js';
-import type { Change, ChangeSet } from '../model/change-set.js';
+import type { Change, ChangeSet } from '../model/ChangeSet.js';
 import type { DetailMessageFlow, ElementDetail, FindHit, ModelView, ViewAnnotation, ViewFlow, ViewLane, ViewMessageFlow, ViewNode } from '../query/model-view.js';
 
 const INDENT = '  ';

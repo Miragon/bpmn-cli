@@ -32,7 +32,7 @@ import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHigh
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
-import { assertProcessId, assertTarget, Doc } from './model/document.js';
+import { assertProcessId, assertTarget, Doc } from './model/Doc.js';
 import { CliError, type Warning } from './shared/CliError.js';
 import { ioError, isCliError, usageError } from './shared/utils/errors.js';
 import { renderExtensionList, renderFind, renderMetrics, renderView } from './report/view-text.js';

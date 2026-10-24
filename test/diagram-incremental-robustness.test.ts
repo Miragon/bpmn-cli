@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { detachedEnds } from '../src/diagram/reroute.js';

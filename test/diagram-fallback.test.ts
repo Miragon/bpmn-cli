@@ -12,7 +12,7 @@ vi.mock('../src/layout/incremental.js', async (importOriginal) => ({
   },
 }));
 
-const { Doc } = await import('../src/model/document.js');
+const { Doc } = await import('../src/model/Doc.js');
 const { mutateDoc } = await import('../src/pipeline/index.js');
 const { CliError } = await import('../src/shared/CliError.js');
 

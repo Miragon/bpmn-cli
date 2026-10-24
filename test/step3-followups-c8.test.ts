@@ -17,7 +17,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { cronProblem, dateTimeRangeProblem, validCycle, validDateTime } from '../src/platform/profiles/c8.js';
 import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
 

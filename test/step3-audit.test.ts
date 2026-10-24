@@ -9,7 +9,7 @@
  *    missing, not by a whole column, when part of the room is free
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { readPlanes, semantics, type DShape } from '../src/diagram/plane.js';
 import { makeSpace } from '../src/diagram/space.js';
 import { mutateDoc } from '../src/pipeline/index.js';

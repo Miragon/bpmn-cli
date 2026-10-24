@@ -47,7 +47,7 @@
  * resolved. A check reports it like any other finding, and so does a write with
  * nothing to compare (an advisory validator of a created document).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import type { El } from '../model/utils/moddle.js';

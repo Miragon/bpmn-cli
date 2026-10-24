@@ -10,7 +10,7 @@
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from '../shared/utils/errors.js';
-import { about, replaced, type ChangeSet, type Rename } from './change-set.js';
+import { about, replaced, type ChangeSet, type Rename } from './ChangeSet.js';
 import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
 import { hasIdWords, IdRegistry, isValidId, transliterate, withSuffix } from '../ids/slugs.js';
 import type { IdConventions } from '../ids/conventions.js';
@@ -647,7 +647,7 @@ export class Doc {
    * `next` took the place of `old` (a retype that changes the type builds a
    * new element, ops/retype.ts swapType): what the running batch recorded
    * about `old` is about `next`, its former ends (recordFormerEnd) and the
-   * change entries made for it (change-set.ts replaced).
+   * change entries made for it (ChangeSet.ts replaced).
    */
   replaceElement(old: El, next: El): void {
     replaced(old, next);

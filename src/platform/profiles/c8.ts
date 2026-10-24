@@ -103,7 +103,7 @@
  * of white space deploys (only an empty one is refused); FEEL, path and enum
  * attributes, form ids and correlation keys of white space are refused.
  */
-import type { Doc } from '../../model/document.js';
+import type { Doc } from '../../model/Doc.js';
 import type { El } from '../../model/utils/moddle.js';
 import { feelSyntaxError } from './feel.js';
 import type { ProfileFinding, Severity } from '../finding.js';

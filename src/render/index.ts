@@ -133,7 +133,7 @@
  *    host that does not render).
  */
 import { aroundView } from '../query/context.js';
-import { Doc } from '../model/document.js';
+import { Doc } from '../model/Doc.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel } from '../layout/index.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';

@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml, newXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Warning } from '../src/shared/CliError.js';
 import { idNamesEnds } from '../src/ops/flows.js';
@@ -19,7 +19,7 @@ import { runOp, runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { renderMutation } from '../src/report/command-report.js';
-import type { ChangeSet } from '../src/model/change-set.js';
+import type { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */

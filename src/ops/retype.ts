@@ -43,14 +43,14 @@
  *    a write reports every item once. Retyped to a userTask in a Camunda 8
  *    file, the task gets zeebe:userTask (platform/defaults.ts).
  */
-import type { Doc } from '../model/document.js';
+import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
-import { ChangeSet } from '../model/change-set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { zeebeUserTaskDefault } from '../platform/defaults.js';
