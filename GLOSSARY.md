@@ -59,6 +59,14 @@ a new concept gets its line here first.
 | **Conventions table** | The conventions new ids follow in one file, a row per id pattern and source (`bpmn show --conventions`, `ids/ConventionsTable.ts`). |
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
 | **Vendor descriptor** | The read-only lookup over an engine's moddle descriptor: its attributes, extension element types, placement and the types an element holds once (`VendorDescriptor`, `CAMUNDA`, `ZEEBE`). |
+| **Extension editor** | Runs an `ext` op: resolves its host, then adds (`ExtensionInserter`) or removes (`ExtensionRemover`) vendor extension elements (`ops/ExtensionEditor.ts`). |
+| **Extension structure** | Where vendor extension elements go: containers, single-instance and keyed types, child order (`ops/ExtensionStructure.ts`). |
+| **Extension level** | The top of an element's extensionElements or the children of one vendor element, where `ext` inserts, selects and removes (`ops/ExtensionLevel.ts`). |
+| **Extension selector** | `prefix:type[attr=value]/...`: the path `ext` names vendor elements with (`ops/SelectorParser.ts`). |
+| **Nested host** | An event definition, loop characteristics or condition expression that holds extension elements and is named through its owner (`ops/NestedHosts.ts`). |
+| **Vendor elements** | How `ext` reads, names and creates generic vendor elements: canonical type, prefix, attributes, key and label (`ops/VendorElements.ts`). |
+| **Extension snippet** | The `--xml` of `ext add`, read synchronously into generic elements (`ops/ExtSnippetReader.ts`). |
+| **Zeebe subscription** | The correlation key of a message, written on the bpmn:Message an event or receive task waits for (`ops/ZeebeSubscription.ts`). |
 | **Camunda 8 defaults** | What the CLI writes for elements it creates in a Camunda 8 file, like Camunda Modeler (`platform/Camunda8Defaults.ts`). |
 | **Command catalogue** | The commands of `bpmn` with their arguments, `--help` text and guide usage, and the options of every write (`report/CommandCatalogue.ts`). |
 | **Shot** | The image or tiles one render wrote, with size, image tokens, plane and numbered problems: `node/ImageWriter.ts` writes it, `report/RenderReport.ts` prints it. |

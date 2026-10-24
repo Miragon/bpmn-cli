@@ -31,7 +31,7 @@ import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { extensionLines, renderDetail, renderExtensionList, renderView } from '../src/report/view-text.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { listAllExtensions } from '../src/ops/ext.js';
+import { listAllExtensions } from '../src/index.js';
 import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
 import { removeElements } from '../src/ops/remove.js';

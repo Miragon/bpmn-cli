@@ -11,7 +11,7 @@ import { addElement } from './add.js';
 import { AliasTable } from './AliasTable.js';
 import { OpAliases } from './OpAliases.js';
 import { connectElements } from './connect.js';
-import { extensionOp } from './ext.js';
+import { ExtensionEditor } from './ExtensionEditor.js';
 import { reportStaleFlows } from './flows.js';
 import { moveElements } from './move.js';
 import { Reordering } from './Reordering.js';
@@ -166,7 +166,7 @@ export class OpRunner {
       case 'order':
         return new Reordering(doc, op).apply();
       case 'ext':
-        return extensionOp(doc, op);
+        return new ExtensionEditor(doc).apply(op);
       case 'split':
         return splitFlow(doc, op);
       case 'place':

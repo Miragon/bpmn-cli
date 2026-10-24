@@ -27,6 +27,7 @@ import { AgentGuide } from './report/AgentGuide.js';
 import { KindsReference } from './report/KindsReference.js';
 import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
 import { OpsParser } from './ops/OpsParser.js';
+import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 import type { El } from './model/utils/moddle.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
@@ -117,7 +118,7 @@ export { validateDoc, type ValidateOptions, type ValidationResult } from './vali
 export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
 export type { ProfileFinding, Severity } from './platform/utils/finding.js';
-export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
+export type { ExtensionInfo } from './ops/ExtensionLister.js';
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
 export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
@@ -127,6 +128,16 @@ export { runFormatOps, type FormatResult, type FormatEntry } from './format/inde
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/** The extension elements of an element, in order. */
+export function listExtensions(el: El): ExtensionInfo[] {
+  return new ExtensionLister().list(el);
+}
+
+/** `ext list`: the element's own extension elements, then those of its nested elements, each with its slot. */
+export function listAllExtensions(el: El): ExtensionInfo[] {
+  return new ExtensionLister().listAll(el);
+}
 
 /** Runs one op on its own (src/ops/OpRunner.ts). */
 export function runOp(doc: Doc, op: Op): ChangeSet {

@@ -52,7 +52,7 @@ import { parseOpsJson } from './shared/utils/ops-json.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
 import { assertKindToken } from './model/kinds.js';
 import type { LayoutEngine } from './layout/index.js';
-import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
+import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 import type { Op } from './ops/types.js';
 import type { LayoutMode, MutationResult } from './pipeline/index.js';
 import { EditTransaction } from './pipeline/EditTransaction.js';
@@ -246,7 +246,7 @@ export async function findXml(xml: string, text: string, opts: { kind?: string }
 /** `bpmn ext list --json`: the extension elements of an element (and of its event definition / loop / condition). */
 export async function extensionsXml(xml: string, id: string): Promise<ExtensionInfo[]> {
   const doc = await Doc.fromXml(xml);
-  return listAllExtensions(doc.require(id));
+  return new ExtensionLister().listAll(doc.require(id));
 }
 
 /** Sets (or, without an argument, clears) the process-wide sink of the layout engines' diagnostic lines. */

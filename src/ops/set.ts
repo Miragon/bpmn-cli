@@ -100,7 +100,7 @@ import { ArtifactEditor } from './ArtifactEditor.js';
 import { LaneEditor } from './LaneEditor.js';
 import { DecisionLinkWriter } from './DecisionLinkWriter.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
-import { setCorrelationKey } from './ext.js';
+import { ZeebeSubscription } from './ZeebeSubscription.js';
 import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
@@ -484,7 +484,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     default:
       if (key.includes(':')) {
         // zeebe:correlationKey: the zeebe:subscription of the message the element waits for (ops/ext.ts)
-        if (value && setCorrelationKey(doc, el, key, value, cs)) return;
+        if (value && new ZeebeSubscription(doc).setCorrelationKey(el, key, value, cs)) return;
         if (value) assertVendorHost(doc, el, key, value);
         if (value) assertZeebeHost(doc, el, key, value);
         setVendorAttribute(doc, el, key, value);

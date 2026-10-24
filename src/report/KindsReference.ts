@@ -4,7 +4,7 @@ import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '.
 import { SWATCHES } from '../diagram/write.js';
 import { OPS_SCHEMA } from '../ops/OpsSchemaBuilder.js';
 import { OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/utils/op-fields.js';
-import { SINGLE_TOP } from '../ops/ext.js';
+import { EXTENSION_STRUCTURE } from '../ops/ExtensionStructure.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
 import { OP_NAMES } from '../ops/utils/op-names.js';
 import { ZEEBE } from '../platform/ZeebeDescriptor.js';
@@ -35,8 +35,8 @@ export interface ZeebeElementDoc {
   single: boolean;
 }
 
-/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ext.ts SINGLE_TOP). */
-const ZEEBE_SINGLE = [...SINGLE_TOP].filter((t) => t.startsWith('zeebe:'));
+/** The zeebe types `ext add` keeps single (merges a second one into the first; ops/ExtensionStructure.ts singleTop). */
+const ZEEBE_SINGLE = [...EXTENSION_STRUCTURE.singleTop].filter((t) => t.startsWith('zeebe:'));
 
 /** The parts of `bpmn kinds` / `kinds --json` by their JSON key: the JSON keys of each (section renders its text). */
 const SECTION_KEYS: Record<string, string[]> = {

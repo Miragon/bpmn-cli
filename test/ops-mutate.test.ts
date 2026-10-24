@@ -4,7 +4,8 @@ import { isCliError } from '../src/shared/utils/errors.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { LaneEditor } from '../src/ops/LaneEditor.js';
 import { applyTrigger } from '../src/ops/events.js';
-import { extensionOp, listExtensions } from '../src/ops/ext.js';
+import { listExtensions } from '../src/index.js';
+import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
 import { moveElements } from '../src/ops/move.js';
 import { Reordering } from '../src/ops/Reordering.js';
 import { cascadeRemove, removeElements } from '../src/ops/remove.js';
@@ -963,7 +964,7 @@ describe('order', () => {
 describe('ext', () => {
   it('adds, lists, replaces and removes typed extension elements', async () => {
     const doc = await linearDoc();
-    const cs = extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } });
+    const cs = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } });
     const task = doc.require('Task_A');
     expect(doc.definitions.$attrs['xmlns:zeebe']).toBe(ZEEBE);
     expect(listExtensions(task)).toEqual([{ index: 0, type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } }]);
@@ -973,34 +974,34 @@ describe('ext', () => {
     expect(xml).toContain(`xmlns:zeebe="${ZEEBE}"`);
     await expectRoundTrip(doc);
 
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:formDefinition', attrs: { formKey: 'f' } });
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'other' }, replace: true });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:formDefinition', attrs: { formKey: 'f' } });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'other' }, replace: true });
     expect(listExtensions(task).map((e) => [e.index, e.type, e.attrs['type'] ?? e.attrs['formKey']])).toEqual([
       [0, 'zeebe:formDefinition', 'f'],
       [1, 'zeebe:taskDefinition', 'other'],
     ]);
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'camunda:script', body: 'return 1;', attrs: { scriptFormat: 'js' } });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'camunda:script', body: 'return 1;', attrs: { scriptFormat: 'js' } });
     expect(listExtensions(task)[2]).toEqual({ index: 2, type: 'camunda:script', attrs: { scriptFormat: 'js' }, body: 'return 1;' });
     xml = await doc.toXml();
     expect(xml).toContain('<camunda:script scriptFormat="js">return 1;</camunda:script>');
     await expectRoundTrip(doc);
 
-    const rm = extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' });
+    const rm = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' });
     expect(rm.changed[0]!.detail).toBe('ext removed zeebe:taskDefinition');
     expect(listExtensions(task).map((e) => e.type)).toEqual(['zeebe:formDefinition', 'camunda:script']);
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', index: 0 });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 0 });
     expect(listExtensions(task).map((e) => e.type)).toEqual(['camunda:script']);
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', index: 5 }))).toBe('E_NO_EXTENSION');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:nope' }))).toBe('E_NO_EXTENSION');
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' });
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 5 }))).toBe('E_NO_EXTENSION');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:nope' }))).toBe('E_NO_EXTENSION');
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' });
     expect(task.get('extensionElements')).toBeUndefined();
     expect(listExtensions(task)).toEqual([]);
     expect((await doc.toXml()).includes('extensionElements')).toBe(false);
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' }))).toBe('E_NO_EXTENSION');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add' }))).toBe('E_USAGE');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'acme:x' }))).toBe('E_UNKNOWN_NAMESPACE');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'bpmn:documentation' }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', type: 'noprefix' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' }))).toBe('E_NO_EXTENSION');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add' }))).toBe('E_USAGE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'acme:x' }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'bpmn:documentation' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'noprefix' }))).toBe('E_INVALID_VALUE');
     await expectRoundTrip(doc);
   });
 
@@ -1013,7 +1014,7 @@ describe('ext', () => {
       <!-- a comment -->
       <zeebe:taskHeaders><zeebe:header key="k" value="v"/></zeebe:taskHeaders>
       <camunda:inputOutput><camunda:inputParameter name="x"><![CDATA[1 < 2]]></camunda:inputParameter></camunda:inputOutput>`;
-    const cs = extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: snippet });
+    const cs = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: snippet });
     expect(cs.changed[0]!.detail).toBe('ext added zeebe:ioMapping, zeebe:taskHeaders, camunda:inputOutput');
     const task = doc.require('Task_A');
     expect(listExtensions(task)).toEqual([
@@ -1042,11 +1043,11 @@ describe('ext', () => {
     expect(listExtensions(holder)).toEqual(listExtensions(task));
 
     // replace by type when adding from a snippet
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:taskHeaders><zeebe:header key="k2" value="v2"/></zeebe:taskHeaders>', replace: true });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:taskHeaders><zeebe:header key="k2" value="v2"/></zeebe:taskHeaders>', replace: true });
     expect(listExtensions(task).filter((e) => e.type === 'zeebe:taskHeaders')).toHaveLength(1);
     expect(listExtensions(task).find((e) => e.type === 'zeebe:taskHeaders')?.children?.[0]?.attrs).toEqual({ key: 'k2', value: 'v2' });
     // inline xmlns declarations are honoured and declared on the definitions
-    extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<acme:thing xmlns:acme="http://acme.example/ns" a="1"/>' });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<acme:thing xmlns:acme="http://acme.example/ns" a="1"/>' });
     expect(doc.definitions.$attrs['xmlns:acme']).toBe('http://acme.example/ns');
     expect((await doc.toXml()).includes('<acme:thing a="1" />')).toBe(true);
     await expectRoundTrip(doc);
@@ -1054,16 +1055,16 @@ describe('ext', () => {
 
   it('rejects malformed snippets and unknown namespaces', async () => {
     const doc = await linearDoc();
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo></zeebe:bar>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo a=1/>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: 'just text' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<!-- only a comment -->' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<foo:bar/>' }))).toBe('E_UNKNOWN_NAMESPACE');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<thing xmlns="http://x"/>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Task_A', action: 'add', xml: '<bpmn:documentation>x</bpmn:documentation>' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo></zeebe:bar>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo a=1/>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: 'just text' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<!-- only a comment -->' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<foo:bar/>' }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<thing xmlns="http://x"/>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<bpmn:documentation>x</bpmn:documentation>' }))).toBe('E_INVALID_VALUE');
     expect(doc.require('Task_A').get('extensionElements')).toBeUndefined();
-    expect(errorCode(() => extensionOp(doc, { op: 'ext', id: 'Nope', action: 'add', type: 'zeebe:x' }))).toBe('E_NOT_FOUND');
+    expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Nope', action: 'add', type: 'zeebe:x' }))).toBe('E_NOT_FOUND');
   });
 });
 
@@ -1076,7 +1077,7 @@ describe('mixed scenario', () => {
     const doc = await fullDoc();
     setProperties(doc, { op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
     retypeElement(doc, { op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
-    extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
+    new ExtensionEditor(doc).apply({ op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
     new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
     moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
     removeElements(doc, { op: 'remove', ids: ['Call', 'Note_1'] });

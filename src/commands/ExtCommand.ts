@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import { listAllExtensions } from '../ops/ext.js';
+import { ExtensionLister } from '../ops/ExtensionLister.js';
 import type { ExtOp } from '../ops/types.js';
 import { renderExtensionList } from '../report/view-text.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
@@ -56,7 +56,7 @@ export class ExtCommand extends MutationCommand {
     await this.cli.guarded(async () => {
       const doc = await this.cli.readDocArg(file);
       const el = doc.require(id);
-      const items = listAllExtensions(el);
+      const items = new ExtensionLister().listAll(el);
       if (o['json']) this.cli.printJson(items, !!o['pretty']);
       else this.cli.print(renderExtensionList(items));
     }, !!o['json']);

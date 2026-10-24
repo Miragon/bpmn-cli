@@ -45,7 +45,7 @@ import { laneOf } from '../ops/utils/lanes.js';
 import { groupMembers } from '../diagram/groups.js';
 import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
 import { describeTrigger } from '../ops/events.js';
-import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
+import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
 import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
 import { flowOrder, repairFlowLinks, validateDoc } from '../validate/structural.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
@@ -832,11 +832,11 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
   });
   const nested: Record<string, NestedDetail> = {};
   for (const { prefix, el: n } of nestedEntries(el)) {
-    nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: listExtensions(n) });
+    nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttrs(n), extensions: new ExtensionLister().list(n) });
   }
   const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(shownId) : [];
   const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(shownId) : [];
-  const listed = listExtensions(el);
+  const listed = new ExtensionLister().list(el);
   const extensions: unknown[] = listed.length ? listed : extensionTypes(el).map((type, index) => ({ index, type }));
   const host = peek<El>(el, 'attachedToRef');
   const associations = associationsOf(doc);
@@ -947,10 +947,10 @@ function vendorMatch(el: El, q: string): string | undefined {
     }
     return undefined;
   };
-  const own = visit(listExtensions(el), '');
+  const own = visit(new ExtensionLister().list(el), '');
   if (own) return own;
   for (const { prefix, el: nested } of nestedEntries(el)) {
-    const hit = visit(listExtensions(nested), `${prefix}.`);
+    const hit = visit(new ExtensionLister().list(nested), `${prefix}.`);
     if (hit) return hit;
   }
   return undefined;

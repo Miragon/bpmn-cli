@@ -37,7 +37,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { kindsJson, kindsText } from '../src/index.js';
-import { listAllExtensions } from '../src/ops/ext.js';
+import { listAllExtensions } from '../src/index.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
