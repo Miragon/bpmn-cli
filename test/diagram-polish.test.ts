@@ -15,7 +15,7 @@ import { Doc } from '../src/model/document.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
-import { routeOrthogonal } from '../src/diagram/router.js';
+import { OrthogonalRouter } from '../src/diagram/OrthogonalRouter.js';
 import { Drawing } from '../src/diagram/Drawing.js';
 import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/utils/text.js';
 import type { Box, Point } from '../src/diagram/types.js';
@@ -162,8 +162,8 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
   it('keeps a middle-only port on the vertex even when another connection docks there', () => {
     const t: Box = { x: 250, y: 160, width: 100, height: 80 };
     const docked = [[{ x: 150, y: 125 }, { x: 250, y: 125 }]];
-    const free = routeOrthogonal({ source: g, target: t, sourceSides: ['right'], obstacles: [], lines: docked });
-    const middle = routeOrthogonal({ source: g, target: t, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
+    const free = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], obstacles: [], lines: docked });
+    const middle = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
     expect(key(free[0]!)).not.toBe('150,125');
     expect(key(middle[0]!)).toBe('150,125');
   });
@@ -171,7 +171,7 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
   it('leaves by another vertex than a taken one when that costs no more than a crossing', () => {
     const t: Box = { x: 250, y: 300, width: 100, height: 80 };
     const taken = [[{ x: 125, y: 150 }, { x: 125, y: 220 }, { x: 250, y: 220 }]];
-    const pts = routeOrthogonal({ source: g, target: t, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
+    const pts = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
     expect(key(pts[0]!)).toBe('150,125');
   });
 
@@ -180,7 +180,7 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
     const s: Box = { x: 100, y: 100, width: 100, height: 80 };
     const t: Box = { x: 230, y: 300, width: 100, height: 80 };
     const line = [[{ x: 120, y: 240 }, { x: 290, y: 240 }]];
-    const pts = routeOrthogonal({ source: s, target: t, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
+    const pts = OrthogonalRouter.route({ source: s, target: t, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
     const crossAt = pts.slice(1).flatMap((q, i) => {
       const p = pts[i]!;
       return p.x === q.x && Math.min(p.y, q.y) < 240 && Math.max(p.y, q.y) > 240 ? [p.x] : [];

@@ -3240,8 +3240,8 @@ describe('groups over a full redraw', () => {
       [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
     );
     const doc = await Doc.fromXml(xml);
-    const { redrawGroups } = await import('../src/diagram/groups.js');
-    const out = redrawGroups(doc.moddle, doc.definitions, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
+    const { Groups } = await import('../src/diagram/Groups.js');
+    const out = new Groups(doc.definitions).redraw(doc.moddle, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
     expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
     expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);
   });

@@ -7,7 +7,6 @@ import type { MetricKey } from './utils/problems.js';
 
 export type Add = (kind: MetricKey, key: string, ids: string[], detail?: string) => void;
 
-
 /** Where a shape belongs (see contract, frameIntrusion); undefined: it belongs nowhere in particular. */
 interface Home {
   el: El;

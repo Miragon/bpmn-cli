@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { attachedSide, defaultSides } from '../src/diagram/utils/sides.js';
-import { routeOrthogonal, type RouteRequest } from '../src/diagram/router.js';
+import { OrthogonalRouter, type RouteRequest } from '../src/diagram/OrthogonalRouter.js';
 import { type Side } from '../src/diagram/types.js';
 import type { Box, Point } from '../src/diagram/types.js';
 
@@ -90,7 +90,7 @@ function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): voi
 }
 
 function route(req: RouteRequest, opts: Expect = {}): Point[] {
-  const points = routeOrthogonal(req);
+  const points = OrthogonalRouter.route(req);
   expectValid(req, points, opts);
   return points;
 }
@@ -366,10 +366,10 @@ describe('routeOrthogonal: lines, frame, fallback', () => {
       { x: Math.round(rand() * 1200), y: Math.round(rand() * 600) },
     ]).map(([a, b]) => [a!, { x: b!.x, y: a!.y }, b!]);
     const req = { source: box(0, 0), target: box(1500, 300), obstacles, lines, sourceSides: TASK_OUT, targetSides: TASK_IN };
-    const first = routeOrthogonal(req);
+    const first = OrthogonalRouter.route(req);
     expectValid(req, first, { mayHit: true });
-    expect(routeOrthogonal(req)).toEqual(first);
-    expect(routeOrthogonal({ ...req, obstacles: [...obstacles].reverse(), lines: [...lines].reverse() })).toEqual(first);
+    expect(OrthogonalRouter.route(req)).toEqual(first);
+    expect(OrthogonalRouter.route({ ...req, obstacles: [...obstacles].reverse(), lines: [...lines].reverse() })).toEqual(first);
   });
 });
 
@@ -388,7 +388,7 @@ describe('routeOrthogonal: performance', () => {
       const source = shapes[a]!, target = shapes[b]!;
       const req = { source, target, obstacles: shapes.filter((s) => s !== source && s !== target), sourceSides: TASK_OUT, targetSides: TASK_IN };
       const t0 = performance.now();
-      const pts = routeOrthogonal(req);
+      const pts = OrthogonalRouter.route(req);
       times.push(performance.now() - t0);
       expectValid(req, pts);
     }

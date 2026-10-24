@@ -45,7 +45,7 @@ import { kindByName, kindLabel, triggerOf } from '../model/kinds.js';
 import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
 import { addTo, collaboration, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/change-set.js';
-import { relabelGroup } from '../diagram/groups.js';
+import { Groups } from '../diagram/Groups.js';
 
 export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
 
@@ -175,7 +175,7 @@ export function setGroupName(doc: Doc, group: El, name: string): void {
   const value = group.get<El | undefined>('categoryValueRef');
   if (value) value.set('value', name || undefined);
   else if (name) group.set('categoryValueRef', createCategoryValue(doc, speakingStem(idOf(group)) ?? '', name));
-  relabelGroup(doc.moddle, doc.definitions, group, name);
+  new Groups(doc.definitions).relabel(doc.moddle, group, name);
 }
 
 /**

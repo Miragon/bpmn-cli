@@ -42,7 +42,7 @@ import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } fro
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { groupName, is, localType, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
-import { groupMembers } from '../diagram/groups.js';
+import { Groups } from '../diagram/Groups.js';
 import { decisionLinkOf } from '../ops/decision.js';
 import { describeTrigger } from '../ops/events.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
@@ -705,7 +705,7 @@ function vendorNamespaces(doc: Doc): string[] {
 }
 
 function buildGroups(doc: Doc): ViewGroup[] {
-  return [...groupMembers(doc.definitions)].map(([id, members]) => compact<ViewGroup>({ id, name: nameOf(doc.require(id)), members }));
+  return [...new Groups(doc.definitions).members()].map(([id, members]) => compact<ViewGroup>({ id, name: nameOf(doc.require(id)), members }));
 }
 
 /** Builds the complete semantic view of a document (see contract above). */
@@ -802,7 +802,7 @@ function baseProperties(doc: Doc, el: El): Record<string, unknown> {
     if (!process) props['blackBox'] = true;
   }
   if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(shownId);
-  if (is(el, 'bpmn:Group')) props['members'] = groupMembers(doc.definitions).get(shownId(el)) ?? [];
+  if (is(el, 'bpmn:Group')) props['members'] = new Groups(doc.definitions).members().get(shownId(el)) ?? [];
   if (is(el, 'bpmn:TextAnnotation')) props['text'] = peek<string>(el, 'text');
   if (is(el, 'bpmn:Process')) props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
   if (is(el, 'bpmn:Error')) props['errorCode'] = peek<string>(el, 'errorCode');

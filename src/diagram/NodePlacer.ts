@@ -112,7 +112,7 @@ import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProce
 import type { DEdge, DShape, Plane, ShapeKind } from './types.js';
 import type { Semantics } from './Semantics.js';
 import { attachedSide, defaultSides } from './utils/sides.js';
-import { routeOrthogonal } from './router.js';
+import { OrthogonalRouter } from './OrthogonalRouter.js';
 import { Drawing } from './Drawing.js';
 import { labelSize } from './utils/text.js';
 
@@ -186,10 +186,6 @@ const OPEN_PER_SHAPE = 3;
 const OPEN_MAX_SHAPES = 40;
 /** a boundary event's path above its host instead of below (the convention): a clean row below costs less */
 const TOP_ROW = 160;
-
-/* ------------------------------------------------------------------ */
-/* flow nodes                                                           */
-/* ------------------------------------------------------------------ */
 
 interface Probe {
   id: string;
@@ -283,10 +279,6 @@ export class NodePlacer {
     this.continued = st.continued && new Set(st.continued);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* spacing                                                              */
-  /* ------------------------------------------------------------------ */
-
   private drawing(plane: Plane): Drawing {
     let d = this.drawings.get(plane);
     if (!d) this.drawings.set(plane, (d = new Drawing(plane)));
@@ -301,14 +293,6 @@ export class NodePlacer {
     }
     return s;
   }
-
-  /* ------------------------------------------------------------------ */
-  /* semantic neighbourhood                                               */
-  /* ------------------------------------------------------------------ */
-
-  /* ------------------------------------------------------------------ */
-  /* shapes                                                               */
-  /* ------------------------------------------------------------------ */
 
   private defaultSize(el: El): { width: number; height: number } {
     if (is(el, 'bpmn:Event')) return { ...SIZES.event };
@@ -473,10 +457,6 @@ export class NodePlacer {
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* free space                                                           */
-  /* ------------------------------------------------------------------ */
-
   /** True when `frame` is `s`'s frame or an ancestor of it. */
   private within(plane: Plane, s: DShape, frame: DShape | undefined): boolean {
     return inFrame(plane, s, frame);
@@ -632,7 +612,7 @@ export class NodePlacer {
     const lines = this.drawing(plane).routingLines().map((l) => this.shiftedLine(l, shift));
     const hostBox = host ? this.shiftedBox(host.bounds, shift) : undefined;
     const sourceSides = from.kind === 'boundary' && hostBox ? [attachedSide(from.bounds, hostBox)] : defaultSides(from.kind, 'source');
-    const pts = routeOrthogonal({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines });
+    const pts = OrthogonalRouter.route({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines });
     let cost = 0;
     for (let i = 0; i + 1 < pts.length; i++) cost += Math.abs(pts[i + 1]!.x - pts[i]!.x) + Math.abs(pts[i + 1]!.y - pts[i]!.y);
     cost = cost * 0.5 + (pts.length - 2) * 30;
@@ -781,10 +761,6 @@ export class NodePlacer {
     if (cand.top) this.seatOnTop(plane, anchor, cand.top);
     this.placeAt(plane, id, cand.x, this.intoOwnLane(plane, probe, cand.x, cand.c, cand.size, [], anchor), cand.size);
   }
-
-  /* ------------------------------------------------------------------ */
-  /* lanes                                                                */
-  /* ------------------------------------------------------------------ */
 
   /** Row centres used in a lane (clustered node centres), most populated first. */
   private laneRows(plane: Plane, lane: DShape, tol: number, exclude: ReadonlySet<string>): number[] {
@@ -1386,10 +1362,6 @@ export class NodePlacer {
     }
     return skipped;
   }
-
-  /* ------------------------------------------------------------------ */
-  /* artifacts                                                            */
-  /* ------------------------------------------------------------------ */
 
   /** Elements an artifact is connected to (associations, data associations), in model order. */
   private artifactAnchors(id: string): string[] {

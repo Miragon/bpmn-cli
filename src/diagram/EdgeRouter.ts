@@ -61,7 +61,8 @@
  *    (PlaneAnalysis.ts) applies the same rule.
  */
 import { attachedSide, defaultSides, gatewaySide } from './utils/sides.js';
-import { crossings, routeOrthogonal, type RouteRequest } from './router.js';
+import { crossings } from './utils/routing.js';
+import { OrthogonalRouter, type RouteRequest } from './OrthogonalRouter.js';
 import type { Side, DEdge, DShape, Plane } from './types.js';
 import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './utils/geom.js';
 import { isLeaf } from './utils/plane.js';
@@ -297,7 +298,7 @@ export class EdgeRouter {
         const dock = this.flowDock(flow, shape.bounds, obstacles);
         if (dock?.clear) return s ? this.straight(s.bounds, dock.at) : this.straight(dock.at, shape.bounds);
         if (dock) {
-          const pts = roundPoints(routeOrthogonal({ source: shape.bounds, target: dock.at, obstacles, lines: opts.lines, ...(dock.sides ? { targetSides: dock.sides } : {}) }));
+          const pts = roundPoints(OrthogonalRouter.route({ source: shape.bounds, target: dock.at, obstacles, lines: opts.lines, ...(dock.sides ? { targetSides: dock.sides } : {}) }));
           return s ? pts : pts.reverse();
         }
       }
@@ -305,7 +306,7 @@ export class EdgeRouter {
       if (!s || !t) return line;
       const obstacles = this.obstaclesFor(e, s, t);
       if (!obstacles.some((o) => pathHits(line, o))) return line;
-      return roundPoints(routeOrthogonal({ source: s.bounds, target: t.bounds, obstacles, lines: opts.lines }));
+      return roundPoints(OrthogonalRouter.route({ source: s.bounds, target: t.bounds, obstacles, lines: opts.lines }));
     }
     if (!s || !t) return undefined;
     const obstacles = this.obstaclesFor(e, s, t);
@@ -329,10 +330,10 @@ export class EdgeRouter {
       sourceAvoid: opts.sourceSides ? [] : this.takenSides(ends(s), false),
       ...(frame ? { frame } : {}),
     };
-    const pts = routeOrthogonal({ ...request, targetAvoid: taken(false) });
+    const pts = OrthogonalRouter.route({ ...request, targetAvoid: taken(false) });
     // a join's entries share its top / bottom vertex (following the other entries' common tail into it is no overlap), never at the price of a further crossing
     if (!targetEnds.some((x) => !x.out && (x.side === 'top' || x.side === 'bottom'))) return roundPoints(pts);
-    const merged = routeOrthogonal({ ...request, targetMerge: true, targetAvoid: taken(true) });
+    const merged = OrthogonalRouter.route({ ...request, targetMerge: true, targetAvoid: taken(true) });
     return roundPoints(crossings(merged, opts.lines) <= crossings(pts, opts.lines) ? merged : pts);
   }
 

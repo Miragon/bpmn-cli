@@ -17,12 +17,16 @@ a new concept gets its line here first.
 | **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/types.ts`; read by `diagram/DiagramReader.ts`, written by `diagram/PlaneWriter.ts`). |
 | **Semantics** | The index of the semantic model a drawing is read against: elements by id, lanes, pools, scopes (`diagram/Semantics.ts`). |
 | **Checkpoint** | A saved state of a plane, to try a change and undo it (`diagram/PlaneCheckpoint.ts`). |
+| **Groups** | The `bpmn:Group` boxes of a document: remembered before a full redraw and drawn again around their members (`diagram/Groups.ts`). |
+| **Sticky** | A design-iq sticky note (`bpmiq:sticky`) that follows the flow node nearest to it (`diagram/Stickies.ts`). |
+| **Drawn element ids** | Ids given to the elements a full redraw draws that have none, in the file's id style (`diagram/DrawnElementIds.ts`). |
 | **DI ids** | The ids of DI elements in the file's style: new ones (`diagram/DiIds.ts`) and the old ones kept over a full redraw (`diagram/DiIdMemo.ts`). |
 | **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`diagram/Drawing.ts`). |
 | **Frame** | A pool, lane or expanded sub-process: a shape that holds other shapes (`diagram/FrameEditor.ts` draws, removes, collapses and expands them). |
 | **Space tool** | The modeler's tool that moves everything beyond a line to make or close room, growing the frames it crosses (`diagram/SpaceTool.ts`). |
 | **Separation** | Local overlap removal: the shapes that conflict with new or moved ones give way (`diagram/Separation.ts`). |
 | **Edge router** | Routes and repairs single connections of a kept drawing with the BPMN side conventions (`diagram/EdgeRouter.ts`). |
+| **Orthogonal router** | Finds the cheapest orthogonal route of one connection between two boxes: A* over a visibility grid (`diagram/OrthogonalRouter.ts`, `diagram/RouteGrid.ts`, `diagram/SearchHeap.ts`). |
 | **Label placer** | Puts external labels on the first free spot around their shape or flow (`diagram/LabelPlacer.ts`). |
 | **Trial** | A change of the drawing that is measured and kept only when it makes the layout no worse (`diagram/TrialGuard.ts`). |
 | **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`diagram/DrawingSnapshot.ts`). |

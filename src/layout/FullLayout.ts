@@ -23,7 +23,7 @@
  * redraw put shapes on it; LayoutResult.notes says so). The clean engine
  * keeps the unconnected parts of a group together.
  * Before they run, every element they draw that has no id gets one in the
- * file's id style (diagram/drawn-ids.ts; LayoutResult.givenIds), since DI
+ * file's id style (diagram/DrawnElementIds.ts; LayoutResult.givenIds), since DI
  * refers to elements by id.
  *
  * Two things the alpha layouter does not handle are patched around here:
@@ -39,8 +39,8 @@
  *     convention) when that spot is free.
  */
 import type { LayoutWarning } from 'bpmn-auto-layout';
-import { giveDrawnElementsIds, type GivenId } from '../diagram/drawn-ids.js';
-import { membersOf, redrawGroups, rememberGroups, undrawnGroups, type RedrawnGroups } from '../diagram/groups.js';
+import { DrawnElementIds, type GivenId } from '../diagram/DrawnElementIds.js';
+import { Groups, type RedrawnGroups } from '../diagram/Groups.js';
 import { diIdsFit } from '../diagram/utils/di-ids.js';
 import { DiIdMemo } from '../diagram/DiIdMemo.js';
 import type { IdRequest } from '../ids/style.js';
@@ -75,7 +75,7 @@ export interface LayoutResult {
   xml: string;
   warnings: LayoutWarningInfo[];
   expanded: string[];
-  /** elements without id that got one so that the diagram can refer to them (diagram/drawn-ids.ts) */
+  /** elements without id that got one so that the diagram can refer to them (diagram/DrawnElementIds.ts) */
   givenIds?: GivenId[];
   /** what the caller should know about the drawing (a group around nothing kept or moved) */
   notes?: string[];
@@ -118,14 +118,14 @@ export class FullLayout {
    */
   async run(): Promise<LayoutResult> {
     // the DI refers to elements by id: an element without one gets one first (never bpmnElement="undefined")
-    const givenIds = giveDrawnElementsIds(this.model.definitions, this.opts.allocateId);
+    const givenIds = new DrawnElementIds(this.model.definitions).give(this.opts.allocateId);
     const given = givenIds.length ? { givenIds } : {};
     const expanded = resolveExpanded(this.model, this.opts);
     const diIds = DiIdMemo.remember(this.model.definitions);
-    const groups = [...rememberGroups(this.model.definitions), ...undrawnGroups(this.model.definitions)];
+    const groups = [...new Groups(this.model.definitions).remembered(), ...new Groups(this.model.definitions).undrawn()];
     if ((this.opts.engine ?? 'clean') === 'clean') {
-      const { warnings } = layoutClean(this.model, expanded, membersOf(groups));
-      const redrawn = redrawGroups(this.model.moddle, this.model.definitions, groups);
+      const { warnings } = layoutClean(this.model, expanded, Groups.membersOf(groups));
+      const redrawn = new Groups(this.model.definitions).redraw(this.model.moddle, groups);
       diIds.restore(this.model.definitions);
       const { xml } = await this.model.moddle.toXML(this.model.definitions, { format: true });
       return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
@@ -148,7 +148,7 @@ export class FullLayout {
     const laidOut = await parseXml(result.xml);
     temporary.withdraw(laidOut.definitions);
     const fixed = new Set(missingDi ? new AssociationEdges(laidOut).synthesise() : []);
-    const redrawn = redrawGroups(laidOut.moddle, laidOut.definitions, groups);
+    const redrawn = new Groups(laidOut.definitions).redraw(laidOut.moddle, groups);
     const placed = new Set([...redrawn.drawn, ...redrawn.kept]);
     diIds.restore(laidOut.definitions);
     return {

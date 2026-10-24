@@ -118,17 +118,17 @@ import { CliError, type Warning } from '../shared/CliError.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { FullLayout, type LayoutWarningInfo, type LayoutEngine } from '../layout/FullLayout.js';
 import { SUB_PROCESS_TYPES } from '../diagram/utils/expansion.js';
-import type { GivenId } from '../diagram/drawn-ids.js';
+import type { GivenId } from '../diagram/DrawnElementIds.js';
 import { DiagramGeometry } from '../layout/DiagramGeometry.js';
 import { IncrementalLayout, type IncrementalReport } from '../layout/IncrementalLayout.js';
 import { Snapshot } from '../layout/Snapshot.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/utils/problems.js';
 import { FormatOps, type FormatEntry, type FormatResult } from '../format/FormatOps.js';
-import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
+import { Stickies, type ResolvedAnchor, type StickyAnchor } from '../diagram/Stickies.js';
 import { applyColors, colorsOf } from '../diagram/utils/colors.js';
 import { DiIds } from '../diagram/DiIds.js';
-import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
+import { Groups } from '../diagram/Groups.js';
 import { kindLabel } from '../model/kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/mirror.js';
 import { addTo, is, layoutRoot, many, parseXml, serialize, type El } from '../model/utils/moddle.js';
@@ -589,7 +589,7 @@ interface Before {
 async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: boolean, baseline: string | undefined): Promise<Before> {
   const snapshot = Snapshot.take(doc.definitions);
   const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
-  const before: Before = { snapshot, stickies: stickyAnchors(doc.definitions) };
+  const before: Before = { snapshot, stickies: new Stickies(doc.definitions).anchors() };
   if (hasDiagram) before.metrics = LayoutAnalysis.of(doc.definitions);
   if (mode === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = baseline ?? (await doc.toXml());
   return before;
@@ -638,7 +638,7 @@ function resolveAnchors(doc: Doc, anchors: readonly StickyAnchor[]): ResolvedAnc
 async function moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ xml: string; moved: Array<{ sticky: string; node: string }> }> {
   if (!anchors.length) return { xml, moved: [] };
   const model = await parseXml(xml);
-  const moved = followStickies(model.definitions, anchors);
+  const moved = new Stickies(model.definitions).follow(anchors);
   return { xml: moved.length ? await serialize(model) : xml, moved };
 }
 
@@ -725,7 +725,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
   const report: IncrementalReport = await IncrementalLayout.run(doc, before.snapshot, { relocated, created, ...expansion });
-  const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), new DiIds(doc.definitions).shape);
+  const groups = new Groups(doc.definitions).redraw(doc.moddle, new Groups(doc.definitions).undrawn(), new DiIds(doc.definitions).shape);
   const xml = await doc.toXml();
   return {
     xml,

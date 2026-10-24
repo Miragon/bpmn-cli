@@ -31,7 +31,6 @@ export const SIZES = {
   outerMargin: 80,
 } as const;
 
-
 export function annotationSize(text: string | undefined): { width: number; height: number } {
   const len = (text ?? '').length;
   const width = Math.min(300, Math.max(100, Math.ceil((len * 6.5 + 24) / 20) * 20));

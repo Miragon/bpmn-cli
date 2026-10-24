@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
-import { crossings } from '../src/diagram/router.js';
+import { crossings } from '../src/diagram/utils/routing.js';
 import { labelAt } from '../src/diagram/utils/labels.js';
 import { renderLayout } from '../src/report/view-text.js';
 import { Doc } from '../src/model/document.js';
