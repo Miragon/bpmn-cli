@@ -68,8 +68,9 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { kindOf, synchronises } from '../model/kinds.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
-import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
+import { detachNode, eventGatewayRule, eventGatewayTargetProblem, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
+
+import { descriptorOf, idOf, isEl, ownValue } from './utils/elements.js';
 import type { RemoveOp } from './types.js';
 
 /** Removes every element named in `op.ids` (cascading), bridging flows around single nodes. */
@@ -245,19 +246,19 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
   if (outName) cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
   if (outFlow.get<El | undefined>('conditionExpression')) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
   removeSequenceFlow(doc, outFlow, cs);
-  cs.remove(flowChange(outFlow));
+  cs.remove(ChangeSet.flowEntryOf(outFlow));
   const bridged: string[] = [];
   for (const inFlow of incoming) {
     const predecessor = inFlow.get<El>('sourceRef');
     const already = doc.outgoing(predecessor).some((f) => f !== inFlow && f.get<El | undefined>('targetRef') === successor);
     if (predecessor === successor || predecessor === node || already) {
       removeSequenceFlow(doc, inFlow, cs);
-      cs.remove(flowChange(inFlow));
+      cs.remove(ChangeSet.flowEntryOf(inFlow));
       cs.note(`not bridged: ${idOf(predecessor)} ${predecessor === successor ? 'is the successor itself' : predecessor === node ? 'is the removed node' : `already flows to ${idOf(successor)}`}`);
       continue;
     }
     const renamed = redirectFlow(doc, inFlow, { target: successor });
-    cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
+    cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
     bridged.push(idOf(predecessor));
   }
   cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
@@ -438,7 +439,7 @@ function reportable(el: El): boolean {
 }
 
 function removedEntry(el: El) {
-  return is(el, 'bpmn:SequenceFlow') ? flowChange(el) : changeOf(el);
+  return is(el, 'bpmn:SequenceFlow') ? ChangeSet.flowEntryOf(el) : ChangeSet.entryOf(el);
 }
 
 /* ------------------------------------------------------------------ */
@@ -450,7 +451,7 @@ export function cascadeRemove(doc: Doc, el: El, cs: ChangeSet): void {
   if (!isAttached(doc, el)) return;
   if (is(el, 'bpmn:SequenceFlow')) {
     removeSequenceFlow(doc, el);
-    cs.remove(flowChange(el));
+    cs.remove(ChangeSet.flowEntryOf(el));
     cleanupReferences(doc, new Set([el]), cs);
     return;
   }
@@ -535,7 +536,7 @@ function removeParticipant(doc: Doc, participant: El, cs: ChangeSet): void {
   const process = participant.get<El | undefined>('processRef');
   detachFromParent(participant);
   doc.ids.release(idOf(participant));
-  cs.remove(changeOf(participant));
+  cs.remove(ChangeSet.entryOf(participant));
   doc.invalidate();
   cleanupReferences(doc, new Set([participant]), cs);
   if (process && isAttached(doc, process) && !doc.participants().some((p) => p.get<El | undefined>('processRef') === process)) {
@@ -583,12 +584,12 @@ function cleanupReferences(doc: Doc, removed: Set<El>, cs: ChangeSet): void {
     }
     if (isMany) {
       removeFrom(holder, prop, target);
-      if (is(holder, 'bpmn:Lane')) cs.change(changeOf(holder, `member ${targetId} removed`));
+      if (is(holder, 'bpmn:Lane')) cs.change(ChangeSet.entryOf(holder, `member ${targetId} removed`));
       continue;
     }
     holder.set(prop, undefined);
     const owner = nearestWithId(holder);
-    if (owner && prop !== 'default') cs.change(changeOf(owner, `${prop} cleared (${targetId} removed)`));
+    if (owner && prop !== 'default') cs.change(ChangeSet.entryOf(owner, `${prop} cleared (${targetId} removed)`));
   }
   doc.invalidate();
 }

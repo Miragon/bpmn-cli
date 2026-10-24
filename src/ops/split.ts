@@ -37,7 +37,7 @@ import { withSuffix } from '../ids/utils/slug.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
-import { createSequenceFlow, flowChange, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
+import { createSequenceFlow, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
 import type { AddOp, FlowOptions, SplitBranch, SplitOp } from './types.js';
 
 
@@ -177,12 +177,12 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   if (spliced) {
     const renamed = redirectFlow(doc, spliced, { target: gateway });
     insertAfterInScope(scope, spliced, gateway);
-    cs.change(flowChange(spliced, `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}`));
+    cs.change(ChangeSet.flowEntryOf(spliced, `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}`));
     cs.note(`inserted ${gatewayId} between ${op.after} and ${idOf(successor!)}`);
   } else {
     const flow = createSequenceFlow(doc, anchor, gateway);
     insertAfterInScope(scope, flow, gateway);
-    cs.create(flowChange(flow));
+    cs.create(ChangeSet.flowEntryOf(flow));
     cs.note(`appended ${gatewayId} after ${op.after}`);
   }
   const gwEntry = cs.created.find((c) => c.id === gatewayId);

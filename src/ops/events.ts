@@ -35,6 +35,7 @@ import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import type { TriggerOptions } from './types.js';
+import { vendorContent } from './utils/elements.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 
 export interface TriggerDetails {
@@ -315,18 +316,6 @@ function updateDefinition(doc: Doc, event: El, def: El, trigger: Exclude<Trigger
 /* ------------------------------------------------------------------ */
 /* replacement (trigger kind change)                                    */
 /* ------------------------------------------------------------------ */
-
-/**
- * Vendor content of a nested element (event definition, loop characteristics,
- * expression): prefixed attributes, extension elements, documentation.
- */
-export function vendorContent(def: El): string[] {
-  const out: string[] = [];
-  for (const [k, v] of Object.entries(def.$attrs ?? {})) if (!k.startsWith('xmlns') && !k.startsWith('xsi:') && typeof v !== 'object') out.push(k);
-  for (const ext of def.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) out.push(ext.$type);
-  if ((def.get<El[] | undefined>('documentation') ?? []).length) out.push('documentation');
-  return out;
-}
 
 /** Removes the event's definitions (ids released) and reports the vendor content that goes with them. */
 function dropDefinitions(doc: Doc, event: El, trigger: Trigger): Warning[] {

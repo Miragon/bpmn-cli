@@ -33,7 +33,7 @@ import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { bindRefAs, ensureRootElement } from './events.js';
-import { createSequenceFlow, flowChange, warnEventGatewayFlow } from './flows.js';
+import { createSequenceFlow, warnEventGatewayFlow } from './flows.js';
 import type { ConnectOp } from './types.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
@@ -249,7 +249,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
         ...(op.language ? { language: op.language } : {}),
         ...(op.default ? { isDefault: true } : {}),
       });
-      cs.create(flowChange(flow));
+      cs.create(ChangeSet.flowEntryOf(flow));
       warnEventGatewayFlow(doc, flow, cs);
       if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
       const out = doc.outgoing(source).length;

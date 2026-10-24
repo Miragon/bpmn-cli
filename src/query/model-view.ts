@@ -46,7 +46,9 @@ import { groupMembers } from '../diagram/groups.js';
 import { decisionLinkOf } from '../ops/decision.js';
 import { describeTrigger } from '../ops/events.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
-import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
+import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
+import { readProperties } from '../ops/set.js';
+import { vendorAttributes } from '../ops/utils/elements.js';
 import { flowOrder, repairFlowLinks, validateDoc } from '../validate/structural.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 

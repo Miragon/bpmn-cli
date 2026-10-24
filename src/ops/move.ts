@@ -82,10 +82,11 @@ import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
-import { applyFlowOptions, carryAssociations, flowChange, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
+import { applyFlowOptions, carryAssociations, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
-import { changeOf, idOf, renameId } from './set.js';
+import { renameId } from './set.js';
+import { idOf } from './utils/elements.js';
 import type { MoveOp } from './types.js';
 
 /** Moves the nodes of `op.ids` (see module contract). */
@@ -258,7 +259,7 @@ function optionsOnInFlow(doc: Doc, flow: El | undefined, p: PlacementOptions, cs
   const options = new ChangeSet();
   applyFlowOptions(doc, flow, p, options);
   if (!renamed && !options.changed.length) return;
-  cs.change(flowChange(flow, `${flowChange(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
+  cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
 }
 
 /**
@@ -318,7 +319,7 @@ function leaveScope(doc: Doc, moved: El[], oldScope: El | undefined, targetScope
     if (dropLanes) {
       for (const lane of doc.lanesOf(n)) {
         removeFrom(lane, 'flowNodeRef', n);
-        cs.change(changeOf(lane, `member ${idOf(n)} removed`));
+        cs.change(ChangeSet.entryOf(lane, `member ${idOf(n)} removed`));
       }
     }
     if (oldScope) removeFrom(oldScope, 'flowElements', n);
@@ -346,7 +347,7 @@ function fixFlows(doc: Doc, moved: El[], scope: El, cs: ChangeSet): void {
         continue;
       }
       removeSequenceFlow(doc, flow, cs);
-      cs.remove(flowChange(flow));
+      cs.remove(ChangeSet.flowEntryOf(flow));
       cs.warn({
         code: 'W_FLOW_DROPPED',
         message: `Sequence flow ${idOf(flow)} (${idOf(src)} -> ${idOf(tgt)}) was removed: it would cross scopes after the move`,
@@ -416,10 +417,10 @@ function bridgeGroup(doc: Doc, group: El[], cs: ChangeSet): void {
   }
   carryAssociations(doc, outFlow, inFlow, cs);
   removeSequenceFlow(doc, outFlow, cs);
-  cs.remove(flowChange(outFlow));
+  cs.remove(ChangeSet.flowEntryOf(outFlow));
   reserveIds(doc, [idOf(outFlow)]);
   const renamed = redirectFlow(doc, inFlow, { target: successor });
-  cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
+  cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
   cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
 }
 
@@ -514,7 +515,7 @@ function moveNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet, explic
     const warning = laneInheritedWarning(idOf(node), inherited);
     if (warning) cs.warn(warning);
   }
-  cs.change(changeOf(node, `moved ${describePlacement(p)}`));
+  cs.change(ChangeSet.entryOf(node, `moved ${describePlacement(p)}`));
   cs.relocated.push(idOf(node));
   doc.invalidate();
   return dropped;
@@ -538,7 +539,7 @@ function reportPutBack(doc: Doc, spare: Map<El, SpareFlow>, cs: ChangeSet): Drop
     const lost = label && back ? giveBack(node, flow, label, cs) : '';
     cs.removed = cs.removed.filter((c) => c.id !== id);
     cs.created = cs.created.filter((c) => c.id !== id);
-    cs.change(flowChange(flow, `${flowChange(flow).detail}${back ? lost : ` (was -> ${idOf(target)})`}`));
+    cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${back ? lost : ` (was -> ${idOf(target)})`}`));
     if (!label || back) continue;
     const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
     const warnings: Warning[] = [];
@@ -593,9 +594,9 @@ function giveBackLate(doc: Doc, dropped: DroppedLabel[], cs: ChangeSet): void {
     if (doc.get(idOf(flow)) !== flow || flow.get<El>('sourceRef') !== node || flow.get<El>('targetRef') !== target) continue;
     cs.warnings = cs.warnings.filter((w) => !warnings.includes(w));
     const lost = giveBack(node, flow, label, cs);
-    const change = flowChange(flow);
+    const change = ChangeSet.flowEntryOf(flow);
     cs.changed = cs.changed.filter((c) => c.id !== change.id);
-    cs.change(flowChange(flow, `${change.detail}${lost}`));
+    cs.change(ChangeSet.flowEntryOf(flow, `${change.detail}${lost}`));
   }
 }
 
@@ -684,7 +685,7 @@ function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBe
     if (returned.length) {
       giveBack(node, flow, { name: returned.some((l) => l.what === 'name') ? name : undefined, condition: returned.some((l) => l.what === 'condition') ? condition : undefined, isDefault: false }, cs);
       cs.changed = cs.changed.filter((c) => c.id !== id);
-      cs.change(flowChange(flow));
+      cs.change(ChangeSet.flowEntryOf(flow));
     }
     for (const { what, at } of lost.filter((l) => !returned.includes(l))) {
       const why = `while moving ${idOf(node)}: the bridge ${idOf(at)} took it, and a later node of the move removed ${idOf(at)}`;
@@ -699,7 +700,7 @@ function reportBridgesKept(doc: Doc, made: BridgeMade[], before: Map<El, LabelBe
       return `its ${list} ${items.length > 1 || notes > 1 ? 'stay' : 'stays'} with the bridge ${idOf(at)}`;
     }).join('; ');
     const last = cs.changed.map((c) => c.id).lastIndexOf(id);
-    const entry = last === -1 ? flowChange(flow) : cs.changed[last]!;
+    const entry = last === -1 ? ChangeSet.flowEntryOf(flow) : cs.changed[last]!;
     const detail = entry.detail ?? '';
     const said = /\(was -> [^()]*\)$/.test(detail) ? `${detail.slice(0, -1)}; ${clause})` : `${detail}${detail ? ' ' : ''}(${clause})`;
     if (last === -1) cs.change(ChangeSet.about({ ...entry, detail: said }, flow));
@@ -730,7 +731,7 @@ function moveInto(doc: Doc, nodes: El[], p: PlacementOptions, cs: ChangeSet): vo
     leaveScope(doc, [node, ...boundaries], oldScope, scope, cs);
     insertAfterInScope(scope, undefined, node, ...boundaries);
     moved.push(node, ...boundaries);
-    cs.change(changeOf(node, `moved into ${idOf(scope)}`));
+    cs.change(ChangeSet.entryOf(node, `moved into ${idOf(scope)}`));
     cs.relocated.push(idOf(node));
   }
   fixFlows(doc, moved, scope, cs);
@@ -756,6 +757,6 @@ function moveOnto(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet): void 
   placeNode(doc, node, { on: p.on! }, cs);
   fixFlows(doc, [node], scope, cs);
   inheritLane(doc, node, [], host, scope);
-  cs.change(changeOf(node, `moved onto ${idOf(host)}${oldHost ? ` (was ${idOf(oldHost)})` : ''}`));
+  cs.change(ChangeSet.entryOf(node, `moved onto ${idOf(host)}${oldHost ? ` (was ${idOf(oldHost)})` : ''}`));
   doc.invalidate();
 }

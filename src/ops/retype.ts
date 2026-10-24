@@ -54,22 +54,8 @@ import { coversProfileSubjects } from './covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
 import { dropIgnoredConditions } from './flows.js';
-import {
-  assertMessageFlowsFit,
-  changeOf,
-  currentTrigger,
-  descriptorOf,
-  idOf,
-  idStateOf,
-  interruptingOnly,
-  isEl,
-  messageFlowConflicts,
-  ownValue,
-  recordIdState,
-  vendorAttributes,
-  warnNonInterruptingDropped,
-  type PropDescriptor,
-} from './set.js';
+import { assertMessageFlowsFit, currentTrigger, idStateOf, interruptingOnly, messageFlowConflicts, recordIdState, warnNonInterruptingDropped } from './set.js';
+import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
@@ -213,7 +199,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     from === to && sameTrigger
       ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
       : `retyped from ${oldLabel} to ${kindLabel(target)}`;
-  cs.change(changeOf(target, detail));
+  cs.change(ChangeSet.entryOf(target, detail));
   bindRefAs(cs, op.refAs, target);
   return cs;
 }

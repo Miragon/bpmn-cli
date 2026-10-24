@@ -61,22 +61,6 @@ function label(el: El): string {
   return `${kindLabel(el)} ${idOf(el)}${name ? ` "${name}"` : ''}`;
 }
 
-/** The change entry of a sequence flow: its ends, or `detail` (the entry is about the flow: ChangeSet.rename). */
-export function flowChange(flow: El, detail?: string): { id: string; kind: string; name?: string; detail: string } {
-  const src = flow.get<El | undefined>('sourceRef');
-  const tgt = flow.get<El | undefined>('targetRef');
-  const name = flow.get<string | undefined>('name');
-  return ChangeSet.about(
-    {
-      id: idOf(flow),
-      kind: 'sequenceFlow',
-      ...(name ? { name } : {}),
-      detail: detail ?? `${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}`,
-    },
-    flow,
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* declaration order                                                    */
 /* ------------------------------------------------------------------ */
@@ -784,16 +768,16 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
       } else if (outCond) cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)}`, element: idOf(outFlow) });
       took.associations = carryAssociations(doc, outFlow, inFlow, cs);
       removeSequenceFlow(doc, outFlow, cs);
-      cs.remove(flowChange(outFlow));
+      cs.remove(ChangeSet.flowEntryOf(outFlow));
       const renamed = redirectFlow(doc, inFlow, { target: successor });
-      cs.change(flowChange(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
+      cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${idOf(node)})${renamedNote(renamed)}`));
       cs.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
       return { flow: inFlow, from: outFlow, took };
     }
   }
   // a self-loop is both incoming and outgoing: remove and report it once
   for (const f of new Set([...incoming, ...outgoing])) {
-    cs.remove(flowChange(f));
+    cs.remove(ChangeSet.flowEntryOf(f));
     removeSequenceFlow(doc, f, cs);
   }
   return undefined;
@@ -886,7 +870,7 @@ export function applyFlowOptions(doc: Doc, flow: El, opts: FlowOptions, cs: Chan
     setDefaultFlow(doc, flow, true);
     touched = true;
   }
-  if (touched) cs.change(flowChange(flow));
+  if (touched) cs.change(ChangeSet.flowEntryOf(flow));
 }
 
 const FLOW_OPTION_FLAGS: Array<[keyof FlowOptions, string]> = [
@@ -939,8 +923,8 @@ function spliceWithOptions(doc: Doc, node: El, flow: El, p: PlacementOptions, cs
   const src = flow.get<El>('sourceRef');
   const tgt = flow.get<El>('targetRef');
   const { second, renamedFrom } = spliceIntoFlow(doc, flow, node, outFlow, p.flowId);
-  cs.create(flowChange(second));
-  cs.change(flowChange(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
+  cs.create(ChangeSet.flowEntryOf(second));
+  cs.change(ChangeSet.flowEntryOf(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
   cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
   applyFlowOptions(doc, flow, p, cs);
   return flow;
@@ -1003,7 +987,7 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
     if (is(anchor, 'bpmn:Gateway') || out.length === 0) {
       insertAfterInScope(scope, lastFlowOf(scope, anchor) ?? anchor, node);
       entryFlow = createSequenceFlow(doc, anchor, node, { ...flowAttrs(p), ...reused(anchor) }, node);
-      cs.create(flowChange(entryFlow));
+      cs.create(ChangeSet.flowEntryOf(entryFlow));
       cs.note(`appended after ${idOf(anchor)}`);
     } else if (out.length === 1) {
       entryFlow = spliceWithOptions(doc, node, out[0]!, p, cs, outFlow);
@@ -1022,7 +1006,7 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
       // prepend: no flow into the node exists; the flow options go to the one flow this creates (node -> anchor)
       insertBeforeInScope(scope, anchor, node);
       const flow = createSequenceFlow(doc, node, anchor, { ...flowAttrs(p), ...reused(node) }, node);
-      cs.create(flowChange(flow));
+      cs.create(ChangeSet.flowEntryOf(flow));
       cs.note(`prepended before ${idOf(anchor)}`);
       const used = usedFlowOptions(p);
       if (used.length) {
@@ -1042,7 +1026,7 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
   if (p.to) {
     const target = doc.require(p.to, 'bpmn:FlowNode');
     const flow = createSequenceFlow(doc, node, target, {}, undefined);
-    cs.create(flowChange(flow));
+    cs.create(ChangeSet.flowEntryOf(flow));
     if (!is(target, 'bpmn:Gateway') && doc.incoming(target).length > 1) {
       cs.warn({
         code: 'W_IMPLICIT_JOIN',

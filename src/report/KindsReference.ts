@@ -4,7 +4,8 @@ import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '.
 import { SWATCHES } from '../diagram/write.js';
 import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
 import { SINGLE_TOP } from '../ops/ext.js';
-import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
+import { NESTED_SLOTS, NESTED_TYPES, type NestedSlot } from '../ops/utils/nested-slots.js';
+import { nestedKeysOf, SET_KEYS, type SetKeyDoc } from '../ops/set.js';
 import { OP_NAMES } from '../ops/types.js';
 import { ZEEBE } from '../platform/ZeebeDescriptor.js';
 import { usageError } from '../shared/utils/errors.js';

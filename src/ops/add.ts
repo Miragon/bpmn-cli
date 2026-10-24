@@ -68,7 +68,8 @@ import { ElementLabels, type AnchorContext } from '../ids/ElementLabels.js';
 import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
 import type { ContextWord } from '../ids/utils/id-words.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
-import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
+import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
+import { typeLabel } from './utils/elements.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { renamedNote } from '../model/utils/renames.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
@@ -323,11 +324,6 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
   }
 }
 
-function rootLabel(el: El): string {
-  const local = localType(el);
-  return local.charAt(0).toLowerCase() + local.slice(1);
-}
-
 /** Reports root elements (messages, errors, ...) that appeared during `fn`. */
 function reportNewRoots(doc: Doc, cs: ChangeSet, fn: () => void): void {
   const before = new Set(many(doc.definitions, 'rootElements'));
@@ -335,7 +331,7 @@ function reportNewRoots(doc: Doc, cs: ChangeSet, fn: () => void): void {
   for (const root of many(doc.definitions, 'rootElements')) {
     if (before.has(root)) continue;
     const name = root.get<string | undefined>('name');
-    cs.create({ id: idOf(root), kind: rootLabel(root), ...(name ? { name } : {}), detail: 'root element' });
+    cs.create({ id: idOf(root), kind: typeLabel(root), ...(name ? { name } : {}), detail: 'root element' });
   }
 }
 

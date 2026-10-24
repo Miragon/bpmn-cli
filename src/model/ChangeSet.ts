@@ -2,7 +2,8 @@
  * What a mutation did. Rendered as text or JSON after every write.
  */
 import type { Warning } from '../shared/CliError.js';
-import type { El } from './utils/moddle.js';
+import { kindLabel, kindOf } from './kinds.js';
+import { idOf, is, nameOf, type El } from './utils/moddle.js';
 import { renamedNote } from './utils/renames.js';
 
 export interface Change {
@@ -39,8 +40,8 @@ export interface Rename {
 
 export class ChangeSet {
   /**
-   * The element a change entry or a rename is about (ops/flows.ts flowChange,
-   * ops/set.ts changeOf, EditContext.recordRename): rename renames only the
+   * The element a change entry or a rename is about (entryOf, flowEntryOf,
+   * EditContext.recordRename): rename renames only the
    * entries of the renamed element, not those of an element that took the id
    * the rename freed. Kept out of the objects, so JSON and the entries' shape
    * stay as they are.
@@ -54,6 +55,38 @@ export class ChangeSet {
   static about<T extends object>(entry: T, el: El | undefined): T {
     if (el) ChangeSet.elements.set(entry, el);
     return entry;
+  }
+
+  /** The entry of an element (about it: rename): its id (`''` without one), kind label (kinds table first, then lowerCamel type), name and `detail`. */
+  static entryOf(el: El, detail?: string): Change {
+    const name = nameOf(el);
+    return ChangeSet.about({ id: el.get<string | undefined>('id') ?? '', kind: ChangeSet.kindOf(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
+  }
+
+  /** The entry of a sequence flow: its ends, or `detail` (about the flow: rename). */
+  static flowEntryOf(flow: El, detail?: string): { id: string; kind: string; name?: string; detail: string } {
+    const src = flow.get<El | undefined>('sourceRef');
+    const tgt = flow.get<El | undefined>('targetRef');
+    const name = flow.get<string | undefined>('name');
+    return ChangeSet.about(
+      {
+        id: idOf(flow),
+        kind: 'sequenceFlow',
+        ...(name ? { name } : {}),
+        detail: detail ?? `${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}`,
+      },
+      flow,
+    );
+  }
+
+  private static kindOf(el: El): string {
+    if (kindOf(el)) return kindLabel(el);
+    if (is(el, 'bpmn:SequenceFlow')) return 'sequenceFlow';
+    if (is(el, 'bpmn:MessageFlow')) return 'messageFlow';
+    if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
+    if (is(el, 'bpmn:Association')) return 'association';
+    const local = el.$type.split(':')[1] ?? el.$type;
+    return local.charAt(0).toLowerCase() + local.slice(1);
   }
 
   /**

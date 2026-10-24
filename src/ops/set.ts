@@ -94,75 +94,21 @@ import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
 import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
-import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
-import { ChangeSet, type Change } from '../model/ChangeSet.js';
+import { addTo, is, many, nameOf, walk, type El } from '../model/utils/moddle.js';
+import { ChangeSet } from '../model/ChangeSet.js';
+import { descriptorOf, idOf, isEl, ownValue, typeLabel, vendorAttributes, type PropDescriptor } from './utils/elements.js';
+import { definitionsOf, nestedEntries, parseSlotRef, resolveNested, slotsOf, SLOT_TEXT, splitNestedKey, type NestedSlot } from './utils/nested-slots.js';
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
-import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
+import { applyTrigger, bindRefAs, ensureRootElement } from './events.js';
+import { vendorContent } from './utils/elements.js';
 import { setCorrelationKey } from './ext.js';
-import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
+import { assertCondition, dropIgnoredConditions, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { VendorDescriptor } from '../platform/VendorDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
-
-/* ------------------------------------------------------------------ */
-/* shared helpers                                                       */
-/* ------------------------------------------------------------------ */
-
-/** A moddle property descriptor (the subset the mutations rely on). */
-export interface PropDescriptor {
-  name: string;
-  type: string;
-  isAttr?: boolean;
-  isReference?: boolean;
-  isMany?: boolean;
-  isBody?: boolean;
-  default?: unknown;
-}
-
-export interface TypeDescriptor {
-  isGeneric?: boolean;
-  properties?: PropDescriptor[];
-  propertiesByName?: Record<string, PropDescriptor>;
-}
-
-/** Typed access to an element's moddle descriptor. */
-export function descriptorOf(el: El): TypeDescriptor {
-  return el.$descriptor as unknown as TypeDescriptor;
-}
-
-/** Reads an own property without triggering moddle's lazy collection creation. */
-export function ownValue(el: El, prop: string): unknown {
-  return Object.prototype.hasOwnProperty.call(el, prop) ? (el as unknown as Record<string, unknown>)[prop] : undefined;
-}
-
-export function idOf(el: El): string {
-  return el.get<string | undefined>('id') ?? '';
-}
-
-/** True for moddle elements (typed or generic). */
-export function isEl(v: unknown): v is El {
-  return !!v && typeof v === 'object' && typeof (v as El).$type === 'string';
-}
-
-/** Canonical kind label for change-set entries (kinds table first, then lowerCamel type). */
-export function changeKind(el: El): string {
-  if (kindOf(el)) return kindLabel(el);
-  if (is(el, 'bpmn:SequenceFlow')) return 'sequenceFlow';
-  if (is(el, 'bpmn:MessageFlow')) return 'messageFlow';
-  if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
-  if (is(el, 'bpmn:Association')) return 'association';
-  const local = el.$type.split(':')[1] ?? el.$type;
-  return local.charAt(0).toLowerCase() + local.slice(1);
-}
-
-/** ChangeSet entry for an element (about it: ChangeSet.rename). */
-export function changeOf(el: El, detail?: string): Change {
-  const name = nameOf(el);
-  return ChangeSet.about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
-}
 
 /* ------------------------------------------------------------------ */
 /* key documentation                                                    */
@@ -429,7 +375,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       // a flow whose id names it by its old id follows when a later op of the batch changes the flow's ends
       recordFormerEnd(doc, el);
       renameId(doc, el, value);
-      cs.change(changeOf(el, `renamed from ${old}`));
+      cs.change(ChangeSet.entryOf(el, `renamed from ${old}`));
       return;
     }
     case 'name':
@@ -450,7 +396,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       const node = doc.require(value, 'bpmn:FlowNode');
       const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
       if (key === 'source') dropIgnoredConditions(doc, node, cs, [el]);
-      cs.change(flowChange(el, `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}`));
+      cs.change(ChangeSet.flowEntryOf(el, `${ChangeSet.flowEntryOf(el).detail} (${key} changed)${renamedNote(renamed)}`));
       return;
     }
     case 'loop':
@@ -476,7 +422,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     case 'calledDecision':
       // another element: an unprefixed calledDecision="..." BPMN does not define can only be removed (W_C7_DEPLOY_SCHEMA)
       if (is(el, 'bpmn:BusinessRuleTask') || value) {
-        cs.change(changeOf(el, setDecisionLink(doc, el, value, cs)));
+        cs.change(ChangeSet.entryOf(el, setDecisionLink(doc, el, value, cs)));
         return;
       }
       setModelProperty(doc, el, key, value);
@@ -490,7 +436,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
         setVendorAttribute(doc, el, key, value);
       } else setModelProperty(doc, el, key, value);
   }
-  cs.change(changeOf(el, detail));
+  cs.change(ChangeSet.entryOf(el, detail));
 }
 
 /**
@@ -543,7 +489,7 @@ function makeDefaultFlow(doc: Doc, flow: El, cs: ChangeSet): void {
       hint: 'Default flows are taken when no other condition matches; set the condition on another outgoing flow if it is still needed.',
     });
   }
-  if (previous && previous !== flow) cs.change(changeOf(previous, `no longer the default flow of ${idOf(source)}`));
+  if (previous && previous !== flow) cs.change(ChangeSet.entryOf(previous, `no longer the default flow of ${idOf(source)}`));
 }
 
 function setDefaultKey(doc: Doc, el: El, value: string, cs: ChangeSet): void {
@@ -621,12 +567,6 @@ function createMultiInstance(doc: Doc, el: El): El {
   multi.$parent = el;
   el.set('loopCharacteristics', multi);
   return multi;
-}
-
-/** lowerCamel local type for messages, e.g. `multiInstanceLoopCharacteristics`. */
-function typeLabel(el: El): string {
-  const local = localType(el);
-  return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
 /** Releases the ids of a removed loop and reports its vendor content (W_PROPERTY_DROPPED). */
@@ -738,14 +678,14 @@ function applyCondition(doc: Doc, flow: El, keys: Map<string, string>, cs: Chang
       return;
     }
     existing!.set('language', language);
-    cs.change(changeOf(flow, language ? `language=${language}` : 'language removed'));
+    cs.change(ChangeSet.entryOf(flow, language ? `language=${language}` : 'language removed'));
     return;
   }
   const condition = keys.get('condition') ?? '';
   if (!condition) {
     if (keys.get('language')) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
     setFlowCondition(doc, flow, undefined);
-    cs.change(changeOf(flow, 'condition removed'));
+    cs.change(ChangeSet.entryOf(flow, 'condition removed'));
     return;
   }
   assertCondition(condition);
@@ -777,193 +717,12 @@ function applyCondition(doc: Doc, flow: El, keys: Map<string, string>, cs: Chang
         : `Pass language=${oldLanguage} together with condition= to keep the script language.`,
     });
   }
-  cs.change(changeOf(flow, `condition=${condition}${language ? ` (${language})` : ''}`));
+  cs.change(ChangeSet.entryOf(flow, `condition=${condition}${language ? ` (${language})` : ''}`));
 }
 
 /* ------------------------------------------------------------------ */
 /* nested elements: definition. / loop. / condition.                     */
 /* ------------------------------------------------------------------ */
-
-/** Key prefixes that address a nested element without an id of its own. */
-export const NESTED_SLOTS = ['definition', 'loop', 'condition'] as const;
-export type NestedSlot = (typeof NESTED_SLOTS)[number];
-
-export const SLOT_TEXT: Record<NestedSlot, string> = {
-  definition: 'event definition',
-  loop: 'loop characteristics',
-  condition: 'condition expression',
-};
-
-/**
- * `loop.camunda:collection` -> { slot: 'loop', key: 'camunda:collection' }
- * (`definition[1].id` -> { slot: 'definition[1]', key: 'id' }); undefined for
- * keys without a slot prefix.
- */
-export function splitNestedKey(key: string): { slot: string; key: string } | undefined {
-  const selector = /^(\w+\[[^\]]*\])\.(.*)$/.exec(key);
-  if (selector) return { slot: selector[1]!, key: selector[2]! };
-  const dot = key.indexOf('.');
-  if (dot <= 0) return undefined;
-  const colon = key.indexOf(':');
-  if (colon >= 0 && colon < dot) return undefined; // a vendor attribute with a dot in its name
-  return { slot: key.slice(0, dot), key: key.slice(dot + 1) };
-}
-
-/**
- * A slot as written before the `.` of a nested key or an ext type:
- * `definition`, `loop`, `condition`, or one event definition of an event
- * that has several, by position (`definition[1]`, 0-based) or by trigger
- * (`definition[timer]`). `invalid` holds a selector that is neither.
- */
-export interface SlotRef {
-  slot: NestedSlot;
-  /** the prefix as given, e.g. `definition[timer]` */
-  text: string;
-  index?: number;
-  trigger?: Exclude<Trigger, 'none'>;
-  invalid?: string;
-}
-
-/** Parses a slot prefix (see SlotRef); undefined when `text` is not one of the slots. */
-export function parseSlotRef(text: string): SlotRef | undefined {
-  const m = /^(\w+)(?:\[\s*([^\]]*?)\s*\])?$/.exec(text.trim());
-  if (!m || !(NESTED_SLOTS as readonly string[]).includes(m[1]!)) return undefined;
-  const ref: SlotRef = { slot: m[1] as NestedSlot, text: text.trim() };
-  const sel = m[2];
-  if (sel === undefined) return ref;
-  if (/^\d+$/.test(sel)) ref.index = Number(sel);
-  else {
-    const t = normalizeTrigger(sel);
-    if (t && t !== 'none') ref.trigger = t;
-    else ref.invalid = sel;
-  }
-  return ref;
-}
-
-/** The event definitions of an event (no lazy collection is created). */
-export function definitionsOf(el: El): El[] {
-  const defs = ownValue(el, 'eventDefinitions');
-  return is(el, 'bpmn:Event') && Array.isArray(defs) ? (defs as El[]) : [];
-}
-
-/** `messageEventDefinition MDef` for messages and hints. */
-function definitionText(def: El): string {
-  const id = def.get<string | undefined>('id');
-  return `${typeLabel(def)}${id ? ` ${id}` : ''}`;
-}
-
-/** The slots `el` has: definition (events), loop (activities), condition (sequence flows, conditional events). */
-export function slotsOf(el: El): NestedSlot[] {
-  const out: NestedSlot[] = [];
-  if (is(el, 'bpmn:Event')) out.push('definition');
-  if (is(el, 'bpmn:Activity')) out.push('loop');
-  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((d) => is(d, 'bpmn:ConditionalEventDefinition'))) out.push('condition');
-  return out;
-}
-
-/**
- * The nested element a slot names on `el`, or undefined when it does not
- * exist (yet). For an event with several event definitions `definition`
- * is the first one (views use nestedEntries, ops resolveNested); `condition`
- * is the condition of its conditional event definition (only when it has
- * exactly one).
- */
-export function nestedElement(el: El, slot: NestedSlot): El | undefined {
-  switch (slot) {
-    case 'definition':
-      return definitionsOf(el)[0];
-    case 'loop':
-      return is(el, 'bpmn:Activity') ? el.get<El | undefined>('loopCharacteristics') : undefined;
-    case 'condition': {
-      if (is(el, 'bpmn:SequenceFlow')) return el.get<El | undefined>('conditionExpression');
-      const conditional = definitionsOf(el).filter((d) => is(d, 'bpmn:ConditionalEventDefinition'));
-      return conditional.length === 1 ? conditional[0]!.get<El | undefined>('condition') : undefined;
-    }
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Every nested element of `el` with the prefix that addresses it: `definition`
- * for the event definition (`definition[<n>]` for each one when an event has
- * several), `loop`, `condition`.
- */
-export function nestedEntries(el: El): Array<{ slot: NestedSlot; prefix: string; el: El }> {
-  const out: Array<{ slot: NestedSlot; prefix: string; el: El }> = [];
-  for (const slot of slotsOf(el)) {
-    if (slot === 'definition') {
-      const defs = definitionsOf(el);
-      defs.forEach((d, i) => out.push({ slot, prefix: defs.length > 1 ? `definition[${i}]` : 'definition', el: d }));
-      continue;
-    }
-    const n = nestedElement(el, slot);
-    if (n) out.push({ slot, prefix: slot, el: n });
-  }
-  return out;
-}
-
-/**
- * The nested element a slot reference names, for an operation (set nested
- * keys, ext on a nested element). undefined = the slot exists but is empty
- * (no trigger, no loop, no condition). An event with several event
- * definitions needs a selector (E_AMBIGUOUS_NESTED); a selector that matches
- * nothing is E_NO_NESTED_ELEMENT; a bad selector or one on loop / condition
- * is E_UNKNOWN_KEY. `what` names the key or type in messages; `example`
- * turns a selector prefix into the command a hint shows (default: `set`).
- */
-export function resolveNested(el: El, ref: SlotRef, what: string, example?: (prefix: string) => string): El | undefined {
-  const id = idOf(el);
-  if (ref.slot !== 'definition' && (ref.index !== undefined || ref.trigger || ref.invalid !== undefined)) {
-    throw modelError('E_UNKNOWN_KEY', `${what}: only definition. takes a selector ([<n>] or [<trigger>]), not ${ref.slot}.`, { element: id, hint: `Use ${ref.slot}.<key>.` });
-  }
-  if (ref.invalid !== undefined) {
-    throw modelError('E_UNKNOWN_KEY', `${what}: "${ref.invalid}" in ${ref.text} is neither a position nor a trigger`, {
-      element: id,
-      hint: 'Select an event definition by position (definition[0], definition[1], ...) or by trigger (definition[message], definition[timer], ...).',
-    });
-  }
-  if (ref.slot !== 'definition') return nestedElement(el, ref.slot);
-  const defs = definitionsOf(el);
-  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
-  if (ref.index !== undefined || ref.trigger) {
-    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((d) => is(d, TRIGGER_TYPES[ref.trigger!]));
-    if (hits.length === 1) return hits[0];
-    if (!hits.length) {
-      throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition ${ref.text} (${what})`, {
-        element: id,
-        hint: defs.length ? `Its event definitions: ${listing}.` : `It has no trigger; give it one first: \`bpmn set <file> ${id} trigger=<trigger>\`.`,
-      });
-    }
-    throw ambiguousNested(el, defs, what, `${hits.length} ${ref.trigger} event definitions`, example);
-  }
-  if (defs.length > 1) throw ambiguousNested(el, defs, what, `${defs.length} event definitions`, example);
-  return defs[0];
-}
-
-function ambiguousNested(el: El, defs: El[], what: string, count: string, example?: (prefix: string) => string) {
-  const id = idOf(el);
-  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
-  const triggers = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0]).filter((t): t is string => !!t);
-  const unique = triggers.filter((t, i) => triggers.indexOf(t) === i && triggers.lastIndexOf(t) === i);
-  const rest = what.replace(/^definition(\[[^\]]*\])?\./, '');
-  const show = example ?? ((prefix: string) => `bpmn set <file> ${id} '${prefix}.${rest}=<value>'`);
-  return modelError('E_AMBIGUOUS_NESTED', `${kindLabel(el)} ${id} has ${count} (${listing}); ${what} does not say which one`, {
-    element: id,
-    candidates: defs.map((_, i) => `definition[${i}]`),
-    hint: `Name one by position (0-based) or by trigger, e.g. \`${show('definition[1]')}\`${unique.length ? ` or \`${show(`definition[${unique[unique.length - 1]}]`)}\`` : ''} (quote the brackets in a shell). The engines act on only one event definition per event; to keep a single one, set the trigger again: \`bpmn set <file> ${id} trigger=<trigger> ...\`.`,
-  });
-}
-
-/** Vendor attributes of an element (prefixed, without xmlns / xsi). */
-export function vendorAttributes(el: El): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(el.$attrs ?? {})) {
-    if (!k.includes(':') || k.startsWith('xmlns') || k.startsWith('xsi:') || k.startsWith('xml:') || v === undefined || v === null || typeof v === 'object') continue;
-    out[k] = String(v);
-  }
-  return out;
-}
 
 /**
  * The local name when `key` is a camunda attribute (`camunda:assignee` ->
@@ -1077,24 +836,6 @@ const NESTED_BLOCKED: Record<string, string> = {
   body: 'use condition= / when= / timer= / cardinality= / completion=',
 };
 
-/** The BPMN types a slot can name (for the key table of `bpmn kinds --json`). */
-export const NESTED_TYPES: Record<NestedSlot, readonly string[]> = {
-  definition: [
-    'bpmn:MessageEventDefinition',
-    'bpmn:TimerEventDefinition',
-    'bpmn:ErrorEventDefinition',
-    'bpmn:SignalEventDefinition',
-    'bpmn:EscalationEventDefinition',
-    'bpmn:ConditionalEventDefinition',
-    'bpmn:LinkEventDefinition',
-    'bpmn:CompensateEventDefinition',
-    'bpmn:TerminateEventDefinition',
-    'bpmn:CancelEventDefinition',
-  ],
-  loop: ['bpmn:MultiInstanceLoopCharacteristics', 'bpmn:StandardLoopCharacteristics'],
-  condition: ['bpmn:FormalExpression'],
-};
-
 /**
  * The `<slot>.<key>` keys a nested element of this type accepts: id, its
  * settable BPMN attributes and the camunda attributes the Camunda descriptor
@@ -1124,7 +865,7 @@ function createNested(doc: Doc, el: El, slot: NestedSlot, key: string, cs: Chang
     const source = el.get<El | undefined>('sourceRef');
     if (source?.get<El | undefined>('default') === el) {
       source.set('default', undefined);
-      cs.change(changeOf(el, `no longer the default flow of ${idOf(source)}`));
+      cs.change(ChangeSet.entryOf(el, `no longer the default flow of ${idOf(source)}`));
     }
     return expr;
   }
@@ -1261,7 +1002,7 @@ function applyNestedKey(doc: Doc, el: El, slot: string, key: string, value: stri
     if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) assertCompensationInScope(doc, el, coerced, full);
     target.set(key, coerced);
   }
-  cs.change(changeOf(el, value ? `${full}=${value}` : `${full} removed`));
+  cs.change(ChangeSet.entryOf(el, value ? `${full}=${value}` : `${full} removed`));
 }
 
 /**
@@ -1569,7 +1310,7 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
   const trigger = requested ?? current.trigger;
   if (nonInterrupting !== undefined && requested === undefined && !Object.keys(given).length) {
     setNonInterrupting(doc, el, nonInterrupting);
-    cs.change(changeOf(el, `nonInterrupting=${nonInterrupting}`));
+    cs.change(ChangeSet.entryOf(el, `nonInterrupting=${nonInterrupting}`));
     return;
   }
   if (!allowed.includes(trigger)) {
@@ -1600,7 +1341,7 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
   const details = Object.entries(given)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}=${String(v)}`);
-  cs.change(changeOf(el, [`trigger=${trigger}`, ...details, ...(nonInterrupting !== undefined ? [`nonInterrupting=${nonInterrupting}`] : [])].join(' ')));
+  cs.change(ChangeSet.entryOf(el, [`trigger=${trigger}`, ...details, ...(nonInterrupting !== undefined ? [`nonInterrupting=${nonInterrupting}`] : [])].join(' ')));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1722,3 +1463,7 @@ export function readProperties(doc: Doc, el: El): Record<string, unknown> {
   }
   return out;
 }
+
+export { descriptorOf, idOf, isEl } from './utils/elements.js';
+export { definitionsOf, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './utils/nested-slots.js';
+export const changeOf = ChangeSet.entryOf;
