@@ -66,8 +66,8 @@ export class OpRunner {
    * when the batch began: it was stale before). Likewise W_ID_PREFIX_STALE:
    * one per element a retype or a trigger change kept the id of, from its
    * state before the batch to its state after it; an element the batch
-   * created takes the prefix of its new kind instead (ops/set.ts
-   * recordIdState).
+   * created takes the prefix of its new kind instead (ops/IdRenamer.ts
+   * recordState).
    */
   runBatch(ops: Op[]): BatchRun {
     return this.within(() => {

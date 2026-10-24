@@ -3,8 +3,8 @@
  *
  * CONTRACT (implemented in the "mutation" work package):
  *  - op.lane (only): assignLane() for each node.
- *  - placement (after/before/flow): for each node: detachWithBridge(bridge=true),
- *    remove it from its current scope's flowElements, then placeNode() with
+ *  - placement (after/before/flow): for each node: Bridge.single(bridge=true),
+ *    remove it from its current scope's flowElements, then NodePlacement.place() with
  *    the placement (which inserts it into the target scope). Boundary events
  *    of a moved activity move along. `in` moves into another scope without
  *    connecting: the moved group is bridged as a whole (one flow in, one flow

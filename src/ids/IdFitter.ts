@@ -8,7 +8,7 @@ export type IdForm = 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';
 export const FORM_JOIN: Record<IdForm, string> = { stemTo: 'To', idPair: '_', stemSnake: '_to_', idSnake: '_to_' };
 export const ID_FORMS = Object.keys(FORM_JOIN) as IdForm[];
 
-/** The longest base id 0.6 and earlier generated (MAX_ID less room for a collision suffix `_99`): followEnds still recognises the flows it cut. */
+/** The longest base id 0.6 and earlier generated (MAX_ID less room for a collision suffix `_99`): FlowIdFollower still recognises the flows it cut. */
 export const LEGACY_BASE = MAX_ID - 3;
 
 /** An end as fitPair cuts it: its text and the number of its words (idWords as it gave them up). */

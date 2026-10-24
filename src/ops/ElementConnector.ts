@@ -1,12 +1,12 @@
 /**
  * `connect`: connection kind is inferred from the endpoints.
  *
- *  - both flow nodes in the same process        -> sequence flow (createSequenceFlow),
+ *  - both flow nodes in the same process        -> sequence flow (SequenceFlows.create),
  *      W_IMPLICIT_SPLIT when a non-gateway source gets a 2nd outgoing flow,
  *      W_IMPLICIT_JOIN when a non-gateway target gets a 2nd incoming flow,
  *      W_EVENT_GATEWAY_TARGET when an event-based gateway gets a target BPMN
  *      2.0 does not allow there (Camunda 7 files: the platform profile reports
- *      the engines' rule instead, see warnEventGatewayFlow in flows.ts)
+ *      the engines' rule instead, see EventGatewayRule.warnFlow)
  *  - endpoints in different participants (or a participant itself) -> message
  *      flow in the collaboration (id Flow_<Source>To<Target> in the default id style, only between InteractionNodes:
  *      participants, tasks, events, sub-processes/call activities; gateways ->

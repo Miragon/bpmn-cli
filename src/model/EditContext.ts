@@ -1,9 +1,9 @@
 /**
  * The state of one edit of a Doc: the settings of the call (declared id
  * conventions, an explicit platform, whether flow ids are kept) and what the
- * running batch or op on its own recorded so far (generated, suffixed and
- * declared ids, renames, kept flows, former flow ends, kept ids of retyped
- * elements, dropped content). The edit transaction
+ * running batch or op on its own recorded so far (the ids it gave out, in
+ * its IdAllocator; renames, kept flows, former flow ends, kept ids of
+ * retyped elements, dropped content). The edit transaction
  * (pipeline/EditTransaction.ts) makes one per call, OpRunner one per runOp /
  * runOps of its own; while ops run it is the document's (Doc.edit), between
  * runs the document keeps one of its own for ops called directly.
@@ -19,7 +19,7 @@ import type { El } from './utils/moddle.js';
 export interface BatchContext {
   /** ids the ops before created, in order */
   created: string[];
-  /** old id -> new id of the flows the ops before renamed (ops/flows.ts followEnds), and of the elements they created and retyped (ops/set.ts recordIdState) */
+  /** old id -> new id of the flows the ops before renamed (ops/FlowIdFollower.ts follow), and of the elements they created and retyped (ops/IdRenamer.ts recordState) */
   renamed: Map<string, string>;
   /** the old ids in `renamed` of elements a retype or a trigger change gave a new prefix (Rename.regenerated) */
   retyped?: Set<string>;
@@ -45,7 +45,7 @@ export interface KeptFlow {
 /**
  * What a node was called as the end of sequence flows before `set` gave it
  * another id or name in the running batch or op on its own
- * (EditContext.recordFormerEnd): its id and its labels (ops/flows.ts endLabels).
+ * (EditContext.recordFormerEnd): its id and its labels (ops/FlowIdFollower.ts endLabels).
  */
 export interface FormerEnd {
   id: string;
@@ -82,7 +82,7 @@ export class EditContext {
   /** set while an `apply` batch runs (OpRunner.runBatch): E_NOT_FOUND names what it created and renamed */
   batch: BatchContext | undefined;
   private flows: ReadonlyMap<El, FlowEnds> | undefined;
-  /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/flows.ts followEnds) */
+  /** ids renamed since the last takeRenames() (a flow whose id named its old ends, ops/FlowIdFollower.ts follow) */
   private renames: Rename[] = [];
   /** flows that kept an id naming their old ends since the last takeKeptFlows() -> those ends (`A -> B`) and that id, for W_FLOW_ID_STALE */
   private keptFlows = new Map<El, KeptFlow>();
@@ -116,7 +116,7 @@ export class EditContext {
 
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
-   * them (ops/flows.ts followEnds): MutationOptions.keepFlowIds decides for
+   * them (ops/FlowIdFollower.ts follow): MutationOptions.keepFlowIds decides for
    * the call, else Doc.followFlowEnds.
    */
   get followFlowEnds(): boolean {
@@ -170,7 +170,7 @@ export class EditContext {
    * With ids kept (followFlowEnds false): the sequence flows the document
    * had when the running batch or op began (begin), the only ones that keep
    * their id (keepsFlowId), with the ends they had then (a flow that ends
-   * there again is not stale: ops/flows.ts staleFlowWarning).
+   * there again is not stale: ops/StaleFlowReport.ts).
    */
   get flowsBefore(): ReadonlyMap<El, FlowEnds> | undefined {
     return this.flows;
@@ -205,8 +205,8 @@ export class EditContext {
   /**
    * Whether `flow` keeps its id when an op gives it other ends: with ids kept
    * (followFlowEnds false) a flow the document had before the batch or the op
-   * on its own (flowsBefore). ops/flows.ts followEnds keeps it instead of
-   * renaming it; ops/move.ts puts a moved node's old out-flow back at the new
+   * on its own (flowsBefore). ops/FlowIdFollower.ts follow keeps it instead of
+   * renaming it; ops/NodeMover.ts puts a moved node's old out-flow back at the new
    * place instead of creating a new one. A flow without id has none to keep.
    */
   keepsFlowId(flow: El): boolean {
@@ -214,8 +214,8 @@ export class EditContext {
   }
 
   /**
-   * Records that a flow kept an id that named its old ends `was` (ops/flows.ts
-   * followEnds with followFlowEnds false). The first ends stay while the flow
+   * Records that a flow kept an id that named its old ends `was` (ops/FlowIdFollower.ts
+   * follow with followFlowEnds false). The first ends stay while the flow
    * has the id it kept; a flow renamed since (`set id=`) keeps a new id.
    */
   recordKeptFlow(flow: El, was: string): void {
@@ -237,7 +237,7 @@ export class EditContext {
     return true;
   }
 
-  /** The flows kept since the last call, with the ends their id named and that id (reportStaleFlows turns them into W_FLOW_ID_STALE). */
+  /** The flows kept since the last call, with the ends their id named and that id (StaleFlowReport.report turns them into W_FLOW_ID_STALE). */
   takeKeptFlows(): Map<El, KeptFlow> {
     const out = this.keptFlows;
     this.keptFlows = new Map();
@@ -246,8 +246,8 @@ export class EditContext {
 
   /**
    * Records what a node was called as a flow end (`end`: its id and labels)
-   * before `set` gives it another id or name (ops/flows.ts recordFormerEnd):
-   * a flow whose id named it so still names its ends (idNamesEnds) until
+   * before `set` gives it another id or name (ops/FlowIdFollower.ts recordFormerEnd):
+   * a flow whose id named it so still names its ends (FlowIdFollower.namesEnds) until
    * the batch or the op on its own ends.
    */
   recordFormerEnd(node: El, end: FormerEnd): void {
@@ -263,7 +263,7 @@ export class EditContext {
 
   /**
    * `next` took the place of `old` (a retype that changes the type builds a
-   * new element, ops/retype.ts swapType): what the running batch recorded
+   * new element, ops/ElementRetyper.ts swapType): what the running batch recorded
    * about `old` is about `next`, its former ends (recordFormerEnd) and the
    * change entries made for it (ChangeSet.recordReplacement).
    */
@@ -277,7 +277,7 @@ export class EditContext {
 
   /**
    * Records what an element was (`before`, `wasLabel`) when a retype or a
-   * trigger change kept its id `id` (ops/set.ts recordIdState); the first
+   * trigger change kept its id `id` (ops/IdRenamer.ts recordState); the first
    * record of an id stays, so a batch compares its state before the batch
    * with the one after.
    */
@@ -285,7 +285,7 @@ export class EditContext {
     if (!this.idStates.has(id)) this.idStates.set(id, { before, wasLabel });
   }
 
-  /** The ids recorded since the last call, with what their elements were (reportStaleIdPrefixes turns them into W_ID_PREFIX_STALE). */
+  /** The ids recorded since the last call, with what their elements were (IdRenamer.reportStalePrefixes turns them into W_ID_PREFIX_STALE). */
   takeIdStates(): Map<string, KeptIdState> {
     const out = this.idStates;
     this.idStates = new Map();

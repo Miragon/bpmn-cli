@@ -29,7 +29,7 @@ export interface OutputOptions {
 
 export type MutationFlags = FileMutationOptions & OutputOptions;
 
-/* The rules `apply` enforces on ops JSON (ops/rules.ts), spelled with CLI flags. */
+/* The rules `apply` enforces on ops JSON (ops/utils/op-rules.ts), spelled with CLI flags. */
 
 const FLOW_FLAGS: Record<string, string> = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' };
 

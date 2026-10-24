@@ -31,7 +31,7 @@
  *    path (Doc.fromXml + mutateDoc, XML from anywhere) is guarded like files.
  *  - dropped content: a retype whose new kind cannot hold the element's
  *    content (sub-process -> task) is refused with E_WOULD_DROP_CONTENT
- *    listing the ids it would delete (EditContext.droppedContent, recorded by ops/retype.ts).
+ *    listing the ids it would delete (EditContext.droppedContent, recorded by ops/ElementRetyper.ts).
  *  - validation: the document is validated before and after the ops; only
  *    errors the ops introduce block the write (E_VALIDATION). Errors the
  *    document already had (same code and element) do not block unrelated

@@ -82,7 +82,7 @@ export class Doc {
   readonly layoutRequests = new LayoutRequests();
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
-   * them (ops/flows.ts followEnds). False keeps the id of every flow the
+   * them (ops/FlowIdFollower.ts follow). False keeps the id of every flow the
    * document had before the batch (EditContext.flowsBefore); the batch
    * reports each one whose id no longer names its ends as W_FLOW_ID_STALE
    * (ops/OpRunner.ts). MutationOptions.keepFlowIds decides for one call

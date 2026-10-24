@@ -40,7 +40,7 @@ export class FlowOptions {
     if (violation) throw usageError(violation.message, { ...details, hint: violation.hint });
   }
 
-  /** The attributes of the flow they create; `keepEmptyCondition`: an empty condition stays, for createSequenceFlow to refuse. */
+  /** The attributes of the flow they create; `keepEmptyCondition`: an empty condition stays, for SequenceFlows.create to refuse. */
   toAttrs(keepEmptyCondition = false): FlowAttrs {
     const { flowId, flowName, condition, language } = this.values;
     return {

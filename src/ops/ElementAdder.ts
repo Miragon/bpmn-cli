@@ -22,7 +22,7 @@
  *  - participants: a new process gets the platform defaults (Doc.initProcess:
  *    camunda:historyTimeToLive in a Camunda 7 file); a user task of a Camunda 8
  *    file gets zeebe:userTask (platform/Camunda8Defaults.ts).
- *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
+ *  - flow nodes: create with name (+ def.props), NodePlacement.place(),
  *    EventDefinitions.apply() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
  *    a missing trigger is inferred from --timer/--message/... when given),
@@ -54,7 +54,7 @@
  *    or the node is the gateway) to a target BPMN 2.0 does not allow there:
  *    W_EVENT_GATEWAY_TARGET once the trigger is set (plain files; Camunda 7
  *    files get the profile's W_C7_DEPLOY_EVENT_GATEWAY, flows.ts).
- *  - ChangeSet: the node's create entry comes first, flows follow (placeNode),
+ *  - ChangeSet: the node's create entry comes first, flows follow (NodePlacement.place),
  *    root Message/Error/Signal/Escalation elements created by the trigger are
  *    reported too.
  *
@@ -284,7 +284,7 @@ export class ElementAdder {
       }
       return;
     }
-    // the flow add created, or a spliced flow without id that took it (ops/flows.ts followEnds: `id added`)
+    // the flow add created, or a spliced flow without id that took it (FlowIdFollower.follow: `id added`)
     const named = (c: Change): boolean => c.kind === 'sequenceFlow' && c.id === op.flowId;
     if (op.flowId && !cs.created.some(named) && !cs.changed.some((c) => named(c) && !!c.detail?.endsWith(renamedNote('')))) {
       const entry = entryFlow ?? this.doc.incoming(node)[0];

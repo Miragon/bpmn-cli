@@ -80,7 +80,7 @@ export class ElementLabels {
   }
 
   /**
-   * The labels earlier versions gave the element as a flow end (followEnds
+   * The labels earlier versions gave the element as a flow end (FlowIdFollower.follow
    * recognises a flow named by them): an unnamed element whose id tells its
    * context was named by its kind (Gateway, Join, End, Timer).
    */

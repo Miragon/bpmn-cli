@@ -15,7 +15,7 @@ export interface Change {
   detail?: string;
 }
 
-/** An id an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds). */
+/** An id an op renamed (a flow whose id named its old ends, ops/FlowIdFollower.ts follow). */
 export interface Rename {
   from: string;
   to: string;
@@ -28,8 +28,8 @@ export interface Rename {
    */
   takeover?: true;
   /**
-   * an element the same change created took another id (ops/set.ts
-   * recordIdState: its generated id after a retype), or a flow the change
+   * an element the same change created took another id (ops/IdRenamer.ts
+   * recordState: its generated id after a retype), or a flow the change
    * named after it followed (with `was`): the old id was never in the file,
    * so the details of the change's entries (a flow's ends), its notes and
    * its warnings name the element by the new one too, and a W_ID_SUFFIXED
@@ -91,7 +91,7 @@ export class ChangeSet {
 
   /**
    * Records that `next` took the place of `old` (a retype that changes the
-   * type builds a new element, ops/retype.ts swapType): an entry about `old`
+   * type builds a new element, ops/ElementRetyper.ts swapType): an entry about `old`
    * is about `next` (rename), so a rename recorded for `next` (its id
    * regenerated) renames the entries an earlier op made for `old`.
    */
@@ -115,14 +115,14 @@ export class ChangeSet {
   warnings: Warning[] = [];
   /** human-readable remarks, e.g. "inserted between A and B" */
   notes: string[] = [];
-  /** ids an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds): earlier entries name the new id */
+  /** ids an op renamed (a flow whose id named its old ends, ops/FlowIdFollower.ts follow): earlier entries name the new id */
   renames: Rename[] = [];
   /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/aliases.ts): the element itself */
   bindings: Array<{ alias: string; el: El }> = [];
-  /** elements an op replaced by a new one (a retype to another type, ops/retype.ts swapType): the batch aliases follow */
+  /** elements an op replaced by a new one (a retype to another type, ops/ElementRetyper.ts swapType): the batch aliases follow */
   replaced: Array<{ from: El; to: El }> = [];
   /**
-   * nodes a `move` placed elsewhere, by their id at the time (ops/move.ts; not
+   * nodes a `move` placed elsewhere, by their id at the time (ops/NodeMover.ts; not
    * renamed): the incremental layout places them again. A move that left a
    * node where it was lists nothing, so its drawing stays.
    */
