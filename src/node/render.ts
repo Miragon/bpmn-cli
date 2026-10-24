@@ -1,6 +1,6 @@
 /**
  * PNG images of a diagram (Node only; `@miragon/bpmn-cli/node`): the SVG of
- * the core renderer (src/render/index.ts) rasterised by resvg compiled to
+ * the core renderer (src/render/DocRenderer.ts) rasterised by resvg compiled to
  * WebAssembly (@resvg/resvg-wasm, imported on the first call, like
  * bpmn-auto-layout) with the bundled Arimo font (assets/fonts, SIL OFL 1.1;
  * metric-compatible with Arial, so the SVG's line breaks hold). No system
@@ -23,7 +23,8 @@
  */
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { RENDER_MAX_SIZE, renderSvg, type RenderOptions, type RenderProblem, type RenderTile } from '../render/index.js';
+import { DocRenderer } from '../render/DocRenderer.js';
+import { RENDER_MAX_SIZE, type RenderOptions, type RenderProblem, type RenderTile } from '../render/types.js';
 import { CliError } from '../shared/CliError.js';
 
 export interface PngImage {
@@ -125,7 +126,7 @@ export async function rasterize(svg: string, opts: { pixels?: boolean } = {}): P
 
 /** `bpmn render` (PNG): one plane of the document (or a part, or its tiles) as PNG images (see the module contract and renderSvg). */
 export async function renderPng(xml: string, opts: RenderOptions = {}): Promise<PngRenderResult> {
-  const drawn = await renderSvg(xml, { ...opts, maxSize: opts.maxSize ?? RENDER_MAX_SIZE });
+  const drawn = await DocRenderer.renderXml(xml, { ...opts, maxSize: opts.maxSize ?? RENDER_MAX_SIZE });
   const images: PngImage[] = [];
   const parts: Array<Pick<RenderTile, 'svg' | 'columns' | 'band'>> = drawn.tiles ?? [{ svg: drawn.svg }];
   for (const part of parts) {

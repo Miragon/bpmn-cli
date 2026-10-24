@@ -28,7 +28,10 @@ import { Command, CommanderError, type Command as CommandType, InvalidArgumentEr
 import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './ops/batch.js';
 import { LayoutDebug } from './shared/LayoutDebug.js';
 import { layoutProblems } from './diagram/metrics.js';
-import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
+import { DocRenderer } from './render/DocRenderer.js';
+import { RENDER_MAX_SIZE, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/types.js';
+import { changeHighlight } from './render/utils/highlight.js';
+import { scaleText } from './render/utils/scale.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
@@ -1131,7 +1134,7 @@ async function writeRender(xml: string, opts: RenderOptions, format: RenderForma
   let parts: Array<{ bytes: string | Uint8Array; width: number; height: number; tokens: number; columns?: [number, number]; band?: number }>;
   let r: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
   if (format === 'svg') {
-    const svg = await renderSvg(xml, opts);
+    const svg = await DocRenderer.renderXml(xml, opts);
     parts = (svg.tiles ?? [svg]).map((t) => ({ bytes: t.svg, width: t.width, height: t.height, tokens: t.tokens, ...('columns' in t && t.columns ? { columns: t.columns } : {}), ...('band' in t && t.band ? { band: t.band } : {}) }));
     r = svg;
   } else {

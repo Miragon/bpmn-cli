@@ -14,6 +14,9 @@ import type { BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './v
 import { BpmnlintConfigResolution } from './validate/BpmnlintConfigResolution.js';
 import { BpmnlintValidator, type BpmnlintValidatorOptions } from './validate/BpmnlintValidator.js';
 import type { NamedValidator } from './validate/validators.js';
+import type { Doc } from './model/document.js';
+import { DocRenderer } from './render/DocRenderer.js';
+import type { RenderOptions, RenderResult } from './render/types.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -80,4 +83,9 @@ export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type
 export { runFormatOps, type FormatResult, type FormatEntry } from './format/index.js';
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
-export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/types.js';
+export { changeHighlight } from './render/utils/highlight.js';
+/** `bpmn render --format svg`: one plane of the document as SVG (see the contract in src/render/DocRenderer.ts). */
+export function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> { return DocRenderer.renderXml(xml, opts); }
+/** One plane of a parsed document as SVG (no layout). */
+export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult { return new DocRenderer(doc, opts).render(); }

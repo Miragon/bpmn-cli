@@ -15,7 +15,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { MAX_TILES, MIN_LABEL_SCALE, renderSvg, scaleText } from '../src/render/index.js';
+import { MIN_LABEL_SCALE, renderSvg } from '../src/index.js';
+import { MAX_TILES } from '../src/render/types.js';
+import { scaleText } from '../src/render/utils/scale.js';
 import { textWidth } from '../src/diagram/text.js';
 import { rasterize } from '../src/node/render.js';
 
