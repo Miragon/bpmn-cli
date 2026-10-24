@@ -136,7 +136,7 @@ import { aroundView } from '../query/context.js';
 import { Doc } from '../model/document.js';
 import { ioError, modelError, usageError } from '../shared/errors.js';
 import { layoutModel } from '../layout/index.js';
-import { is, type El } from '../model/moddle.js';
+import { groupName, is, type El } from '../model/moddle.js';
 import type { MutationReport } from '../report/command-report.js';
 import type { Box, Point } from '../diagram/geom.js';
 import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from '../diagram/metrics.js';
@@ -1185,7 +1185,7 @@ function externalLabel(id: string, value: string, cx: number, top: number, color
 function shapeLabel(s: DShape, style: Style): Item | undefined {
   const external = s.kind === 'event' || s.kind === 'boundary' || s.kind === 'gateway' || s.kind === 'data' || s.kind === 'group';
   if (!external) return undefined;
-  const value = s.kind === 'group' ? raw<string>(raw(s.el, 'categoryValueRef'), 'value') : raw<string>(s.el, 'name');
+  const value = s.kind === 'group' ? groupName(s.el) : raw<string>(s.el, 'name');
   if (!value || !value.trim()) return undefined;
   if (s.label) return externalLabel(s.id, value, s.label.x + s.label.width / 2, Math.round(s.label.y), style.label, s.label.width);
   const b = s.bounds;

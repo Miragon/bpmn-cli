@@ -163,11 +163,6 @@ export function createTextAnnotation(doc: Doc, scope: El, opts: { id?: string; n
   return annotation;
 }
 
-/** The name of a group: the value of its category value (a group has no `name`). */
-export function groupName(group: El): string | undefined {
-  return group.get<El | undefined>('categoryValueRef')?.get<string | undefined>('value') || undefined;
-}
-
 /** A root bpmn:Category with one bpmn:CategoryValue for the group `groupId`; returns the value. */
 function createCategoryValue(doc: Doc, context: string, name: string | undefined): El {
   const request = { ...(name ? { name } : {}), context };
