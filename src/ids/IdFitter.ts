@@ -1,6 +1,7 @@
 import { camelSlug, cutAt, idWords, isFiller, keptTail, MAX_ID, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, withLetter } from './utils/slug.js';
 import { beginAlike, lcfirst, speakingStem, stem, ucfirst } from './utils/id-words.js';
-import type { Body, IdRequest } from './style.js';
+import type { Body } from './style.js';
+import type { IdRequest } from './utils/requests.js';
 
 /** The flow forms built from the ends' ids or id stems, and the word between the ends. */
 export type IdForm = 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';

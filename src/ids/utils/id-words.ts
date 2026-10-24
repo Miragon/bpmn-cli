@@ -93,3 +93,32 @@ export function prefixClass(prefix: string, typeNames: string[], trigger: string
   if (trigger && typeNames.some((n) => `${trigger}${n}`.toLowerCase() === p)) return 'triggerKind';
   return 'literal';
 }
+
+/**
+ * A word for an element of a kind (the start of an unnamed element's body,
+ * the label of an unnamed flow end): Start, MessageStart, End, ErrorEnd,
+ * Timer (catch and boundary events), MessageThrow, Intermediate; Exclusive,
+ * Parallel (gateways); Task, UserTask, SubProcess; LaneSet, ...; Main (a
+ * process, collaboration or definitions). With a context, the prefix says
+ * enough for every kind but the events (Gateway_AfterCheckInvoice): ''.
+ */
+export function kindWord(key: string, trigger: string | undefined, withContext = false): string {
+  const t = trigger && trigger !== 'none' ? ucfirst(trigger) : '';
+  switch (key) {
+    case 'startEvent':
+      return `${t}Start`;
+    case 'endEvent':
+      return `${t}End`;
+    case 'boundaryEvent':
+      return t || 'Boundary';
+    case 'intermediateCatchEvent':
+      return t || 'Catch';
+    case 'intermediateThrowEvent':
+      return t ? `${t}Throw` : 'Intermediate';
+  }
+  if (withContext) return '';
+  if (/^[a-z]+Gateway$/.test(key)) return ucfirst(key.slice(0, -'Gateway'.length));
+  // the one process of a file, the collaboration of its pools, the definitions of an unnamed new file (defs_main)
+  if (key === 'bpmn:Process' || key === 'bpmn:Collaboration' || key === 'bpmn:Definitions') return 'Main';
+  return ucfirst(localName(key));
+}

@@ -15,7 +15,8 @@ import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
 import { hasIdWords, isValidId, transliterate, withSuffix } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
 import type { IdConventions } from '../ids/conventions.js';
-import { IdStyle, typeRequest, type IdRequest, type IdState } from '../ids/style.js';
+import { IdStyle, type IdState } from '../ids/style.js';
+import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
@@ -493,7 +494,7 @@ export class Doc {
 
   /**
    * A new id in the document's style (src/ids/style.ts) for a kindRequest /
-   * typeRequest / connectionRequest / flowRequest; claims it. `base` is the
+   * typeRequest / connectionRequest / ElementLabels.flowRequest; claims it. `base` is the
    * id the request wanted: when it was taken the id carries a suffix, which
    * is recorded for W_ID_SUFFIXED (takeSuffixed). An id under a prefix the
    * declared conventions name for the request (IdStyle.explain: `lint`;

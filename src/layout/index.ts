@@ -42,7 +42,7 @@ import type { LayoutWarning } from 'bpmn-auto-layout';
 import { giveDrawnElementsIds, type GivenId } from '../diagram/drawn-ids.js';
 import { membersOf, redrawGroups, rememberGroups, undrawnGroups, type RedrawnGroups } from '../diagram/groups.js';
 import { diIdsFit, rememberDiIds, restoreDiIds } from '../diagram/write.js';
-import type { IdRequest } from '../ids/style.js';
+import type { IdRequest } from '../ids/utils/requests.js';
 import { layoutClean } from './clean/engine.js';
 import { addTo, is, layoutRoot, many, parseXml, processes, removeFrom, serialize, walk, type El, type Model, idOf } from '../model/utils/moddle.js';
 import { ModelError } from '../model/ModelError.js';

@@ -37,7 +37,8 @@
 import type { BpmnlintRuleSetting, BpmnlintSeverity } from '../validate/bpmnlint-validator.js';
 import { closestKey } from '../shared/utils/fuzzy.js';
 import type { Doc } from '../model/document.js';
-import { IdStyle, kindRequest, typeRequest, type Body, type FlowForm, type IdRequest, type PrefixSource } from './style.js';
+import { IdStyle, type Body, type FlowForm, type PrefixSource } from './style.js';
+import { kindRequest, typeRequest, type IdRequest } from './utils/requests.js';
 import { isUsablePrefix } from './utils/slug.js';
 import { KINDS, TRIGGER_TYPES } from '../model/kinds.js';
 import { createModdle } from '../model/utils/moddle.js';

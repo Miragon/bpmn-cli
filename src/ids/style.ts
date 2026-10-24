@@ -64,10 +64,10 @@
  *  letter: `123` names nothing); an unnamed element's body is a word for its
  *  kind plus its context (IdRequest.context: Gateway_AfterCheckInvoice,
  *  Event_TimerOnReview, Event_StartInPayment, LaneSet_OrderHandling; built
- *  by contextOf: an unnamed anchor that is itself after / before something
+ *  by ElementLabels.context: an unnamed anchor that is itself after / before something
  *  gives the nearest named anchor, once: the task after Gateway_AfterCheck
  *  is Activity_AfterCheck, never Activity_AfterAfterCheck); a flow's body
- *  names its ends (labelOf: the speaking part of an end's id, also an
+ *  names its ends (ElementLabels.label: the speaking part of an end's id, also an
  *  unnamed end's own context, AfterCheck, and CheckJoin for the join of the
  *  split after Check; else its name, else a word for its kind). Names and
  *  contexts are transliterated (ä -> ae, ø -> oe, å -> aa, src/ids/utils/slug.ts). A
@@ -98,11 +98,11 @@
  *  both forms (derivedBases lists both).
  *
  *  style.next(req, registry) returns a free id for a request (kindRequest /
- *  typeRequest / connectionRequest / flowRequest) and the id it wanted
+ *  typeRequest / connectionRequest / ElementLabels.flowRequest) and the id it wanted
  *  (`base`); an unnamed gateway or activity whose base is taken, or whose
  *  body another id has, first spells out its kind (spelledBase:
  *  Gateway_ParallelAfterCheck), then, after an unnamed anchor whose context
- *  it repeats (IdRequest.anchorKind, anchorContext), names the anchor's
+ *  it repeats (IdRequest.anchorKind, ElementLabels.anchorContext), names the anchor's
  *  kind (qualifiedBase: Task_AfterCheckGateway after
  *  ExclusiveGateway_AfterCheck where the task prefix says the kind); a
  *  taken base gets `_2`, `_3` (the file-learned flow forms stemTo and
@@ -188,57 +188,18 @@
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, SUFFIX_WORD, withSuffix } from './utils/slug.js';
 import type { IdRegistry } from './IdRegistry.js';
 import { FORM_JOIN, ID_FORMS, IdFitter, LEGACY_BASE, type IdForm } from './IdFitter.js';
-import { beginAlike, CONTEXT_WORDS, GENERIC, GLUED, HASH, lcfirst, localName, PREFIXED, prefixClass, speakingStem, stem, stemWords, TOOL_DEFAULTS, ucfirst, type ContextWord, type PrefixClass } from './utils/id-words.js';
-import { kindTypeNames } from './utils/requests.js';
+import { beginAlike, CONTEXT_WORDS, GENERIC, GLUED, HASH, kindWord, lcfirst, localName, PREFIXED, prefixClass, speakingStem, stem, stemWords, TOOL_DEFAULTS, ucfirst, type PrefixClass } from './utils/id-words.js';
+import { CONNECTIONS, connectionRequest, kindRequest, kindTypeNames, typeRequest, type IdRequest } from './utils/requests.js';
+import { ElementLabels } from './ElementLabels.js';
 import type { IdConventions } from './conventions.js';
 import { DeclaredConventions, type Votes } from './DeclaredConventions.js';
-import { kindByName, kindOf, triggerOf, type KindDef } from '../model/kinds.js';
+import { kindByName, kindOf, triggerOf } from '../model/kinds.js';
 import { is, isBpmnElement, walk, type El } from '../model/utils/moddle.js';
 
 /** The case of the bodies of new ids. */
 export type Body = 'pascal' | 'camel' | 'snake' | 'pascalSnake';
 /** How new flows are named (see the module contract). */
 export type FlowForm = 'named' | 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake' | 'scopedTo';
-
-export interface IdRequest {
-  /** style key: a kind of `bpmn kinds` (userTask, eventSubProcess, lane, ...) or a BPMN type (bpmn:Message, bpmn:LaneSet) */
-  key: string;
-  /** the bpmn-cli prefix of the kind (Activity, Event, Gateway, Message, ...) */
-  prefix: string;
-  /** names of the kind that a type-named prefix would use (serviceTask_, ServiceTask_), lowerCamel */
-  typeNames: string[];
-  /** event trigger (message, timer, ...) */
-  trigger?: string;
-  name?: string;
-  /**
-   * words that tell an element without name apart: where it is ("After Check
-   * invoice", "On Review", "In Payment") or what it belongs to (the process
-   * of a lane set, the ends of an association); with a word for the kind
-   * they are the body of its id
-   */
-  context?: string;
-  /**
-   * a word for the kind of the unnamed anchor whose context `context`
-   * repeats (anchorContext: `Gateway` for the gateway after Check, whose
-   * context `After Check` an element after it repeats): where the id from
-   * the context alone, or its body, is taken, the context names that anchor
-   * too (`After Check Gateway`), before a suffix
-   */
-  anchorKind?: string;
-  /** connections (sequence / message flows): the ids of the ends */
-  source?: string;
-  target?: string;
-  /** connections: the speaking labels of the ends (labelOf; default: the speaking part of the end ids) */
-  sourceLabel?: string;
-  targetLabel?: string;
-  /**
-   * a word after the body that a cut keeps (the backing bpmn:DataObject's
-   * `Object` where its id would else be its reference's: ops/artifacts.ts):
-   * the body is cut so that the word fits beside it within the 64
-   * characters, past the 40 of a name
-   */
-  tailWord?: string;
-}
 
 /** How a type's flows are named: the form, its prefix, the separator after the prefix ('' in `flow12` files), the scope of `scopedTo`. */
 export interface FlowStyle {
@@ -255,64 +216,6 @@ export interface IdStyleInfo {
   sequenceFlow: FlowStyle;
   messageFlow: FlowStyle;
 }
-
-/** The request for an element of a kind of `bpmn kinds`. */
-export function kindRequest(def: KindDef, opts: { trigger?: string; name?: string; context?: string; anchorKind?: string } = {}): IdRequest {
-  return { key: def.kind, prefix: def.prefix, typeNames: kindTypeNames(def), ...opts };
-}
-
-/** The request for an element of another BPMN type (bpmn:Message, bpmn:LaneSet, bpmn:Association, ...). */
-export function typeRequest(type: string, opts: { name?: string; context?: string; prefix?: string } = {}): IdRequest {
-  const { prefix, ...rest } = opts;
-  return { key: type, prefix: prefix ?? localName(type), typeNames: [lcfirst(localName(type))], ...rest };
-}
-
-/** The request for a sequence flow or message flow from `source` to `target` (ids; their labels: see flowRequest). */
-export function connectionRequest(
-  type: 'bpmn:SequenceFlow' | 'bpmn:MessageFlow',
-  source: string,
-  target: string,
-  opts: { name?: string; sourceLabel?: string; targetLabel?: string } = {},
-): IdRequest {
-  const { name, ...labels } = opts;
-  return { key: type, prefix: 'Flow', typeNames: [lcfirst(localName(type))], source, target, ...(name ? { name } : {}), ...labels };
-}
-
-/** The request for a connection between two elements: their ids and speaking labels (labelOf). */
-export function flowRequest(type: 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source: El, target: El, name?: string): IdRequest {
-  return connectionRequest(type, source.get<string>('id'), target.get<string>('id'), { ...(name ? { name } : {}), sourceLabel: labelOf(source), targetLabel: labelOf(target) });
-}
-
-/**
- * A word for an element of a kind (the start of an unnamed element's body,
- * the label of an unnamed flow end): Start, MessageStart, End, ErrorEnd,
- * Timer (catch and boundary events), MessageThrow, Intermediate; Exclusive,
- * Parallel (gateways); Task, UserTask, SubProcess; LaneSet, ...; Main (a
- * process, collaboration or definitions). With a context, the prefix says
- * enough for every kind but the events (Gateway_AfterCheckInvoice): ''.
- */
-export function kindWord(key: string, trigger: string | undefined, withContext = false): string {
-  const t = trigger && trigger !== 'none' ? ucfirst(trigger) : '';
-  switch (key) {
-    case 'startEvent':
-      return `${t}Start`;
-    case 'endEvent':
-      return `${t}End`;
-    case 'boundaryEvent':
-      return t || 'Boundary';
-    case 'intermediateCatchEvent':
-      return t || 'Catch';
-    case 'intermediateThrowEvent':
-      return t ? `${t}Throw` : 'Intermediate';
-  }
-  if (withContext) return '';
-  if (/^[a-z]+Gateway$/.test(key)) return ucfirst(key.slice(0, -'Gateway'.length));
-  // the one process of a file, the collaboration of its pools, the definitions of an unnamed new file (defs_main)
-  if (key === 'bpmn:Process' || key === 'bpmn:Collaboration' || key === 'bpmn:Definitions') return 'Main';
-  return ucfirst(localName(key));
-}
-
-const CONNECTIONS = new Set(['bpmn:SequenceFlow', 'bpmn:MessageFlow']);
 
 /** A request for a connection between two ends (its id names them: connectionBase). */
 const isConnection = (req: IdRequest): boolean => CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined;
@@ -356,117 +259,6 @@ function isSpecific(prefix: string, typeNames: string[], trigger: string | undef
   const p = prefix.toLowerCase();
   if (p === family.toLowerCase() || GENERIC.has(p)) return false;
   return typeNames.some((n) => n.toLowerCase().startsWith(p)) || (!!trigger && trigger.toLowerCase().startsWith(p));
-}
-
-/**
- * An id body made from a kind and a context (`AfterCheckInvoice`,
- * `EndAfterTimer`, `timer_on_review`): the words before the first context
- * word among its first three words (the kind: `End`, none for a gateway or
- * task), that word and the words after it (the anchor); a collision suffix
- * is not part of the anchor. Undefined for any other stem.
- */
-function contextParts(stem: string): { head: string[]; word: ContextWord; tail: string[] } | undefined {
-  const words = stemWords(stem.replace(/_\d+$/, ''));
-  const i = words.slice(0, 3).findIndex((w) => CONTEXT_WORDS.has(w.toLowerCase()));
-  if (i === -1 || i === words.length - 1) return undefined;
-  return { head: words.slice(0, i), word: ucfirst(words[i]!.toLowerCase()) as ContextWord, tail: words.slice(i + 1) };
-}
-
-/**
- * The label of an unnamed join a split gave its gateway's id (`<id>_join`,
- * `<id>Join`): the split's anchor and Join (Gateway_AfterCheck_join ->
- * `Check Join`; Gateway_InvoiceOk_join keeps `InvoiceOk_join`).
- */
-function joinLabel(own: string): string | undefined {
-  const m = /^(.+?)_?join$/i.exec(own);
-  if (!m) return undefined;
-  const parts = contextParts(m[1]!);
-  return parts && !parts.head.length && parts.word === 'After' ? `${parts.tail.join(' ')} Join` : undefined;
-}
-
-/**
- * How another id names an element (the ends of a flow, what an element
- * belongs to), so that ids are built from ids: the speaking part of its id
- * (Activity_CheckInvoice -> CheckInvoice, also after a rename of the
- * element; an unnamed element's own context, Gateway_AfterCheckInvoice ->
- * AfterCheckInvoice, so the flows at two unnamed gateways differ; the join
- * of the split after Check -> `Check Join`); else, for an id that says too
- * little (a hash, a number, one or two letters such as Part_B), its name; a
- * text annotation its text; else a word for its kind (Gateway, End, Timer,
- * UserTask, Flow, ...).
- */
-export function labelOf(el: El): string {
-  const id = el.get<string | undefined>('id');
-  const name = el.get<string | undefined>('name');
-  const own = id ? speakingStem(id) : undefined;
-  const named = hasIdWords(name);
-  if (is(el, 'bpmn:TextAnnotation')) {
-    const text = el.get<string | undefined>('text');
-    return own ?? (nameWords(text).length ? text! : 'TextAnnotation');
-  }
-  if (own && (!named || own.replace(/[^A-Za-z]/g, '').length >= 3)) return named ? own : (joinLabel(own) ?? own);
-  if (named) return name!;
-  return kindLabel(el);
-}
-
-/** A word for the kind of an element without a speaking id or name (Gateway, End, Timer, UserTask, Flow, ...). */
-function kindLabel(el: El): string {
-  if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) return 'Flow';
-  const def = kindOf(el);
-  if (def?.family === 'gateway') return 'Gateway';
-  if (def) return kindWord(def.kind, triggerOf(el));
-  return localName(el.$type);
-}
-
-/**
- * The context an anchor gives an unnamed element (`After Check invoice`,
- * `On Review`, `In Payment`): `<word> <labelOf(anchor)>`, but an anchor
- * that is itself unnamed and placed the same way gives its own anchor (the
- * nearest named anchor, once: after Gateway_AfterCheck is `After Check`,
- * never `After AfterCheck`), and an unnamed anchor whose id starts with its
- * context says its kind first (`On Task AfterCheck`).
- */
-export function contextOf(word: ContextWord, anchor: El): string {
-  return anchorContext(word, anchor).context;
-}
-
-/** The context of an unnamed element (contextOf) and, where it repeats an unnamed anchor's own context, a word for that anchor's kind (IdRequest.anchorKind). */
-export interface AnchorContext {
-  context: string;
-  anchorKind?: string;
-}
-
-/**
- * contextOf with the kind of the anchor it names past: after or before an
- * unnamed anchor placed the same way (Gateway_AfterCheck) the context is the
- * anchor's own (`After Check`), and `anchorKind` (`Gateway`) tells the new
- * element apart where its id would repeat the anchor's body
- * (Task_AfterCheckGateway after ExclusiveGateway_AfterCheck in a file whose
- * task prefix says the kind; IdStyle.next).
- */
-export function anchorContext(word: ContextWord, anchor: El): AnchorContext {
-  const label = labelOf(anchor);
-  const id = anchor.get<string | undefined>('id');
-  const own = id ? speakingStem(id) : undefined;
-  if (!own || is(anchor, 'bpmn:TextAnnotation') || hasIdWords(anchor.get<string | undefined>('name'))) return { context: `${word} ${label}` };
-  const parts = contextParts(own);
-  if (!parts) return { context: `${word} ${label}` };
-  if (parts.word === word && (word === 'After' || word === 'Before')) return { context: `${word} ${parts.tail.join(' ')}`, anchorKind: kindLabel(anchor) };
-  // the join's label says its kind (Check Join)
-  if (!parts.head.length && label === own) return { context: `${word} ${kindLabel(anchor)} ${label}` };
-  return { context: `${word} ${label}` };
-}
-
-/**
- * The labels earlier versions gave an element as a flow end (followEnds
- * recognises a flow named by them): an unnamed element whose id tells its
- * context was named by its kind (Gateway, Join, End, Timer).
- */
-export function formerLabels(el: El): string[] {
-  const id = el.get<string | undefined>('id');
-  const own = id ? speakingStem(id) : undefined;
-  if (!own || hasIdWords(el.get<string | undefined>('name')) || is(el, 'bpmn:TextAnnotation') || !contextParts(own)) return [];
-  return [kindOf(el)?.family === 'gateway' && /join$/i.test(own) ? 'Join' : kindLabel(el)];
 }
 
 /** A flow form as read from a file: the forms new flows get, or hashed / numbered flows (new ones get `named` with their prefix). */
@@ -703,7 +495,7 @@ function learn(defs: El | undefined, d?: DeclaredConventions): Learned {
     // scopedTo flow 0.6 cut to an empty target word (Flow_KotO_WarenwirtschaftssystemabgleichTo)
     if (p) {
       let req: IdRequest | undefined;
-      const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: labelOf(el.get<El>('sourceRef')), targetLabel: labelOf(el.get<El>('targetRef')) }));
+      const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: new ElementLabels(el.get<El>('sourceRef')).label(), targetLabel: new ElementLabels(el.get<El>('targetRef')).label() }));
       for (const form of ID_FORMS) if (!seen.some((f) => f.form === form) && cutOfForm(id, form, p, request)) seen.push({ form, prefix: p });
       const scope = seen.some((f) => f.form === 'scopedTo') ? undefined : legacyScopedCut(id, p, source, target);
       if (scope) seen.push({ form: 'scopedTo', prefix: p, scope });
@@ -860,7 +652,7 @@ function learn(defs: El | undefined, d?: DeclaredConventions): Learned {
     for (const { el, id, source, target } of v.joined) {
       let a: string | undefined;
       let b: string | undefined;
-      const ends = { source: (): string => (a ??= labelOf(el.get<El>('sourceRef'))), target: (): string => (b ??= labelOf(el.get<El>('targetRef'))) };
+      const ends = { source: (): string => (a ??= new ElementLabels(el.get<El>('sourceRef')).label()), target: (): string => (b ??= new ElementLabels(el.get<El>('targetRef')).label()) };
       const p = glued.find((p) => id.startsWith(p) && gluedJoinedOf(id, p, ends));
       if (p) voteNumbered(p);
       else countFlow(v, el, id, source, target);
@@ -907,7 +699,7 @@ function mayBeOf(id: string, style: FlowStyle): boolean {
 }
 
 /**
- * Whether `id` is a flow bpmn-cli named by its ends (their labels, labelOf,
+ * Whether `id` is a flow bpmn-cli named by its ends (their labels, ElementLabels.label,
  * read when needed) after the glued prefix `prefix` in a snake_case or
  * Pascal_Snake body (namedBase with a glued head:
  * `fweigh_parcel_to_label_parcel`, `fWeigh_Parcel_To_Label_Parcel`): before
@@ -1022,6 +814,12 @@ export class IdStyle {
   static of(conventions?: IdConventions): IdStyle {
     const d = DeclaredConventions.of(conventions);
     return d ? new IdStyle(learn(undefined), d) : IdStyle.DEFAULT;
+  }
+
+  /** A request by key alone (a kind of `bpmn kinds`, or a BPMN type): the case and collision suffix of a split's join gateway. */
+  static keyRequest(key: string): IdRequest {
+    const def = kindByName(key);
+    return def ? kindRequest(def) : typeRequest(key);
   }
 
   /** Whether declared conventions apply (IdStyle.infer with conventions that declare a usable prefix). */
@@ -1168,7 +966,7 @@ export class IdStyle {
 
   /** The separator of the collision suffix of a kind's ids (split's join gateway: gateway_okJoin2). */
   suffixSep(key: string): string {
-    return this.sepFor(keyRequest(key));
+    return this.sepFor(IdStyle.keyRequest(key));
   }
 
   private caseLike(name: string, lowerFirst: boolean): string {
@@ -1505,12 +1303,12 @@ export class IdStyle {
    * decides (camelCase / PascalCase `<id>Join`, snake_case `<id>_join`),
    * and a gateway id that does not start with a prefix the conventions
    * accept (an explicit Gateway_Check) gives the declared prefix and
-   * `label` (the gateway's: labelOf) with Join: gateway_checkJoin; one whose
+   * `label` (the gateway's: ElementLabels.label) with Join: gateway_checkJoin; one whose
    * body after that prefix is not in the declared case, the words of that
    * body: gateway_Approved under camelCase gives gateway_approvedJoin.
    */
   joinId(gatewayId: string, key = 'exclusiveGateway', label = speakingStem(gatewayId) ?? gatewayId): string {
-    const req = keyRequest(key);
+    const req = IdStyle.keyRequest(key);
     const head = this.declaredHead(req);
     const state = { type: typeOf(key) };
     if (head !== undefined && !this.d!.inDeclaredCase(gatewayId, state)) {
@@ -1698,11 +1496,6 @@ function effectiveHead(style: FlowStyle, c: Body): { head: string; form: FlowFor
 /** No such votes: a file with evidence of its own, or no declared conventions. */
 const NO_VOTES: Votes = { kind: 0, literal: 0, lower: 0, upper: 0 };
 
-/** A request by key alone (a kind of `bpmn kinds`, or a BPMN type): the case and collision suffix of a split's join gateway. */
-export function keyRequest(key: string): IdRequest {
-  const def = kindByName(key);
-  return def ? kindRequest(def) : typeRequest(key);
-}
 
 /**
  * Whether a flow id is a cut of a form built from its ends' ids with the

@@ -15,7 +15,8 @@
  * Doc.initProcess.
  */
 import type { Doc } from '../model/document.js';
-import { labelOf, typeRequest } from '../ids/style.js';
+import { ElementLabels } from '../ids/ElementLabels.js';
+import { typeRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
 import { addTo, is, many, type El } from '../model/utils/moddle.js';
 import { ZEEBE_URI } from './descriptor.js';
@@ -49,6 +50,6 @@ export function zeebeUserTaskDefault(doc: Doc, el: El): boolean {
 export function definitionIdDefault(doc: Doc, event: El, def: El): void {
   if (doc.platform() !== 'camunda8' || def.get<string | undefined>('id')) return;
   const eventId = event.get<string | undefined>('id') ?? '';
-  const label = (eventId && speakingStem(eventId)) || labelOf(event);
+  const label = (eventId && speakingStem(eventId)) || new ElementLabels(event).label();
   def.set('id', doc.allocateId(typeRequest(def.$type, { context: label })).id);
 }

@@ -29,7 +29,7 @@
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
-import { typeRequest } from '../ids/style.js';
+import { typeRequest } from '../ids/utils/requests.js';
 import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
 import { isC7Uri } from '../platform/descriptor.js';
