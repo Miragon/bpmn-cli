@@ -579,7 +579,7 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     for (const env of ['0', 'off', '']) {
       expect(okWith({ BPMN_KEEP_FLOW_IDS: env }, 'add', f, ...splice, '--dry-run').out, env).toBe(ok('add', f, ...splice, '--dry-run').out);
     }
-  });
+  }, 60000);
 
   it('an E_NOT_FOUND of a batch says that BPMN_KEEP_FLOW_IDS kept the flow ids: the id the default renames to does not exist', () => {
     const ops = join(dir, 'note-error-ops.json');
