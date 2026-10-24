@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OPS_SCHEMA, parseOps } from '../src/ops/batch.js';
 import { kindsJson } from '../src/index.js';
-import { FORMAT_OP_NAMES } from '../src/ops/types.js';
+import { FORMAT_OP_NAMES } from '../src/ops/utils/op-names.js';
 import { Doc } from '../src/model/Doc.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
 import { layoutView } from '../src/query/layout-view.js';

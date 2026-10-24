@@ -14,8 +14,8 @@
  * Without the profile (`--platform none`, a file of another platform) the
  * operation warning stays.
  */
-import type { Warning } from '../shared/CliError.js';
-import { subjectOf, type ProfileFinding } from '../platform/utils/finding.js';
+import type { Warning } from '../../shared/CliError.js';
+import { subjectOf, type ProfileFinding } from '../../platform/utils/finding.js';
 
 /** Hidden list of profile subjects an operation warning repeats (not serialised). */
 const COVERS: unique symbol = Symbol('covered-profile-subjects');

@@ -20,33 +20,9 @@ import { closestKey, editDistance } from '../shared/utils/fuzzy.js';
 import { FLOW_NODE_FAMILIES, KindError, gatewayKindList, kindByName, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
 import { ALIAS, checkAliases } from './aliases.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './rules.js';
-import {
-  OP_NAMES,
-  parseSpaceAmount,
-  type AddOp,
-  type AlignOp,
-  type ColorOp,
-  type ConnectOp,
-  type ExtOp,
-  type LabelOp,
-  type PlaceOp,
-  type RouteOp,
-  type SpaceOp,
-  type TidyOp,
-  type CompactOp,
-  type FlowOptions,
-  type MoveOp,
-  type Op,
-  type OrderOp,
-  type Placement,
-  type RemoveOp,
-  type RetypeOp,
-  type SetOp,
-  type Selectors,
-  type SplitBranch,
-  type SplitOp,
-  type TriggerOptions,
-} from './types.js';
+import { OP_NAMES } from './utils/op-names.js';
+import { parseSpaceAmount } from './utils/space-amount.js';
+import type { AddOp, AlignOp, ColorOp, ConnectOp, ExtOp, LabelOp, PlaceOp, RouteOp, SpaceOp, TidyOp, CompactOp, FlowOptions, MoveOp, Op, OrderOp, Placement, RemoveOp, RetypeOp, SetOp, Selectors, SplitBranch, SplitOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
 /* field specs                                                          */

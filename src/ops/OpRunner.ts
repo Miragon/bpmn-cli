@@ -18,7 +18,8 @@ import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
 import { reportStaleIdPrefixes, setProperties } from './set.js';
 import { splitFlow } from './split.js';
-import { isFormatOp, type Op } from './types.js';
+import { isFormatOp } from './utils/op-names.js';
+import type { Op } from './types.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {

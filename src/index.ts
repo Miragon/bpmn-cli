@@ -41,7 +41,7 @@ export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
 export { layoutModel } from './layout/index.js';
-export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
+export { FORMAT_OP_NAMES, isFormatOp } from './ops/utils/op-names.js';
 export type {
   Op,
   AddOp,

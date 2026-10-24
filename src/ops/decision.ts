@@ -41,7 +41,7 @@ import { modelError } from '../shared/utils/errors.js';
 import { kindLabel } from '../model/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { coversProfileSubjects } from './covers.js';
+import { coversProfileSubjects } from './utils/covers.js';
 import { CAMUNDA_URI, OPERATON_URI, C7_URIS } from '../platform/CamundaDescriptor.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 

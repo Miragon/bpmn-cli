@@ -11,7 +11,8 @@ import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/report/guide.js';
 import { guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/index.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/utils/slug.js';
 import { KINDS } from '../src/model/kinds.js';
-import { OP_NAMES, type Op } from '../src/ops/types.js';
+import { OP_NAMES } from '../src/ops/utils/op-names.js';
+import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 
 /** Runs parseOps and returns the thrown CliError. */

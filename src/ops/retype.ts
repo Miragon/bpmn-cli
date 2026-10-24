@@ -50,7 +50,7 @@ import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type 
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { applyTrigger, bindRefAs } from './events.js';
-import { coversProfileSubjects } from './covers.js';
+import { coversProfileSubjects } from './utils/covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
 import { dropIgnoredConditions } from './flows.js';
@@ -74,7 +74,7 @@ import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
-export { withoutProfileDuplicates } from './covers.js';
+export { withoutProfileDuplicates } from './utils/covers.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
 

@@ -74,7 +74,7 @@ import { type Warning } from '../shared/CliError.js';
 import { addTo, BPMN_NS, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { kindLabel } from '../model/kinds.js';
-import { coversProfileSubjects } from './covers.js';
+import { coversProfileSubjects } from './utils/covers.js';
 import { changeOf, definitionsOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';
 import { CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../platform/CamundaDescriptor.js';

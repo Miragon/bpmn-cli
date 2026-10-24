@@ -5,7 +5,7 @@ import { SWATCHES } from '../diagram/write.js';
 import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
 import { SINGLE_TOP } from '../ops/ext.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
-import { OP_NAMES } from '../ops/types.js';
+import { OP_NAMES } from '../ops/utils/op-names.js';
 import { ZEEBE } from '../platform/ZeebeDescriptor.js';
 import { usageError } from '../shared/utils/errors.js';
 import { ERROR_CATALOGUE, EXIT_CODE_DOCS, ID_CONVENTIONS, NESTED_SELECTORS, NON_INTERRUPTING_DOC, PLACEMENT_DOCS, PLACEMENT_NOTES, TRIGGER_OPTIONS } from './guide.js';
