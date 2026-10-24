@@ -7,22 +7,18 @@
 import { SWATCHES } from '../diagram/write.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
 
-export interface SubcommandDoc {
-  name: string;
-  /** commander's arguments after the name: `<file> <id>` */
-  arguments: string;
-  /** the description `--help` prints */
-  help: string;
-}
-
-export interface CommandDoc {
+/** What commander registers of a command. */
+export interface CommandSignature {
   name: string;
   /** commander's arguments after the name: `<file> [id]` */
   arguments?: string;
   aliases?: string[];
   /** the description `--help` prints */
   help: string;
-  subcommands?: SubcommandDoc[];
+}
+
+export interface CommandDoc extends CommandSignature {
+  subcommands?: CommandSignature[];
   /** the guide's usage line */
   usage: string;
   summary: string;

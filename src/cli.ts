@@ -21,16 +21,14 @@
  * --json prints compact JSON (--pretty indents it).
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, dirname, extname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
 import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './ops/batch.js';
 import { LayoutDebug } from './shared/LayoutDebug.js';
 import { layoutProblems } from './diagram/metrics.js';
-import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
+import { changeHighlight, RENDER_MAX_SIZE, type RenderOptions } from './render/index.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
-import { AROUND_DEFAULT_DEPTH } from './query/context.js';
 import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
 import { assertProcessId, assertTarget, Doc } from './model/document.js';
 import { CliError, type Warning } from './shared/CliError.js';
@@ -40,7 +38,7 @@ import { guideShort, guideText, guideTopic, KINDS_SECTION_NAMES, kindsJson, kind
 import { assertKindToken } from './model/kinds.js';
 import { projectIdConventions } from './node/bpmnlint.js';
 import { assertNewFile, checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
-import { renderPng } from './node/render.js';
+import { ImageWriter, type ImageFormat, type Shot } from './node/ImageWriter.js';
 import { listAllExtensions } from './ops/ext.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './ops/rules.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
@@ -49,6 +47,7 @@ import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profi
 import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
 import { findElements } from './query/model-view.js';
 import { CommandCatalogue } from './report/CommandCatalogue.js';
+import { RenderReport } from './report/RenderReport.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -1030,8 +1029,8 @@ withJsonOptions(command(program, 'metrics')).action(
 );
 
 /* render ------------------------------------------------------------- */
-const RENDER_FORMATS = ['png', 'svg'] as const;
-type RenderFormat = (typeof RENDER_FORMATS)[number];
+const RENDER_FORMATS: readonly ImageFormat[] = ['png', 'svg'];
+type RenderFormat = ImageFormat;
 
 function boundedNumber(what: string, min: number, max: number, integer: boolean) {
   return (v: string): number => {
@@ -1062,123 +1061,9 @@ function renderTarget(v: string): string {
   return v;
 }
 
-/** Thousands with commas (1,856). */
-const thousands = (v: number): string => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
 /** Comma-separated ids; the option may repeat (--highlight A,B --highlight C). */
 function collectIds(v: string, prev: string[] | undefined): string[] {
   return [...(prev ?? []), ...(splitList(v) ?? [])];
-}
-
-/** One written image of a render (a tile: its columns / band). */
-interface ShotImage {
-  out: string;
-  width: number;
-  height: number;
-  tokens: number;
-  columns?: [number, number];
-  band?: number;
-}
-
-/** What `render` (and `--render` of a mutating command) wrote and found. */
-interface Shot {
-  out: string;
-  format: RenderFormat;
-  width: number;
-  height: number;
-  tokens: number;
-  scale: number;
-  plane: string;
-  planes: string[];
-  notes: string[];
-  problems: RenderProblem[];
-  nodes?: string[];
-  /** with tiles: every image written */
-  images?: ShotImage[];
-}
-
-/**
- * Renders `xml` and writes the image: to `out`, to stdout (`-`), else to
- * bpmn-cli/<stem>.<format> in the temp directory; tiles get -1, -2, ...
- * before the extension.
- */
-async function writeRender(xml: string, opts: RenderOptions, format: RenderFormat, out: string | undefined, stem: string): Promise<Shot> {
-  let parts: Array<{ bytes: string | Uint8Array; width: number; height: number; tokens: number; columns?: [number, number]; band?: number }>;
-  let r: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
-  if (format === 'svg') {
-    const svg = await renderSvg(xml, opts);
-    parts = (svg.tiles ?? [svg]).map((t) => ({ bytes: t.svg, width: t.width, height: t.height, tokens: t.tokens, ...('columns' in t && t.columns ? { columns: t.columns } : {}), ...('band' in t && t.band ? { band: t.band } : {}) }));
-    r = svg;
-  } else {
-    const png = await renderPng(xml, opts);
-    parts = png.images.map((i) => ({ bytes: i.png, width: i.width, height: i.height, tokens: i.tokens, ...(i.columns ? { columns: i.columns } : {}), ...(i.band ? { band: i.band } : {}) }));
-    r = png;
-  }
-  const images: ShotImage[] = [];
-  if (out === '-') {
-    process.stdout.write(parts[0]!.bytes);
-    images.push({ out: '-', width: parts[0]!.width, height: parts[0]!.height, tokens: parts[0]!.tokens });
-  } else {
-    const target = out ?? join(tmpdir(), 'bpmn-cli', `${stem}.${format}`);
-    const ext = extname(target);
-    for (const [i, p] of parts.entries()) {
-      const file = parts.length > 1 ? `${target.slice(0, target.length - ext.length)}-${i + 1}${ext}` : target;
-      try {
-        await mkdir(dirname(file), { recursive: true });
-        await writeFile(file, p.bytes);
-      } catch (err) {
-        throw ioError('E_IO', `Cannot write ${file}: ${(err as Error).message}`, { file, hint: 'Pass -o <file> in a writable directory.' });
-      }
-      images.push({ out: file, width: p.width, height: p.height, tokens: p.tokens, ...(p.columns ? { columns: p.columns } : {}), ...(p.band ? { band: p.band } : {}) });
-    }
-  }
-  const first = images[0]!;
-  return {
-    out: first.out,
-    format,
-    width: first.width,
-    height: first.height,
-    tokens: first.tokens,
-    scale: r.scale,
-    plane: r.plane,
-    planes: r.planes,
-    notes: r.notes,
-    problems: r.problems,
-    ...(r.nodes ? { nodes: r.nodes } : {}),
-    ...(images.length > 1 ? { images } : {}),
-  };
-}
-
-/** The text of a render: one `wrote` line per image, then the crop, the halos, the numbered problems, the planes and the notes. */
-function renderShotLines(shot: Shot, extra: { crop?: string; halos?: string; problems?: string } = {}): string[] {
-  const images = shot.images ?? [{ out: shot.out, width: shot.width, height: shot.height, tokens: shot.tokens }];
-  const lines = images.map((im, i) => {
-    const tile = images.length > 1 ? `  tile ${i + 1}/${images.length}${im.columns ? ` c${im.columns[0]}-c${im.columns[1]}` : ''}${im.band ? ` band ${im.band}` : ''}` : '';
-    return `wrote ${im.out === '-' ? '<stdout>' : im.out}  ${im.width}x${im.height} px  ~${thousands(im.tokens)} image tokens  scale ${scaleText(shot.scale)}  plane ${shot.plane}${tile}`;
-  });
-  if (images.length > 1) lines.push(`${images.length} tiles, ~${thousands(images.reduce((s, im) => s + im.tokens, 0))} image tokens in all`);
-  if (extra.crop) lines.push(`crop: ${extra.crop}: ${shot.nodes?.length ?? 0} node${shot.nodes?.length === 1 ? '' : 's'}`);
-  if (extra.halos) lines.push(`halos: ${extra.halos}`);
-  if (extra.problems !== undefined) {
-    if (!shot.problems.length) lines.push(`${extra.problems}: none`);
-    else {
-      lines.push(`${extra.problems} (numbered in the image):`);
-      for (const p of shot.problems) {
-        const where = !p.drawn ? '  (not in the image)' : p.tile ? `  (tile ${p.tile})` : '';
-        lines.push(`  ${p.n} ${p.kind} [${p.ids.join(', ')}]${p.detail ? ` ${p.detail}` : ''}${where}`);
-      }
-    }
-  }
-  if (shot.planes.length) lines.push(`other planes (--plane <id>): ${shot.planes.join(', ')}`);
-  for (const note of shot.notes) lines.push(`note: ${note}`);
-  return lines;
-}
-
-/** The halo legend of a highlight: the colour names of HALO_COLORS. */
-function haloLegend(h: RenderHighlight): string | undefined {
-  const names: Record<keyof RenderHighlight, string> = { created: 'green', changed: 'orange', moved: 'blue' };
-  const parts = (['created', 'changed', 'moved'] as const).filter((k) => h[k]?.length).map((k) => `${names[k]} ${k}`);
-  return parts.length ? parts.join(', ') : undefined;
 }
 
 /** `--render <file>` of a mutating command: the result drawn with what the change touched and the problems it added; a render failure is reported, the mutation stands. */
@@ -1187,13 +1072,11 @@ async function renderMutationResult(xml: string, report: MutationReport, target:
   const touched = [...highlight.created, ...highlight.changed, ...highlight.moved];
   const opts: RenderOptions = { maxSize: RENDER_MAX_SIZE, highlight, problems: report.layout.metrics?.added ?? [], ...(touched.length ? { focus: touched } : {}) };
   try {
-    const shot = await writeRender(xml, opts, renderFormat(undefined, target), target, 'result');
-    const halos = haloLegend(highlight);
-    const lines = renderShotLines(shot, { ...(halos ? { halos } : {}), problems: 'layout problems the change added' });
-    return { shot, lines: [`render: ${lines[0]!}`, ...lines.slice(1).map((l) => `  ${l}`)], json: { ...shot } };
+    const shot = await new ImageWriter(process.stdout).write(xml, opts, renderFormat(undefined, target), target, 'result');
+    return { shot, lines: new RenderReport(shot).resultLines(highlight), json: { ...shot } };
   } catch (err) {
     if (!isCliError(err)) throw err;
-    return { lines: [`render: failed ${err.code}: ${err.message}${err.details.hint ? `  (${String(err.details.hint)})` : ''}`], json: { error: err.toJSON() } };
+    return { lines: [RenderReport.failureLine(err)], json: { error: err.toJSON() } };
   }
 }
 
@@ -1244,26 +1127,15 @@ withJsonOptions(
       ...(o['problems'] ? { problems: true } : {}),
       ...(o['tiles'] ? { tiles: true } : {}),
     };
-    const crop =
-      around !== undefined
-        ? `around ${around} (depth ${(o['depth'] as number | undefined) ?? AROUND_DEFAULT_DEPTH}${o['inner'] ? ', inner' : ''})`
-        : path
-          ? `path ${path[0]} -> ${path[1]}${via ? ` via ${via.join(', ')}` : ''}`
-          : o['scope'] !== undefined
-            ? `scope ${String(o['scope'])}`
-            : ids.length
-              ? `${ids.length} id${ids.length > 1 ? 's' : ''}`
-              : undefined;
     const xml = file === '-' ? decodeXmlBytes(await readStdin('the model'), 'stdin') : await readXml(file);
     const stem = file === '-' ? 'stdin' : basename(file).replace(/\.(bpmn|xml)$/i, '');
-    const shot = await writeRender(xml, opts, format, out, stem);
+    const shot = await new ImageWriter(process.stdout).write(xml, opts, format, out, stem);
     const report = out === '-' ? process.stderr : process.stdout;
     if (json) {
       printJson({ file, ...shot }, !!o['pretty'], report);
       return;
     }
-    const halos = highlight?.length ? 'orange --highlight' : undefined;
-    print(renderShotLines(shot, { ...(crop ? { crop } : {}), ...(halos ? { halos } : {}), ...(o['problems'] ? { problems: 'problems' } : {}) }).join('\n'), report);
+    print(new RenderReport(shot).renderLines(opts).join('\n'), report);
   }, json);
 });
 

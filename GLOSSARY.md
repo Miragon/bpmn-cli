@@ -24,3 +24,5 @@ a new concept gets its line here first.
 | **Id style** | The way a file spells its ids (prefixes, case, flow form), learned from the file. |
 | **Id conventions** | The id rules a project declares in the `element-id-naming` rule of its `.bpmnlintrc`. |
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
+| **Command catalogue** | The commands of `bpmn` with their arguments, `--help` text and guide usage, and the options of every write (`report/CommandCatalogue.ts`). |
+| **Shot** | The image or tiles one render wrote, with size, image tokens, plane and numbered problems: `node/ImageWriter.ts` writes it, `report/RenderReport.ts` prints it. |

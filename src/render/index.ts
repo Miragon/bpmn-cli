@@ -2,7 +2,7 @@
  * The drawing as an image: one diagram plane (its DI) drawn as SVG without a
  * browser, close to how bpmn-js draws it (not pixel-identical), so an agent
  * can look at what it changed (`bpmn render`; the node layer rasterises the
- * SVG to PNG, src/node/render.ts).
+ * SVG to PNG, src/node/PngRenderer.ts).
  *
  * CONTRACT
  *  - renderSvg(xml, opts) parses the document (E_PARSE) and draws one plane:
