@@ -64,7 +64,8 @@
 import type { Doc } from '../model/document.js';
 import { CliError } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
+import { anchorContext, kindRequest, type AnchorContext, type IdRequest } from '../ids/style.js';
+import type { ContextWord } from '../ids/utils/id-words.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
 import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet, renamedNote, type Change } from '../model/change-set.js';

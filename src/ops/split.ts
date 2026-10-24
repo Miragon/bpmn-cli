@@ -26,7 +26,7 @@
  */
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { type CliError } from '../shared/CliError.js';
+import type { CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/change-set.js';

@@ -185,8 +185,10 @@
  *  (ops/set.ts recordIdState). Without declared conventions nothing of
  *  this runs.
  */
-import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, keptTail, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, SUFFIX_WORD, withLetter, withSuffix } from './utils/slug.js';
+import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isSuffix, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, SUFFIX_WORD, withSuffix } from './utils/slug.js';
 import type { IdRegistry } from './IdRegistry.js';
+import { FORM_JOIN, ID_FORMS, IdFitter, LEGACY_BASE, type IdForm } from './IdFitter.js';
+import { beginAlike, CONTEXT_WORDS, GLUED, HASH, lcfirst, localName, PREFIXED, speakingStem, stem, stemWords, TOOL_DEFAULTS, ucfirst, type ContextWord } from './utils/id-words.js';
 import type { IdConventions } from './conventions.js';
 import { kindByName, kindOf, KINDS, triggerOf, type KindDef } from '../model/kinds.js';
 import { is, isBpmnElement, walk, type El } from '../model/utils/moddle.js';
@@ -251,14 +253,6 @@ export interface IdStyleInfo {
   sequenceFlow: FlowStyle;
   messageFlow: FlowStyle;
 }
-
-/* ------------------------------------------------------------------ */
-/* requests                                                             */
-/* ------------------------------------------------------------------ */
-
-const lcfirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
-const ucfirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-const localName = (type: string): string => type.slice(type.indexOf(':') + 1);
 
 /**
  * Names a type-named prefix of the kind could use: the kind and its BPMN
@@ -333,16 +327,6 @@ const CONNECTIONS = new Set(['bpmn:SequenceFlow', 'bpmn:MessageFlow']);
 /** A request for a connection between two ends (its id names them: connectionBase). */
 const isConnection = (req: IdRequest): boolean => CONNECTIONS.has(req.key) && req.source !== undefined && req.target !== undefined;
 
-/** The longest base id 0.6 and earlier generated (MAX_ID less room for a collision suffix `_99`): followEnds still recognises the flows it cut. */
-const LEGACY_BASE = MAX_ID - 3;
-
-/* ------------------------------------------------------------------ */
-/* classification                                                       */
-/* ------------------------------------------------------------------ */
-
-const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
-/** A number glued to its prefix: `flow12`, `f3`. */
-const GLUED = /^([A-Za-z]+)(\d+)$/;
 /** `<scope>_<A>To<B>` after a flow prefix: Flow_KotO_ValidateToReserve. */
 const SCOPED_TO = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To([A-Z][A-Za-z0-9]*)$/;
 /** A glued flow named by its ends with a collision suffix (`flowCheckOrderToShip_2`, a flow bpmn-cli named in a file of flow12 ids): not a prefix and a number. */
@@ -361,10 +345,6 @@ const SCOPED_CUT = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To\d*$/;
  * next end event) and of its family.
  */
 const MIN_EVIDENCE = 2;
-
-/** Tool defaults that say nothing about a file's conventions (the Camunda Modeler's first start event). */
-const TOOL_DEFAULTS = new Set(['StartEvent_1']);
-const HASH = /^[01][0-9a-z]{6}$/;
 
 type BodyClass = Body | 'hash' | 'numbered' | 'lower' | 'other';
 
@@ -411,57 +391,6 @@ function isSpecific(prefix: string, typeNames: string[], trigger: string | undef
   const p = prefix.toLowerCase();
   if (p === family.toLowerCase() || GENERIC.has(p)) return false;
   return typeNames.some((n) => n.toLowerCase().startsWith(p)) || (!!trigger && trigger.toLowerCase().startsWith(p));
-}
-
-/** The id without its prefix (`serviceTask_checkStock` -> `checkStock`). */
-function stem(id: string): string {
-  const i = id.indexOf('_');
-  return i === -1 ? id : id.slice(i + 1);
-}
-
-/**
- * The part of an id that says what the element is (`CheckInvoice` of
- * Activity_CheckInvoice, `checkOrder` of a bare checkOrder), or undefined
- * for ids that say nothing: tool defaults (StartEvent_1), Camunda Modeler
- * hashes (Activity_0k3x9qa), numbers (Task_12, flow12) and machine ids
- * (sid-6F1C..., UUIDs: mostly digits).
- */
-export function speakingStem(id: string): string | undefined {
-  if (TOOL_DEFAULTS.has(id) || GLUED.test(id)) return undefined;
-  // a collision suffix belongs to the stem (reviewOrder_2, Activity_Check_2); `Task_12` is a number, not a suffix
-  const suffixed = /^(.+)_(\d+)$/.exec(id);
-  if (suffixed && (suffixed[1]!.includes('_') || nameWords(suffixed[1]).length > 1)) {
-    const base = speakingStem(suffixed[1]!);
-    return base ? `${base}_${suffixed[2]}` : undefined;
-  }
-  const s = stem(id);
-  if (HASH.test(s) || /^\d+$/.test(s) || !/[A-Za-z]/.test(s)) return undefined;
-  const digits = s.replace(/[^0-9]/g, '').length;
-  if (digits >= 3 && digits * 4 >= s.length && !hasWord(s)) return undefined;
-  return s;
-}
-
-/**
- * Whether a stem with many digits still has a word (`AfterCheck2024`,
- * `Order01001`): a run of four or more letters with one that is no hex digit.
- * Machine ids have none (`sid-6F1C3A2B-...`, UUIDs, `a3f2c1de`).
- */
-function hasWord(s: string): boolean {
-  return (s.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
-}
-
-/** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_StartInPayment). */
-export type ContextWord = 'After' | 'Before' | 'On' | 'In';
-const CONTEXT_WORDS = new Set(['after', 'before', 'on', 'in']);
-
-/** The words of an id stem, split at case changes, between letters and digits and at separators (`After4AugenPrinzip` -> After, 4, Augen, Prinzip). */
-function stemWords(stem: string): string[] {
-  return stem
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
-    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
 }
 
 /**
@@ -1031,7 +960,7 @@ function gluedJoinedOf(id: string, prefix: string, ends: { source: () => string;
     if (!id.includes(join) || id.charAt(prefix.length) !== slug(ends.source()).charAt(0)) continue;
     // its source whole and the join: also one whose target a splice changed while its id was kept (W_FLOW_ID_STALE)
     if (id.startsWith(`${prefix}${slug(ends.source())}${join}`)) return true;
-    const at = (max: number, legacy = false): string => pairEnds(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max, legacy, closingNumber('_'));
+    const at = (max: number, legacy = false): string => new IdFitter({ legacy }).pair(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max);
     const uncut = at(Infinity);
     if (fits(uncut) || (uncut.length > MAX_ID - 4 && [0, 1, 2, 3, 4].some((k) => fits(at(MAX_ID - k))))) return true;
     const legacy = at(LEGACY_BASE, true);
@@ -1048,7 +977,7 @@ function gluedJoinedOf(id: string, prefix: string, ends: { source: () => string;
  */
 function otherStyles(v: FlowVotes, style: FlowStyle): FlowStyle[] {
   const out = new Map<string, FlowStyle>();
-  const key = (s: FlowStyle): string => (s.form === 'named' ? `named|${namedHead(s.prefix, s.sep, 'pascal', true).head}` : `${s.form}|${s.prefix}|${s.scope ?? ''}`);
+  const key = (s: FlowStyle): string => (s.form === 'named' ? `named|${new IdFitter({ legacy: true }).namedHead(s.prefix, s.sep).head}` : `${s.form}|${s.prefix}|${s.scope ?? ''}`);
   const add = (s: FlowStyle): void => {
     if (!out.has(key(s))) out.set(key(s), s);
   };
@@ -1829,28 +1758,12 @@ export class IdStyle {
     return { id, base };
   }
 
-  /** The ends of a `named` flow in a case and the word between them (`CheckInvoice`, `To`, `BookInvoice`; `legacy`: slugs cut as 0.6 cut them). */
-  private flowParts(source: string, target: string, glued: boolean, legacy: boolean, c: Body): [string, string, string] {
-    switch (c) {
-      case 'camel': {
-        const a = camelSlug(source, legacy);
-        return [glued ? ucfirst(a) : a, 'To', slugify(target, legacy)];
-      }
-      case 'snake':
-        return [snakeSlug(source, legacy), '_to_', snakeSlug(target, legacy)];
-      case 'pascalSnake':
-        return [pascalSnakeSlug(source, legacy), '_To_', pascalSnakeSlug(target, legacy)];
-      default:
-        return [slugify(source, legacy), 'To', slugify(target, legacy)];
-    }
-  }
-
   /**
    * `legacy`: the ends cut as 0.6 and earlier cut them (legacyFitPair;
    * derivedBases). A head (the flow prefix, and a scopedTo flow's scope) that
    * leaves the ends fewer than 16 of the 64 characters stays, per flow,
-   * where the ends fit beside it at whole words (wholeEnds,
-   * wholeIdFormBase), and gives way elsewhere to a named flow with the
+   * where the ends fit beside it at whole words (IdFitter.whole,
+   * IdFitter.wholeIdForm), and gives way elsewhere to a named flow with the
    * default prefix Flow_, a scopedTo flow's ends named by their end words,
    * so one file can hold both forms (not `legacy`: 0.6 kept the head and
    * cut the ends).
@@ -1865,17 +1778,19 @@ export class IdStyle {
       const t = req.target!;
       const own = this.scopeOf(req, scope!);
       const head = `${prefix}_${own}_`;
-      const [a, b] = [endWord(s, own, 'Start', legacy), endWord(t, own, 'End', legacy)];
+      const fitter = new IdFitter({ legacy, sep: '' });
+      const [a, b] = [fitter.endWord(s, own, 'Start'), fitter.endWord(t, own, 'End')];
       if (legacy) return { base: cutAt(`${head}${a}To${b}`, max, true), sep: '' };
       // the two words share the room after the scope like any flow's ends (0.6 cut the whole id: Flow_KotO_ValidateTo); a
       // long head stays where they fit beside it whole, elsewhere the flow is named by its end words (Flow_Validate_To_Pack)
-      const base = long(head, 'To') ? wholeEnds(head, a, 'To', b, max, closingNumber('')) : pairEnds(head, a, 'To', b, max, false, closingNumber(''));
+      const base = long(head, 'To') ? fitter.whole(head, a, 'To', b, max) : fitter.pair(head, a, 'To', b, max);
       return base !== undefined ? { base, sep: '' } : { base: this.namedBase({ ...req, sourceLabel: a, targetLabel: b }, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
     }
     const own = form === 'stemTo' ? '' : '_';
-    if (!long(`${prefix}_`, FORM_JOIN[form])) return { base: idFormBase(form, `${prefix}_`, req, max, legacy), sep: own };
+    const fitter = new IdFitter({ legacy });
+    if (!long(`${prefix}_`, FORM_JOIN[form])) return { base: fitter.idForm(form, `${prefix}_`, req, max), sep: own };
     // a long flow prefix stays where the ends fit beside it at whole words, elsewhere a named flow with Flow_
-    const base = wholeIdFormBase(form, `${prefix}_`, req, max);
+    const base = fitter.wholeIdForm(form, `${prefix}_`, req, max);
     return base !== undefined ? { base, sep: own } : { base: this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
   }
 
@@ -1904,43 +1819,32 @@ export class IdStyle {
       };
       const source = label(req.source!, req.sourceLabel);
       const target = label(req.target!, req.targetLabel);
-      let [a, join, b] = this.flowParts(source, target, false, legacy, c);
-      if (this.lettersOnly(req) && /^[0-9]/.test(a)) a = this.flowParts(`From ${source}`, target, false, legacy, c)[0];
-      return { base: pairEnds(head, a, join, b, max, legacy, closingNumber(sep), [c === 'camel' ? nameWords(source) : undefined]), sep };
+      const fitter = new IdFitter({ body: c, legacy, sep, ...(c === 'camel' ? { names: nameWords(source) } : {}) });
+      let [a, join, b] = fitter.ends(source, target, false);
+      if (this.lettersOnly(req) && /^[0-9]/.test(a)) a = fitter.ends(`From ${source}`, target, false)[0];
+      return { base: fitter.pair(head, a, join, b, max), sep };
     }
     if (form === 'scopedTo') {
       const own = this.scopeOf(req, this.flowOf(req.key).scope!);
-      const [a, b] = [endWord(req.source!, own, 'Start', legacy), endWord(req.target!, own, 'End', legacy)];
-      return { base: legacy ? cutAt(`${head}${own}_${a}To${b}`, max, true) : pairEnds(`${head}${own}_`, a, 'To', b, max, false, closingNumber(sep)), sep };
+      const fitter = new IdFitter({ legacy, sep });
+      const [a, b] = [fitter.endWord(req.source!, own, 'Start'), fitter.endWord(req.target!, own, 'End')];
+      return { base: legacy ? cutAt(`${head}${own}_${a}To${b}`, max, true) : fitter.pair(`${head}${own}_`, a, 'To', b, max), sep };
     }
-    return { base: idFormBase(form, head, req, max, legacy), sep };
+    return { base: new IdFitter({ legacy }).idForm(form, head, req, max), sep };
   }
 
   /** The base of a `named` flow with the prefix and separator of the file's flows (`legacy`: connectionBase). */
   private namedBase(req: IdRequest, max: number, prefix: string, sep: string | undefined, legacy: boolean): string {
     const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
     const c = this.caseFor(req);
-    const { head, glued, long } = namedHead(prefix, sep, c, legacy);
+    const { head, glued, long } = new IdFitter({ body: c, legacy }).namedHead(prefix, sep);
     const source = label(req.source!, req.sourceLabel);
-    const [a, join, b] = this.flowParts(source, label(req.target!, req.targetLabel), glued, legacy, c);
-    const names: [string[]?] = [c === 'camel' && !glued ? nameWords(source) : undefined];
-    if (!long) return pairEnds(head, a, join, b, max, legacy, closingNumber('_'), names);
+    const fitter = new IdFitter({ body: c, legacy, ...(c === 'camel' && !glued ? { names: nameWords(source) } : {}) });
+    const [a, join, b] = fitter.ends(source, label(req.target!, req.targetLabel), glued);
+    if (!long) return fitter.pair(head, a, join, b, max);
     // a long prefix stays where the ends fit beside it at whole words, elsewhere the default Flow_
-    return wholeEnds(head, a, join, b, max, closingNumber('_'), names) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, legacy);
+    return fitter.whole(head, a, join, b, max) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, legacy);
   }
-}
-
-/**
- * The head of a `named` flow's id in case `c` (namedBase), whether its ends
- * are glued to it, and whether it is `long`: it leaves the ends fewer than
- * 16 of the 64 characters, so it stays only where they fit beside it at
- * whole words (else the default Flow_; never for `legacy`, 0.6 kept it).
- */
-function namedHead(prefix: string, sep: string | undefined, c: Body, legacy: boolean): { head: string; glued: boolean; long: boolean } {
-  // a number glued to a lower-case prefix (flow12) glues the words too (flowCheckToShip); an upper-case one reads apart (F12 -> F_CheckToShip)
-  const glued = sep === '' && /[a-z]/.test(prefix);
-  const joined = c === 'snake' || c === 'pascalSnake' ? 4 : 2;
-  return { head: `${prefix}${glued ? '' : '_'}`, glued, long: !legacy && MAX_ID - prefix.length - (glued ? 0 : 1) - joined < 16 };
 }
 
 /**
@@ -1953,9 +1857,10 @@ function namedHead(prefix: string, sep: string | undefined, c: Body, legacy: boo
 function effectiveHead(style: FlowStyle, c: Body): { head: string; form: FlowForm; fallback?: string } {
   const { form, prefix, sep, scope, head } = style;
   if (head !== undefined) return { head, form };
-  const fallback = namedHead(DEFAULT_FLOW.prefix, undefined, c, false).head;
+  const fitter = new IdFitter({ body: c });
+  const fallback = fitter.namedHead(DEFAULT_FLOW.prefix, undefined).head;
   if (form === 'named') {
-    const own = namedHead(prefix, sep, c, false);
+    const own = fitter.namedHead(prefix, sep);
     if (!own.long) return { head: own.head, form };
     return MAX_ID - own.head.length - (c === 'snake' || c === 'pascalSnake' ? 4 : 2) < 2 ? { head: fallback, form } : { head: own.head, form, fallback };
   }
@@ -1980,81 +1885,6 @@ export function keyRequest(key: string): IdRequest {
   return def ? kindRequest(def) : typeRequest(key);
 }
 
-/** The flow forms built from the ends' ids or id stems, and the word between the ends. */
-type IdForm = 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';
-const FORM_JOIN: Record<IdForm, string> = { stemTo: 'To', idPair: '_', stemSnake: '_to_', idSnake: '_to_' };
-const ID_FORMS = Object.keys(FORM_JOIN) as IdForm[];
-
-/** pairEnds where the ends fit at whole words (wholePair): undefined where a word of theirs would be cut inside. */
-function wholeEnds(head: string, a: string, join: string, b: string, max: number, closes: RegExp, names: [string[]?, string[]?] = []): string | undefined {
-  const pair = wholePair(a, b, max - head.length - join.length, names, closes);
-  return pair && `${head}${pair[0]}${join}${pair[1]}`;
-}
-
-/** idFormBase where the ends fit at whole words after their prefixes (wholePair; idPair and idSnake never share the room of the whole ids): undefined where they do not. */
-function wholeIdFormBase(form: IdForm, head: string, req: IdRequest, max: number): string | undefined {
-  const s = req.source!;
-  const t = req.target!;
-  const join = FORM_JOIN[form];
-  const closes = closingNumber(form === 'stemTo' ? '' : '_');
-  if (form === 'idPair' || form === 'idSnake') {
-    const [pa, pb] = [s.length - stem(s).length, t.length - stem(t).length];
-    const pair = wholePair(stem(s), stem(t), max - head.length - join.length - pa - pb, [], closes);
-    return pair && `${head}${s.slice(0, pa)}${pair[0]}${join}${t.slice(0, pb)}${pair[1]}`;
-  }
-  const { a, b, names } = stemEnds(form, req, false);
-  return wholeEnds(head, a, join, b, max, closes, [names]);
-}
-
-/** `<head><a><join><b>`, the two ends sharing the room up to `max` (`legacy`: as 0.6 cut, legacyFitPair; `closes`, `names`: fitPair). */
-function pairEnds(head: string, a: string, join: string, b: string, max: number, legacy: boolean, closes: RegExp, names: [string[]?, string[]?] = []): string {
-  const room = max - head.length - join.length;
-  const [x, y] = legacy ? legacyFitPair(a, b, room) : fitPair(a, b, Math.max(room, 0), names, closes);
-  return `${head}${x}${join}${y}`;
-}
-
-/**
- * The base of a flow in a form built from its ends' ids (stemTo, idPair,
- * stemSnake, idSnake) after `head` (`<prefix>_`, or a declared prefix), at
- * most `max` characters (`legacy`: cut as 0.6 cut). The stem forms write
- * an end whose id says nothing from its label; idPair and idSnake keep
- * each id's prefix (`Task_`) and share the room among the words after it
- * (0.6, and a room under 16: the whole ids share it, so the words of a
- * prefix can go too).
- */
-function idFormBase(form: IdForm, head: string, req: IdRequest, max: number, legacy: boolean): string {
-  const s = req.source!;
-  const t = req.target!;
-  const join = FORM_JOIN[form];
-  const closes = closingNumber(form === 'stemTo' ? '' : '_');
-  if (form === 'idPair' || form === 'idSnake') {
-    const pa = s.length - stem(s).length;
-    const pb = t.length - stem(t).length;
-    const room = max - head.length - join.length - pa - pb;
-    if (legacy || room < 16) return pairEnds(head, s, join, t, max, legacy, closes);
-    const [x, y] = fitPair(stem(s), stem(t), room, [], closes);
-    return `${head}${s.slice(0, pa)}${x}${join}${t.slice(0, pb)}${y}`;
-  }
-  const { a, b, names } = stemEnds(form, req, legacy);
-  return pairEnds(head, a, join, b, max, legacy, closes, [names]);
-}
-
-/**
- * The ends of a stem form (stemTo: camelCase, the source in lower case;
- * stemSnake: snake_case): an end's id stem when that says something, else
- * its label (`names`: the source's name words, where it is written from
- * its label in camelCase).
- */
-function stemEnds(form: 'stemTo' | 'stemSnake', req: IdRequest, legacy: boolean): { a: string; b: string; names?: string[] } {
-  const slug = (text: string): string => (form === 'stemTo' ? camelSlug(text, legacy) : snakeSlug(text, legacy));
-  /** whether an end is written from its label (its id says nothing) */
-  const byLabel = (id: string, label: string | undefined): label is string => speakingStem(id) === undefined && !!label && !!slug(label);
-  const end = (id: string, label: string | undefined): string => speakingStem(id) ?? (byLabel(id, label) ? slug(label) : stem(id));
-  const [a, b] = [end(req.source!, req.sourceLabel), end(req.target!, req.targetLabel)];
-  if (form === 'stemSnake') return { a, b };
-  return { a: lcfirst(a), b: ucfirst(b), ...(byLabel(req.source!, req.sourceLabel) ? { names: nameWords(req.sourceLabel) } : {}) };
-}
-
 /**
  * Whether a flow id is a cut of a form built from its ends' ids with the
  * prefix `prefix`: one of the bases derivedBases lists for the form (cut to
@@ -2071,15 +1901,16 @@ function cutOfForm(id: string, form: IdForm, prefix: string, request: () => IdRe
   const req = request();
   if (form === 'stemTo' || form === 'stemSnake') {
     // and the start of the source (an empty one: the join), unless the ends begin alike (a source without its first word)
-    const { a, b } = stemEnds(form, req, false);
+    const { a, b } = new IdFitter().stemEnds(form, req);
     if (!beginAlike(a, b) && rest.charAt(0) !== a.charAt(0) && !rest.startsWith(join)) return false;
   }
-  if (idFormBase(form, `${prefix}_`, req, Infinity, false).length <= MAX_ID - 4) return false;
+  const fitter = new IdFitter();
+  if (fitter.idForm(form, `${prefix}_`, req, Infinity).length <= MAX_ID - 4) return false;
   const sep = form === 'stemTo' ? '' : '_';
   const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), sep);
-  const legacy = idFormBase(form, `${prefix}_`, req, LEGACY_BASE, true);
+  const legacy = new IdFitter({ legacy: true }).idForm(form, `${prefix}_`, req, LEGACY_BASE);
   if (id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true))) return true;
-  if (id === idFormBase(form, `${prefix}_`, req, MAX_ID, false)) return true;
+  if (id === fitter.idForm(form, `${prefix}_`, req, MAX_ID)) return true;
   // a suffix of up to 4 characters cut the base to leave it room (next); a glued one can take any of the last digits,
   // and the letter word before them after a base that ends in a digit (`No2`)
   const digits = (sep === '' ? /\d+$/ : /_\d+$/).exec(id)?.[0] ?? '';
@@ -2089,7 +1920,7 @@ function cutOfForm(id: string, form: IdForm, prefix: string, request: () => IdRe
   for (const k of ks) {
     const suffix = id.slice(id.length - k);
     if (/^_?0/.test(suffix.slice(suffix.startsWith(SUFFIX_WORD) ? SUFFIX_WORD.length : 0))) continue;
-    if (id.slice(0, -k) === idFormBase(form, `${prefix}_`, req, MAX_ID - k, false)) return true;
+    if (id.slice(0, -k) === fitter.idForm(form, `${prefix}_`, req, MAX_ID - k)) return true;
   }
   return false;
 }
@@ -2107,9 +1938,10 @@ function legacyScopedCut(id: string, prefix: string, source: string, target: str
   if (!m) return undefined;
   const scope = m[1]!;
   // cheap test first: the source's end word as 0.6 took it
-  const a = endWord(source, scope, 'Start', true);
+  const fitter = new IdFitter({ legacy: true });
+  const a = fitter.endWord(source, scope, 'Start');
   if (!m[2]!.startsWith(a)) return undefined;
-  const legacy = cutAt(`${prefix}_${scope}_${a}To${endWord(target, scope, 'End', true)}`, LEGACY_BASE, true);
+  const legacy = cutAt(`${prefix}_${scope}_${a}To${fitter.endWord(target, scope, 'End')}`, LEGACY_BASE, true);
   const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), '');
   return id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true)) ? scope : undefined;
 }
@@ -2165,231 +1997,3 @@ function bodyTaken(id: string, ids: IdRegistry): boolean {
   return false;
 }
 
-/**
- * Two ends that share `room` characters, cut at whole words. Each end can
- * give up its words one after the other (endForms): the last word before
- * the join or number it ends with (keptTail), never its first word, never
- * its last word with a letter before that join or number
- * (`2Lieferantenbestellungen` keeps both, `LieferantenbestellungenJoin`
- * never shrinks to `Join`), never a word between two numbers (the two would
- * read as one: `Stufe2Freigabe3` gives up the 2 first, never `Stufe23`; nor
- * `stufe_2_2` for `stufe_2_pruefung_2`, which reads like a suffixed id),
- * never the numbers before a number tail (`zahlungseingang_2_2` never names
- * `zahlungseingang_2`, another element, whose suffix skipped `_2`); a
- * number the given-up word leaves at the end of the id goes with it where it
- * reads like a collision suffix (`closes`, the target's: a separated `_4`
- * where the suffix is `_2`, `archivieren` for `archivieren_100_4_augen`,
- * never `archivieren_100`; any number where the suffix is glued, stemTo and
- * scopedTo), and stays elsewhere (`Phase1To...`, `V2To...`); a filler word
- * (isFiller: und, an, the) a given-up word leaves at the end of the end, or
- * before its Join or number, goes too (`lieferung_versenden`, never
- * `lieferung_versenden_und`; not the first word). Ends that begin
- * with the same word (the unnamed elements after one anchor:
- * after_check_gateway, after_check_gateway_task) differ at their ends: each
- * keeps its last word (a join with a number: both) and gives up the word
- * before it, down to its first (`SynchronisierenTo...` for
- * `LieferantenbestellungenSynchronisieren`). Of the forms of the two ends
- * that fit beside each other, the pair with the most words is taken, then
- * the one with the most characters, then the more even one, then the one
- * where the source gave up more (`SynchronisierenToRechnungLieferantenbestellungen`
- * for `Synchronisieren aktualisieren` and `Rechnung Lieferantenbestellungen`:
- * the short word goes, not the long one). Only when even the shortest forms
- * do not fit, a word is cut inside (cutInside, which keeps the join or
- * number at the end): in the longer end where the other fits whole and it
- * keeps 8 characters, else in both (sharePair). `names`: the name words an
- * end was written from with camelSlug, so that an end without its first
- * word starts as camelSlug writes it (`urlPDFVersenden` for URL PDF
- * versenden). Deterministic.
- */
-function fitPair(a: string, b: string, room: number, names: [string[]?, string[]?] = [], closes?: RegExp): [string, string] {
-  if (a.length + b.length <= room) return [a, b];
-  const { best, fa, fb } = bestPair(a, b, room, names, closes);
-  if (best) return best;
-  // even the shortest forms do not fit: a word is cut inside, in the longer end where the other fits whole
-  const [x, y] = [fa[fa.length - 1]!.text, fb[fb.length - 1]!.text];
-  const long = x.length >= y.length ? 0 : 1;
-  const keep = room - (long ? x : y).length;
-  if (keep < 8) return sharePair(x, y, room, cutInside);
-  const cut = cutInside(long ? y : x, keep);
-  // the other end takes back what fits beside the cut (more than its shortest form only where the cut ends short of `keep`)
-  const other = (long ? fa : fb).find((f) => f.text.length + cut.length <= room)!.text;
-  return long ? [other, cut] : [cut, other];
-}
-
-/** fitPair at whole words only (a long head stays only where the ends fit beside it so: IdStyle.connectionBase): undefined where even the shortest forms of the ends do not fit beside each other. */
-function wholePair(a: string, b: string, room: number, names: [string[]?, string[]?] = [], closes?: RegExp): [string, string] | undefined {
-  if (a.length + b.length <= room) return [a, b];
-  return bestPair(a, b, room, names, closes).best;
-}
-
-/** The forms of two ends (endForms) and, of the pairs that fit into `room`, the best (fitPair's order); no best where none fits. */
-function bestPair(a: string, b: string, room: number, names: [string[]?, string[]?], closes?: RegExp): { best?: [string, string]; fa: EndForm[]; fb: EndForm[] } {
-  const keepLast = beginAlike(a, b);
-  const [fa, fb] = [endForms(a, keepLast, room, names[0]), endForms(b, keepLast, room, names[1], closes)];
-  /** most words, most characters, the more even pair; later pairs win a full tie (the source has given up more) */
-  const score = (x: EndForm, y: EndForm): number[] => [x.words + y.words, x.text.length + y.text.length, -Math.abs(x.text.length - y.text.length)];
-  let best: { x: EndForm; y: EndForm; score: number[] } | undefined;
-  for (const x of fa) {
-    for (const y of fb) {
-      if (x.text.length + y.text.length > room) continue;
-      const s = score(x, y);
-      const n = best ? s.findIndex((v, i) => v !== best!.score[i]) : 0;
-      if (!best || n === -1 || s[n]! > best.score[n]!) best = { x, y, score: s };
-    }
-  }
-  return { ...(best ? { best: [best.x.text, best.y.text] as [string, string] } : {}), fa, fb };
-}
-
-/** An end as fitPair cuts it: its text and the number of its words (idWords as it gave them up). */
-interface EndForm {
-  text: string;
-  words: number;
-}
-
-/**
- * An end as it is and after each word it gives up, the shortest last (the
- * rules: fitPair; `closes`: the numbers that would read like a collision
- * suffix at the end of the id, for the end that closes it). Of the forms
- * longer than `room`, which fit beside no other, only the shortest is
- * listed (a long id's end lists only what can fit).
- */
-function endForms(x: string, keepLast: boolean, room: number, names?: string[], closes?: RegExp): EndForm[] {
-  const words = idWords(x);
-  const tail = idWords(keptTail(x)).length;
-  const kept = keepLast ? Math.max(tail, 1) : tail;
-  const letter = (w: string): boolean => /[A-Za-z]/.test(w);
-  const number = (w: string): boolean => /^[_.-]*\d+$/.test(w);
-  /** the index of a filler word a cut form would end on (the last before the Join / number tail, not kept, not the first, not the last with a letter, not between two numbers); -1 for none */
-  const filler = (): number => {
-    const i = words.length - tail - 1;
-    if (i < 1 || i > words.length - 1 - kept || !isFiller(words[i]!)) return -1;
-    if (!words.some((w, n) => n !== i && n < words.length - tail && letter(w))) return -1;
-    return /\d$/.test(words[i - 1]!) && /^[_.-]*\d/.test(words[i + 1] ?? '') ? -1 : i;
-  };
-  /** the index of the word given up next, -1 for none */
-  const victim = (): number => {
-    const head = words.length - tail;
-    for (let i = words.length - 1 - kept; i >= (keepLast ? 0 : 1); i--) {
-      // the last word with a letter before the Join / number tail stays
-      if (letter(words[i]!) && !words.some((w, n) => n !== i && n < head && letter(w))) continue;
-      // so do the numbers before a number tail (zahlungseingang_2_2 never shrinks to zahlungseingang_2, another element's
-      // id, which a suffix would then make the base again)
-      if (number(words[i]!) && i + 1 < words.length && words.slice(i + 1).every(number)) continue;
-      if (i === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[i - 1]!) && /^[_.-]*\d/.test(words[i + 1] ?? ''))) return i;
-    }
-    return -1;
-  };
-  const out: EndForm[] = x.length <= room ? [{ text: x, words: words.length }] : [];
-  let length = x.length;
-  for (let i = victim(); i >= 0; i = victim()) {
-    const [dropped] = words.splice(i, 1);
-    length -= dropped!.length;
-    if (i === 0) {
-      // without its first word an end starts with the next one, without a separator and in the case the end began with
-      // (a camel stemTo end: synchronisierenTo..., urlCheckTo... as camelSlug writes it)
-      const next = words[0]!.replace(/^[_.-]+/, '');
-      length -= words[0]!.length - next.length;
-      words[0] = /^[a-z]/.test(dropped!) ? lowerFirst(next, words.slice(1).join(''), names) : next;
-    }
-    // a number the given-up word leaves at the end of the id goes too where it reads like a collision suffix, and a filler
-    // word the cut would end on (`..._versenden_und`, `...KundenAn`)
-    for (let more = true; more; ) {
-      more = false;
-      while (closes && !kept && words.length > 1 && closes.test(words[words.length - 1]!)) {
-        length -= words.pop()!.length;
-        more = true;
-      }
-      const f = filler();
-      if (f >= 0) {
-        length -= words.splice(f, 1)[0]!.length;
-        more = true;
-      }
-    }
-    if (length <= room) out.push({ text: words.join(''), words: words.length });
-  }
-  if (length > room) out.push({ text: words.join(''), words: words.length });
-  return out;
-}
-
-/** The numbers fitPair's closing end does not end on (a collision suffix's look): any where the suffix is glued (`2`: stemTo, scopedTo), a separated one where it is `_2`. */
-const closingNumber = (sep: string): RegExp => (sep === '' ? /^[_.-]*\d+$/ : /^_\d+$/);
-
-/**
- * The first word of an end that lost its first one, lower-cased as camelSlug
- * writes a first word (`Versenden` -> versenden, `URLCheck` -> urlCheck).
- * `names`: the words the end was written from, which tell where a run of
- * capitals ends (`URLPDFVersenden` + URL PDF versenden -> urlPDFVersenden;
- * also where camelSlug cut the name at 40 and the end is a run of its middle
- * words); without them the run is lowered whole (urlpdfVersenden, as
- * camelSlug writes the slug).
- */
-function lowerFirst(word: string, rest: string, names?: string[]): string {
-  const end = `${word}${rest}`.toLowerCase();
-  const tails = (names ?? []).map((_, k) => camelSlug(names!.slice(k).join(' '))).reverse();
-  const own = tails.find((t) => t.toLowerCase() === end) ?? tails.find((t) => t.toLowerCase().startsWith(end));
-  if (own) return own.slice(0, word.length);
-  return word.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (m) => m.toLowerCase());
-}
-
-/**
- * An end cut inside a word to at most `max` characters (fitPair, once no
- * end has a whole word left to give up): its first characters and the join
- * or number it ends with (`3Zahlungseingangsbest2024`), where the two read
- * apart (readsApart: never `32024`), else its first `max` characters.
- */
-function cutInside(slug: string, max: number): string {
-  if (slug.length <= max) return slug;
-  const tail = keptTail(slug);
-  const head = slug.slice(0, Math.max(max - tail.length, 0)).replace(/[_.-]+$/, '');
-  if (tail && readsApart(head, tail)) return `${head}${tail}`;
-  // a room that ends inside a leading number: the end starts at its first word with a letter (withLetter)
-  return withLetter(slug, slug.slice(0, Math.max(max, 0)).replace(/[_.-]+$/, ''), (rest) => cutInside(rest, max));
-}
-
-/** fitPair as 0.6 and earlier cut the ends (inside a word where a kept last word left no room for a whole one); only derivedBases uses it, to recognise the flows it named. */
-function legacyFitPair(a: string, b: string, room: number): [string, string] {
-  if (a.length + b.length <= room) return [a, b];
-  // ends that begin alike (the unnamed elements after one anchor: after_check_gateway, after_check_gateway_task) differ
-  // at their ends: a cut there would make them read alike, so it cuts inside and keeps each end's last word
-  return sharePair(a, b, room, beginAlike(a, b) ? cutKeepingLast : legacyCut);
-}
-
-/** Whether two ends begin with the same word (the unnamed elements after one anchor), which fitPair keeps apart at their ends. */
-function beginAlike(a: string, b: string): boolean {
-  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
-  return first(a) === first(b);
-}
-
-/** cutAt as 0.6 cut (legacyFitPair, derivedBases). */
-const legacyCut = (slug: string, max: number): string => cutAt(slug, max, true);
-
-/** Two ends that share the room by characters (legacyFitPair; fitPair once even the shortest forms do not fit and the shorter end leaves the longer under 8 characters): the first end at least half, the second what is left, the first what the second leaves over. */
-function sharePair(a: string, b: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
-  const first = cut(a, Math.max(Math.floor(room / 2), room - b.length));
-  const second = cut(b, room - first.length);
-  return [cut(a, room - second.length), second];
-}
-
-/** cutAt that keeps the slug's last word (`after_check_order_gateway_task`, 25 -> `after_check_order_task`), as 0.6 cut (legacyFitPair). */
-function cutKeepingLast(slug: string, max: number): string {
-  if (slug.length <= max) return slug;
-  const m = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
-  if (!m || m[2]!.length + 8 > max) return legacyCut(slug, max);
-  return `${legacyCut(m[1]!, max - m[2]!.length)}${m[2]}`;
-}
-
-/**
- * The word a scopedTo flow uses for one of its ends: Start / End for a start
- * / end event (`startEvent_KotOrder`, `EndEvent_Failed`), else the first word
- * with a letter of the id after its prefix and the scope
- * (`serviceTask_KotO_ValidatePayment` -> Validate, `task_KotO_4AugenPruefen`
- * -> Augen: a number would end the flow's id like a collision suffix, `To4`).
- * `legacy`: the first word, as 0.6 took it (derivedBases).
- */
-function endWord(id: string, scope: string, terminal: 'Start' | 'End', legacy = false): string {
-  const segments = id.split('_');
-  if (segments.length > 1 && new RegExp(`^${terminal}(Event)?$`, 'i').test(segments[0]!)) return terminal;
-  const rest = segments.length > 1 ? segments.slice(1).filter((x) => x !== scope) : segments;
-  const word = (words: string[]): string | undefined => (legacy ? words[0] : words.find((w) => /[A-Za-z]/.test(w)));
-  return ucfirst(word(nameWords(rest.join(' '))) ?? word(nameWords(id)) ?? terminal);
-}

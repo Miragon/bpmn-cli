@@ -1,0 +1,70 @@
+import { nameWords } from './slug.js';
+
+export const lcfirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+export const ucfirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+export const localName = (type: string): string => type.slice(type.indexOf(':') + 1);
+
+export const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
+/** A number glued to its prefix: `flow12`, `f3`. */
+export const GLUED = /^([A-Za-z]+)(\d+)$/;
+
+/** Tool defaults that say nothing about a file's conventions (the Camunda Modeler's first start event). */
+export const TOOL_DEFAULTS = new Set(['StartEvent_1']);
+export const HASH = /^[01][0-9a-z]{6}$/;
+
+/** The id without its prefix (`serviceTask_checkStock` -> `checkStock`). */
+export function stem(id: string): string {
+  const i = id.indexOf('_');
+  return i === -1 ? id : id.slice(i + 1);
+}
+
+/**
+ * The part of an id that says what the element is (`CheckInvoice` of
+ * Activity_CheckInvoice, `checkOrder` of a bare checkOrder), or undefined
+ * for ids that say nothing: tool defaults (StartEvent_1), Camunda Modeler
+ * hashes (Activity_0k3x9qa), numbers (Task_12, flow12) and machine ids
+ * (sid-6F1C..., UUIDs: mostly digits).
+ */
+export function speakingStem(id: string): string | undefined {
+  if (TOOL_DEFAULTS.has(id) || GLUED.test(id)) return undefined;
+  // a collision suffix belongs to the stem (reviewOrder_2, Activity_Check_2); `Task_12` is a number, not a suffix
+  const suffixed = /^(.+)_(\d+)$/.exec(id);
+  if (suffixed && (suffixed[1]!.includes('_') || nameWords(suffixed[1]).length > 1)) {
+    const base = speakingStem(suffixed[1]!);
+    return base ? `${base}_${suffixed[2]}` : undefined;
+  }
+  const s = stem(id);
+  if (HASH.test(s) || /^\d+$/.test(s) || !/[A-Za-z]/.test(s)) return undefined;
+  const digits = s.replace(/[^0-9]/g, '').length;
+  if (digits >= 3 && digits * 4 >= s.length && !hasWord(s)) return undefined;
+  return s;
+}
+
+/**
+ * Whether a stem with many digits still has a word (`AfterCheck2024`,
+ * `Order01001`): a run of four or more letters with one that is no hex digit.
+ * Machine ids have none (`sid-6F1C3A2B-...`, UUIDs, `a3f2c1de`).
+ */
+function hasWord(s: string): boolean {
+  return (s.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
+}
+
+/** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice, Event_TimerOnReview, Event_StartInPayment). */
+export type ContextWord = 'After' | 'Before' | 'On' | 'In';
+export const CONTEXT_WORDS = new Set(['after', 'before', 'on', 'in']);
+
+/** The words of an id stem, split at case changes, between letters and digits and at separators (`After4AugenPrinzip` -> After, 4, Augen, Prinzip). */
+export function stemWords(stem: string): string[] {
+  return stem
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Whether two ends begin with the same word (the unnamed elements after one anchor), which fitPair keeps apart at their ends. */
+export function beginAlike(a: string, b: string): boolean {
+  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
+  return first(a) === first(b);
+}

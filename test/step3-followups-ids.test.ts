@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { MAX_ID } from '../src/ids/utils/slug.js';
-import { speakingStem } from '../src/ids/style.js';
+import { speakingStem } from '../src/ids/utils/id-words.js';
 
 const flowIds = (xml: string): string[] => [...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!);
 const allIds = (xml: string): string[] => [...xml.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]!);

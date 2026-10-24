@@ -15,7 +15,8 @@
  * Doc.initProcess.
  */
 import type { Doc } from '../model/document.js';
-import { labelOf, speakingStem, typeRequest } from '../ids/style.js';
+import { labelOf, typeRequest } from '../ids/style.js';
+import { speakingStem } from '../ids/utils/id-words.js';
 import { addTo, is, many, type El } from '../model/utils/moddle.js';
 import { ZEEBE_URI } from './descriptor.js';
 
