@@ -329,7 +329,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       const chunk = bundle.chunks.find((c) => c.inputs.includes(rules))!;
       expect(chunk.imports.filter((p) => initial.has(p)), rules).toEqual([]);
     }
-    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/profiles/c8.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/feel.ts', 'src/platform/profiles/schema-text.ts']));
+    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/profiles/c8.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/FeelParser.ts', 'src/platform/profiles/FeelExpression.ts', 'src/platform/profiles/TimerValue.ts', 'src/platform/profiles/schema-text.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {

@@ -33,7 +33,7 @@
  *   W_C8_DEPLOY_EXPRESSION         a static value where Camunda 8 requires a FEEL expression (=...): conditions of
  *                                  sequence flows and conditional events, zeebe:script expression, multi-instance
  *                                  inputCollection / outputElement, correlation keys, an ad-hoc sub-process's
- *                                  completion condition; a FEEL syntax error (platform/profiles/feel.ts) in a value Camunda 8
+ *                                  completion condition; a FEEL syntax error (platform/profiles/FeelParser.ts) in a value Camunda 8
  *                                  parses at deploy (FEEL_ATTRS, conditions, message / signal names starting with =)
  *   W_C8_DEPLOY_MESSAGE            message event / receive task without message, message without name, a catching
  *                                  message (not a process start) without exactly one zeebe:subscription with a
@@ -105,9 +105,10 @@
  */
 import type { Doc } from '../../model/document.js';
 import type { El } from '../../model/utils/moddle.js';
-import { feelSyntaxError } from './feel.js';
+import { FeelExpression } from './FeelExpression.js';
 import type { ProfileFinding, Severity } from '../finding.js';
 import type { RuleKit } from './rule-kit.js';
+import { TimerValue } from './TimerValue.js';
 import { NCNAME, schemaTextIssues, useKit as useSchemaTextKit, type SchemaTextIssue } from './schema-text.js';
 
 /* What the rules use of the core: handed over by the loader (useKit), never imported (platform/profiles/rule-kit.ts). */
@@ -331,89 +332,6 @@ function rebuildHint(ctx: Ctx, host: El, owner: El | undefined, type: string): s
 /* values                                                               */
 /* ------------------------------------------------------------------ */
 
-// what Camunda 8.9 parses (engine-checked on 60 values): an ISO 8601 period / duration (Java Period + Duration,
-// split at an upper-case T; a fraction on the seconds only: PT1.5S, not PT1.5H), a date-time with offset or Z (an
-// optional [zone] after it; t and z in either case), a repeating interval R[n]/[start/]duration, a 6-field cron
-// expression or one of its macros
-const PERIOD = /^[-+]?[Pp](?:[-+]?\d+[Yy])?(?:[-+]?\d+[Mm])?(?:[-+]?\d+[Ww])?(?:[-+]?\d+[Dd])?$/;
-const DURATION = /^[-+]?P(?:T(?=[-+]?\d)(?:[-+]?\d+H)?(?:[-+]?\d+M)?(?:[-+]?\d+(?:[.,]\d{0,9})?S)?)$/i;
-const DATE_TIME = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:[Zz]|[+-]\d{2}:\d{2}(?::\d{2})?)(?:\[[^\]]+\])?$/;
-const CRON_MACROS = ['@yearly', '@annually', '@monthly', '@weekly', '@daily', '@midnight', '@hourly'];
-
-export function validDuration(value: string): boolean {
-  const v = value.trim();
-  const t = v.indexOf('T');
-  if (t === -1) return PERIOD.test(v) && /\d/.test(v);
-  const period = v.slice(0, t);
-  if (!/^[-+]?[Pp]$/.test(period) && !(PERIOD.test(period) && /\d/.test(period))) return false;
-  return DURATION.test(`P${v.slice(t)}`) && /\d/.test(v.slice(t));
-}
-
-/** An ISO 8601 date-time with offset that is a real instant (dateTimeRangeProblem). */
-export function validDateTime(value: string): boolean {
-  return DATE_TIME.test(value.trim()) && !dateTimeRangeProblem(value);
-}
-
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-/**
- * Why a date-time of the right form is no real instant, or undefined: Java's
- * strict parse, which Camunda 8 uses (engine-checked: 2030-02-30 and 25:00
- * are refused): month 1-12, a day of that month (29 February in leap years),
- * hour 0-23, minute and second 0-59, an offset of at most 18 hours.
- */
-export function dateTimeRangeProblem(value: string): string | undefined {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2})(?::(\d{2}))?/.exec(value.trim());
-  if (!m) return undefined;
-  const [y, mo, d, h, mi, s] = m.slice(1).map((x) => Number(x ?? 0)) as [number, number, number, number, number, number];
-  if (mo < 1 || mo > 12) return `month ${m[2]} is not in 01-12`;
-  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]!;
-  if (d < 1 || d > days) return `${MONTHS[mo - 1]} ${y} has no day ${m[3]}`;
-  if (h > 23) return `hour ${m[4]} is not in 00-23`;
-  if (mi > 59) return `minute ${m[5]} is not in 00-59`;
-  if (s > 59) return `second ${m[6]} is not in 00-59`;
-  const offset = /([+-])(\d{2}):(\d{2})(?::(\d{2}))?(?:\[[^\]]+\])?$/.exec(value.trim());
-  if (offset && (Number(offset[3]) > 59 || Number(offset[4] ?? 0) > 59 || Number(offset[2]) * 3600 + Number(offset[3]) * 60 + Number(offset[4] ?? 0) > 18 * 3600)) return `offset ${offset[0].replace(/\[.*$/, '')} is not within ±18:00`;
-  return undefined;
-}
-
-/**
- * Why Camunda 8 refuses a FEEL expression at deploy (the text after the `=`),
- * or undefined. The JUEL habits first, with their FEEL spelling (&&, ||, ==,
- * !, ${...}, single quotes), then the syntax check of platform/profiles/feel.ts (the
- * grammar Camunda 8.9 parses, engine-checked; every valid probe passes).
- */
-export function feelProblem(expression: string): string | undefined {
-  let code = '';
-  for (let i = 0; i < expression.length; i++) {
-    const c = expression[i]!;
-    if (c === '"' || c === '`') {
-      let j = i + 1;
-      while (j < expression.length && expression[j] !== c) j += expression[j] === '\\' && c === '"' ? 2 : 1;
-      if (j >= expression.length) break;
-      code += c === '"' ? ' "s" ' : ' n ';
-      i = j;
-    } else if (c === '/' && expression[i + 1] === '/') {
-      const end = expression.indexOf('\n', i);
-      i = end === -1 ? expression.length : end;
-    } else if (c === '/' && expression[i + 1] === '*') {
-      const end = expression.indexOf('*/', i + 2);
-      if (end === -1) break;
-      i = end + 1;
-    } else {
-      code += c;
-    }
-  }
-  if (/[$#]\{/.test(code)) return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';
-  if (code.includes('&&')) return '&& (FEEL: and)';
-  if (code.includes('||')) return '|| (FEEL: or)';
-  if (code.includes('==')) return '== (FEEL compares with a single =)';
-  if (/!(?!=)/.test(code)) return '! (FEEL: not(...))';
-  if (code.includes("'")) return 'single quotes (FEEL strings use double quotes)';
-  return feelSyntaxError(expression);
-}
-
 /** Zeebe attributes Camunda 8 parses as FEEL when they start with = (engine-checked). */
 const FEEL_ATTRS: Record<string, string[]> = {
   taskDefinition: ['type', 'retries'],
@@ -430,95 +348,13 @@ const FEEL_ATTRS: Record<string, string[]> = {
   adHoc: ['activeElementsCollection', 'outputElement'],
 };
 
-/** W_C8_DEPLOY_EXPRESSION for a FEEL value (=...) with a slip feelProblem finds; true when it reported one. */
+/** W_C8_DEPLOY_EXPRESSION for a FEEL value (=...) with a slip FeelExpression finds; true when it reported one. */
 function checkFeel(ctx: Ctx, el: El, owner: El | undefined, subject: string, what: string, value: string | undefined, fix: string): boolean {
   if (!isFeel(value)) return false;
-  const problem = feelProblem(value!.trim().slice(1));
+  const problem = new FeelExpression(value!.trim().slice(1)).problem();
   if (!problem) return false;
   push(ctx, 'deploy', 'W_C8_DEPLOY_EXPRESSION', el, owner, `feel:${subject}`, `${what} "${value!.trim()}" is no valid FEEL: ${problem}; Camunda 8 parses it at deploy and refuses the file`, fix);
   return true;
-}
-
-export function validCycle(value: string): boolean {
-  const v = value.trim();
-  const m = /^R-?\d*\/(.+)$/.exec(v);
-  if (m) {
-    const parts = m[1]!.split('/');
-    if (parts.length === 1) return validDuration(parts[0]!);
-    if (parts.length === 2) return validDateTime(parts[0]!) && validDuration(parts[1]!);
-    return false;
-  }
-  if (CRON_MACROS.includes(v)) return true;
-  return v.split(/ +/).length === 6 && !v.startsWith('R') && !cronProblem(v);
-}
-
-/** Why a cycle of a valid form is refused (a date that is no real instant, a cron field out of range), or undefined. */
-export function cycleRangeProblem(value: string): string | undefined {
-  const v = value.trim();
-  const m = /^R-?\d*\/(.+)\/.+$/.exec(v);
-  if (m) return dateTimeRangeProblem(m[1]!);
-  return v.split(/ +/).length === 6 && !v.startsWith('R') ? cronProblem(v) : undefined;
-}
-
-/** Why Spring's CronExpression (which Camunda 8 uses) refuses a 6-field cron expression, or undefined. */
-export function cronProblem(value: string): string | undefined {
-  const fields = value.trim().split(/ +/);
-  for (let i = 0; i < 6; i++) {
-    const spec = CRON_FIELDS[i]!;
-    if (!validCronField(fields[i] ?? '', spec)) return `the ${spec.name} field "${fields[i] ?? ''}" is not ${spec.names ? `in ${spec.min}-${spec.max} or ${spec.names[0]}-${spec.names[spec.names.length - 1]}` : `in ${spec.min}-${spec.max}`}${spec.question ? ' (or ?)' : ''}`;
-  }
-  return undefined;
-}
-
-/** The six fields of a cron expression (Spring's CronExpression, which Camunda 8 uses): range and names. */
-interface CronField {
-  name: string;
-  min: number;
-  max: number;
-  names?: string[];
-  /** `?` allowed (the day fields) */
-  question?: boolean;
-  /** Quartz forms of the field (not checked further) */
-  quartz?: RegExp;
-}
-
-const CRON_FIELDS: CronField[] = [
-  { name: 'second', min: 0, max: 59 },
-  { name: 'minute', min: 0, max: 59 },
-  { name: 'hour', min: 0, max: 23 },
-  // L, W: last day, nearest weekday
-  { name: 'day-of-month', min: 1, max: 31, question: true, quartz: /[LW]/i },
-  { name: 'month', min: 1, max: 12, names: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] },
-  // 0 and 7 are Sunday; L, #: last / nth weekday of the month
-  { name: 'day-of-week', min: 0, max: 7, names: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'], question: true, quartz: /[L#]/i },
-];
-
-/**
- * One cron field as Spring parses it (engine-checked on Camunda 8.9: an
- * hour 25 is refused): a list of `*`, values and ranges, each with an
- * optional `/step` of 1 or more; `?` in the day fields; month and weekday
- * names. A day field with a Quartz form (L, W, #) passes.
- */
-function validCronField(field: string, spec: CronField): boolean {
-  if (spec.quartz?.test(field)) return /^[0-9A-Za-z#?,\-/]+$/.test(field);
-  if (spec.question && field === '?') return true;
-  const value = (text: string): number | undefined => {
-    const i = spec.names?.indexOf(text.toUpperCase()) ?? -1;
-    // names: 1-based (JAN = 1, MON = 1)
-    const n = i >= 0 ? i + 1 : /^\d+$/.test(text) ? Number(text) : undefined;
-    return n !== undefined && n >= spec.min && n <= spec.max ? n : undefined;
-  };
-  return field.split(',').every((part) => {
-    const [range, step, ...rest] = part.split('/');
-    if (rest.length || range === undefined || range === '') return false;
-    if (step !== undefined && !(/^\d+$/.test(step) && Number(step) >= 1)) return false;
-    if (range === '*') return true;
-    const ends = range.split('-');
-    if (ends.length === 1) return value(ends[0]!) !== undefined;
-    if (ends.length !== 2) return false;
-    const [a, b] = ends.map(value);
-    return a !== undefined && b !== undefined && a <= b;
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -820,7 +656,7 @@ function checkContent(ctx: Ctx, host: El, owner: El | undefined, v: El, local: s
   if (local === 'taskSchedule') {
     for (const a of ['dueDate', 'followUpDate']) {
       const d = attr(v, a);
-      if (d !== undefined && !isFeel(d) && d.trim() !== '' && !validDateTime(d)) {
+      if (d !== undefined && !isFeel(d) && d.trim() !== '' && !new TimerValue(d).isDateTime()) {
         push(ctx, 'deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, `taskSchedule:${a}`, `${z(ctx, 'taskSchedule')} of ${where} has ${a}="${d}", which is no ISO 8601 date-time with offset (2030-03-02T15:35+02:00); Camunda 8 refuses the file`, fixHint(ctx, host, owner, v, { [a]: '2030-03-02T15:35+02:00' }).replace(/\.$/, ' (or an expression: =<FEEL>).'));
       }
     }
@@ -1096,9 +932,10 @@ function checkTimer(ctx: Ctx, el: El, def: El): void {
     if (value === '') push(ctx, 'deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer:value', `The ${kind} of ${label} is empty; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} timer=PT1H\`.`);
     return;
   }
-  const ok = kind === 'timeDuration' ? validDuration(value) : kind === 'timeDate' ? validDateTime(value) : validCycle(value);
+  const timer = new TimerValue(value);
+  const ok = kind === 'timeDuration' ? timer.isDuration() : kind === 'timeDate' ? timer.isDateTime() : timer.isCycle();
   // the right form, but no real date-time or a cron field out of its range
-  const range = ok ? undefined : kind === 'timeDate' ? dateTimeRangeProblem(value) : kind === 'timeCycle' ? cycleRangeProblem(value) : undefined;
+  const range = ok ? undefined : kind === 'timeDate' ? timer.dateTimeRangeProblem() : kind === 'timeCycle' ? timer.cycleRangeProblem() : undefined;
   if (range) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer:value', `The ${kind} "${value}" of ${label} is no valid ${kind === 'timeDate' || !/^\S+( +\S+){5}$/.test(value) ? 'date-time' : 'cron expression'}: ${range}; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} ${sh(`timer=${kind === 'timeDate' ? '2030-12-31T10:00:00Z' : 'R/PT1H'}`)}\` (with a value in range).`);
   } else if (!ok) {

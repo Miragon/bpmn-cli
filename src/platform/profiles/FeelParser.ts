@@ -1,7 +1,7 @@
 /**
- * A FEEL syntax check for the Camunda 8 profile: feelSyntaxError(text)
- * returns why Camunda 8.9 refuses to deploy an expression (the text after
- * the `=`), or undefined when it parses.
+ * A FEEL syntax check for the Camunda 8 profile: new FeelParser(text).run()
+ * throws a FeelError that says why Camunda 8.9 refuses to deploy an
+ * expression (the text after the `=`).
  *
  * Not an evaluator and no dependency: a tokenizer and a recursive-descent
  * reading of the grammar Camunda 8.9's FEEL engine (feel-scala) accepts at
@@ -35,6 +35,7 @@
  * connector punctuation, combining marks) or `?`; a name with spaces only as
  * a function name before `(`, a context key, a parameter, or in backticks.
  */
+import { FeelError } from './FeelError.js';
 
 type Kind = 'num' | 'str' | 'temporal' | 'word' | 'tick' | 'op' | 'end';
 
@@ -44,15 +45,6 @@ interface Tok {
   pos: number;
   /** a line break between the previous token and this one */
   nl: boolean;
-}
-
-class FeelError extends Error {
-  constructor(
-    readonly at: number,
-    message: string,
-  ) {
-    super(message);
-  }
 }
 
 /** Never a name (standalone or in a path). */
@@ -86,95 +78,18 @@ const STRAY: Record<string, string> = {
   '\u00a0': 'a non-breaking space',
 };
 
-function tokenize(src: string): Tok[] {
-  const out: Tok[] = [];
-  let i = 0;
-  let nl = false;
-  const push = (kind: Kind, text: string, pos: number): void => {
-    out.push({ kind, text, pos, nl });
-    nl = false;
-  };
-  while (i < src.length) {
-    const c = src[i]!;
-    if (SPACE.test(c)) {
-      if (c === '\n' || c === '\r' || c === '\u2028' || c === '\u2029') nl = true;
-      i++;
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '/') {
-      while (i < src.length && src[i] !== '\n') i++;
-      continue;
-    }
-    if (c === '/' && src[i + 1] === '*') {
-      const end = src.indexOf('*/', i + 2);
-      if (end === -1) throw new FeelError(i, 'an unterminated comment');
-      if (/[\n\r]/.test(src.slice(i, end))) nl = true;
-      i = end + 2;
-      continue;
-    }
-    if (c === '"' || c === '`') {
-      let j = i + 1;
-      while (j < src.length && src[j] !== c) j += src[j] === '\\' && c === '"' ? 2 : 1;
-      if (j >= src.length) throw new FeelError(i, c === '"' ? 'an unterminated string' : 'an unterminated `name`');
-      if (c === '`' && j === i + 1) throw new FeelError(i, 'an empty `` name');
-      push(c === '"' ? 'str' : 'tick', src.slice(i, j + 1), i);
-      i = j + 1;
-      continue;
-    }
-    if (c === '@') {
-      let j = i + 1;
-      while (j < src.length && SPACE.test(src[j]!)) j++;
-      if (src[j] !== '"') throw new FeelError(i, '@ without a "string" (a temporal literal is @"2030-01-01")');
-      let k = j + 1;
-      while (k < src.length && src[k] !== '"') k += src[k] === '\\' ? 2 : 1;
-      if (k >= src.length) throw new FeelError(j, 'an unterminated string');
-      push('temporal', src.slice(i, k + 1), i);
-      i = k + 1;
-      continue;
-    }
-    const prev = out[out.length - 1];
-    const afterValue = !!prev && (prev.kind !== 'op' || [')', ']', '}'].includes(prev.text));
-    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] ?? '') && !afterValue)) {
-      const m = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/.exec(src.slice(i))!;
-      push('num', m[0], i);
-      i += m[0].length;
-      continue;
-    }
-    if (c === '?') {
-      push('word', '?', i);
-      i++;
-      continue;
-    }
-    if (NAME_START.test(c)) {
-      let j = i + 1;
-      while (j < src.length && NAME_PART.test(src[j]!)) j++;
-      push('word', src.slice(i, j), i);
-      i = j;
-      continue;
-    }
-    const op = OPERATORS.find((o) => src.startsWith(o, i));
-    if (op) {
-      push('op', op, i);
-      i += op.length;
-      continue;
-    }
-    throw new FeelError(i, STRAY[c] ?? `the character ${JSON.stringify(c)}`);
-  }
-  out.push({ kind: 'end', text: '', pos: src.length, nl });
-  return out;
-}
-
-class Parser {
+export class FeelParser {
   private i = 0;
   /** parsing the upper bound of an interval */
   private rangeEnd = 0;
   /** the farthest error of a reading either() gave up (if x then 1: the missing else, not "x" after a name if) */
   private farthest: FeelError | undefined;
 
-  constructor(
-    private t: Tok[],
-    private readonly src: string,
-  ) {}
+  private t: Tok[];
+
+  constructor(private readonly src: string) {
+    this.t = FeelParser.tokenize(src);
+  }
 
   run(): void {
     try {
@@ -229,7 +144,7 @@ class Parser {
     if (t.text === word) return true;
     let rest: Tok[];
     try {
-      rest = tokenize(t.text.slice(word.length)).slice(0, -1);
+      rest = FeelParser.tokenize(t.text.slice(word.length)).slice(0, -1);
     } catch {
       return false;
     }
@@ -677,15 +592,82 @@ class Parser {
     }
     this.textual();
   }
-}
 
-/** Why Camunda 8 refuses the FEEL expression (the text after `=`), or undefined when it parses. */
-export function feelSyntaxError(text: string): string | undefined {
-  try {
-    new Parser(tokenize(text), text).run();
-    return undefined;
-  } catch (err) {
-    if (err instanceof FeelError) return err.message;
-    throw err;
+  private static tokenize(src: string): Tok[] {
+    const out: Tok[] = [];
+    let i = 0;
+    let nl = false;
+    const push = (kind: Kind, text: string, pos: number): void => {
+      out.push({ kind, text, pos, nl });
+      nl = false;
+    };
+    while (i < src.length) {
+      const c = src[i]!;
+      if (SPACE.test(c)) {
+        if (c === '\n' || c === '\r' || c === '\u2028' || c === '\u2029') nl = true;
+        i++;
+        continue;
+      }
+      if (c === '/' && src[i + 1] === '/') {
+        while (i < src.length && src[i] !== '\n') i++;
+        continue;
+      }
+      if (c === '/' && src[i + 1] === '*') {
+        const end = src.indexOf('*/', i + 2);
+        if (end === -1) throw new FeelError(i, 'an unterminated comment');
+        if (/[\n\r]/.test(src.slice(i, end))) nl = true;
+        i = end + 2;
+        continue;
+      }
+      if (c === '"' || c === '`') {
+        let j = i + 1;
+        while (j < src.length && src[j] !== c) j += src[j] === '\\' && c === '"' ? 2 : 1;
+        if (j >= src.length) throw new FeelError(i, c === '"' ? 'an unterminated string' : 'an unterminated `name`');
+        if (c === '`' && j === i + 1) throw new FeelError(i, 'an empty `` name');
+        push(c === '"' ? 'str' : 'tick', src.slice(i, j + 1), i);
+        i = j + 1;
+        continue;
+      }
+      if (c === '@') {
+        let j = i + 1;
+        while (j < src.length && SPACE.test(src[j]!)) j++;
+        if (src[j] !== '"') throw new FeelError(i, '@ without a "string" (a temporal literal is @"2030-01-01")');
+        let k = j + 1;
+        while (k < src.length && src[k] !== '"') k += src[k] === '\\' ? 2 : 1;
+        if (k >= src.length) throw new FeelError(j, 'an unterminated string');
+        push('temporal', src.slice(i, k + 1), i);
+        i = k + 1;
+        continue;
+      }
+      const prev = out[out.length - 1];
+      const afterValue = !!prev && (prev.kind !== 'op' || [')', ']', '}'].includes(prev.text));
+      if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] ?? '') && !afterValue)) {
+        const m = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/.exec(src.slice(i))!;
+        push('num', m[0], i);
+        i += m[0].length;
+        continue;
+      }
+      if (c === '?') {
+        push('word', '?', i);
+        i++;
+        continue;
+      }
+      if (NAME_START.test(c)) {
+        let j = i + 1;
+        while (j < src.length && NAME_PART.test(src[j]!)) j++;
+        push('word', src.slice(i, j), i);
+        i = j;
+        continue;
+      }
+      const op = OPERATORS.find((o) => src.startsWith(o, i));
+      if (op) {
+        push('op', op, i);
+        i += op.length;
+        continue;
+      }
+      throw new FeelError(i, STRAY[c] ?? `the character ${JSON.stringify(c)}`);
+    }
+    out.push({ kind: 'end', text: '', pos: src.length, nl });
+    return out;
   }
 }
