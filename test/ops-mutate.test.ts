@@ -6,7 +6,7 @@ import { assignLane } from '../src/ops/containers.js';
 import { applyTrigger } from '../src/ops/events.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { moveElements } from '../src/ops/move.js';
-import { orderFlows } from '../src/ops/order.js';
+import { Reordering } from '../src/ops/Reordering.js';
 import { cascadeRemove, removeElements } from '../src/ops/remove.js';
 import { retypeElement } from '../src/ops/retype.js';
 import { readProperties, renameId, setProperties, SET_KEYS } from '../src/ops/set.js';
@@ -921,7 +921,7 @@ describe('order', () => {
   it('rewrites node.outgoing and the declaration order', async () => {
     const doc = await fullDoc();
     const gw = doc.require('Gw');
-    const cs = orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no'] });
+    const cs = new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F_no'] }).apply();
     expect(ids(gw.get<El[]>('outgoing'))).toEqual(['F_no', 'F_yes']);
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('F_no')).toBe(order.indexOf('Gw') + 1);
@@ -930,7 +930,7 @@ describe('order', () => {
     const xml = await doc.toXml();
     expect(xml.indexOf('<bpmn:outgoing>F_no</bpmn:outgoing>')).toBeLessThan(xml.indexOf('<bpmn:outgoing>F_yes</bpmn:outgoing>'));
     expect(xml.indexOf('id="F_no"')).toBeLessThan(xml.indexOf('id="F_yes"'));
-    const noop = orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
+    const noop = new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
     expect(noop.isEmpty).toBe(true);
     await expectRoundTrip(doc);
   });
@@ -941,7 +941,7 @@ describe('order', () => {
       <bpmn:exclusiveGateway id="G"><bpmn:outgoing>Fa</bpmn:outgoing><bpmn:outgoing>Fb</bpmn:outgoing></bpmn:exclusiveGateway>
       <bpmn:task id="A"><bpmn:incoming>Fa</bpmn:incoming></bpmn:task><bpmn:task id="B"><bpmn:incoming>Fb</bpmn:incoming></bpmn:task>`),
     );
-    orderFlows(doc, { op: 'order', id: 'G', flows: ['Fb', 'Fa'] });
+    new Reordering(doc, { op: 'order', id: 'G', flows: ['Fb', 'Fa'] }).apply();
     expect(flowElementIds(doc.defaultScope())).toEqual(['G', 'Fb', 'Fa', 'A', 'B']);
     expect(ids(doc.require('G').get<El[]>('outgoing'))).toEqual(['Fb', 'Fa']);
     await expectRoundTrip(doc);
@@ -949,10 +949,10 @@ describe('order', () => {
 
   it('rejects flows that are not outgoing flows of the node', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F1'] }))).toBe('E_NOT_OUTGOING');
-    expect(errorCode(() => orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_no'] }))).toBe('E_USAGE');
-    expect(errorCode(() => orderFlows(doc, { op: 'order', id: 'Gw', flows: [] }))).toBe('E_USAGE');
-    expect(errorCode(() => orderFlows(doc, { op: 'order', id: 'F1', flows: ['F1'] }))).toBe('E_WRONG_KIND');
+    expect(errorCode(() => new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F1'] }).apply())).toBe('E_NOT_OUTGOING');
+    expect(errorCode(() => new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_no'] }).apply())).toBe('E_USAGE');
+    expect(errorCode(() => new Reordering(doc, { op: 'order', id: 'Gw', flows: [] }).apply())).toBe('E_USAGE');
+    expect(errorCode(() => new Reordering(doc, { op: 'order', id: 'F1', flows: ['F1'] }).apply())).toBe('E_WRONG_KIND');
   });
 });
 
@@ -1077,7 +1077,7 @@ describe('mixed scenario', () => {
     setProperties(doc, { op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
     retypeElement(doc, { op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
     extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
-    orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
+    new Reordering(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
     moveElements(doc, { op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
     removeElements(doc, { op: 'remove', ids: ['Call', 'Note_1'] });
     const again = await expectRoundTrip(doc);

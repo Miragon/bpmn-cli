@@ -20,7 +20,7 @@ import { ModelError } from '../model/ModelError.js';
 import type { EditContext } from '../model/EditContext.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { OpRunner } from '../ops/OpRunner.js';
-import { ordersLanes, ordersPools } from '../ops/order.js';
+import { Reordering } from '../ops/Reordering.js';
 import { isFormatOp } from '../ops/utils/op-names.js';
 import type { Op } from '../ops/types.js';
 import { plainText, preserveText } from '../xml/preserve.js';
@@ -275,7 +275,7 @@ export class DiagramUpdate {
   private formatEntries(ops: Op[]): FormatEntry[] {
     const out: FormatEntry[] = [];
     ops.forEach((op, index) => {
-      if (isFormatOp(op) || (op.op === 'order' && (ordersLanes(this.doc, op) || ordersPools(this.doc, op)))) out.push({ op, index });
+      if (isFormatOp(op) || (op.op === 'order' && new Reordering(this.doc, op).ordersBands())) out.push({ op, index });
     });
     return out;
   }

@@ -13,7 +13,7 @@ import { connectElements } from './connect.js';
 import { extensionOp } from './ext.js';
 import { reportStaleFlows } from './flows.js';
 import { moveElements } from './move.js';
-import { orderFlows } from './order.js';
+import { Reordering } from './Reordering.js';
 import { removeElements } from './remove.js';
 import { retypeElement } from './retype.js';
 import { reportStaleIdPrefixes, setProperties } from './set.js';
@@ -163,7 +163,7 @@ export class OpRunner {
       case 'move':
         return moveElements(doc, op);
       case 'order':
-        return orderFlows(doc, op);
+        return new Reordering(doc, op).apply();
       case 'ext':
         return extensionOp(doc, op);
       case 'split':
