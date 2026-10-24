@@ -26,7 +26,7 @@
  *    default together with condition is E_USAGE (a default flow has none)
  */
 import type { Doc } from '../model/Doc.js';
-import { modelError, usageError } from '../shared/utils/errors.js';
+import { modelError } from '../shared/utils/errors.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
@@ -34,6 +34,7 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
 import { bindRefAs, ensureRootElement } from './events.js';
 import { createSequenceFlow, warnEventGatewayFlow } from './flows.js';
+import { FlowOptions } from './FlowOptions.js';
 import type { ConnectOp } from './types.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
@@ -191,13 +192,7 @@ function assertOptionsFor(kind: ConnectionKind, op: ConnectOp): void {
   }
   if (kind !== 'sequenceFlow' && kind !== 'messageFlow' && op.name !== undefined) reject('name', 'sequence and message flows');
   if (kind !== 'messageFlow' && op.message !== undefined) reject('message', 'message flows (between pools)');
-  if (op.default && op.condition !== undefined) {
-    throw usageError('--default and --condition are mutually exclusive: a default flow has no condition', {
-      element: op.source,
-      related: [op.target],
-      hint: 'Keep the condition on the other branches and mark this one as default.',
-    });
-  }
+  new FlowOptions({ condition: op.condition, default: op.default }).assertConsistent({ element: op.source, related: [op.target] });
 }
 
 /** Connects two elements; the connection kind is inferred from the endpoints. */
@@ -242,13 +237,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
 
   switch (kind) {
     case 'sequenceFlow': {
-      const flow = createSequenceFlow(doc, source, target, {
-        ...(op.id ? { id: op.id } : {}),
-        ...(op.name ? { name: op.name } : {}),
-        ...(op.condition !== undefined ? { condition: op.condition } : {}),
-        ...(op.language ? { language: op.language } : {}),
-        ...(op.default ? { isDefault: true } : {}),
-      });
+      const flow = createSequenceFlow(doc, source, target, new FlowOptions({ flowId: op.id, flowName: op.name, condition: op.condition, language: op.language, default: op.default }).toAttrs(true));
       cs.create(ChangeSet.flowEntryOf(flow));
       warnEventGatewayFlow(doc, flow, cs);
       if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);

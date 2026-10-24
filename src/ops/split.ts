@@ -38,7 +38,8 @@ import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
 import { createSequenceFlow, insertAfterInScope, redirectFlow, renamedNote } from './flows.js';
-import type { AddOp, FlowOptions, SplitBranch, SplitOp } from './types.js';
+import { FlowOptions } from './FlowOptions.js';
+import type { AddOp, FlowOptions as FlowOptionValues, SplitOp } from './types.js';
 
 
 function gatewayKind(token: string | undefined): string {
@@ -56,17 +57,6 @@ function gatewayKind(token: string | undefined): string {
     });
   }
   return def.kind;
-}
-
-/** Flow options of a branch (branch-level defaults, first node's own options win). */
-function branchFlowOptions(branch: SplitBranch): FlowOptions {
-  const out: FlowOptions = {};
-  if (branch.flowName !== undefined) out.flowName = branch.flowName;
-  if (branch.flowId !== undefined) out.flowId = branch.flowId;
-  if (branch.condition !== undefined) out.condition = branch.condition;
-  if (branch.language !== undefined) out.language = branch.language;
-  if (branch.default !== undefined) out.default = branch.default;
-  return out;
 }
 
 /** The id of the element an addElement() call created (its entry is always first). */
@@ -189,9 +179,9 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   if (gwEntry) gwEntry.detail = spliced ? `between ${op.after} and ${idOf(successor!)}` : `after ${op.after}`;
 
   // 2. branches
-  const ends: Array<{ end: string; flowOptions: FlowOptions; direct: boolean }> = [];
+  const ends: Array<{ end: string; flowOptions: FlowOptionValues; direct: boolean }> = [];
   for (const branch of op.branches) {
-    const flowOptions = branchFlowOptions(branch);
+    const flowOptions = FlowOptions.of(branch);
     if (!branch.nodes?.length) {
       if (!withJoin && !spliced) {
         throw modelError('E_INVALID_VALUE', 'An empty branch needs a join gateway or a successor to connect to', {
@@ -204,10 +194,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     }
     let prev = gatewayId;
     branch.nodes.forEach((node, i) => {
-      const own: FlowOptions = {};
-      for (const key of ['flowName', 'flowId', 'condition', 'language', 'default'] as const) {
-        if (node[key] !== undefined) (own as Record<string, unknown>)[key] = node[key];
-      }
+      const own = FlowOptions.of(node);
       const addOp: AddOp = { ...node, ...(i === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: prev };
       const nodeCs = addElement(doc, addOp);
       cs.merge(nodeCs);
@@ -255,16 +242,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
     for (const { end, flowOptions, direct } of continuing) {
       const opts = direct ? flowOptions : {};
       cs.merge(
-        connectElements(doc, {
-          op: 'connect',
-          source: end,
-          target,
-          ...(opts.flowId ? { id: opts.flowId } : {}),
-          ...(opts.flowName ? { name: opts.flowName } : {}),
-          ...(opts.condition !== undefined ? { condition: opts.condition } : {}),
-          ...(opts.language ? { language: opts.language } : {}),
-          ...(opts.default ? { default: true } : {}),
-        }),
+        connectElements(doc, { op: 'connect', source: end, target, ...new FlowOptions(opts).toConnect() }),
       );
     }
   }

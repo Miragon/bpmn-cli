@@ -38,7 +38,8 @@ import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindL
 import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { renamedNote } from '../model/utils/renames.js';
-import type { FlowOptions, Placement } from './types.js';
+import { FlowOptions } from './FlowOptions.js';
+import type { FlowOptions as FlowOptionValues, Placement } from './types.js';
 
 export interface FlowAttrs {
   id?: string;
@@ -787,7 +788,7 @@ export function detachNode(doc: Doc, node: El, bridge: boolean, cs: ChangeSet): 
 /* placement                                                            */
 /* ------------------------------------------------------------------ */
 
-export type PlacementOptions = Placement & FlowOptions & { to?: string };
+export type PlacementOptions = Placement & FlowOptionValues & { to?: string };
 
 /**
  * A compensation handler (isForCompensation=true) cannot carry boundary
@@ -855,36 +856,6 @@ export function placementScope(doc: Doc, p: Placement): El {
   }
 }
 
-/** The flow options of a placement (name, condition, default) on the flow into the node, reported as changed when one was given. */
-export function applyFlowOptions(doc: Doc, flow: El, opts: FlowOptions, cs: ChangeSet): void {
-  let touched = false;
-  if (opts.flowName !== undefined) {
-    flow.set('name', opts.flowName || undefined);
-    touched = true;
-  }
-  if (opts.condition !== undefined) {
-    setFlowCondition(doc, flow, opts.condition, opts.language);
-    touched = true;
-  }
-  if (opts.default) {
-    setDefaultFlow(doc, flow, true);
-    touched = true;
-  }
-  if (touched) cs.change(ChangeSet.flowEntryOf(flow));
-}
-
-const FLOW_OPTION_FLAGS: Array<[keyof FlowOptions, string]> = [
-  ['flowName', '--flow-name'],
-  ['flowId', '--flow-id'],
-  ['condition', '--condition'],
-  ['language', '--language'],
-  ['default', '--default'],
-];
-
-function usedFlowOptions(p: FlowOptions): string[] {
-  return FLOW_OPTION_FLAGS.filter(([key]) => p[key] !== undefined && p[key] !== false).map(([, flag]) => flag);
-}
-
 /**
  * Refuses to splice a node that cannot sit inside a flow (start / end events,
  * event sub-processes) with an error that names the way out.
@@ -926,7 +897,7 @@ function spliceWithOptions(doc: Doc, node: El, flow: El, p: PlacementOptions, cs
   cs.create(ChangeSet.flowEntryOf(second));
   cs.change(ChangeSet.flowEntryOf(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
   cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
-  applyFlowOptions(doc, flow, p, cs);
+  new FlowOptions(p).apply(doc, flow, cs);
   return flow;
 }
 
@@ -986,7 +957,7 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
     const out = doc.outgoing(anchor);
     if (is(anchor, 'bpmn:Gateway') || out.length === 0) {
       insertAfterInScope(scope, lastFlowOf(scope, anchor) ?? anchor, node);
-      entryFlow = createSequenceFlow(doc, anchor, node, { ...flowAttrs(p), ...reused(anchor) }, node);
+      entryFlow = createSequenceFlow(doc, anchor, node, { ...new FlowOptions(p).toAttrs(), ...reused(anchor) }, node);
       cs.create(ChangeSet.flowEntryOf(entryFlow));
       cs.note(`appended after ${idOf(anchor)}`);
     } else if (out.length === 1) {
@@ -1005,10 +976,10 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
     if (inc.length === 0 || isJoin) {
       // prepend: no flow into the node exists; the flow options go to the one flow this creates (node -> anchor)
       insertBeforeInScope(scope, anchor, node);
-      const flow = createSequenceFlow(doc, node, anchor, { ...flowAttrs(p), ...reused(node) }, node);
+      const flow = createSequenceFlow(doc, node, anchor, { ...new FlowOptions(p).toAttrs(), ...reused(node) }, node);
       cs.create(ChangeSet.flowEntryOf(flow));
       cs.note(`prepended before ${idOf(anchor)}`);
-      const used = usedFlowOptions(p);
+      const used = new FlowOptions(p).flags;
       if (used.length) {
         cs.note(`${used.join(', ')} applied to ${idOf(flow)} (${idOf(node)} -> ${idOf(anchor)}): ${idOf(anchor)} ${isJoin ? 'is a join gateway' : 'had no incoming flow'}, so no flow into ${idOf(node)} was created`);
       }
@@ -1038,14 +1009,4 @@ export function placeNode(doc: Doc, node: El, p: PlacementOptions, cs: ChangeSet
   }
   doc.invalidate();
   return entryFlow;
-}
-
-function flowAttrs(p: FlowOptions): FlowAttrs {
-  return {
-    ...(p.flowId ? { id: p.flowId } : {}),
-    ...(p.flowName ? { name: p.flowName } : {}),
-    ...(p.condition ? { condition: p.condition } : {}),
-    ...(p.language ? { language: p.language } : {}),
-    ...(p.default ? { isDefault: true } : {}),
-  };
 }

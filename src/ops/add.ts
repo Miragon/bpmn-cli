@@ -78,6 +78,7 @@ import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
+import { FlowOptions } from './FlowOptions.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 
@@ -275,19 +276,9 @@ function triggerOptionsOf(opts: TriggerOptions): TriggerOptions {
   return out as TriggerOptions;
 }
 
-const FLOW_OPTION_FLAGS = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' } as const;
-
-function presentFlowOptions(op: AddOp): string[] {
-  return (Object.keys(FLOW_OPTION_FLAGS) as Array<keyof typeof FLOW_OPTION_FLAGS>).filter((k) => op[k] !== undefined && op[k] !== false).map((k) => FLOW_OPTION_FLAGS[k]);
-}
-
 /** Rejects contradictory or empty flow options before anything is mutated (same rules as `apply`). */
 function checkFlowOptions(op: AddOp): void {
-  if (op.default && op.condition !== undefined) {
-    throw usageError('--default and --condition are mutually exclusive: a default flow has no condition', {
-      hint: 'Keep the condition on the other branches and mark this one as default.',
-    });
-  }
+  new FlowOptions(op).assertConsistent();
   assertCondition(op.condition);
 }
 
@@ -296,7 +287,7 @@ function warnIgnoredFlowOptions(doc: Doc, op: AddOp, node: El, entryFlow: El | u
   const id = idOf(node);
   const mode = placementMode(op);
   if (mode === 'in' || mode === 'none' || mode === 'on') {
-    const given = presentFlowOptions(op);
+    const given = new FlowOptions(op).flags;
     if (given.length) {
       const why = mode === 'on' ? '--on attaches the event, it' : mode === 'in' ? '--in' : 'a placement without --after/--before/--flow';
       cs.warn({

@@ -82,11 +82,12 @@ import { kindLabel } from '../model/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
-import { applyFlowOptions, carryAssociations, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
+import { carryAssociations, insertAfterInScope, placeNode, placementMode, placementScope, redirectFlow, removeSequenceFlow, renamedNote, warnEventGatewayFlow, type Bridge, type PlacementOptions } from './flows.js';
 import { crossLaneNote, inheritedLane, laneInheritedWarning } from './lanes.js';
 import { assertBridgeAllowed, canLoopToItself, detachWithBridge } from './remove.js';
 import { renameId } from './set.js';
 import { idOf } from './utils/elements.js';
+import { FlowOptions } from './FlowOptions.js';
 import type { MoveOp } from './types.js';
 
 /** Moves the nodes of `op.ids` (see module contract). */
@@ -257,7 +258,7 @@ function optionsOnInFlow(doc: Doc, flow: El | undefined, p: PlacementOptions, cs
   const renamed = p.flowId !== undefined && p.flowId !== old;
   if (renamed) renameId(doc, flow, p.flowId!);
   const options = new ChangeSet();
-  applyFlowOptions(doc, flow, p, options);
+  new FlowOptions(p).apply(doc, flow, options);
   if (!renamed && !options.changed.length) return;
   cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
 }
@@ -276,8 +277,7 @@ function optionsOnInFlow(doc: Doc, flow: El | undefined, p: PlacementOptions, cs
  */
 function inPlace(doc: Doc, nodes: El[], p: PlacementOptions): boolean {
   if (nodes.some((n) => is(n, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) return false;
-  const flowOptions = p.flowName !== undefined || p.flowId !== undefined || p.condition !== undefined || p.language !== undefined || !!p.default;
-  if (flowOptions && doc.incoming(nodes[0]!).length !== 1) return false;
+  if (new FlowOptions(p).flags.length && doc.incoming(nodes[0]!).length !== 1) return false;
   const onlyIn = (n: El): El | undefined => {
     const flows = doc.incoming(n);
     return flows.length === 1 ? flows[0]!.get<El>('sourceRef') : undefined;
