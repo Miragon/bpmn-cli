@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, validateXml } from '../src/api.js';
 import { Doc } from '../src/model/document.js';
-import { conventionsView } from '../src/ids/conventions.js';
+import { conventionsView } from '../src/index.js';
 import { ID_CONVENTIONS } from '../src/report/guide.js';
 import { cutAt, cutName, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids/utils/slug.js';
 import { IdRegistry } from '../src/ids/IdRegistry.js';

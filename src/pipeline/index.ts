@@ -55,7 +55,7 @@
  *    introduced among the warnings and never blocks; for a created document
  *    (`new`) it reports everything it finds in the new model.
  *
- * Declared id conventions (MutationOptions.conventions, src/ids/conventions.ts:
+ * Declared id conventions (MutationOptions.conventions, src/ids/IdConventionsReader.ts:
  * element-id-naming of the project's .bpmnlintrc, which the node layer reads)
  * are the document's for the call: the ids the ops and a full redraw
  * generate follow them where they declare a prefix (src/ids/IdStyle.ts); the
@@ -110,7 +110,7 @@
  * write that moves no node leaves them untouched. `layout.stickies` lists
  * the stickies that moved.
  */
-import type { IdConventions } from '../ids/conventions.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
 import { LayoutDebug, type DebugSink } from '../shared/LayoutDebug.js';
 import { utf8Declaration } from '../xml/encoding.js';
 import { Doc } from '../model/document.js';
@@ -180,7 +180,7 @@ export interface MutationOptions {
    */
   keepFlowIds?: boolean;
   /**
-   * the project's declared id conventions (src/ids/conventions.ts: the
+   * the project's declared id conventions (src/ids/IdConventionsReader.ts: the
    * prefixes, case and qualifier of element-id-naming; the node layer reads
    * them from the .bpmnlintrc it runs): ids the change generates follow
    * them where they declare a prefix, the file's own style elsewhere;

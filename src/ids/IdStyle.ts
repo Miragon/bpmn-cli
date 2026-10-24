@@ -123,7 +123,7 @@
  *  style.joinId(gatewayId) the id of a split's join gateway.
  *
  * DECLARED CONVENTIONS
- *  IdStyle.infer(defs, conventions) with IdConventions (src/ids/conventions.ts:
+ *  IdStyle.infer(defs, conventions) with IdConventions (src/ids/IdConventionsReader.ts:
  *  the prefixes, case and qualifier @miragon/rules/element-id-naming
  *  declares in the project's .bpmnlintrc, or a host's table) fills the gaps
  *  the file leaves: a request whose BPMN type has a declared prefix (the
@@ -190,7 +190,7 @@ import type { IdRegistry } from './IdRegistry.js';
 import { FORM_JOIN, IdFitter, LEGACY_BASE } from './IdFitter.js';
 import { caseLike, CONTEXT_WORDS, kindWord, PREFIXED, speakingStem, stemWords } from './utils/id-words.js';
 import { CONNECTIONS, connectionRequest, kindRequest, typeRequest, type IdRequest } from './utils/requests.js';
-import type { IdConventions } from './conventions.js';
+import type { IdConventions } from './IdConventionsReader.js';
 import { DeclaredConventions } from './DeclaredConventions.js';
 import { DEFAULT_FLOW, LearnedStyle } from './LearnedStyle.js';
 import { kindByName } from '../model/kinds.js';

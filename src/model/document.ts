@@ -14,7 +14,7 @@ import { about, replaced, type ChangeSet, type Rename } from './change-set.js';
 import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
 import { hasIdWords, isValidId, transliterate, withSuffix } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
-import type { IdConventions } from '../ids/conventions.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
 import { IdStyle, type IdState } from '../ids/IdStyle.js';
 import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
@@ -46,7 +46,7 @@ export interface NewDocOptions {
   /** declare vendor namespaces and the execution platform up front (and, for camunda7, the Modeler's process defaults) */
   target?: 'camunda8' | 'camunda7' | 'none';
   /**
-   * the project's declared id conventions (src/ids/conventions.ts; the node
+   * the project's declared id conventions (src/ids/IdConventionsReader.ts; the node
    * layer reads them from the .bpmnlintrc): the document keeps them
    * (Doc.conventions); the process and definitions ids follow them only
    * where they name bpmn:Process / bpmn:Definitions exactly
@@ -472,7 +472,7 @@ export class Doc {
   }
 
   /**
-   * The project's declared id conventions (src/ids/conventions.ts; the pipeline
+   * The project's declared id conventions (src/ids/IdConventionsReader.ts; the pipeline
    * sets them for a call from MutationOptions.conventions): new ids follow
    * them where they declare a prefix, the file's own style elsewhere
    * (src/ids/IdStyle.ts). Setting other ones learns the style again.

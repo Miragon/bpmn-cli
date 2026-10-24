@@ -37,7 +37,7 @@
  * or `lintConfig`, runs as an advisory validator next to the host's
  * (`lintBlocks`: a blocking one); without a .bpmnlintrc nothing is loaded.
  * Its @miragon/rules/element-id-naming gives the id conventions new ids
- * follow (src/ids/conventions.ts), unless the host passes `conventions` itself
+ * follow (src/ids/IdConventionsReader.ts), unless the host passes `conventions` itself
  * (or a validator named bpmnlint: then its own conventions, if any).
  */
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -47,7 +47,7 @@ import { declaredEncoding, isUtf8 } from '../xml/encoding.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { Op } from '../ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type CheckOptions, type CheckResult, type LayoutDocOptions, type MutationOptions, type MutationResult } from '../pipeline/index.js';
-import type { IdConventions } from '../ids/conventions.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
 import type { Validator } from '../validate/validators.js';
 import { projectLint, type FileBpmnlintOptions } from './bpmnlint.js';
 
