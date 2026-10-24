@@ -61,7 +61,7 @@
  * The validator never throws: what goes wrong is W_LINT_FAILED.
  */
 import { BpmnModdle } from 'bpmn-moddle';
-import { isDecisionLinkWarning, reportedImportWarnings } from '../ops/decision.js';
+import { isDecisionLinkWarning, reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import type { NamedValidator, ValidatorContext, ValidatorFinding } from './validators.js';
 import { firstLine } from '../shared/utils/text.js';
 

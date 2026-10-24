@@ -114,7 +114,7 @@ import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { EditContext } from '../model/EditContext.js';
-import { reportedImportWarnings } from '../ops/decision.js';
+import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { OpRunner, type BatchRun } from '../ops/OpRunner.js';
 import { withoutProfileDuplicates } from '../ops/retype.js';
 import type { Op } from '../ops/types.js';

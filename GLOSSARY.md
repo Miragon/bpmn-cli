@@ -20,6 +20,7 @@ a new concept gets its line here first.
 | **Change set** | What one op created, changed and removed, and the warnings it raised (`model/ChangeSet.ts`). |
 | **Kind** | The CLI's name for a BPMN element type, with an optional trigger (`userTask`, `boundaryEvent:timer`). |
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
+| **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader`, written by `DecisionLinkWriter` (`ops/`). |
 | **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors. |
 | **Splice** | Inserting a node into an existing sequence flow. |
 | **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/plane.ts`). |

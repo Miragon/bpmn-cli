@@ -43,7 +43,7 @@ import { diExpansionState } from '../layout/index.js';
 import { groupName, is, localType, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
 import { groupMembers } from '../diagram/groups.js';
-import { decisionLinkOf } from '../ops/decision.js';
+import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
 import { describeTrigger } from '../ops/events.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
@@ -385,7 +385,7 @@ export function nodeProps(el: El, opts: { zeebe?: boolean } = {}): Record<string
   const called = peek<string>(el, 'calledElement');
   if (called) props['calledElement'] = called;
   // the decision link of a business rule task, whatever the spelling (no engine: calledDecision, C7: camunda:decisionRef, C8: zeebe:calledDecision)
-  const decision = decisionLinkOf(el);
+  const decision = new DecisionLinkReader().linkOf(el);
   if (decision) props['calledDecision'] = decision.value;
   if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
   const messageRef = peek<El>(el, 'messageRef');
@@ -936,7 +936,7 @@ export interface FindHit {
 /** The first vendor value of `el` containing `q`: an attribute (also of a nested element) or an extension element attribute / body. */
 function vendorMatch(el: El, q: string): string | undefined {
   for (const [k, v] of Object.entries(vendorValues(el) ?? {})) if (v.toLowerCase().includes(q)) return `${k}=${v}`;
-  const decision = decisionLinkOf(el);
+  const decision = new DecisionLinkReader().linkOf(el);
   if (decision && decision.value.toLowerCase().includes(q)) return `calledDecision=${decision.value}`;
   const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
     for (const e of exts ?? []) {

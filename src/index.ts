@@ -25,6 +25,8 @@ import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInf
 import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
 import { AgentGuide } from './report/AgentGuide.js';
 import { KindsReference } from './report/KindsReference.js';
+import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
+import type { El } from './model/utils/moddle.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
@@ -101,7 +103,13 @@ export function conventionsView(
   return new ConventionsTable(doc, conventions).view(opts);
 }
 
-export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
+export type { DecisionLink } from './ops/DecisionLinkReader.js';
+
+/** The decision link of a business rule task in any spelling (undefined for other elements or without one). */
+export function decisionLinkOf(el: El, doc?: Doc): DecisionLink | undefined {
+  return new DecisionLinkReader(doc).linkOf(el);
+}
+
 export { ChangeSet, type Change } from './model/ChangeSet.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */

@@ -98,7 +98,7 @@ import { addTo, is, localType, many, nameOf, walk, type El } from '../model/util
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
-import { setDecisionLink } from './decision.js';
+import { DecisionLinkWriter } from './DecisionLinkWriter.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { setCorrelationKey } from './ext.js';
 import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
@@ -476,7 +476,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
     case 'calledDecision':
       // another element: an unprefixed calledDecision="..." BPMN does not define can only be removed (W_C7_DEPLOY_SCHEMA)
       if (is(el, 'bpmn:BusinessRuleTask') || value) {
-        cs.change(changeOf(el, setDecisionLink(doc, el, value, cs)));
+        cs.change(changeOf(el, new DecisionLinkWriter(doc).write(el, value, cs)));
         return;
       }
       setModelProperty(doc, el, key, value);

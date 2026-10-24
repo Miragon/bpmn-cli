@@ -2,7 +2,7 @@ import type { Doc } from '../model/Doc.js';
 import type { CliError } from '../shared/CliError.js';
 import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { layoutModel } from '../layout/index.js';
-import { reportedImportWarnings } from '../ops/decision.js';
+import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { PlatformDetection } from '../platform/PlatformDetection.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import { validateDoc } from '../validate/structural.js';
