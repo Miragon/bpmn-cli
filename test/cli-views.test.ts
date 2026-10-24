@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { COMMANDS, GUIDE_TOPICS, guideTopic, KINDS_SECTION_NAMES } from '../src/report/guide.js';
+import { COMMANDS } from '../src/report/CommandCatalogue.js';
+import { GUIDE_TOPICS, guideTopic, KINDS_SECTION_NAMES } from '../src/report/guide.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const CLAIMS = join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn');

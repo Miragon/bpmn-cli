@@ -48,6 +48,7 @@ import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } fr
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
 import { advisoryValidators, mutationReport, mutationSummary, mutationWarnings, renderMutation, renderSummary, renderValidation, validationReport, validatorTag, type MutationReport, type MutationSummary } from './report/command-report.js';
 import { findElements } from './query/model-view.js';
+import { CommandCatalogue } from './report/CommandCatalogue.js';
 
 /** The package version (dist/cli.js and src/cli.ts both sit one level below package.json). */
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -272,34 +273,51 @@ function printError(err: unknown, json: boolean | undefined): void {
 /* option helpers                                                       */
 /* ------------------------------------------------------------------ */
 
+const CATALOGUE = new CommandCatalogue();
+
+/** A command of the catalogue: its arguments, aliases and --help description. */
+function command(parent: CommandType, name: string): CommandType {
+  return define(parent, CATALOGUE.command(name));
+}
+
+function subcommand(parent: CommandType, name: string, sub: string): CommandType {
+  return define(parent, CATALOGUE.command(name).subcommands!.find((s) => s.name === sub)!);
+}
+
+function define(parent: CommandType, doc: { name: string; arguments?: string; aliases?: string[]; help: string }): CommandType {
+  const cmd = parent.command(doc.arguments ? `${doc.name} ${doc.arguments}` : doc.name);
+  for (const alias of doc.aliases ?? []) cmd.alias(alias);
+  return cmd.description(doc.help);
+}
+
 /** --json, and --pretty to indent it. */
 function withJsonOptions(cmd: CommandType): CommandType {
-  return cmd.option('--json', 'machine-readable output (compact JSON)').option('--pretty', 'with --json: indented JSON');
+  return cmd.option(...CATALOGUE.commonOption('--json')).option(...CATALOGUE.commonOption('--pretty'));
 }
 
 function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): CommandType {
   withJsonOptions(cmd)
-    .option('--summary', 'short result: created ids by kind, changed / removed ids, added warnings, one layout line')
-    .option('-o, --out <file>', 'write to this file instead of the input file (- = stdout)')
-    .option('--dry-run', 'run everything but do not write')
-    .option('--render <file>', 'also draw the result to this .png / .svg: created, changed and moved elements with a halo, the layout problems the change added numbered (a large drawing: the region of the change)', renderTarget);
+    .option(...CATALOGUE.commonOption('--summary'))
+    .option(...CATALOGUE.commonOption('--out'))
+    .option(...CATALOGUE.commonOption('--dry-run'))
+    .option(...CATALOGUE.commonOption('--render'), renderTarget);
   if (layoutToggle) {
     cmd
-      .option('--layout <mode>', 'auto (default): keep a hand-made diagram and place changes locally, redraw an engine-owned one; incremental: always keep; full: always redraw', (v: string) => {
+      .option(...CATALOGUE.commonOption('--layout'), (v: string) => {
         if (!(LAYOUT_MODES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
         return v;
       })
-      .option('--relayout', 'redraw the whole diagram (= --layout full)')
-      .option('--no-layout', 'do not update the diagram (new elements get no shape, a flow whose ends changed loses its edge; format operations still apply)');
+      .option(...CATALOGUE.commonOption('--relayout'))
+      .option(...CATALOGUE.commonOption('--no-layout'));
   }
   return withLintOptions(cmd)
-    .option('--force', 'write despite a lossy import, new validation errors or content a retype would delete')
-    .option('--backup', 'copy the input file to <file>.bak before writing')
-    .option('--show', 'append the full model view to the result')
-    .option('--strict', 'exit with code 5 when there are warnings')
-    .option('--keep-flow-ids', 'keep the id of every existing sequence flow the change gives other ends, instead of renaming a flow whose id names its old ends after its new ones; W_FLOW_ID_STALE names each flow whose id no longer names its ends. BPMN_KEEP_FLOW_IDS=1 makes keeping the default')
-    .option('--no-keep-flow-ids', 'rename such flows after their new ends, also when BPMN_KEEP_FLOW_IDS=1')
-    .option('--engine <engine>', 'layout engine: clean (default) or auto (bpmn-auto-layout)', (v: string) => {
+    .option(...CATALOGUE.commonOption('--force'))
+    .option(...CATALOGUE.commonOption('--backup'))
+    .option(...CATALOGUE.commonOption('--show'))
+    .option(...CATALOGUE.commonOption('--strict'))
+    .option(...CATALOGUE.commonOption('--keep-flow-ids'))
+    .option(...CATALOGUE.commonOption('--no-keep-flow-ids'))
+    .option(...CATALOGUE.commonOption('--engine'), (v: string) => {
       if (v !== 'clean' && v !== 'auto') throw new InvalidArgumentError('expected clean or auto');
       return v;
     });
@@ -308,8 +326,8 @@ function withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): Co
 /** --lint-config <path> / --no-lint-config (in this order, so that the default stays undefined, like --layout / --no-layout) */
 function withLintOptions(cmd: CommandType): CommandType {
   return cmd
-    .option('--lint-config <path>', "the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file written (-o) or checked, up to the repository root, whoever owns it; outside one only in the file's directory; stdin without -o: from the working directory)")
-    .option('--no-lint-config', "do not read the project's bpmnlint configuration (no bpmnlint findings, no id conventions from element-id-naming)");
+    .option(...CATALOGUE.commonOption('--lint-config'))
+    .option(...CATALOGUE.commonOption('--no-lint-config'));
 }
 
 function withTriggerOptions(cmd: CommandType): CommandType {
@@ -497,9 +515,7 @@ program
 
 /* new ---------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('new <file>')
-    .description('create a new .bpmn file with one empty process')
+  command(program, 'new')
     .option('--name <text>', 'process name')
     .option('--id <processId>', "process id (default: Process_<Name> or Process_1; a bpmn:Process prefix the .bpmnlintrc's element-id-naming names: that prefix and the name, process_main without one)")
     .option('--no-executable', 'isExecutable=false')
@@ -552,9 +568,7 @@ function depthArg(v: string): number {
 }
 
 withJsonOptions(
-  program
-    .command('show <file> [id]')
-    .description('print the model (or one element) as the AI sees it: no coordinates (file - = stdin)')
+  command(program, 'show')
     .option('--scope <id>', 'only this process / sub-process / participant')
     .option('--around <id>', 'only the neighbourhood of this element: --depth flow steps along sequence flows, both ways')
     .option('--depth <n>', 'with --around: flow steps (default 2)', depthArg)
@@ -607,9 +621,7 @@ withJsonOptions(
 
 /* find --------------------------------------------------------------- */
 withJsonOptions(
-  program
-    .command('find <file> <text>')
-    .description('find elements by id, name or vendor attribute value (case-insensitive substring; file - = stdin)')
+  command(program, 'find')
     .option('--kind <kind>', 'restrict to a kind', kindArg),
 ).action(async (file: string, text: string, o: RawOpts) => {
   await run(async () => {
@@ -623,9 +635,7 @@ withJsonOptions(
 /* add ---------------------------------------------------------------- */
 withTriggerOptions(
   withMutationOptions(
-    program
-      .command('add <file> <kind> [name] [keyValues...]')
-      .description('create an element and wire it in (kind[:trigger], e.g. userTask, startEvent:message, boundaryEvent:timer)')
+    command(program, 'add')
       .option('--id <id>', "explicit id (default: in the file's id style, else <Prefix>_<NameSlug>)")
       .option('--after <id>', 'append after a gateway / unconnected node, or insert into the node\'s single outgoing flow')
       .option('--before <id>', 'prepend before a join / unconnected node, or insert into the node\'s single incoming flow')
@@ -693,9 +703,7 @@ withTriggerOptions(
 
 /* connect ------------------------------------------------------------ */
 withMutationOptions(
-  program
-    .command('connect <file> <sourceId> <targetId>')
-    .description('connect two elements (sequence flow, message flow, association or data association is inferred)')
+  command(program, 'connect')
     .option('--name <text>', 'flow name')
     .option('--id <id>', 'flow id')
     .option('--condition <expr>', 'condition expression (sequence flows)')
@@ -725,9 +733,7 @@ withMutationOptions(
 
 /* set ---------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('set <file> <id> [keyValues...]')
-    .description('set properties: key=value ... (see `bpmn kinds` for keys; key= unsets)')
+  command(program, 'set')
     .option('--unset <key>', 'remove a property (repeatable)', (v: string, prev: string[]) => [...prev, v], [] as string[]),
 ).action(async (file: string, id: string, keyValues: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
@@ -741,10 +747,7 @@ withMutationOptions(
 
 /* remove ------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('remove <file> <ids...>')
-    .alias('rm')
-    .description('remove elements (connected flows, boundary events, associations follow; a node with one in/out flow is bridged, a merge from every predecessor; a parallel / inclusive join needs --bridge-all or --no-bridge)')
+  command(program, 'remove')
     .option('--no-bridge', 'do not reconnect predecessor and successor')
     .option('--bridge-all', 'a join (several incoming flows, one outgoing): connect every predecessor to the successor')
     .option('--with-branch', 'also remove the exclusive downstream path (every node only this one leads to, up to the next merge or the ends)')
@@ -767,10 +770,7 @@ withMutationOptions(
 /* retype ------------------------------------------------------------- */
 withTriggerOptions(
   withMutationOptions(
-    program
-      .command('retype <file> <id> <kind>')
-      .alias('replace')
-      .description('change the kind of an element (task -> userTask, endEvent -> endEvent:error ...) keeping id and connections'),
+    command(program, 'retype'),
   ),
 ).action(async (file: string, id: string, kind: string, o: RawOpts) => {
   const opts = mutationOptions(o);
@@ -782,9 +782,7 @@ withTriggerOptions(
 
 /* move --------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('move <file> <ids...>')
-    .description('relocate nodes: --after/--before/--flow (re-insert), --in (another scope), --on (boundary events), --lane')
+  command(program, 'move')
     .option('--after <id>', 'insert after this node')
     .option('--before <id>', 'insert before this node')
     .option('--flow <flowId>', 'insert into this flow')
@@ -814,9 +812,7 @@ withMutationOptions(
 
 /* order -------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('order <file> <id> <ids...>')
-    .description('order the outgoing flows of a node (top-to-bottom branch order), the lanes of a pool / process / parent lane, or the pools of a collaboration (top to bottom)'),
+  command(program, 'order'),
 ).action(async (file: string, nodeId: string, flowIds: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
@@ -826,11 +822,9 @@ withMutationOptions(
 });
 
 /* ext ---------------------------------------------------------------- */
-const ext = program.command('ext').description('vendor extension elements (<bpmn:extensionElements>)');
+const ext = command(program, 'ext');
 withMutationOptions(
-  ext
-    .command('add <file> <id> <type> [attrs...]')
-    .description('add an extension element, e.g. zeebe:taskDefinition type=send-email retries=3; child types go into their container (camunda:inputParameter -> camunda:inputOutput), single-instance containers are merged; <type> may be a path (camunda:connector/camunda:inputParameter) and take a definition. / loop. / condition. prefix for a nested element')
+  subcommand(ext, 'ext', 'add')
     .option('--body <text>', 'text content')
     .option('--xml <snippet>', 'raw XML snippet (may contain nested elements); its roots must be of <type>')
     .option('--replace', 'replace existing elements of the same type (and key) instead of merging'),
@@ -851,9 +845,7 @@ withMutationOptions(
   }, opts.json);
 });
 withMutationOptions(
-  ext
-    .command('remove <file> <id> <selector>')
-    .description("remove extension elements: a type, one item ('camunda:inputParameter[name=x]', 'camunda:formField[1]'), a path, or an index from `ext list` (loop.0 for a nested element's)"),
+  subcommand(ext, 'ext', 'remove'),
 ).action(
   async (file: string, id: string, typeOrIndex: string, o: RawOpts) => {
     const opts = mutationOptions(o);
@@ -867,7 +859,7 @@ withMutationOptions(
     }, opts.json);
   },
 );
-withJsonOptions(ext.command('list <file> <id>').description('list extension elements of an element (and of its event definition / loop / condition) as an indented tree')).action(
+withJsonOptions(subcommand(ext, 'ext', 'list')).action(
   async (file: string, id: string, o: RawOpts) => {
     await run(async () => {
       const doc = await readDocArg(file);
@@ -922,9 +914,7 @@ function selectorsOf(ids: string[], o: RawOpts, need: boolean): Pick<PlaceOp, 'i
 
 withMutationOptions(
   withSelectors(
-    program
-      .command('place <file> [ids...]')
-      .description('diagram only: move shapes (one rigid group, the first id is the reference) to the row and/or column of another element')
+    command(program, 'place')
       .option('--row-of <id>', 'row: centre on the row of this element')
       .option('--below <id>', 'row: the row below this element')
       .option('--above <id>', 'row: the row above this element')
@@ -951,9 +941,7 @@ withMutationOptions(
 
 withMutationOptions(
   withSelectors(
-    program
-      .command('align <file> [ids...]')
-      .description('diagram only: put shapes on one row (same vertical centre) or one column (same horizontal centre)')
+    command(program, 'align')
       .addOption(new Option('--axis <axis>', 'row or column').choices(['row', 'column']).makeOptionMandatory())
       .option('--to <id>', 'reference element that stays (default: the first id; with only --kind and --axis column: the rightmost one)'),
     'align',
@@ -969,10 +957,7 @@ withMutationOptions(
 
 withMutationOptions(
   withSelectors(
-    program
-      .command('color <file> [ids...]')
-      .alias('colour')
-      .description('diagram only: colour shapes and connections (bpmn-js colour picker colours; default removes the colour)')
+    command(program, 'color')
       .addOption(new Option('--color <color>', COLOR_VALUES.join(' | ')).choices([...COLOR_VALUES]).makeOptionMandatory()),
     'colour',
   ),
@@ -984,9 +969,7 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  program
-    .command('label <file> <id>')
-    .description('diagram only: put the external label of an event, gateway, data element or flow on one side')
+  command(program, 'label')
     .addOption(new Option('--side <side>', LABEL_SIDE_VALUES.join(' | ')).choices([...LABEL_SIDE_VALUES]).makeOptionMandatory()),
 ).action(async (file: string, id: string, o: RawOpts) => {
   const op: LabelOp = { op: 'label', id, side: o['side'] as LabelOp['side'] };
@@ -994,9 +977,7 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  program
-    .command('route <file> <flowId>')
-    .description('diagram only: route a sequence / message flow again, optionally forcing the side it leaves and enters by (a flow without a line whose ends are drawn gets one)')
+  command(program, 'route')
     .addOption(new Option('--exit <side>', `side it leaves its source by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES]))
     .addOption(new Option('--entry <side>', `side it enters its target by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES])),
 ).action(async (file: string, flowId: string, o: RawOpts) => {
@@ -1005,9 +986,7 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  program
-    .command('space <file>')
-    .description('diagram only: insert space right of / below an element (the modeler\'s space tool)')
+  command(program, 'space')
     .option('--after <id>', 'horizontal space right of this element')
     .option('--below <id>', 'vertical space below this element')
     .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (v: string) => {
@@ -1023,7 +1002,7 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  withSelectors(program.command('tidy <file> [ids...]').description('diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (default: every shape)'), 'tidy'),
+  withSelectors(command(program, 'tidy'), 'tidy'),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   await run(async () => {
     const op: TidyOp = { op: 'tidy', ...selectorsOf(ids, o, false) };
@@ -1032,16 +1011,14 @@ withMutationOptions(
 });
 
 withMutationOptions(
-  program
-    .command('compact <file> [ids...]')
-    .description('diagram only: close empty rows and columns and shrink pools, lanes and expanded sub-processes to their content (default: the whole drawing), keeping the order; never adds a layout problem'),
+  command(program, 'compact'),
 ).action(async (file: string, ids: string[], o: RawOpts) => {
   const op: CompactOp = { op: 'compact', ...(ids.length ? { ids } : {}) };
   await runFormat(file, op, o);
 });
 
 /* metrics ------------------------------------------------------------ */
-withJsonOptions(program.command('metrics <file>').description('layout quality of the drawing: score, counts and every problem with the element ids (file - = stdin)')).action(
+withJsonOptions(command(program, 'metrics')).action(
   async (file: string, o: RawOpts) => {
     await run(async () => {
       const doc = await readDocArg(file);
@@ -1221,9 +1198,7 @@ async function renderMutationResult(xml: string, report: MutationReport, target:
 }
 
 withJsonOptions(
-  program
-    .command('render <file> [ids...]')
-    .description('draw the diagram as an image to look at (PNG, or SVG; no browser): the whole plane or a crop (ids, --around, --path, --scope), with halos and numbered layout problems; prints the size, the image tokens and the other planes (file - = stdin)')
+  command(program, 'render')
     .option('-o, --out <file>', 'the image file, .png or .svg (another name needs --format; - = stdout); default: bpmn-cli/<name>.png in the temp directory; tiles: <name>-1.png, <name>-2.png, ...')
     .option('--format <format>', 'png (default) or svg; default: the -o extension', (v: string) => {
       if (!(RENDER_FORMATS as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${RENDER_FORMATS.join(' or ')}`);
@@ -1294,7 +1269,7 @@ withJsonOptions(
 
 /* apply -------------------------------------------------------------- */
 withMutationOptions(
-  program.command('apply <file> [ops]').description('apply a JSON list of operations in one transaction (ops file or - for stdin; file - = the model from stdin, the result to stdout)'),
+  command(program, 'apply'),
 ).action(async (file: string, opsFile: string | undefined, o: RawOpts) => {
   const opts = mutationOptions(o);
   await run(async () => {
@@ -1327,11 +1302,9 @@ withMutationOptions(
 /* validate ----------------------------------------------------------- */
 withLintOptions(
   withJsonOptions(
-    program
-      .command('validate <file>')
-      .description("structural validation, lint, the engine profile (Camunda 7 / 8), the project's .bpmnlintrc and a layout dry run (nothing is written; file - = stdin)"),
+    command(program, 'validate'),
   )
-    .option('--strict', 'exit with code 5 when there are warnings')
+    .option(...CATALOGUE.commonOption('--strict'))
     .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (v: string) => {
       if (!(PLATFORM_CHOICES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
       return v;
@@ -1356,9 +1329,7 @@ withLintOptions(
 
 /* layout ------------------------------------------------------------- */
 withMutationOptions(
-  program
-    .command('layout <file>')
-    .description('redraw the diagram (DI) from the semantic model; --tidy keeps the drawing and only removes overlaps')
+  command(program, 'layout')
     .option('--expand <ids>', 'comma-separated sub-process ids to expand')
     .option('--collapse <ids>', 'comma-separated sub-process ids to collapse')
     .option('--tidy', 'keep the drawing: remove overlaps and gaps < 20 px with minimal moves (= bpmn tidy)'),
@@ -1381,9 +1352,7 @@ withMutationOptions(
 
 /* kinds / guide ------------------------------------------------------ */
 withJsonOptions(
-  program
-    .command('kinds')
-    .description('element kinds, triggers, settable keys, ops schema and error codes')
+  command(program, 'kinds')
     .option('--section <names>', `only these parts (comma-separated): ${KINDS_SECTION_NAMES}`),
 ).action(async (o: RawOpts) => {
   await run(async () => {
@@ -1393,9 +1362,7 @@ withJsonOptions(
   }, !!o['json']);
 });
 
-program
-  .command('guide [topic]')
-  .description('cheat sheet for AI agents (--short: the core in 5 KB; a topic: one section)')
+command(program, 'guide')
   .option('--short', 'the core: contract, reading, ops keys, placement, top errors (at most 5 KB)')
   .action(async (topic: string | undefined, o: RawOpts) => {
     await run(async () => {

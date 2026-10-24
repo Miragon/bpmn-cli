@@ -5,7 +5,8 @@ import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js
 import { Doc } from '../src/model/document.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
-import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
+import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
+import { ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
 import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
@@ -34,15 +35,18 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
+const GUIDE_TEXT_FILES = ['report/guide.ts', 'report/CommandCatalogue.ts'];
+
 /**
  * Every E_/W_ code mentioned anywhere under src/ (code strings and contract
- * comments). A prefix used as a template (`W_LAYOUT_${code}`) is reported as
- * the family `W_LAYOUT_*`.
+ * comments) but the guide's text, which documents them (and families such as
+ * W_C7_DEPLOY_*) instead of emitting them. A prefix used as a template (`W_LAYOUT_${code}`)
+ * is reported as the family `W_LAYOUT_*`.
  */
 function codesInSource(): string[] {
   const codes = new Set<string>();
   for (const file of sourceFiles(SRC_DIR)) {
-    if (file.endsWith('report/guide.ts')) continue;
+    if (GUIDE_TEXT_FILES.some((guide) => file.endsWith(guide))) continue;
     for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
   }
   return [...codes].sort();
