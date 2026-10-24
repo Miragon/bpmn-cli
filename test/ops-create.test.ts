@@ -4,7 +4,6 @@ import { is, many, type El } from '../src/model/utils/moddle.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
 import { assignLane, laneOf } from '../src/ops/containers.js';
 import { EventTrigger } from '../src/ops/EventTrigger.js';
-import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
 import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
 import type { CliError } from '../src/shared/CliError.js';
@@ -14,6 +13,7 @@ import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js
 import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';
 import { ElementConnector } from '../src/ops/ElementConnector.js';
+import { FlowSplitter } from '../src/ops/FlowSplitter.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -789,7 +789,7 @@ describe('split', () => {
         { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify' }] },
       ],
     };
-    const cs = splitFlow(doc, op);
+    const cs = new FlowSplitter(doc).split(op);
     const created = cs.created.filter((c) => c.kind !== 'sequenceFlow').map((c) => c.id);
     expect(created).toEqual(['Gateway_InvoiceOk', 'Activity_Book', 'Activity_Archive', 'Activity_Clarify', 'Gateway_InvoiceOk_join']);
     expect(cs.created.find((c) => c.id === 'Gateway_InvoiceOk')!.detail).toBe('between Task_A and End');
@@ -817,7 +817,7 @@ describe('split', () => {
 
   it('without a join every branch end connects to the old successor (implicit join warnings)', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       kind: 'parallel',
@@ -835,7 +835,7 @@ describe('split', () => {
 
   it('appends after gateways / unconnected nodes and supports empty branches', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Loose',
       id: 'Gateway_Split',
@@ -852,7 +852,7 @@ describe('split', () => {
     expect(doc.require('Gateway_Merge').get('name')).toBe('merge');
 
     // after a gateway: appended as another branch, old branches untouched
-    splitFlow(doc, { op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
+    new FlowSplitter(doc).split({ op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
     expect(ids(doc.outgoing(doc.require('GW')))).toHaveLength(2);
     expect(edge(doc, 'F2')).toBe('GW->Task_A');
     await roundTrip(doc);
@@ -860,12 +860,12 @@ describe('split', () => {
 
   it('validates kind, branches and anchors', async () => {
     const doc = await linearDoc();
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
     add(doc, { kind: 'task', name: 'Alone', in: 'Process_1' });
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
   });
 
   it('typed ops (mutateDoc, no parseOps): a branch without a nodes array is E_USAGE in parseOps\' words, and the document stays as it was', async () => {
@@ -916,7 +916,7 @@ describe('split', () => {
 
   it('branch nodes inherit the anchor lane and can carry triggers', async () => {
     const doc = await docFromXml(WITH_LANES);
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       kind: 'eventBased',
@@ -1119,7 +1119,7 @@ describe('connect: self-loops', () => {
 describe('split: terminating branches', () => {
   it('a branch ending in an end event stops there; the one that continues runs on without a pass-through join', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       name: 'Ok?',
@@ -1141,14 +1141,14 @@ describe('split: terminating branches', () => {
 
   it('with every branch terminating no join is created and the lost successor is noted; join:false stops the end branch too', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, { op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
+    const cs = new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
     expect(doc.has('Gateway_1_join')).toBe(false);
     expect(doc.incoming(doc.require('End'))).toHaveLength(0);
     expect(cs.notes.some((n) => n.includes('no join gateway created'))).toBe(true);
     expect(cs.notes.some((n) => n.includes('End is no longer reached'))).toBe(true);
 
     const doc2 = await linearDoc();
-    const cs2 = splitFlow(doc2, { op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
+    const cs2 = new FlowSplitter(doc2).split({ op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
     expect(doc2.incoming(doc2.require('End')).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_Go']);
     expect(doc2.outgoing(doc2.require('Event_Stop'))).toHaveLength(0);
     expect(cs2.warnings).toHaveLength(0);
