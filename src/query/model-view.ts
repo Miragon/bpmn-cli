@@ -40,7 +40,9 @@ import { usageError, type Warning } from '../shared/errors.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { is, localType, walk, type El } from '../model/moddle.js';
+import { groupName } from '../ops/artifacts.js';
 import { laneOf } from '../ops/containers.js';
+import { groupMembers } from '../diagram/groups.js';
 import { decisionLinkOf } from '../ops/decision.js';
 import { describeTrigger } from '../ops/events.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
@@ -119,6 +121,13 @@ export interface ViewAnnotation {
   attachedTo: string[];
 }
 
+export interface ViewGroup {
+  id: string;
+  name?: string;
+  /** the elements its box holds and those that reference its category value */
+  members: string[];
+}
+
 export interface ViewProcess {
   id: string;
   name?: string;
@@ -158,6 +167,8 @@ export interface ModelView {
     annotations?: ViewAnnotation[];
   };
   processes: ViewProcess[];
+  /** groups of every process and of the collaboration */
+  groups?: ViewGroup[];
   rootElements: Array<{ id: string; kind: string; name?: string; code?: string; correlationKey?: string }>;
   problems: Warning[];
   /** content the reader could not keep (a write needs --force and drops it), e.g. a duplicate loopCharacteristics */
@@ -250,6 +261,7 @@ function idOf(el: El | undefined): string {
 }
 
 function nameOf(el: El): string | undefined {
+  if (is(el, 'bpmn:Group')) return groupName(el);
   const n = peek<unknown>(el, 'name');
   return typeof n === 'string' && n ? n : undefined;
 }
@@ -702,6 +714,10 @@ function vendorNamespaces(doc: Doc): string[] {
     .filter((prefix) => !STANDARD_NS.has(prefix));
 }
 
+function buildGroups(doc: Doc): ViewGroup[] {
+  return [...groupMembers(doc.definitions)].map(([id, members]) => compact<ViewGroup>({ id, name: nameOf(doc.require(id)), members }));
+}
+
 /** Builds the complete semantic view of a document (see contract above). */
 export function buildView(doc: Doc): ModelView {
   const ctx: ViewCtx = { doc, expansion: diExpansionState(doc.definitions) };
@@ -715,6 +731,7 @@ export function buildView(doc: Doc): ModelView {
     }),
     collaboration: buildCollaboration(doc),
     processes: doc.processes().map((p) => buildProcess(ctx, p)),
+    groups: nonEmpty(buildGroups(doc)),
     rootElements: buildRootElements(doc),
     problems: [...errors, ...warnings],
     importWarnings: nonEmpty(doc.lossyImportWarnings.map((w) => w.message.split('\n')[0]!)),
@@ -731,6 +748,11 @@ export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView
   const id = scope.get<string>('id');
   const processId = doc.processOf(scope)?.get<string>('id');
   view.processes = view.processes.filter((p) => p.id === processId);
+  const inScope = (id: string): boolean => {
+    for (let el = doc.get(id); el; el = el.$parent as El | undefined) if (el === scope) return true;
+    return false;
+  };
+  view.groups = nonEmpty((view.groups ?? []).filter((g) => g.members.some(inScope)));
   if (id !== processId) {
     // narrow to the sub-process subtree
     const findNode = (nodes: ViewNode[]): ViewNode | undefined => {
@@ -790,6 +812,7 @@ function baseProperties(doc: Doc, el: El): Record<string, unknown> {
     if (!process) props['blackBox'] = true;
   }
   if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(idOf);
+  if (is(el, 'bpmn:Group')) props['members'] = groupMembers(doc.definitions).get(idOf(el)) ?? [];
   if (is(el, 'bpmn:TextAnnotation')) props['text'] = peek<string>(el, 'text');
   if (is(el, 'bpmn:Process')) props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
   if (is(el, 'bpmn:Error')) props['errorCode'] = peek<string>(el, 'errorCode');

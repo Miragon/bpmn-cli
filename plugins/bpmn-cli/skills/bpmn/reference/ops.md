@@ -93,7 +93,8 @@ bpmn show invoice.bpmn
 | `on` A | boundary events only: attach to activity A |
 | `to` T | also connect the new node to T (a branch that rejoins) |
 
-Data objects, data stores, annotations, lanes and pools take `in` only.
+Data objects, data stores, annotations, lanes and pools take `in` only. A group takes
+no placement: `members` names what it is drawn around.
 
 ```bash
 printf '%s' '[

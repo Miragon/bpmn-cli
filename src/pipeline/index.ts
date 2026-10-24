@@ -122,6 +122,7 @@ import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } f
 import { runFormatOps, type FormatEntry, type FormatResult } from '../format/index.js';
 import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
 import { applyColors, colorsOf, diIds } from '../diagram/write.js';
+import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
 import { kindLabel } from '../model/kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/mirror.js';
 import { addTo, is, layoutRoot, many, ModelError, parseXml, serialize, type El } from '../model/moddle.js';
@@ -716,6 +717,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
   const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated, created, ...expansion });
+  const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), diIds(doc.definitions).shape);
   const xml = await doc.toXml();
   return {
     xml,
@@ -724,7 +726,7 @@ async function incrementalLayout(doc: Doc, before: Before, relocated: string[], 
       mode: 'incremental',
       warnings: [],
       expanded: [],
-      placed: report.placed,
+      placed: [...report.placed, ...groups.drawn],
       moved: report.moved,
       rerouted: report.rerouted,
       ...(report.reshaped.length ? { reshaped: report.reshaped } : {}),

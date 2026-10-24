@@ -214,7 +214,8 @@ Exit codes: 0 ok, 1 usage, 2 model/validation error, 3 layout, 4 file/parse,
   `exclusiveGateway` (xor), `parallelGateway` (and), `inclusiveGateway` (or),
   `eventBasedGateway`, `startEvent`, `endEvent`, `intermediateCatchEvent`,
   `intermediateThrowEvent`, `boundaryEvent`, `participant` (pool), `lane`,
-  `dataObject`, `dataStore`, `textAnnotation`. Events take `kind:trigger`
+  `dataObject`, `dataStore`, `textAnnotation`, `group` (`members` [ids]: drawn
+  around them). Events take `kind:trigger`
   (`startEvent:message`, `boundaryEvent:timer`, `endEvent:error`) plus the
   trigger key (`message`, `timer`, `error` + `errorCode`, `signal`, ...).
 - Placement (exactly one per add): `after` X (append after a gateway / an end of

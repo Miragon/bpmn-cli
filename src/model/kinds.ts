@@ -105,6 +105,7 @@ export const KINDS: KindDef[] = [
   { kind: 'dataObject', type: 'bpmn:DataObjectReference', family: 'data', aliases: ['data', 'dataObjectReference'], prefix: 'DataObjectReference', description: 'Data object (reference + backing bpmn:DataObject)' },
   { kind: 'dataStore', type: 'bpmn:DataStoreReference', family: 'data', aliases: ['store', 'dataStoreReference'], prefix: 'DataStoreReference', description: 'Data store reference' },
   { kind: 'textAnnotation', type: 'bpmn:TextAnnotation', family: 'artifact', aliases: ['note', 'annotation', 'text'], prefix: 'TextAnnotation', description: 'Text annotation (connect it to an element to draw an association)' },
+  { kind: 'group', type: 'bpmn:Group', family: 'artifact', aliases: [], prefix: 'Group', description: 'Group drawn around its members (--members <id,...>; the members reference its category value)' },
 ];
 
 const REJECTED_TYPES: Record<string, string> = {
@@ -112,7 +113,6 @@ const REJECTED_TYPES: Record<string, string> = {
   'bpmn:SubChoreography': 'choreographies are not supported',
   'bpmn:CallChoreography': 'choreographies are not supported',
   'bpmn:ImplicitThrowEvent': 'implicit throw events are not supported',
-  'bpmn:Group': 'groups are not supported in this version',
 };
 
 const byToken = new Map<string, KindDef>();

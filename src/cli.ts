@@ -650,7 +650,7 @@ withTriggerOptions(
       .option('--text <text>', 'text annotations: the text')
       .option('--process <id>', 'participants: bind this existing process')
       .option('--black-box', 'participants: no process')
-      .option('--members <ids>', 'lanes: comma-separated member node ids'),
+      .option('--members <ids>', 'lanes / groups: comma-separated member ids (a group is drawn around them)'),
   ),
 ).action(async (file: string, kind: string, name: string | undefined, keyValues: string[], o: RawOpts) => {
   const opts = mutationOptions(o);

@@ -125,7 +125,7 @@ element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQuali
   subProcess_{name:camel}            lint        eventSubProcess adHocSubProcess transaction
   gateway_{name:camel}               lint        exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
   event_{name:camel}                 lint        intermediateCatchEvent intermediateThrowEvent boundaryEvent
-  <Kind>_{name:pascal}               file        participant lane textAnnotation collaboration message (not checked)
+  <Kind>_{name:pascal}               file        participant lane textAnnotation group collaboration message (not checked)
   DataObjectReference_{name:pascal}  file        dataObject (not checked)
   DataStoreReference_{name:pascal}   file        dataStore (not checked)
   Process_{name:pascal}              default     process (not checked)

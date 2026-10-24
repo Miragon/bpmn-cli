@@ -54,9 +54,9 @@ type (`bpmn:UserTask`). Events take a trigger suffix (`startEvent:message`, `bou
 | events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `Event_` |
 | pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `Participant_`, `Lane_` |
 | data | `dataObject` (`data`), `dataStore` (`store`) | `DataObjectReference_`, `DataStoreReference_` |
-| artifacts | `textAnnotation` (`note`) | `TextAnnotation_` |
+| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `TextAnnotation_`, `Group_` |
 
-Choreographies and groups are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
+Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
 `complexGateway`: the Camunda profiles report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
 `W_C8_DEPLOY_UNSUPPORTED`); use `exclusiveGateway` or `inclusiveGateway` there.
 
