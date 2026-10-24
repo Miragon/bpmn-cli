@@ -17,24 +17,17 @@ interface EndForm {
   words: number;
 }
 
-/**
- * Builds a flow's id from its two ends within the room the id leaves them:
- * the forms named by the ends and the cuts that share the room. `body`: the
- * case of the ends; `legacy`: the ends cut as 0.6 and earlier cut them
- * (derivedBases); `sep`: the separator of the flow's collision suffix,
- * whose look the end that closes the id does not end on; `names`: the name
- * words the source end was written from with camelSlug.
- */
 export class IdFitter {
   private readonly body: Body;
   private readonly legacy: boolean;
+  /** the numbers fitPair's closing end does not end on (a collision suffix's look): any where the suffix is glued (`2`: stemTo, scopedTo), a separated one where it is `_2` */
   private readonly closes: RegExp;
   private readonly names: string[] | undefined;
 
-  constructor(opts: { body?: Body; legacy?: boolean; sep?: string; names?: string[] } = {}) {
+  constructor(opts: { body?: Body; legacy?: boolean; suffixSep?: string; names?: string[] } = {}) {
     this.body = opts.body ?? 'pascal';
     this.legacy = opts.legacy ?? false;
-    this.closes = (opts.sep ?? '_') === '' ? /^[_.-]*\d+$/ : /^_\d+$/;
+    this.closes = (opts.suffixSep ?? '_') === '' ? /^[_.-]*\d+$/ : /^_\d+$/;
     this.names = opts.names;
   }
 
@@ -153,9 +146,8 @@ export class IdFitter {
     return ucfirst(word(nameWords(rest.join(' '))) ?? word(nameWords(id)) ?? terminal);
   }
 
-  /** The fitter of a form built from the ends' ids: its collision suffix glued for stemTo, else `_`. */
   private ofForm(form: IdForm, names?: string[]): IdFitter {
-    return new IdFitter({ legacy: this.legacy, sep: form === 'stemTo' ? '' : '_', ...(names ? { names } : {}) });
+    return new IdFitter({ legacy: this.legacy, suffixSep: form === 'stemTo' ? '' : '_', ...(names ? { names } : {}) });
   }
 
   /**

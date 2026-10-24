@@ -792,7 +792,7 @@ export class IdStyle {
       const t = req.target!;
       const own = this.scopeOf(req, scope!);
       const head = `${prefix}_${own}_`;
-      const fitter = new IdFitter({ legacy, sep: '' });
+      const fitter = new IdFitter({ legacy, suffixSep: '' });
       const [a, b] = [fitter.endWord(s, own, 'Start'), fitter.endWord(t, own, 'End')];
       if (legacy) return { base: cutAt(`${head}${a}To${b}`, max, true), sep: '' };
       // the two words share the room after the scope like any flow's ends (0.6 cut the whole id: Flow_KotO_ValidateTo); a
@@ -833,14 +833,14 @@ export class IdStyle {
       };
       const source = label(req.source!, req.sourceLabel);
       const target = label(req.target!, req.targetLabel);
-      const fitter = new IdFitter({ body: c, legacy, sep, ...(c === 'camel' ? { names: nameWords(source) } : {}) });
+      const fitter = new IdFitter({ body: c, legacy, suffixSep: sep, ...(c === 'camel' ? { names: nameWords(source) } : {}) });
       let [a, join, b] = fitter.ends(source, target, false);
       if (this.lettersOnly(req) && /^[0-9]/.test(a)) a = fitter.ends(`From ${source}`, target, false)[0];
       return { base: fitter.pair(head, a, join, b, max), sep };
     }
     if (form === 'scopedTo') {
       const own = this.scopeOf(req, this.flowOf(req.key).scope!);
-      const fitter = new IdFitter({ legacy, sep });
+      const fitter = new IdFitter({ legacy, suffixSep: sep });
       const [a, b] = [fitter.endWord(req.source!, own, 'Start'), fitter.endWord(req.target!, own, 'End')];
       return { base: legacy ? cutAt(`${head}${own}_${a}To${b}`, max, true) : fitter.pair(`${head}${own}_`, a, 'To', b, max), sep };
     }

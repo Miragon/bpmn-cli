@@ -10,9 +10,7 @@ export interface AnchorContext {
   anchorKind?: string;
 }
 
-/** How ids name one element: as a flow end and what an element belongs to (label), as the anchor of an unnamed element (context). */
 export class ElementLabels {
-  /** the speaking part of the element's id (speakingStem) */
   private readonly own: string | undefined;
 
   constructor(private readonly el: El) {

@@ -21,6 +21,13 @@ a new concept gets its line here first.
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |
 | **Finding** | One problem a validation reports (structural, profile, bpmnlint, a host's validator). |
 | **Baseline** | The findings a document had before an edit, so a write reports only what the edit added. |
-| **Id style** | The way a file spells its ids (prefixes, case, flow form), learned from the file. |
-| **Id conventions** | The id rules a project declares in the `element-id-naming` rule of its `.bpmnlintrc`. |
+| **Id style** | The way a file spells its ids (prefixes, case, flow form), learned from the file (`ids/IdStyle.ts`). |
+| **Learned style** | What the ids of one file show by majority: the prefix per kind, the body case, the flow forms (`ids/LearnedStyle.ts`). |
+| **Tally** | The votes of a file's ids for the keys of one learned rule (`ids/Tally.ts`). |
+| **Id fitter** | Builds a flow's id from its two ends within the 64 characters of an id, cutting at whole words (`ids/IdFitter.ts`). |
+| **Element labels** | How ids name an element: as a flow end, and as the anchor of an unnamed element (`ids/ElementLabels.ts`). |
+| **Id registry** | Every id a document uses (BPMN, DI and vendor ids), so that a new id never collides (`ids/IdRegistry.ts`). |
+| **Id conventions** | The id rules a project declares in the `element-id-naming` rule of its `.bpmnlintrc`, read by the id conventions reader (`ids/IdConventionsReader.ts`). |
+| **Declared conventions** | The id conventions as the id style applies them: the usable prefixes, the qualifier, the body case (`ids/DeclaredConventions.ts`). |
+| **Conventions table** | The conventions new ids follow in one file, a row per id pattern and source (`bpmn show --conventions`, `ids/ConventionsTable.ts`). |
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
