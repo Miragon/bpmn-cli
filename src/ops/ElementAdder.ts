@@ -39,7 +39,7 @@
  *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
  *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them);
  *    group -> artifacts.ts createGroup (op.members; no placement options).
- *  - op.set -> setProperties() from ./set.js on the new element.
+ *  - op.set -> PropertySetter.set() on the new element.
  *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
  *    --if-absent and an existing one: that one), op.flowAs the flow the flow
  *    options describe (into the node; a prepend before a join / unconnected
@@ -78,7 +78,6 @@ import { EventTrigger } from './EventTrigger.js';
 import { LaneInheritance } from './LaneInheritance.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { FlowOptions } from './FlowOptions.js';
-import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 import { StaleFlowReport } from './StaleFlowReport.js';
 import { NodePlacement } from './NodePlacement.js';
@@ -86,6 +85,7 @@ import { EventGatewayRule } from './EventGatewayRule.js';
 import { FlowRules } from '../model/FlowRules.js';
 import { EventDefinitions } from './EventDefinitions.js';
 import { RootElements } from './RootElements.js';
+import { PropertySetter } from './PropertySetter.js';
 
 /** Start triggers an event sub-process can be created with (`eventSubProcess:<trigger>`). */
 const EVENT_SUBPROCESS_TRIGGERS: Trigger[] = (kindByName('startEvent')?.triggers ?? []).filter((t) => t !== 'none');
@@ -412,7 +412,7 @@ export class ElementAdder {
       this.reportNewRoots(cs, () => new EventDefinitions(this.doc, el).apply(resolved, op));
       if (resolved !== 'none') entry.kind = kindLabel(el);
     }
-    if (messageTask) setTaskMessage(this.doc, el, op.message ?? '', cs);
+    if (messageTask) new PropertySetter(this.doc).setTaskMessage(el, op.message ?? '', cs);
     if (new Camunda8Defaults(this.doc).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
     // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
     for (const f of new Set([...this.doc.incoming(el), ...this.doc.outgoing(el)])) new EventGatewayRule(this.doc).warnFlow(f, cs);
@@ -522,7 +522,7 @@ export class ElementAdder {
       }
     }
     if (op.set && Object.keys(op.set).length) {
-      cs.merge(setProperties(this.doc, { op: 'set', id: idOf(el), values: op.set }));
+      cs.merge(new PropertySetter(this.doc).set({ op: 'set', id: idOf(el), values: op.set }));
     }
     cs.bind(op.as, el);
     new RootElements(this.doc).bindRefAs(cs, op.refAs, el);

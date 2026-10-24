@@ -10,7 +10,7 @@
  *    section with participants and message flows. Root messages/errors/
  *    signals/escalations. `problems` = validateDoc(doc) errors + warnings
  *    (import from ./validate.js).
- *  - elementDetail(doc, el): everything about one element incl. readProperties()
+ *  - elementDetail(doc, el): everything about one element incl. ElementProperties.read()
  *    from ops/set.js, listExtensions() from ops/ext.js, flows in/out with
  *    labels/conditions, host, attached boundary events, lane, scope.
  *  Both first add missing incoming/outgoing mirror entries (optional in BPMN
@@ -47,8 +47,8 @@ import { decisionLinkOf } from '../ops/decision.js';
 import { EventTrigger } from '../ops/EventTrigger.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
-import { readProperties } from '../ops/set.js';
 import { vendorAttributes } from '../ops/utils/elements.js';
+import { ElementProperties } from '../ops/ElementProperties.js';
 import { flowOrder, repairFlowLinks, validateDoc } from '../validate/structural.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
@@ -767,7 +767,7 @@ export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView
 /* one element                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Facts the view derives itself; readProperties() (ops/set.ts) overrides them key by key. */
+/** Facts the view derives itself; ElementProperties.read() (ops/ElementProperties.ts) overrides them key by key. */
 function baseProperties(doc: Doc, el: El): Record<string, unknown> {
   const props: Record<string, unknown> = {};
   const documentation = documentationOf(el);
@@ -860,7 +860,7 @@ export function elementDetail(doc: Doc, el: El): ElementDetail {
     process: is(el, 'bpmn:Participant') ? peek<El>(el, 'processRef')?.get<string>('id') : doc.processOf(el)?.get<string>('id'),
     lane: isNode && !is(el, 'bpmn:BoundaryEvent') ? laneOf(doc, el)?.get<string>('id') : undefined,
     host: host ? shownId(host) : undefined,
-    properties: { ...baseProperties(doc, el), ...readProperties(doc, el) },
+    properties: { ...baseProperties(doc, el), ...new ElementProperties(doc).read(el) },
     incoming,
     outgoing: doc.outgoing(el).map(flowView),
     boundary: boundary.length ? boundary : undefined,

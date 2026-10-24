@@ -5,7 +5,6 @@ import { is, many, type El } from '../src/model/utils/moddle.js';
 import { assignLane } from '../src/ops/containers.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { orderFlows } from '../src/ops/order.js';
-import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { IdRenamer } from '../src/ops/IdRenamer.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
@@ -13,6 +12,9 @@ import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
 import { ElementRetyper } from '../src/ops/ElementRetyper.js';
 import { NodeMover } from '../src/ops/NodeMover.js';
+import { PropertySetter } from '../src/ops/PropertySetter.js';
+import { ElementProperties } from '../src/ops/ElementProperties.js';
+import { SET_KEYS } from '../src/ops/PropertyCoercer.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -158,7 +160,7 @@ const itLanes = lanesReady ? it : it.todo;
 describe('set: generic keys', () => {
   it('sets name and documentation, and unsets with empty values', async () => {
     const doc = await linearDoc();
-    const cs = setProperties(doc, { op: 'set', id: 'Task_A', values: { name: 'Check invoice', doc: 'Look at it carefully' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { name: 'Check invoice', doc: 'Look at it carefully' } });
     const task = doc.require('Task_A');
     expect(task.get('name')).toBe('Check invoice');
     expect(many(task, 'documentation')[0]!.get('text')).toBe('Look at it carefully');
@@ -166,7 +168,7 @@ describe('set: generic keys', () => {
     expect(cs.changed[0]!.kind).toBe('userTask');
     const xml = await doc.toXml();
     expect(xml).toContain('<bpmn:documentation>Look at it carefully</bpmn:documentation>');
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { name: '' }, unset: ['documentation'] });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { name: '' }, unset: ['documentation'] });
     expect(task.get('name')).toBeUndefined();
     expect(many(task, 'documentation')).toHaveLength(0);
     await expectRoundTrip(doc);
@@ -174,16 +176,16 @@ describe('set: generic keys', () => {
 
   it('sets typed moddle attributes with descriptor validation (boolean, integer, enum, reference)', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'Process_1', values: { isExecutable: 'false' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'false' } });
     expect(doc.require('Process_1').get('isExecutable')).toBe(false);
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { completionQuantity: '2', isForCompensation: 'yes' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { completionQuantity: '2', isForCompensation: 'yes' } });
     expect(doc.require('Task_A').get('completionQuantity')).toBe(2);
     expect(doc.require('Task_A').get('isForCompensation')).toBe(true);
-    setProperties(doc, { op: 'set', id: 'Gw', values: { gatewayDirection: 'diverging' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'diverging' } });
     expect(doc.require('Gw').get('gatewayDirection')).toBe('Diverging');
-    setProperties(doc, { op: 'set', id: 'Call', values: { calledElement: 'Other' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Call', values: { calledElement: 'Other' } });
     expect(doc.require('Call').get('calledElement')).toBe('Other');
-    setProperties(doc, { op: 'set', id: 'MF1', values: { messageRef: 'Message_Order' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'MF1', values: { messageRef: 'Message_Order' } });
     expect(doc.require('MF1').get<El>('messageRef').get('id')).toBe('Message_Order');
     const xml = await doc.toXml();
     expect(xml).toContain('gatewayDirection="Diverging"');
@@ -194,17 +196,17 @@ describe('set: generic keys', () => {
 
   it('rejects invalid enum / boolean / integer values', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Gw', values: { gatewayDirection: 'sideways' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Process_1', values: { isExecutable: 'maybe' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { completionQuantity: 'two' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'MF1', values: { messageRef: 'Nope' } }))).toBe('E_NOT_FOUND');
-    expect(Object.keys(readProperties(doc, doc.require('Gw')))).not.toContain('gatewayDirection');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'sideways' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'maybe' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { completionQuantity: 'two' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'MF1', values: { messageRef: 'Nope' } }))).toBe('E_NOT_FOUND');
+    expect(Object.keys(new ElementProperties(doc).read(doc.require('Gw')))).not.toContain('gatewayDirection');
   });
 
   it('sets vendor attributes and declares the namespace automatically', async () => {
     const doc = await linearDoc();
     expect(doc.definitions.$attrs['xmlns:camunda']).toBeUndefined();
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { 'camunda:assignee': 'bob', 'zeebe:modelerTemplate': 'tpl' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': 'bob', 'zeebe:modelerTemplate': 'tpl' } });
     expect(doc.require('Task_A').$attrs['camunda:assignee']).toBe('bob');
     expect(doc.definitions.$attrs['xmlns:camunda']).toBe(CAMUNDA);
     expect(doc.definitions.$attrs['xmlns:zeebe']).toBe(ZEEBE);
@@ -213,16 +215,16 @@ describe('set: generic keys', () => {
     expect(xml).toContain(`xmlns:camunda="${CAMUNDA}"`);
     const again = await expectRoundTrip(doc);
     expect(again.require('Task_A').$attrs['camunda:assignee']).toBe('bob');
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { 'camunda:assignee': '' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': '' } });
     expect(doc.require('Task_A').$attrs['camunda:assignee']).toBeUndefined();
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { 'acme:thing': '1' } }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { 'acme:thing': '1' } }))).toBe('E_UNKNOWN_NAMESPACE');
   });
 
   it('rejects unknown keys listing the settable keys', async () => {
     const doc = await fullDoc();
     let caught: unknown;
     try {
-      setProperties(doc, { op: 'set', id: 'Task_A', values: { colour: 'red' } });
+      new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { colour: 'red' } });
     } catch (err) {
       caught = err;
     }
@@ -230,9 +232,9 @@ describe('set: generic keys', () => {
     const candidates = isCliError(caught) ? (caught.details.candidates as string[]) : [];
     expect(candidates).toEqual(expect.arrayContaining(['name', 'doc', 'id', 'loop', 'lane', 'isForCompensation', 'completionQuantity']));
     expect(candidates).not.toContain('condition');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { condition: 'x' } }))).toBe('E_UNKNOWN_KEY');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { attachedToRef: 'Task_B' } }))).toBe('E_UNKNOWN_KEY');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: {} }))).toBe('E_USAGE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { condition: 'x' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { attachedToRef: 'Task_B' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: {} }))).toBe('E_USAGE');
     expect(SET_KEYS.some((k) => k.key === 'loop' && k.appliesTo === 'activity')).toBe(true);
   });
 });
@@ -242,31 +244,31 @@ describe('set: flow keys', () => {
     const doc = await fullDoc();
     const gw = doc.require('Gw');
     expect(gw.get<El>('default').get('id')).toBe('F_no');
-    setProperties(doc, { op: 'set', id: 'F_no', values: { condition: '${!ok}', language: 'juel' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F_no', values: { condition: '${!ok}', language: 'juel' } });
     const fNo = doc.require('F_no');
     expect(fNo.get<El>('conditionExpression').get('body')).toBe('${!ok}');
     expect(fNo.get<El>('conditionExpression').get('language')).toBe('juel');
     expect(gw.get('default')).toBeUndefined();
 
-    setProperties(doc, { op: 'set', id: 'F_yes', values: { default: 'true' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
     expect(gw.get<El>('default').get('id')).toBe('F_yes');
     expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
-    setProperties(doc, { op: 'set', id: 'F_yes', values: { default: 'false' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F_yes', values: { default: 'false' } });
     expect(gw.get('default')).toBeUndefined();
-    setProperties(doc, { op: 'set', id: 'Gw', values: { default: 'F_no' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
     expect(gw.get<El>('default').get('id')).toBe('F_no');
     expect(fNo.get('conditionExpression')).toBeUndefined();
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Gw', values: { default: 'F1' } }))).toBe('E_NOT_OUTGOING');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Gw', values: { default: 'F1' } }))).toBe('E_NOT_OUTGOING');
 
-    setProperties(doc, { op: 'set', id: 'F_T', values: { target: 'Task_Send' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F_T', values: { target: 'Task_Send' } });
     const ft = doc.require('F_T');
     expect(ft.get<El>('targetRef').get('id')).toBe('Task_Send');
     expect(ids(doc.incoming(doc.require('Task_Remind')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Task_Send')))).toEqual(['F_no', 'F_T']);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'F_T', values: { target: 'SubTask' } }))).toBe('E_CROSS_SCOPE');
-    setProperties(doc, { op: 'set', id: 'F_no', values: { condition: '' } });
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'F_T', values: { target: 'SubTask' } }))).toBe('E_CROSS_SCOPE');
+    new PropertySetter(doc).set({ op: 'set', id: 'F_no', values: { condition: '' } });
     expect(fNo.get('conditionExpression')).toBeUndefined();
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'F_no', values: { language: 'juel' } }))).toBe('E_NO_CONDITION');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'F_no', values: { language: 'juel' } }))).toBe('E_NO_CONDITION');
     await expectRoundTrip(doc);
   });
 });
@@ -274,7 +276,7 @@ describe('set: flow keys', () => {
 describe('set: loop keys', () => {
   it('creates multi-instance / standard loop characteristics with expressions', async () => {
     const doc = await linearDoc();
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { loop: 'sequential', cardinality: '3', completion: '${done}' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'sequential', cardinality: '3', completion: '${done}' } });
     const task = doc.require('Task_A');
     const loop = task.get<El>('loopCharacteristics');
     expect(loop.$type).toBe('bpmn:MultiInstanceLoopCharacteristics');
@@ -288,23 +290,23 @@ describe('set: loop keys', () => {
     expect(xml).toContain('xsi:type="bpmn:tFormalExpression">3</bpmn:loopCardinality>');
     await expectRoundTrip(doc);
 
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { loop: 'parallel' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'parallel' } });
     expect(task.get<El>('loopCharacteristics')).toBe(loop);
     expect(loop.get('isSequential')).toBe(false);
-    expect(readProperties(doc, task)).toMatchObject({ loop: 'parallel', cardinality: '3', completion: '${done}' });
+    expect(new ElementProperties(doc).read(task)).toMatchObject({ loop: 'parallel', cardinality: '3', completion: '${done}' });
 
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { loop: 'standard' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'standard' } });
     expect(task.get<El>('loopCharacteristics').$type).toBe('bpmn:StandardLoopCharacteristics');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { cardinality: '2' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { cardinality: '2' } }))).toBe('E_INVALID_VALUE');
     xml = await doc.toXml();
     expect(xml).toContain('<bpmn:standardLoopCharacteristics />');
 
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { loop: 'none' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'none' } });
     expect(task.get('loopCharacteristics')).toBeUndefined();
-    const cs = setProperties(doc, { op: 'set', id: 'Task_A', values: { cardinality: '5' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { cardinality: '5' } });
     expect(task.get<El>('loopCharacteristics').get('isSequential')).toBe(false);
     expect(cs.notes[0]).toMatch(/parallel multi-instance/);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { loop: 'weird' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'weird' } }))).toBe('E_INVALID_VALUE');
     await expectRoundTrip(doc);
   });
 });
@@ -312,14 +314,14 @@ describe('set: loop keys', () => {
 describe('set: sub-process expansion', () => {
   it('records expansion requests per document', async () => {
     const doc = await fullDoc();
-    expect(readProperties(doc, doc.require('Sub'))['expanded']).toBe(true);
-    setProperties(doc, { op: 'set', id: 'Sub', values: { expanded: 'false' } });
+    expect(new ElementProperties(doc).read(doc.require('Sub'))['expanded']).toBe(true);
+    new PropertySetter(doc).set({ op: 'set', id: 'Sub', values: { expanded: 'false' } });
     expect(doc.layoutRequests.expansion()).toEqual({ expand: [], collapse: ['Sub'] });
-    expect(readProperties(doc, doc.require('Sub'))['expanded']).toBe(false);
-    setProperties(doc, { op: 'set', id: 'Sub', values: { expanded: 'true' } });
+    expect(new ElementProperties(doc).read(doc.require('Sub'))['expanded']).toBe(false);
+    new PropertySetter(doc).set({ op: 'set', id: 'Sub', values: { expanded: 'true' } });
     expect(doc.layoutRequests.expansion()).toEqual({ expand: ['Sub'], collapse: [] });
     expect(doc.layoutRequests.requested('Sub')).toBe(true);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { expanded: 'false' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { expanded: 'false' } }))).toBe('E_UNKNOWN_KEY');
     const other = await linearDoc();
     expect(other.layoutRequests.expansion()).toEqual({ expand: [], collapse: [] });
   });
@@ -328,28 +330,28 @@ describe('set: sub-process expansion', () => {
 describe('set: event keys', () => {
   it('sets nonInterrupting directly on boundary events', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
     expect(doc.require('Timer_A').get('cancelActivity')).toBe(false);
-    expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H', nonInterrupting: true });
+    expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H', nonInterrupting: true });
     const xml = await doc.toXml();
     expect(xml).toContain('cancelActivity="false"');
-    setProperties(doc, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'false' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'false' } });
     expect((await doc.toXml()).includes('cancelActivity')).toBe(false);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Timer_A', values: { trigger: 'bogus' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Timer_A', values: { timer: 'PT1M', message: 'x' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'End', values: { trigger: 'timer' } }))).toBe('E_INVALID_TRIGGER');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Task_A', values: { timer: 'PT1M' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { trigger: 'bogus' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT1M', message: 'x' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'End', values: { trigger: 'timer' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { timer: 'PT1M' } }))).toBe('E_UNKNOWN_KEY');
   });
 
   itTriggers('changes triggers through applyTrigger (timer value, message, trigger=none)', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'Timer_A', values: { timer: 'PT2D' } });
-    expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT2D' });
-    const cs = setProperties(doc, { op: 'set', id: 'Timer_A', values: { message: 'Reminder' } });
-    expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'message', message: 'Reminder' });
+    new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2D' } });
+    expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT2D' });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { message: 'Reminder' } });
+    expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]!.kind).toBe('boundaryEvent:message');
-    setProperties(doc, { op: 'set', id: 'Start', values: { trigger: 'none' } });
-    expect(readProperties(doc, doc.require('Start'))['trigger']).toBe('none');
+    new PropertySetter(doc).set({ op: 'set', id: 'Start', values: { trigger: 'none' } });
+    expect(new ElementProperties(doc).read(doc.require('Start'))['trigger']).toBe('none');
     await expectRoundTrip(doc);
   });
 });
@@ -357,7 +359,7 @@ describe('set: event keys', () => {
 describe('set: id rename', () => {
   it('renames an id and every reference, including calledElement strings', async () => {
     const doc = await fullDoc();
-    const cs = setProperties(doc, { op: 'set', id: 'Task_A', values: { id: 'Activity_DoA' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { id: 'Activity_DoA' } });
     expect(cs.changed[0]).toMatchObject({ id: 'Activity_DoA', kind: 'userTask', detail: 'renamed from Task_A' });
     expect(doc.get('Task_A')).toBeUndefined();
     expect(doc.ids.has('Task_A')).toBe(false);
@@ -376,8 +378,8 @@ describe('set: id rename', () => {
     expect(doc.require('Call').get('calledElement')).toBe('Process_Customer');
     expect(doc.require('P_Customer').get<El>('processRef').get('id')).toBe('Process_Customer');
 
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'End', values: { id: 'Start' } }))).toBe('E_DUPLICATE_ID');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'End', values: { id: '1bad id' } }))).toBe('E_INVALID_ID');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'End', values: { id: 'Start' } }))).toBe('E_DUPLICATE_ID');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'End', values: { id: '1bad id' } }))).toBe('E_INVALID_ID');
     expect(doc.require('End').get('id')).toBe('End');
     await expectRoundTrip(doc);
   });
@@ -386,12 +388,12 @@ describe('set: id rename', () => {
 describe('set: readProperties', () => {
   it('round-trips what set wrote', async () => {
     const doc = await fullDoc();
-    setProperties(doc, {
+    new PropertySetter(doc).set({
       op: 'set',
       id: 'Task_A',
       values: { name: 'Do it', doc: 'docs', 'camunda:assignee': 'bob', isForCompensation: 'true', loop: 'sequential', cardinality: '2' },
     });
-    const props = readProperties(doc, doc.require('Task_A'));
+    const props = new ElementProperties(doc).read(doc.require('Task_A'));
     expect(props).toMatchObject({
       id: 'Task_A',
       name: 'Do it',
@@ -403,21 +405,21 @@ describe('set: readProperties', () => {
       lane: 'Lane_Sales',
     });
     expect(Object.keys(props)).not.toContain('xmlns:camunda');
-    expect(readProperties(doc, doc.require('F_yes'))).toEqual({ id: 'F_yes', name: 'yes', condition: '${ok}', source: 'Gw', target: 'Task_B' });
-    expect(readProperties(doc, doc.require('F_no'))).toMatchObject({ default: true });
-    expect(readProperties(doc, doc.require('Gw'))).toMatchObject({ default: 'F_no', lane: 'Lane_Sales' });
-    expect(readProperties(doc, doc.require('Call'))).toMatchObject({ calledElement: 'Process_2' });
-    expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
-    expect(readProperties(doc, doc.require('Process_1'))).toMatchObject({ isExecutable: true });
-    expect(readProperties(doc, doc.require('Note_1'))).toMatchObject({ text: 'hello' });
-    setProperties(doc, { op: 'set', id: 'Note_1', values: { text: 'changed' } });
+    expect(new ElementProperties(doc).read(doc.require('F_yes'))).toEqual({ id: 'F_yes', name: 'yes', condition: '${ok}', source: 'Gw', target: 'Task_B' });
+    expect(new ElementProperties(doc).read(doc.require('F_no'))).toMatchObject({ default: true });
+    expect(new ElementProperties(doc).read(doc.require('Gw'))).toMatchObject({ default: 'F_no', lane: 'Lane_Sales' });
+    expect(new ElementProperties(doc).read(doc.require('Call'))).toMatchObject({ calledElement: 'Process_2' });
+    expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
+    expect(new ElementProperties(doc).read(doc.require('Process_1'))).toMatchObject({ isExecutable: true });
+    expect(new ElementProperties(doc).read(doc.require('Note_1'))).toMatchObject({ text: 'hello' });
+    new PropertySetter(doc).set({ op: 'set', id: 'Note_1', values: { text: 'changed' } });
     expect(doc.require('Note_1').get('text')).toBe('changed');
     // every read key is accepted by set again (round trip)
-    const again = readProperties(doc, doc.require('Task_A'));
+    const again = new ElementProperties(doc).read(doc.require('Task_A'));
     const values: Record<string, string> = {};
     for (const [k, v] of Object.entries(again)) if (k !== 'id' && k !== 'lane') values[k] = String(v);
-    expect(() => setProperties(doc, { op: 'set', id: 'Task_A', values })).not.toThrow();
-    expect(readProperties(doc, doc.require('Task_A'))).toEqual(again);
+    expect(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values })).not.toThrow();
+    expect(new ElementProperties(doc).read(doc.require('Task_A'))).toEqual(again);
   });
 });
 
@@ -651,9 +653,9 @@ describe('retype', () => {
     const cs2 = new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     expect(cs2.warnings).toEqual([]);
     new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
-    setProperties(doc, { op: 'set', id: 'Sub', values: { calledElement: 'X' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Sub', values: { calledElement: 'X' } });
     expect(doc.require('Sub').get('calledElement')).toBe('X');
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Call', values: { calledElement: 'X' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Call', values: { calledElement: 'X' } }))).toBe('E_UNKNOWN_KEY');
     await expectRoundTrip(doc);
   });
 
@@ -747,11 +749,11 @@ describe('retype', () => {
     const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
     const ev = doc.require('Timer_A');
     expect(ev.$type).toBe('bpmn:BoundaryEvent');
-    expect(readProperties(doc, ev)).toMatchObject({ trigger: 'message', message: 'Reminder' });
+    expect(new ElementProperties(doc).read(ev)).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:message', detail: 'retyped from boundaryEvent:timer to boundaryEvent:message' });
     expect(doc.rootElementsOfType('bpmn:Message').some((m) => m.get('name') === 'Reminder')).toBe(true);
     new ElementRetyper(doc).retype({ op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
-    expect(readProperties(doc, doc.require('Start'))).toMatchObject({ trigger: 'timer', timer: 'R/PT1H' });
+    expect(new ElementProperties(doc).read(doc.require('Start'))).toMatchObject({ trigger: 'timer', timer: 'R/PT1H' });
     await expectRoundTrip(doc);
   });
 });
@@ -1075,7 +1077,7 @@ describe('ext', () => {
 describe('mixed scenario', () => {
   it('serialises without import warnings after set / retype / move / order / ext / remove', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
     new ElementRetyper(doc).retype({ op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
     extensionOp(doc, { op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
     orderFlows(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] });
@@ -1150,38 +1152,38 @@ const COLLAPSED_WITH_DI = definitionsXml(
 describe('set: non-interrupting rules match add/retype', () => {
   it('refuses nonInterrupting=true where add refuses it (error starts, untyped starts, starts outside an event sub-process)', async () => {
     const doc = await docFromXml(EVENT_SUB);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'OnErr', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'OnErr', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
     expect(doc.require('OnErr').get('isInterrupting')).not.toBe(false);
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'Start', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
-    setProperties(doc, { op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Start', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    new PropertySetter(doc).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
     expect(doc.require('OnMsg').get('isInterrupting')).toBe(false);
     // an explicit flag together with an interrupting-only trigger is still an error
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom', nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom', nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
     await expectRoundTrip(doc);
   });
 
   it('a trigger change to an interrupting-only trigger clears the flag with W_PROPERTY_DROPPED instead of failing', async () => {
     const doc = await docFromXml(EVENT_SUB);
-    setProperties(doc, { op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
-    const cs = setProperties(doc, { op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom' } });
     expect(doc.require('OnMsg').get('isInterrupting')).not.toBe(false);
     expect((await doc.toXml()).includes('isInterrupting')).toBe(false);
-    expect(readProperties(doc, doc.require('OnMsg'))).toMatchObject({ trigger: 'error', error: 'Boom' });
-    expect(readProperties(doc, doc.require('OnMsg'))['nonInterrupting']).toBeUndefined();
+    expect(new ElementProperties(doc).read(doc.require('OnMsg'))).toMatchObject({ trigger: 'error', error: 'Boom' });
+    expect(new ElementProperties(doc).read(doc.require('OnMsg'))['nonInterrupting']).toBeUndefined();
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_PROPERTY_DROPPED', element: 'OnMsg' })]);
     expect(cs.warnings[0]!.message).toMatch(/nonInterrupting/);
 
     const full = await fullDoc();
-    setProperties(full, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const cs2 = setProperties(full, { op: 'set', id: 'Timer_A', values: { trigger: 'error', error: 'Fail' } });
+    new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    const cs2 = new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'error', error: 'Fail' } });
     expect(full.require('Timer_A').get('cancelActivity')).not.toBe(false);
     expect((await full.toXml()).includes('cancelActivity')).toBe(false);
     expect(cs2.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(cs2.changed[0]).toMatchObject({ id: 'Timer_A', kind: 'boundaryEvent:error' });
     // a trigger that allows non-interrupting keeps the flag silently
-    setProperties(full, { op: 'set', id: 'Timer_A', values: { trigger: 'message', message: 'Late' } });
-    setProperties(full, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const cs3 = setProperties(full, { op: 'set', id: 'Timer_A', values: { timer: 'PT2H' } });
+    new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'message', message: 'Late' } });
+    new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    const cs3 = new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2H' } });
     expect(full.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(cs3.warnings).toEqual([]);
     await expectRoundTrip(full);
@@ -1191,7 +1193,7 @@ describe('set: non-interrupting rules match add/retype', () => {
 describe('set: default flow side effects are reported', () => {
   it('default=true drops the condition with W_CONDITION_DROPPED and reports the previous default flow', async () => {
     const doc = await fullDoc();
-    const cs = setProperties(doc, { op: 'set', id: 'F_yes', values: { default: 'true' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
     expect(doc.require('Gw').get<El>('default').get('id')).toBe('F_yes');
     expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_CONDITION_DROPPED', element: 'F_yes' })]);
@@ -1200,7 +1202,7 @@ describe('set: default flow side effects are reported', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'F_no', detail: 'no longer the default flow of Gw' }), expect.objectContaining({ id: 'F_yes', detail: 'default=true' })]),
     );
     // the node-side key reports the same
-    const cs2 = setProperties(doc, { op: 'set', id: 'Gw', values: { default: 'F_no' } });
+    const cs2 = new PropertySetter(doc).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
     expect(cs2.changed).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'F_yes', detail: 'no longer the default flow of Gw' })]));
     expect(cs2.warnings).toEqual([]);
     await expectRoundTrip(doc);
@@ -1208,10 +1210,10 @@ describe('set: default flow side effects are reported', () => {
 
   it('refuses default=true together with a condition (a default flow has no condition)', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => setProperties(doc, { op: 'set', id: 'F_no', values: { default: 'true', condition: '${x}' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '${x}' } }))).toBe('E_INVALID_VALUE');
     expect(doc.require('F_no').get('conditionExpression')).toBeUndefined();
     // default=false / an empty condition may accompany each other
-    setProperties(doc, { op: 'set', id: 'F_no', values: { default: 'true', condition: '' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '' } });
     expect(doc.require('Gw').get<El>('default').get('id')).toBe('F_no');
   });
 });
@@ -1221,7 +1223,7 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     const doc = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
     let caught: unknown;
     try {
-      setProperties(doc, { op: 'set', id: 'Recv', values: { trigger: 'timer', timer: 'PT1H' } });
+      new PropertySetter(doc).set({ op: 'set', id: 'Recv', values: { trigger: 'timer', timer: 'PT1H' } });
     } catch (err) {
       caught = err;
     }
@@ -1234,14 +1236,14 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     // staying a message event (or untyped) is fine
     const doc3 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
     expect(new ElementRetyper(doc3).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:message', message: 'Other' }).warnings).toEqual([]);
-    expect(setProperties(doc3, { op: 'set', id: 'Recv', values: { trigger: 'none' } }).warnings).toEqual([]);
+    expect(new PropertySetter(doc3).set({ op: 'set', id: 'Recv', values: { trigger: 'none' } }).warnings).toEqual([]);
     await expectRoundTrip(doc3);
   });
 
   it('does not blame a conflict that already existed in the file', async () => {
     const doc = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>'));
-    setProperties(doc, { op: 'set', id: 'Recv', values: { timer: 'PT2H' } });
-    expect(readProperties(doc, doc.require('Recv'))).toMatchObject({ trigger: 'timer', timer: 'PT2H' });
+    new PropertySetter(doc).set({ op: 'set', id: 'Recv', values: { timer: 'PT2H' } });
+    expect(new ElementProperties(doc).read(doc.require('Recv'))).toMatchObject({ trigger: 'timer', timer: 'PT2H' });
   });
 });
 
@@ -1249,7 +1251,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
   it('same kind and trigger with options updates the trigger details instead of rebuilding them', async () => {
     const doc = await fullDoc();
     const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timerKind: 'cycle' });
-    expect(readProperties(doc, doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
+    expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
     expect(await doc.toXml()).toContain('<bpmn:timeCycle');
     expect(cs.changed).toEqual([{ id: 'Timer_A', kind: 'boundaryEvent:timer', detail: 'trigger options updated (timerKind=cycle)' }]);
 
@@ -1264,7 +1266,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
 
   it('clears a non-interrupting flag the new trigger cannot carry, with W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
     const kept = new ElementRetyper(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Late' });
     expect(doc.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(kept.warnings).toEqual([]);
@@ -1383,7 +1385,7 @@ describe('move: bridging with --in, no id recycling', () => {
 describe('remove / move: bridging policy', () => {
   it('a condition is not carried onto the predecessor\'s default flow (W_CONDITION_DROPPED, flow stays default)', async () => {
     const doc = await fullDoc();
-    setProperties(doc, { op: 'set', id: 'F4', values: { condition: '${c}' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'F4', values: { condition: '${c}' } });
     const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Task_Send'] });
     const fNo = doc.require('F_no');
     expect(fNo.get<El>('targetRef').get('id')).toBe('Sub');
@@ -1394,7 +1396,7 @@ describe('remove / move: bridging policy', () => {
     await expectRoundTrip(doc);
     // the same through move
     const doc2 = await fullDoc();
-    setProperties(doc2, { op: 'set', id: 'F4', values: { condition: '${m}' } });
+    new PropertySetter(doc2).set({ op: 'set', id: 'F4', values: { condition: '${m}' } });
     const cs2 = new NodeMover(doc2).move({ op: 'move', ids: ['Task_Send'], after: 'Start' });
     expect(doc2.require('F_no').get('conditionExpression')).toBeUndefined();
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');

@@ -34,13 +34,13 @@ import { is, many, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/index.js';
 import { withoutProfileDuplicates } from '../src/ops/covers.js';
-import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { buildView, elementDetail } from '../src/query/model-view.js';
 import { definitionsXml } from './helpers.js';
 import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
+import { ElementProperties } from '../src/ops/ElementProperties.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -222,12 +222,12 @@ describe('2. definition.<key> on an event with several event definitions', () =>
     run(doc, [{ op: 'set', id: 'Event_Wait', values: { 'definition.id': 'M1' } }]);
     run(doc, [{ op: 'set', id: 'Event_Wait', values: { 'definition[message].id': 'M2' } }]);
     expect(doc.require('M2').$type).toBe('bpmn:MessageEventDefinition');
-    expect(readProperties(doc, doc.require('Event_Wait'))['definition.id']).toBe('M2');
+    expect(new ElementProperties(doc).read(doc.require('Event_Wait'))['definition.id']).toBe('M2');
   });
 
   it('show lists every event definition under its selector; the model view names them all', async () => {
     const doc = await load(MULTI, { nsDecl: CAMUNDA, extraRoots: MULTI_ROOTS });
-    const props = readProperties(doc, doc.require('Event_Wait'));
+    const props = new ElementProperties(doc).read(doc.require('Event_Wait'));
     expect(props).toMatchObject({ 'definition[0]': 'messageEventDefinition', 'definition[0].id': 'MDef', 'definition[1]': 'timerEventDefinition', 'definition[1].id': 'TDef' });
     expect(props['definition.id']).toBeUndefined();
     const text = renderDetail(elementDetail(doc, doc.require('Event_Wait')));

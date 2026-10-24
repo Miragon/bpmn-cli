@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
-import { setProperties } from '../src/ops/set.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml, docFromXml } from './helpers.js';
 import { ElementRetyper } from '../src/ops/ElementRetyper.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';
 import { ElementConnector } from '../src/ops/ElementConnector.js';
+import { PropertySetter } from '../src/ops/PropertySetter.js';
 
 const forkXml = (gateway: string, conditionOnA = '') =>
   definitionsXml(`
@@ -40,7 +40,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
   for (const gateway of ['parallelGateway', 'eventBasedGateway']) {
     it(`set condition= on a flow out of a ${gateway} is refused`, async () => {
       const doc = await docFromXml(forkXml(gateway));
-      expect(errorCodeOf(() => setProperties(doc, { op: 'set', id: 'FA', values: { condition: '${x}' } }))).toBe('E_INVALID_VALUE');
+      expect(errorCodeOf(() => new PropertySetter(doc).set({ op: 'set', id: 'FA', values: { condition: '${x}' } }))).toBe('E_INVALID_VALUE');
       expect(conditionOf(doc, 'FA')).toBeUndefined();
     });
   }
@@ -57,7 +57,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
 
   it('removing the condition of such a flow still works', async () => {
     const doc = await docFromXml(forkXml('parallelGateway', CONDITION));
-    setProperties(doc, { op: 'set', id: 'FA', values: { condition: '' } });
+    new PropertySetter(doc).set({ op: 'set', id: 'FA', values: { condition: '' } });
     expect(conditionOf(doc, 'FA')).toBeUndefined();
   });
 
@@ -70,7 +70,7 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
 
   it('set source= behind a parallel gateway drops the condition with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    const cs = setProperties(doc, { op: 'set', id: 'FX', values: { source: 'Gw' } });
+    const cs = new PropertySetter(doc).set({ op: 'set', id: 'FX', values: { source: 'Gw' } });
     expect(cs.warnings.map((w) => [w.code, w.element])).toEqual([['W_CONDITION_DROPPED', 'FX']]);
     expect(conditionOf(doc, 'FX')).toBeUndefined();
   });

@@ -211,7 +211,7 @@ export class EventDefinitions {
 
   /**
    * A new inline condition of a conditional event: like a sequence flow's
-   * condition (ops/set.ts), it replaces a script resource (camunda:resource and
+   * condition (ops/PropertySetter.ts), it replaces a script resource (camunda:resource and
    * its language go) and a `${...}` body does not keep a script language; both
    * are reported (W_PROPERTY_DROPPED).
    */

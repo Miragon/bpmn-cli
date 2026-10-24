@@ -16,6 +16,7 @@ import { is, type El } from '../model/utils/moddle.js';
 import { EventDefinitions } from './EventDefinitions.js';
 import { EventTrigger, ALWAYS_INTERRUPTING } from './EventTrigger.js';
 import { IdRenamer } from './IdRenamer.js';
+import { PropertyCoercer } from './PropertyCoercer.js';
 import { idOf } from './utils/elements.js';
 import type { TriggerOptions } from './types.js';
 
@@ -164,6 +165,6 @@ export class TriggerChange {
       }
       return;
     }
-    throw modelError('E_INVALID_VALUE', `Invalid value for nonInterrupting on ${idOf(el)}: only boundary events and start events of event sub-processes can be non-interrupting`, { element: idOf(el) });
+    throw PropertyCoercer.invalid(el, 'nonInterrupting', 'only boundary events and start events of event sub-processes can be non-interrupting');
   }
 }

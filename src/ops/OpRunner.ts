@@ -10,7 +10,6 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import { AliasTable, referencedIds, referencesOf, resolveOp } from './aliases.js';
 import { extensionOp } from './ext.js';
 import { orderFlows } from './order.js';
-import { setProperties } from './set.js';
 import { IdRenamer } from './IdRenamer.js';
 import { isFormatOp, type Op } from './types.js';
 import { StaleFlowReport } from './StaleFlowReport.js';
@@ -20,6 +19,7 @@ import { ElementAdder } from './ElementAdder.js';
 import { ElementConnector } from './ElementConnector.js';
 import { FlowSplitter } from './FlowSplitter.js';
 import { NodeMover } from './NodeMover.js';
+import { PropertySetter } from './PropertySetter.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -155,7 +155,7 @@ export class OpRunner {
       case 'connect':
         return new ElementConnector(doc).connect(op);
       case 'set':
-        return setProperties(doc, op);
+        return new PropertySetter(doc).set(op);
       case 'remove':
         return new ElementRemover(doc).remove(op);
       case 'retype':
