@@ -195,6 +195,32 @@ describe('structural errors', () => {
     expect(r.errors[0]!.related).toEqual(['End', 'A']);
   });
 
+  it('E_INVALID_SOURCE / E_INVALID_TARGET: a link throw event ends its path, a link catch event starts one', async () => {
+    const link = '<bpmn:linkEventDefinition name="Shipping" />';
+    const doc = await processDoc(
+      body(
+        [
+          { tag: 'startEvent', id: 'Start' },
+          { tag: 'intermediateThrowEvent', id: 'Throw', inner: link },
+          { tag: 'intermediateCatchEvent', id: 'Catch', inner: link },
+          { tag: 'endEvent', id: 'End' },
+        ],
+        [
+          { id: 'F1', from: 'Start', to: 'Throw' },
+          { id: 'F2', from: 'Throw', to: 'End' },
+          { id: 'F3', from: 'Start', to: 'Catch' },
+          { id: 'F4', from: 'Catch', to: 'End' },
+        ],
+      ),
+    );
+    const r = validateDoc(doc);
+    expect(r.errors.map((e) => [e.code, e.element])).toEqual([
+      ['E_INVALID_SOURCE', 'F2'],
+      ['E_INVALID_TARGET', 'F3'],
+    ]);
+    expect(r.errors[0]!.message).toContain('Link throw event Throw');
+  });
+
   it('E_CROSS_SCOPE', async () => {
     const doc = await processDoc(
       body(

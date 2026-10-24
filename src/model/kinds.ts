@@ -274,6 +274,16 @@ export function triggerOf(el: El): Trigger | undefined {
   return entry?.[0];
 }
 
+/** A throwing link event ends its path: the flow continues at the catching link event of the same name. */
+export function isLinkThrow(el: El): boolean {
+  return is(el, 'bpmn:IntermediateThrowEvent') && triggerOf(el) === 'link';
+}
+
+/** A catching link event starts a path: it continues the throwing link event of the same name. */
+export function isLinkCatch(el: El): boolean {
+  return is(el, 'bpmn:IntermediateCatchEvent') && triggerOf(el) === 'link';
+}
+
 /** `userTask`, `startEvent:message`, `boundaryEvent:timer` ... for display. */
 export function kindLabel(el: El): string {
   const def = kindOf(el);
