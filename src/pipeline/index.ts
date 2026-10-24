@@ -118,7 +118,9 @@ import { CliError, type Warning } from '../shared/CliError.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from '../layout/index.js';
 import type { GivenId } from '../diagram/drawn-ids.js';
-import { diagramGeometry, engineOwned, layoutIncremental, pruneReEnded, takeSnapshot, type IncrementalReport, type Snapshot } from '../layout/incremental.js';
+import { DiagramGeometry } from '../layout/DiagramGeometry.js';
+import { IncrementalLayout, type IncrementalReport } from '../layout/IncrementalLayout.js';
+import { Snapshot } from '../layout/Snapshot.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/utils/problems.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from '../format/index.js';
@@ -583,7 +585,7 @@ interface Before {
 }
 
 async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: boolean, baseline: string | undefined): Promise<Before> {
-  const snapshot = takeSnapshot(doc.definitions);
+  const snapshot = Snapshot.take(doc.definitions);
   const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
   const before: Before = { snapshot, stickies: stickyAnchors(doc.definitions) };
   if (hasDiagram) before.metrics = LayoutAnalysis.of(doc.definitions);
@@ -662,7 +664,7 @@ async function runFormat(xml: string, file: string | undefined, entries: FormatE
  */
 async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undrawn: readonly string[]): Promise<boolean> {
   const model = await parseXml(xml);
-  const mine = diagramGeometry(model.definitions);
+  const mine = DiagramGeometry.of(model.definitions);
   let reference = xml;
   if (undrawn.length) {
     try {
@@ -677,11 +679,11 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
   }
   const clean = await parseXml(reference);
   await layoutModel(clean, {});
-  if (engineOwned(mine, clean.definitions)) return true;
+  if (mine.drawnBy(clean.definitions)) return true;
   if (engine !== 'auto') return false;
   const auto = await parseXml(reference);
   const result = await layoutModel(auto, { engine: 'auto' });
-  return engineOwned(mine, (await parseXml(result.xml)).definitions);
+  return mine.drawnBy((await parseXml(result.xml)).definitions);
 }
 
 async function decideMode(requested: LayoutMode, before: Before, opts: MutationOptions): Promise<{ mode: 'full' | 'incremental'; reason: string }> {
@@ -720,7 +722,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
 
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
-  const report: IncrementalReport = await layoutIncremental(doc, before.snapshot, { relocated, created, ...expansion });
+  const report: IncrementalReport = await IncrementalLayout.run(doc, before.snapshot, { relocated, created, ...expansion });
   const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), diIds(doc.definitions).shape);
   const xml = await doc.toXml();
   return {
@@ -857,7 +859,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   if (requested === 'skip') {
     const pruned = pruneDanglingDi(doc);
     // the edge of a flow whose ends changed shows the old ends: removed too, the next write draws the flow like a new one
-    const reEnded = pruneReEnded(doc.definitions, before.snapshot);
+    const reEnded = before.snapshot.pruneReEnded(doc.definitions);
     if (pruned || reEnded.length) changes.note(staleDiNote(pruned, reEnded));
     persistExpansionHints(doc, collectExpansion(doc, opts));
     xml = await doc.toXml();

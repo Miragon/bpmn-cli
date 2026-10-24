@@ -202,3 +202,8 @@ export function successors(sem: Semantics, id: string): string[] {
     .map((f) => idOf(raw(f, 'targetRef')))
     .filter((x): x is string => !!x);
 }
+
+/** A pool or lane of the plane drawn vertically (isHorizontal=false): the incremental layout routes nothing there (IncrementalLayout assertHorizontal). */
+export function verticalBand(plane: Plane): DShape | undefined {
+  return [...plane.shapes.values()].find((s) => (s.kind === 'participant' || s.kind === 'lane') && s.di && raw<boolean>(s.di, 'isHorizontal') === false);
+}

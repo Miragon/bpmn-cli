@@ -29,7 +29,7 @@
  *     crossed container: the line rule; untouched shape: kept); interior
  *     waypoints beyond the line are shifted. Orthogonal edges stay
  *     orthogonal unless an end docks on an untouched shape across the line
- *     (callers repair those, see layout/incremental.ts)
+ *     (callers repair those, see layout/IncrementalLayout.ts)
  *   - an edge label follows the segment it belongs to (the one nearest to
  *     it): shifted when both ends of that segment were shifted, kept when
  *     neither was, and for a segment stretched by the line shifted when it

@@ -41,7 +41,7 @@
  *    `stale(edge, plane, further)` is true (`further`: its diagram shows a
  *    root an earlier diagram already shows, a second view); returns the ids
  *    of their elements in document order. Used for the edges of flows whose
- *    ends changed (layout/incremental.ts pruneReEnded).
+ *    ends changed (layout/Snapshot.ts pruneReEnded).
  *  - colorsOf(defs) / applyColors(defs, colors): the bpmn-js colour
  *    attributes by element id, used to carry colours over a full redraw.
  *  - setSwatch(di, swatch) writes one colour of the bpmn-js colour

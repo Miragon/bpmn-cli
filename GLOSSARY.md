@@ -29,6 +29,10 @@ a new concept gets its line here first.
 | **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`diagram/NodePlacer.ts`). |
 | **Layout mode** | How a write updates the drawing: `full` redraws, `incremental` keeps a hand-made drawing and places only what changed. |
 | **Engine** | A layout engine: the clean engine redraws, the incremental engine keeps a drawing. |
+| **Snapshot** | What every DI element showed before the ops of a write, with the semantic facts the incremental layout's diff needs (`layout/Snapshot.ts`). |
+| **Engine-owned** | A drawing that equals what the engine draws for the same model, so `auto` redraws it in full (`layout/DiagramGeometry.ts`). |
+| **Engine drawing** | What the clean engine draws for the document; the incremental layout copies blocks of it for new expanded sub-processes and pools (`layout/EngineDrawing.ts`). |
+| **Crossing repair** | The incremental layout's last step: crossings between new and kept lines are tried away by routing again or a branch's next row, each trial measured (`layout/CrossingRepair.ts`). |
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |
 | **Finding** | One problem a validation reports (structural, profile, bpmnlint, a host's validator). |
 | **Baseline** | The findings a document had before an edit, so a write reports only what the edit added. |

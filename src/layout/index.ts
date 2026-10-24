@@ -83,7 +83,6 @@ function subProcesses(root: El): El[] {
   return [...walk(root)].filter((e) => SUB_PROCESS_TYPES.some((t) => is(e, t)) && !!e.get('id'));
 }
 
-
 /** Reads the expansion state recorded in the current DI. */
 export function diExpansionState(defs: El): Map<string, boolean> {
   const state = new Map<string, boolean>();
@@ -140,10 +139,6 @@ export function injectLayoutHints(model: Model, expanded: Set<string>): void {
   }
   addTo(definitions, 'diagrams', diagram);
 }
-
-/* ------------------------------------------------------------------ */
-/* temporary lane membership                                            */
-/* ------------------------------------------------------------------ */
 
 interface TempMember {
   laneId: string;
@@ -227,10 +222,6 @@ function removeTemporaryLaneMembers(defs: El, members: TempMember[]): void {
     if (lane && node) removeFrom(lane, 'flowNodeRef', node);
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* association edges the layouter leaves out                           */
-/* ------------------------------------------------------------------ */
 
 interface Rect {
   x: number;
@@ -438,10 +429,6 @@ function synthesiseAssociationEdges(model: Model): string[] {
   }
   return fixed;
 }
-
-/* ------------------------------------------------------------------ */
-/* entry points                                                         */
-/* ------------------------------------------------------------------ */
 
 function toWarningInfo(w: LayoutWarning): LayoutWarningInfo {
   return { code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: w.relatedElementIds ?? [] };

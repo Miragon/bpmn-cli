@@ -5,10 +5,12 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/layout/incremental.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/layout/incremental.js')>()),
-  layoutIncremental: async () => {
-    throw new Error('boom');
+vi.mock('../src/layout/IncrementalLayout.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/layout/IncrementalLayout.js')>()),
+  IncrementalLayout: {
+    run: async () => {
+      throw new Error('boom');
+    },
   },
 }));
 
