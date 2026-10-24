@@ -38,7 +38,12 @@ import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.j
 import { titleBox } from '../src/diagram/text.js';
 import { Doc } from '../src/model/document.js';
 import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
-import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
+import { ArtifactPlacer } from '../src/layout/clean/ArtifactPlacer.js';
+import { ChainLiftTrial } from '../src/layout/clean/ChainLiftTrial.js';
+import { JoinColumnTrial } from '../src/layout/clean/JoinColumnTrial.js';
+import { ScopeGrid } from '../src/layout/clean/ScopeGrid.js';
+import { ScopePlacer } from '../src/layout/clean/ScopePlacer.js';
+import { shiftNode } from '../src/layout/clean/utils/scope.js';
 import type { GNode, ScopeLayout } from '../src/diagram/types.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { collapsedIds } from '../src/ops/add.js';
@@ -901,7 +906,7 @@ describe('clean layout engine', () => {
   it('a join\'s move that is not kept is undone exactly, also on a scope the passes after placement already ran on (as in a process with lanes)', async () => {
     // controlflow__s22 laid out and routed; its join's column is still taken, so freeJoinColumns tries the move once more
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s22.bpmn'), 'utf8'));
-    const scope = layoutScope(doc.require('Process_S22'), { expanded: new Set(), collapsedScopes: new Map() });
+    const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('Process_S22'));
     const state = (): string =>
       JSON.stringify({
         nodes: scope.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => [n.id, n.layer, n.row, n.band, n.width, n.box, n.topUsed]),
@@ -914,10 +919,10 @@ describe('clean layout engine', () => {
     await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
-        freeJoinColumns(scope, (shifts) => {
-          gridScope(scope, undefined, shifts);
-          placeAttachedArtifacts(scope);
-        }),
+        new JoinColumnTrial(scope, (shifts) => {
+          new ScopeGrid(scope).arrange(shifts);
+          new ArtifactPlacer(scope).placeAttached();
+        }).run(),
     );
     expect(lines.filter((l) => l.startsWith('[joins]')).map((l) => l.split(':')[0])).toEqual(['[joins] Gateway_Complete_join stays']);
     expect(state()).toBe(drawn);
@@ -2755,7 +2760,7 @@ describe('clean layout engine', () => {
         return { nodes: new Set(nodes), top, bottom: y };
       });
       scope.height = y;
-      placeAttachedArtifacts(scope);
+      new ArtifactPlacer(scope).placeAttached();
       scope.laneBands = bands;
     };
   }
@@ -2764,7 +2769,7 @@ describe('clean layout engine', () => {
     const laneIds = (doc: Doc): string[][] => many(many(doc.require('P'), 'laneSets')[0]!, 'lanes').map((l) => (l.get<El[] | undefined>('flowNodeRef') ?? []).map(idOf));
     /** the scope arranged by lane, then liftChains on it: the debug lines, and whether it changed anything the arrangement sets */
     const run = async (doc: Doc): Promise<{ scope: ScopeLayout; changed: boolean; lines: string[] }> => {
-      const scope = layoutScope(doc.require('P'), { expanded: new Set(), collapsedScopes: new Map() });
+      const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('P'));
       const state = (): string =>
         JSON.stringify({
           nodes: scope.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => [n.id, n.layer, n.row, n.band, n.width, n.box, n.topUsed]),
@@ -2779,7 +2784,7 @@ describe('clean layout engine', () => {
       const lines: string[] = [];
       await LayoutDebug.during(
         (line) => lines.push(line),
-        async () => liftChains(scope, arrange),
+        async () => new ChainLiftTrial(scope, arrange).run(),
       );
       return { scope, changed: state() !== arranged, lines };
     };

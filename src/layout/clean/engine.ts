@@ -36,11 +36,22 @@
 import { titleBox } from '../../diagram/text.js';
 import { addTo, is, many, type El, type Model, idOf } from '../../model/utils/moddle.js';
 import { layoutRoot } from '../../model/utils/moddle.js';
-import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { annotationSize } from './place.js';
+import { ArtifactPlacer } from './ArtifactPlacer.js';
+import { ChainLiftTrial } from './ChainLiftTrial.js';
+import { EdgeRouter } from './EdgeRouter.js';
+import { JoinColumnTrial } from './JoinColumnTrial.js';
+import { LinkRouter } from './LinkRouter.js';
+import { ScopeFrame } from './ScopeFrame.js';
+import { DATA_ROW_EXTRA, ScopeGrid } from './ScopeGrid.js';
+import { ScopeLabels } from './ScopeLabels.js';
+import { ScopePlacer, type PlaceOptions } from './ScopePlacer.js';
+import { TopBorderTrial } from './TopBorderTrial.js';
+import { growToFit, shiftNode } from './utils/scope.js';
 import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from './MessageFlowRouter.js';
 import { NotePlacer, type NoteJob } from './NotePlacer.js';
 import type { Segment as Seg } from './utils/geometry.js';
-import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
+import { borderPoint } from './route.js';
 import { METRICS, SIZES, boxesOverlap, center, type Box, type GEdge, type GNode, type LaneBox, type Point, type ScopeLayout } from '../../diagram/types.js';
 
 export interface EngineWarning {
@@ -281,7 +292,7 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
       let rowY = y + SIZES.lanePadding;
       rows.forEach((r) => {
         const inRow = lane.nodes.filter((n) => n.row === r);
-        const rh = Math.max(0, ...inRow.map((n) => n.height + boundaryExtra(n)));
+        const rh = Math.max(0, ...inRow.map((n) => n.height + ScopeGrid.boundaryExtra(n)));
         for (const n of inRow) shiftNode(n, 0, Math.round(rowY + rh / 2 - n.height / 2 - n.box.y));
         rowY += rh + METRICS.vGap + (inRow.some((n) => dataRow.has(n)) ? DATA_ROW_EXTRA : 0);
       });
@@ -292,7 +303,7 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
     }
     scope.height = y;
     // data objects and boundary notes follow their node, then route inside the bands
-    placeAttachedArtifacts(scope);
+    new ArtifactPlacer(scope).placeAttached();
     scope.laneBands = leaves.map((l) => ({ nodes: new Set(l.nodes), top: l.y, bottom: l.y + l.height }));
   };
   arrange();
@@ -302,20 +313,20 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
   const band = scope.edges.find((e) => e.bandY !== undefined);
   const drawnBandY = band?.bandY;
   let bandShift: number | undefined;
-  freeJoinColumns(scope, (shifts) => {
+  new JoinColumnTrial(scope, (shifts) => {
     if (bandShift === undefined) {
-      gridScope(scope, groups);
+      new ScopeGrid(scope, groups).arrange();
       bandShift = band?.bandY !== undefined && drawnBandY !== undefined ? drawnBandY - band.bandY : 0;
     }
-    gridScope(scope, groups, shifts);
+    new ScopeGrid(scope, groups).arrange(shifts);
     for (const e of scope.edges) if (e.bandY !== undefined) e.bandY += bandShift;
     arrange();
-  });
+  }).run();
   // then a node entered from a row above in its own lane moves up onto that row where its cell there is free (a split's
   // branch in its lane, whose happy path runs on in another lane, leaves through its right vertex); the columns stay
-  liftChains(scope, arrange);
+  new ChainLiftTrial(scope, arrange).run();
   // a boundary event whose way goes over the top better from its host's top border sits there (the rows stay)
-  boundariesOnTop(scope);
+  new TopBorderTrial(scope).run();
   // the lanes as the joins and lifts left them (undoing a trial puts back the scope's lane bands, not these)
   leaves.forEach((l, i) => {
     const b = scope.laneBands![i]!;
@@ -326,14 +337,14 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
   const yOf = (): number => ref?.box.y ?? 0;
   // a loop drawn over the top (its label above y 0) moves the content down: the bands follow
   const beforeRouting = yOf();
-  routeEdges(scope);
+  new EdgeRouter(scope).route();
   growFirstLane(scope, leaves, yOf() - beforeRouting, true);
   fitLaneLoops(scope, leaves);
   // annotations may need a strip above the content: same again
   const beforeNotes = yOf();
-  placeAnnotations(scope);
+  new ArtifactPlacer(scope).placeAnnotations();
   growFirstLane(scope, leaves, yOf() - beforeNotes, false);
-  routeLinks(scope);
+  new LinkRouter(scope).route();
   growToFit(scope);
   // event sub-processes go below the content of their lane; those of the last lane or of none below everything
   const last = leaves[leaves.length - 1]!;
@@ -344,7 +355,7 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
     es.box.y = extraY + METRICS.vGap;
     extraY = es.box.y + es.box.height;
   }
-  const contentBottom = Math.max(extraY, ...scope.nodes.map((n) => n.box.y + n.box.height), ...scope.artifacts.map((a) => a.box.y + a.box.height), ...scope.edges.flatMap((e) => e.points.map((p) => p.y)), ...nodeLabels(scope).map((l) => l.y + l.height));
+  const contentBottom = Math.max(extraY, ...scope.nodes.map((n) => n.box.y + n.box.height), ...scope.artifacts.map((a) => a.box.y + a.box.height), ...scope.edges.flatMap((e) => e.points.map((p) => p.y)), ...new ScopeLabels(scope).all().map((l) => l.y + l.height));
   if (contentBottom > last.y + last.height - SIZES.lanePadding) last.height = Math.round(contentBottom + SIZES.lanePadding - last.y);
   scope.height = last.y + last.height;
   // parent bands span their children
@@ -357,7 +368,7 @@ function applyLanes(scope: ScopeLayout, process: El, groups?: ReadonlyMap<string
     }
   };
   top.forEach(finalize);
-  const width = Math.max(scope.width, ...scope.artifacts.map((a) => a.box.x + a.box.width), ...scope.nodes.map((n) => n.box.x + n.box.width), ...scope.eventSubs.map((n) => n.box.x + n.box.width), ...nodeLabels(scope).map((l) => l.x + l.width)) + 2 * SIZES.lanePadding;
+  const width = Math.max(scope.width, ...scope.artifacts.map((a) => a.box.x + a.box.width), ...scope.nodes.map((n) => n.box.x + n.box.width), ...scope.eventSubs.map((n) => n.box.x + n.box.width), ...new ScopeLabels(scope).all().map((l) => l.x + l.width)) + 2 * SIZES.lanePadding;
   const depth = (bands: LaneBand[]): number => (bands.length ? 1 + Math.max(...bands.map((b) => depth(b.children))) : 0);
   const totalDepth = depth(top);
   const toBox = (b: LaneBand, level: number): LaneBox => ({
@@ -411,7 +422,7 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
     for (const c of scope.compensations) edge(c.el, shiftPts(c.points, origin));
     for (const a of scope.artifacts) {
       const box = shift(a.box, origin);
-      const label = a.kind === 'annotation' ? undefined : elementLabel(a, 'data');
+      const label = a.kind === 'annotation' ? undefined : ScopeLabels.of(a, 'data');
       shape(a.el, box, {}, label ? shift(label, origin) : undefined);
       for (const link of a.links) edge(link.el, shiftPts(link.points, origin));
     }
@@ -431,13 +442,13 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
       shape(n.el, box); // collapsed: own plane
     } else {
       const kind = n.kind === 'gateway' ? 'gateway' : is(n.el, 'bpmn:Event') ? 'event' : undefined;
-      const label = kind ? elementLabel(n, kind) : undefined;
+      const label = kind ? ScopeLabels.of(n, kind) : undefined;
       const extra = is(n.el, 'bpmn:ExclusiveGateway') ? { isMarkerVisible: true } : {};
       shape(n.el, box, extra, label ? shift(label, origin) : undefined);
     }
     for (const b of n.boundary) {
       const bb = shift(b.box, origin);
-      const label = elementLabel(b, 'boundary');
+      const label = ScopeLabels.of(b, 'boundary');
       shape(b.el, bb, {}, label ? shift(label, origin) : undefined);
     }
   }
@@ -448,7 +459,7 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
     for (const participant of many(root, 'participants')) {
       const process = participant.get<El | undefined>('processRef');
       if (process) {
-        const scope = layoutScope(process, placeOpts);
+        const scope = new ScopePlacer(placeOpts).layOut(process);
         applyLanes(scope, process, placeOpts.groups);
         pools.push({ participant, process, scope, box: { x: 0, y: 0, width: 0, height: 0 }, origin: { x: 0, y: 0 } });
       } else {
@@ -461,7 +472,7 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
       if (!p.scope) continue;
       const laneDepth = p.scope.lanes.length ? laneDepthOf(p.scope.lanes) : 0;
       // the labels right of the content (an end event's): the pool holds them
-      const framed = framedSize(p.scope);
+      const framed = new ScopeFrame(p.scope).framedSize();
       const contentW = framed.width - framed.left + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader;
       maxWidth = Math.max(maxWidth, SIZES.participantHeader + contentW);
       p.box.height = p.scope.lanes.length ? p.scope.height : Math.max(150, p.scope.height + 2 * SIZES.lanePadding);
@@ -509,11 +520,11 @@ export function layoutClean(model: Model, expanded: Set<string>, groups?: Readon
       else warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(link.el), message: `No DI created for ${idOf(link.el)} (an end has no shape)` });
     }
   } else {
-    const scope = layoutScope(root, placeOpts);
+    const scope = new ScopePlacer(placeOpts).layOut(root);
     applyLanes(scope, root, placeOpts.groups);
     if (scope.lanes.length) {
       const laneDepth = laneDepthOf(scope.lanes);
-      const framed = framedSize(scope);
+      const framed = new ScopeFrame(scope).framedSize();
       for (const lane of scope.lanes) stretchLane(lane, framed.width - framed.left + 2 * SIZES.lanePadding + laneDepth * SIZES.laneHeader);
       emitScope(scope, { x: margin + laneDepth * SIZES.laneHeader + SIZES.lanePadding, y: margin });
       for (const lane of scope.lanes) fixLaneShapes(lane, { box: { x: margin, y: margin, width: 0, height: 0 }, participant: root, origin: { x: 0, y: 0 } }, true);
