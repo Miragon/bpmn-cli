@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OPS_SCHEMA, parseOps } from '../src/ops/batch.js';
-import { kindsJson } from '../src/report/guide.js';
+import { kindsJson } from '../src/index.js';
 import { FORMAT_OP_NAMES } from '../src/ops/types.js';
 import { Doc } from '../src/model/document.js';
 import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';

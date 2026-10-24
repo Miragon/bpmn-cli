@@ -1,14 +1,15 @@
 import type { Command as CommandType } from 'commander';
-import { KINDS_SECTION_NAMES, kindsJson, kindsSectionJson, kindsSectionText, kindsSections, kindsText } from '../report/guide.js';
+import { KINDS_SECTION_NAMES, KindsReference } from '../report/KindsReference.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 
 export class KindsCommand extends CliCommand {
   register(program: CommandType): void {
     this.withJsonOptions(this.define(program, 'kinds').option('--section <names>', `only these parts (comma-separated): ${KINDS_SECTION_NAMES}`)).action((o: RawOpts) =>
       this.cli.guarded(async () => {
-        const sections = o['section'] !== undefined ? kindsSections(String(o['section'])) : undefined;
-        if (o['json']) this.cli.printJson(sections ? kindsSectionJson(sections) : kindsJson(), !!o['pretty']);
-        else this.cli.print(sections ? kindsSectionText(sections) : kindsText());
+        const kinds = new KindsReference();
+        const sections = o['section'] !== undefined ? kinds.sections(String(o['section'])) : undefined;
+        if (o['json']) this.cli.printJson(sections ? kinds.sectionJson(sections) : kinds.json(), !!o['pretty']);
+        else this.cli.print(sections ? kinds.sectionText(sections) : kinds.text());
       }, !!o['json']),
     );
   }

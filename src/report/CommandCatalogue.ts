@@ -1,25 +1,21 @@
 /**
  * The commands of `bpmn`: commander registers them from here (src/commands/,
- * `--help`) and `bpmn guide` lists them (src/report/guide.ts). Where the two
+ * `--help`) and `bpmn guide` lists them (src/report/AgentGuide.ts). Where the two
  * read differently, an entry keeps both texts: `help` for `--help`, `usage`,
  * `summary` and `examples` for the guide.
  */
 import { SWATCHES } from '../diagram/write.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
 
-/** What commander registers of a command. */
 export interface CommandSignature {
   name: string;
-  /** commander's arguments after the name: `<file> [id]` */
   arguments?: string;
   aliases?: string[];
-  /** the description `--help` prints */
   help: string;
 }
 
 export interface CommandDoc extends CommandSignature {
   subcommands?: CommandSignature[];
-  /** the guide's usage line */
   usage: string;
   summary: string;
   examples: string[];
@@ -54,7 +50,6 @@ export const COMMANDS: CommandDoc[] = [
   { name: 'guide', arguments: '[topic]', help: 'cheat sheet for AI agents (--short: the core in 5 KB; a topic: one section)', usage: 'bpmn guide [--short | <topic>]', summary: 'This cheat sheet; --short the core in at most 5 KB, <topic> one section (see TOPICS).', examples: ['bpmn guide --short', 'bpmn guide format'] },
 ];
 
-/** An option of every mutating command: the guide's `option` and `description`; `flags` and `help` where `--help` reads differently. */
 export interface CommonOptionDoc {
   option: string;
   description: string;
@@ -83,7 +78,6 @@ export const COMMON_OPTIONS: CommonOptionDoc[] = [
   { option: '--engine <clean|auto>', description: 'layout engine: clean (built-in, default: straight happy path, branches as bands below, loops underneath) or auto (bpmn-auto-layout)', flags: '--engine <engine>', help: 'layout engine: clean (default) or auto (bpmn-auto-layout)' },
 ];
 
-/** The lookups commander's wiring reads: a command's entry, a common option's flags and `--help` text. */
 export class CommandCatalogue {
   constructor(
     readonly commands: readonly CommandDoc[] = COMMANDS,
@@ -94,9 +88,8 @@ export class CommandCatalogue {
     return this.commands.find((c) => c.name === name)!;
   }
 
-  /** The flags and `--help` text of a common option, by its long flag (`--out`). */
-  commonOption(long: string): [flags: string, help: string] {
-    const doc = this.commonOptions.find((o) => (o.flags ?? o.option).split(/[ ,]+/).includes(long))!;
+  commonOption(longFlag: string): [flags: string, help: string] {
+    const doc = this.commonOptions.find((o) => (o.flags ?? o.option).split(/[ ,]+/).includes(longFlag))!;
     return [doc.flags ?? doc.option, doc.help ?? doc.description];
   }
 }

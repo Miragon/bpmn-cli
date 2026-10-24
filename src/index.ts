@@ -9,13 +9,17 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
+import { AgentGuide } from './report/AgentGuide.js';
+import { KindsReference } from './report/KindsReference.js';
+
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
 export { renderView, renderDetail, renderAround, renderContext, renderLayoutView, renderFind, renderMetrics, renderExtensionList, renderProblems } from './report/view-text.js';
 export { setLayoutDebug } from './api.js';
 export { type DebugSink } from './shared/LayoutDebug.js';
-export { guideText, guideShort, guideTopic, GUIDE_TOPICS, kindsJson, kindsText, kindsSections, kindsSectionJson, kindsSectionText, ERROR_CATALOGUE } from './report/guide.js';
+export { GUIDE_TOPICS } from './report/AgentGuide.js';
+export { ERROR_CATALOGUE } from './report/guide.js';
 /* the reading views of large models: the neighbourhood of an element (show --around) and an element in its context (show <id> --context) */
 export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './query/context.js';
 /* the building blocks */
@@ -70,3 +74,43 @@ export { runFormatOps, type FormatResult, type FormatEntry } from './format/inde
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/** `bpmn guide`: the agent cheat sheet. */
+export function guideText(): string {
+  return new AgentGuide().text();
+}
+
+/** `bpmn guide --short`: contract, reading, changing, ops keys, placement and the top errors in at most 5 KB. */
+export function guideShort(): string {
+  return new AgentGuide().short();
+}
+
+/** `bpmn guide <topic>`: the sections of the full guide a topic names; E_USAGE with the topics for an unknown one. */
+export function guideTopic(topic: string): string {
+  return new AgentGuide().topic(topic);
+}
+
+/** `bpmn kinds`: kinds, triggers, set keys, placement grammar and the error catalogue as text. */
+export function kindsText(): string {
+  return new KindsReference().text();
+}
+
+/** `bpmn kinds --json`: the same as one object, plus the ops schema and example. */
+export function kindsJson(): Record<string, unknown> {
+  return new KindsReference().json();
+}
+
+/** Resolves `--section a,b` (case and dashes ignored: set-keys = setKeys); E_USAGE with the names for an unknown one. */
+export function kindsSections(spec: string): string[] {
+  return new KindsReference().sections(spec);
+}
+
+/** `bpmn kinds --section <names>` as text. */
+export function kindsSectionText(sections: string[]): string {
+  return new KindsReference().sectionText(sections);
+}
+
+/** `bpmn kinds --section <names> --json`: only those keys of kindsJson(). */
+export function kindsSectionJson(sections: string[]): Record<string, unknown> {
+  return new KindsReference().sectionJson(sections);
+}

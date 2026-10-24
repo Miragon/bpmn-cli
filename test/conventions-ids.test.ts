@@ -13,7 +13,7 @@ import { Doc } from '../src/model/document.js';
 import { IdStyle } from '../src/ids/style.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';
-import { guideText, kindsJson } from '../src/report/guide.js';
+import { guideText, kindsJson } from '../src/index.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 

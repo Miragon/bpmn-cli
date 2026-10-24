@@ -3,24 +3,20 @@ import { AROUND_DEFAULT_DEPTH } from '../query/context.js';
 import { scaleText, type RenderHighlight, type RenderOptions } from '../render/index.js';
 import type { CliError } from '../shared/CliError.js';
 
-/** The text of a render: what `bpmn render` and `--render` of a mutating command print about the image(s) written. */
 export class RenderReport {
   constructor(private readonly shot: Shot) {}
 
-  /** `bpmn render`: the image lines, the crop, the --highlight halos and the numbered problems the options asked for. */
   renderLines(opts: RenderOptions): string[] {
     const crop = this.cropOf(opts);
     return this.lines({ ...(crop ? { crop } : {}), ...(Array.isArray(opts.highlight) && opts.highlight.length ? { halos: 'orange --highlight' } : {}), ...(opts.problems ? { problems: 'problems' } : {}) });
   }
 
-  /** `--render <file>` of a mutating command: the first line as `render: ...`, the rest indented below it. */
   resultLines(highlight: RenderHighlight): string[] {
     const halos = this.haloLegend(highlight);
     const lines = this.lines({ ...(halos ? { halos } : {}), problems: 'layout problems the change added' });
     return [`render: ${lines[0]!}`, ...lines.slice(1).map((l) => `  ${l}`)];
   }
 
-  /** A failed `--render <file>`: the mutation stands, the line says why there is no image. */
   static failureLine(err: CliError): string {
     return `render: failed ${err.code}: ${err.message}${err.details.hint ? `  (${String(err.details.hint)})` : ''}`;
   }
@@ -51,7 +47,6 @@ export class RenderReport {
     return lines;
   }
 
-  /** The crop of `bpmn render`, as the result names it (one per call). */
   private cropOf(opts: RenderOptions): string | undefined {
     if (opts.around) return `around ${opts.around.id} (depth ${opts.around.depth ?? AROUND_DEFAULT_DEPTH}${opts.around.inner ? ', inner' : ''})`;
     if (opts.path) return `path ${opts.path.from} -> ${opts.path.to}${opts.path.via ? ` via ${opts.path.via.join(', ')}` : ''}`;

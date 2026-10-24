@@ -30,7 +30,6 @@ export type ShownView =
   | { kind: 'around'; view: AroundView }
   | { kind: 'layout'; view: LayoutView };
 
-/** `bpmn show` (and viewXml / showXml): the view the options ask for, the options checked like the CLI's flags. */
 export class ViewRequest {
   /** E_USAGE for show options that do not go together (the CLI's flags and the API's options alike). */
   constructor(private readonly opts: ViewOptions = {}) {
@@ -48,7 +47,6 @@ export class ViewRequest {
     if (opts.context && opts.scope !== undefined) throw usageError('--context shows one element; drop --scope', { hint: 'Use `bpmn show <file> <id> --context`.' });
   }
 
-  /** --depth and --inner (`flags`, as given) of `show` / `render` go only with --around. */
   static assertAroundFlags(around: string | undefined, flags: string[], command: 'show' | 'render'): void {
     if (around === undefined && flags.length) throw usageError(`${flags.join(' and ')} ${flags.length > 1 ? 'go' : 'goes'} only with --around <id>`, { hint: `Use \`bpmn ${command} <file> --around <id> --depth <n>\`.` });
   }

@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import { guideShort, guideText, guideTopic } from '../report/guide.js';
+import { AgentGuide } from '../report/AgentGuide.js';
 import { usageError } from '../shared/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 
@@ -10,7 +10,8 @@ export class GuideCommand extends CliCommand {
       .action((topic: string | undefined, o: RawOpts) =>
         this.cli.guarded(async () => {
           if (topic !== undefined && o['short']) throw usageError('--short and a topic cannot be combined', { hint: 'Use `bpmn guide --short` or `bpmn guide <topic>`.' });
-          this.cli.print(o['short'] ? guideShort() : topic !== undefined ? guideTopic(topic) : guideText());
+          const guide = new AgentGuide();
+          this.cli.print(o['short'] ? guide.short() : topic !== undefined ? guide.topic(topic) : guide.text());
         }),
       );
   }

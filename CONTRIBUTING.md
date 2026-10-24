@@ -39,7 +39,8 @@ them on a private corpus without copying it into the repository, are described i
   stage of the pipeline. `src/report/CommandCatalogue.ts` lists every command with its arguments,
   its `--help` text and its guide usage, and the options of every write: the commander wiring in
   `src/commands/` and `bpmn guide` both read it. `src/report/guide.ts` holds the error catalogue
-  and the other tables of `bpmn guide` and `bpmn kinds`.
+  and the other hand-written tables that `bpmn guide` (`AgentGuide.ts`) and `bpmn kinds`
+  (`KindsReference.ts`) print.
 
   | folder | holds |
   | --- | --- |

@@ -204,7 +204,6 @@ export async function showXml(xml: string, opts: ViewOptions = {}): Promise<stri
   return renderShown(request.of(await Doc.fromXml(xml)));
 }
 
-/** Options of conventionsXml; ConventionsLookup (src/node/ConventionsLookup.ts) gives them from the project's .bpmnlintrc. */
 export interface ConventionsXmlOptions {
   conventions?: IdConventions;
   file?: string;

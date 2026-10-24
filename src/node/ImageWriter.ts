@@ -34,9 +34,7 @@ export interface Shot {
   images?: ShotImage[];
 }
 
-/** Draws a document and writes the image(s): `bpmn render` and `--render` of a mutating command. */
 export class ImageWriter {
-  /** `stdout`: where `-` writes the image */
   constructor(private readonly stdout: { write(bytes: string | Uint8Array): unknown }) {}
 
   /**

@@ -36,7 +36,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { kindsJson, kindsText } from '../src/report/guide.js';
+import { kindsJson, kindsText } from '../src/index.js';
 import { listAllExtensions } from '../src/ops/ext.js';
 import { runOps } from '../src/ops/index.js';
 import type { Op } from '../src/ops/types.js';

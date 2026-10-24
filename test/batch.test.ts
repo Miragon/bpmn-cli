@@ -7,7 +7,8 @@ import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
 import { Cli } from '../src/commands/Cli.js';
 import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
-import { ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
+import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/report/guide.js';
+import { guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/index.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
 import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
@@ -36,7 +37,7 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-const GUIDE_TEXT_FILES = ['report/guide.ts', 'report/CommandCatalogue.ts'];
+const GUIDE_TEXT_FILES = ['report/guide.ts', 'report/CommandCatalogue.ts', 'report/AgentGuide.ts', 'report/KindsReference.ts'];
 
 /**
  * Every E_/W_ code mentioned anywhere under src/ (code strings and contract

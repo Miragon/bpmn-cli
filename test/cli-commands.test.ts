@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { Cli, type CliIo } from '../src/commands/Cli.js';
-import { guideShort } from '../src/report/guide.js';
+import { guideShort } from '../src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'bpmn-cli-commands-'));
 
