@@ -17,6 +17,10 @@ import type { CheckOptions, CheckResult, LayoutDocOptions, MutationOptions, Muta
 import { EditTransaction } from './pipeline/EditTransaction.js';
 import { Relayout } from './pipeline/Relayout.js';
 import { DocCheck } from './pipeline/DocCheck.js';
+import { IdConventionsReader, type IdConventions, type IdNamingHelpers } from './ids/IdConventionsReader.js';
+import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
+import type { BpmnlintRuleSetting, BpmnlintSeverity } from './validate/bpmnlint-validator.js';
+import type { ValidatorFinding } from './validate/validators.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
@@ -62,7 +66,36 @@ export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, Val
 /* the project's bpmnlint configuration as an advisory validator; bpmnlint itself is injected (@miragon/bpmn-cli/node loads it) */
 export { bpmnlintValidator, resolveBpmnlintConfig, BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinter, type BpmnlintLinterClass, type BpmnlintReport, type BpmnlintResolver, type BpmnlintRule, type BpmnlintRuleSetting, type BpmnlintSeverity, type BpmnlintUnavailable, type BpmnlintValidatorOptions, type ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
 /* declared id conventions: what element-id-naming of the project's .bpmnlintrc says about new ids (its naming helpers injected; @miragon/bpmn-cli/node reads the .bpmnlintrc) */
-export { idConventionsFromLint, conventionsView, renderConventions, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode, type ConventionsView, type ConventionsRow, type Undeclared } from './ids/conventions.js';
+export { renderConventions } from './ids/utils/conventions-text.js';
+export { ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode } from './ids/IdConventionsReader.js';
+export { type ConventionsView, type ConventionsRow, type Undeclared } from './ids/ConventionsTable.js';
+
+/**
+ * The id conventions element-id-naming declares with its effective setting
+ * (src/ids/IdConventionsReader.ts), and a W_CONFIG_IGNORED note for each
+ * value new ids cannot follow; `source` names the .bpmnlintrc in the notes
+ * and the results (default `.bpmnlintrc`). `conventions` is undefined where
+ * nothing is declared (no setting, severity off, every prefix switched off).
+ */
+export function idConventionsFromLint(setting: BpmnlintRuleSetting | undefined, naming: IdNamingHelpers, opts: { source?: string } = {}): { conventions?: IdConventions; notes: ValidatorFinding[] } {
+  return new IdConventionsReader(naming, opts.source).read(setting);
+}
+
+/**
+ * The conventions new ids follow in a document (undefined: a new file),
+ * with `conventions` declared over its own style (IdStyle.infer): one row
+ * per pattern and source, the kinds that follow it; `opts`: the file, its
+ * rule setting, the notes, where the .bpmnlintrc is and why it declares
+ * none, as the node layer found them (src/ids/ConventionsTable.ts).
+ */
+export function conventionsView(
+  doc: Doc | undefined,
+  conventions: IdConventions | undefined,
+  opts: { file?: string; severity?: BpmnlintSeverity; notes?: ValidatorFinding[]; where?: string; undeclared?: Undeclared } = {},
+): ConventionsView {
+  return new ConventionsTable(doc, conventions).view(opts);
+}
+
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './model/ChangeSet.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';

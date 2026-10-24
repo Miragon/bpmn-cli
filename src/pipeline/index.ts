@@ -3,7 +3,7 @@
  * mutateDoc), of `bpmn layout` (pipeline/Relayout.ts: layoutDoc) and of
  * `bpmn validate` (pipeline/DocCheck.ts: checkDoc).
  */
-import type { IdConventions } from '../ids/conventions.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
 import type { DebugSink } from '../shared/LayoutDebug.js';
 import type { Warning } from '../shared/CliError.js';
 import type { LayoutWarningInfo, LayoutEngine } from '../layout/index.js';
@@ -52,7 +52,7 @@ export interface MutationOptions {
    */
   keepFlowIds?: boolean;
   /**
-   * the project's declared id conventions (src/ids/conventions.ts: the
+   * the project's declared id conventions (src/ids/IdConventionsReader.ts: the
    * prefixes, case and qualifier of element-id-naming; the node layer reads
    * them from the .bpmnlintrc it runs): ids the change generates follow
    * them where they declare a prefix, the file's own style elsewhere;

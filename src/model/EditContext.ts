@@ -8,9 +8,10 @@
  * runOps of its own; while ops run it is the document's (Doc.edit), between
  * runs the document keeps one of its own for ops called directly.
  */
-import type { IdConventions } from '../ids/conventions.js';
-import { withSuffix } from '../ids/slugs.js';
-import { IdStyle, type IdRequest, type IdState } from '../ids/style.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
+import { withSuffix } from '../ids/utils/slug.js';
+import { IdStyle, type IdState } from '../ids/IdStyle.js';
+import type { IdRequest } from '../ids/utils/requests.js';
 import { ChangeSet, type Rename } from './ChangeSet.js';
 import type { Doc } from './Doc.js';
 import type { El } from './utils/moddle.js';

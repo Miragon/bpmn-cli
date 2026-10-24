@@ -31,7 +31,8 @@ import { layoutProblems } from './diagram/metrics.js';
 import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
-import { conventionsView, renderConventions, type Undeclared } from './ids/conventions.js';
+import { renderConventions } from './ids/utils/conventions-text.js';
+import { ConventionsTable, type Undeclared } from './ids/ConventionsTable.js';
 import { Doc } from './model/Doc.js';
 import { CliError, type Warning } from './shared/CliError.js';
 import { ioError, isCliError, usageError } from './shared/utils/errors.js';
@@ -575,7 +576,7 @@ withJsonOptions(
       const found = await projectIdConventions(file === '-' ? undefined : file, lintOptions(o));
       // why none are declared, where none are
       const undeclared: Undeclared = o['lintConfig'] === false ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : !found.setting || found.setting.severity === 'off' ? 'off' : 'no prefixes';
-      const view = conventionsView(doc, found?.conventions, {
+      const view = new ConventionsTable(doc, found?.conventions).view({
         ...(file !== '-' ? { file } : {}),
         ...(found?.setting ? { severity: found.setting.severity } : {}),
         notes: found?.notes ?? [],

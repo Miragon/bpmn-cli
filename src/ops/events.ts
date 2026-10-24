@@ -29,7 +29,7 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
-import { typeRequest } from '../ids/style.js';
+import { typeRequest } from '../ids/utils/requests.js';
 import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
 import { isC7Uri } from '../platform/descriptor.js';
@@ -71,7 +71,7 @@ const EVENT_SUBPROCESS_ONLY: Trigger[] = ['error', 'escalation', 'compensate'];
 
 /**
  * Finds a root Message/Error/Signal/Escalation by id or name, creating it
- * (id `<Prefix>_<Slug>` in the default style, src/ids/style.ts) when missing. `extra` (errorCode / escalationCode)
+ * (id `<Prefix>_<Slug>` in the default style, src/ids/IdStyle.ts) when missing. `extra` (errorCode / escalationCode)
  * is applied to found elements too. Returns whether it was created.
  */
 export function ensureRootElement(doc: Doc, type: RootRefType, nameOrId: string, extra: Record<string, string | undefined> = {}): { el: El; created: boolean } {

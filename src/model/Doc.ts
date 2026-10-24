@@ -11,9 +11,12 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from '../shared/utils/errors.js';
 import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
-import { hasIdWords, IdRegistry, isValidId, transliterate } from '../ids/slugs.js';
-import type { IdConventions } from '../ids/conventions.js';
-import { IdStyle, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
+import { hasIdWords, isValidId, transliterate } from '../ids/utils/slug.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
+import type { IdConventions } from '../ids/IdConventionsReader.js';
+import { IdStyle } from '../ids/IdStyle.js';
+import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
+import { speakingStem } from '../ids/utils/id-words.js';
 import { EditContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
 import { kindLabel, suggestKinds } from './kinds.js';
@@ -44,7 +47,7 @@ export interface NewDocOptions {
   /** declare vendor namespaces and the execution platform up front (and, for camunda7, the Modeler's process defaults) */
   target?: 'camunda8' | 'camunda7' | 'none';
   /**
-   * the project's declared id conventions (src/ids/conventions.ts; the node
+   * the project's declared id conventions (src/ids/IdConventionsReader.ts; the node
    * layer reads them from the .bpmnlintrc): the document keeps them
    * (Doc.conventions); the process and definitions ids follow them only
    * where they name bpmn:Process / bpmn:Definitions exactly
@@ -420,10 +423,10 @@ export class Doc {
   }
 
   /**
-   * The project's declared id conventions (src/ids/conventions.ts;
+   * The project's declared id conventions (src/ids/IdConventionsReader.ts;
    * MutationOptions.conventions decide for one call instead,
    * EditContext.conventions): new ids follow them where they declare a
-   * prefix, the file's own style elsewhere (src/ids/style.ts). Setting other
+   * prefix, the file's own style elsewhere (src/ids/IdStyle.ts). Setting other
    * ones learns the style again.
    */
   get conventions(): IdConventions | undefined {

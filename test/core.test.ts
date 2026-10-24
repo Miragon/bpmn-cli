@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { IdRegistry, isValidId, slugify } from '../src/ids/slugs.js';
-import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids/style.js';
+import { IdRegistry } from '../src/ids/IdRegistry.js';
+import { isValidId, slugify } from '../src/ids/utils/slug.js';
+import { connectionRequest, kindRequest, typeRequest } from '../src/ids/utils/requests.js';
+import { IdStyle } from '../src/ids/IdStyle.js';
 import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
 import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';

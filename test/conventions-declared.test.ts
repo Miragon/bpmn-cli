@@ -1,15 +1,15 @@
 /**
- * Declared id conventions in the core (issue #34; src/ids/style.ts DECLARED
+ * Declared id conventions in the core (issue #34; src/ids/IdStyle.ts DECLARED
  * CONVENTIONS): they fill the gaps a change opens and never rename what is
  * there; the rest of the file keeps its own style, stable over many writes;
  * W_ID_PREFIX_STALE after a retype or a trigger change; the `conventions`
  * of a result; the view of `bpmn show --conventions`. The conventions come
- * from the real plugin's naming helpers (src/ids/conventions.ts).
+ * from the real plugin's naming helpers (src/ids/IdConventionsReader.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../src/api.js';
 import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
-import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/ids/conventions.js';
+import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { bpmnlintEngine } from '../src/node/bpmnlint.js';
 import type { Op } from '../src/ops/types.js';

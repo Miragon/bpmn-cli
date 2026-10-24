@@ -1,7 +1,7 @@
 /**
  * Data objects / stores, text annotations, associations, data associations.
  *
- *  Ids follow the file's style (src/ids/style.ts); the bpmn-cli default is
+ *  Ids follow the file's style (src/ids/IdStyle.ts); the bpmn-cli default is
  *  given here.
  *  - createDataObject(): bpmn:DataObject (id DataObject_<Slug>) + a
  *    bpmn:DataObjectReference (id DataObjectReference_<Slug>, the element the
@@ -42,7 +42,9 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { kindByName, kindLabel, triggerOf } from '../model/kinds.js';
-import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
+import { ElementLabels } from '../ids/ElementLabels.js';
+import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.js';
+import { speakingStem } from '../ids/utils/id-words.js';
 import { addTo, collaboration, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { relabelGroup } from '../diagram/groups.js';
@@ -60,11 +62,11 @@ function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): str
 
 /** The id request of a data object / data store / annotation added by `add`: its name, else its text, else `In <scope>`. */
 export function artifactRequest(kind: 'dataObject' | 'dataStore' | 'textAnnotation', scope: El, opts: { name?: string; text?: string }): IdRequest {
-  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), context: opts.text?.trim() ? opts.text : contextOf('In', scope) });
+  return kindRequest(kindByName(kind)!, { ...(opts.name ? { name: opts.name } : {}), context: opts.text?.trim() ? opts.text : new ElementLabels(scope).context('In') });
 }
 
 /** The context of an element that belongs to another one (`To` between the ends of a connection). */
-const between = (source: El, target: El): string => `${labelOf(source)} To ${labelOf(target)}`;
+const between = (source: El, target: El): string => `${new ElementLabels(source).label()} To ${new ElementLabels(target).label()}`;
 
 function assertFlowScope(scope: El, what: string): void {
   if (!is(scope, 'bpmn:Process') && !is(scope, 'bpmn:SubProcess')) {
@@ -200,7 +202,7 @@ export function createGroup(doc: Doc, opts: { id?: string; name?: string; member
   if (wrong) {
     throw modelError('E_INVALID_VALUE', `${idOf(wrong)} is a ${kindLabel(wrong)}; group members are flow nodes, data objects and data stores`, { element: idOf(wrong) });
   }
-  const around = `Around ${labelOf(members[0]!)}`;
+  const around = `Around ${new ElementLabels(members[0]!).label()}`;
   const id = allocateId(doc, kindRequest(kindByName('group')!, opts.name ? { name: opts.name } : { context: around }), opts.id);
   const value = createCategoryValue(doc, speakingStem(id) ?? around, opts.name);
   const group = doc.create('bpmn:Group', { id, categoryValueRef: value });
@@ -267,7 +269,7 @@ export function createAssociation(doc: Doc, source: El, target: El, opts: { id?:
 function placeholderProperty(doc: Doc, node: El): El {
   const existing = many(node, 'properties').find((p) => p.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
   if (existing) return existing;
-  const property = doc.create('bpmn:Property', { id: doc.allocateId(typeRequest('bpmn:Property', { context: labelOf(node) })).id, name: PLACEHOLDER_PROPERTY });
+  const property = doc.create('bpmn:Property', { id: doc.allocateId(typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: PLACEHOLDER_PROPERTY });
   addTo(node, 'properties', property);
   return property;
 }

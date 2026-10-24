@@ -81,7 +81,7 @@ const WITH_JOIN = definitionsXml(`
     <bpmn:sequenceFlow id="F4" sourceRef="B" targetRef="Join" />
     <bpmn:sequenceFlow id="F5" sourceRef="Join" targetRef="End" />`);
 
-// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/ids/style.ts)
+// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/ids/IdStyle.ts)
 const WITH_LANES = definitionsXml(`
     <bpmn:laneSet id="LaneSet_1">
       <bpmn:lane id="Lane_Sales" name="Sales"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef></bpmn:lane>

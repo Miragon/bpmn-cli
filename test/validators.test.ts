@@ -212,7 +212,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('checks what would be written: without the layout a new node has no shape', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
-    // the new flow's id in the file's style (src/ids/style.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
+    // the new flow's id in the file's style (src/ids/IdStyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
     expect(codes(r.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
@@ -224,7 +224,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('ruleId findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
-    // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/style.ts)
+    // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/IdStyle.ts)
     expect(r.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));

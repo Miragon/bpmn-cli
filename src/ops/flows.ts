@@ -29,8 +29,11 @@ import type { FlowEnds, FormerEnd, KeptFlow } from '../model/EditContext.js';
 import { followDiIds } from '../diagram/write.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
-import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';
-import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
+import { connectionRequest, type IdRequest } from '../ids/utils/requests.js';
+import { ElementLabels } from '../ids/ElementLabels.js';
+import { speakingStem } from '../ids/utils/id-words.js';
+import { hasIdWords, isSuffix, isValidId, slugify } from '../ids/utils/slug.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
 import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
@@ -363,7 +366,7 @@ export function createSequenceFlow(doc: Doc, source: El, target: El, attrs: Flow
   } else {
     let id = attrs.id;
     if (id) doc.claimId(id);
-    else id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
+    else id = doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
     flow = doc.create('bpmn:SequenceFlow', {
       id,
       ...(attrs.name ? { name: attrs.name } : {}),
@@ -446,13 +449,13 @@ export function removeSequenceFlow(doc: Doc, flow: El, cs?: ChangeSet): void {
 
 /**
  * The labels a flow id may name an end by (idNamesEnds): how ids name it
- * now (labelOf), the speaking part of its id (an end renamed since), its
+ * now (ElementLabels.label), the speaking part of its id (an end renamed since), its
  * name also where its id speaks (Activity_Verify, named Check, after `set
  * id=`; left out where it gives the same words as one of the others), and
- * how earlier versions named an unnamed end (formerLabels).
+ * how earlier versions named an unnamed end (ElementLabels.formerLabels).
  */
 export function endLabels(el: El): string[] {
-  const labels = [labelOf(el), speakingStem(idOf(el)), ...formerLabels(el)].filter((l): l is string => !!l);
+  const labels = [new ElementLabels(el).label(), speakingStem(idOf(el)), ...new ElementLabels(el).formerLabels()].filter((l): l is string => !!l);
   const name = el.get<string | undefined>('name');
   if (hasIdWords(name) && !labels.some((l) => l === name || (!l.includes('_') && slugify(l) === slugify(name)))) labels.push(name!);
   return [...new Set(labels)];
@@ -513,7 +516,7 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   const old = idOf(flow);
   if (!old) {
     if (wanted) doc.claimId(wanted);
-    flow.set('id', wanted || doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id);
+    flow.set('id', wanted || doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id);
     doc.invalidate();
     return '';
   }
@@ -524,7 +527,7 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
     return undefined;
   }
   doc.ids.release(old);
-  const id = doc.allocateId(flowRequest('bpmn:SequenceFlow', source, target)).id;
+  const id = doc.allocateId(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
   if (id === old) return undefined;
   flow.set('id', id);
   doc.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
@@ -540,7 +543,7 @@ function followEdgeId(doc: Doc, flow: El, old: string, id: string): void {
 
 /** The request a connection's id is built from (its type, its ends). */
 function connectionRequestOf(flow: El): IdRequest {
-  return flowRequest(flow.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
+  return ElementLabels.flowRequest(flow.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
 }
 
 /**
@@ -602,7 +605,7 @@ export function staleFlowWarning(doc: Doc, flow: El, { was, id: keptId, preferre
   if (began?.[0] === source && began[1] === target) return undefined;
   const taken = hinted ?? doc.ids;
   const wanted = preferred?.target === target && isValidId(preferred.id) && !taken.has(preferred.id) && !doc.has(preferred.id) ? preferred.id : undefined;
-  const suggested = wanted ?? doc.idStyle.next(flowRequest('bpmn:SequenceFlow', source, target), taken).id;
+  const suggested = wanted ?? doc.idStyle.next(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target), taken).id;
   hinted?.claim(suggested);
   return {
     code: 'W_FLOW_ID_STALE',

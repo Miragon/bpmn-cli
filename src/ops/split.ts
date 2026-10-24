@@ -26,13 +26,14 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { type CliError } from '../shared/CliError.js';
+import type { CliError } from '../shared/CliError.js';
 import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
+import { IdStyle } from '../ids/IdStyle.js';
+import { ElementLabels } from '../ids/ElementLabels.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './batch.js';
-import { withSuffix } from '../ids/slugs.js';
+import { withSuffix } from '../ids/utils/slug.js';
 import { addElement } from './add.js';
 import { connectElements } from './connect.js';
 import { laneOf } from './containers.js';
@@ -88,7 +89,7 @@ function createdId(cs: ChangeSet): string {
 function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: string): { id: string; base?: string } {
   if (op.joinId) return { id: op.joinId };
   const gatewayId = idOf(gateway);
-  const base = doc.idStyle.joinId(gatewayId, kind, labelOf(gateway));
+  const base = doc.idStyle.joinId(gatewayId, kind, new ElementLabels(gateway).label());
   const sep = doc.idStyle.suffixSep(kind);
   let id = base;
   for (let n = 2; doc.has(id) || doc.ids.has(id); n++) id = withSuffix(base, sep, n);
@@ -97,7 +98,7 @@ function joinIdFor(doc: Doc, op: SplitOp, gateway: El, cs: ChangeSet, kind: stri
   }
   // the result's `conventions:` line: a join under a prefix the declared conventions name, other than the file's style gives
   const style = doc.idStyle;
-  if (style.declared && style.explain(keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.edit.recordDeclaredId(id);
+  if (style.declared && style.explain(IdStyle.keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) doc.edit.recordDeclaredId(id);
   return { id, base };
 }
 
@@ -168,7 +169,7 @@ export function splitFlow(doc: Doc, op: SplitOp): ChangeSet {
   const laneOpt = lane ? { lane: idOf(lane) } : {};
 
   // 1. split gateway
-  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, anchorContext('After', anchor));
+  const gwCs = addElement(doc, { op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, new ElementLabels(anchor).anchorContext('After'));
   cs.merge(gwCs);
   const gatewayId = createdId(gwCs);
   const gateway = doc.require(gatewayId);

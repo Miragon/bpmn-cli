@@ -13,7 +13,7 @@
  *  draws or keys by id (processes, collaborations, participants, lanes,
  *  flow nodes, sequence and message flows, data object / store references,
  *  text annotations, groups, associations, data associations) that has no
- *  id one in the file's id style (src/ids/style.ts; `allocate` claims it in
+ *  id one in the file's id style (src/ids/IdStyle.ts; `allocate` claims it in
  *  the caller's registry, by default a registry of every id of `defs`), and
  *  returns them in document order: its name, else its kind and `In <parent>`;
  *  a connection names its ends. Nodes and containers get theirs first, so
@@ -22,8 +22,10 @@
  *  id-less elements it changes nothing. The incremental layout does not
  *  need it: it never draws an element without id (the element keeps no DI).
  */
-import { IdRegistry } from '../ids/slugs.js';
-import { contextOf as placeOf, flowRequest, IdStyle, kindRequest, labelOf, typeRequest, type IdRequest } from '../ids/style.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
+import { IdStyle } from '../ids/IdStyle.js';
+import { ElementLabels } from '../ids/ElementLabels.js';
+import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { kindLabel, kindOf, triggerOf } from '../model/kinds.js';
 import { indexById, is, isDiElement, walk, type El } from '../model/utils/moddle.js';
 
@@ -74,9 +76,9 @@ function requestFor(el: El, context: string): IdRequest {
   if (CONNECTIONS.some((t) => is(el, t))) {
     const [source, target] = endsOf(el);
     if (source && target && idOf(source) && idOf(target) && (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow'))) {
-      return flowRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, named.name);
+      return ElementLabels.flowRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, named.name);
     }
-    const label = (end: El | undefined): string => (end && idOf(end) ? labelOf(end) : '');
+    const label = (end: El | undefined): string => (end && idOf(end) ? new ElementLabels(end).label() : '');
     return typeRequest(el.$type, { context: source || target ? `${label(source)} To ${label(target)}` : context });
   }
   const def = kindOf(el);
@@ -92,16 +94,16 @@ function contextOf(defs: El, el: El): string {
   if (is(el, 'bpmn:Collaboration')) {
     const participants = el.get<El[] | undefined>('participants') ?? [];
     const process = participants.map((p) => p.get<El | undefined>('processRef')).find(Boolean) ?? (defs.get<El[] | undefined>('rootElements') ?? []).find((r) => is(r, 'bpmn:Process'));
-    return process ? labelOf(process) : '';
+    return process ? new ElementLabels(process).label() : '';
   }
   if (is(el, 'bpmn:Process')) {
     const pool = [...walk(defs, { bpmnOnly: true })].find((p) => is(p, 'bpmn:Participant') && p.get<El | undefined>('processRef') === el);
-    return pool && (idOf(pool) || pool.get<string | undefined>('name')) ? labelOf(pool) : '';
+    return pool && (idOf(pool) || pool.get<string | undefined>('name')) ? new ElementLabels(pool).label() : '';
   }
   // the nearest container that names something (a lane set or an id-less parent says nothing)
   let parent = el.$parent as El | undefined;
   while (parent && (!idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) parent = parent.$parent as El | undefined;
-  return parent && !is(parent, 'bpmn:Definitions') ? placeOf('In', parent) : '';
+  return parent && !is(parent, 'bpmn:Definitions') ? new ElementLabels(parent).context('In') : '';
 }
 
 /** Gives the id-less elements a full redraw draws an id in the file's style (see the module contract). */

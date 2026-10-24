@@ -5,7 +5,7 @@
  *  - id: op.id (claimId) or a speaking id in the file's style
  *    (doc.allocateId with kindRequest: kind, trigger, name, and the placement
  *    as the context of an unnamed element: Gateway_AfterCheckInvoice,
- *    Event_TimerOnReview; src/ids/style.ts); a taken id gets a `_2` suffix
+ *    Event_TimerOnReview; src/ids/IdStyle.ts); a taken id gets a `_2` suffix
  *    (W_ID_SUFFIXED, reported by OpRunner).
  *  - op.ifAbsent with op.id and the element exists -> empty ChangeSet with a note;
  *    ifAbsent without an id is E_USAGE (same rule as `apply`).
@@ -64,7 +64,9 @@
 import type { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type IdRequest } from '../ids/style.js';
+import { ElementLabels, type AnchorContext } from '../ids/ElementLabels.js';
+import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
+import type { ContextWord } from '../ids/utils/id-words.js';
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
 import { addTo, is, localType, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
@@ -136,13 +138,13 @@ export function allocateElementId(doc: Doc, req: IdRequest, op: { id?: string })
  * What tells an unnamed element apart: its placement (`After <anchor>`,
  * `Before <anchor>`, `After <source of the flow>`, `On <host>`; `In <scope>`
  * for a sub-process, or a pool / process of a file with several), in the
- * words of anchorContext (the nearest named anchor, once; the kind of an
+ * words of ElementLabels.anchorContext (the nearest named anchor, once; the kind of an
  * unnamed anchor it names past, for when the id would repeat the anchor's).
  */
 function placementContext(doc: Doc, op: AddOp): AnchorContext | undefined {
   const at = (word: ContextWord, id: string | undefined): AnchorContext => {
     const el = id ? doc.get(id) : undefined;
-    return el ? anchorContext(word, el) : { context: word };
+    return el ? new ElementLabels(el).anchorContext(word) : { context: word };
   };
   switch (placementMode(op)) {
     case 'after':
@@ -152,14 +154,14 @@ function placementContext(doc: Doc, op: AddOp): AnchorContext | undefined {
       return at('Before', op.before);
     case 'flow': {
       const source = doc.get(op.flow!)?.get<El | undefined>('sourceRef');
-      return source ? anchorContext('After', source) : undefined;
+      return source ? new ElementLabels(source).anchorContext('After') : undefined;
     }
     case 'on':
       return at('On', op.on);
     default: {
       const scope = op.in ? doc.get(op.in) : undefined;
       if (!scope) return undefined;
-      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? anchorContext('In', scope) : undefined;
+      return is(scope, 'bpmn:SubProcess') || doc.processes().length > 1 ? new ElementLabels(scope).anchorContext('In') : undefined;
     }
   }
 }

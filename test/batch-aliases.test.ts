@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { renderMutation } from '../src/report/command-report.js';
 import { OPS_SCHEMA, opsExample, parseOps } from '../src/ops/batch.js';
-import { idConventionsFromLint } from '../src/ids/conventions.js';
+import { idConventionsFromLint } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { CliError } from '../src/shared/CliError.js';
 import { ERROR_CATALOGUE, guideShort, guideText } from '../src/report/guide.js';

@@ -28,7 +28,7 @@
  * platform profile's new findings work as in the CLI, a host's own
  * validators (`validators`) run in the same transaction, `keepFlowIds`
  * keeps flow ids like `--keep-flow-ids`, and `conventions` are the declared
- * id conventions new ids follow (src/ids/conventions.ts; a host that lints with
+ * id conventions new ids follow (src/ids/IdConventionsReader.ts; a host that lints with
  * element-id-naming builds them from the same configuration). The result
  * keeps the input's text wherever the ops changed nothing (the
  * text-preserving step).
@@ -43,7 +43,8 @@ import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import { layoutView, type LayoutView } from './query/layout-view.js';
 import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
-import { conventionsView, type ConventionsView, type IdConventions, type Undeclared } from './ids/conventions.js';
+import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
+import type { IdConventions } from './ids/IdConventionsReader.js';
 import { Doc, type NewDocOptions } from './model/Doc.js';
 import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
@@ -274,7 +275,7 @@ export async function conventionsXml(
   opts: { conventions?: IdConventions; file?: string; severity?: BpmnlintSeverity; notes?: ValidatorFinding[]; where?: string; undeclared?: Undeclared } = {},
 ): Promise<ConventionsView> {
   const { conventions, ...rest } = opts;
-  return conventionsView(xml === undefined ? undefined : await Doc.fromXml(xml, opts.file), conventions, rest);
+  return new ConventionsTable(xml === undefined ? undefined : await Doc.fromXml(xml, opts.file), conventions).view(rest);
 }
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */

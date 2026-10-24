@@ -6,7 +6,7 @@ import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';
 import { COMMANDS, COMMON_OPTIONS, ERROR_CATALOGUE, PLACEMENT_NOTES, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/report/guide.js';
-import { MAX_ID, MAX_SLUG } from '../src/ids/slugs.js';
+import { MAX_ID, MAX_SLUG } from '../src/ids/utils/slug.js';
 import { KINDS } from '../src/model/kinds.js';
 import { OP_NAMES, type Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';

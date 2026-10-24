@@ -88,8 +88,10 @@
 import { followDiIds } from '../diagram/write.js';
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
-import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
+import { cutAt, MAX_ID, withSuffix } from '../ids/utils/slug.js';
+import { IdRegistry } from '../ids/IdRegistry.js';
+import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
+import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';

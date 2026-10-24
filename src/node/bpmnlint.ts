@@ -10,7 +10,7 @@
  *                                       on what it left out or read from the project), or why bpmnlint cannot run
  *   projectBpmnlint(file, opts)      -> the NamedValidator for a file, or undefined (no .bpmnlintrc, --no-lint-config)
  *   projectBpmnlintSettings(file)    -> the effective rule settings (same lookup, flags, cache and errors)
- *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/ids/conventions.ts), the
+ *   projectIdConventions(file, opts) -> the id conventions its element-id-naming declares (src/ids/IdConventionsReader.ts), the
  *                                       W_CONFIG_IGNORED notes the validator reports and what it leaves out (same lookup,
  *                                       flags, cache)
  *
@@ -100,7 +100,7 @@ import Module, { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../validate/bpmnlint-validator.js';
-import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../ids/conventions.js';
+import { IdConventionsReader, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../ids/IdConventionsReader.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { NamedValidator, Validator, ValidatorFinding } from '../validate/validators.js';
 import { findUp, gitRoot } from './find-up.js';
@@ -918,7 +918,7 @@ function idConventionsOf(loaded: LoadedBpmnlint & { ok: true }): ProjectIdConven
   const setting = loaded.resolved.rules[ID_NAMING_RULE];
   const l = loadLibs();
   const out: ProjectIdConventions = { notes: [], where: loaded.where, ...(setting ? { setting } : {}) };
-  if (setting && setting.severity !== 'off' && !isFailure(l)) Object.assign(out, idConventionsFromLint(setting, l.plugin.naming, { source: loaded.where }));
+  if (setting && setting.severity !== 'off' && !isFailure(l)) Object.assign(out, new IdConventionsReader(l.plugin.naming, loaded.where).read(setting));
   idConventionsCache.set(loaded.resolved, out);
   return out;
 }
@@ -961,7 +961,7 @@ export async function projectBpmnlint(file: string | undefined, opts: FileBpmnli
 
 /** What the .bpmnlintrc of a file declares about ids (projectIdConventions). */
 export interface ProjectIdConventions {
-  /** the id conventions of its element-id-naming (src/ids/conventions.ts); absent: the rule is off or not configured, or every prefix is switched off */
+  /** the id conventions of its element-id-naming (src/ids/IdConventionsReader.ts); absent: the rule is off or not configured, or every prefix is switched off */
   conventions?: IdConventions;
   /** W_CONFIG_IGNORED: values of the rule's options new ids do not follow (the validator reports them); W_LINT_UNAVAILABLE: what the configuration leaves out, or why it could not be loaded */
   notes: ValidatorFinding[];
@@ -975,7 +975,7 @@ export interface ProjectIdConventions {
 
 /**
  * The id conventions the .bpmnlintrc that applies to a file declares through
- * @miragon/rules/element-id-naming (src/ids/conventions.ts idConventionsFromLint
+ * @miragon/rules/element-id-naming (src/ids/IdConventionsReader.ts
  * with the plugin's own naming helpers): the same lookup, flags and cache as
  * projectBpmnlint; undefined without a .bpmnlintrc or with `lintConfig:
  * false`. The notes list what `validate` lists about the configuration: its
