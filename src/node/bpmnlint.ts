@@ -1,6 +1,6 @@
 /**
  * The project's .bpmnlintrc on disk (Node only): lookup, loading and the
- * resolver chain. The validator itself is the core's (src/validate/bpmnlint-validator.ts).
+ * resolver chain. The validator itself is the core's (src/validate/BpmnlintValidator.ts).
  *
  *   findBpmnlintConfig(dir)          -> the nearest .bpmnlintrc from dir up to the repository root (the path as given,
  *                                       then the physical one), or undefined
@@ -99,7 +99,10 @@ import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import Module, { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_VALIDATOR, moddleEntries, resolveBpmnlintConfig, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinterClass, type BpmnlintResolver, type BpmnlintRuleSetting, type BpmnlintUnavailable, type ResolvedBpmnlintConfig } from '../validate/bpmnlint-validator.js';
+import type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinterClass, BpmnlintResolver, BpmnlintRuleSetting, BpmnlintUnavailable, ResolvedBpmnlintConfig } from '../validate/bpmnlint-validator.js';
+import { BpmnlintConfigResolution } from '../validate/BpmnlintConfigResolution.js';
+import { BpmnlintValidator, BPMNLINT_VALIDATOR } from '../validate/BpmnlintValidator.js';
+import { bpmnlintUnavailableFindings, moddleEntries } from '../validate/utils/bpmnlint.js';
 import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers } from '../ids/conventions.js';
 import { ioError } from '../shared/utils/errors.js';
 import type { NamedValidator, Validator, ValidatorFinding } from '../validate/validators.js';
@@ -883,7 +886,7 @@ async function load(abs: string, config: BpmnlintConfig, where: string, repo: Re
     const chain = new ChainResolver(l, rcDir, opts, repo);
     const engine = { Linter: l.Linter, resolver: chain };
     const moddle = moddleExtensionsOf(config, rcDir, l, opts.from);
-    const resolved = await resolveBpmnlintConfig(engine, config, { moddleExtensions: moddle.found });
+    const resolved = await new BpmnlintConfigResolution(engine, config, { moddleExtensions: moddle.found }).resolve();
     const project = chain.projectPackages().map((pkg) => {
       const v = chain.projectVersion(pkg);
       return v ? `${pkg}@${v}` : pkg;
@@ -946,7 +949,7 @@ export async function projectLint(file: string | undefined, opts: FileBpmnlintOp
     return { validator: { name: BPMNLINT_VALIDATOR, detail: loaded.detail, blocks, validate: () => findings } };
   }
   const ids = idConventionsOf(loaded);
-  const validator = bpmnlintValidator(loaded.engine, loaded.resolved, { detail: `${loaded.detail}${ignoredDetail(ids.notes)}`, blocks, unavailable: loaded.notes, notes: ids.notes });
+  const validator = new BpmnlintValidator(loaded.engine, loaded.resolved, { detail: `${loaded.detail}${ignoredDetail(ids.notes)}`, blocks, unavailable: loaded.notes, notes: ids.notes }).named();
   return { validator, ...(ids.conventions ? { conventions: ids.conventions } : {}) };
 }
 

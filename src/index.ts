@@ -10,6 +10,10 @@
  * typecheck (skipLibCheck false) resolves them.
  */
 import { TextPreservation, type PreservedText } from './xml/TextPreservation.js';
+import type { BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+import { BpmnlintConfigResolution } from './validate/BpmnlintConfigResolution.js';
+import { BpmnlintValidator, type BpmnlintValidatorOptions } from './validate/BpmnlintValidator.js';
+import type { NamedValidator } from './validate/validators.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -53,7 +57,12 @@ export function preserveText(original: string, baseline: string, next: string): 
 /* a host's validators, run inside the write transaction (MutationOptions.validators) and by validate (CheckOptions.validators) */
 export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './validate/validators.js';
 /* the project's bpmnlint configuration as an advisory validator; bpmnlint itself is injected (@miragon/bpmn-cli/node loads it) */
-export { bpmnlintValidator, resolveBpmnlintConfig, BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintConfig, type BpmnlintEngine, type BpmnlintLinter, type BpmnlintLinterClass, type BpmnlintReport, type BpmnlintResolver, type BpmnlintRule, type BpmnlintRuleSetting, type BpmnlintSeverity, type BpmnlintUnavailable, type BpmnlintValidatorOptions, type ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+export { BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintValidatorOptions } from './validate/BpmnlintValidator.js';
+export type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinter, BpmnlintLinterClass, BpmnlintReport, BpmnlintResolver, BpmnlintRule, BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintUnavailable, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
+/** The NamedValidator of a resolved configuration (BpmnlintValidator). */
+export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmnlintConfig, opts: BpmnlintValidatorOptions = {}): NamedValidator { return new BpmnlintValidator(engine, resolved, opts).named(); }
+/** The effective configuration (BpmnlintConfigResolution). `opts.moddleExtensions`: descriptors the host resolved for the module paths of `config.moddleExtensions`. */
+export async function resolveBpmnlintConfig(engine: BpmnlintEngine, config: BpmnlintConfig, opts: { moddleExtensions?: Record<string, object> } = {}): Promise<ResolvedBpmnlintConfig> { return new BpmnlintConfigResolution(engine, config, opts).resolve(); }
 /* declared id conventions: what element-id-naming of the project's .bpmnlintrc says about new ids (its naming helpers injected; @miragon/bpmn-cli/node reads the .bpmnlintrc) */
 export { idConventionsFromLint, conventionsView, renderConventions, ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode, type ConventionsView, type ConventionsRow, type Undeclared } from './ids/conventions.js';
 export { decisionLinkOf, type DecisionLink } from './ops/decision.js';

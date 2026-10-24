@@ -1,6 +1,6 @@
 /**
- * The project's bpmnlint configuration (issue #33): src/validate/bpmnlint-validator.ts (the
- * core: resolution, the advisory validator) and src/node/bpmnlint.ts (lookup,
+ * The project's bpmnlint configuration (issue #33): src/validate/ (the core:
+ * BpmnlintConfigResolution, the advisory BpmnlintValidator) and src/node/bpmnlint.ts (lookup,
  * loading, the resolver chain), with the real bpmnlint and
  * @miragon/bpmnlint-plugin-rules, offline.
  *
@@ -19,7 +19,8 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { bpmnlintUnavailableFindings, bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/validate/bpmnlint-validator.js';
+import { bpmnlintValidator, BPMNLINT_COVERS, resolveBpmnlintConfig, type BpmnlintEngine, type BpmnlintResolver } from '../src/index.js';
+import { bpmnlintUnavailableFindings } from '../src/validate/utils/bpmnlint.js';
 import { idConventionsFromLint, ID_NAMING_RULE } from '../src/ids/conventions.js';
 import { Doc } from '../src/model/document.js';
 import type { CliError } from '../src/shared/CliError.js';
