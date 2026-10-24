@@ -5,7 +5,6 @@ import { addElement } from '../src/ops/add.js';
 import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
 import { connectElements } from '../src/ops/connect.js';
 import { assignLane, laneOf } from '../src/ops/containers.js';
-import { applyTrigger } from '../src/ops/events.js';
 import { EventTrigger } from '../src/ops/EventTrigger.js';
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
@@ -14,6 +13,7 @@ import type { CliError } from '../src/shared/CliError.js';
 import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
+import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -405,10 +405,10 @@ describe('triggers', () => {
     expect(codeOf(() => add(doc, { kind: 'startEvent:message', message: 'M', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     expect(codeOf(() => add(doc, { kind: 'endEvent', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     // retriggering a non-interrupting boundary event to error makes it interrupting again
-    applyTrigger(doc, doc.require('Event_NI'), 'error', { error: 'E' });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('error', { error: 'E' });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
-    applyTrigger(doc, doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: true });
-    applyTrigger(doc, doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: false });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: true });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: false });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
     await roundTrip(doc);
   });
@@ -442,11 +442,11 @@ describe('triggers', () => {
     const cs = add(doc, { kind: 'userTask', name: 'T', in: 'Process_1', timer: 'PT1H' });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
     add(doc, { kind: 'startEvent:message', name: 'M', message: 'X', in: 'Process_1' });
-    applyTrigger(doc, doc.require('Event_M'), 'none');
+    new EventDefinitions(doc, doc.require('Event_M')).apply('none');
     expect(many(doc.require('Event_M'), 'eventDefinitions')).toHaveLength(0);
     expect(new EventTrigger(doc.require('Event_M')).describe()).toBe('');
-    expect(codeOf(() => applyTrigger(doc, doc.require('Task_A'), 'timer'))).toBe('E_WRONG_KIND');
-    expect(codeOf(() => applyTrigger(doc, doc.require('Start'), 'terminate'))).toBe('E_INVALID_TRIGGER');
+    expect(codeOf(() => new EventDefinitions(doc, doc.require('Task_A')).apply('timer'))).toBe('E_WRONG_KIND');
+    expect(codeOf(() => new EventDefinitions(doc, doc.require('Start')).apply('terminate'))).toBe('E_INVALID_TRIGGER');
     await roundTrip(doc);
   });
 });

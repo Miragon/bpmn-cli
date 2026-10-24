@@ -23,7 +23,7 @@
  *    camunda:historyTimeToLive in a Camunda 7 file); a user task of a Camunda 8
  *    file gets zeebe:userTask (platform/Camunda8Defaults.ts).
  *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
- *    applyTrigger() for events (default trigger 'none'; boundary events and
+ *    EventDefinitions.apply() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
  *    a missing trigger is inferred from --timer/--message/... when given),
  *    documentation (op.doc), sub-process expansion (op.collapsed ->
@@ -74,7 +74,6 @@ import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { renamedNote } from '../model/utils/renames.js';
 import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
-import { applyTrigger, bindRefAs } from './events.js';
 import { LaneInheritance } from './LaneInheritance.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { FlowOptions } from './FlowOptions.js';
@@ -84,6 +83,8 @@ import { StaleFlowReport } from './StaleFlowReport.js';
 import { NodePlacement } from './NodePlacement.js';
 import { EventGatewayRule } from './EventGatewayRule.js';
 import { FlowRules } from '../model/FlowRules.js';
+import { EventDefinitions } from './EventDefinitions.js';
+import { RootElements } from './RootElements.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -422,7 +423,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
       }
       resolved = 'none';
     }
-    reportNewRoots(doc, cs, () => applyTrigger(doc, el, resolved, op));
+    reportNewRoots(doc, cs, () => new EventDefinitions(doc, el).apply(resolved, op));
     if (resolved !== 'none') entry.kind = kindLabel(el);
   }
   if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
@@ -475,7 +476,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
     cs.bind(op.as, existing);
     if (op.flowAs) cs.bind(op.flowAs, doc.incoming(existing)[0]);
     if (op.outAs) bindExistingOutAs(doc, op.outAs, existing, cs);
-    bindRefAs(cs, op.refAs, existing);
+    new RootElements(doc).bindRefAs(cs, op.refAs, existing);
     if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
       cs.warn({
         code: 'W_KIND_MISMATCH',
@@ -542,7 +543,7 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
     cs.merge(setProperties(doc, { op: 'set', id: idOf(el), values: op.set }));
   }
   cs.bind(op.as, el);
-  bindRefAs(cs, op.refAs, el);
+  new RootElements(doc).bindRefAs(cs, op.refAs, el);
   doc.edit.allocator.reportSuffixed(cs);
   doc.invalidate();
   return cs;

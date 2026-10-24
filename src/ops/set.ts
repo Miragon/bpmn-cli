@@ -97,7 +97,6 @@ import { definitionsOf, nestedEntries, parseSlotRef, resolveNested, slotsOf, SLO
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
-import { bindRefAs, ensureRootElement } from './events.js';
 import { EventTrigger } from './EventTrigger.js';
 import { TriggerChange } from './TriggerChange.js';
 import { vendorContent } from './utils/elements.js';
@@ -110,6 +109,7 @@ import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import { SequenceFlows } from './SequenceFlows.js';
 import { FlowIdFollower } from './FlowIdFollower.js';
 import { FlowRules } from '../model/FlowRules.js';
+import { RootElements } from './RootElements.js';
 
 /* ------------------------------------------------------------------ */
 /* key documentation                                                    */
@@ -362,7 +362,7 @@ export function setProperties(doc: Doc, op: SetOp): ChangeSet {
   if (eventKeys.size) applyEventKeys(doc, el, eventKeys, cs);
   for (const n of nested) if (!flowCondition.includes(n) && !resourceRemoval.includes(n)) applyNestedKey(doc, el, n.slot, n.key, n.value, cs);
   doc.invalidate();
-  bindRefAs(cs, op.refAs, el);
+  new RootElements(doc).bindRefAs(cs, op.refAs, el);
   return cs;
 }
 
@@ -450,7 +450,7 @@ export function setTaskMessage(doc: Doc, task: El, name: string, cs: ChangeSet):
     task.set('messageRef', undefined);
     return;
   }
-  const { el: message, created } = ensureRootElement(doc, 'bpmn:Message', name);
+  const { el: message, created } = new RootElements(doc).ensure('bpmn:Message', name);
   task.set('messageRef', message);
   if (created) cs.create({ id: idOf(message), kind: 'message', name: message.get<string>('name'), detail: 'root element' });
 }

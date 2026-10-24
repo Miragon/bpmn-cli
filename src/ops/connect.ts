@@ -32,11 +32,11 @@ import { kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, createAssociation, createDataAssociation, isDataReference } from './artifacts.js';
-import { bindRefAs, ensureRootElement } from './events.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { ConnectOp } from './types.js';
 import { EventGatewayRule } from './EventGatewayRule.js';
 import { SequenceFlows } from './SequenceFlows.js';
+import { RootElements } from './RootElements.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
 
@@ -124,7 +124,7 @@ function createMessageFlow(doc: Doc, source: El, target: El, op: ConnectOp, cs: 
     });
   }
   const id = doc.edit.allocator.explicitOr(op.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
-  const message = op.message ? ensureRootElement(doc, 'bpmn:Message', op.message) : undefined;
+  const message = op.message ? new RootElements(doc).ensure('bpmn:Message', op.message) : undefined;
   if (message?.created) {
     const name = message.el.get<string | undefined>('name');
     cs.create({ id: idOf(message.el), kind: 'message', ...(name ? { name } : {}), detail: 'root element' });
@@ -216,7 +216,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
     const same = existing ?? existingConnection(doc, kind, source, target);
     if (same) {
       cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
-      bindRefAs(cs, op.refAs, same);
+      new RootElements(doc).bindRefAs(cs, op.refAs, same);
       return cs.bind(op.as, same);
     }
   }
@@ -278,7 +278,7 @@ export function connectElements(doc: Doc, op: ConnectOp): ChangeSet {
   const made = [...cs.created].reverse().find((c) => CONNECTION_KINDS.has(c.kind));
   cs.bind(op.as, made ? doc.get(made.id) : undefined);
   // refAs: the message the new message flow carries
-  bindRefAs(cs, op.refAs, made ? doc.get(made.id) : undefined);
+  new RootElements(doc).bindRefAs(cs, op.refAs, made ? doc.get(made.id) : undefined);
   doc.edit.allocator.reportSuffixed(cs);
   doc.invalidate();
   return cs;

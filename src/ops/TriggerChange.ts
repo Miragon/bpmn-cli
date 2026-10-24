@@ -3,7 +3,7 @@
  * its kind (`retype`), from what the element was when it began: the trigger
  * options are merged with the current ones, a non-interrupting flag the new
  * trigger cannot carry is cleared (W_PROPERTY_DROPPED), the event definitions
- * change (applyTrigger), the message flows at the event must still fit it
+ * change (EventDefinitions.apply), the message flows at the event must still fit it
  * (E_INVALID_TRIGGER, the rule `connect` applies), and the id state is
  * recorded for W_ID_PREFIX_STALE.
  */
@@ -13,7 +13,7 @@ import type { IdState } from '../ids/IdStyle.js';
 import { modelError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf, type Trigger } from '../model/kinds.js';
 import { is, type El } from '../model/utils/moddle.js';
-import { applyTrigger } from './events.js';
+import { EventDefinitions } from './EventDefinitions.js';
 import { EventTrigger, ALWAYS_INTERRUPTING } from './EventTrigger.js';
 import { IdRenamer } from './IdRenamer.js';
 import { idOf } from './utils/elements.js';
@@ -66,7 +66,7 @@ export class TriggerChange {
         } else if (strict) merged.nonInterrupting = true;
       }
       if (strict && merged.nonInterrupting) this.assertNonInterruptingAllowed(on, trigger);
-      for (const w of applyTrigger(this.doc, on, trigger, merged)) cs.warn(w);
+      for (const w of new EventDefinitions(this.doc, on).apply(trigger, merged)) cs.warn(w);
     }
     this.assertMessageFlowsFit(on);
     if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(cs, on, trigger);

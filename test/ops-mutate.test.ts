@@ -3,7 +3,6 @@ import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { assignLane } from '../src/ops/containers.js';
-import { applyTrigger } from '../src/ops/events.js';
 import { extensionOp, listExtensions } from '../src/ops/ext.js';
 import { moveElements } from '../src/ops/move.js';
 import { orderFlows } from '../src/ops/order.js';
@@ -13,6 +12,7 @@ import { readProperties, setProperties, SET_KEYS } from '../src/ops/set.js';
 import { IdRenamer } from '../src/ops/IdRenamer.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from './helpers.js';
+import { EventDefinitions } from '../src/ops/EventDefinitions.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -137,7 +137,7 @@ const triggersReady = implemented(() => {
   const ev = doc.create('bpmn:StartEvent', { id: 'Probe' });
   many(doc.defaultScope(), 'flowElements').push(ev);
   ev.$parent = doc.defaultScope();
-  applyTrigger(doc, ev, 'timer', { timer: 'PT1M' });
+  new EventDefinitions(doc, ev).apply('timer', { timer: 'PT1M' });
 });
 
 const lanesReady = implemented(() => {

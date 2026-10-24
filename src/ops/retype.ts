@@ -15,7 +15,7 @@
  *    so an agent never deletes a whole subtree by asking for another kind.
  *  - allowed: task <-> task/subProcess/callActivity (activity family),
  *    gateway <-> gateway, event <-> event of the same position (start/end/
- *    intermediate catch|throw/boundary), plus trigger changes via applyTrigger.
+ *    intermediate catch|throw/boundary), plus trigger changes via TriggerChange.
  *    Other combinations -> E_INVALID_RETYPE.
  *  - same kind & trigger -> no-op note; with trigger options the existing
  *    trigger details are merged with the given ones ("trigger options updated").
@@ -49,7 +49,6 @@ import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
@@ -59,6 +58,7 @@ import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import { SequenceFlows } from './SequenceFlows.js';
+import { RootElements } from './RootElements.js';
 
 export { withoutProfileDuplicates } from './covers.js';
 
@@ -155,7 +155,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
   const sameTrigger = trigger === oldTrigger;
   if (from === to && sameTrigger && !hasTriggerOptions) {
     cs.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
-    bindRefAs(cs, op.refAs, el);
+    new RootElements(doc).bindRefAs(cs, op.refAs, el);
     return cs;
   }
   if (to.kind === 'eventSubProcess' && (doc.incoming(el).length || doc.outgoing(el).length)) {
@@ -186,7 +186,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
       ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
       : `retyped from ${oldLabel} to ${kindLabel(target)}`;
   cs.change(ChangeSet.entryOf(target, detail));
-  bindRefAs(cs, op.refAs, target);
+  new RootElements(doc).bindRefAs(cs, op.refAs, target);
   return cs;
 }
 
