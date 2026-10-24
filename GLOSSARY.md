@@ -16,6 +16,14 @@ a new concept gets its line here first.
 | **Splice** | Inserting a node into an existing sequence flow. |
 | **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/plane.ts`). |
 | **Checkpoint** | A saved state of a plane, to try a change and undo it (`diagram/PlaneCheckpoint.ts`). |
+| **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`diagram/Drawing.ts`). |
+| **Frame** | A pool, lane or expanded sub-process: a shape that holds other shapes (`diagram/FrameEditor.ts` draws, removes, collapses and expands them). |
+| **Space tool** | The modeler's tool that moves everything beyond a line to make or close room, growing the frames it crosses (`diagram/SpaceTool.ts`). |
+| **Separation** | Local overlap removal: the shapes that conflict with new or moved ones give way (`diagram/Separation.ts`). |
+| **Edge router** | Routes and repairs single connections of a kept drawing with the BPMN side conventions (`diagram/EdgeRouter.ts`). |
+| **Label placer** | Puts external labels on the first free spot around their shape or flow (`diagram/LabelPlacer.ts`). |
+| **Trial** | A change of the drawing that is measured and kept only when it makes the layout no worse (`diagram/TrialGuard.ts`). |
+| **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`diagram/DrawingSnapshot.ts`). |
 | **Layout mode** | How a write updates the drawing: `full` redraws, `incremental` keeps a hand-made drawing and places only what changed. |
 | **Engine** | A layout engine: the clean engine redraws, the incremental engine keeps a drawing. |
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |

@@ -16,7 +16,7 @@
  *  keep the drawing's gap. A region without content is one strip.
  *
  *  compactPlane(plane, opts) closes the empty strips of every frame of the
- *  plane, inside out, each strip with diagram/space.ts closeStrip (which checks again
+ *  plane, inside out, each strip with diagram/SpaceTool.ts closeStrip (which checks again
  *  that nothing is in the way), far strips first:
  *   1. expanded sub-processes, deepest first: columns, then rows, with
  *      everything outside the sub-process kept where it is (the sub-process
@@ -46,10 +46,11 @@
  *  60) on y. Strips with less than 10 px to gain are left alone.
  */
 import { bottom, right, type Box } from '../diagram/utils/geom.js';
-import { spacingOf } from '../diagram/place.js';
-import { inFrame, isLeaf, raw, type DEdge, type DShape, type Plane } from '../diagram/plane.js';
-import { closeStrip, type Axis, type SpaceResult } from '../diagram/space.js';
+import { spacingOf, inFrame, isLeaf, raw } from '../diagram/utils/plane.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
+import type { Axis, SpaceResult } from '../diagram/SpaceTool.js';
 import { titleDepth } from '../diagram/utils/text.js';
+import { Drawing } from '../diagram/Drawing.js';
 
 /** padding kept between a frame's border and its content */
 export const PAD = 30;
@@ -210,14 +211,14 @@ export function looseEdges(plane: Plane): Set<string> {
 }
 
 /**
- * Closes one empty strip with diagram/space.ts closeStrip (which checks that nothing
+ * Closes one empty strip with diagram/SpaceTool.ts closeStrip (which checks that nothing
  * is in the way); message flows do not count, their bends and labels inside
  * the strip are squeezed into the room it keeps.
  */
 export function closeEmpty(plane: Plane, axis: Axis, st: Strip, within?: Box, keep?: ReadonlySet<string>): SpaceResult | undefined {
   const loose = looseEdges(plane);
   const touched = [...plane.edges.values()].filter((e) => loose.has(e.id) && touches(e, axis, st, within));
-  const r = closeStrip(plane, { axis, from: st.from, to: st.to, gap: st.keep, ignore: loose, ...(within ? { within: { ...within } } : {}), ...(keep ? { keep } : {}) });
+  const r = new Drawing(plane).closeStrip({ axis, from: st.from, to: st.to, gap: st.keep, ignore: loose, ...(within ? { within: { ...within } } : {}), ...(keep ? { keep } : {}) });
   if (r) for (const e of touched) squeeze(e, axis, st, within);
   return r;
 }

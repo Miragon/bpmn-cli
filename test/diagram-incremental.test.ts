@@ -14,8 +14,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { detachedEnds } from '../src/diagram/reroute.js';
+import { readPlanes } from '../src/diagram/plane.js';
+import { type DEdge, type DShape } from '../src/diagram/types.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
@@ -670,7 +671,7 @@ function flowFrom(doc: Doc, source: string, target: string): string {
 
 /** The edges that do not reach their ends (reroute.ts detachedEnds), with the ends they miss. */
 function detached(doc: Doc): string[] {
-  return readPlanes(doc.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length).map((e) => `${e.id}->${detachedEnds(p, e).join(',')}`));
+  return readPlanes(doc.definitions).flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length).map((e) => `${e.id}->${new Drawing(p).detachedEnds(e).join(',')}`));
 }
 
 /** `xml` with the waypoints of the edge of `flow` moved by (dx, dy): the line no longer reaches its ends. */

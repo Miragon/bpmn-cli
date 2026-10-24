@@ -61,10 +61,10 @@
  *      between the pools) makes room: its content moves down by the
  *      difference, at most by the depth the title gained, and it grows
  *      (space tool at its top in frame mode, a note says so)
- *   7. local overlap removal around everything placed or moved (diagram/separate.ts)
+ *   7. local overlap removal around everything placed or moved (diagram/Separation.ts)
  *   8. connections: new ones are routed, kept ones are rerouted only when an
  *      end changed, was placed or moved away from it, or when they now cut a
- *      shape (diagram/reroute.ts); connections entirely inside a shifted region were
+ *      shape (diagram/EdgeRouter.ts); connections entirely inside a shifted region were
  *      translated by the space tool. A connection routed during step 6 is
  *      routed again only when it broke since (like a flow an earlier single
  *      command drew); an existing one counts as rerouted
@@ -72,7 +72,7 @@
  *      a kept label a new line runs over or a grown activity covers steps
  *      aside (and the label of a boundary event the placement moved to its
  *      host's top border), and so does a label now on the title of an
- *      expanded sub-process that it was clear of before the ops (diagram/labels.ts
+ *      expanded sub-process that it was clear of before the ops (diagram/LabelPlacer.ts
  *      clearTitles: room made in a sub-process moves its centred title by
  *      half the added width, a label beyond the line by all of it; a renamed
  *      title can be wider), unless its new spot is on a title too or outside
@@ -93,7 +93,7 @@
  *  removed elements is pruned there too, and so is the edge of a flow whose
  *  ends changed (pruneReEnded: it would show the old ends; a note names
  *  them). A kept connection that does not reach an end of its own
- *  (diagram/reroute.ts detachedEnds: left at the end's old place by another tool or
+ *  (diagram/EdgeRouter.ts detachedEnds: left at the end's old place by another tool or
  *  an older --no-layout write) counts as broken in step 8 and is rerouted,
  *  whatever it looked like before; not on a plane with vertical pools /
  *  lanes, where nothing is routed (it stays as drawn there).
@@ -118,19 +118,21 @@ import { layoutClean } from './clean/engine.js';
 import { SIZES } from '../diagram/utils/sizes.js';
 import { is, layoutRoot, parseXml, type El } from '../model/utils/moddle.js';
 import { successorOf } from '../model/change-set.js';
-import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from '../diagram/containers.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, polylinesCross, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/utils/geom.js';
-import { clearTitles, hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from '../diagram/labels.js';
-import { layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
-import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from '../diagram/place.js';
-import { boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, readPlanes, semantics, titleOf, type DEdge, type DShape, type Plane, type Semantics } from '../diagram/plane.js';
-import { brokenEdge, DETACHED_GAP, detachedEnds, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from '../diagram/reroute.js';
-import { separate } from '../diagram/separate.js';
-import { attachedSide } from '../diagram/router.js';
-import { closeStrip, fitInFrame, makeSpace } from '../diagram/space.js';
+import { hasExternalLabel } from '../diagram/utils/labels.js';
+import { isHardProblem, layoutProblems, problemKey, type LayoutMetrics } from '../diagram/metrics.js';
+import { changeLane, placeArtifact, placeFlowNodes, predecessors, successors, newShape, type PlaceCtx } from '../diagram/place.js';
+import { spacingOf, type Spacing, boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, titleOf } from '../diagram/utils/plane.js';
+import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
+import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
+import { DETACHED_GAP, type EdgeBefore } from '../diagram/EdgeRouter.js';
+import { attachedSide } from '../diagram/utils/sides.js';
 import { activitySize, BOTTOM_ROOM, titleBox } from '../diagram/utils/text.js';
 import { pruneDi, pruneEdges, writePlanes } from '../diagram/write.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
+import { Drawing } from '../diagram/Drawing.js';
+import type { SpaceResult } from '../diagram/SpaceTool.js';
+import { TrialGuard, type TrialPolicy } from '../diagram/TrialGuard.js';
 
 /* ------------------------------------------------------------------ */
 /* snapshot                                                             */
@@ -583,6 +585,11 @@ interface Ctx {
   notes: string[];
 }
 
+/** The drawing of a plane in this run: what its frame edits move goes into the run's moved shapes. */
+function drawingOf(ctx: Ctx, plane: Plane): Drawing {
+  return new Drawing(plane, ctx.place.moved);
+}
+
 /** The id an element had before the ops (its DI is the same object even when `set id=` renamed it). */
 function oldId(ctx: Ctx, x: DShape | DEdge): string {
   return (x.di && ctx.snap.byDi.get(x.di)?.id) || x.id;
@@ -644,11 +651,11 @@ function removedAndRelocated(ctx: Ctx, relocated: Set<string>): Array<{ plane: P
     const plane = planeOfDi(ctx.planes, entry.planeDi);
     if (!plane) continue;
     if (entry.kind === 'lane') {
-      removedLane(plane, entry.bounds, entry.poolId, entry.laneId, ctx.place.moved);
+      drawingOf(ctx, plane).removedLane(entry.bounds, entry.poolId, entry.laneId);
       continue;
     }
     if (entry.kind === 'participant') {
-      removedPool(plane, entry.bounds, ctx.place.moved);
+      drawingOf(ctx, plane).removedPool(entry.bounds);
       continue;
     }
     const flowNode = ['task', 'subProcess', 'event', 'gateway'].includes(entry.kind);
@@ -713,7 +720,7 @@ function closeStrips(ctx: Ctx, strips: Array<{ plane: Plane; box: Box; poolId?: 
     // nothing to pull back: leave the frame as it is
     const beyond = [...st.plane.shapes.values()].some((s) => isLeaf(s) && s.bounds.x >= to && (!band || (cy(s.bounds) >= band.y && cy(s.bounds) <= band.y + band.height)) && !keep?.has(s.id));
     if (!beyond) continue;
-    const r = closeStrip(st.plane, { axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
+    const r = drawingOf(ctx, st.plane).closeStrip({ axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
     if (LayoutDebug.on()) LayoutDebug.log(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${r ? `closed, moved ${[...r.moved].join(',')}` : 'kept'}`);
     if (r) r.moved.forEach((x) => ctx.place.moved.add(x));
   }
@@ -729,7 +736,7 @@ function closeStrips(ctx: Ctx, strips: Array<{ plane: Plane; box: Box; poolId?: 
  * stays beyond the strip in the frame (what a full close would have moved
  * along) or to an artifact that stays.
  */
-function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: number, to: number, gap: number, ignore: ReadonlySet<string>): ReturnType<typeof closeStrip> {
+function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: number, to: number, gap: number, ignore: ReadonlySet<string>): SpaceResult | undefined {
   const pad = 10;
   const fb = frame?.bounds;
   const row: Box = { x: fb ? fb.x : -1e7, y: box.y - pad, width: fb ? fb.width : 2e7, height: box.height + 2 * pad };
@@ -738,7 +745,7 @@ function closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: numbe
   const end = Math.min(to, ...onRow.filter((s) => s.bounds.x >= right(box) - 1).map((s) => s.bounds.x));
   if (!onRow.some((s) => s.bounds.x >= end - 3)) return undefined;
   const saved = new PlaneCheckpoint(plane);
-  const r = closeStrip(plane, { axis: 'x', from, to: end, gap, ignore, within: row });
+  const r = new Drawing(plane).closeStrip({ axis: 'x', from, to: end, gap, ignore, within: row });
   if (!r) return undefined;
   const leaves = [...plane.shapes.values()].filter(isLeaf);
   const before = (s: DShape): Box => saved.boundsOf(s);
@@ -783,12 +790,12 @@ function shrinkRetyped(ctx: Ctx, plane: Plane, s: DShape): void {
   s.bounds = { x: before.x, y: Math.round(cy(before) - SIZES.task.height / 2), ...SIZES.task };
   s.di.set('isExpanded', undefined);
   s.container = false;
-  reseatBoundaries(plane, s, before, ctx.place.moved);
+  drawingOf(ctx, plane).reseatBoundaries(s, before);
   ctx.active.add(s.id);
   const sp = ctx.place.spacing.get(plane) ?? spacingOf(plane);
   const band = s.poolId ? plane.shapes.get(s.poolId)?.bounds : undefined;
   const own = new Set([...plane.edges.values()].filter((e) => e.sourceId === s.id || e.targetId === s.id).map((e) => e.id));
-  const r = closeStrip(plane, { axis: 'x', from: right(s.bounds), to: right(before) + sp.gap, gap: sp.gap, ignore: own, ...(band ? { within: { ...band } } : {}) });
+  const r = drawingOf(ctx, plane).closeStrip({ axis: 'x', from: right(s.bounds), to: right(before) + sp.gap, gap: sp.gap, ignore: own, ...(band ? { within: { ...band } } : {}) });
   r?.moved.forEach((x) => ctx.place.moved.add(x));
   own.forEach((id) => ctx.reroute.add(id));
 }
@@ -813,9 +820,9 @@ function applyExpansion(ctx: Ctx, opts: IncrementalOptions): void {
           child = { id: `BPMNPlane_${s.id}`, rootId: s.id, root: s.el, shapes: new Map(), edges: new Map(), dropped: [] };
           ctx.planes.push(child);
         }
-        collapse(plane, s, child, sp.gap, ctx.place.moved);
+        drawingOf(ctx, plane).collapse(s, child, sp.gap);
       } else {
-        expand(plane, s, ctx.planes.find((p) => p.rootId === s.id), ctx.sem, ctx.place.moved);
+        drawingOf(ctx, plane).expand(s, ctx.planes.find((p) => p.rootId === s.id), ctx.sem);
       }
       ctx.active.add(s.id);
       for (const e of plane.edges.values()) if (e.sourceId === s.id || e.targetId === s.id) ctx.reroute.add(e.id);
@@ -837,8 +844,8 @@ async function placeContainers(ctx: Ctx, wrapped: string | undefined, blocks: ()
       // a new pool whose process has content: the engine lays that content out as one block
       const content = id !== wrapped && proc ? rawList(proc, 'flowElements').filter(isFlowNode) : [];
       const block = content.length ? blockOf(await blocks(), id, true) : undefined;
-      if (id === wrapped) wrapPool(plane, s);
-      else placePool(plane, s, !proc, block ? { width: block.box.width, height: block.box.height } : undefined);
+      if (id === wrapped) drawingOf(ctx, plane).wrapPool(s);
+      else drawingOf(ctx, plane).placePool(s, !proc, block ? { width: block.box.width, height: block.box.height } : undefined);
       plane.shapes.set(id, s);
       if (block) adoptBlock(ctx, plane, block, s.bounds.x - block.box.x, s.bounds.y - block.box.y);
       ctx.place.placed.add(id);
@@ -847,7 +854,7 @@ async function placeContainers(ctx: Ctx, wrapped: string | undefined, blocks: ()
       const plane = homePlane(ctx.planes, ctx.sem, id);
       if (!plane) continue;
       const s = newShape(ctx.place, plane, id, { x: 0, y: 0, width: 0, height: 0 });
-      if (!placeLane(plane, s, ctx.place.moved)) {
+      if (!drawingOf(ctx, plane).placeLane(s)) {
         ctx.notes.push(`lane ${id} not drawn: its process has no pool in the diagram`);
         continue;
       }
@@ -1034,22 +1041,20 @@ function routeNow(ctx: Ctx, plane: Plane, id: string): void {
     // an end that changes later (a flow into a node still to be placed) is routed when that node is placed
     if (ends.sourceId !== e.sourceId || ends.targetId !== e.targetId || !plane.shapes.has(e.sourceId) || !plane.shapes.has(e.targetId)) continue;
     const was = ctx.routedNow.get(e.id) ?? ctx.edgesBefore.get(e);
-    if (!was || (!brokenEdge(plane, e, was, { detached }) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
+    if (!was || (!drawingOf(ctx, plane).brokenEdge(e, was, { detached }) && !(ctx.place.continued?.has(id) && grazes(plane, e, [id])))) continue;
     if (LayoutDebug.on()) LayoutDebug.log(`[route] ${e.id}: broken when ${id} was placed`);
     routeKept(ctx, plane, e);
   }
-  if (!s.label && hasExternalLabel(s) && raw<string>(el, 'name')) placeShapeLabel(plane, s);
+  if (!s.label && hasExternalLabel(s) && raw<string>(el, 'name')) drawingOf(ctx, plane).placeShapeLabel(s);
   // the next command would measure the drawing's gap and row spacing again, with these flows
   ctx.place.spacing.set(plane, spacingOf(plane));
 }
 
 /** Routes a connection during placement (routeNow) and records its state then. */
 function routeKept(ctx: Ctx, plane: Plane, e: DEdge): void {
-  const pts = routeEdge(plane, e, { lines: routingLines(plane, e.id) });
-  if (!pts || pts.length < 2) return;
-  e.points = pts;
-  if (e.label || raw<string>(e.el, 'name')) placeEdgeLabel(plane, e);
-  ctx.routedNow.set(e.id, edgeBefore(plane, e));
+  const drawing = drawingOf(ctx, plane);
+  if (!drawing.reroute(e)) return;
+  ctx.routedNow.set(e.id, drawing.edgeBefore(e));
 }
 
 /** Room kept free below an activity's text for what sits on its bottom border: a marker, boundary events. */
@@ -1081,7 +1086,7 @@ function growForTitle(ctx: Ctx, plane: Plane, s: DShape): void {
   if (!boxes.length) return;
   const delta = Math.ceil(Math.min(gained, bottom(title) + 4 - Math.min(...boxes.map((b) => b.y))));
   if (delta <= 0) return;
-  const r = makeSpace(plane, { axis: 'y', line: s.bounds.y + 1, delta, anchors: [s.id], frame: s.id, within: copyBox(s.bounds) });
+  const r = drawingOf(ctx, plane).makeSpace({ axis: 'y', line: s.bounds.y + 1, delta, anchors: [s.id], frame: s.id, within: copyBox(s.bounds) });
   for (const x of [...r.moved, ...r.resized]) ctx.place.moved.add(x);
   ctx.place.moved.add(s.id);
   ctx.notes.push(`${s.id} made ${delta} px of room below its new title`);
@@ -1112,10 +1117,10 @@ function growForNames(ctx: Ctx): void {
         const lefts = next.flatMap((o) => [o.bounds.x, ...(o.label && onRow(o.label) && right(o.label) > right(old) ? [Math.max(right(old), o.label.x)] : [])]);
         const free = Math.min(Infinity, ...lefts.map((x) => x - right(old)));
         if (free - dw < Math.min(sp.gap, 40)) {
-          // inside a sub-process: frame mode, it never grows over foreign shapes (diagram/space.ts)
+          // inside a sub-process: frame mode, it never grows over foreign shapes (diagram/SpaceTool.ts)
           const sub = s.parentId ? plane.shapes.get(s.parentId) : undefined;
           const frame = sub ?? (s.poolId ? plane.shapes.get(s.poolId) : undefined);
-          const r = makeSpace(plane, { axis: 'x', line: right(old) + 0.5, delta: dw, keep: own, anchors: [s.id], ...(frame ? { within: copyBox(frame.bounds) } : {}), ...(sub ? { frame: sub.id } : {}) });
+          const r = drawingOf(ctx, plane).makeSpace({ axis: 'x', line: right(old) + 0.5, delta: dw, keep: own, anchors: [s.id], ...(frame ? { within: copyBox(frame.bounds) } : {}), ...(sub ? { frame: sub.id } : {}) });
           for (const x of [...r.moved, ...r.resized]) ctx.place.moved.add(x);
         }
       }
@@ -1124,8 +1129,8 @@ function growForNames(ctx: Ctx): void {
       const frame = frameOf(plane, s);
       const inner = frame ? frameInterior(frame, 15) : undefined;
       if (inner && s.bounds.y < inner.y) s.bounds.y = Math.round(inner.y);
-      reseatBoundaries(plane, s, old, ctx.place.moved);
-      for (const x of fitInFrame(plane, s.id, 15).moved) ctx.place.moved.add(x);
+      drawingOf(ctx, plane).reseatBoundaries(s, old);
+      for (const x of drawingOf(ctx, plane).fitInFrame(s.id, 15).moved) ctx.place.moved.add(x);
       ctx.active.add(s.id);
       ctx.place.moved.add(s.id);
       ctx.grown.add(s.id);
@@ -1145,7 +1150,7 @@ function separateAll(ctx: Ctx): void {
     if (!active.length) continue;
     const movable = new Set(active);
     for (const id of active) for (const n of neighbourIds(ctx, id)) if (plane.shapes.has(n)) movable.add(n);
-    const r = separate(plane, { active: [...active].filter((id) => ctx.place.placed.has(id) || ctx.active.has(id)), movable, baseline: ctx.baseline });
+    const r = drawingOf(ctx, plane).separate({ active: [...active].filter((id) => ctx.place.placed.has(id) || ctx.active.has(id)), movable, baseline: ctx.baseline });
     r.moved.forEach((x) => ctx.place.moved.add(x));
     r.resized.forEach((x) => ctx.place.moved.add(x));
     if (r.unresolved.length) ctx.notes.push(`overlap left: ${r.unresolved.map(([a, b]) => `${a}~${b}`).join(', ')}`);
@@ -1205,7 +1210,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
       const now = ctx.routedNow.get(e.id);
       if (now) {
         const ends = edgeEnds(e.el);
-        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !brokenEdge(plane, e, now, { detached }) && !grazes(plane, e, ctx.place.continued)) continue;
+        if (ends.sourceId === e.sourceId && ends.targetId === e.targetId && e.points.length >= 2 && !drawingOf(ctx, plane).brokenEdge(e, now, { detached }) && !grazes(plane, e, ctx.place.continued)) continue;
         ctx.reroute.add(e.id);
         if (LayoutDebug.on()) LayoutDebug.log(`[route] ${e.id}: broken after it was routed`);
         continue;
@@ -1224,7 +1229,7 @@ function collectEdges(ctx: Ctx, before: Map<DEdge, EdgeBefore>): void {
           ? 'ends changed'
           : (e.sourceId && ctx.place.placed.has(e.sourceId)) || (e.targetId && ctx.place.placed.has(e.targetId))
             ? 'end placed'
-            : brokenEdge(plane, e, before.get(e), { detached })
+            : drawingOf(ctx, plane).brokenEdge(e, before.get(e), { detached })
               ? 'broken'
               : grazes(plane, e, ctx.place.continued)
                 ? 'runs along a new shape'
@@ -1267,13 +1272,14 @@ function routeAll(ctx: Ctx): string[] {
   const rerouted: string[] = [];
   for (const plane of ctx.planes) {
     // message flows after the sequence flows (they cross the pools and should see the final sequence flows), connections docked on a connection last
-    const pending = [...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)).sort((a, b) => routeRank(plane, a) - routeRank(plane, b));
+    const drawing = drawingOf(ctx, plane);
+    const pending = drawing.routeOrder([...plane.edges.values()].filter((e) => ctx.reroute.has(e.id)));
     const waiting = new Set(pending.map((e) => e.id));
     for (const e of pending) {
-      const lines = routingLines(plane, e.id).filter((l) => ![...waiting].some((id) => plane.edges.get(id)?.points === l));
-      const pts = routeEdge(plane, e, { lines });
+      const lines = drawing.routingLines(e.id).filter((l) => ![...waiting].some((id) => plane.edges.get(id)?.points === l));
+      const routed = drawing.reroute(e, { lines });
       waiting.delete(e.id);
-      if (!pts || pts.length < 2) {
+      if (!routed) {
         if (!e.points.length) {
           plane.edges.delete(e.id);
           ctx.newEdges.delete(e.id);
@@ -1281,8 +1287,6 @@ function routeAll(ctx: Ctx): string[] {
         }
         continue;
       }
-      e.points = pts;
-      if (e.label || raw<string>(e.el, 'name')) placeEdgeLabel(plane, e);
       if (!ctx.newEdges.has(e.id)) rerouted.push(e.id);
     }
   }
@@ -1297,31 +1301,31 @@ function labels(ctx: Ctx, routed: ReadonlySet<string>): void {
     for (const s of plane.shapes.values()) {
       if (ctx.fromEngine.has(s.id)) continue;
       if ((ctx.place.placed.has(s.id) && !s.label) || (ctx.place.relabel?.has(s.id) && hasExternalLabel(s))) {
-        placeShapeLabel(plane, s);
+        drawingOf(ctx, plane).placeShapeLabel(s);
         continue;
       }
       if (s.label && hasExternalLabel(s) && fresh.some(([p, q]) => segmentHits(p, q, s.label!, 1))) {
-        placeShapeLabel(plane, s);
+        drawingOf(ctx, plane).placeShapeLabel(s);
         ctx.notes.push(`label of ${s.id} moved off a new line`);
         continue;
       }
       if (s.label && hasExternalLabel(s) && grown.some((g) => g !== s && overlaps(s.label!, g.bounds))) {
-        placeShapeLabel(plane, s);
+        drawingOf(ctx, plane).placeShapeLabel(s);
         ctx.notes.push(`label of ${s.id} moved off a grown shape`);
         continue;
       }
       const before = ctx.snap.names.get(oldId(ctx, s));
       const now = raw<string>(s.el, 'name');
-      if (now && now !== before) refitLabel(plane, s);
+      if (now && now !== before) drawingOf(ctx, plane).refitLabel(s);
     }
     for (const e of plane.edges.values()) {
       if (ctx.fromEngine.has(e.id) || ctx.reroute.has(e.id)) continue;
       const before = ctx.snap.names.get(oldId(ctx, e));
       const now = raw<string>(e.el, 'name');
-      if (now && now !== before) refitLabel(plane, e);
+      if (now && now !== before) drawingOf(ctx, plane).refitLabel(e);
     }
     // a label now on the title of an expanded sub-process that it was clear of (room made under it, a wider new title)
-    for (const [id, sub] of clearTitles(plane, (o, sub) => !ctx.fromEngine.has(o.id) && clearOfOldTitle(ctx, o, sub))) ctx.notes.push(`label of ${id} moved off the name of ${sub}`);
+    for (const [id, sub] of drawingOf(ctx, plane).clearTitles((o, sub) => !ctx.fromEngine.has(o.id) && clearOfOldTitle(ctx, o, sub))) ctx.notes.push(`label of ${id} moved off the name of ${sub}`);
   }
 }
 
@@ -1342,8 +1346,6 @@ function clearOfOldTitle(ctx: Ctx, owner: DShape | DEdge, sub: DShape): boolean 
 const REPAIR_TRIALS = 8;
 /** of them at most this many chains placed again (each draws the new elements again) */
 const CHAIN_RETRIES = 2;
-
-const isHardProblem = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
 
 /** Every crossing between a connection drawn in this run and an existing one: [new, existing, plane]. */
 function newCrossings(ctx: Ctx): Array<[DEdge, DEdge, Plane]> {
@@ -1533,8 +1535,7 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
   if (!newCrossings(ctx).length) return rerouted;
   let trials = 0;
   let retries = 0;
-  let base: LayoutMetrics | undefined;
-  let hard: Map<string, number> | undefined;
+  let guard: TrialGuard | undefined;
   const measure = (): LayoutMetrics => {
     writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
     return layoutProblems(ctx.doc.definitions);
@@ -1543,38 +1544,23 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
   // before this run (counted together: a reroute must not trade a crossing with a new connection for one among the
   // hand-drawn lines; a chain drawn again may cross another pair of them, not more)
   const DRAWN = 'crossings among drawn lines';
-  const hardCounts = (m: LayoutMetrics): Map<string, number> => {
-    const out = new Map<string, number>();
-    for (const p of m.problems) {
-      const key = isHardProblem(p) ? problemKey(p) : p.kind === 'crossings' && p.ids.every((id) => !ctx.newEdges.has(id)) ? DRAWN : undefined;
-      if (key) out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-  };
+  const policy: TrialPolicy = { key: (p) => (isHardProblem(p) ? problemKey(p) : p.kind === 'crossings' && p.ids.every((id) => !ctx.newEdges.has(id)) ? DRAWN : undefined), lower: true, rebase: true };
   const ensureBase = (): void => {
-    if (base) return;
-    base = measure();
-    hard = hardCounts(base);
+    guard ??= new TrialGuard(measure, policy);
   };
   /** the guard: measures the drawing; true (and the new baseline) when it lowered the score and added nothing guarded */
   const judge = (what: string): boolean => {
-    const m = measure();
-    const now = hardCounts(m);
-    const added = [...now].filter(([k, c]) => c > (hard!.get(k) ?? 0)).map(([k]) => k);
-    const ok = !added.length && m.score < base!.score;
-    if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${what}: score ${base!.score} -> ${m.score}${added.length ? `, added ${added.join(' ')}` : ''}: ${ok ? 'kept' : 'undone'}`);
-    if (ok) {
-      base = m;
-      hard = now;
-    }
-    return ok;
+    const v = guard!.judge();
+    if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${what}: score ${v.before} -> ${v.after}${v.addedKeys.length ? `, added ${v.addedKeys.join(' ')}` : ''}: ${v.ok ? 'kept' : 'undone'}`);
+    return v.ok;
   };
   const reroutes = (list: string[]): void => {
     for (const [n, e, plane] of newCrossings(ctx)) {
       if (!polylinesCross(n.points, e.points)) continue;
       for (const target of [n, e]) {
         if (trials >= REPAIR_TRIALS) return;
-        const pts = routeEdge(plane, target, { lines: routingLines(plane, target.id) });
+        const drawing = drawingOf(ctx, plane);
+        const pts = drawing.route(target, { lines: drawing.routingLines(target.id) });
         if (!pts || pts.length < 2 || samePoints(pts, target.points)) continue;
         // not measured: a route that still crosses the line it is tried for, or (an existing connection) that crosses
         // another drawn line it did not cross before (the guard would undo it)
@@ -1586,8 +1572,7 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
         trials++;
         ensureBase();
         const old = { points: target.points, label: target.label ? copyBox(target.label) : undefined };
-        target.points = pts;
-        if (target.label || raw<string>(target.el, 'name')) placeEdgeLabel(plane, target);
+        drawing.adoptRoute(target, pts);
         if (!judge(`${target.id} routed again (it crossed: ${n.id} x ${e.id})`)) {
           target.points = old.points;
           if (old.label) target.label = old.label;
@@ -1779,8 +1764,8 @@ export async function layoutIncremental(doc: Doc, snap: Snapshot, opts: Incremen
   for (const plane of planes) {
     const vertical = !!verticalBand(plane);
     for (const e of plane.edges.values()) {
-      before.set(e, edgeBefore(plane, e));
-      const ends = vertical ? [] : detachedEnds(plane, e);
+      before.set(e, drawingOf(ctx, plane).edgeBefore(e));
+      const ends = vertical ? [] : drawingOf(ctx, plane).detachedEnds(e);
       if (ends.length && !(e.di && changedEnds(snap, e.di).length)) detached.set(e.id, ends);
     }
   }

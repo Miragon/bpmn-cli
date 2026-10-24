@@ -17,7 +17,8 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
+import { readPlanes } from '../src/diagram/plane.js';
+import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';

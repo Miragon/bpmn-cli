@@ -26,17 +26,18 @@
  *   - colors: every coloured shape / edge with its swatch name (diagram/write.ts
  *     SWATCHES) or 'custom' plus the raw fill / stroke.
  *   - labels: external labels (events, gateways, data, flows) that are not on
- *     the default side (diagram/labels.ts defaultLabelSide; flows: above), with the
+ *     the default side (diagram/utils/labels.ts defaultLabelSide; flows: above), with the
  *     side they are on.
  *   - metrics: layoutProblems(defs) (counts, score, problems with ids).
  *  Read-only.
  */
 import { is, type El } from '../model/utils/moddle.js';
 import { cx, cy, median, right } from '../diagram/utils/geom.js';
-import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type LabelSide } from '../diagram/labels.js';
+import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type LabelSide } from '../diagram/utils/labels.js';
 import { layoutProblems, type LayoutMetrics } from '../diagram/metrics.js';
-import { spacingOf } from '../diagram/place.js';
-import { raw, readPlanes, semantics, type DShape, type Plane } from '../diagram/plane.js';
+import { spacingOf, raw } from '../diagram/utils/plane.js';
+import { readPlanes, semantics } from '../diagram/plane.js';
+import type { DShape, Plane } from '../diagram/types.js';
 import { swatchOf, type SwatchName } from '../diagram/write.js';
 
 export interface LayoutGroup {

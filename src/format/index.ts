@@ -31,7 +31,7 @@
  *   - color: a SWATCHES colour (diagram/write.ts setSwatch) on shapes and edges;
  *     'default' removes every colour. The bioc / color namespaces are
  *     declared on the definitions when missing.
- *   - label: the external label box on one side of its element (diagram/labels.ts
+ *   - label: the external label box on one side of its element (diagram/LabelPlacer.ts
  *     labelOnSide: off lines, other labels and the titles of expanded
  *     sub-processes where possible, inside its frame below the title first;
  *     flows: edgeLabelAt), keeping the label's size. A label put above a
@@ -39,11 +39,11 @@
  *     title gets room at the top of the sub-process first (space tool in
  *     frame mode: the content moves down, the sub-process grows; a note
  *     says so).
- *   - route: one flow routed again (diagram/reroute.ts routeEdge), `exit` / `entry`
+ *   - route: one flow routed again (diagram/EdgeRouter.ts routeEdge), `exit` / `entry`
  *     forcing the side it leaves / enters by. A sequence or message flow
  *     without a connection whose two ends are drawn on one plane (added, or
  *     its ends changed, with --no-layout) gets one there.
- *   - space: the space tool (diagram/space.ts makeSpace) at the far edge of an
+ *   - space: the space tool (diagram/SpaceTool.ts makeSpace) at the far edge of an
  *     element: `after` moves everything starting right of it (within its
  *     pool), `below` everything starting below it; pools, lanes and the
  *     sub-processes holding the element grow where the line crosses them,
@@ -51,7 +51,7 @@
  *     (anchored at the element). On a pool or lane the line is just inside
  *     its far edge, so the frame itself grows. `by`: 'column' (median task width + gap, default
  *     for after), 'row' (row spacing, default for below) or pixels.
- *   - tidy: diagram/separate.ts tidy on the given shapes (default: every leaf shape
+ *   - tidy: diagram/Separation.ts tidy on the given shapes (default: every leaf shape
  *     of every diagram).
  *   - order (lanes): the lane bands of the owner follow the semantic lane
  *     order (ops/order.ts already reordered `laneSet.lanes`), stacked from
@@ -62,7 +62,7 @@
  *  frame's start (more than 10 px into a header), its centre in another lane or pool, or below a lane with a
  *  sibling lane underneath; past the right / bottom edge the frame grows
  *  (also for the shape's label). Then the moved shapes stay and the others
- *  give way (diagram/separate.ts), first with the references fixed, else with them
+ *  give way (diagram/Separation.ts), first with the references fixed, else with them
  *  movable too; moved shapes still in conflict give way along the axis the
  *  request leaves free. The request must hold afterwards (row / column /
  *  side of the reference), no sub-process may have grown over a reference,
@@ -73,12 +73,12 @@
  *  in has moved (a pool growing towards a reference in another pool would
  *  push that pool away), else E_NO_ROOM and nothing is written.
  *  After every geometric op: connections whose ends moved by the same
- *  offset are translated, connections now broken (diagram/reroute.ts brokenEdge)
+ *  offset are translated, connections now broken (diagram/EdgeRouter.ts brokenEdge)
  *  are routed again, named rerouted flows get their label placed again, a
  *  shape label a rerouted line runs over steps aside (keeping its side),
  *  and so does a label the op brought onto the title of an expanded
  *  sub-process that it was clear of before, to a spot off every title
- *  inside its sub-process or pool, else it stays (diagram/labels.ts clearTitles;
+ *  inside its sub-process or pool, else it stays (diagram/LabelPlacer.ts clearTitles;
  *  `space` widening a sub-process moves its centred title by half the
  *  added width).
  *  Result per op: {op, index, moved (shapes whose bounds changed), rerouted
@@ -105,19 +105,20 @@ import { is, type El } from '../model/utils/moddle.js';
 import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
 import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
-import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/utils/geom.js';
-import { clearTitles, edgeLabelAt, hasExternalLabel, labelArea, labelAt, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from '../diagram/labels.js';
-import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
-import { spacingOf } from '../diagram/place.js';
-import { edgeEnds, edgeKind, frameInterior, frameOf, homePlane, idOf, isLeaf, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from '../diagram/plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routeRank, routingLines, type EdgeBefore } from '../diagram/reroute.js';
-import { attachedSide, type Side } from '../diagram/router.js';
-import { separate, tidy } from '../diagram/separate.js';
-import { fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from '../diagram/space.js';
+import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, type Box, type Point } from '../diagram/utils/geom.js';
+import { edgeLabelAt, hasExternalLabel, labelArea, labelAt } from '../diagram/utils/labels.js';
+import { isHardProblem, layoutProblems, problemKey, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
+import { spacingOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, isLeaf, raw, rawList } from '../diagram/utils/plane.js';
+import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
+import type { DEdge, DShape, Plane, Semantics, Side } from '../diagram/types.js';
+import { attachedSide } from '../diagram/utils/sides.js';
 import { selection } from '../query/select.js';
-import { titleBox } from '../diagram/utils/text.js';
+import { labelSize } from '../diagram/utils/text.js';
 import { setSwatch, writePlanes } from '../diagram/write.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
+import { Drawing } from '../diagram/Drawing.js';
+import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { TrialGuard, type TrialPolicy } from '../diagram/TrialGuard.js';
 
 export interface FormatResult {
   op: FormatOp['op'] | 'order';
@@ -253,123 +254,6 @@ function outermost(plane: Plane, shapes: DShape[]): DShape[] {
 /* snapshot and settling                                                */
 /* ------------------------------------------------------------------ */
 
-interface Snap {
-  bounds: Map<string, Box>;
-  points: Map<string, Point[]>;
-  edges: Map<DEdge, EdgeBefore>;
-  /** external labels of shapes and connections, by element id */
-  labels: Map<string, Box>;
-}
-
-function snapshot(planes: readonly Plane[]): Snap {
-  const out: Snap = { bounds: new Map(), points: new Map(), edges: new Map(), labels: new Map() };
-  for (const plane of planes) {
-    for (const s of plane.shapes.values()) {
-      out.bounds.set(s.id, copyBox(s.bounds));
-      if (s.label) out.labels.set(s.id, copyBox(s.label));
-    }
-    for (const e of plane.edges.values()) {
-      out.points.set(e.id, copyPoints(e.points));
-      out.edges.set(e, edgeBefore(plane, e));
-      if (e.label) out.labels.set(e.id, copyBox(e.label));
-    }
-  }
-  return out;
-}
-
-function changedShapes(planes: readonly Plane[], snap: Snap): string[] {
-  const out: string[] = [];
-  for (const plane of planes) {
-    for (const s of plane.shapes.values()) {
-      const b = snap.bounds.get(s.id);
-      if (b && !sameBox(b, s.bounds)) out.push(s.id);
-    }
-  }
-  return out;
-}
-
-function changedEdges(planes: readonly Plane[], snap: Snap): string[] {
-  const out: string[] = [];
-  for (const plane of planes) {
-    for (const e of plane.edges.values()) {
-      const p = snap.points.get(e.id);
-      if (p && !samePoints(p, e.points)) out.push(e.id);
-    }
-  }
-  return out;
-}
-
-/** Shape labels a fresh line runs over step aside, keeping their side. */
-function clearLabels(plane: Plane, fresh: readonly DEdge[]): void {
-  const segs = fresh.flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i]!, q] as const));
-  if (!segs.length) return;
-  for (const s of plane.shapes.values()) {
-    if (!s.label || !hasExternalLabel(s) || !segs.some(([p, q]) => segmentHits(p, q, s.label!, 1))) continue;
-    const host = s.hostId ? plane.shapes.get(s.hostId)?.bounds : undefined;
-    const side = labelSideOf(s, host);
-    placeShapeLabel(plane, s, side === 'inside' ? undefined : side);
-  }
-}
-
-/** Routes one connection again (with its label); false when an end has no shape. */
-function reroute(plane: Plane, e: DEdge, sides: { sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
-  const pts = routeEdge(plane, e, { lines: routingLines(plane, e.id), ...sides });
-  if (!pts || pts.length < 2) return false;
-  e.points = pts;
-  if (e.label || raw<string>(e.el, 'name')) placeEdgeLabel(plane, e);
-  return true;
-}
-
-/** Whether a label was clear of the title of an expanded sub-process before the op (snapshot bounds; a format op renames nothing). */
-function clearBefore(snap: Snap, owner: DShape | DEdge, sub: DShape): boolean {
-  const label = snap.labels.get(owner.id);
-  const bounds = snap.bounds.get(sub.id);
-  const title = bounds ? titleBox(bounds, raw<string>(sub.el, 'name')) : undefined;
-  return !label || !title || !overlaps(label, title);
-}
-
-/**
- * After shapes moved on `plane`: connections whose ends moved by the same
- * offset are translated, broken ones routed again, labels cleared, also off
- * the titles of expanded sub-processes (see module contract). Returns the
- * rerouted connection ids.
- */
-function settle(plane: Plane, snap: Snap): string[] {
-  const delta = new Map<string, { dx: number; dy: number }>();
-  for (const s of plane.shapes.values()) {
-    const b = snap.bounds.get(s.id);
-    if (!b || Math.abs(b.width - s.bounds.width) > 0.5 || Math.abs(b.height - s.bounds.height) > 0.5) continue;
-    const dx = s.bounds.x - b.x;
-    const dy = s.bounds.y - b.y;
-    if (dx || dy) delta.set(s.id, { dx, dy });
-  }
-  for (const e of plane.edges.values()) {
-    const old = snap.points.get(e.id);
-    if (!old || !samePoints(old, e.points)) continue;
-    const a = e.sourceId ? delta.get(e.sourceId) : undefined;
-    const b = e.targetId ? delta.get(e.targetId) : undefined;
-    if (!a || !b || a.dx !== b.dx || a.dy !== b.dy) continue;
-    for (const p of e.points) {
-      p.x += a.dx;
-      p.y += a.dy;
-    }
-    if (e.label) {
-      e.label.x += a.dx;
-      e.label.y += a.dy;
-    }
-  }
-  const rerouted: DEdge[] = [];
-  // sequence flows first, message flows next (they cross the pools and should see the final flows), connections docked on a connection last
-  const edges = [...plane.edges.values()].sort((p, q) => routeRank(plane, p) - routeRank(plane, q));
-  for (const e of edges) {
-    if (!brokenEdge(plane, e, snap.edges.get(e))) continue;
-    if (reroute(plane, e)) rerouted.push(e);
-  }
-  clearLabels(plane, rerouted);
-  clearTitles(plane, (owner, sub) => clearBefore(snap, owner, sub));
-  return rerouted.map((e) => e.id);
-}
-
 /* ------------------------------------------------------------------ */
 /* frames                                                               */
 /* ------------------------------------------------------------------ */
@@ -426,7 +310,7 @@ function checkFrames(plane: Plane, shapes: readonly DShape[], dx: number, dy: nu
   for (const s of shapes) {
     const frame = frameOf(plane, s);
     if (!frame) continue;
-    const unit = unitBox(plane, s);
+    const unit = new Drawing(plane).unitBox(s);
     const box = { ...unit, x: unit.x + dx, y: unit.y + dy };
     let there = escape(plane, s, frame, box);
     const farRef = !there && frame.kind === 'subProcess' && refs.length > 0 && refs.every((r) => r !== frame && !inFrameOf(plane, r, frame)) && !inside(box, frame.bounds);
@@ -467,7 +351,7 @@ function framesOf(plane: Plane, s: DShape): DShape[] {
  * does, or one holding none of the moved shapes that moved (pushed away by
  * a frame that grew). Undefined when its frames are intact.
  */
-function frameLeft(plane: Plane, ref: DShape, snap: Snap, movedFrames: ReadonlySet<string>): DShape | undefined {
+function frameLeft(plane: Plane, ref: DShape, snap: DrawingSnapshot, movedFrames: ReadonlySet<string>): DShape | undefined {
   const was = snap.bounds.get(ref.id);
   let lost: DShape | undefined;
   for (const f of framesOf(plane, ref)) {
@@ -486,7 +370,7 @@ function frameLeft(plane: Plane, ref: DShape, snap: Snap, movedFrames: ReadonlyS
  * push one shape onto another, e.g. onto a reference that stayed while the
  * shapes around it made room.
  */
-function newOverlaps(plane: Plane, snap: Snap): Array<[string, string]> {
+function newOverlaps(plane: Plane, snap: DrawingSnapshot): Array<[string, string]> {
   const leaves = [...plane.shapes.values()].filter(isLeaf);
   const out: Array<[string, string]> = [];
   for (let i = 0; i < leaves.length; i++) {
@@ -517,15 +401,15 @@ function fitLabel(plane: Plane, s: DShape, keep: string[]): void {
   if (!frame || !s.label) return;
   const sub = frame.kind === 'subProcess';
   const over = bottom(s.label) + 5 - bottom(frame.bounds);
-  if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+  if (over > 0.5) new Drawing(plane).makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
   const overRight = right(s.label) + 5 - right(frame.bounds);
   if (overRight <= 0.5) return;
   const pool = frame.kind === 'participant' ? frame : frame.poolId ? plane.shapes.get(frame.poolId) : undefined;
-  makeSpace(plane, { axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : pool ? { within: copyBox(pool.bounds) } : {}) });
+  new Drawing(plane).makeSpace({ axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : pool ? { within: copyBox(pool.bounds) } : {}) });
 }
 
 /**
- * Shapes moved on request stay; the others give way (diagram/separate.ts). First the
+ * Shapes moved on request stay; the others give way (diagram/Separation.ts). First the
  * references stay too; when the request then does not hold (`holds`, e.g.
  * "same row as R"), or two shapes ended up on each other, the references may
  * give way as well (a row reference sliding right keeps its row). When a
@@ -534,7 +418,7 @@ function fitLabel(plane: Plane, s: DShape, keep: string[]): void {
  * in neither way, a new overlap is left, or a sub-process grew over a
  * reference.
  */
-function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[], snap: Snap, notes: string[], target: string, holds: () => boolean, lock: ReadonlyArray<'x' | 'y'>): void {
+function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[], snap: DrawingSnapshot, notes: string[], target: string, holds: () => boolean, lock: ReadonlyArray<'x' | 'y'>): void {
   const ids = moved.flatMap((s) => [s.id, ...[...plane.shapes.values()].filter((b) => b.hostId === s.id).map((b) => b.id)]);
   const refIds = refs.map((f) => f.id).filter((id) => !ids.includes(id));
   const all = leafIds(plane);
@@ -579,15 +463,15 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
   const attempt = (fixed: string[]): { ok: boolean; notes: string[]; swallowed: DShape[]; displaced: Array<{ ref: DShape; frame: DShape }>; collided: Array<[string, string]>; strayed: Array<{ shape: DShape; frame: DShape }> } => {
     const out: string[] = [];
     for (const s of moved) {
-      fitInFrame(plane, s.id, 15, undefined, [...ids, ...fixed]);
+      new Drawing(plane).fitInFrame(s.id, 15, undefined, [...ids, ...fixed]);
       fitLabel(plane, s, [...ids, ...fixed]);
     }
-    const first = separate(plane, { active: ids, movable: all, pinned: [...ids, ...fixed], baseline: snap.bounds });
+    const first = new Drawing(plane).separate({ active: ids, movable: all, pinned: [...ids, ...fixed], baseline: snap.bounds });
     const stuck = first.unresolved.filter(([a, b]) => ids.includes(a) || ids.includes(b));
     let left = false;
     if (stuck.length) {
       // the moved shapes give way along the axis the request leaves free
-      const second = separate(plane, { active: ids, movable: all, pinned: fixed, locked: { ids, axes: lock }, baseline: snap.bounds });
+      const second = new Drawing(plane).separate({ active: ids, movable: all, pinned: fixed, locked: { ids, axes: lock }, baseline: snap.bounds });
       left = second.unresolved.some(([a, b]) => ids.includes(a) || ids.includes(b));
       if (!left) out.push(`moved ${moved.map((s) => s.id).join(', ')} ${lock.includes('x') ? 'down' : 'right'} a little to clear ${stuck.map(([a, b]) => (ids.includes(a) ? b : a)).join(', ')}`);
     }
@@ -635,20 +519,20 @@ function makeRoom(plane: Plane, moved: readonly DShape[], refs: readonly DShape[
 /* place / align                                                        */
 /* ------------------------------------------------------------------ */
 
-function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
+function placeOp(ctx: Ctx, op: PlaceOp, snap: DrawingSnapshot, notes: string[]): string[] {
   if (op.side) return boundarySide(ctx, op.ids?.[0] ?? '', op.side, snap, notes);
   const items = unique(op.ids ?? []).map((id) => movableShape(ctx, id));
   const { plane, shape: ref } = items[0]!;
   for (const it of items) samePlane(plane, it.plane, it.shape.id, ref.id);
   const group = outermost(plane, items.map((i) => i.shape));
   const sp = spacingOf(plane);
-  const refUnit = unitBox(plane, ref);
+  const refUnit = new Drawing(plane).unitBox(ref);
   const fixed: DShape[] = [];
   const target = (id: string): { shape: DShape; unit: Box } => {
     const t = drawnShape(ctx, id);
     samePlane(plane, t.plane, ref.id, id);
     fixed.push(t.shape);
-    return { shape: t.shape, unit: t.shape.container ? t.shape.bounds : unitBox(plane, t.shape) };
+    return { shape: t.shape, unit: t.shape.container ? t.shape.bounds : new Drawing(plane).unitBox(t.shape) };
   };
   let dx = 0;
   let dy = 0;
@@ -686,7 +570,7 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
     if (!t.container) continue;
     for (const s of group) {
       if (!framesOf(plane, s).includes(t)) continue;
-      const u = unitBox(plane, s);
+      const u = new Drawing(plane).unitBox(s);
       if (inside({ ...u, x: u.x + dx, y: u.y + dy }, t.bounds)) continue;
       throw modelError('E_LEAVES_CONTAINER', `Placing ${s.id} ${parts.join(' and ')} would move it out of its ${frameWord(t)} ${t.id}`, {
         element: s.id,
@@ -700,18 +584,18 @@ function placeOp(ctx: Ctx, op: PlaceOp, snap: Snap, notes: string[]): string[] {
     notes.push(`${ref.id} is already there`);
     return [];
   }
-  for (const s of group) shiftShape(plane, s.id, dx, dy);
-  const unit = (s: DShape): Box => (s.container ? s.bounds : unitBox(plane, s));
+  for (const s of group) new Drawing(plane).shift(s.id, dx, dy);
+  const unit = (s: DShape): Box => (s.container ? s.bounds : new Drawing(plane).unitBox(s));
   const shape = (id: string): DShape => plane.shapes.get(id)!;
   const holds = (): boolean => {
-    const r = unitBox(plane, ref);
+    const r = new Drawing(plane).unitBox(ref);
     const rowOk = op.rowOf ? Math.abs(cy(ref.bounds) - cy(shape(op.rowOf).bounds)) <= 1 : op.below ? r.y >= bottom(unit(shape(op.below))) - 1 : op.above ? bottom(r) <= unit(shape(op.above)).y + 1 : true;
     const colOk = op.columnOf ? Math.abs(cx(ref.bounds) - cx(shape(op.columnOf).bounds)) <= 1 : op.after ? r.x >= right(unit(shape(op.after))) - 1 : op.before ? right(r) <= unit(shape(op.before)).x + 1 : true;
     return rowOk && colOk;
   };
   const lock: Array<'x' | 'y'> = [...(op.columnOf || op.after || op.before ? ['x' as const] : []), ...(op.rowOf || op.below || op.above ? ['y' as const] : [])];
   makeRoom(plane, group, fixed, snap, notes, parts.join(' and '), holds, lock);
-  return settle(plane, snap);
+  return new Drawing(plane).settle(snap);
 }
 
 /**
@@ -752,7 +636,7 @@ function exceptionPath(ctx: Ctx, plane: Plane, event: DShape, host: DShape, side
  * with a lane underneath at the bottom of that lane), the others give way
  * (makeRoom), and its flows are routed again.
  */
-function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, notes: string[]): string[] {
+function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: DrawingSnapshot, notes: string[]): string[] {
   const { plane, shape: event } = drawnShape(ctx, id);
   const host = event.hostId ? plane.shapes.get(event.hostId) : undefined;
   if (event.kind !== 'boundary' || !host) {
@@ -774,11 +658,11 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
   const frame = frameOf(plane, host);
   if (side === 'top' && path.length && frame) {
     const same = path.filter((n) => frameOf(plane, n) === frame);
-    const top = Math.min(...same.map((n) => unitBox(plane, n).y + mirror(n)));
+    const top = Math.min(...same.map((n) => new Drawing(plane).unitBox(n).y + mirror(n)));
     const deficit = Math.ceil(frameInterior(frame, 15).y - top);
     if (same.length && deficit > 0) {
       const sub = frame.kind === 'subProcess';
-      makeSpace(plane, { axis: 'y', line: frame.bounds.y + 1, delta: deficit, anchors: [host.id], ...(sub ? { frame: frame.id, within: copyBox(frame.bounds) } : {}) });
+      new Drawing(plane).makeSpace({ axis: 'y', line: frame.bounds.y + 1, delta: deficit, anchors: [host.id], ...(sub ? { frame: frame.id, within: copyBox(frame.bounds) } : {}) });
       notes.push(`made ${deficit} px of room above ${host.id} in its ${frameWord(frame)} ${frame.id}`);
     }
   }
@@ -786,10 +670,10 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
   // `space --below <lane>`; the lanes below move down); a pool, a sub-process and the last lane grow on their own
   if (side === 'bottom' && path.length && frame?.kind === 'lane' && [...plane.shapes.values()].some((l) => l.kind === 'lane' && l !== frame && l.poolId === frame.poolId && l.bounds.y >= bottom(frame.bounds) - 1)) {
     const same = path.filter((n) => frameOf(plane, n) === frame);
-    const low = Math.max(...same.map((n) => bottom(unitBox(plane, n)) + mirror(n)));
+    const low = Math.max(...same.map((n) => bottom(new Drawing(plane).unitBox(n)) + mirror(n)));
     const deficit = Math.ceil(low - bottom(frameInterior(frame, 15)));
     if (same.length && deficit > 0) {
-      makeSpace(plane, { axis: 'y', line: bottom(frame.bounds) - 1, delta: deficit, anchors: [frame.id] });
+      new Drawing(plane).makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: deficit, anchors: [frame.id] });
       notes.push(`made ${deficit} px of room below ${host.id} in its lane ${frame.id}`);
     }
   }
@@ -839,15 +723,15 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
   }
   const shifts = path.map((n) => ({ n, dy: mirror(n) }));
   for (const { n, dy: ny } of shifts) checkFrames(plane, [n], 0, ny, `on the ${side} side of ${host.id}`, [host]);
-  for (const { n, dy: ny } of shifts) shiftShape(plane, n.id, 0, ny);
+  for (const { n, dy: ny } of shifts) new Drawing(plane).shift(n.id, 0, ny);
   const holds = (): boolean => attachedSide(event.bounds, host.bounds) === side && path.every((n) => (side === 'top' ? bottom(n.bounds) <= hb.y : n.bounds.y >= bottom(hb)));
   if (path.length) makeRoom(plane, path, [host], snap, notes, `on the ${side} side of ${host.id}`, holds, ['y']);
-  if (event.label) placeShapeLabel(plane, event);
-  const rerouted = settle(plane, snap);
+  if (event.label) new Drawing(plane).placeShapeLabel(event);
+  const rerouted = new Drawing(plane).settle(snap);
   // the flows of the event leave by the new border
   for (const e of plane.edges.values()) {
     if (e.sourceId !== id || rerouted.includes(e.id)) continue;
-    if (reroute(plane, e)) rerouted.push(e.id);
+    if (new Drawing(plane).reroute(e)) rerouted.push(e.id);
   }
   notes.push(`${id} moved to the ${side} border of ${host.id}${path.length ? `; its path followed (${path.map((n) => n.id).join(', ')})` : ''}`);
   return rerouted;
@@ -859,7 +743,7 @@ function boundarySide(ctx: Ctx, id: string, side: 'top' | 'bottom', snap: Snap, 
  * or pool on that line is left out (noted); an explicit id is refused
  * (E_LEAVES_CONTAINER).
  */
-function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[], picked: ReadonlySet<string> = new Set()): string[] {
+function alignOp(ctx: Ctx, op: AlignOp, snap: DrawingSnapshot, notes: string[], picked: ReadonlySet<string> = new Set()): string[] {
   const refId = op.to ?? op.ids?.[0] ?? "";
   const { plane, shape: ref } = drawnShape(ctx, refId);
   const items = unique(op.ids ?? [])
@@ -886,11 +770,11 @@ function alignOp(ctx: Ctx, op: AlignOp, snap: Snap, notes: string[], picked: Rea
     if (!left.length || kept.length) notes.push(`already aligned on the ${op.axis} of ${refId}`);
     return [];
   }
-  for (const m of moved) shiftShape(plane, m.s.id, m.dx, m.dy);
+  for (const m of moved) new Drawing(plane).shift(m.s.id, m.dx, m.dy);
   const line = (b: Box): number => (op.axis === 'column' ? cx(b) : cy(b));
   const holds = (): boolean => moved.every((m) => Math.abs(line(m.s.bounds) - line(ref.bounds)) <= 1);
   makeRoom(plane, moved.map((m) => m.s), [ref], snap, notes, `on the ${op.axis} of ${refId}`, holds, [op.axis === 'column' ? 'x' : 'y']);
-  return settle(plane, snap);
+  return new Drawing(plane).settle(snap);
 }
 
 /* ------------------------------------------------------------------ */
@@ -916,13 +800,14 @@ function colorOp(ctx: Ctx, op: ColorOp): string[] {
   return colored;
 }
 
-function labelOp(ctx: Ctx, op: LabelOp, snap: Snap, notes: string[]): { labels: string[]; rerouted: string[] } {
+function labelOp(ctx: Ctx, op: LabelOp, snap: DrawingSnapshot, notes: string[]): { labels: string[]; rerouted: string[] } {
   const el = ctx.doc.require(op.id);
   const name = raw<string>(el, 'name')?.trim();
   if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) {
     const { edge } = drawnEdge(ctx, op.id);
     if (!name) throw modelError('E_NO_LABEL', `${op.id} has no name, so it has no label`, { element: op.id, hint: `Name it first: \`bpmn set <file> ${op.id} name=...\`.` });
-    const size = edge.label ? { width: edge.label.width, height: edge.label.height } : labelSizeOf(name);
+    const { width, height } = edge.label ?? labelSize(name);
+    const size = { width, height };
     const box = edgeLabelAt(edge, size, op.side);
     if (!box) {
       const want = op.side === 'left' || op.side === 'right' ? 'vertical' : 'horizontal';
@@ -943,17 +828,18 @@ function labelOp(ctx: Ctx, op: LabelOp, snap: Snap, notes: string[]): { labels: 
     });
   }
   if (!name) throw modelError('E_NO_LABEL', `${op.id} has no name, so it has no label`, { element: op.id, hint: `Name it first: \`bpmn set <file> ${op.id} name=...\`.` });
-  const size = shape.label ? { width: shape.label.width, height: shape.label.height } : labelSizeOf(name);
-  let box = labelOnSide(plane, shape, op.side, size);
+  const { width, height } = shape.label ?? labelSize(name);
+  const size = { width, height };
+  let box = new Drawing(plane).labelOnSide(shape, op.side, size);
   let rerouted: string[] = [];
   // above a shape at the top of an expanded sub-process, whose title takes the room there: room at the top of
   // the sub-process first (its content moves down, it grows), so the label sits between the title and the shape
   const frame = shape.kind === 'boundary' ? undefined : frameOf(plane, shape);
-  const room = op.side === 'above' && frame?.kind === 'subProcess' && !inside(box, labelArea(frame)) ? roomBelowTitle(plane, frame, labelAt(shape, size, 'above'), shape.id) : undefined;
+  const room = op.side === 'above' && frame?.kind === 'subProcess' && !inside(box, labelArea(frame)) ? new Drawing(plane).roomBelowTitle(frame, labelAt(shape, size, 'above'), shape.id) : undefined;
   if (room) {
-    rerouted = settle(plane, snap);
+    rerouted = new Drawing(plane).settle(snap);
     notes.push(`made ${room.delta} px of room above ${op.id} in its sub-process ${frame!.id} (for the label, below the title)`);
-    box = labelOnSide(plane, shape, op.side, size);
+    box = new Drawing(plane).labelOnSide(shape, op.side, size);
   }
   const changed = !sameBox(shape.label, box);
   shape.label = box;
@@ -981,12 +867,12 @@ function routeOp(ctx: Ctx, op: RouteOp): string[] {
   intoHost(plane, edge.sourceId, op.exit, 'exit', op.id);
   intoHost(plane, edge.targetId, op.entry, 'entry', op.id);
   const before = copyPoints(edge.points);
-  const ok = reroute(plane, edge, { ...(op.exit ? { sourceSides: [op.exit] } : {}), ...(op.entry ? { targetSides: [op.entry] } : {}) });
+  const ok = new Drawing(plane).reroute(edge, { ...(op.exit ? { sourceSides: [op.exit] } : {}), ...(op.entry ? { targetSides: [op.entry] } : {}) });
   if (!ok) {
     if (!edge.di) plane.edges.delete(op.id);
     throw modelError('E_NO_SHAPE', `${op.id} cannot be routed: an end has no shape in its diagram`, { element: op.id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });
   }
-  clearLabels(plane, [edge]);
+  new Drawing(plane).clearLabels([edge]);
   return samePoints(before, edge.points) ? [] : [op.id];
 }
 
@@ -1004,55 +890,30 @@ function columnWidth(plane: Plane): number {
 /* guarded changes (compact, closing space)                             */
 /* ------------------------------------------------------------------ */
 
-const isHard = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
-
 /** The current layout problems of the document (the planes written first). */
 function measure(ctx: Ctx): LayoutMetrics {
   writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
   return layoutProblems(ctx.doc.definitions);
 }
 
+/** What the drawing shows before an op. */
+function snapshotOf(ctx: Ctx): DrawingSnapshot {
+  return new DrawingSnapshot(ctx.planes.map((p) => new Drawing(p)));
+}
+
+/** A change of one plane must not add a hard layout problem or raise the score (compact.ts Attempt). */
+const GUARDED: TrialPolicy = { key: (p) => (isHardProblem(p) ? problemKey(p) : undefined), lower: false, rebase: false };
+
 /**
- * Runs changes of one plane that must not make the drawing worse: after each
- * change the connections it broke are routed again, and the change is undone
- * when it added a hard layout problem or raised the score (compact.ts
- * Attempt). `rejected` collects what the undone changes would have added.
+ * Runs changes of one plane that must not make the drawing worse (Drawing
+ * attempt): after each change the connections it broke are routed again,
+ * and the change is undone when it added a hard layout problem or raised
+ * the score. `rejected` collects what the undone changes would have added.
  */
 function guard(ctx: Ctx, plane: Plane): { attempt: Attempt; rejected: LayoutProblem[] } {
-  const start = measure(ctx);
-  const hard = new Map<string, number>();
-  for (const p of start.problems.filter(isHard)) hard.set(problemKey(p), (hard.get(problemKey(p)) ?? 0) + 1);
-  let score = start.score;
-  let problems = start.problems;
-  const rejected: LayoutProblem[] = [];
-  const attempt: Attempt = (change, force = []) => {
-    const st = new PlaneCheckpoint(plane);
-    const before = new Map([...plane.edges.values()].map((e) => [e, edgeBefore(plane, e)] as const));
-    const r = change();
-    if (!r || (!r.moved.size && !r.resized.size)) {
-      st.restore();
-      return false;
-    }
-    const edges = [...plane.edges.values()].sort((p, q) => routeRank(plane, p) - routeRank(plane, q));
-    const fresh = edges.filter((e) => (force.includes(e.id) || brokenEdge(plane, e, before.get(e))) && reroute(plane, e));
-    clearLabels(plane, fresh);
-    const m = measure(ctx);
-    const count = new Map(hard);
-    const added = m.problems.filter(isHard).filter((p) => {
-      const n = count.get(problemKey(p)) ?? 0;
-      count.set(problemKey(p), n - 1);
-      return n <= 0;
-    });
-    if (added.length || m.score > score) {
-      rejected.push(...(added.length ? added : diffProblems(problems, m.problems).added));
-      st.restore();
-      return false;
-    }
-    score = m.score;
-    problems = m.problems;
-    return true;
-  };
-  return { attempt, rejected };
+  const trials = new TrialGuard(() => measure(ctx), GUARDED);
+  const drawing = new Drawing(plane);
+  return { attempt: (change, force) => drawing.attempt(trials, change, force), rejected: trials.rejected };
 }
 
 function problemWords(ps: readonly LayoutProblem[]): string {
@@ -1085,7 +946,7 @@ function compactTargets(ctx: Ctx, ids: readonly string[]): Map<Plane, Set<string
   return out;
 }
 
-function compactOp(ctx: Ctx, op: CompactOp, snap: Snap, notes: string[]): string[] {
+function compactOp(ctx: Ctx, op: CompactOp, snap: DrawingSnapshot, notes: string[]): string[] {
   if (!ctx.planes.length) throw noDiagram();
   const targets = op.ids ? compactTargets(ctx, op.ids) : new Map(ctx.planes.map((p) => [p, undefined] as const));
   const rerouted: string[] = [];
@@ -1100,7 +961,7 @@ function compactOp(ctx: Ctx, op: CompactOp, snap: Snap, notes: string[]): string
     }
     total.refused += st.refused;
     rejected.push(...g.rejected);
-    rerouted.push(...settle(plane, snap));
+    rerouted.push(...new Drawing(plane).settle(snap));
   }
   const n = total.strips.x + total.strips.y;
   if (!n) notes.push('nothing to compact: no empty row or column to close');
@@ -1113,7 +974,7 @@ function compactOp(ctx: Ctx, op: CompactOp, snap: Snap, notes: string[]): string
 }
 
 /** Negative `space`: closes up to `amount` px of the empty space right of / below an element (see module contract). */
-function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 'x' | 'y', amount: number, snap: Snap, notes: string[]): string[] {
+function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 'x' | 'y', amount: number, snap: DrawingSnapshot, notes: string[]): string[] {
   const gaps = drawingGaps(plane);
   const loose = looseEdges(plane);
   const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
@@ -1130,7 +991,7 @@ function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 
     if (last !== undefined) strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
   } else {
     // a node or an expanded sub-process: the empty space after it, across the pool band (x) / the whole plane (y)
-    const unit = shape.container ? shape.bounds : unitBox(plane, shape);
+    const unit = shape.container ? shape.bounds : new Drawing(plane).unitBox(shape);
     within = axis === 'x' && pool ? copyBox(pool.bounds) : undefined;
     const region = axis === 'x' ? { x: far(unit), y: (pool ?? shape).bounds.y, width: 1e6, height: (pool ?? shape).bounds.height } : { x: -1e6, y: far(unit), width: 2e6, height: 1e6 };
     if (axis === 'x' && !pool) Object.assign(region, { y: -1e6, height: 2e6 });
@@ -1163,7 +1024,7 @@ function closeSpace(ctx: Ctx, refId: string, plane: Plane, shape: DShape, axis: 
     });
   }
   notes.push(close < amount ? `closed ${close} px ${where} (of ${Math.round(amount)} px asked for): the rest is not empty` : `closed ${close} px ${where}`);
-  return settle(plane, snap);
+  return new Drawing(plane).settle(snap);
 }
 
 /** `s` lies inside frame `f` (its frame chain contains it). */
@@ -1171,7 +1032,7 @@ function inFrameOf(plane: Plane, s: DShape, f: DShape): boolean {
   return framesOf(plane, s).includes(f);
 }
 
-function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap, notes: string[]): string[] {
+function spaceOp(ctx: Ctx, op: SpaceOp, snap: DrawingSnapshot, notes: string[]): string[] {
   const refId = (op.after ?? op.below)!;
   const { plane, shape } = drawnShape(ctx, refId);
   const axis = op.after ? 'x' : 'y';
@@ -1189,14 +1050,14 @@ function spaceOp(ctx: Ctx, op: SpaceOp, snap: Snap, notes: string[]): string[] {
   const unitHint = by.unit === 'px' && delta < own / 4 ? `; one ${axis === 'x' ? 'column' : 'row'} is ${own} px: --by ${delta}${axis === 'x' ? 'col' : 'row'} moves by ${delta} ${axis === 'x' ? 'columns' : 'rows'}` : '';
   notes.push(`inserted ${delta} px${steps} ${where}${unitHint}`);
   // a frame grows itself: the line runs just inside its far edge
-  const box = shape.container ? shape.bounds : unitBox(plane, shape);
+  const box = shape.container ? shape.bounds : new Drawing(plane).unitBox(shape);
   const line = shape.container ? (axis === 'x' ? right(box) - 1 : bottom(box) - 1) : axis === 'x' ? right(box) + 1 : bottom(box) + 1;
   const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
-  makeSpace(plane, { axis, line, delta, anchors: [shape.id], ...(axis === 'x' && pool ? { within: copyBox(pool.bounds) } : {}) });
-  return settle(plane, snap);
+  new Drawing(plane).makeSpace({ axis, line, delta, anchors: [shape.id], ...(axis === 'x' && pool ? { within: copyBox(pool.bounds) } : {}) });
+  return new Drawing(plane).settle(snap);
 }
 
-function tidyOp(ctx: Ctx, op: TidyOp, snap: Snap, notes: string[]): string[] {
+function tidyOp(ctx: Ctx, op: TidyOp, snap: DrawingSnapshot, notes: string[]): string[] {
   if (!ctx.planes.length) throw noDiagram();
   const byPlane = new Map<Plane, string[]>();
   if (op.ids) {
@@ -1207,9 +1068,9 @@ function tidyOp(ctx: Ctx, op: TidyOp, snap: Snap, notes: string[]): string[] {
   } else for (const plane of ctx.planes) byPlane.set(plane, []);
   const rerouted: string[] = [];
   for (const [plane, ids] of byPlane) {
-    const r = tidy(plane, ids.length ? { ids } : {});
+    const r = new Drawing(plane).tidy(ids.length ? { ids } : {});
     if (r.unresolved.length) notes.push(`overlap left: ${r.unresolved.map(([a, b]) => `${a}~${b}`).join(', ')}`);
-    rerouted.push(...settle(plane, snap));
+    rerouted.push(...new Drawing(plane).settle(snap));
   }
   return rerouted;
 }
@@ -1234,7 +1095,7 @@ function laneSubtree(sem: Semantics, laneId: string): Set<string> {
   return out;
 }
 
-function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[] {
+function orderBands(ctx: Ctx, op: OrderOp, snap: DrawingSnapshot, notes: string[]): string[] {
   const owner = ctx.doc.get(op.id);
   const set = owner ? laneSetOf(owner) : undefined;
   const lanes = rawList(set, 'lanes').map((l) => idOf(l)!).filter(Boolean);
@@ -1270,18 +1131,18 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
     for (const id of members.get(band.id)!) {
       const s = plane.shapes.get(id)!;
       if (s.kind === 'lane') s.bounds.y += dy;
-      else shiftShape(plane, id, 0, dy);
+      else new Drawing(plane).shift(id, 0, dy);
     }
   }
   // a band whose members hang out at its bottom (a boundary event on the border, a shape drawn below it) grows,
   // so that nothing ends up in the band below or outside the pool (audit #40)
   const pool = poolId ? plane.shapes.get(poolId) : undefined;
   for (const b of bands) {
-    const lowest = Math.max(-Infinity, ...members.get(b.id)!.map((id) => plane.shapes.get(id)!).filter((s) => s.kind !== 'lane').map((s) => bottom(unitBox(plane, s))));
+    const lowest = Math.max(-Infinity, ...members.get(b.id)!.map((id) => plane.shapes.get(id)!).filter((s) => s.kind !== 'lane').map((s) => bottom(new Drawing(plane).unitBox(s))));
     const over = lowest + 5 - bottom(b.bounds);
-    if (over > 0.5) makeSpace(plane, { axis: 'y', line: bottom(b.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
+    if (over > 0.5) new Drawing(plane).makeSpace({ axis: 'y', line: bottom(b.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
   }
-  return settle(plane, snap);
+  return new Drawing(plane).settle(snap);
 }
 
 /**
@@ -1292,7 +1153,7 @@ function orderBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[
  * artifacts drawn in its band move with it; message flows are routed again
  * (settle). Pools that are not stacked (two overlap on y) keep their places.
  */
-function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): string[] {
+function orderPoolBands(ctx: Ctx, op: OrderOp, snap: DrawingSnapshot, notes: string[]): string[] {
   const collab = ctx.doc.get(op.id);
   const ids = rawList(collab, 'participants').map((p) => idOf(p)!).filter(Boolean);
   const plane = ctx.planes.find((p) => p.rootId === op.id);
@@ -1327,10 +1188,10 @@ function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): str
     b.bounds.y += dy;
     for (const s of members.get(b.id)!) {
       if (s.kind === 'lane') s.bounds.y += dy;
-      else shiftShape(plane, s.id, 0, dy);
+      else new Drawing(plane).shift(s.id, 0, dy);
     }
   });
-  return settle(plane, snap);
+  return new Drawing(plane).settle(snap);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1430,9 +1291,9 @@ function withRoomHint(ctx: Ctx, op: PlaceOp | AlignOp, run: () => string[], asFi
     for (const c of roomCandidates(ctx, op)) {
       states.forEach((st) => st.restore());
       try {
-        spaceOp(ctx, c, snapshot(ctx.planes), []);
-        if (op.op === 'place') placeOp(ctx, op, snapshot(ctx.planes), []);
-        else alignOp(ctx, op, snapshot(ctx.planes), []);
+        spaceOp(ctx, c, snapshotOf(ctx), []);
+        if (op.op === 'place') placeOp(ctx, op, snapshotOf(ctx), []);
+        else alignOp(ctx, op, snapshotOf(ctx), []);
       } catch {
         continue;
       }
@@ -1465,7 +1326,7 @@ function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | u
   const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : resolveSelection(ctx, entry.op);
   const op = resolved.op;
   if (op.op === 'order' && !ordersLanes(ctx.doc, op) && !ordersPools(ctx.doc, op)) return undefined;
-  const snap = snapshot(ctx.planes);
+  const snap = snapshotOf(ctx);
   const notes: string[] = [];
   let rerouted: string[] = [];
   const extra: Partial<FormatResult> = {};
@@ -1502,8 +1363,8 @@ function runOne(ctx: Ctx, entry: FormatEntry, asFile: boolean): FormatResult | u
       break;
   }
   const routed = unique(rerouted);
-  const reshaped = changedEdges(ctx.planes, snap).filter((id) => !routed.includes(id));
-  return { op: op.op, index, moved: changedShapes(ctx.planes, snap), rerouted: routed, ...(reshaped.length ? { reshaped } : {}), ...extra, ...(notes.length ? { notes } : {}) };
+  const reshaped = snap.changedEdges().filter((id) => !routed.includes(id));
+  return { op: op.op, index, moved: snap.changedShapes(), rerouted: routed, ...(reshaped.length ? { reshaped } : {}), ...extra, ...(notes.length ? { notes } : {}) };
 }
 
 /**

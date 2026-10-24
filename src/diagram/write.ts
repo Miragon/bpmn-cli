@@ -14,7 +14,7 @@
  *    elements are deleted. A plane without DI gets a new BPMNDiagram.
  *    Coordinates are rounded to whole pixels when written; a connection
  *    keeps at least two waypoints (rounding never merges its ends into one;
- *    the engine reroutes zero-length connections before, reroute.ts).
+ *    the engine reroutes zero-length connections before, EdgeRouter.ts).
  *  - rememberDiIds(defs) / restoreDiIds(defs, memo): a full redraw (the
  *    engine writes new DI) keeps the ids the file's DI had: every BPMNShape /
  *    BPMNEdge gets the id of the old DI element of its element, every
@@ -56,7 +56,8 @@ import type { BpmnModdle } from 'bpmn-moddle';
 import { cutAt, MAX_ID } from '../ids/slugs.js';
 import { addTo, is, removeFrom, type El } from '../model/utils/moddle.js';
 import { roundPoints, sameBox, samePoints, type Box, type Point } from './utils/geom.js';
-import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
+import { displayRoot, idOf, raw, rawList } from './utils/plane.js';
+import type { DEdge, DShape, Plane, Semantics } from './types.js';
 
 /* ------------------------------------------------------------------ */
 /* id style                                                             */

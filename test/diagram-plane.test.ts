@@ -4,7 +4,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes, semantics, homePlane, frameOf, type Plane } from '../src/diagram/plane.js';
+import { readPlanes, semantics, homePlane } from '../src/diagram/plane.js';
+import { frameOf } from '../src/diagram/utils/plane.js';
+import { type Plane } from '../src/diagram/types.js';
 import { applyColors, colorsOf, diIds, pruneDi, writePlanes } from '../src/diagram/write.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { BPMN_NS } from './helpers.js';

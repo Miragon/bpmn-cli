@@ -1188,7 +1188,7 @@ export interface LabelOptions {
  * External label boxes for events, gateways, boundary events and data objects. A boundary event's hangs below its
  * host, right of the event (of two events the second one's left of it, three and more stepped down); on the top
  * border (GNode.onTop) it sits above the host, right of the event (of two such events the second one's left of it,
- * three and more stepped up; left of it with GNode.labelLeft), as the incremental layout puts it (diagram/labels.ts).
+ * three and more stepped up; left of it with GNode.labelLeft), as the incremental layout puts it (diagram/LabelPlacer.ts).
  */
 export function elementLabel(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
   const name = nameOf(n);

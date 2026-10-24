@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { detachedEnds } from '../src/diagram/reroute.js';
+import { readPlanes } from '../src/diagram/plane.js';
+import { type DEdge, type DShape } from '../src/diagram/types.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
@@ -239,7 +240,7 @@ describe('several diagrams, partial and unusual DI', () => {
       ['F1', 'F5'],
     ]);
     expect(r.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);
-    expect(readPlanes(after.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length))).toEqual([]);
+    expect(readPlanes(after.definitions).flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length))).toEqual([]);
     expect(duplicates(after)).toEqual([]);
     // a rename of an end is no end change: both views keep every edge
     const renamed = await run(xml, [{ op: 'set', id: 'C', values: { id: 'Activity_C' } }], { layout: 'incremental' });

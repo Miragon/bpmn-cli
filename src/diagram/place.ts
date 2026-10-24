@@ -33,7 +33,7 @@
  *     only when that spot is taken: space tool at P.right + 1 by
  *     N.width + gap within P's pool (inside an expanded sub-process: in
  *     frame mode, so the sub-process never grows over foreign shapes, see
- *     space.ts; the same for every space-tool run placement makes there)
+ *     SpaceTool.ts; the same for every space-tool run placement makes there)
  *   - append, P has no other placed successor: continuation on P's row (space
  *     tool when something sits there); joins take the rightmost predecessor
  *   - append, P already has placed successors (new branch): column P.right +
@@ -90,9 +90,9 @@
  *  Sizes follow the drawing (median size of shapes of the same kind on the
  *  plane), else the engine's SIZES. Every placed shape is moved inside its
  *  frame's interior at the top / left and fitted into it at the right /
- *  bottom with its label (frames grow, see space.ts fitInFrame); a new
+ *  bottom with its label (frames grow, see SpaceTool.ts fitInFrame); a new
  *  gateway at the top of an expanded sub-process gets room below the title
- *  for its label above it (space.ts roomBelowTitle).
+ *  for its label above it (SpaceTool.ts roomBelowTitle).
  *
  *  changeLane(ctx, id) moves an existing node into its (new) lane: same x,
  *  the free row of the target lane band preferred for its neighbours, else a
@@ -106,20 +106,14 @@ import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { annotationSize, SIZES } from './utils/sizes.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, segmentsCross, type Box, type Point } from './utils/geom.js';
-import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf, labelSizeOf } from './labels.js';
-import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
-import { routingLines } from './reroute.js';
-import { attachedSide, defaultSides, routeOrthogonal, type ShapeKind } from './router.js';
-import { borderPad, fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from './space.js';
-
-export interface Spacing {
-  /** horizontal gap between connected neighbours */
-  gap: number;
-  /** vertical distance between row centres */
-  row: number;
-  /** centres closer than this are on the same row */
-  rowTol: number;
-}
+import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf } from './utils/labels.js';
+import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, shapeKind, spacingOf, type Spacing } from './utils/plane.js';
+import { poolOf } from './plane.js';
+import type { DEdge, DShape, Plane, Semantics, ShapeKind } from './types.js';
+import { attachedSide, defaultSides } from './utils/sides.js';
+import { routeOrthogonal } from './router.js';
+import { Drawing } from './Drawing.js';
+import { labelSize } from './utils/text.js';
 
 export interface Reuse {
   shape: DShape;
@@ -176,26 +170,6 @@ export interface PlaceCtx {
 /* ------------------------------------------------------------------ */
 /* spacing                                                              */
 /* ------------------------------------------------------------------ */
-
-/** Gap and row spacing of a plane, measured on its sequence flows. */
-export function spacingOf(plane: Plane): Spacing {
-  const gaps: number[] = [];
-  const rows: number[] = [];
-  for (const e of plane.edges.values()) {
-    if (e.kind !== 'sequenceFlow' || !e.sourceId || !e.targetId) continue;
-    const s = plane.shapes.get(e.sourceId);
-    const t = plane.shapes.get(e.targetId);
-    if (!s || !t || s.kind === 'boundary' || s.container || t.container) continue;
-    const dy = Math.abs(cy(s.bounds) - cy(t.bounds));
-    if (dy <= 5) {
-      const g = t.bounds.x - right(s.bounds);
-      if (g > 0) gaps.push(g);
-    } else if (dy >= 30) rows.push(dy);
-  }
-  const gap = Math.round(clamp(median(gaps) ?? 60, 40, 100));
-  const row = Math.round(clamp(median(rows) ?? 140, 80, 150));
-  return { gap, row, rowTol: Math.max(5, row / 4) };
-}
 
 function spacing(ctx: PlaceCtx, plane: Plane): Spacing {
   let s = ctx.spacing.get(plane);
@@ -352,12 +326,13 @@ function commit(ctx: PlaceCtx, plane: Plane, s: DShape): void {
     ctx.reuse.delete(s.id);
   }
   ctx.afterPlace?.(plane, s);
-  const r = fitInFrame(plane, s.id, 15);
+  const r = new Drawing(plane).fitInFrame(s.id, 15);
   r.moved.forEach((x) => ctx.moved.add(x));
   // the label a new gateway gets above it: room below the title of its sub-process
   const name = raw<string>(s.el, 'name')?.trim();
   if (!reuse && name && frame?.kind === 'subProcess' && hasExternalLabel(s) && s.kind !== 'boundary' && defaultLabelSide(s.kind) === 'above') {
-    const room = roomBelowTitle(plane, frame, labelAt(s, labelSizeOf(name), 'above'), s.id);
+    const { width, height } = labelSize(name);
+    const room = new Drawing(plane).roomBelowTitle(frame, labelAt(s, { width, height }, 'above'), s.id);
     if (room) recordSpace(ctx, room.res);
   }
   if (!reuse && s.kind !== 'boundary') reattachBoundaries(ctx, plane, s);
@@ -425,7 +400,7 @@ function obstacles(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet
       if (frame && s.label && overlaps(s.label, frame.bounds)) labels.push(s.label);
       continue;
     }
-    if (solid) boxes.push(isLeaf(s) && !s.hostId ? unitBox(plane, s) : s.bounds);
+    if (solid) boxes.push(isLeaf(s) && !s.hostId ? new Drawing(plane).unitBox(s) : s.bounds);
     if (s.label) labels.push(s.label);
   }
   if (plain) for (const e of plane.edges.values()) if (e.label) labels.push(e.label);
@@ -448,7 +423,7 @@ function isFree(box: Box, obs: { boxes: Box[]; labels: Box[] }, clearance = 20):
 
 /**
  * Where a space-tool run for a node goes: inside its expanded sub-process
- * (frame mode: the sub-process never grows over foreign shapes, space.ts),
+ * (frame mode: the sub-process never grows over foreign shapes, SpaceTool.ts),
  * else within its pool.
  */
 function spaceBand(plane: Plane, s: Pick<DShape, 'parentId' | 'poolId'>, anchor?: DShape): { within?: Box; frame?: string } {
@@ -574,7 +549,7 @@ function connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, 
     if (isLeaf(o) || (o.kind === 'subProcess' && o.container && o.id !== from.parentId)) obstacles.push(shiftedBox(o.bounds, shift));
   }
   const flows = [...plane.edges.values()].map((e) => shiftedLine(e.points, shift)).filter((p) => p.length >= 2);
-  const lines = routingLines(plane).map((l) => shiftedLine(l, shift));
+  const lines = new Drawing(plane).routingLines().map((l) => shiftedLine(l, shift));
   const hostBox = host ? shiftedBox(host.bounds, shift) : undefined;
   const sourceSides = from.kind === 'boundary' && hostBox ? [attachedSide(from.bounds, hostBox)] : defaultSides(from.kind, 'source');
   const pts = routeOrthogonal({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines });
@@ -689,8 +664,8 @@ function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>,
   const cands: Cand[] = rows.map((r, k) => {
     const cand: Cand = { x, c: r.c, size, extent, penalty: basePenalty + 60 * k + (r.onLine ? 700 : 0) + Math.max(0, (r.c - first) / step - 1) * 40 };
     // a row below the frame's interior grows the frame: content below it moves away (the shape keeps clear of the
-    // frame's boundary events on its bottom border, space.ts borderPad)
-    const pad = frame ? Math.max(15, borderPad(plane, frame, { x, y: r.c - size.height / 2, ...size }, 'y')) : 15;
+    // frame's boundary events on its bottom border, SpaceTool.ts borderPad)
+    const pad = frame ? Math.max(15, new Drawing(plane).borderPad(frame, { x, y: r.c - size.height / 2, ...size }, 'y')) : 15;
     if (frame && r.c + size.height / 2 + pad > bottom(frame.bounds)) {
       const line = bottom(frame.bounds) - 1;
       const delta = Math.ceil(r.c + size.height / 2 + pad - bottom(frame.bounds));
@@ -720,7 +695,7 @@ function rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>,
 function placeCand(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, cand: Cand, anchor: DShape): void {
   if (cand.insert) {
     const { line, delta, within, frame } = cand.insert;
-    recordSpace(ctx, makeSpace(plane, { axis: 'y', line, delta, anchors: [anchor.id, probe.parentId], ...(within ? { within } : {}), ...(frame ? { frame } : {}) }));
+    recordSpace(ctx, new Drawing(plane).makeSpace({ axis: 'y', line, delta, anchors: [anchor.id, probe.parentId], ...(within ? { within } : {}), ...(frame ? { frame } : {}) }));
   }
   // the spot after the room was made
   if (cand.top) seatOnTop(ctx, plane, anchor, cand.top);
@@ -782,9 +757,9 @@ export function changeLane(ctx: PlaceCtx, plane: Plane, id: string): boolean {
     .map((n) => Math.round(cy(n.bounds)));
   const c = rowInLane(ctx, plane, lane, s.bounds.x, s.bounds.width, s.bounds.height, neighbours, exclude);
   const dy = Math.round(c - s.bounds.height / 2 - s.bounds.y);
-  for (const m of shiftShape(plane, id, 0, dy)) ctx.moved.add(m);
+  for (const m of new Drawing(plane).shift(id, 0, dy)) ctx.moved.add(m);
   // a row of the lane's own (as close to the border as its shapes sit) needs no growth
-  if (!inLane()) recordSpace(ctx, fitInFrame(plane, id, 15));
+  if (!inLane()) recordSpace(ctx, new Drawing(plane).fitInFrame(id, 15));
   return true;
 }
 
@@ -884,7 +859,7 @@ function makeRoomBelow(ctx: PlaceCtx, plane: Plane, host: DShape, event: Box): v
   if (!blockers.length) return;
   const top = Math.min(...blockers.map((b) => b.bounds.y));
   if (top < bottom(host.bounds) - 0.5) return;
-  recordSpace(ctx, makeSpace(plane, { axis: 'y', line: top - 0.5, delta: Math.ceil(bottom(zone) + 10 - top), anchors: [host.id], ...spaceBand(plane, host, host) }));
+  recordSpace(ctx, new Drawing(plane).makeSpace({ axis: 'y', line: top - 0.5, delta: Math.ceil(bottom(zone) + 10 - top), anchors: [host.id], ...spaceBand(plane, host, host) }));
 }
 
 /**
@@ -996,14 +971,14 @@ function reachOf(s: DShape): LabelReach | undefined {
   return { side, left: s.bounds.x - s.label.x, right: right(s.label) - right(s.bounds) };
 }
 
-/** The reach of the label a new node of `size` gets on its default side (labels.ts; undefined: no name, no external label). */
+/** The reach of the label a new node of `size` gets on its default side (utils/labels.ts; undefined: no name, no external label). */
 function newReach(ctx: PlaceCtx, id: string, size: { width: number; height: number }): LabelReach | undefined {
   const el = ctx.sem.byId.get(id);
   const kind = el ? shapeKind(el) : undefined;
   const name = raw<string>(el, 'name')?.trim();
   if (!kind || !name || kind === 'boundary' || !hasExternalLabel({ kind })) return undefined;
   const side = defaultLabelSide(kind);
-  const over = (labelSizeOf(name).width - size.width) / 2;
+  const over = (labelSize(name).width - size.width) / 2;
   return side === 'above' || side === 'below' ? { side, left: over, right: over } : undefined;
 }
 
@@ -1066,7 +1041,7 @@ function placeAfter(ctx: PlaceCtx, plane: Plane, id: string, preds: DShape[], pe
     if (!isFree(box, blockers) || !succRoom) {
       const full = size.width + gap + Math.max(sp.gap, sGap) - sp.gap;
       const delta = Math.min(full, localShift(plane, box, maxRight + 1, blockers, S, Math.max(sp.gap, sGap)) ?? full);
-      recordSpace(ctx, makeSpace(plane, { axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
+      recordSpace(ctx, new Drawing(plane).makeSpace({ axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...spaceBand(plane, probe, main) }));
     }
     if (LayoutDebug.on()) LayoutDebug.log(`[place] ${id} after ${main.id}: ${S ? `splice before ${S.id}` : 'continuation'} at x=${x} c=${c}`);
     placeAt(ctx, plane, id, x, c, size);
@@ -1179,7 +1154,7 @@ function topCandidates(ctx: PlaceCtx, plane: Plane, id: string, probe: Probe, ev
 
 /** Moves a boundary event to its spot on the host's top border (its path is placed above the host next). */
 function seatOnTop(ctx: PlaceCtx, plane: Plane, event: DShape, spot: Box): void {
-  const moved = shiftShape(plane, event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
+  const moved = new Drawing(plane).shift(event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
   for (const m of moved) if (!ctx.placed.has(m)) ctx.moved.add(m);
   // its label is placed again once its path is drawn (layout/incremental.ts labels)
   if (event.label) (ctx.relabel ??= new Set()).add(event.id);
@@ -1205,7 +1180,7 @@ function placeBefore(ctx: PlaceCtx, plane: Plane, id: string, succ: DShape): voi
       }
     }
   }
-  recordSpace(ctx, makeSpace(plane, { axis: 'x', line: succ.bounds.x - 0.5, delta: size.width + sp.gap, anchors: [succ.id, probe.parentId], ...spaceBand(plane, probe, succ) }));
+  recordSpace(ctx, new Drawing(plane).makeSpace({ axis: 'x', line: succ.bounds.x - 0.5, delta: size.width + sp.gap, anchors: [succ.id, probe.parentId], ...spaceBand(plane, probe, succ) }));
   const c = intoOwnLane(ctx, plane, probe, succ.bounds.x - sp.gap - size.width, cy(succ.bounds), size, [], succ);
   placeAt(ctx, plane, id, succ.bounds.x - sp.gap - size.width, c, size);
 }
@@ -1392,7 +1367,7 @@ export function placeArtifact(ctx: PlaceCtx, id: string): boolean {
   const frame = frameOf(plane, probe);
   const obs = obstacles(plane, frame, new Set([id, ...homeGroups(plane, [anchor])]));
   const segs = edgeBoxes(plane);
-  const a = unitBox(plane, anchor);
+  const a = new Drawing(plane).unitBox(anchor);
   const annotation = is(el, 'bpmn:TextAnnotation');
   const candidates: Box[] = [];
   const steps = [0, 1, 2, 3, 4];

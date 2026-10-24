@@ -22,9 +22,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
-import { brokenEdge, detachedEnds, edgeBefore } from '../src/diagram/reroute.js';
-import { makeSpace } from '../src/diagram/space.js';
+import { readPlanes } from '../src/diagram/plane.js';
+import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { writePlanes } from '../src/diagram/write.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
@@ -162,7 +162,7 @@ describe('a growing frame makes room around it instead of growing over foreign s
       sh('Up', 'task', [600, 150, 100, 80], { laneId: 'L', poolId: 'Pool' }),
     ];
     const plane: Plane = { id: 'p', rootId: 'r', root: el, shapes: new Map(list.map((s) => [s.id, s])), edges: new Map(), dropped: [] };
-    const r = makeSpace(plane, { axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
+    const r = new Drawing(plane).makeSpace({ axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
     expect(plane.shapes.get('F')!.bounds.width).toBe(420);
     expect(plane.shapes.get('B')!.bounds.x).toBe(500);
     // Up is beyond the line but outside the frame: it stays; the lane and the pool do not grow
@@ -271,8 +271,8 @@ describe('connections always keep two distinct waypoints', () => {
   it('brokenEdge: two waypoints on one point', async () => {
     const doc = await Doc.fromXml(fixture('zero-edge.bpmn'));
     const plane = readPlanes(doc.definitions)[0]!;
-    expect(brokenEdge(plane, plane.edges.get('F2')!, undefined)).toBe(true);
-    expect(brokenEdge(plane, plane.edges.get('F1')!, undefined)).toBe(false);
+    expect(new Drawing(plane).brokenEdge(plane.edges.get('F2')!, undefined)).toBe(true);
+    expect(new Drawing(plane).brokenEdge(plane.edges.get('F1')!, undefined)).toBe(false);
   });
 
   it('rounding never merges the two ends of a connection into one waypoint', async () => {
@@ -410,9 +410,9 @@ describe('metrics: frame defects and real segment tests', () => {
   it('brokenEdge: an end point more than 10 px outside its end is broken whatever it was before (detachedEnds)', async () => {
     const doc = await Doc.fromXml(diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI));
     const plane = readPlanes(doc.definitions)[0]!;
-    const broken = [...plane.edges.values()].filter((e) => brokenEdge(plane, e, edgeBefore(plane, e))).map((e) => e.id);
+    const broken = [...plane.edges.values()].filter((e) => new Drawing(plane).brokenEdge(e, new Drawing(plane).edgeBefore(e))).map((e) => e.id);
     expect(broken).toEqual(['Far', 'Both', 'DOA']);
-    expect([...plane.edges.values()].map((e) => [e.id, detachedEnds(plane, e)])).toEqual([
+    expect([...plane.edges.values()].map((e) => [e.id, new Drawing(plane).detachedEnds(e)])).toEqual([
       ['Near', []],
       ['Far', ['B']],
       ['Both', ['A', 'B']],

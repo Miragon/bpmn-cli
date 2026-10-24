@@ -25,7 +25,7 @@
  *  their ids after the ops, so a renamed node is still followed).
  */
 import { is, type El } from '../model/utils/moddle.js';
-import { idOf, raw, rawList } from './plane.js';
+import { idOf, raw, rawList } from './utils/plane.js';
 
 export const BPMIQ_URI = 'https://bpmiq.io/schema/1.0/bpmiq';
 

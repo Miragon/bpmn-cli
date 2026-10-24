@@ -141,3 +141,86 @@ export interface LaneBox {
   box: Box;
   children: LaneBox[];
 }
+
+export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';
+
+export interface DShape {
+  id: string;
+  el: El;
+  /** the BPMNShape; undefined for an element placed by the engine until write.ts creates it */
+  di?: El;
+  bounds: Box;
+  kind: ShapeKind;
+  /** pool, lane or expanded sub-process */
+  container: boolean;
+  expanded?: boolean;
+  label?: Box;
+  hostId?: string;
+  laneId?: string;
+  poolId?: string;
+  parentId?: string;
+}
+
+export interface DEdge {
+  id: string;
+  el: El;
+  di?: El;
+  kind: EdgeKind;
+  sourceId?: string;
+  targetId?: string;
+  points: Point[];
+  label?: Box;
+}
+
+export interface Plane {
+  /** BPMNPlane id */
+  id: string;
+  /** the BPMNPlane; undefined for a plane the engine creates until write.ts writes it */
+  di?: El;
+  /** id of the element the plane shows: collaboration, process or collapsed sub-process */
+  rootId: string;
+  root: El;
+  shapes: Map<string, DShape>;
+  edges: Map<string, DEdge>;
+  /** DI elements write.ts deletes */
+  dropped: El[];
+  /**
+   * BPMNShapes without valid bounds (missing, NaN), by element id: the
+   * element counts as undrawn and is placed, reusing this DI (and its colours)
+   */
+  unbounded?: Map<string, El>;
+  /** write.ts deletes the whole diagram (its content moved elsewhere) */
+  deleted?: boolean;
+}
+
+export interface Semantics {
+  /** semantic elements by id (no DI) */
+  byId: Map<string, El>;
+  /** flow node id -> innermost lane id */
+  laneOf: Map<string, string>;
+  /** lane id -> parent lane id */
+  laneParent: Map<string, string>;
+  /** lane id -> process id */
+  laneProcess: Map<string, string>;
+  /** process id -> participant id */
+  poolOfProcess: Map<string, string>;
+  /** flow element / artifact id -> containing process or sub-process */
+  scopeOf: Map<string, El>;
+  /** the collaboration, if any */
+  collaboration?: El;
+}
+
+export type Side = 'left' | 'right' | 'top' | 'bottom';
+
+export type ShapeKind =
+  | 'task'
+  | 'subProcess'
+  | 'event'
+  | 'gateway'
+  | 'boundary'
+  | 'data'
+  | 'annotation'
+  | 'participant'
+  | 'lane'
+  | 'group'
+  | 'other';

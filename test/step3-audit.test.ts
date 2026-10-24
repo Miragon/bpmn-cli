@@ -10,8 +10,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes, semantics, type DShape } from '../src/diagram/plane.js';
-import { makeSpace } from '../src/diagram/space.js';
+import { readPlanes, semantics } from '../src/diagram/plane.js';
+import { type DShape } from '../src/diagram/types.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { mutateDoc } from '../src/pipeline/index.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
@@ -35,7 +36,7 @@ describe('#41 shapes no lane lists follow the lane they are drawn in', () => {
     expect(doc.importWarnings).toEqual([]);
     const plane = readPlanes(doc.definitions, semantics(doc.definitions))[0]!;
     // room below A, in the band of A's column only (like a growing sub-process makes it): L2 lies beyond the line and moves
-    makeSpace(plane, { axis: 'y', line: 140, delta: 100, within: { x: 90, y: 0, width: 120, height: 300 } });
+    new Drawing(plane).makeSpace({ axis: 'y', line: 140, delta: 100, within: { x: 90, y: 0, width: 120, height: 300 } });
     expect(plane.shapes.get('L2')!.bounds.y).toBe(250);
     expect(plane.shapes.get('B')!.bounds.y).toBe(290);
     expect(plane.shapes.get('Data')!.bounds.y).toBe(300);

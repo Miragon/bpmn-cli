@@ -13,9 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
+import { readPlanes } from '../src/diagram/plane.js';
+import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
 import { routeOrthogonal } from '../src/diagram/router.js';
-import { makeSpace } from '../src/diagram/space.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/utils/text.js';
 import type { Box, Point } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
@@ -77,7 +78,7 @@ describe('makeSpace: labels go with their connection', () => {
       [sh('Top', 'participant', [100, 0, 800, 60]), sh('Pool', 'participant', [100, 120, 800, 200]), sh('A', 'task', [200, 160, 100, 80], { poolId: 'Pool' }), sh('R', 'task', [400, 160, 100, 80], { poolId: 'Pool' })],
       [ed('M', 'R', 'Top', [[450, 160], [450, 60]], { kind: 'messageFlow', label: { x: 456, y: 85, width: 40, height: 14 } })],
     );
-    makeSpace(p, { axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
+    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
     expect(p.edges.get('M')!.points).toEqual([{ x: 600, y: 160 }, { x: 600, y: 60 }]);
     expect(p.edges.get('M')!.label!.x).toBe(606);
   });
@@ -87,7 +88,7 @@ describe('makeSpace: labels go with their connection', () => {
       [sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [500, 100, 100, 80]), sh('C', 'task', [100, 300, 100, 80]), sh('D', 'task', [200, 300, 30, 80])],
       [ed('F', 'A', 'B', [[200, 140], [500, 140]], { label: { x: 210, y: 120, width: 30, height: 14 } }), ed('K', 'C', 'D', [[200, 340], [200, 340]], { label: { x: 420, y: 320, width: 30, height: 14 } })],
     );
-    makeSpace(p, { axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
+    new Drawing(p).makeSpace({ axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
     expect(p.edges.get('F')!.points).toEqual([{ x: 200, y: 140 }, { x: 600, y: 140 }]);
     expect(p.edges.get('F')!.label!.x).toBe(210);
     // a connection outside the band does not move, nor does its label (even beyond the line)
@@ -121,7 +122,7 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
 
   it('anchored outside them: the one mostly before the line stays, the other moves as a whole', () => {
     const p = rows();
-    const r = makeSpace(p, { axis: 'x', line: 301, delta: 160, anchors: ['A'] });
+    const r = new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['A'] });
     expect(p.shapes.get('Sub1')!.bounds).toEqual({ x: 150, y: 200, width: 250, height: 150 });
     expect(p.shapes.get('S1b')!.bounds.x).toBe(340);
     expect(p.shapes.get('S1b')!.label!.x).toBe(335);
@@ -140,12 +141,12 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
 
   it('anchored inside one: that one grows, as without anchors', () => {
     const p = rows();
-    makeSpace(p, { axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
+    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
     expect(p.shapes.get('Sub1')!.bounds.width).toBe(410);
     expect(p.shapes.get('S1a')!.bounds.x).toBe(170);
     expect(p.shapes.get('S1b')!.bounds.x).toBe(500);
     const q = rows();
-    makeSpace(q, { axis: 'x', line: 301, delta: 160 });
+    new Drawing(q).makeSpace({ axis: 'x', line: 301, delta: 160 });
     expect(q.shapes.get('Sub1')!.bounds.width).toBe(410);
     expect(q.shapes.get('Sub2')!.bounds.width).toBe(560);
   });

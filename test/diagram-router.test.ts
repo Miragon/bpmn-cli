@@ -9,7 +9,9 @@
  * frame when one is given. The scenarios then assert the shape of the route.
  */
 import { describe, expect, it } from 'vitest';
-import { attachedSide, defaultSides, routeOrthogonal, type RouteRequest, type Side } from '../src/diagram/router.js';
+import { attachedSide, defaultSides } from '../src/diagram/utils/sides.js';
+import { routeOrthogonal, type RouteRequest } from '../src/diagram/router.js';
+import { type Side } from '../src/diagram/types.js';
 import type { Box, Point } from '../src/diagram/types.js';
 
 const box = (x: number, y: number, width = 100, height = 80): Box => ({ x, y, width, height });

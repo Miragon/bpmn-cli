@@ -28,7 +28,7 @@
  *    joins the bundle and follows it into the same vertex. The waiver can
  *    make a route that crosses a line on its way to the shared vertex
  *    cheaper than a crossing-free detour to a free one: the caller compares
- *    (reroute.ts routeEdge, with `crossings`)
+ *    (EdgeRouter.ts routeEdge, with `crossings`)
  *  - a target with `targetMiddle` (a gateway) is touched only at its port:
  *    running through another vertex of the diamond (along its bounding box,
  *    under or beside it) costs like cutting an obstacle (only the target: a
@@ -72,22 +72,8 @@
  * (the test of the cost).
  */
 import { bottom, equalBoxes, grow, right, segmentHitsBox, union } from './utils/geom.js';
-import type { Box, Point } from './types.js';
-
-export type Side = 'left' | 'right' | 'top' | 'bottom';
-
-export type ShapeKind =
-  | 'task'
-  | 'subProcess'
-  | 'event'
-  | 'gateway'
-  | 'boundary'
-  | 'data'
-  | 'annotation'
-  | 'participant'
-  | 'lane'
-  | 'group'
-  | 'other';
+import type { Box, Point, Side } from './types.js';
+import { SOURCE_DEFAULT, TARGET_DEFAULT } from './utils/sides.js';
 
 export interface RouteRequest {
   source: Box;
@@ -144,44 +130,10 @@ const REGION_PAD = 100;
 const THIN_MARGIN = 3;
 const EPS = 1e-6;
 
-const SOURCE_DEFAULT: Side[] = ['right', 'bottom', 'top', 'left'];
-const TARGET_DEFAULT: Side[] = ['left', 'bottom', 'top', 'right'];
-
 /** travel direction 0..3 = right, down, left, up */
 const DX = [1, 0, -1, 0];
 const DY = [0, 1, 0, -1];
 const OUTWARD: Record<Side, number> = { right: 0, bottom: 1, left: 2, top: 3 };
-
-/** BPMN conventions for the sides a connection may leave (`source`) or enter (`target`) a shape. */
-export function defaultSides(kind: ShapeKind, role: 'source' | 'target'): Side[] {
-  const source = role === 'source';
-  switch (kind) {
-    case 'task':
-    case 'subProcess':
-    case 'gateway':
-      return source ? ['right', 'bottom', 'top'] : ['left', 'bottom', 'top'];
-    case 'boundary':
-      return source ? ['bottom'] : [...TARGET_DEFAULT];
-    case 'participant':
-    case 'lane':
-      return source ? ['bottom', 'top'] : ['top', 'bottom'];
-    default:
-      return source ? [...SOURCE_DEFAULT] : [...TARGET_DEFAULT];
-  }
-}
-
-/** the border of `host` a boundary event sits on (the side its flows should leave by) */
-export function attachedSide(event: Box, host: Box): Side {
-  const cx = event.x + event.width / 2;
-  const cy = event.y + event.height / 2;
-  const dist: Array<[Side, number]> = [
-    ['bottom', Math.abs(cy - bottom(host))],
-    ['right', Math.abs(cx - right(host))],
-    ['top', Math.abs(cy - host.y)],
-    ['left', Math.abs(cx - host.x)],
-  ];
-  return dist.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
-}
 
 // ---------------------------------------------------------------- geometry
 

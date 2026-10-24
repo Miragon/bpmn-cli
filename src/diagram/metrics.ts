@@ -35,7 +35,7 @@
  *                      shape of that end on its plane (an end without a
  *                      shape there, or docked on a connection, is not
  *                      checked): a line left at its end's old place, which
- *                      the incremental layout reroutes (reroute.ts
+ *                      the incremental layout reroutes (EdgeRouter.ts
  *                      detachedEnds, the same rule)
  *  - QUALITY_KEYS are soft drawing-quality kinds the harness does not
  *    measure either (weights below 6, so the bench and the fuzzer never count
@@ -207,6 +207,9 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   messageLabelFar: 1,
   failed: 50,
 };
+
+/** A hard layout defect: weighted like an outside-lane node or more (import warnings aside). */
+export const isHardProblem = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
 
 /** Where a problem shows in the drawing (locateProblems). */
 export interface ProblemLocation {
@@ -787,7 +790,7 @@ function checkDegenerate({ edges, add }: PlaneCtx): void {
   }
 }
 
-/** how far (px) an edge's end point may lie outside its end's shape (reroute.ts DETACHED_GAP alike) */
+/** how far (px) an edge's end point may lie outside its end's shape (EdgeRouter.ts DETACHED_GAP alike) */
 const DETACHED_GAP = 10;
 
 /** The source and target an edge is drawn between (a data association: its activity and the data object / store). */
