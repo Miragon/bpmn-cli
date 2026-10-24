@@ -16,7 +16,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseOps } from '../src/ops/batch.js';
+import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { renderDetail, renderExtensionList } from '../src/report/view-text.js';
 import { kindsJson, kindsText } from '../src/index.js';

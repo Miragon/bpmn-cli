@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPS_SCHEMA, OP_FIELDS, opsExample, parseOps } from '../src/ops/batch.js';
+import { OPS_SCHEMA } from '../src/ops/OpsSchemaBuilder.js';
+import { OP_FIELDS, opsExample } from '../src/ops/utils/op-fields.js';
+import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import { renderView } from '../src/report/view-text.js';

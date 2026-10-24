@@ -9,7 +9,8 @@ import { laneOf } from '../src/ops/utils/lanes.js';
 import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events.js';
 import { splitFlow } from '../src/ops/split.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
-import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from '../src/ops/utils/op-fields.js';
+import { parseOps } from '../src/index.js';
 import type { CliError } from '../src/shared/CliError.js';
 import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
@@ -895,7 +896,7 @@ describe('split', () => {
     const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
     expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
     expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
-    // no TypeError: the batch aliases read only arrays of objects (ops/aliases.ts), the split checks the shape
+    // no TypeError: the batch aliases read only arrays of objects (ops/OpAliases.ts), the split checks the shape
     expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
     expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
     expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);

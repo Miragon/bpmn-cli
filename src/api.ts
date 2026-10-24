@@ -37,7 +37,7 @@
  * candidates, hint, op), exactly what the CLI prints with --json; the input
  * string is never modified.
  */
-import { parseOps } from './ops/batch.js';
+import { OpsParser } from './ops/OpsParser.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
 import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
 import type { LayoutView } from './query/layout-view.js';
@@ -118,7 +118,7 @@ function toEditResult(input: string | undefined, mutation: MutationResult): Edit
 
 /** The ops of applyToXml: an array, `{ ops: [...] }` or the JSON text of either, checked like `bpmn apply`. */
 function readOps(ops: unknown): Op[] {
-  return parseOps(typeof ops === 'string' ? parseOpsJson(ops) : ops);
+  return new OpsParser().parse(typeof ops === 'string' ? parseOpsJson(ops) : ops);
 }
 
 /** Parses a document for a write: E_PARSE, and E_IMPORT_LOSSY unless force (like the CLI's loadDoc). */

@@ -9,7 +9,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseOps } from '../src/ops/batch.js';
+import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { layoutView } from '../src/query/layout-view.js';
 import { readPlanes, type DShape } from '../src/diagram/plane.js';

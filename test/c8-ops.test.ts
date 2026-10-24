@@ -14,7 +14,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { opsExample } from '../src/ops/batch.js';
+import { opsExample } from '../src/ops/utils/op-fields.js';
 import { Doc } from '../src/model/Doc.js';
 import { renderView } from '../src/report/view-text.js';
 import { runOps } from '../src/index.js';

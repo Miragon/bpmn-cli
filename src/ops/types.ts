@@ -52,7 +52,7 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   kind: string;
   name?: string;
   id?: string;
-  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/aliases.ts) */
+  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/OpAliases.ts) */
   as?: string;
   /** batch alias of the flow into the new node (the flow the flow options describe) */
   flowAs?: string;

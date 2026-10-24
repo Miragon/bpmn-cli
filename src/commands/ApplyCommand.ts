@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Command as CommandType } from 'commander';
-import { parseOps } from '../ops/batch.js';
+import { OpsParser } from '../ops/OpsParser.js';
 import type { Op } from '../ops/types.js';
 import { ioError, usageError } from '../shared/utils/errors.js';
 import { parseOpsJson } from '../shared/utils/ops-json.js';
@@ -15,7 +15,7 @@ export class ApplyCommand extends MutationCommand {
   private async run(file: string, opsFile: string | undefined, o: RawOpts): Promise<void> {
     const opts = this.mutationOptions(o);
     await this.cli.guarded(async () => {
-      const ops: Op[] = parseOps(parseOpsJson(await this.readOpsText(file, opsFile)));
+      const ops: Op[] = new OpsParser().parse(parseOpsJson(await this.readOpsText(file, opsFile)));
       await this.mutate(file, ops, opts);
     }, opts.json);
   }

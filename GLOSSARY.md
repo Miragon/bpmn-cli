@@ -17,6 +17,11 @@ a new concept gets its line here first.
 | **Check** | `bpmn validate` of a document: validation, the validators and a layout dry run (`pipeline/DocCheck.ts`). |
 | **Reordering** | An `order` op on a document: the outgoing flows of a node, the lanes of a pool or lane, or the pools of a collaboration (`ops/Reordering.ts`). |
 | **Alias** | A `$name` an op gives to what it creates, so later ops of the batch can name it. |
+| **Op aliases** | Where one op defines aliases and where it may name one, and the op with its aliases resolved (`ops/OpAliases.ts`). |
+| **Alias table** | The aliases of a running batch: each bound to its element, so it follows renames and retypes (`ops/AliasTable.ts`). |
+| **Field spec** | Type, description and rules of one key of an op in the ops JSON; one table per op (`ops/utils/op-fields.ts`). |
+| **Ops parser** | Checks the ops JSON of `apply` against the field specs and the batch aliases and returns typed ops (`ops/OpsParser.ts`). |
+| **Ops schema** | The JSON Schema of the ops JSON, built from the field specs (`ops/OpsSchemaBuilder.ts`). |
 | **Change set** | What one op created, changed and removed, and the warnings it raised (`model/ChangeSet.ts`). |
 | **Pool editor** | Creates a participant (pool): wraps the one process, binds one, creates a new or a black-box one (`ops/PoolEditor.ts`). |
 | **Lane editor** | Creates lanes (nested ones inherit the parent's members) and assigns flow nodes to a lane (`ops/LaneEditor.ts`). |

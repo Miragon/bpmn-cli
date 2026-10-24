@@ -26,6 +26,7 @@ import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/Platf
 import { AgentGuide } from './report/AgentGuide.js';
 import { KindsReference } from './report/KindsReference.js';
 import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
+import { OpsParser } from './ops/OpsParser.js';
 import type { El } from './model/utils/moddle.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
@@ -118,7 +119,7 @@ export type { PlatformSummary, ProfileReport } from './platform/profiles/Platfor
 export type { ProfileFinding, Severity } from './platform/utils/finding.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
-export { parseOps, OPS_SCHEMA } from './ops/batch.js';
+export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
 export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
@@ -135,6 +136,14 @@ export function runOp(doc: Doc, op: Op): ChangeSet {
 /** Runs a batch (OpRunner.runBatch) and returns what changed. */
 export function runOps(doc: Doc, ops: Op[]): ChangeSet {
   return new OpRunner(doc).runBatch(ops).changes;
+}
+
+/**
+ * Validates the ops JSON (an array or `{ ops: [...] }`) and returns typed
+ * ops. Throws a usage error (exit 1) naming the op index for every problem.
+ */
+export function parseOps(input: unknown): Op[] {
+  return new OpsParser().parse(input);
 }
 
 /** Applies ops to an in-memory document (src/pipeline/EditTransaction.ts). */

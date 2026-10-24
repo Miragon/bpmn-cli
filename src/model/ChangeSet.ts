@@ -84,7 +84,7 @@ export class ChangeSet {
   notes: string[] = [];
   /** ids an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds): earlier entries name the new id */
   renames: Rename[] = [];
-  /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/aliases.ts): the element itself */
+  /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/OpAliases.ts): the element itself */
   bindings: Array<{ alias: string; el: El }> = [];
   /** elements an op replaced by a new one (a retype to another type, ops/retype.ts swapType): the batch aliases follow */
   replaced: Array<{ from: El; to: El }> = [];
