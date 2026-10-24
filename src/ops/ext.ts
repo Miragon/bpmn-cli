@@ -2,7 +2,7 @@
  * `ext`: vendor extension elements inside <bpmn:extensionElements>.
  *
  * Vendor content stays generic in the model (camunda-bpmn-moddle is never
- * registered, see src/platform/descriptor.ts); this module knows just enough
+ * registered, see src/platform/VendorDescriptor.ts); this module knows just enough
  * of its structure to never write a file the engines reject or ignore.
  *
  * CONTRACT
@@ -72,13 +72,13 @@ import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { addTo, BPMN_NS, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
-import { allowedOn, allowedParents, CAMUNDA_URI, containersOf, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
-import { zeebeAllowedOn, zeebeType } from '../platform/zeebe.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { kindLabel } from '../model/kinds.js';
 import { coversProfileSubjects } from './covers.js';
 import { changeOf, definitionsOf, descriptorOf, idOf, isEl, nestedEntries, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
 import type { ExtOp } from './types.js';
+import { CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../platform/CamundaDescriptor.js';
+import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export interface ExtensionInfo {
   index: number;
@@ -104,40 +104,7 @@ const NAME_RE = /^([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)$/;
  * Types that occur at most once in bpmn:extensionElements (canonical names:
  * camunda: / zeebe: by namespace URI, whatever prefix a file uses).
  */
-export const SINGLE_TOP: ReadonlySet<string> = new Set([
-  // Camunda 7: a second one makes Camunda 7.24, CIB seven 2.2 and Operaton 2.1
-  // reject the deployment (ENGINE-01009 "multiple elements with tag name ... found")
-  'camunda:inputOutput',
-  'camunda:formData',
-  'camunda:connector',
-  'camunda:failedJobRetryTimeCycle',
-  // the engines accept two, but the Camunda Modeler and the C7 model API read
-  // only one; merging them loses nothing
-  'camunda:properties',
-  // Zeebe (zeebe-bpmn-moddle): the Zeebe model reads one element of each
-  'zeebe:ioMapping',
-  'zeebe:taskHeaders',
-  'zeebe:properties',
-  'zeebe:taskDefinition',
-  'zeebe:formDefinition',
-  'zeebe:assignmentDefinition',
-  'zeebe:priorityDefinition',
-  'zeebe:taskSchedule',
-  'zeebe:calledElement',
-  'zeebe:calledDecision',
-  'zeebe:loopCharacteristics',
-  'zeebe:subscription',
-  'zeebe:script',
-  'zeebe:userTask',
-  'zeebe:versionTag',
-  'zeebe:executionListeners',
-  'zeebe:taskListeners',
-  'zeebe:linkedResources',
-  // Camunda 8.9 refuses a second one (engine-checked, test/c8-profile.test.ts)
-  'zeebe:adHoc',
-  'zeebe:conditionalFilter',
-  'zeebe:publishMessage',
-]);
+export const SINGLE_TOP: ReadonlySet<string> = new Set([...CAMUNDA.singles, ...ZEEBE.singles]);
 
 /** Children that occur at most once inside their vendor parent. */
 export const SINGLE_CHILD: Readonly<Record<string, readonly string[]>> = {
@@ -170,13 +137,7 @@ export const KEYS: Readonly<Record<string, readonly string[]>> = {
 /** Containers of child types the camunda descriptor does not describe as types (and all Zeebe ones). */
 const STATIC_HOMES: Readonly<Record<string, string>> = {
   'camunda:connectorId': 'camunda:connector', // a String property of camunda:Connector, written as an element
-  'zeebe:input': 'zeebe:ioMapping',
-  'zeebe:output': 'zeebe:ioMapping',
-  'zeebe:header': 'zeebe:taskHeaders',
-  'zeebe:property': 'zeebe:properties',
-  'zeebe:executionListener': 'zeebe:executionListeners',
-  'zeebe:taskListener': 'zeebe:taskListeners',
-  'zeebe:linkedResource': 'zeebe:linkedResources',
+  ...ZEEBE.nestedHomes(),
 };
 
 /** Child order of containers whose schema is a sequence (camunda.xsd / zeebe.xsd, the order the modelers write). */
@@ -227,7 +188,7 @@ function isCamunda(type: string): boolean {
 /** A camunda type that may only appear inside another vendor element (descriptor: no allowedIn, but a container). */
 function nestedOnly(type: string): boolean {
   const t = ruleName(type);
-  return isCamunda(t) && !allowedParents(t).some((p) => p === '*' || p.startsWith('bpmn:')) && containersOf(t).length > 0;
+  return isCamunda(t) && !CAMUNDA.allowedParents(t).some((p) => p === '*' || p.startsWith('bpmn:')) && CAMUNDA.containersOf(t).length > 0;
 }
 
 /** True when vendor type `parent` holds `child` as a direct child. */
@@ -236,7 +197,7 @@ function holds(parent: string, child: string): boolean {
   const c = ruleName(child);
   if (SINGLE_CHILD[p]?.includes(c)) return true;
   if (STATIC_HOMES[c] === p) return true;
-  return isCamunda(c) && containersOf(c).includes(p);
+  return isCamunda(c) && CAMUNDA.containersOf(c).includes(p);
 }
 
 /** The one container type of a child type, if it has exactly one (in the child's namespace family). */
@@ -245,7 +206,7 @@ function containerOf(type: string): string | undefined {
   const fixed = STATIC_HOMES[t];
   if (fixed) return inFamily(fixed, type);
   if (!nestedOnly(t)) return undefined;
-  const all = containersOf(t);
+  const all = CAMUNDA.containersOf(t);
   return all.length === 1 ? inFamily(all[0]!, type) : undefined;
 }
 
@@ -1223,8 +1184,8 @@ function misplacedWarning(doc: Doc, host: El, v: El, cs: ChangeSet): void {
   const t = typeOf(doc, v);
   if (t.startsWith('zeebe:')) {
     const local = t.slice('zeebe:'.length);
-    const z = zeebeType(local);
-    if (!z || zeebeAllowedOn(local, host) !== false) return;
+    const z = ZEEBE.type(local);
+    if (!z || ZEEBE.allowedOn(local, host) !== false) return;
     const hosts = z.allowedIn.filter((a) => a.startsWith('bpmn:')).map((a) => a.slice(5).replace(/^./, (c) => c.toLowerCase()));
     cs.warn(
       coversProfileSubjects(
@@ -1241,7 +1202,7 @@ function misplacedWarning(doc: Doc, host: El, v: El, cs: ChangeSet): void {
   }
   if (!isCamunda(t)) return;
   if (nestedOnly(t)) {
-    const containers = containersOf(ruleName(t))
+    const containers = CAMUNDA.containersOf(ruleName(t))
       .filter((c) => !c.endsWith('inputOutputParameter'))
       .map((c) => inFamily(c, t));
     cs.warn({
@@ -1252,7 +1213,7 @@ function misplacedWarning(doc: Doc, host: El, v: El, cs: ChangeSet): void {
     });
     return;
   }
-  if (ruleName(t) === 'camunda:field' && allowedOn(ruleName(t), host) === false) {
+  if (ruleName(t) === 'camunda:field' && CAMUNDA.allowedOn(ruleName(t), host) === false) {
     cs.warn({
       code: 'W_MISPLACED_EXTENSION',
       message: `${v.$type} on ${hostLabel(host)} (${host.$type}) is not read by the engines: field injection belongs to service, send and business rule tasks, a message event definition or a listener`,
@@ -1286,7 +1247,7 @@ function pathTo(type: string, container: string): string {
   let c: string | undefined = container;
   for (let i = 0; c && nestedOnly(c) && i < 6; i++) {
     chain.unshift(c);
-    const up: string[] = containersOf(c).filter((x) => !x.endsWith('inputOutputParameter'));
+    const up: string[] = CAMUNDA.containersOf(c).filter((x) => !x.endsWith('inputOutputParameter'));
     c = up.length === 1 ? up[0] : undefined;
   }
   if (c && !nestedOnly(c) && chain.length === 1) chain.unshift(c);

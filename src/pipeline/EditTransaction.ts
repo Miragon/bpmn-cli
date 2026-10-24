@@ -118,7 +118,7 @@ import { reportedImportWarnings } from '../ops/decision.js';
 import { OpRunner, type BatchRun } from '../ops/OpRunner.js';
 import { withoutProfileDuplicates } from '../ops/retype.js';
 import type { Op } from '../ops/types.js';
-import { ensureProfile } from '../platform/profiles/profile.js';
+import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidationResult } from '../validate/structural.js';
 import { FindingBaseline, type ValidationDelta } from '../validate/FindingBaseline.js';
 import { buildView } from '../query/model-view.js';
@@ -172,7 +172,7 @@ export class EditTransaction {
   private async guard(): Promise<void> {
     this.doc.assertLossless(this.opts);
     // the engine rules of the file's platform (a chunk of its own in a browser bundle): loaded before anything runs
-    await ensureProfile(this.doc, this.opts.platform);
+    await PLATFORM_PROFILES.ensure(this.doc, this.opts.platform);
   }
 
   /** Runs the batch (its ops with their aliases resolved are what the layout and the format phase run); refuses the content retypes would delete. */

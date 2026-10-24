@@ -21,7 +21,7 @@
  *    (found by id or name, created when missing), like a message event.
  *  - participants: a new process gets the platform defaults (Doc.initProcess:
  *    camunda:historyTimeToLive in a Camunda 7 file); a user task of a Camunda 8
- *    file gets zeebe:userTask (platform/defaults.ts).
+ *    file gets zeebe:userTask (platform/Camunda8Defaults.ts).
  *  - flow nodes: create with name (+ def.props), placeNode() from ./flows.js,
  *    applyTrigger() for events (default trigger 'none'; boundary events and
  *    event sub-process start events require a trigger -> E_TRIGGER_REQUIRED;
@@ -76,7 +76,7 @@ import { assignLane, createLane, createParticipant, laneOf } from './containers.
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
 import { assertCondition, flowIdIgnoredHint, placeNode, placementMode, placementScope, warnEventGatewayFlow } from './flows.js';
-import { zeebeUserTaskDefault } from '../platform/defaults.js';
+import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { setProperties, setTaskMessage } from './set.js';
 import type { AddOp, TriggerOptions } from './types.js';
 
@@ -445,7 +445,7 @@ function addFlowNode(doc: Doc, op: AddOp, def: KindDef, trigger: Trigger | undef
     if (resolved !== 'none') entry.kind = kindLabel(el);
   }
   if (messageTask) setTaskMessage(doc, el, op.message ?? '', cs);
-  if (zeebeUserTaskDefault(doc, el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
+  if (new Camunda8Defaults(doc).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
   // a flow out of an event-based gateway the new node now ends or starts (checked once the trigger is set)
   for (const f of new Set([...doc.incoming(el), ...doc.outgoing(el)])) warnEventGatewayFlow(doc, f, cs);
   if (op.collapsed && def.family === 'subProcess') {

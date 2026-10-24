@@ -10,7 +10,7 @@ import type { LayoutWarningInfo, LayoutEngine } from '../layout/index.js';
 import type { MetricsDelta } from '../diagram/metrics.js';
 import type { FormatResult } from '../format/index.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import type { PlatformChoice } from '../platform/profiles/profile.js';
+import type { PlatformChoice } from '../platform/PlatformDetection.js';
 import type { ValidationResult } from '../validate/structural.js';
 import type { ValidationDelta } from '../validate/FindingBaseline.js';
 import type { Validator } from '../validate/validators.js';

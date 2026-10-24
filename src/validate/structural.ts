@@ -55,7 +55,7 @@
  * W_EMPTY_SUBPROCESS).
  * Without the option nothing changes (show, library callers).
  * Mutations report only the profile findings a change introduced
- * (validate/FindingBaseline.ts, withProfile + profileDelta).
+ * (validate/FindingBaseline.ts, withProfile + PlatformProfiles.delta).
  */
 import type { Doc } from '../model/Doc.js';
 import { isCliError } from '../shared/utils/errors.js';
@@ -64,7 +64,9 @@ import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel,
 import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { assertSequenceFlowEndpoints } from '../ops/flows.js';
-import { runProfile, summarize, type PlatformChoice, type PlatformSummary, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
+import type { PlatformChoice } from '../platform/PlatformDetection.js';
+import type { ProfileFinding } from '../platform/utils/finding.js';
+import { PLATFORM_PROFILES, type PlatformSummary, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidatorReport } from './validators.js';
 
 export interface ValidationResult {
@@ -752,7 +754,7 @@ function checkDuplicateNames(ctx: Ctx): void {
 export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult {
   const result = validateStructure(doc);
   if (opts.platform === undefined) return result;
-  const report = runProfile(doc, opts.platform);
+  const report = PLATFORM_PROFILES.run(doc, opts.platform);
   return withProfile(result, report, report.findings);
 }
 
@@ -795,7 +797,7 @@ export function withProfile(result: ValidationResult, report: ProfileReport, sho
   }
   const covered = lintCoveredBy(shown);
   const warnings = result.warnings.filter((w) => !covered(w));
-  const platform: PlatformSummary = { ...summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
+  const platform: PlatformSummary = { ...PLATFORM_PROFILES.summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
   return { errors: result.errors, warnings: [...warnings, ...shown], platform };
 }
 

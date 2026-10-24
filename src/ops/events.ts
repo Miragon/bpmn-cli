@@ -32,10 +32,10 @@ import { type Warning } from '../shared/CliError.js';
 import { typeRequest } from '../ids/utils/requests.js';
 import { kindLabel, kindOf, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { addTo, is, many, walk, type El, idOf } from '../model/utils/moddle.js';
-import { isC7Uri } from '../platform/descriptor.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { definitionIdDefault } from '../platform/defaults.js';
+import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import type { TriggerOptions } from './types.js';
+import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 
 export interface TriggerDetails {
   trigger: Trigger;
@@ -280,7 +280,7 @@ function updateCondition(doc: Doc, event: El, def: El, opts: TriggerOptions): Wa
   const expr = def.get<El | undefined>('condition');
   const dropped: string[] = [];
   if (expr && expr.get<string | undefined>('body') !== opts.when) {
-    const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && isC7Uri(doc.namespaceUri(k.split(':')[0]!)));
+    const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && CAMUNDA.reads(doc.namespaceUri(k.split(':')[0]!)));
     const language = expr.get<string | undefined>('language');
     if (resourceKey) {
       dropped.push(`${resourceKey} ${String(expr.$attrs[resourceKey])}`);
@@ -470,7 +470,7 @@ export function applyTrigger(doc: Doc, event: El, trigger: Trigger, opts: Trigge
   const warnings = dropDefinitions(doc, event, trigger);
   if (fresh) {
     addTo(event, 'eventDefinitions', fresh);
-    definitionIdDefault(doc, event, fresh);
+    new Camunda8Defaults(doc).definitionId(event, fresh);
   }
   doc.invalidate();
   return warnings;

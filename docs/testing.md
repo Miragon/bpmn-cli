@@ -392,9 +392,9 @@ npx vitest run test/isomorphic.test.ts
   not compile. It prints the minified and gzipped sizes, split like a host's
   bundler would split them: the initial chunks of the whole entry and of an
   `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
-  rules, the Camunda 8 rules with `feel` and `schema-text`,
+  rules, the Camunda 8 rules with the FEEL, timer and schema-text checks,
   bpmn-auto-layout). It fails when a rule module
-  (`dist/platform/{c7,c8,feel,schema-text}.js`) is in the initial chunks of
+  (`dist/platform/profiles/`: the profiles, their base, utils and checks) is in the initial chunks of
   either entry, naming it; when a rule module imports a module the entry
   loads, naming both (Rollup / Vite would put that module into the host's
   entry chunk and make the rule chunk import the entry chunk back: a host
@@ -421,7 +421,7 @@ npx vitest run test/isomorphic.test.ts
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
-  esbuild make of the `import()` in `src/platform/profiles/profile.ts`), writes a
+  esbuild make of the `import()` in `src/platform/profiles/PlatformProfiles.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
   chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
   error and covered lint warning come out like Node's) and
@@ -664,7 +664,7 @@ flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
-The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/c7.ts`) states for
+The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/C7Profile.ts`) states for
 every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
 model per rule (82 models) with the expected codes and the engine verdict;
 by default it checks only the profile. To re-check the verdicts against live
@@ -704,9 +704,9 @@ element by element.
 
 ## Engine checks (Camunda 8)
 
-The Camunda 8 profile (`src/platform/profiles/c8.ts`) states for every rule what
+The Camunda 8 profile (`src/platform/profiles/C8Profile.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
-(`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
+(`src/platform/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
 while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
 rule (151 models) with the expected codes and Camunda 8's verdict, the timer

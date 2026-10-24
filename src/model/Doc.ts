@@ -21,10 +21,11 @@ import { EditContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
-import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from '../platform/descriptor.js';
-import { C8_PLATFORM_VERSION } from '../platform/zeebe.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
+import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from '../platform/CamundaDescriptor.js';
+import { C8_PLATFORM_VERSION } from '../platform/ZeebeDescriptor.js';
+import { PlatformDetection } from '../platform/PlatformDetection.js';
 
 export const KNOWN_NAMESPACES: Record<string, string> = {
   camunda: 'http://camunda.org/schema/1.0/bpmn',
@@ -221,11 +222,11 @@ export class Doc {
     return doc;
   }
 
-  /** The engine the file targets (the running edit's explicit platform, EditContext.platformChoice, else platform/descriptor.ts platformOf). */
+  /** The engine the file targets (the running edit's explicit platform, EditContext.platformChoice, else platform/PlatformDetection.ts target). */
   platform(): 'camunda7' | 'camunda8' | undefined {
     const choice = this.edit.platformChoice;
     if (choice) return choice === 'c7' ? 'camunda7' : choice === 'c8' ? 'camunda8' : undefined;
-    return platformOf(this.definitions);
+    return new PlatformDetection(this.definitions).target();
   }
 
   /**

@@ -15,7 +15,7 @@
  * operation warning stays.
  */
 import type { Warning } from '../shared/CliError.js';
-import { subjectOf, type ProfileFinding } from '../platform/finding.js';
+import { subjectOf, type ProfileFinding } from '../platform/utils/finding.js';
 
 /** Hidden list of profile subjects an operation warning repeats (not serialised). */
 const COVERS: unique symbol = Symbol('covered-profile-subjects');

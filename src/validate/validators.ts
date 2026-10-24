@@ -51,7 +51,7 @@
 import type { Doc } from '../model/Doc.js';
 import type { Warning } from '../shared/CliError.js';
 import type { Op } from '../ops/types.js';
-import type { Platform } from '../platform/detect.js';
+import type { Platform } from '../platform/PlatformDetection.js';
 
 export type ValidatorSeverity = 'error' | 'warning';
 

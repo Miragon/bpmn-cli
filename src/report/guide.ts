@@ -18,7 +18,7 @@ import { OP_NAMES } from '../ops/types.js';
 import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
 import { SWATCHES } from '../diagram/write.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
-import { zeebeAllowedOn, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
+import { ZEEBE } from '../platform/ZeebeDescriptor.js';
 
 /* ------------------------------------------------------------------ */
 /* error catalogue                                                      */
@@ -531,26 +531,26 @@ export interface ZeebeElementDoc {
 /** Where each zeebe extension element goes, by the Zeebe descriptor (`bpmn kinds` section CAMUNDA 8, `kinds --json` -> zeebeElements). */
 export function zeebeElementTable(): ZeebeElementDoc[] {
   const out: ZeebeElementDoc[] = [];
-  for (const name of zeebeTypeNames()) {
-    const t = zeebeType(name)!;
+  for (const name of ZEEBE.typeNames()) {
+    const t = ZEEBE.type(name)!;
     const on: string[] = [];
-    if (zeebeNestedOnly(name)) on.push(...zeebeContainersOf(name).map((c) => `in ${c}`));
+    if (ZEEBE.nestedOnly(name)) on.push(...ZEEBE.containersOf(name).map((c) => `in ${c}`));
     else {
-      if (zeebeAllowedOn(name, 'bpmn:Process') === true) on.push('process');
+      if (ZEEBE.allowedOn(name, 'bpmn:Process') === true) on.push('process');
       // a whole family (all events, all tasks, ...) is named once
       const families = new Map<string, KindDef[]>();
       for (const k of KINDS) families.set(k.family, [...(families.get(k.family) ?? []), k]);
       for (const [family, kinds] of families) {
-        const allowed = kinds.filter((k) => zeebeAllowedOn(name, k.type) === true);
+        const allowed = kinds.filter((k) => ZEEBE.allowedOn(name, k.type) === true);
         if (allowed.length && allowed.length === kinds.length && kinds.length > 1) on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
         else on.push(...allowed.map((k) => k.kind));
       }
-      if (zeebeAllowedOn(name, 'bpmn:Message') === true && zeebeAllowedOn(name, 'bpmn:Task') !== true) on.push('message');
-      if (zeebeAllowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
-      const defs = ['Message', 'Conditional'].filter((d) => zeebeAllowedOn(name, `bpmn:${d}EventDefinition`) === true);
+      if (ZEEBE.allowedOn(name, 'bpmn:Message') === true && ZEEBE.allowedOn(name, 'bpmn:Task') !== true) on.push('message');
+      if (ZEEBE.allowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
+      const defs = ['Message', 'Conditional'].filter((d) => ZEEBE.allowedOn(name, `bpmn:${d}EventDefinition`) === true);
       for (const d of defs) on.push(`definition. (${d.toLowerCase()} events)`);
-      if (zeebeAllowedOn(name, 'bpmn:Lane') === true && zeebeAllowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
-      for (const c of zeebeContainersOf(name)) on.push(`in ${c}`);
+      if (ZEEBE.allowedOn(name, 'bpmn:Lane') === true && ZEEBE.allowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
+      for (const c of ZEEBE.containersOf(name)) on.push(`in ${c}`);
     }
     out.push({ type: name, on, attributes: t.attributes.map((a) => a.name), ...(t.children.length ? { children: t.children } : {}), single: ZEEBE_SINGLE.includes(name) });
   }

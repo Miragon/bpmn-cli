@@ -57,7 +57,7 @@ import type { LayoutMode, MutationResult } from './pipeline/index.js';
 import { EditTransaction } from './pipeline/EditTransaction.js';
 import { Relayout } from './pipeline/Relayout.js';
 import { DocCheck } from './pipeline/DocCheck.js';
-import type { PlatformChoice } from './platform/profiles/profile.js';
+import type { PlatformChoice } from './platform/PlatformDetection.js';
 import { mutationReport, validationReport, type MutationReport, type ValidationReport } from './report/command-report.js';
 import type { Validator, ValidatorFinding } from './validate/validators.js';
 import { buildView, elementDetail, findElements, scopeView, type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';

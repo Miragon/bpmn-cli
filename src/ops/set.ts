@@ -95,8 +95,6 @@ import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
-import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
@@ -105,6 +103,9 @@ import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './eve
 import { setCorrelationKey } from './ext.js';
 import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
+import { CAMUNDA } from '../platform/CamundaDescriptor.js';
+import { VendorDescriptor } from '../platform/VendorDescriptor.js';
+import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 /* ------------------------------------------------------------------ */
 /* shared helpers                                                       */
@@ -654,7 +655,7 @@ function dropLoop(doc: Doc, el: El, old: El, mode: string, cs: ChangeSet): void 
 function vendorValue(doc: Doc, el: El, key: string, value: string, label: string = key): string {
   if (!value) return value;
   const local = camundaLocal(doc, key);
-  if (!local || camundaAttr(local)?.type !== 'Boolean') return value;
+  if (!local || CAMUNDA.attr(local)?.type !== 'Boolean') return value;
   return String(parseBool(el, label, value));
 }
 
@@ -702,7 +703,7 @@ function setModelProperty(doc: Doc, el: El, key: string, value: string): void {
 /** True for a camunda:resource key (any prefix bound to the camunda namespace, or Operaton's: operaton:resource). */
 function isResourceKey(doc: Doc, key: string): boolean {
   const [prefix, local] = key.split(':');
-  return local === 'resource' && !!prefix && isC7Uri(doc.namespaceUri(prefix));
+  return local === 'resource' && !!prefix && CAMUNDA.reads(doc.namespaceUri(prefix));
 }
 
 /** The camunda:resource attribute key of an expression, if it has one. */
@@ -972,7 +973,7 @@ export function vendorAttributes(el: El): Record<string, string> {
 function camundaLocal(doc: Doc, key: string): string | undefined {
   const idx = key.indexOf(':');
   if (idx <= 0) return undefined;
-  return isC7Uri(doc.namespaceUri(key.slice(0, idx))) ? key.slice(idx + 1) : undefined;
+  return CAMUNDA.reads(doc.namespaceUri(key.slice(0, idx))) ? key.slice(idx + 1) : undefined;
 }
 
 /** `key=value` for a hint, single-quoted when the shell would mangle it. */
@@ -989,20 +990,20 @@ function shellPair(key: string, value: string): string {
 function placeFor(el: El, name: string): { slot?: NestedSlot; prefix?: string; trigger?: Exclude<Trigger, 'none'>; element?: El } | undefined {
   if (is(el, 'bpmn:Event')) {
     const defs = definitionsOf(el);
-    const fit = defs.findIndex((d) => attrAppliesTo(name, d));
+    const fit = defs.findIndex((d) => CAMUNDA.attrAppliesTo(name, d));
     if (fit !== -1) return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
-    if (slotsOf(el).includes('condition') && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+    if (slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
     const current = triggerOf(el);
     for (const t of kindOf(el)?.triggers ?? []) {
       if (t === 'none' || t === current) continue;
-      if (attrAppliesTo(name, TRIGGER_TYPES[t])) return { slot: 'definition', trigger: t };
+      if (CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[t])) return { slot: 'definition', trigger: t };
     }
   }
-  if (is(el, 'bpmn:Activity') && attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) return { slot: 'loop' };
-  if (is(el, 'bpmn:SequenceFlow') && attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+  if (is(el, 'bpmn:Activity') && CAMUNDA.attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) return { slot: 'loop' };
+  if (is(el, 'bpmn:SequenceFlow') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
   if (is(el, 'bpmn:Participant')) {
     const process = el.get<El | undefined>('processRef');
-    if (process && attrAppliesTo(name, process)) return { element: process };
+    if (process && CAMUNDA.attrAppliesTo(name, process)) return { element: process };
   }
   return undefined;
 }
@@ -1016,7 +1017,7 @@ function assertVendorHost(doc: Doc, el: El, key: string, value: string): void {
   const local = camundaLocal(doc, key);
   if (!local) return;
   const name = `camunda:${local}`;
-  if (attrAppliesTo(name, el) !== false) return;
+  if (CAMUNDA.attrAppliesTo(name, el) !== false) return;
   const place = placeFor(el, name);
   if (!place) return;
   const id = idOf(el);
@@ -1046,12 +1047,12 @@ function assertZeebeHost(doc: Doc, el: El, key: string, value: string): void {
   const idx = key.indexOf(':');
   if (idx <= 0 || doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) return;
   const local = key.slice(idx + 1);
-  if (zeebeAttr(local)) return;
+  if (ZEEBE.attr(local)) return;
   const prefix = key.slice(0, idx);
   const id = idOf(el);
   const pair = shellPair(local, value);
-  const owners = zeebeTypeNames().filter((t) => zeebeType(t)!.attributes.some((a) => a.name === local));
-  const here = owners.filter((t) => zeebeAllowedOn(t, el) === true);
+  const owners = ZEEBE.typeNames().filter((t) => ZEEBE.type(t)!.attributes.some((a) => a.name === local));
+  const here = owners.filter((t) => ZEEBE.allowedOn(t, el) === true);
   const loop = is(el, 'bpmn:Activity') && owners.includes('zeebe:loopCharacteristics');
   const message = owners.includes('zeebe:subscription') && (is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:Event'));
   if (!here.length && !loop && !message) return;
@@ -1100,7 +1101,7 @@ export const NESTED_TYPES: Record<NestedSlot, readonly string[]> = {
  * places on it (other vendors' attributes are accepted too, unchecked).
  */
 export function nestedKeysOf(doc: Doc, slot: NestedSlot, target: El): string[] {
-  const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k]), ...camundaAttrsFor(target).map((a) => a.name)];
+  const keys = ['id', ...genericKeys(doc, target).filter((k) => !NESTED_BLOCKED[k]), ...CAMUNDA.attrsFor(target).map((a) => a.name)];
   return [...new Set(keys)].map((k) => `${slot}.${k}`);
 }
 
@@ -1129,7 +1130,7 @@ function createNested(doc: Doc, el: El, slot: NestedSlot, key: string, cs: Chang
   }
   if (slot === 'definition') {
     const name = local ? `camunda:${local}` : undefined;
-    const trigger = name ? (kindOf(el)?.triggers ?? []).find((t) => t !== 'none' && attrAppliesTo(name, TRIGGER_TYPES[t])) : undefined;
+    const trigger = name ? (kindOf(el)?.triggers ?? []).find((t) => t !== 'none' && CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[t])) : undefined;
     throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition to set ${slot}.${key} on (it has no trigger)`, {
       element: id,
       hint: `Give it a trigger first: \`bpmn set <file> ${id} trigger=${trigger ?? '<trigger>'}\` (or in the same command, e.g. trigger=${trigger ?? 'message'} ${slot}.${key}=<value>).`,
@@ -1148,10 +1149,10 @@ function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: str
   const id = idOf(el);
   const full = `${prefix}.${key}`;
   const zi = key.indexOf(':');
-  if (zi > 0 && doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !zeebeAttr(key.slice(zi + 1))) {
+  if (zi > 0 && doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !ZEEBE.attr(key.slice(zi + 1))) {
     // a zeebe setting of a nested element is an extension element of it (loop.zeebe:loopCharacteristics)
     const local = key.slice(zi + 1);
-    const owner = zeebeTypeNames().find((t) => zeebeAllowedOn(t, target) === true && zeebeType(t)!.attributes.some((a) => a.name === local));
+    const owner = ZEEBE.typeNames().find((t) => ZEEBE.allowedOn(t, target) === true && ZEEBE.type(t)!.attributes.some((a) => a.name === local));
     if (owner) {
       throw modelError('E_WRONG_HOST', `${key} is not an attribute of the ${typeLabel(target)} of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
         element: id,
@@ -1161,10 +1162,10 @@ function checkNestedKey(doc: Doc, el: El, slot: NestedSlot, target: El, key: str
   }
   if (key.includes(':')) {
     const local = camundaLocal(doc, key);
-    if (!local || attrAppliesTo(`camunda:${local}`, target) !== false) return;
-    const owners = camundaAttr(local)?.owners ?? [];
-    const onElement = attrAppliesTo(`camunda:${local}`, el);
-    const multi = slot === 'loop' && owners.some((o) => typeIs('bpmn:MultiInstanceLoopCharacteristics', o));
+    if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) return;
+    const owners = CAMUNDA.attr(local)?.owners ?? [];
+    const onElement = CAMUNDA.attrAppliesTo(`camunda:${local}`, el);
+    const multi = slot === 'loop' && owners.some((o) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', o));
     throw modelError('E_WRONG_HOST', `${key} cannot be set on the ${typeLabel(target)} of ${kindLabel(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
       element: id,
       hint: multi
@@ -1621,7 +1622,7 @@ export function renameId(doc: Doc, el: El, newId: string): void {
     followDiIds(doc.definitions, el, old, newId, doc.ids);
   }
   // id-valued attributes of vendor extension elements are plain strings in the model
-  const vendorRefs = idReferenceAttrs().filter((r) => is(el, r.target));
+  const vendorRefs = CAMUNDA.idReferenceAttrs().filter((r) => is(el, r.target));
   for (const e of walk(doc.definitions)) {
     if (is(e, 'bpmn:CallActivity') && e.get<string | undefined>('calledElement') === old) e.set('calledElement', newId);
     if (!descriptorOf(e).isGeneric) continue;
@@ -1629,7 +1630,7 @@ export function renameId(doc: Doc, el: El, newId: string): void {
     if (e.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
     if (!vendorRefs.length) continue;
     const [prefix, local] = e.$type.split(':');
-    if (!prefix || !local || !isC7Uri(doc.namespaceUri(prefix))) continue;
+    if (!prefix || !local || !CAMUNDA.reads(doc.namespaceUri(prefix))) continue;
     for (const ref of vendorRefs) {
       if (ref.element !== `camunda:${local}`) continue;
       if (any[ref.attr] === old) any[ref.attr] = newId;

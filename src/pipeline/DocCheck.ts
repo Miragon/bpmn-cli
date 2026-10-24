@@ -3,8 +3,8 @@ import type { CliError } from '../shared/CliError.js';
 import { LayoutDebug } from '../shared/LayoutDebug.js';
 import { layoutModel } from '../layout/index.js';
 import { reportedImportWarnings } from '../ops/decision.js';
-import { resolvePlatform } from '../platform/detect.js';
-import { ensureProfile } from '../platform/profiles/profile.js';
+import { PlatformDetection } from '../platform/PlatformDetection.js';
+import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import { validateDoc } from '../validate/structural.js';
 import { ValidatorSet } from '../validate/ValidatorSet.js';
 import { counts, withValidatorReports } from '../validate/utils/validator-issues.js';
@@ -26,7 +26,7 @@ export class DocCheck {
   async run(doc: Doc): Promise<CheckResult> {
     const opts = this.opts;
     return LayoutDebug.during(opts.debug, async () => {
-      await ensureProfile(doc, opts.platform ?? 'auto');
+      await PLATFORM_PROFILES.ensure(doc, opts.platform ?? 'auto');
       let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
       const structuralErrors = validation.errors.length;
       const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
@@ -34,7 +34,7 @@ export class DocCheck {
       const validators = new ValidatorSet(opts.validators);
       if (validators.size) {
         // before the layout dry run, which redraws the model in memory: the validators see the document's own diagram
-        const runs = await validators.run({ xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...(file ? { file } : {}), phase: 'check', platform: resolvePlatform(doc, opts.platform ?? 'auto').platform, ops: [] });
+        const runs = await validators.run({ xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...(file ? { file } : {}), phase: 'check', platform: PlatformDetection.of(doc).resolve(opts.platform ?? 'auto').platform, ops: [] });
         validation = withValidatorReports(validation, DocCheck.reports(runs), runs);
       }
       let layout: CheckResult['layout'];

@@ -37,7 +37,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { mutateDoc } from '../src/index.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

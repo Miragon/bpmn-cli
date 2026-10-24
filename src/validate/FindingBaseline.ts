@@ -26,8 +26,9 @@ import type { Warning } from '../shared/CliError.js';
 import { modelError } from '../shared/utils/errors.js';
 import type { El } from '../model/utils/moddle.js';
 import type { Op } from '../ops/types.js';
-import { resolvePlatform } from '../platform/detect.js';
-import { ensureProfile, profileBaseline, profileDelta, runProfile, type PlatformChoice, type ProfileBaseline, type ProfileFinding, type ProfileReport } from '../platform/profiles/profile.js';
+import { PlatformDetection, type PlatformChoice } from '../platform/PlatformDetection.js';
+import type { ProfileFinding } from '../platform/utils/finding.js';
+import { PLATFORM_PROFILES, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import { lintCoveredBy, validateDoc, withProfile, type ValidationResult } from './structural.js';
 import { coveredLint, counts, keyOf, leftOutOf, lintKey, preexisting, validatorRefusal, withValidatorReports } from './utils/validator-issues.js';
 import type { Validator, ValidatorContext, ValidatorIssue, ValidatorReport, ValidatorRun } from './validators.js';
@@ -99,10 +100,10 @@ export class FindingBaseline {
    */
   static async capture(doc: Doc, opts: BaselineOptions): Promise<FindingBaseline> {
     const { errors, warnings } = validateDoc(doc);
-    const profile = profileBaseline(doc, opts.platform);
+    const profile = PLATFORM_PROFILES.baseline(doc, opts.platform);
     const index = new Map(doc.byId());
     const validators = new ValidatorSet(opts.validators);
-    const context: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(opts.file ? { file: opts.file } : {}), platform: validators.size ? resolvePlatform(doc, opts.platform ?? 'auto').platform : 'none', ops: opts.ops };
+    const context: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(opts.file ? { file: opts.file } : {}), platform: validators.size ? PlatformDetection.of(doc).resolve(opts.platform ?? 'auto').platform : 'none', ops: opts.ops };
     const validatorsBefore = validators.size ? await validators.run({ xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...context, phase: 'before' }) : [];
     return new FindingBaseline(doc, opts, { errors, warnings }, index, doc.source ? profile : { report: { ...profile.report, findings: [] }, elements: [] }, validators, context, validatorsBefore);
   }
@@ -117,9 +118,9 @@ export class FindingBaseline {
   async afterOps(): Promise<ValidationResult> {
     const raw = (this.raw = validateDoc(this.doc));
     const structural = this.separatePreexisting(raw);
-    await ensureProfile(this.doc, this.opts.platform);
-    const after = (this.profileAfter = runProfile(this.doc, this.opts.platform));
-    const delta = profileDelta(this.doc, this.profile, after);
+    await PLATFORM_PROFILES.ensure(this.doc, this.opts.platform);
+    const after = (this.profileAfter = PLATFORM_PROFILES.run(this.doc, this.opts.platform));
+    const delta = PLATFORM_PROFILES.delta(this.doc, this.profile, after);
     const validation = (this.validation = withProfile(structural, after, delta.added, delta));
     if (validation.errors.length && !this.opts.force) {
       throw modelError('E_VALIDATION', `The change would introduce ${validation.errors.length} structural error(s); nothing was written`, {

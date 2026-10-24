@@ -25,8 +25,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'package.json'));
 
 const TARGETS = [
-  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/platform/descriptor.ts' },
-  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/platform/zeebe.ts' },
+  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/platform/CamundaDescriptor.ts' },
+  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/platform/ZeebeDescriptor.ts' },
 ];
 
 /** One line per type (and per association / enumeration), the rest as JSON. */

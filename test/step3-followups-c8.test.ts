@@ -18,8 +18,8 @@
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
 import { Doc } from '../src/model/Doc.js';
-import { cronProblem, dateTimeRangeProblem, validCycle, validDateTime } from '../src/platform/profiles/c8.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { TimerValue } from '../src/platform/profiles/TimerValue.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
@@ -149,14 +149,14 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
   });
 
   it('says what is out of range', () => {
-    expect(dateTimeRangeProblem('2030-02-30T10:00:00Z')).toBe('February 2030 has no day 30');
-    expect(dateTimeRangeProblem('2030-12-31T25:00:00Z')).toBe('hour 25 is not in 00-23');
-    expect(dateTimeRangeProblem('2032-02-29T10:00:00Z')).toBeUndefined();
-    expect(cronProblem('0 0 25 * * ?')).toBe('the hour field "25" is not in 0-23');
-    expect(cronProblem('0 0 9 * 13 *')).toBe('the month field "13" is not in 1-12 or JAN-DEC');
-    expect(validDateTime('2030-12-31T10:00:00+18:00')).toBe(true);
-    expect(validCycle('0 0 9 ? * MON-FRI')).toBe(true);
-    expect(validCycle('0 0 25 * * ?')).toBe(false);
+    expect(new TimerValue('2030-02-30T10:00:00Z').dateTimeRangeProblem()).toBe('February 2030 has no day 30');
+    expect(new TimerValue('2030-12-31T25:00:00Z').dateTimeRangeProblem()).toBe('hour 25 is not in 00-23');
+    expect(new TimerValue('2032-02-29T10:00:00Z').dateTimeRangeProblem()).toBeUndefined();
+    expect(new TimerValue('0 0 25 * * ?').cronProblem()).toBe('the hour field "25" is not in 0-23');
+    expect(new TimerValue('0 0 9 * 13 *').cronProblem()).toBe('the month field "13" is not in 1-12 or JAN-DEC');
+    expect(new TimerValue('2030-12-31T10:00:00+18:00').isDateTime()).toBe(true);
+    expect(new TimerValue('0 0 9 ? * MON-FRI').isCycle()).toBe(true);
+    expect(new TimerValue('0 0 25 * * ?').isCycle()).toBe(false);
   });
 
   it('validate names the value and the reason', async () => {

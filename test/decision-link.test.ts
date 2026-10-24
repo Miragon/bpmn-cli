@@ -17,9 +17,8 @@ import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/report/g
 import { runOps } from '../src/index.js';
 import { settableKeys } from '../src/ops/set.js';
 import { checkFile } from '../src/node/files.js';
-import { mutateDoc } from '../src/index.js';
-import { type MutationOptions } from '../src/pipeline/index.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { mutateDoc, type MutationOptions } from '../src/index.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

@@ -30,7 +30,7 @@ import type { FormatResult } from '../format/index.js';
 import type { Warning } from '../shared/CliError.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './view-text.js';
 import type { CheckResult, ConventionsReport, LayoutStatus, MutationResult } from '../pipeline/index.js';
-import type { PlatformSummary } from '../platform/profiles/profile.js';
+import type { PlatformSummary } from '../platform/profiles/PlatformProfiles.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import type { ValidationResult } from '../validate/structural.js';
 import type { ValidatorReport } from '../validate/validators.js';

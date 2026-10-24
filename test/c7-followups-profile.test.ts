@@ -22,9 +22,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { platformOf } from '../src/platform/descriptor.js';
-import { detectPlatform } from '../src/platform/detect.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { detectPlatform, loadProfiles, runProfile } from '../src/index.js';
+import { PlatformDetection } from '../src/platform/PlatformDetection.js';
 import { validateDoc } from '../src/validate/structural.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
@@ -265,7 +264,7 @@ describe('one platform detector', () => {
   it.each(cases)('Doc.platform() follows detectPlatform: %s', async (_name, ns, body, expected) => {
     const doc = await Doc.fromXml(xml(body, { ns, attrs: '' }));
     const p = detectPlatform(doc).platform;
-    expect(platformOf(doc.definitions)).toBe(expected);
+    expect(new PlatformDetection(doc.definitions).target()).toBe(expected);
     expect(doc.platform()).toBe(p === 'c7' ? 'camunda7' : p === 'c8' ? 'camunda8' : undefined);
   });
 

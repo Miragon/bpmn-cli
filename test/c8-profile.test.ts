@@ -1,5 +1,5 @@
 /**
- * The Camunda 8 validation profile (src/platform/profiles/c8.ts): one synthetic model
+ * The Camunda 8 validation profile (src/platform/profiles/C8Profile.ts): one synthetic model
  * per rule with the exact findings it must produce and what Camunda 8.9 does
  * with it, the zeebe descriptor lookup, the FEEL and timer value checks, and
  * the `validate` output for Camunda 8 files.
@@ -20,10 +20,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { mutateDoc } from '../src/index.js';
-import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/profiles/c8.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeContainersOf, zeebeNestedOnly, zeebeType } from '../src/platform/zeebe.js';
+import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
+import { TimerValue } from '../src/platform/profiles/TimerValue.js';
+import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
+import { ZEEBE as C8_DESCRIPTOR } from '../src/platform/ZeebeDescriptor.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
@@ -375,44 +376,44 @@ describe('Camunda 8 profile: one model per rule', () => {
 
 describe('the zeebe descriptor, read as data', () => {
   it('knows where zeebe elements belong and what they hold', () => {
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:ServiceTask')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:EndEvent')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:UserTask')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:ioMapping', 'bpmn:ExclusiveGateway')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:subscription', 'bpmn:Message')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:properties', 'bpmn:Lane')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:publishMessage', 'bpmn:SendTask')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:input', 'bpmn:ServiceTask')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:nope', 'bpmn:ServiceTask')).toBeUndefined();
-    expect(zeebeContainersOf('zeebe:header')).toEqual(['zeebe:taskHeaders']);
-    expect(zeebeContainersOf('zeebe:input')).toEqual(['zeebe:ioMapping']);
-    expect(zeebeNestedOnly('zeebe:executionListener')).toBe(true);
-    expect(zeebeNestedOnly('zeebe:taskHeaders')).toBe(false);
-    expect(zeebeType('calledDecision')!.attributes.map((a) => a.name)).toEqual(['decisionId', 'resultVariable', 'bindingType', 'versionTag']);
-    expect(zeebeType('zeebe:inputOutputParameter')).toBeUndefined();
-    expect(zeebeAttr('zeebe:modelerTemplate')!.owners).toContain('bpmn:FlowElement');
-    expect(zeebeAttr('zeebe:taskDefinition')).toBeUndefined();
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:ServiceTask')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:EndEvent')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:UserTask')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:ioMapping', 'bpmn:ExclusiveGateway')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:subscription', 'bpmn:Message')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:properties', 'bpmn:Lane')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:publishMessage', 'bpmn:SendTask')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:input', 'bpmn:ServiceTask')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:nope', 'bpmn:ServiceTask')).toBeUndefined();
+    expect(C8_DESCRIPTOR.containersOf('zeebe:header')).toEqual(['zeebe:taskHeaders']);
+    expect(C8_DESCRIPTOR.containersOf('zeebe:input')).toEqual(['zeebe:ioMapping']);
+    expect(C8_DESCRIPTOR.nestedOnly('zeebe:executionListener')).toBe(true);
+    expect(C8_DESCRIPTOR.nestedOnly('zeebe:taskHeaders')).toBe(false);
+    expect(C8_DESCRIPTOR.type('calledDecision')!.attributes.map((a) => a.name)).toEqual(['decisionId', 'resultVariable', 'bindingType', 'versionTag']);
+    expect(C8_DESCRIPTOR.type('zeebe:inputOutputParameter')).toBeUndefined();
+    expect(C8_DESCRIPTOR.attr('zeebe:modelerTemplate')!.owners).toContain('bpmn:FlowElement');
+    expect(C8_DESCRIPTOR.attr('zeebe:taskDefinition')).toBeUndefined();
   });
 });
 
 describe('values Camunda 8 parses at deploy (engine-checked on 60 timer values and 45 expressions)', () => {
   it('durations', () => {
-    for (const v of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) expect(validDuration(v), v).toBe(true);
-    for (const v of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) expect(validDuration(v), v).toBe(false);
+    for (const v of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) expect(new TimerValue(v).isDuration(), v).toBe(true);
+    for (const v of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) expect(new TimerValue(v).isDuration(), v).toBe(false);
   });
   it('dates', () => {
-    for (const v of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) expect(validDateTime(v), v).toBe(true);
-    for (const v of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) expect(validDateTime(v), v).toBe(false);
+    for (const v of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) expect(new TimerValue(v).isDateTime(), v).toBe(true);
+    for (const v of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) expect(new TimerValue(v).isDateTime(), v).toBe(false);
   });
   it('cycles', () => {
-    for (const v of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) expect(validCycle(v), v).toBe(true);
-    for (const v of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) expect(validCycle(v), v).toBe(false);
+    for (const v of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) expect(new TimerValue(v).isCycle(), v).toBe(true);
+    for (const v of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) expect(new TimerValue(v).isCycle(), v).toBe(false);
   });
   it('FEEL slips', () => {
     const ok = ['a != b', 'not(a)', 'a = 1', '"a && b" = s', '-a', 'a - 1', 'a > 1 and b < 2', 'a in [1,2]', 'if a then b else c', 'some x in xs satisfies x > 1', 'a.b.c', 'x[1]', 'count(xs) > 0', 'date("2020-01-01") < today()', 'a instance of number', 'a between 1 and 3', 'a = null', 'a / 2', 'a ** 2', '`a b` > 1', '//comment\n a', 'a /* c */ > 1', '{"k": 1}.k = 1', '@"2020-01-01"', 'function(x) x', 'for x in xs return x'];
-    for (const e of ok) expect(feelProblem(e), e).toBeUndefined();
+    for (const e of ok) expect(new FeelExpression(e).problem(), e).toBeUndefined();
     const bad = ['x == 1', 'a && b', 'a || b', '!a', '${a}', 'x >', '(a', 'a)', '[1,2', '{a: 1', '"abc', 'a and', 'a or', 'a +', "'single'", 'a ? b : c', 'a.', '', ' '];
-    for (const e of bad) expect(feelProblem(e), e).toBeDefined();
+    for (const e of bad) expect(new FeelExpression(e).problem(), e).toBeDefined();
   });
 });
 
