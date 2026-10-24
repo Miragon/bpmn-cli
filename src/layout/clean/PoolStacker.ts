@@ -1,5 +1,6 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { SIZES, type Box, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../diagram/utils/sizes.js';
+import type { Box, Point, ScopeLayout } from '../../diagram/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import type { DiWriter } from './DiWriter.js';
 import { LaneArranger } from './LaneArranger.js';

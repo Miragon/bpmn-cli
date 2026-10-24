@@ -177,7 +177,7 @@ export class OpRunner {
       case 'space':
       case 'tidy':
       case 'compact':
-        // diagram only: they run after the layout (src/format/index.ts, called by the pipeline)
+        // diagram only: they run after the layout (src/format/FormatOps.ts, called by the pipeline)
         return new ChangeSet();
       default:
         throw usageError(`Unknown operation "${String((op as { op?: unknown }).op)}"`);

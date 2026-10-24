@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
 import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from '../src/layout/clean/MessageFlowRouter.js';
 import { is, many, parseXml, type El, type Model } from '../src/model/utils/moddle.js';
 
@@ -46,7 +46,7 @@ const boxOf = (b: El): Box => ({ x: b.get<number>('x'), y: b.get<number>('y'), w
 
 async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
   const source = await parseXml(xml);
-  const { xml: out, warnings } = await layoutModel(source, opts);
+  const { xml: out, warnings } = await new FullLayout(source, opts).run();
   const model = await parseXml(out);
   const shapes: Drawn['shapes'] = new Map();
   const edges: Drawn['edges'] = new Map();

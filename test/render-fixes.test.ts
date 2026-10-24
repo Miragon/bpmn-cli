@@ -14,12 +14,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
 import { MIN_LABEL_SCALE, renderSvg } from '../src/index.js';
 import { MAX_TILES } from '../src/render/types.js';
 import { scaleText } from '../src/render/utils/scale.js';
-import { textWidth } from '../src/diagram/text.js';
+import { textWidth } from '../src/diagram/utils/text.js';
 import { PngRenderer } from '../src/node/PngRenderer.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const GALLERY = join(ROOT, 'test', 'fixtures', 'render', 'gallery.bpmn');
@@ -240,7 +240,7 @@ describe('message flows', () => {
 describe('a file without a diagram', () => {
   it('lists the problems `bpmn metrics` reports for the file, none in the image, and says so', async () => {
     const xml = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
-    const metrics = layoutProblems((await Doc.fromXml(xml)).definitions).problems;
+    const metrics = LayoutAnalysis.of((await Doc.fromXml(xml)).definitions).problems;
     expect(metrics.length).toBeGreaterThan(10);
     const r = await renderSvg(xml, { problems: true });
     expect(r.problems.map((p) => [p.kind, p.ids, p.detail])).toEqual(metrics.map((p) => [p.kind, p.ids, p.detail]));

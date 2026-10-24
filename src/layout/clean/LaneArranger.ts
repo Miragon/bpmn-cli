@@ -1,5 +1,6 @@
 import { many, type El, idOf } from '../../model/utils/moddle.js';
-import { METRICS, SIZES, type GEdge, type GNode, type LaneBox, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { METRICS, SIZES } from '../../diagram/utils/sizes.js';
+import type { GEdge, GNode, LaneBox, Point, ScopeLayout } from '../../diagram/types.js';
 import { ArtifactPlacer } from './ArtifactPlacer.js';
 import { ChainLiftTrial } from './ChainLiftTrial.js';
 import { EdgeRouter } from './EdgeRouter.js';

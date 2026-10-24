@@ -1,6 +1,6 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { SIZES, type GEdge, type GNode, type ScopeLayout } from '../../diagram/types.js';
-import { sizeOf } from './place.js';
+import { SIZES } from '../../diagram/utils/sizes.js';
+import type { GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
 import { outgoingOf } from './utils/nodes.js';
 
 export class ScopeGraph {
@@ -16,7 +16,7 @@ export class ScopeGraph {
     for (const el of flowElements) {
       if (!is(el, 'bpmn:FlowNode') || is(el, 'bpmn:BoundaryEvent')) continue;
       const kind = this.kindOfNode(el);
-      const node: GNode = { el, id: idOf(el), ...sizeOf(el), kind, boundary: [], layer: 0, row: 0, band: 0, box: { x: 0, y: 0, width: 0, height: 0 }, out: [], in: [] };
+      const node: GNode = { el, id: idOf(el), ...this.sizeOfNode(el), kind, boundary: [], layer: 0, row: 0, band: 0, box: { x: 0, y: 0, width: 0, height: 0 }, out: [], in: [] };
       if (kind === 'subProcess' || kind === 'eventSubProcess') nest(node);
       byId.set(node.id, node);
       if (kind === 'eventSubProcess') eventSubs.push(node);
@@ -67,6 +67,12 @@ export class ScopeGraph {
     }
     this.layout = layout;
     this.markBackEdges();
+  }
+
+  private sizeOfNode(el: El): { width: number; height: number } {
+    if (is(el, 'bpmn:Event')) return { ...SIZES.event };
+    if (is(el, 'bpmn:Gateway')) return { ...SIZES.gateway };
+    return { ...SIZES.task };
   }
 
   private kindOfNode(el: El): GNode['kind'] {

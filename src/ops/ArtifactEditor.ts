@@ -22,10 +22,10 @@
  *    reference)
  *    references the value too (FlowElement.categoryValueRef), so membership
  *    needs no coordinates: the layout draws the box around the members
- *    (diagram/groups.ts). No members: E_USAGE, a wrong one: E_INVALID_VALUE.
+ *    (diagram/Groups.ts). No members: E_USAGE, a wrong one: E_INVALID_VALUE.
  *  - setGroupName(): `set <group> name=` writes the category value's
  *    `value` (a group has no `name`) and sizes the group's label in the
- *    drawing to the new name (diagram/groups.ts relabelGroup).
+ *    drawing to the new name (diagram/Groups.ts relabel).
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
@@ -35,7 +35,7 @@ import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.
 import { speakingStem } from '../ids/utils/id-words.js';
 import { addTo, collaboration, is, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { relabelGroup } from '../diagram/groups.js';
+import { Groups } from '../diagram/Groups.js';
 import { allocateId } from './utils/allocate-id.js';
 import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
 
@@ -112,7 +112,7 @@ export class ArtifactEditor {
     const value = group.get<El | undefined>('categoryValueRef');
     if (value) value.set('value', name || undefined);
     else if (name) group.set('categoryValueRef', this.createCategoryValue(speakingStem(idOf(group)) ?? '', name));
-    relabelGroup(this.doc.moddle, this.doc.definitions, group, name);
+    new Groups(this.doc.definitions).relabel(this.doc.moddle, group, name);
   }
 
   /** The id request of a data object / data store / annotation added by `add`: its name, else its text, else `In <scope>`. */

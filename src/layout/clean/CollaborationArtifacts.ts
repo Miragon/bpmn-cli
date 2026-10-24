@@ -1,11 +1,11 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { SIZES, center, type Box, type Point } from '../../diagram/types.js';
+import { SIZES, annotationSize } from '../../diagram/utils/sizes.js';
+import { center, borderPoint } from '../../diagram/utils/geom.js';
+import type { Box, Point } from '../../diagram/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import type { DiWriter } from './DiWriter.js';
 import { NotePlacer, type NoteJob } from './NotePlacer.js';
-import { annotationSize } from './place.js';
 import type { PoolLayout } from './PoolStacker.js';
-import { borderPoint } from './route.js';
 import type { Segment } from './utils/geometry.js';
 import { laneDepth } from './utils/lanes.js';
 import { isContainerShape, poolOf } from './utils/pools.js';
@@ -32,7 +32,7 @@ export class CollaborationArtifacts {
   /**
    * Boxes for the text annotations owned by the collaboration, next to the
    * first element an association ties them to (see NotePlacer). Groups are left
-   * out: layoutModel draws them around what they held (diagram/groups.ts).
+   * out: layoutModel draws them around what they held (diagram/Groups.ts).
    */
   private notes(): Array<{ el: El; box?: Box }> {
     const { pools } = this;

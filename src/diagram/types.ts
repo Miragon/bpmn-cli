@@ -27,16 +27,16 @@ export interface GNode {
   /** host for boundary events */
   host?: GNode;
   /**
-   * a boundary event on its host's top border instead of the bottom one (layout/clean/place.ts boundariesOnTop): its flows leave
-   * it upwards over the top (layout/clean/route.ts), its label sits above the host (layout/clean/route.ts elementLabel)
+   * a boundary event on its host's top border instead of the bottom one (layout/clean/TopBorderTrial.ts): its flows leave
+   * it upwards over the top (layout/clean/EdgeRouter.ts), its label sits above the host (layout/clean/ScopeLabels.ts)
    */
   onTop?: boolean;
-  /** such an event's label goes to the upper left of it (layout/clean/place.ts boundariesOnTop: where the upper right is taken) */
+  /** such an event's label goes to the upper left of it (layout/clean/TopBorderTrial.ts: where the upper right is taken) */
   labelLeft?: boolean;
   /** expanded sub-process: its laid-out child scope */
   child?: ScopeLayout;
   /**
-   * expanded sub-process: where its content sits (layout/clean/place.ts frameSubProcess): `left` and `top` from the
+   * expanded sub-process: where its content sits (layout/clean/ScopeFrame.ts): `left` and `top` from the
    * padding's left edge and the frame's top, `inner` the width of the content with its labels
    */
   childPad?: { left: number; top: number; inner: number };
@@ -67,7 +67,7 @@ export interface GEdge {
   back: boolean;
   /**
    * empty band (gateway -> join without nodes): the reserved row and its y, set by the placer; the router
-   * draws the flow straight instead when the row between the two is free (layout/clean/route.ts)
+   * draws the flow straight instead when the row between the two is free (layout/clean/EdgeRouter.ts)
    */
   bandRow?: number;
   bandY?: number;
@@ -76,13 +76,13 @@ export interface GEdge {
   label?: Box;
   /**
    * set by the router on a boundary event's flow that leaves the event downwards to a run below its host's row (at
-   * its second waypoint's y; the host's lane holds it, layout/clean/engine.ts fitLaneLoops)
+   * its second waypoint's y; the host's lane holds it, layout/clean/LaneArranger.ts fitLaneLoops)
    */
   runsBelow?: boolean;
   /**
    * set by the router on such a flow that then goes over the top to its target, and on the flow of a boundary event
    * on its host's top border (GNode.onTop), which goes straight up over the top (its highest waypoints, its label
-   * above them; the lane of both ends holds them, layout/clean/engine.ts fitLaneLoops)
+   * above them; the lane of both ends holds them, layout/clean/LaneArranger.ts fitLaneLoops)
    */
   runsAbove?: boolean;
 }
@@ -142,79 +142,68 @@ export interface LaneBox {
   children: LaneBox[];
 }
 
-export interface LayoutMetrics {
-  hGap: number;
-  vGap: number;
-  loopGap: number;
-  boundaryOffset: number;
+export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';
+
+export interface DShape {
+  id: string;
+  el: El;
+  /** the BPMNShape; undefined for an element placed by the engine until PlaneWriter.ts creates it */
+  di?: El;
+  bounds: Box;
+  kind: ShapeKind;
+  /** pool, lane or expanded sub-process */
+  container: boolean;
+  expanded?: boolean;
+  label?: Box;
+  hostId?: string;
+  laneId?: string;
+  poolId?: string;
+  parentId?: string;
 }
 
-export const METRICS: LayoutMetrics = {
-  hGap: 60,
-  vGap: 60,
-  loopGap: 30,
-  boundaryOffset: 25,
-};
-
-export const SIZES = {
-  task: { width: 100, height: 80 },
-  event: { width: 36, height: 36 },
-  gateway: { width: 50, height: 50 },
-  dataObject: { width: 36, height: 50 },
-  dataStore: { width: 50, height: 50 },
-  subProcessPadding: { top: 45, right: 30, bottom: 30, left: 30 },
-  subProcessMin: { width: 200, height: 120 },
-  participantHeader: 30,
-  laneHeader: 30,
-  lanePadding: 30,
-  blackBoxHeight: 60,
-  poolGap: 80,
-  outerMargin: 80,
-} as const;
-
-export function center(b: Box): Point {
-  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+export interface DEdge {
+  id: string;
+  el: El;
+  di?: El;
+  kind: EdgeKind;
+  sourceId?: string;
+  targetId?: string;
+  points: Point[];
+  label?: Box;
 }
 
-/** labelSize's results by width and name (the layout asks for the same names over and over); cleared when full */
-const sizes = new Map<number, Map<string, { width: number; height: number; lines: number }>>();
-
-/** Estimated label box for a name rendered by bpmn-js (12px Arial, wrapped at `maxWidth`); do not change the result. */
-export function labelSize(name: string, maxWidth = 90): { width: number; height: number; lines: number } {
-  let byName = sizes.get(maxWidth);
-  if (!byName) sizes.set(maxWidth, (byName = new Map()));
-  let size = byName.get(name);
-  if (!size) {
-    if (byName.size >= 4096) byName.clear();
-    byName.set(name, (size = measureLabel(name, maxWidth)));
-  }
-  return size;
+export interface Plane {
+  /** BPMNPlane id */
+  id: string;
+  /** the BPMNPlane; undefined for a plane the engine creates until PlaneWriter.ts writes it */
+  di?: El;
+  /** id of the element the plane shows: collaboration, process or collapsed sub-process */
+  rootId: string;
+  root: El;
+  shapes: Map<string, DShape>;
+  edges: Map<string, DEdge>;
+  /** DI elements PlaneWriter.ts deletes */
+  dropped: El[];
+  /**
+   * BPMNShapes without valid bounds (missing, NaN), by element id: the
+   * element counts as undrawn and is placed, reusing this DI (and its colours)
+   */
+  unbounded?: Map<string, El>;
+  /** PlaneWriter.ts deletes the whole diagram (its content moved elsewhere) */
+  deleted?: boolean;
 }
 
-function measureLabel(name: string, maxWidth: number): { width: number; height: number; lines: number } {
-  const words = name.split(/\s+/).filter(Boolean);
-  const charW = 7;
-  const pad = 12;
-  const longest = Math.max(0, ...words.map((w) => w.length * charW + pad));
-  const limit = Math.max(maxWidth, longest); // never break inside a word
-  const lines: number[] = [];
-  let cur = 0;
-  for (const w of words) {
-    const ww = w.length * charW;
-    if (cur === 0) cur = ww;
-    else if (cur + charW + ww + pad <= limit) cur += charW + ww;
-    else {
-      lines.push(cur);
-      cur = ww;
-    }
-  }
-  if (cur > 0 || !lines.length) lines.push(cur);
-  const width = Math.max(20, Math.min(limit, Math.max(...lines) + pad));
-  return { width, height: lines.length * LABEL_LINE, lines: lines.length };
-}
+export type Side = 'left' | 'right' | 'top' | 'bottom';
 
-export const LABEL_LINE = 14;
-
-export function boxesOverlap(a: Box, b: Box, margin = 0): boolean {
-  return a.x < b.x + b.width + margin && a.x + a.width + margin > b.x && a.y < b.y + b.height + margin && a.y + a.height + margin > b.y;
-}
+export type ShapeKind =
+  | 'task'
+  | 'subProcess'
+  | 'event'
+  | 'gateway'
+  | 'boundary'
+  | 'data'
+  | 'annotation'
+  | 'participant'
+  | 'lane'
+  | 'group'
+  | 'other';

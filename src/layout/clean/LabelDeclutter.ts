@@ -1,6 +1,7 @@
-import { titleBox } from '../../diagram/text.js';
+import { titleBox } from '../../diagram/utils/text.js';
+import { boxesOverlap } from '../../diagram/utils/geom.js';
+import type { Box, Point } from '../../diagram/types.js';
 import { is, many, type El } from '../../model/utils/moddle.js';
-import { boxesOverlap, type Box, type Point } from '../../diagram/types.js';
 import { toSegments, type Segment } from './utils/geometry.js';
 
 /** How far a label keeps from a horizontal line. */

@@ -51,7 +51,7 @@ them on a private corpus without copying it into the repository, are described i
   | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
   | `ops/` | the semantic edits (`add`, `connect`, `set`, ...) and the ops JSON of `apply` |
   | `diagram/` | the drawing (BPMN DI) and the geometry building blocks the engines share |
-  | `layout/` | the layout engines: `clean/` redraws, `incremental.ts` keeps a hand-made drawing |
+  | `layout/` | the layout engines: `clean/` redraws, `IncrementalLayout.ts` keeps a hand-made drawing |
   | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
   | `render/` | the SVG of a diagram |
   | `validate/` | structural validation, the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with |

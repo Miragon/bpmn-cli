@@ -7,10 +7,10 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { triggerOf } from '../model/utils/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
+import { Groups } from '../diagram/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
-import { groupMembers } from '../diagram/groups.js';
 import { ExtensionLister } from '../ops/ExtensionLister.js';
 import { nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
 import { flowOrder, repairFlowLinks } from '../validate/structural.js';
@@ -127,7 +127,7 @@ export class ElementDetailBuilder {
       if (!process) props['blackBox'] = true;
     }
     if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(shownId);
-    if (is(el, 'bpmn:Group')) props['members'] = groupMembers(doc.definitions).get(shownId(el)) ?? [];
+    if (is(el, 'bpmn:Group')) props['members'] = new Groups(doc.definitions).members().get(shownId(el)) ?? [];
     if (is(el, 'bpmn:TextAnnotation')) props['text'] = peek<string>(el, 'text');
     if (is(el, 'bpmn:Process')) props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
     if (is(el, 'bpmn:Error')) props['errorCode'] = peek<string>(el, 'errorCode');

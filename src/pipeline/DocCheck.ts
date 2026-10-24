@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
 import type { CliError } from '../shared/CliError.js';
 import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { layoutModel } from '../layout/index.js';
+import { FullLayout } from '../layout/FullLayout.js';
 import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { PlatformDetection } from '../platform/PlatformDetection.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
@@ -42,7 +42,7 @@ export class DocCheck {
         layout = { status: 'skipped', warnings: [], expanded: [] };
       } else {
         try {
-          const r = await layoutModel(doc.model, {});
+          const r = await new FullLayout(doc.model, {}).run();
           layout = { status: 'ok', warnings: r.warnings, expanded: r.expanded };
         } catch (err) {
           const e = toCliError(err) as CliError;

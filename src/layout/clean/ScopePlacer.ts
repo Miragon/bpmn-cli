@@ -63,7 +63,8 @@
  *    together
  */
 import { is, many, type El } from '../../model/utils/moddle.js';
-import { METRICS, type GNode, type ScopeLayout } from '../../diagram/types.js';
+import { METRICS } from '../../diagram/utils/sizes.js';
+import type { GNode, ScopeLayout } from '../../diagram/types.js';
 import { ArtifactPlacer } from './ArtifactPlacer.js';
 import { EdgeRouter } from './EdgeRouter.js';
 import { JoinColumnTrial } from './JoinColumnTrial.js';

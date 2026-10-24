@@ -192,7 +192,7 @@ export interface SplitOp {
 }
 
 /* ------------------------------------------------------------------ */
-/* format operations: diagram only, see src/format/index.ts               */
+/* format operations: diagram only, see src/format/FormatOps.ts               */
 /* ------------------------------------------------------------------ */
 
 export type SideName = 'left' | 'right' | 'top' | 'bottom';

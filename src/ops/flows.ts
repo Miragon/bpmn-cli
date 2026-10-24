@@ -14,7 +14,7 @@
  * with a collision suffix: idNamesEnds) is renamed after its new ends when a
  * splice, a bridge, a move or `set source= / target=` changes them
  * (followEnds; its DI edge id follows when it was `<id>_di`, `BPMNEdge_<id>`
- * or `Edge_<id>`, also cut: diagram/write.ts followDiIds, which `set id=`
+ * or `Edge_<id>`, also cut: diagram/utils/di-ids.ts followDiIds, which `set id=`
  * uses too). Every other id stays. With EditContext.followFlowEnds false
  * (`--keep-flow-ids`, where flow ids are API) a flow the document had keeps
  * its id, and the batch reports each one whose id no longer names its ends
@@ -26,7 +26,7 @@
  */
 import type { Doc } from '../model/Doc.js';
 import type { FlowEnds, FormerEnd, KeptFlow } from '../model/EditContext.js';
-import { followDiIds } from '../diagram/write.js';
+import { followDiIds } from '../diagram/utils/di-ids.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { connectionRequest, type IdRequest } from '../ids/utils/requests.js';
@@ -535,7 +535,7 @@ export function followEnds(doc: Doc, flow: El, oldSource: El | undefined, oldTar
   return old;
 }
 
-/** The DI edge of a flow renamed `old` -> `id` follows where its id was derived from the flow's (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`; diagram/write.ts followDiIds). */
+/** The DI edge of a flow renamed `old` -> `id` follows where its id was derived from the flow's (`<id>_di`, `BPMNEdge_<id>`, `Edge_<id>`; diagram/utils/di-ids.ts followDiIds). */
 function followEdgeId(doc: Doc, flow: El, old: string, id: string): void {
   followDiIds(doc.definitions, flow, old, id, doc.ids);
   doc.invalidate();

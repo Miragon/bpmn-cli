@@ -1,6 +1,6 @@
-import type { Box } from '../diagram/geom.js';
-import type { LayoutProblem } from '../diagram/metrics.js';
-import type { DShape } from '../diagram/plane.js';
+import type { Box } from '../diagram/utils/geom.js';
+import type { LayoutProblem } from '../diagram/utils/problems.js';
+import type { DShape } from '../diagram/types.js';
 import { is } from '../model/utils/moddle.js';
 import { DiagramColumns } from '../query/DiagramColumns.js';
 import { MARGIN, MAX_TILES, type Frame, type Item } from './types.js';

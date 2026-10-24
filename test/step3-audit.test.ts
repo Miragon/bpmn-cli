@@ -10,9 +10,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { readPlanes, semantics, type DShape } from '../src/diagram/plane.js';
-import { makeSpace } from '../src/diagram/space.js';
+import type { DShape } from '../src/diagram/types.js';
 import { mutateDoc } from '../src/index.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Semantics } from '../src/diagram/Semantics.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
 const sh = (id: string, x: number, y: number, w: number, h: number, extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;
@@ -22,7 +24,7 @@ const defs = (process: string, di: string, extraRoots = '', root = 'P'): string 
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
@@ -33,9 +35,9 @@ describe('#41 shapes no lane lists follow the lane they are drawn in', () => {
     const xml = defs(process, `${sh('Pool', 0, 0, 800, 300, ' isHorizontal="true"')}${sh('L1', 30, 0, 770, 150, ' isHorizontal="true"')}${sh('L2', 30, 150, 770, 150, ' isHorizontal="true"')}${sh('A', 100, 40, 100, 80)}${sh('B', 100, 190, 100, 80)}${sh('Data', 600, 200, 36, 50)}`, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
     const doc = await Doc.fromXml(xml);
     expect(doc.importWarnings).toEqual([]);
-    const plane = readPlanes(doc.definitions, semantics(doc.definitions))[0]!;
+    const plane = new DiagramReader(doc.definitions, Semantics.of(doc.definitions)).planes()[0]!;
     // room below A, in the band of A's column only (like a growing sub-process makes it): L2 lies beyond the line and moves
-    makeSpace(plane, { axis: 'y', line: 140, delta: 100, within: { x: 90, y: 0, width: 120, height: 300 } });
+    new Drawing(plane).makeSpace({ axis: 'y', line: 140, delta: 100, within: { x: 90, y: 0, width: 120, height: 300 } });
     expect(plane.shapes.get('L2')!.bounds.y).toBe(250);
     expect(plane.shapes.get('B')!.bounds.y).toBe(290);
     expect(plane.shapes.get('Data')!.bounds.y).toBe(300);
@@ -220,7 +222,7 @@ describe('#61 connections the space tool reshapes are reported', () => {
     // F4 loops back over the top: G (beyond the insert) -> up -> left -> down into A
     const di = `${sh('S', 100, 182, 36, 36)}${sh('A', 196, 160, 100, 80)}${sh('G', 356, 175, 50, 50)}${sh('E', 466, 182, 36, 36)}${ed('F1', [[136, 200], [196, 200]])}${ed('F2', [[296, 200], [356, 200]])}${ed('F3', [[406, 200], [466, 200]])}${ed('F4', [[381, 175], [381, 120], [246, 120], [246, 160]])}`;
     const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
-    const after = new Map([...readPlanes((await Doc.fromXml(r.xml)).definitions)[0]!.edges.values()].map((e) => [e.id, e.points.map((p) => `${p.x},${p.y}`).join(' ')]));
+    const after = new Map([...new DiagramReader((await Doc.fromXml(r.xml)).definitions).planes()[0]!.edges.values()].map((e) => [e.id, e.points.map((p) => `${p.x},${p.y}`).join(' ')]));
     expect(after.get('F4')).not.toBe('381,175 381,120 246,120 246,160');
     expect(r.layout.rerouted ?? []).not.toContain('F4');
     expect(r.layout.reshaped).toContain('F4');

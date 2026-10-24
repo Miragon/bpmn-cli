@@ -1,4 +1,4 @@
-import { raw } from '../diagram/plane.js';
+import { raw } from '../diagram/utils/plane.js';
 import type { El } from '../model/utils/moddle.js';
 import { FILL, STROKE } from './utils/svg.js';
 

@@ -5,7 +5,7 @@
  * Contract
  *  - ROOT is the repository; DEFAULT_BIN its built CLI (bin/bpmn.js), which
  *    env BPMN_BIN overrides.
- *  - `loadMetrics()` imports dist/diagram/metrics.js (always this repo's build,
+ *  - `loadMetrics()` imports dist/index.js (always this repo's build,
  *    whatever CLI is fuzzed) -> { measure, diff, hard, keys }.
  *  - `loadRender()` imports dist/node/index.js -> { draw(xml), maxSize }:
  *    the PNG of `bpmn render --problems --tiles` (the walk's render oracle).
@@ -41,8 +41,9 @@ async function importDist(rel) {
 }
 
 export async function loadMetrics() {
-  const lib = await importDist(join('diagram', 'metrics.js'));
-  return { measure: lib.layoutProblemsOfXml, diff: lib.diffProblems, hard: hardKinds(lib), keys: [...lib.KEYS], newKinds: newKinds(lib) };
+  const api = await importDist('index.js');
+  const lib = { KEYS: api.METRIC_KEYS, WEIGHTS: api.METRIC_WEIGHTS };
+  return { measure: api.layoutProblemsOfXml, diff: api.diffProblems, hard: hardKinds(lib), keys: [...lib.KEYS], newKinds: newKinds(lib) };
 }
 
 export async function loadRender() {

@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/index.js';
-import { innerLines, wrapLines } from '../src/diagram/text.js';
+import { innerLines, wrapLines } from '../src/diagram/utils/text.js';
 import { CliError } from '../src/shared/CliError.js';
 import { renderPng } from '../src/node/index.js';
 import { PngRenderer } from '../src/node/PngRenderer.js';

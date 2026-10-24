@@ -555,7 +555,7 @@ function cleanupReferences(doc: Doc, removed: Set<El>, cs: ChangeSet): void {
     if (holder.$type.startsWith('bpmndi:')) {
       const gone = is(holder, 'bpmndi:BPMNPlane') ? (holder.$parent as El) : holder;
       detachFromParent(gone);
-      // its ids are free again: a later `set id=` of the batch takes the derived DI id along as a command of its own does (diagram/write.ts followDiIds)
+      // its ids are free again: a later `set id=` of the batch takes the derived DI id along as a command of its own does (diagram/utils/di-ids.ts followDiIds)
       for (const e of walk(gone, { bpmnOnly: true })) {
         const id = idOf(e);
         if (id) doc.ids.release(id);

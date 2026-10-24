@@ -1,6 +1,6 @@
-import type { Box } from '../diagram/geom.js';
-import type { LayoutProblem, MetricKey } from '../diagram/metrics.js';
-import type { Plane } from '../diagram/plane.js';
+import type { Box } from '../diagram/utils/geom.js';
+import type { LayoutProblem, MetricKey } from '../diagram/utils/problems.js';
+import type { Plane } from '../diagram/types.js';
 import type { El } from '../model/utils/moddle.js';
 
 /** What a halo marks: the CLI's `--render` colours created, changed and moved elements apart. */

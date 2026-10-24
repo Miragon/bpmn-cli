@@ -1,16 +1,15 @@
 import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import { titleBox } from '../../diagram/text.js';
+import { titleBox } from '../../diagram/utils/text.js';
+import { boxesOverlap, center, equalBoxes, segmentHitsBox } from '../../diagram/utils/geom.js';
+import type { Box, GEdge, GNode, LaneBandInfo, LinkEnd, Point, ScopeLayout } from '../../diagram/types.js';
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { boxesOverlap, center, type Box, type GEdge, type GNode, type LaneBandInfo, type LinkEnd, type Point, type ScopeLayout } from '../../diagram/types.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
 import { ArrangementTrial, type Routes } from './ArrangementTrial.js';
 import { LinkRouter } from './LinkRouter.js';
-import { sameBox } from './place.js';
-import { segmentHitsBox, segmentsCross } from './route.js';
 import { ScopeGrid } from './ScopeGrid.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { hitCount, toSegments, type Segment } from './utils/geometry.js';
+import { hitCount, segmentsCross, toSegments, type Segment } from './utils/geometry.js';
 import { nameOf } from './utils/names.js';
 import { obstacles, routedArtifacts } from './utils/scope.js';
 
@@ -93,7 +92,7 @@ export class TopBorderTrial extends ArrangementTrial {
           const clear =
             !label ||
             (!shapes.some((s) => s !== b.box && boxesOverlap(s, label, 2)) &&
-              !labels.some((l) => !sameBox(l, label) && boxesOverlap(l, label, 2)) &&
+              !labels.some((l) => !equalBoxes(l, label) && boxesOverlap(l, label, 2)) &&
               !flowLabels.some((l) => boxesOverlap(l, label, 2)) &&
               !segments.some(([, s]) => s.some(([p, q]) => segmentHitsBox(p, q, label))));
           ways.set(b, { length, bends, up, box, label: clear, worth: false });

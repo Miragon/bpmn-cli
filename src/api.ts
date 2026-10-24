@@ -39,12 +39,13 @@
  */
 import { OpsParser } from './ops/OpsParser.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
-import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
+import type { LayoutMetrics } from './diagram/utils/problems.js';
 import type { LayoutView } from './query/layout-view.js';
 import type { AroundView, ElementContext } from './query/context.js';
 import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
 import { AroundWindow } from './query/AroundWindow.js';
 import { ElementContextBuilder } from './query/ElementContextBuilder.js';
+import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { IdConventions } from './ids/IdConventionsReader.js';
@@ -58,7 +59,7 @@ import { DetailText } from './report/DetailText.js';
 import { LayoutText } from './report/LayoutText.js';
 import { ModelViewText } from './report/ModelViewText.js';
 import { assertKindToken } from './model/kinds.js';
-import type { LayoutEngine } from './layout/index.js';
+import type { LayoutEngine } from './layout/FullLayout.js';
 import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 import type { Op } from './ops/types.js';
 import type { LayoutMode, MutationResult } from './pipeline/index.js';
@@ -244,7 +245,7 @@ export async function conventionsXml(xml: string | undefined, opts: ConventionsX
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */
 export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'score' | 'counts' | 'problems'>> {
-  return metricsJson(layoutProblems((await Doc.fromXml(xml)).definitions));
+  return metricsJson(LayoutAnalysis.of((await Doc.fromXml(xml)).definitions));
 }
 
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (case-insensitive), optionally of one kind. */

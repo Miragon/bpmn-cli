@@ -1,6 +1,7 @@
-import type { Box } from '../diagram/geom.js';
-import { raw, rawList, type DShape } from '../diagram/plane.js';
-import { titleBox, textWidth } from '../diagram/text.js';
+import type { Box } from '../diagram/utils/geom.js';
+import { raw, rawList } from '../diagram/utils/plane.js';
+import type { DShape } from '../diagram/types.js';
+import { titleBox, textWidth } from '../diagram/utils/text.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';
@@ -84,7 +85,7 @@ export class ShapePainter {
     return this.text.external(s.id, value, b.x + b.width / 2, Math.round(s.kind === 'group' ? b.y : b.y + b.height));
   }
 
-  /** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's name; an expanded sub-process's title, diagram/text.ts titleBox); undefined without one. */
+  /** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's name; an expanded sub-process's title, diagram/utils/text.ts titleBox); undefined without one. */
   nameBox(): Box | undefined {
     const s = this.shape;
     const name = s.kind === 'group' ? undefined : raw<string>(s.el, 'name');

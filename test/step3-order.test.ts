@@ -1,6 +1,6 @@
 /**
  * Step 3: pool order (`order <collaborationId> <participantId...>`,
- * src/ops/Reordering.ts and src/format/index.ts orderPoolBands): the participants
+ * src/ops/Reordering.ts and src/format/FormatOps.ts orderPoolBands): the participants
  * of a collaboration are reordered top to bottom, black-box partner pools
  * included; a kept drawing gets its pool bands restacked with their content
  * and the message flows routed again.
@@ -12,8 +12,9 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from "vitest";
 import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
+import type { DEdge, DShape } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
@@ -66,20 +67,20 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 
 const participants = (doc: Doc): string[] => doc.collaboration()!.get<El[]>('participants').map((p) => p.get<string>('id'));
 const collabId = (doc: Doc): string => doc.collaboration()!.get<string>('id');
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hard = (doc: Doc): string[] => layoutProblems(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
+const hard = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
 const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
 const topToBottom = (doc: Doc, ids: string[]): string[] => [...ids].sort((a, b) => shapes(doc).get(a)!.bounds.y - shapes(doc).get(b)!.bounds.y);
 

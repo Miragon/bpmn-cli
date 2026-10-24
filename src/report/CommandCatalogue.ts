@@ -4,7 +4,7 @@
  * read differently, an entry keeps both texts: `help` for `--help`, `usage`,
  * `summary` and `examples` for the guide.
  */
-import { SWATCHES } from '../diagram/write.js';
+import { SWATCHES } from '../diagram/utils/colors.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
 
 export interface CommandSignature {

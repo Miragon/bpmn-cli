@@ -64,24 +64,24 @@
  *
  * Layout modes (MutationOptions.layout):
  *  - false: skip; the DI of removed elements is pruned, new elements have none,
- *    and a flow whose ends changed loses its edge (layout/incremental.ts
+ *    and a flow whose ends changed loses its edge (layout/IncrementalLayout.ts
  *    pruneReEnded; kept when it already reaches its new ends, and on the
  *    root's first diagram while a new end has no shape: the next write places
  *    that end and routes the flow); a note counts what was removed
  *  - 'full': redraw everything with the engine (clean or auto); bpmn-js
  *    colours (bioc:/color:) and the drawing's DI ids are carried over by
- *    element id (layoutModel, diagram/write.ts restoreDiIds; plane and
+ *    element id (layoutModel, diagram/DiIdMemo.ts; plane and
  *    diagram ids by root; new DI gets the file's DI id style). An element
  *    the redraw draws that has no id (a hand-written message flow, pool,
  *    process, collaboration) first gets one in the file's id style and
- *    registry (diagram/drawn-ids.ts), reported as a change and a note.
+ *    registry (diagram/DrawnElementIds.ts), reported as a change and a note.
  *    A group box is drawn again around the elements it held
- *    (diagram/groups.ts); one with none of them drawn keeps its box (or
+ *    (diagram/Groups.ts); one with none of them drawn keeps its box (or
  *    its size below the drawing when the redraw put shapes on it), a
  *    layout note says so
  *  - 'incremental': keep every existing shape and connection, place what is
  *    new, prune what is gone, reroute only affected connections
- *    (src/layout/incremental.ts); a file without any diagram is drawn in full
+ *    (src/layout/IncrementalLayout.ts); a file without any diagram is drawn in full
  *  - 'auto' (default, also `true`): full when the layout root had no flow node
  *    DI before the ops, or when the drawing is engine-owned (re-running the
  *    clean engine on the model as it was before the ops reproduces every
@@ -91,10 +91,10 @@
  *    If the incremental layout fails, auto falls back to full.
  * The result reports the mode, why it ran, what the incremental engine
  * placed / moved / rerouted / pruned, and the layout problems before / after
- * (src/diagram/metrics.ts) with the problems added and resolved.
+ * (src/diagram/LayoutAnalysis.ts) with the problems added and resolved.
  *
  * Format ops (place, align, color, label, route, space, tidy, and the lane
- * part of `order`; src/format/index.ts) run after the layout, on its result,
+ * part of `order`; src/format/FormatOps.ts) run after the layout, on its result,
  * in batch order; a failing one fails the whole batch. A batch of format ops
  * only keeps the drawing (no layout runs) unless `full` is requested or the
  * file has no diagram yet; with --no-layout they run on the existing DI.
@@ -104,7 +104,7 @@
  * it; colours survive full redraws.
  *
  * design-iq stickies (`bpmiq:sticky` extension elements with absolute
- * coordinates, src/diagram/stickies.ts) follow the flow node nearest to them
+ * coordinates, src/diagram/Stickies.ts) follow the flow node nearest to them
  * before the ops by the shift of its centre, after the layout and the format
  * ops, whatever moved it (incremental placement, a format op, a redraw); a
  * write that moves no node leaves them untouched. `layout.stickies` lists

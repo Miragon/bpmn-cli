@@ -1,6 +1,8 @@
-import type { Box, Point } from '../diagram/geom.js';
-import { layoutProblems, locateProblems, problemKey, type LayoutProblem } from '../diagram/metrics.js';
-import type { Plane } from '../diagram/plane.js';
+import type { Box, Point } from '../diagram/utils/geom.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../diagram/ProblemLocator.js';
+import { problemKey, type LayoutProblem } from '../diagram/utils/problems.js';
+import type { Plane } from '../diagram/types.js';
 import { TileGrid } from './TileGrid.js';
 import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type Frame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
 import { contains, grow, meets, pointsBox, unionOf } from './utils/boxes.js';
@@ -118,12 +120,12 @@ export class Composer {
     return unionOf(boxes);
   }
 
-  /** The problems listed (see contract), located (diagram/metrics.ts locateProblems). */
+  /** The problems listed (see contract), located (diagram/ProblemLocator.ts). */
   private problemList(asked: true | readonly LayoutProblem[]): LayoutProblem[] {
     const frame = this.frame;
     const defs = frame.defs;
     if (!defs || !frame.located) return [];
-    const located = frame.fileProblems ?? locateProblems(defs, layoutProblems(defs).problems);
+    const located = frame.fileProblems ?? new ProblemLocator(defs).locate(LayoutAnalysis.of(defs).problems);
     if (asked === true) {
       const shown = frame.drawn;
       return shown ? located.filter((p) => p.ids.some((id) => shown.has(id))) : located;

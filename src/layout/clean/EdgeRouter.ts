@@ -75,11 +75,13 @@
  *    the label box (it wraps at 90 px)
  *  - data associations are orthogonal stubs (vertical / horizontal / Z): LinkRouter
  */
-import { METRICS, center, labelSize, type Box, type GEdge, type GNode, type LaneBandInfo, type Point, type ScopeLayout } from '../../diagram/types.js';
-import { pathHits, segmentHitsBox, segmentsCross } from './route.js';
+import { labelSize } from '../../diagram/utils/text.js';
+import { METRICS } from '../../diagram/utils/sizes.js';
+import { center, segmentHitsBox } from '../../diagram/utils/geom.js';
+import type { Box, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../diagram/types.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { bottom, dedupe, hitCount, right, toSegments, type Segment } from './utils/geometry.js';
+import { bottom, dedupe, hitCount, pathHits, right, segmentsCross, toSegments, type Segment } from './utils/geometry.js';
 import { nameOf } from './utils/names.js';
 import { boundaryLeft } from './utils/nodes.js';
 import { obstacles, routedArtifacts } from './utils/scope.js';

@@ -32,10 +32,38 @@ a new concept gets its line here first.
 | **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader`, written by `DecisionLinkWriter` (`ops/`). |
 | **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors. |
 | **Splice** | Inserting a node into an existing sequence flow. |
-| **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/plane.ts`). |
+| **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/types.ts`; read by `diagram/DiagramReader.ts`, written by `diagram/PlaneWriter.ts`). |
+| **Semantics** | The index of the semantic model a drawing is read against: elements by id, lanes, pools, scopes (`diagram/Semantics.ts`). |
 | **Checkpoint** | A saved state of a plane, to try a change and undo it (`diagram/PlaneCheckpoint.ts`). |
+| **Groups** | The `bpmn:Group` boxes of a document: remembered before a full redraw and drawn again around their members (`diagram/Groups.ts`). |
+| **Sticky** | A design-iq sticky note (`bpmiq:sticky`) that follows the flow node nearest to it (`diagram/Stickies.ts`). |
+| **Drawn element ids** | Ids given to the elements a full redraw draws that have none, in the file's id style (`diagram/DrawnElementIds.ts`). |
+| **DI ids** | The ids of DI elements in the file's style: new ones (`diagram/DiIds.ts`) and the old ones kept over a full redraw (`diagram/DiIdMemo.ts`). |
+| **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`diagram/Drawing.ts`). |
+| **Frame** | A pool, lane or expanded sub-process: a shape that holds other shapes (`diagram/FrameEditor.ts` draws, removes, collapses and expands them). |
+| **Space tool** | The modeler's tool that moves everything beyond a line to make or close room, growing the frames it crosses (`diagram/SpaceTool.ts`). |
+| **Separation** | Local overlap removal: the shapes that conflict with new or moved ones give way (`diagram/Separation.ts`). |
+| **Edge router** | Routes and repairs single connections of a kept drawing with the BPMN side conventions (`diagram/EdgeRouter.ts`). |
+| **Orthogonal router** | Finds the cheapest orthogonal route of one connection between two boxes: A* over a visibility grid (`diagram/OrthogonalRouter.ts`, `diagram/RouteGrid.ts`, `diagram/SearchHeap.ts`). |
+| **Label placer** | Puts external labels on the first free spot around their shape or flow (`diagram/LabelPlacer.ts`). |
+| **Trial** | A change that is measured and kept only when it makes the result no worse, else undone: of a kept drawing (`diagram/TrialGuard.ts`), or of an arrangement of the clean engine, kept only when the routes then draw better (`layout/clean/ArrangementTrial.ts`). |
+| **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`diagram/DrawingSnapshot.ts`). |
+| **Layout analysis** | The measurement of a drawing's layout problems, one plane analysis per BPMNPlane (`diagram/LayoutAnalysis.ts`, `diagram/PlaneAnalysis.ts`; kinds and weights in `diagram/utils/problems.ts`). |
+| **Problem locator** | Finds where a layout problem shows on its plane, for the numbered badges of `render --problems` (`diagram/ProblemLocator.ts`). |
+| **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`diagram/NodePlacer.ts`). |
+| **Format ops** | One run of a batch's format operations on a document's drawing (`format/FormatOps.ts`), one action class per op (`format/*Action.ts`). |
+| **Room maker** | Keeps the shapes a format op moved on request where they are and lets the others give way, refusing a move out of its frame (`format/RoomMaker.ts`). |
+| **Room hint** | The space-tool run an `E_NO_ROOM` refusal of `place` / `align` names, found by a dry run (`format/RoomHint.ts`). |
+| **Compaction** | Closing the empty rows and columns of a drawing and shrinking its frames to their content (`format/Compaction.ts`). |
 | **Layout mode** | How a write updates the drawing: `full` redraws, `incremental` keeps a hand-made drawing and places only what changed. |
 | **Engine** | A layout engine: the clean engine redraws, the incremental engine keeps a drawing. |
+| **Snapshot** | What every DI element showed before the ops of a write, with the semantic facts the incremental layout's diff needs (`layout/Snapshot.ts`). |
+| **Engine-owned** | A drawing that equals what the engine draws for the same model, so `auto` redraws it in full (`layout/DiagramGeometry.ts`). |
+| **Engine drawing** | What the clean engine draws for the document; the incremental layout copies blocks of it for new expanded sub-processes and pools (`layout/EngineDrawing.ts`). |
+| **Crossing repair** | The incremental layout's last step: crossings between new and kept lines are tried away by routing again or a branch's next row, each trial measured (`layout/CrossingRepair.ts`). |
+| **Full layout** | A redraw of the whole model by an engine that keeps the DI ids, the colours and the groups (`layout/FullLayout.ts`). |
+| **Temporary lane members** | Laneless flow nodes put into a lane for one bpmn-auto-layout run only (`layout/TemporaryLaneMembers.ts`). |
+| **Association edges** | The association DI bpmn-auto-layout leaves out, drawn after its run (`layout/AssociationEdges.ts`). |
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |
 | **Engine profile** | One engine's profile run over a document: the walk, the findings and the rules of Camunda 7 (`C7Profile`) or Camunda 8 (`C8Profile`) on the `EngineProfile` base (`platform/profiles/`). |
 | **Platform profiles** | The loaded engine profiles and their loads, runs, baselines and deltas (`platform/profiles/PlatformProfiles.ts`). |
@@ -77,7 +105,6 @@ a new concept gets its line here first.
 | **Scope** | A process or sub-process the clean engine lays out on its own, in a fixed sequence of steps (`layout/clean/ScopePlacer.ts`). |
 | **Grid** | The columns (layers) and rows (bands) of a scope's nodes and where they put them (`layout/clean/ScopeGrid.ts`, the rows by `RowAssigner.ts`). |
 | **Arrangement** | Where the clean engine has put a scope's nodes, boundary events, flows and artifacts at one moment; an `ArrangementCheckpoint` saves it and puts it back. |
-| **Trial** | A move of an arrangement the clean engine keeps only when the routes then draw better, else undoes (`layout/clean/ArrangementTrial.ts`). |
 | **Join column** | The column under a node that its flows from below rise in on, kept free by moving the node right (`JoinColumnTrial`). |
 | **Chain lift** | A node and the nodes after it in its lane moved up onto the row of the flow into it (`ChainLiftTrial`). |
 | **Top border** | The upper border of a host, where a boundary event whose flows go up sits when that draws better (`TopBorderTrial`). |

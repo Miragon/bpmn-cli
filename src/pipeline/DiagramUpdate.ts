@@ -6,14 +6,19 @@
 import { utf8Declaration } from '../xml/utils/encoding.js';
 import { Doc } from '../model/Doc.js';
 import { CliError } from '../shared/CliError.js';
-import { layoutModel, SUB_PROCESS_TYPES, type LayoutEngine } from '../layout/index.js';
-import type { GivenId } from '../diagram/drawn-ids.js';
-import { diagramGeometry, engineOwned, layoutIncremental, pruneReEnded, takeSnapshot, type IncrementalReport, type Snapshot } from '../layout/incremental.js';
-import { layoutProblems, metricsDelta, type LayoutMetrics } from '../diagram/metrics.js';
-import { runFormatOps, type FormatEntry, type FormatResult } from '../format/index.js';
-import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
-import { applyColors, colorsOf, diIds } from '../diagram/write.js';
-import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
+import { FullLayout, type LayoutEngine } from '../layout/FullLayout.js';
+import { SUB_PROCESS_TYPES } from '../diagram/utils/expansion.js';
+import type { GivenId } from '../diagram/DrawnElementIds.js';
+import { DiagramGeometry } from '../layout/DiagramGeometry.js';
+import { IncrementalLayout, type IncrementalReport } from '../layout/IncrementalLayout.js';
+import { Snapshot } from '../layout/Snapshot.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { metricsDelta, type LayoutMetrics } from '../diagram/utils/problems.js';
+import { FormatOps, type FormatEntry, type FormatResult } from '../format/FormatOps.js';
+import { Stickies, type ResolvedAnchor, type StickyAnchor } from '../diagram/Stickies.js';
+import { applyColors, colorsOf } from '../diagram/utils/colors.js';
+import { DiIds } from '../diagram/DiIds.js';
+import { Groups } from '../diagram/Groups.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/utils/mirror.js';
 import { addTo, is, layoutRoot, many, parseXml, serialize, type El } from '../model/utils/moddle.js';
 import { ModelError } from '../model/ModelError.js';
@@ -63,10 +68,10 @@ export class DiagramUpdate {
     const asRead = doc.source ? await serializeWithout(doc.model, unkeptEntries(doc.definitions, doc.source.mirror)) : undefined;
     const requested = opts.layout === false ? 'skip' : opts.layout === undefined || opts.layout === true ? 'auto' : opts.layout;
     const formatOnly = ops.length > 0 && ops.every(isFormatOp);
-    const snapshot = takeSnapshot(doc.definitions);
+    const snapshot = Snapshot.take(doc.definitions);
     const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
-    const before: Before = { snapshot, stickies: stickyAnchors(doc.definitions) };
-    if (hasDiagram) before.metrics = layoutProblems(doc.definitions);
+    const before: Before = { snapshot, stickies: new Stickies(doc.definitions).anchors() };
+    if (hasDiagram) before.metrics = LayoutAnalysis.of(doc.definitions);
     if (requested === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = asRead ?? (await doc.toXml());
     return new DiagramUpdate(doc, opts, requested, formatOnly, before, asRead);
   }
@@ -86,11 +91,11 @@ export class DiagramUpdate {
     if (this.requested === 'skip') {
       const pruned = this.pruneDanglingDi();
       // the edge of a flow whose ends changed shows the old ends: removed too, the next write draws the flow like a new one
-      const reEnded = pruneReEnded(doc.definitions, this.before.snapshot);
+      const reEnded = this.before.snapshot.pruneReEnded(doc.definitions);
       if (pruned || reEnded.length) changes.note(DiagramUpdate.staleDiNote(pruned, reEnded));
       this.persistExpansionHints(doc.layoutRequests.expansion(this.opts));
       xml = await doc.toXml();
-      layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(this.before.metrics, layoutProblems(doc.definitions)) };
+      layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(this.before.metrics, LayoutAnalysis.of(doc.definitions)) };
     } else if (this.formatOnly && this.requested !== 'full' && this.before.snapshot.flowNodeShapes > 0) {
       // nothing semantic changed: the drawing is kept as it is and only formatted
       xml = await doc.toXml();
@@ -176,7 +181,7 @@ export class DiagramUpdate {
         if (id && is(shape, 'bpmndi:BPMNShape')) shapes.set(id, shape);
       }
     }
-    let newDi: ReturnType<typeof diIds> | undefined;
+    let newDi: DiIds | undefined;
     for (const [id, expanded] of wanted) {
       const sub = doc.get(id);
       if (!sub || !SUB_PROCESS_TYPES.some((t) => is(sub, t))) continue;
@@ -189,8 +194,8 @@ export class DiagramUpdate {
       if (!rootPlane) {
         const root = layoutRoot(doc.definitions);
         if (!root) continue;
-        // the engine's plane and diagram ids, a long root id cut (diagram/write.ts diIds)
-        newDi ??= diIds(doc.definitions);
+        // the engine's plane and diagram ids, a long root id cut (diagram/DiIds.ts)
+        newDi ??= new DiIds(doc.definitions);
         rootPlane = doc.moddle.create('bpmndi:BPMNPlane', { id: newDi.plane(root.get<string>('id')), bpmnElement: root });
         const diagram = doc.moddle.create('bpmndi:BPMNDiagram', { id: newDi.diagram(root.get<string>('id')), plane: rootPlane });
         rootPlane.$parent = diagram;
@@ -198,7 +203,7 @@ export class DiagramUpdate {
       }
       // a placeholder shape (redrawn by the next layout) so the collapse survives the stale diagram; its id in the file's DI style
       const shape = doc.moddle.create('bpmndi:BPMNShape', {
-        id: (newDi ??= diIds(doc.definitions)).shape(id),
+        id: (newDi ??= new DiIds(doc.definitions)).shape(id),
         bpmnElement: sub,
         isExpanded: false,
         bounds: doc.moddle.create('dc:Bounds', { x: 0, y: 0, width: 100, height: 80 }),
@@ -268,7 +273,7 @@ export class DiagramUpdate {
   private static async moveStickies(xml: string, anchors: ResolvedAnchor[]): Promise<{ xml: string; moved: Array<{ sticky: string; node: string }> }> {
     if (!anchors.length) return { xml, moved: [] };
     const model = await parseXml(xml);
-    const moved = followStickies(model.definitions, anchors);
+    const moved = new Stickies(model.definitions).follow(anchors);
     return { xml: moved.length ? await serialize(model) : xml, moved };
   }
 
@@ -284,8 +289,8 @@ export class DiagramUpdate {
   /** Runs the format ops on the laid-out XML; returns the new XML and their results. */
   private static async runFormat(xml: string, file: string | undefined, entries: FormatEntry[], asFile: boolean): Promise<{ xml: string; results: FormatResult[]; after: LayoutMetrics }> {
     const laid = await Doc.fromXml(xml, file);
-    const results = runFormatOps(laid, entries, asFile);
-    return { xml: await laid.toXml(), results, after: layoutProblems(laid.definitions) };
+    const results = new FormatOps(laid).run(entries, asFile);
+    return { xml: await laid.toXml(), results, after: LayoutAnalysis.of(laid.definitions) };
   }
 
   /**
@@ -296,7 +301,7 @@ export class DiagramUpdate {
    */
   private static async isEngineOwned(xml: string, engine: LayoutEngine | undefined, undrawn: readonly string[]): Promise<boolean> {
     const model = await parseXml(xml);
-    const mine = diagramGeometry(model.definitions);
+    const mine = DiagramGeometry.of(model.definitions);
     let reference = xml;
     if (undrawn.length) {
       try {
@@ -310,12 +315,12 @@ export class DiagramUpdate {
       }
     }
     const clean = await parseXml(reference);
-    await layoutModel(clean, {});
-    if (engineOwned(mine, clean.definitions)) return true;
+    await new FullLayout(clean, {}).run();
+    if (mine.drawnBy(clean.definitions)) return true;
     if (engine !== 'auto') return false;
     const auto = await parseXml(reference);
-    const result = await layoutModel(auto, { engine: 'auto' });
-    return engineOwned(mine, (await parseXml(result.xml)).definitions);
+    const result = await new FullLayout(auto, { engine: 'auto' }).run();
+    return mine.drawnBy((await parseXml(result.xml)).definitions);
   }
 
   private async decideMode(requested: LayoutMode): Promise<{ mode: 'full' | 'incremental'; reason: string }> {
@@ -332,15 +337,15 @@ export class DiagramUpdate {
 
   /**
    * Full redraw with the engine; colours survive by element id (the DI ids
-   * survive inside layoutModel, diagram/write.ts restoreDiIds; so do group
-   * boxes, drawn again around what they held, diagram/groups.ts).
+   * survive inside layoutModel, diagram/DiIdMemo.ts; so do group
+   * boxes, drawn again around what they held, diagram/Groups.ts).
    */
   private async fullLayout(edit: EditContext): Promise<Ran> {
     const doc = this.doc;
     const colors = colorsOf(doc.definitions);
     const expansion = doc.layoutRequests.expansion(this.opts);
     // an element without id that the redraw draws gets one in the document's style and registry
-    const result = await layoutModel(doc.model, { ...expansion, engine: this.opts.engine, allocateId: (req) => edit.allocateId(req).id });
+    const result = await new FullLayout(doc.model, { ...expansion, engine: this.opts.engine, allocateId: (req) => edit.allocateId(req).id }).run();
     if (result.givenIds?.length) doc.invalidate();
     let xml = result.xml;
     let defs = doc.definitions;
@@ -351,14 +356,14 @@ export class DiagramUpdate {
     } else if (applyColors(doc.moddle, defs, colors)) {
       xml = await doc.toXml();
     }
-    return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
+    return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: LayoutAnalysis.of(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
   }
 
   private async incrementalLayout(relocated: string[], created: readonly string[]): Promise<Ran> {
     const doc = this.doc;
     const expansion = doc.layoutRequests.expansion(this.opts);
-    const report: IncrementalReport = await layoutIncremental(doc, this.before.snapshot, { relocated, created, ...expansion });
-    const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), diIds(doc.definitions).shape);
+    const report: IncrementalReport = await IncrementalLayout.run(doc, this.before.snapshot, { relocated, created, ...expansion });
+    const groups = new Groups(doc.definitions).redraw(doc.moddle, new Groups(doc.definitions).undrawn(), new DiIds(doc.definitions).shape);
     const xml = await doc.toXml();
     return {
       xml,
@@ -374,7 +379,7 @@ export class DiagramUpdate {
         pruned: report.pruned,
         notes: report.notes,
       },
-      after: layoutProblems(doc.definitions),
+      after: LayoutAnalysis.of(doc.definitions),
     };
   }
 

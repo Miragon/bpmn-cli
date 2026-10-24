@@ -1,16 +1,16 @@
 /**
- * Connections and labels in a kept drawing: src/diagram/reroute.ts (routing
+ * Connections and labels in a kept drawing: src/diagram/EdgeRouter.ts (routing
  * one connection with the BPMN side conventions, deciding which kept
- * connections need a new route), src/diagram/labels.ts (label placement)
+ * connections need a new route), src/diagram/LabelPlacer.ts (label placement)
  * and the text rendering of the layout block (src/report/utils/result-lines.ts renderLayout).
  */
 import { describe, expect, it } from 'vitest';
-import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
-import { brokenEdge, edgeBefore, routeEdge, routingLines } from '../src/diagram/reroute.js';
-import { crossings } from '../src/diagram/router.js';
-import { clearTitles, labelAt, placeEdgeLabel, placeShapeLabel, refitLabel } from '../src/diagram/labels.js';
+import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
+import { crossings } from '../src/diagram/utils/routing.js';
+import { labelAt } from '../src/diagram/utils/labels.js';
 import { renderLayout } from '../src/report/utils/result-lines.js';
 import { Doc } from '../src/model/Doc.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import type { El } from '../src/model/utils/moddle.js';
 
 /** A real element for `type` with `name` (labels read the name, routing the type). */
@@ -39,8 +39,8 @@ describe('routeEdge', () => {
       [sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [300, 100, 100, 80]), sh('BE', 'boundary', [160, 162, 36, 36], { hostId: 'A' }), sh('X', 'event', [400, 300, 36, 36])],
       [ed('F', 'sequenceFlow', 'A', 'B'), ed('FX', 'sequenceFlow', 'BE', 'X')],
     );
-    expect(routeEdge(p, p.edges.get('F')!, { lines: [] })).toEqual([{ x: 200, y: 140 }, { x: 300, y: 140 }]);
-    const fx = routeEdge(p, p.edges.get('FX')!, { lines: [] })!;
+    expect(new Drawing(p).route(p.edges.get('F')!, { lines: [] })).toEqual([{ x: 200, y: 140 }, { x: 300, y: 140 }]);
+    const fx = new Drawing(p).route(p.edges.get('FX')!, { lines: [] })!;
     expect(fx[0]).toEqual({ x: 178, y: 198 });
     expect(fx[1]!.x).toBe(178);
   });
@@ -50,7 +50,7 @@ describe('routeEdge', () => {
       [sh('Up', 'participant', [0, 0, 600, 100]), sh('Mid', 'participant', [0, 150, 300, 100]), sh('Down', 'participant', [0, 300, 600, 100]), sh('T', 'task', [400, 310, 100, 80], { poolId: 'Down' })],
       [ed('M', 'messageFlow', 'Up', 'T')],
     );
-    const pts = routeEdge(p, p.edges.get('M')!, { lines: [] })!;
+    const pts = new Drawing(p).route(p.edges.get('M')!, { lines: [] })!;
     expect(pts[0]!.y).toBe(100);
     expect(pts[pts.length - 1]!.y).toBe(310);
     expect(pts.every((q) => q.x > 300)).toBe(true);
@@ -73,17 +73,17 @@ describe('routeEdge', () => {
         [ed('WJ', 'sequenceFlow', 'W', 'J', [[200, 25], [300, 25]]), hook('H1J', 160), hook('H2J', 260), hook('H3J', 360), ed('NJ', 'sequenceFlow', 'N', 'J'), ...(cross ? [ed('YZ', 'sequenceFlow', 'Y', 'Z', [[460, 180], [266, 180]])] : [])],
       );
     let p = setup(false);
-    expect(routeEdge(p, p.edges.get('NJ')!, { lines: routingLines(p, 'NJ') })).toEqual([{ x: 200, y: 460 }, { x: 385, y: 460 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
+    expect(new Drawing(p).route(p.edges.get('NJ')!, { lines: new Drawing(p).routingLines('NJ') })).toEqual([{ x: 200, y: 460 }, { x: 385, y: 460 }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }]);
     // Y -> Z crosses the bundle's column: joining it would cross that flow, the way to the free top vertex does not
     p = setup(true);
-    const pts = routeEdge(p, p.edges.get('NJ')!, { lines: routingLines(p, 'NJ') })!;
+    const pts = new Drawing(p).route(p.edges.get('NJ')!, { lines: new Drawing(p).routingLines('NJ') })!;
     expect(pts.at(-1)).toEqual({ x: 325, y: 0 });
-    expect(crossings(pts, routingLines(p, 'NJ'))).toBe(0);
+    expect(crossings(pts, new Drawing(p).routingLines('NJ'))).toBe(0);
   });
 
   it('keeps an association straight when nothing is in the way', () => {
     const p = plane([sh('A', 'task', [100, 100, 100, 80]), sh('N', 'event', [260, 0, 36, 36])], [ed('As', 'association', 'N', 'A')]);
-    const pts = routeEdge(p, p.edges.get('As')!, { lines: [] })!;
+    const pts = new Drawing(p).route(p.edges.get('As')!, { lines: [] })!;
     expect(pts).toHaveLength(2);
   });
 });
@@ -94,62 +94,62 @@ describe('brokenEdge', () => {
 
   it('keeps an intact connection', () => {
     const p = setup();
-    expect(brokenEdge(p, p.edges.get('F')!, edgeBefore(p, p.edges.get('F')!))).toBe(false);
+    expect(new Drawing(p).brokenEdge(p.edges.get('F')!, new Drawing(p).edgeBefore(p.edges.get('F')!))).toBe(false);
   });
 
   it('flags a connection whose end lost its shape, that turned diagonal, or now cuts a shape', () => {
     let p = setup();
-    let before = edgeBefore(p, p.edges.get('F')!);
+    let before = new Drawing(p).edgeBefore(p.edges.get('F')!);
     p.shapes.get('B')!.bounds.y += 50;
-    expect(brokenEdge(p, p.edges.get('F')!, before)).toBe(true);
+    expect(new Drawing(p).brokenEdge(p.edges.get('F')!, before)).toBe(true);
     p = setup();
-    before = edgeBefore(p, p.edges.get('F')!);
+    before = new Drawing(p).edgeBefore(p.edges.get('F')!);
     p.edges.get('F')!.points[1] = { x: 300, y: 150 };
-    expect(brokenEdge(p, p.edges.get('F')!, before)).toBe(true);
+    expect(new Drawing(p).brokenEdge(p.edges.get('F')!, before)).toBe(true);
     p = setup();
-    before = edgeBefore(p, p.edges.get('F')!);
+    before = new Drawing(p).edgeBefore(p.edges.get('F')!);
     p.shapes.set('N', sh('N', 'event', [230, 122, 36, 36]));
-    expect(brokenEdge(p, p.edges.get('F')!, before)).toBe(true);
+    expect(new Drawing(p).brokenEdge(p.edges.get('F')!, before)).toBe(true);
   });
 
   it('does not reroute a hand-drawn connection for a defect it already had', () => {
     const p = setup();
     p.shapes.set('N', sh('N', 'event', [230, 122, 36, 36]));
-    const before = edgeBefore(p, p.edges.get('F')!);
+    const before = new Drawing(p).edgeBefore(p.edges.get('F')!);
     expect(before.cut.has('N')).toBe(true);
-    expect(brokenEdge(p, p.edges.get('F')!, before)).toBe(false);
+    expect(new Drawing(p).brokenEdge(p.edges.get('F')!, before)).toBe(false);
   });
 
   it('feeds labels to the router as diagonals', () => {
     const p = setup();
     p.shapes.get('A')!.label = { x: 120, y: 190, width: 60, height: 14 };
-    expect(routingLines(p)).toContainEqual([{ x: 120, y: 190 }, { x: 180, y: 204 }]);
-    expect(routingLines(p, 'F')).not.toContainEqual(p.edges.get('F')!.points);
+    expect(new Drawing(p).routingLines()).toContainEqual([{ x: 120, y: 190 }, { x: 180, y: 204 }]);
+    expect(new Drawing(p).routingLines('F')).not.toContainEqual(p.edges.get('F')!.points);
   });
 });
 
 describe('labels', () => {
   it('puts event labels below and gateway labels above, off lines and shapes', () => {
     const p = plane([sh('E', 'event', [100, 100, 36, 36], {}, 'Done'), sh('G', 'gateway', [300, 100, 50, 50], {}, 'ok?')]);
-    expect(placeShapeLabel(p, p.shapes.get('E')!)!.y).toBe(142);
-    expect(placeShapeLabel(p, p.shapes.get('G')!)!.y).toBeLessThan(100);
+    expect(new Drawing(p).placeShapeLabel(p.shapes.get('E')!)!.y).toBe(142);
+    expect(new Drawing(p).placeShapeLabel(p.shapes.get('G')!)!.y).toBeLessThan(100);
     // a line right below the event pushes its label to the next side
     p.edges.set('L', ed('L', 'sequenceFlow', 'X', 'Y', [[0, 148], [400, 148]]));
-    const box = placeShapeLabel(p, p.shapes.get('E')!)!;
+    const box = new Drawing(p).placeShapeLabel(p.shapes.get('E')!)!;
     expect(box.y + box.height).toBeLessThanOrEqual(100);
-    expect(placeShapeLabel(p, p.shapes.get('E')!, 'right')!.x).toBeGreaterThan(136);
+    expect(new Drawing(p).placeShapeLabel(p.shapes.get('E')!, 'right')!.x).toBeGreaterThan(136);
   });
 
   it('hangs a boundary label below the host, right of the event', () => {
     const p = plane([sh('H', 'task', [100, 100, 100, 80]), sh('B', 'boundary', [160, 162, 36, 36], { hostId: 'H' }, 'Late')]);
-    const box = placeShapeLabel(p, p.shapes.get('B')!)!;
+    const box = new Drawing(p).placeShapeLabel(p.shapes.get('B')!)!;
     expect(box).toMatchObject({ x: 200, y: 182 });
     expect(labelAt(p.shapes.get('B')!, { width: 30, height: 14 }, 'below', p.shapes.get('H')!)).toMatchObject({ x: 200, y: 182 });
   });
 
   it('puts a flow label above its first long horizontal segment, near the start', () => {
     const p = plane([], [ed('F', 'sequenceFlow', 'A', 'B', [[100, 100], [100, 200], [400, 200]], 'yes')]);
-    const box = placeEdgeLabel(p, p.edges.get('F')!)!;
+    const box = new Drawing(p).placeEdgeLabel(p.edges.get('F')!)!;
     expect(box.y + box.height).toBe(196);
     expect(box.x).toBe(108);
   });
@@ -160,11 +160,11 @@ describe('labels', () => {
     const p = plane([sub, sh('G', 'gateway', [145, 124, 50, 50], { parentId: 'SP' }, 'Complete?')]);
     const g = p.shapes.get('G')!;
     g.label = { x: 133, y: 108, width: 75, height: 14 };
-    expect(clearTitles(p, () => true)).toEqual([]);
+    expect(new Drawing(p).clearTitles(() => true)).toEqual([]);
     expect(g.label).toEqual({ x: 133, y: 108, width: 75, height: 14 });
     // with room below the gateway the label moves there, inside the sub-process
     sub.bounds.height = 120;
-    expect(clearTitles(p, () => true)).toEqual([['G', 'SP']]);
+    expect(new Drawing(p).clearTitles(() => true)).toEqual([['G', 'SP']]);
     expect(g.label!.y).toBeGreaterThanOrEqual(174);
     expect(g.label!.y + g.label!.height).toBeLessThanOrEqual(220);
   });
@@ -173,7 +173,7 @@ describe('labels', () => {
     const p = plane([sh('E', 'event', [100, 100, 36, 36], {}, 'Everything has been booked and archived')]);
     const e = p.shapes.get('E')!;
     e.label = { x: 98, y: 142, width: 40, height: 14 };
-    const box = refitLabel(p, e)!;
+    const box = new Drawing(p).refitLabel(e)!;
     expect(box.y).toBe(142);
     expect(box.height).toBeGreaterThan(14);
     expect(box.x + box.width / 2).toBeCloseTo(118, 0);

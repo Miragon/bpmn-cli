@@ -9,10 +9,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseOps } from '../src/index.js';
+import { parseOps, layoutView } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
-import { layoutView } from '../src/index.js';
-import { readPlanes, type DShape } from '../src/diagram/plane.js';
+import type { DShape } from '../src/diagram/types.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
@@ -75,7 +75,7 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 

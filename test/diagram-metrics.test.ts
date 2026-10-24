@@ -1,5 +1,5 @@
 /**
- * Tests of src/diagram/metrics.ts (layout problems with ids).
+ * Tests of src/diagram/LayoutAnalysis.ts (layout problems with ids).
  *
  * Every fixture is a hand-built definitions document with BPMNDI: a clean
  * baseline plus one defect per metric kind, checked for the problem ids,
@@ -12,7 +12,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
+import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
 import { parseXml } from '../src/model/utils/moddle.js';
 import { definitionsXml } from './helpers.js';
 
@@ -70,7 +72,7 @@ const LINEAR_DI = {
 };
 
 async function measure(xml: string) {
-  return layoutProblemsOfXml(xml);
+  return LayoutAnalysis.ofXml(xml);
 }
 
 const only = (problems: LayoutProblem[], kind: MetricKey): LayoutProblem[] => problems.filter((p) => p.kind === kind);
@@ -265,7 +267,7 @@ describe('layoutProblems', () => {
   it('works on a parsed definitions element without touching the model', async () => {
     const { definitions } = await parseXml(processXml(LINEAR_BODY, Object.values(LINEAR_DI)));
     const proc = definitions.rootElements[0];
-    const m = layoutProblems(definitions);
+    const m = LayoutAnalysis.of(definitions);
     expect(m.score).toBe(0);
     expect(Object.hasOwn(proc, 'laneSets')).toBe(false);
     expect(Object.hasOwn(proc, 'artifacts')).toBe(false);
@@ -438,7 +440,7 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
       const found = only(m.problems, 'segmentOverlap');
       expect(found).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '35px' }]);
       const { definitions } = await parseXml(xml);
-      expect(locateProblems(definitions, found).map((p) => p.at)).toEqual([{ plane: 'Process_1', x: 342.5, y: 230 }]);
+      expect(new ProblemLocator(definitions).locate(found).map((p) => p.at)).toEqual([{ plane: 'Process_1', x: 342.5, y: 230 }]);
     });
   });
 
@@ -479,7 +481,7 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
     });
 
     describe('labelOnTitle', () => {
-      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (text.ts titleBox)
+      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (diagram/utils/text.ts titleBox)
       const titled = (name: string, expanded: boolean, label: Rect): string =>
         processXml(`<bpmn:subProcess id="Sub"${name ? ` name="${name}"` : ''} /><bpmn:startEvent id="E" name="Order in" />`, [shape('Sub', [100, 100, 300, 200], { expanded }), shape('E', [40, 40, 36, 36], { label })]);
 

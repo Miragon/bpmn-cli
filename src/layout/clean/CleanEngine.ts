@@ -26,15 +26,16 @@
  *    scope levels are drawn when both ends are on the same plane, otherwise
  *    reported as DI_NOT_CREATED
  *  - groups are not drawn here (no warning either): layoutModel draws them
- *    again around what their boxes held (diagram/groups.ts)
+ *    again around what their boxes held (diagram/Groups.ts)
  *  - a label on a shape, another label, a line or the title of an expanded
- *    sub-process (diagram/text.ts titleBox) moves to a free spot around its
+ *    sub-process (diagram/utils/text.ts titleBox) moves to a free spot around its
  *    element, in a sub-process below its title first, else beside the
  *    title; a spot next to the element before one stepped further out
  *    (LabelDeclutter)
  */
 import { idOf, is, layoutRoot, type Model } from '../../model/utils/moddle.js';
-import { SIZES, type ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../diagram/utils/sizes.js';
+import type { ScopeLayout } from '../../diagram/types.js';
 import { CollaborationArtifacts } from './CollaborationArtifacts.js';
 import { DiWriter } from './DiWriter.js';
 import { LaneArranger } from './LaneArranger.js';

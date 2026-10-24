@@ -1,7 +1,7 @@
 import { is } from '../model/utils/moddle.js';
-import { cx, cy, median, right } from '../diagram/geom.js';
-import { spacingOf } from '../diagram/place.js';
-import type { DShape, Plane } from '../diagram/plane.js';
+import { cx, cy, median, right } from '../diagram/utils/geom.js';
+import { spacingOf } from '../diagram/utils/plane.js';
+import type { DShape, Plane } from '../diagram/types.js';
 import type { LayoutGap, PlaneColumn } from './layout-view.js';
 
 /** The columns of a diagram's flow nodes (see the contract of layout-view.ts). */

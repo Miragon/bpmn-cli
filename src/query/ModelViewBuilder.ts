@@ -22,10 +22,10 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { kindLabel } from '../model/utils/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
+import { Groups } from '../diagram/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
-import { groupMembers } from '../diagram/groups.js';
 import { flowOrder, validateDoc } from '../validate/structural.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
@@ -234,6 +234,6 @@ export class ModelViewBuilder {
   }
 
   private groups(): ViewGroup[] {
-    return [...groupMembers(this.doc.definitions)].map(([id, members]) => compact<ViewGroup>({ id, name: nameOf(this.doc.require(id)), members }));
+    return [...new Groups(this.doc.definitions).members()].map(([id, members]) => compact<ViewGroup>({ id, name: nameOf(this.doc.require(id)), members }));
   }
 }

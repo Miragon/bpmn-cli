@@ -1,5 +1,6 @@
-import type { Box, Point } from '../diagram/geom.js';
-import { raw, type DEdge } from '../diagram/plane.js';
+import type { Box, Point } from '../diagram/utils/geom.js';
+import { raw } from '../diagram/utils/plane.js';
+import type { DEdge } from '../diagram/types.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';

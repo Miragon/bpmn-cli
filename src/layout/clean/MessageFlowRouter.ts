@@ -28,9 +28,10 @@
  *    sub-process frames), `lines` the edges already drawn inside a pool.
  */
 import { is, type El } from '../../model/utils/moddle.js';
-import { SIZES, center, type Box, type Point } from '../../diagram/types.js';
-import { crossings, properCross } from './messages.js';
-import { toSegments, type Segment } from './utils/geometry.js';
+import { SIZES } from '../../diagram/utils/sizes.js';
+import { center } from '../../diagram/utils/geom.js';
+import type { Box, Point } from '../../diagram/types.js';
+import { crossings, properCross, toSegments, type Segment } from './utils/geometry.js';
 
 /** One pool as the message flow router sees it. */
 export interface MessagePool {

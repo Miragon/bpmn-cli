@@ -1,6 +1,5 @@
-import { copyBox, copyPoints } from './geom.js';
-import type { Box, Point } from './types.js';
-import type { DEdge, DShape, Plane } from './plane.js';
+import { copyBox, copyPoints } from './utils/geom.js';
+import type { Box, Point, DEdge, DShape, Plane } from './types.js';
 
 /** Everything a plane draws (bounds, labels, waypoints), to try something and undo it. */
 export class PlaneCheckpoint {

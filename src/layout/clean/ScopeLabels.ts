@@ -1,4 +1,6 @@
-import { LABEL_LINE, boxesOverlap, labelSize, type Box, type GArtifact, type GNode, type ScopeLayout } from '../../diagram/types.js';
+import { LABEL_LINE, labelSize } from '../../diagram/utils/text.js';
+import { boxesOverlap } from '../../diagram/utils/geom.js';
+import type { Box, GArtifact, GNode, ScopeLayout } from '../../diagram/types.js';
 import { bottom } from './utils/geometry.js';
 import { nameOf } from './utils/names.js';
 import { boundaryLeft, isEvent } from './utils/nodes.js';
@@ -70,7 +72,7 @@ export class ScopeLabels {
    * External label boxes for events, gateways, boundary events and data objects. A boundary event's hangs below its
    * host, right of the event (of two events the second one's left of it, three and more stepped down); on the top
    * border (GNode.onTop) it sits above the host, right of the event (of two such events the second one's left of it,
-   * three and more stepped up; left of it with GNode.labelLeft), as the incremental layout puts it (diagram/labels.ts).
+   * three and more stepped up; left of it with GNode.labelLeft), as the incremental layout puts it (diagram/LabelPlacer.ts).
    */
   static of(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
     const name = nameOf(n);

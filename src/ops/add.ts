@@ -31,7 +31,7 @@
  *    the after/before anchor (or of the host for boundary events; --flow:
  *    of the flow's source). A splice into a flow whose ends are in different
  *    lanes takes the lane of the row the incremental layout puts the node
- *    on (diagram/place.ts: the target's row after a branching source, so
+ *    on (diagram/NodePlacer.ts: the target's row after a branching source, so
  *    then the target's lane; else the anchor's) and warns W_LANE_INHERITED
  *    naming the other lane (decided before the placement, which may rename
  *    the flow).

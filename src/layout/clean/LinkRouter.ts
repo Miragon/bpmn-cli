@@ -1,6 +1,6 @@
-import { center, type Box, type GNode, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { center, borderPoint } from '../../diagram/utils/geom.js';
+import type { Box, GNode, Point, ScopeLayout } from '../../diagram/types.js';
 import { EdgeRouter } from './EdgeRouter.js';
-import { borderPoint } from './route.js';
 import { bottom, dedupe, hitCount, right, toSegments, type Segment } from './utils/geometry.js';
 import { obstacles, routedSegments } from './utils/scope.js';
 

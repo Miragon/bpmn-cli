@@ -66,7 +66,7 @@ export class ChangeSet {
     if (old !== next) ChangeSet.successors.set(old, next);
   }
 
-  /** The element `el` is now: the last one that took its place (recordReplacement), or itself (also read by layout/incremental.ts changedEnds). */
+  /** The element `el` is now: the last one that took its place (recordReplacement), or itself (also read by layout/Snapshot.ts changedEnds). */
   static successorOf(el: El): El {
     const seen = new Set<El>([el]);
     for (let next = ChangeSet.successors.get(el); next && !seen.has(next); next = ChangeSet.successors.get(el)) {

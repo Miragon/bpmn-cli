@@ -4,7 +4,7 @@
  * had a compensation event's label on the sub-process's name).
  *
  *  - Full engine: every label of a sub-process's content stays off its title
- *    (text.ts titleBox, where bpmn-js draws the name) and inside the frame,
+ *    (diagram/utils/text.ts titleBox, where bpmn-js draws the name) and inside the frame,
  *    in both op orders of the maintainer's case, for a gateway in the first
  *    row (its label above, the frame grows at the top), under a title of
  *    four lines, for labels wider than the events (left, right, below) and
@@ -30,9 +30,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
-import { layoutProblems, locateProblems } from '../src/diagram/metrics.js';
 import { renderSvg } from '../src/index.js';
-import { titleBox } from '../src/diagram/text.js';
+import { titleBox } from '../src/diagram/utils/text.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
 import { parseXml } from '../src/model/utils/moddle.js';
 
 interface Box {
@@ -870,7 +871,7 @@ describe('labelOnTitle', () => {
     expect(m.problems).toEqual([{ kind: 'labelOnTitle', ids: ['Event_Abgebrochen', 'Activity_Esp'] }]);
     expect(m.score).toBe(2);
     const { definitions } = await parseXml(xml);
-    const [p] = locateProblems(definitions, layoutProblems(definitions).problems);
+    const [p] = new ProblemLocator(definitions).locate(LayoutAnalysis.of(definitions).problems);
     const title = titleBox({ x: 140, y: 220, width: 240, height: 140 }, ESP_NAME)!;
     expect(p!.at!.plane).toBe('Process_1');
     expect(overlap({ x: p!.at!.x - 0.5, y: p!.at!.y - 0.5, width: 1, height: 1 }, title)).toBe(true);

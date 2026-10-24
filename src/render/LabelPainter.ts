@@ -1,5 +1,5 @@
-import type { Box, Point } from '../diagram/geom.js';
-import { textWidth, wrapLines } from '../diagram/text.js';
+import type { Box, Point } from '../diagram/utils/geom.js';
+import { textWidth, wrapLines } from '../diagram/utils/text.js';
 import { LAYER, type Item } from './types.js';
 import { attr, lines, SIZE } from './utils/svg.js';
 

@@ -7,7 +7,7 @@
  *    splice may rename the flow it goes into). The lane of the anchor (the
  *    host for a boundary event, the after / before anchor, a flow's source);
  *    a splice into a flow whose ends are in different lanes takes the lane
- *    of the row the incremental layout draws the node on (diagram/place.ts:
+ *    of the row the incremental layout draws the node on (diagram/NodePlacer.ts:
  *    the target's row after a branching source, so then the target's lane;
  *    else the anchor's) and returns both ends in `cross`.
  *  - laneInheritedWarning(id, inherited): W_LANE_INHERITED for a cross-lane
@@ -76,7 +76,7 @@ export function inheritedLane(doc: Doc, p: Placement): InheritedLane {
   const from = laneOf(doc, source);
   const to = laneOf(doc, target);
   if (from === to) return lane ? { lane } : {};
-  // after a branching source the node goes on the target's row (diagram/place.ts splice rule): the target's lane
+  // after a branching source the node goes on the target's row (diagram/NodePlacer.ts splice rule): the target's lane
   const branching = doc.outgoing(source).length > 1 && !!to;
   const chosen = branching ? to : lane;
   return { ...(chosen ? { lane: chosen } : {}), cross: { source, target, ...(from ? { from } : {}), ...(to ? { to } : {}), branching } };

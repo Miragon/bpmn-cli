@@ -9,7 +9,7 @@
  *    single commands, and add no backward flow; without the reminder path
  *    they add no layout problem at all (score 0, like two commands; on 0.5.0
  *    the batches gave 9 to 19). The new nodes are placed in op order, a chain
- *    of new nodes stays a splice through a split (diagram/place.ts
+ *    of new nodes stays a splice through a split (diagram/NodePlacer.ts
  *    spliceTarget, chainReaches), exception paths wait for the normal flow,
  *    and the flows of a node are routed as soon as the next one is placed
  *    (incremental.ts routeNow), like the next single command sees them.
@@ -33,7 +33,8 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml } from '../src/api.js';
 import { CliError } from '../src/shared/CliError.js';
-import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const FIXTURE = (() => {
@@ -88,7 +89,7 @@ const boundsOf = (xml: string, id: string): { x: number; y: number; width: numbe
   return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
 };
 const bottomOf = (b: { y: number; height: number }): number => b.y + b.height;
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
 
 async function batch(ops: object[], xml = FIXTURE): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;

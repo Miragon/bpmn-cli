@@ -64,7 +64,7 @@
  *    those naming an element drawn in full) in metrics order with the same
  *    ids, a list exactly these problems (matched by problemKey) in its order;
  *    each numbered 1.. in that order. A problem whose location
- *    (diagram/metrics.ts locateProblems) is on this plane and in the image gets a
+ *    (diagram/ProblemLocator.ts) is on this plane and in the image gets a
  *    numbered badge there (`drawn`); a badge that would cover an earlier one
  *    moves aside within the bounding box of the problem's elements.
  *  - tiles: when the image would draw its labels below MIN_LABEL_SCALE, it is
@@ -113,14 +113,14 @@
  *    else with a shape is a plain box.
  *  - Labels like bpmn-js 18: external labels (events, gateways, data, flows,
  *    groups) centred on the DI label bounds with their top at its y, in 11
- *    px Arial (diagram/text.ts wrapLines), 13.2 px a line, laid out twice like
+ *    px Arial (diagram/utils/text.ts wrapLines), 13.2 px a line, laid out twice like
  *    bpmn-js: wrapped at max(90, the label bounds' width), then again at the
  *    width of the widest line of that (rounded up), which may break it
  *    differently; without label bounds (90 px) below the shape (a group: at
  *    its top), a flow's at the middle of its middle segment, 15 px above it
  *    (right of a vertical one).
  *    Embedded labels: 12 px, padding 7, centred in tasks and collapsed
- *    sub-processes, at the top of expanded ones (their title, diagram/text.ts
+ *    sub-processes, at the top of expanded ones (their title, diagram/utils/text.ts
  *    titleBox), left-top in annotations; pool and lane names in their 30 px
  *    header band.
  *  - Off-viewport culling: shapes, connections and labels outside the view
@@ -134,11 +134,14 @@
  */
 import { Doc } from '../model/Doc.js';
 import { ioError, modelError } from '../shared/utils/errors.js';
-import { layoutModel } from '../layout/index.js';
+import { FullLayout } from '../layout/FullLayout.js';
+import type { Box } from '../diagram/utils/geom.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import type { LayoutProblem } from '../diagram/utils/problems.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
 import { is } from '../model/utils/moddle.js';
-import type { Box } from '../diagram/geom.js';
-import { layoutProblems, type LayoutProblem } from '../diagram/metrics.js';
-import { homePlane, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from '../diagram/plane.js';
 import { Composer } from './Composer.js';
 import { Crop } from './Crop.js';
 import { Scene } from './Scene.js';
@@ -152,16 +155,16 @@ export class DocRenderer {
     private readonly doc: Doc,
     private readonly opts: RenderOptions = {},
   ) {
-    this.sem = semantics(doc.definitions);
+    this.sem = Semantics.of(doc.definitions);
   }
 
   /** `bpmn render --format svg`: one plane of the document as SVG (see the module contract). */
   static async renderXml(xml: string, opts: RenderOptions = {}): Promise<RenderResult> {
     let doc = await Doc.fromXml(xml);
-    if (readPlanes(doc.definitions).length) return new DocRenderer(doc, opts).render();
+    if (new DiagramReader(doc.definitions).planes().length) return new DocRenderer(doc, opts).render();
     // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth); the problems stay the file's
-    const fileProblems = opts.problems ? layoutProblems(doc.definitions).problems : [];
-    const { xml: drawn } = await layoutModel(doc.model);
+    const fileProblems = opts.problems ? LayoutAnalysis.of(doc.definitions).problems : [];
+    const { xml: drawn } = await new FullLayout(doc.model).run();
     doc = await Doc.fromXml(drawn);
     const result = new DocRenderer(doc, opts).render(fileProblems);
     const notes = ['the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)'];
@@ -173,7 +176,7 @@ export class DocRenderer {
   render(fileProblems?: LayoutProblem[]): RenderResult {
     const { doc, opts, sem } = this;
     const defs = doc.definitions;
-    const read = readPlanes(defs, sem);
+    const read = new DiagramReader(defs, sem).planes();
     const checked = read.map((p) => DocRenderer.saneOf(p));
     const planes = checked.map((c) => c.plane);
     const want = Crop.of(doc, sem, planes, opts);
@@ -305,7 +308,7 @@ export class DocRenderer {
         is(el, 'bpmn:DataStoreReference') ||
         is(el, 'bpmn:TextAnnotation');
       if (!drawable || planes.some((p) => p.shapes.has(id) || p.edges.has(id))) continue;
-      if (homePlane(planes, sem, id) === plane) out.push(id);
+      if (sem.homePlane(planes, id) === plane) out.push(id);
     }
     return out;
   }

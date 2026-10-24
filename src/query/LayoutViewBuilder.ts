@@ -1,10 +1,12 @@
 import { is, type El } from '../model/utils/moddle.js';
-import { cx, cy, right } from '../diagram/geom.js';
-import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf } from '../diagram/labels.js';
-import { layoutProblems } from '../diagram/metrics.js';
-import { spacingOf } from '../diagram/place.js';
-import { raw, readPlanes, semantics, type DShape, type Plane } from '../diagram/plane.js';
-import { swatchOf } from '../diagram/write.js';
+import { cx, cy, right } from '../diagram/utils/geom.js';
+import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf } from '../diagram/utils/labels.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { spacingOf, raw } from '../diagram/utils/plane.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
+import type { DShape, Plane } from '../diagram/types.js';
+import { swatchOf } from '../diagram/utils/colors.js';
 import { DiagramColumns } from './DiagramColumns.js';
 import type { LayoutColor, LayoutDiagram, LayoutGroup, LayoutLabel, LayoutView } from './layout-view.js';
 
@@ -13,8 +15,8 @@ export class LayoutViewBuilder {
   constructor(private readonly defs: El) {}
 
   build(): LayoutView {
-    const sem = semantics(this.defs);
-    const planes = readPlanes(this.defs, sem);
+    const sem = Semantics.of(this.defs);
+    const planes = new DiagramReader(this.defs, sem).planes();
     const colors: LayoutColor[] = [];
     const labels: LayoutLabel[] = [];
     for (const plane of planes) {
@@ -35,7 +37,7 @@ export class LayoutViewBuilder {
         if (side && side !== 'above') labels.push({ id: e.id, side, default: 'above' });
       }
     }
-    return { diagrams: planes.map((p) => LayoutViewBuilder.diagramOf(p, sem.laneParent)), colors, labels, metrics: layoutProblems(this.defs) };
+    return { diagrams: planes.map((p) => LayoutViewBuilder.diagramOf(p, sem.laneParent)), colors, labels, metrics: LayoutAnalysis.of(this.defs) };
   }
 
   private static diagramOf(plane: Plane, laneParent: Map<string, string>): LayoutDiagram {

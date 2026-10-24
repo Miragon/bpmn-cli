@@ -8,9 +8,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { detachedEnds } from '../src/diagram/reroute.js';
+import type { DEdge, DShape } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
@@ -30,13 +31,13 @@ async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
   return out;
 }
 
@@ -222,7 +223,7 @@ describe('closing a strip inside a sub-process', () => {
 describe('several diagrams, partial and unusual DI', () => {
   it('a second view of the same process keeps its own connections', async () => {
     const { after } = await run(fixture('twoviews.bpmn'), [{ op: 'set', id: 'C', values: { name: 'Renamed' } }]);
-    const planes = readPlanes(after.definitions);
+    const planes = new DiagramReader(after.definitions).planes();
     expect(planes.map((p) => [p.shapes.size, p.edges.size])).toEqual([
       [7, 5],
       [7, 5],
@@ -232,7 +233,7 @@ describe('several diagrams, partial and unusual DI', () => {
 
   it('a second view loses the edges of the flows whose ends changed and keeps the rest; with --no-layout both views do', async () => {
     const xml = fixture('twoviews.bpmn');
-    const viewEdges = (doc: Doc): string[][] => readPlanes(doc.definitions).map((p) => [...p.edges.keys()].sort());
+    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((p) => [...p.edges.keys()].sort());
     // C after D: the bridge F2 (A -> D) and D -> C (F4) get other ends, C -> D (F3) goes, C -> E is new
     const { r, after } = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: 'incremental' });
     expect(viewEdges(after)).toEqual([
@@ -240,7 +241,7 @@ describe('several diagrams, partial and unusual DI', () => {
       ['F1', 'F5'],
     ]);
     expect(r.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);
-    expect(readPlanes(after.definitions).flatMap((p) => [...p.edges.values()].filter((e) => detachedEnds(p, e).length))).toEqual([]);
+    expect(new DiagramReader(after.definitions).planes().flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length))).toEqual([]);
     expect(duplicates(after)).toEqual([]);
     // a rename of an end is no end change: both views keep every edge
     const renamed = await run(xml, [{ op: 'set', id: 'C', values: { id: 'Activity_C' } }], { layout: 'incremental' });
@@ -304,13 +305,13 @@ describe('several diagrams, partial and unusual DI', () => {
       expect(r.layout.rerouted ?? [], layout).toEqual([]);
       expect(r.layout.notes ?? [], layout).toEqual([]);
       expect(edges(after).get('F3')!.points.at(-1), layout).toEqual({ x: 160, y: 550 });
-      expect(layoutProblems(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
+      expect(LayoutAnalysis.of(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
     }
   });
 
   it('a retype and a rename of the same node in one batch are no end change: both views keep its edges, with and without layout', async () => {
     const xml = fixture('twoviews.bpmn');
-    const viewEdges = (doc: Doc): string[][] => readPlanes(doc.definitions).map((p) => [...p.edges.keys()].sort());
+    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((p) => [...p.edges.keys()].sort());
     const ops: Op[] = [
       { op: 'retype', id: 'C', kind: 'userTask' },
       { op: 'set', id: 'C', values: { id: 'Activity_C' } },

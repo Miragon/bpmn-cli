@@ -1,7 +1,8 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { METRICS, SIZES, boxesOverlap, type Box, type GArtifact, type GEdge, type GNode, type LinkEnd, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { METRICS, SIZES, annotationSize } from '../../diagram/utils/sizes.js';
+import { boxesOverlap } from '../../diagram/utils/geom.js';
+import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../diagram/types.js';
 import { EdgeRouter } from './EdgeRouter.js';
-import { annotationSize } from './place.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { routedSegments, shiftScope } from './utils/scope.js';
 

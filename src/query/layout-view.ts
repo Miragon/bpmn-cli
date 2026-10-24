@@ -23,17 +23,17 @@
  *     `compact` can close), `gaps` of a group the places in its rows where
  *     two neighbours are that far apart (index of the node after the gap):
  *     such a row holds unrelated clusters that merely share a y.
- *   - colors: every coloured shape / edge with its swatch name (diagram/write.ts
+ *   - colors: every coloured shape / edge with its swatch name (diagram/utils/colors.ts
  *     SWATCHES) or 'custom' plus the raw fill / stroke.
  *   - labels: external labels (events, gateways, data, flows) that are not on
- *     the default side (diagram/labels.ts defaultLabelSide; flows: above), with the
+ *     the default side (diagram/utils/labels.ts defaultLabelSide; flows: above), with the
  *     side they are on.
- *   - metrics: layoutProblems(defs) (counts, score, problems with ids).
+ *   - metrics: LayoutAnalysis.of(defs) (counts, score, problems with ids).
  *  Read-only.
  */
-import type { LabelSide } from '../diagram/labels.js';
-import type { LayoutMetrics } from '../diagram/metrics.js';
-import type { SwatchName } from '../diagram/write.js';
+import type { LabelSide } from '../diagram/utils/labels.js';
+import type { LayoutMetrics } from '../diagram/utils/problems.js';
+import type { SwatchName } from '../diagram/utils/colors.js';
 
 export interface LayoutGroup {
   /** the frame: plane root, participant, lane or expanded sub-process */

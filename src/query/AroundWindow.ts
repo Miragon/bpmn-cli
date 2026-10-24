@@ -14,7 +14,7 @@
 import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/utils/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
 import { flowOrder } from '../validate/structural.js';

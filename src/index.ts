@@ -21,8 +21,8 @@ import { IdConventionsReader, type IdConventions, type IdNamingHelpers } from '.
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
 import type { NamedValidator, ValidatorFinding } from './validate/validators.js';
-import type { El } from './model/utils/moddle.js';
-import type { LayoutMetrics } from './diagram/metrics.js';
+import type { El, Model } from './model/utils/moddle.js';
+import type { LayoutMetrics, LayoutProblem } from './diagram/utils/problems.js';
 import type { Warning } from './shared/CliError.js';
 import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
@@ -61,6 +61,10 @@ import { advisoryOf } from './report/utils/findings.js';
 import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
 import { OpsParser } from './ops/OpsParser.js';
 import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
+import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { FullLayout, type LayoutOptions, type LayoutResult } from './layout/FullLayout.js';
+import { FormatOps, type FormatEntry, type FormatResult } from './format/FormatOps.js';
+import { ProblemLocator } from './diagram/ProblemLocator.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -96,7 +100,6 @@ export function implementationOf(el: El): Implementation | undefined { return ne
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/utils/kinds.js';
-export { layoutModel } from './layout/index.js';
 export { FORMAT_OP_NAMES, isFormatOp } from './ops/utils/op-names.js';
 export type {
   Op,
@@ -184,11 +187,11 @@ export function findElements(doc: Doc, text: string, kind?: string): FindHit[] {
 export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ModelViewBuilder(doc).scope(view, scopeId); }
 export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
-export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
+export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/utils/problems.js';
 export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
 export function layoutView(defs: El): LayoutView { return new LayoutViewBuilder(defs).build(); }
-export { runFormatOps, type FormatResult, type FormatEntry } from './format/index.js';
-export { SWATCHES, type SwatchName } from './diagram/write.js';
+export type { FormatResult, FormatEntry } from './format/FormatOps.js';
+export { SWATCHES, type SwatchName } from './diagram/utils/colors.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/types.js';
 export { changeHighlight } from './render/utils/highlight.js';
@@ -314,4 +317,37 @@ export function kindsSectionText(sections: string[]): string {
 /** `bpmn kinds --section <names> --json`: only those keys of kindsJson(). */
 export function kindsSectionJson(sections: string[]): Record<string, unknown> {
   return new KindsReference().sectionJson(sections);
+}
+
+/** The layout problems of every diagram of `defs` (diagram/LayoutAnalysis.ts); `importWarnings` are reported as one `failed` problem. */
+export function layoutProblems(defs: El, opts: { importWarnings?: number } = {}): LayoutMetrics {
+  return LayoutAnalysis.of(defs, opts);
+}
+
+/** Parses `xml` and measures it (import warnings count as `failed`). */
+export function layoutProblemsOfXml(xml: string): Promise<LayoutMetrics> {
+  return LayoutAnalysis.ofXml(xml);
+}
+
+/** The problems with where each shows on its plane (diagram/ProblemLocator.ts). */
+export function locateProblems(defs: El, problems: readonly LayoutProblem[]): LayoutProblem[] {
+  return new ProblemLocator(defs).locate(problems);
+}
+
+/**
+ * Runs the format ops of a batch on the drawing of `doc` (format/FormatOps.ts).
+ * `asFile`: the drawing of `doc` is the file's (a batch of format ops only):
+ * the first op's refusal may name a runnable command.
+ */
+export function runFormatOps(doc: Doc, entries: readonly FormatEntry[], asFile = false): FormatResult[] {
+  return new FormatOps(doc).run(entries, asFile);
+}
+
+/**
+ * Lays out the model (layout/FullLayout.ts). The model's in-memory DI is
+ * replaced by the hint diagram as a side effect; callers should treat the
+ * returned XML as the truth and re-parse it if they need DI.
+ */
+export function layoutModel(model: Model, opts: LayoutOptions = {}): Promise<LayoutResult> {
+  return new FullLayout(model, opts).run();
 }

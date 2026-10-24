@@ -23,8 +23,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { diffProblems, layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DShape } from '../src/diagram/plane.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import type { DShape } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
@@ -45,7 +47,7 @@ async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
   return out;
 }
 
@@ -59,7 +61,7 @@ describe('fitInFrame keeps an inner frame with its content when the drawing has 
     const before = await Doc.fromXml(xml);
     const { r, after } = await run(xml, [{ op: 'set', id: 'R', values: { name: LONG } }], { layout: 'incremental' });
     expect(r.layout.mode).toBe('incremental');
-    const added = diffProblems(layoutProblems(before.definitions).problems, layoutProblems(after.definitions).problems).added;
+    const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
     expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
     const b = shapes(before);
     const s = shapes(after);
@@ -105,7 +107,7 @@ describe('making room for place / align never leaves a new overlap', () => {
     const xml = fixture('place-pinned-row.bpmn');
     const before = await Doc.fromXml(xml);
     const { r, after } = await run(xml, [{ op: 'place', ids: ['M'], rowOf: 'J', after: 'X' }]);
-    const added = diffProblems(layoutProblems(before.definitions).problems, layoutProblems(after.definitions).problems).added;
+    const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
     expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
     const s = shapes(after);
     const centreY = (id: string): number => s.get(id)!.bounds.y + s.get(id)!.bounds.height / 2;

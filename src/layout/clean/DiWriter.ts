@@ -1,9 +1,10 @@
 import { addTo, is, type El, type Model, idOf } from '../../model/utils/moddle.js';
-import { SIZES, center, type Box, type GNode, type LaneBox, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../diagram/utils/sizes.js';
+import { center, borderPoint } from '../../diagram/utils/geom.js';
+import type { Box, GNode, LaneBox, Point, ScopeLayout } from '../../diagram/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import { LabelDeclutter } from './LabelDeclutter.js';
 import type { PoolLayout } from './PoolStacker.js';
-import { borderPoint } from './route.js';
 import { ScopeLabels } from './ScopeLabels.js';
 
 export class DiWriter {

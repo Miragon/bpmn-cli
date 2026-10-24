@@ -1,4 +1,7 @@
-import { METRICS, SIZES, center, labelSize, type GEdge, type GNode, type ScopeLayout } from '../../diagram/types.js';
+import { labelSize } from '../../diagram/utils/text.js';
+import { METRICS, SIZES } from '../../diagram/utils/sizes.js';
+import { center } from '../../diagram/utils/geom.js';
+import type { GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
 import { RowAssigner } from './RowAssigner.js';
 import { nameOf } from './utils/names.js';
 import { isEvent } from './utils/nodes.js';

@@ -13,14 +13,14 @@
  * process) or a lane (its child lanes); every listed id must be a direct
  * child lane of it (E_NOT_CHILD_LANE); unlisted lanes follow in their old
  * order. Rewrites `laneSet.lanes`. A kept diagram gets its bands reordered in
- * the diagram phase (src/format/index.ts, orderBands).
+ * the diagram phase (src/format/FormatOps.ts, orderBands).
  *
  * Pools: with `op.pools`, a collaboration as op.id (or participant ids in
  * `op.flows`) the participants of that collaboration are ordered top to
  * bottom instead (black-box pools included); every listed id must be one of
  * its participants (E_NOT_PARTICIPANT); unlisted pools follow in their old
  * order. Rewrites `collaboration.participants`; a kept diagram gets its pool
- * bands reordered in the diagram phase (src/format/index.ts, orderPools).
+ * bands reordered in the diagram phase (src/format/FormatOps.ts, orderPools).
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';

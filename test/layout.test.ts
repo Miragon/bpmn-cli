@@ -33,18 +33,18 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LayoutDebug } from '../src/shared/LayoutDebug.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
-import { titleBox } from '../src/diagram/text.js';
+import type { DShape, GNode, ScopeLayout } from '../src/diagram/types.js';
+import { titleBox } from '../src/diagram/utils/text.js';
 import { Doc } from '../src/model/Doc.js';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
 import { ArtifactPlacer } from '../src/layout/clean/ArtifactPlacer.js';
 import { ChainLiftTrial } from '../src/layout/clean/ChainLiftTrial.js';
 import { JoinColumnTrial } from '../src/layout/clean/JoinColumnTrial.js';
 import { ScopeGrid } from '../src/layout/clean/ScopeGrid.js';
 import { ScopePlacer } from '../src/layout/clean/ScopePlacer.js';
 import { shiftNode } from '../src/layout/clean/utils/scope.js';
-import type { GNode, ScopeLayout } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
@@ -358,7 +358,7 @@ interface Laid {
 const OUT_DIR = process.env['BPMN_LAYOUT_TEST_OUT'];
 
 async function layout(name: string, doc: Doc, opts: LayoutOptions = {}): Promise<Laid> {
-  const { xml, warnings } = await layoutModel(doc.model, opts);
+  const { xml, warnings } = await new FullLayout(doc.model, opts).run();
   if (OUT_DIR) {
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(join(OUT_DIR, `${name}.bpmn`), xml);
@@ -646,7 +646,7 @@ describe('clean layout engine', () => {
     const L = await layout('top-loop-label', doc);
     const g = L.box('Gateway_Another');
     expect(flowBetween(L, 'Gateway_Another', 'Activity_Claim').points[0]).toEqual({ x: cx(g), y: g.y });
-    expect(layoutProblems(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
+    expect(LayoutAnalysis.of(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
   });
 
   it('lanes: a join whose entries rise into its bottom vertex leaves for a target below through its right vertex; a split with one entry keeps its drops', async () => {
@@ -678,7 +678,7 @@ describe('clean layout engine', () => {
     // o2c: the join's entries from Finance and Warehouse, and the fork's entry from Finance (it merges "ok" too): both leave for the lanes below through the right vertex
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'agent__o2c.bpmn'), 'utf8'));
     const o2c = await layout('o2c-join-exits', doc);
-    expect(layoutProblems(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
+    expect(LayoutAnalysis.of(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
     const fork = o2c.box('Gateway_Fork'), join2 = o2c.box('Gateway_Join');
     for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
     expect(flowBetween(o2c, 'Gateway_Join', 'Activity_ShipGoods').points[0]).toEqual({ x: right(join2), y: cy(join2) });
@@ -1608,7 +1608,7 @@ describe('clean layout engine', () => {
     // it crosses no line; the drawing keeps the crossing the lanes force (score 5)
     expect(crossingsOf(L, flow.id)).toEqual([]);
     expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
-    expect(layoutProblems(L.out.model.definitions).score).toBeLessThanOrEqual(5);
+    expect(LayoutAnalysis.of(L.out.model.definitions).score).toBeLessThanOrEqual(5);
     // the label to the upper right of the event, clear of the flows into and out of Pick invoice
     const label = L.shape('BE12').label!, host = L.box('A1');
     expect(label.x).toBeGreaterThan(right(L.box('BE12')));
@@ -1884,7 +1884,7 @@ describe('clean layout engine', () => {
       expect(flowBetween(L, 'BE13', 'H').points[0], `${what}: Rejected's flow leaves downwards`).toEqual({ x: cx(rejected), y: bottom(rejected) });
       expect(L.shape('BE13').label!.x, `${what}: its label right of it, below the host`).toBeGreaterThan(right(rejected));
       if (sub) expect(L.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
-      expect(layoutProblems(L.out.model.definitions).score, what).toBe(0);
+      expect(LayoutAnalysis.of(L.out.model.definitions).score, what).toBe(0);
     }
   });
 
@@ -3003,7 +3003,7 @@ ${categories}
 /** Every shape of the drawing by element id (all planes). */
 async function shapesOf(xml: string): Promise<Map<string, DShape>> {
   const doc = await Doc.fromXml(xml);
-  return new Map(diagramPlanes(doc.definitions).flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
+  return new Map(new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
 }
 
 /** The group's box holds the members whole and cuts no other leaf shape. */
@@ -3126,7 +3126,7 @@ describe('groups over a full redraw', () => {
     // the old DI order
     expect(r.xml.indexOf('bpmnElement="Group_Outer"')).toBeLessThan(r.xml.indexOf('bpmnElement="Group_Inner"'));
     expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
-    expect(layoutProblems((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
+    expect(LayoutAnalysis.of((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
   });
 
   it('two stacked groups come back the same on a second redraw, and an edit to the first result finds it engine-owned', async () => {
@@ -3244,8 +3244,8 @@ describe('groups over a full redraw', () => {
       [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
     );
     const doc = await Doc.fromXml(xml);
-    const { redrawGroups } = await import('../src/diagram/groups.js');
-    const out = redrawGroups(doc.moddle, doc.definitions, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
+    const { Groups } = await import('../src/diagram/Groups.js');
+    const out = new Groups(doc.definitions).redraw(doc.moddle, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
     expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
     expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);
   });

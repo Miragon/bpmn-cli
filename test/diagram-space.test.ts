@@ -1,14 +1,13 @@
 /**
  * The geometry tools of the incremental engine on hand-built planes:
- * src/diagram/space.ts (space tool, strip closing, frame growth) and
- * src/diagram/separate.ts (local overlap removal, tidy).
+ * src/diagram/SpaceTool.ts (space tool, strip closing, frame growth) and
+ * src/diagram/Separation.ts (local overlap removal, tidy).
  */
 import { describe, expect, it } from 'vitest';
 import type { Box, Point } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
-import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
-import { closeStrip, fitInFrame, makeSpace, shiftShape } from '../src/diagram/space.js';
-import { separate, tidy } from '../src/diagram/separate.js';
+import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 
 const EL = {} as El;
 
@@ -47,7 +46,7 @@ function pooled(): Plane {
 describe('makeSpace', () => {
   it('moves shapes beyond the line, grows containers crossing it, keeps the rest', () => {
     const p = pooled();
-    const r = makeSpace(p, { axis: 'x', line: 350, delta: 120 });
+    const r = new Drawing(p).makeSpace({ axis: 'x', line: 350, delta: 120 });
     expect(box(p, 'A')).toEqual({ x: 200, y: 135, width: 100, height: 80 });
     expect(box(p, 'B').x).toBe(520);
     expect(box(p, 'BE').x).toBe(580);
@@ -63,7 +62,7 @@ describe('makeSpace', () => {
 
   it('confines the effect to the band of `within`', () => {
     const p = pooled();
-    makeSpace(p, { axis: 'x', line: 350, delta: 50, within: { x: 0, y: 100, width: 1000, height: 150 } });
+    new Drawing(p).makeSpace({ axis: 'x', line: 350, delta: 50, within: { x: 0, y: 100, width: 1000, height: 150 } });
     expect(box(p, 'B').x).toBe(450);
     expect(box(p, 'C').x).toBe(400);
     // the lanes stay aligned with the grown pool
@@ -74,7 +73,7 @@ describe('makeSpace', () => {
     const p = pooled();
     p.shapes.set('Pool2', sh('Pool2', 'participant', [100, 450, 700, 200]));
     p.shapes.set('D', sh('D', 'task', [700, 500, 100, 80], { poolId: 'Pool2' }));
-    makeSpace(p, { axis: 'y', line: 249, delta: 60, within: { x: 400, y: 0, width: 100, height: 1000 } });
+    new Drawing(p).makeSpace({ axis: 'y', line: 249, delta: 60, within: { x: 400, y: 0, width: 100, height: 1000 } });
     expect(box(p, 'L1').height).toBe(210);
     expect(box(p, 'L2').y).toBe(310);
     expect(box(p, 'Pool').height).toBe(360);
@@ -87,7 +86,7 @@ describe('makeSpace', () => {
 
   it('never touches kept shapes', () => {
     const p = pooled();
-    makeSpace(p, { axis: 'x', line: 350, delta: 50, keep: new Set(['B']) });
+    new Drawing(p).makeSpace({ axis: 'x', line: 350, delta: 50, keep: new Set(['B']) });
     expect(box(p, 'B').x).toBe(400);
     expect(box(p, 'BE').x).toBe(460);
     expect(box(p, 'C').x).toBe(450);
@@ -95,7 +94,7 @@ describe('makeSpace', () => {
 
   it('moves the content of a container that lies beyond the line with it', () => {
     const p = plane([sh('Sub', 'subProcess', [400, 100, 300, 200], { expanded: true }), sh('In', 'task', [450, 150, 100, 80], { parentId: 'Sub' })]);
-    makeSpace(p, { axis: 'y', line: 90, delta: 40, within: { x: 600, y: 0, width: 200, height: 500 } });
+    new Drawing(p).makeSpace({ axis: 'y', line: 90, delta: 40, within: { x: 600, y: 0, width: 200, height: 500 } });
     expect(box(p, 'Sub').y).toBe(140);
     expect(box(p, 'In').y).toBe(190);
   });
@@ -122,7 +121,7 @@ function withSub(): Plane {
 describe('makeSpace and boundary events / shrinking', () => {
   it('boundary events of a resized sub-process stay on its border: the part beyond the line moves', () => {
     const p = withSub();
-    makeSpace(p, { axis: 'y', line: 349, delta: 60 });
+    new Drawing(p).makeSpace({ axis: 'y', line: 349, delta: 60 });
     expect(box(p, 'SP').height).toBe(260);
     // bottom-border events follow the bottom border, with their label; the right-border event (above the line) stays
     expect(box(p, 'BB').y).toBe(392);
@@ -130,14 +129,14 @@ describe('makeSpace and boundary events / shrinking', () => {
     expect(p.shapes.get('BB')!.label!.y).toBe(412);
     expect(box(p, 'BR').y).toBe(230);
     const q = withSub();
-    makeSpace(q, { axis: 'x', line: 699, delta: 40 });
+    new Drawing(q).makeSpace({ axis: 'x', line: 699, delta: 40 });
     expect(box(q, 'BR').x).toBe(722);
     expect(box(q, 'BB').x).toBe(600);
   });
 
   it('a negative delta in a sub-process band shrinks only the containers inside the band, never past their content', () => {
     const p = withSub();
-    const r = makeSpace(p, { axis: 'x', line: 400, delta: -100, within: { ...box(p, 'SP') } });
+    const r = new Drawing(p).makeSpace({ axis: 'x', line: 400, delta: -100, within: { ...box(p, 'SP') } });
     expect(box(p, 'Pool').width).toBe(900);
     expect(box(p, 'L1').width).toBe(870);
     expect(box(p, 'SP').width).toBe(400);
@@ -145,7 +144,7 @@ describe('makeSpace and boundary events / shrinking', () => {
     expect(r.resized.has('Pool')).toBe(false);
     // shrinking further than the content allows stops 10 px after it
     const q = withSub();
-    makeSpace(q, { axis: 'x', line: 660, delta: -150, within: { ...box(q, 'SP') } });
+    new Drawing(q).makeSpace({ axis: 'x', line: 660, delta: -150, within: { ...box(q, 'SP') } });
     expect(box(q, 'SP').x + box(q, 'SP').width).toBe(650);
   });
 
@@ -153,7 +152,7 @@ describe('makeSpace and boundary events / shrinking', () => {
     const p = withSub();
     p.shapes.set('Pool2', sh('Pool2', 'participant', [100, 550, 900, 200]));
     p.shapes.set('Note', sh('Note', 'annotation', [300, 540, 100, 30]));
-    makeSpace(p, { axis: 'y', line: 520, delta: 50, within: { x: 100, y: 0, width: 150, height: 1000 } });
+    new Drawing(p).makeSpace({ axis: 'y', line: 520, delta: 50, within: { x: 100, y: 0, width: 150, height: 1000 } });
     expect(box(p, 'Pool2').y).toBe(600);
     expect(box(p, 'Note').y).toBe(590);
   });
@@ -167,7 +166,7 @@ describe('makeSpace and boundary events / shrinking', () => {
     box(p, 'SA').y = 520;
     box(p, 'SB').y = 520;
     p.edges.get('G')!.points = [{ x: 340, y: 560 }, { x: 540, y: 560 }];
-    fitInFrame(p, 'SP', 15);
+    new Drawing(p).fitInFrame('SP', 15);
     expect(box(p, 'L1').height).toBeGreaterThan(400);
     expect(box(p, 'SA').y).toBe(520);
     expect(box(p, 'SB').y).toBe(520);
@@ -178,7 +177,7 @@ describe('makeSpace and boundary events / shrinking', () => {
 describe('closeStrip', () => {
   it('pulls everything back when the strip is empty', () => {
     const p = plane([sh('A', 'task', [100, 100, 100, 80]), sh('C', 'task', [500, 100, 100, 80])], [ed('F', 'A', 'C', [[200, 140], [500, 140]])]);
-    const r = closeStrip(p, { axis: 'x', from: 240, to: 460, gap: 60 });
+    const r = new Drawing(p).closeStrip({ axis: 'x', from: 240, to: 460, gap: 60 });
     expect(r).toBeDefined();
     expect(box(p, 'C').x).toBe(340);
     expect(pts(p, 'F')).toEqual([{ x: 200, y: 140 }, { x: 340, y: 140 }]);
@@ -186,12 +185,12 @@ describe('closeStrip', () => {
 
   it('refuses when a shape, a label or a bend is in the strip', () => {
     const shape = plane([sh('A', 'task', [100, 100, 100, 80]), sh('X', 'event', [300, 400, 36, 36]), sh('C', 'task', [500, 100, 100, 80])]);
-    expect(closeStrip(shape, { axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
+    expect(new Drawing(shape).closeStrip({ axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
     const label = plane([sh('A', 'task', [100, 100, 100, 80], { label: { x: 320, y: 200, width: 40, height: 14 } }), sh('C', 'task', [500, 100, 100, 80])]);
-    expect(closeStrip(label, { axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
+    expect(new Drawing(label).closeStrip({ axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
     const bend = plane([sh('A', 'task', [100, 100, 100, 80]), sh('C', 'task', [500, 100, 100, 80])], [ed('F', 'A', 'C', [[150, 180], [150, 300], [350, 300], [350, 400], [550, 400], [550, 180]])]);
-    expect(closeStrip(bend, { axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
-    expect(closeStrip(bend, { axis: 'x', from: 240, to: 460, gap: 60, ignore: new Set(['F']) })).toBeDefined();
+    expect(new Drawing(bend).closeStrip({ axis: 'x', from: 240, to: 460, gap: 60 })).toBeUndefined();
+    expect(new Drawing(bend).closeStrip({ axis: 'x', from: 240, to: 460, gap: 60, ignore: new Set(['F']) })).toBeDefined();
   });
 });
 
@@ -199,7 +198,7 @@ describe('fitInFrame and shiftShape', () => {
   it('grows the lane and the pool around a shape that sticks out', () => {
     const p = pooled();
     box(p, 'A').y = 200; // reaches 280 > lane bottom 250
-    fitInFrame(p, 'A', 15);
+    new Drawing(p).fitInFrame('A', 15);
     expect(box(p, 'L1').height).toBe(195);
     expect(box(p, 'L2').y).toBe(295);
     expect(box(p, 'Pool').height).toBe(345);
@@ -208,7 +207,7 @@ describe('fitInFrame and shiftShape', () => {
 
   it('moves a host with its label and boundary events', () => {
     const p = pooled();
-    expect(shiftShape(p, 'B', 10, 5).sort()).toEqual(['B', 'BE']);
+    expect(new Drawing(p).shift('B', 10, 5).sort()).toEqual(['B', 'BE']);
     expect(box(p, 'BE')).toMatchObject({ x: 470, y: 202 });
     expect(p.shapes.get('B')!.label).toMatchObject({ x: 410, y: 225 });
   });
@@ -217,7 +216,7 @@ describe('fitInFrame and shiftShape', () => {
 describe('separate', () => {
   it('pushes the later of two overlapping shapes right, never the fixed ones', () => {
     const p = plane([sh('A', 'task', [100, 100, 100, 80]), sh('N', 'task', [210, 100, 100, 80]), sh('B', 'task', [290, 100, 100, 80])]);
-    const r = separate(p, { active: ['N'], movable: ['N', 'B'] });
+    const r = new Drawing(p).separate({ active: ['N'], movable: ['N', 'B'] });
     expect(box(p, 'A').x).toBe(100);
     expect(box(p, 'N').x).toBe(220);
     expect(box(p, 'B').x).toBe(340);
@@ -229,14 +228,14 @@ describe('separate', () => {
     const p = plane([sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [205, 100, 100, 80]), sh('N', 'event', [400, 300, 36, 36])]);
     const baseline = new Map([...p.shapes.values()].filter((s) => s.id !== 'N').map((s) => [s.id, { ...s.bounds }]));
     box(p, 'B').y += 1; // B moved a little but its conflict with A is not worse
-    separate(p, { active: ['B', 'N'], movable: ['A', 'B', 'N'], baseline });
+    new Drawing(p).separate({ active: ['B', 'N'], movable: ['A', 'B', 'N'], baseline });
     expect(box(p, 'A').x).toBe(100);
     expect(box(p, 'B')).toMatchObject({ x: 205, y: 101 });
   });
 
   it('checks only the own box of a new boundary event, with a smaller gap', () => {
     const p = plane([sh('H', 'task', [100, 100, 100, 80]), sh('BE', 'boundary', [160, 162, 36, 36], { hostId: 'H' }), sh('X', 'task', [220, 120, 100, 80])]);
-    separate(p, { active: ['BE'], movable: ['H', 'X'] });
+    new Drawing(p).separate({ active: ['BE'], movable: ['H', 'X'] });
     // 24 px between the event and X: fine for a boundary event (8 px), so nothing moves
     expect(box(p, 'X').x).toBe(220);
     expect(box(p, 'H').x).toBe(100);
@@ -245,7 +244,7 @@ describe('separate', () => {
   it('grows the frame instead of leaving it', () => {
     const p = pooled();
     p.shapes.set('N', sh('N', 'task', [400, 150, 100, 80], { laneId: 'L1', poolId: 'Pool' }));
-    separate(p, { active: ['N'], movable: ['N', 'B'] });
+    new Drawing(p).separate({ active: ['N'], movable: ['N', 'B'] });
     const n = box(p, 'N');
     const b = box(p, 'B');
     expect(n.y >= b.y + b.height + 20 || n.x >= b.x + b.width + 20 || b.x >= n.x + n.width + 20).toBe(true);
@@ -255,7 +254,7 @@ describe('separate', () => {
 
   it('tidy removes overlaps among all shapes, keeping the order', () => {
     const p = plane([sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [150, 100, 100, 80]), sh('C', 'task', [180, 120, 100, 80])]);
-    const r = tidy(p);
+    const r = new Drawing(p).tidy();
     expect(r.unresolved).toEqual([]);
     const [a, b, c] = ['A', 'B', 'C'].map((id) => box(p, id));
     expect(a!.x).toBe(100);

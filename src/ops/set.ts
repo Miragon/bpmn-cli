@@ -74,7 +74,7 @@
  *    (camunda:errorEventDefinition errorRef); a DI shape or edge id derived
  *    from the old id (`BPMNShape_<old>`, `<old>_di`, `Edge_<old>`, also
  *    cut, also `_2`) takes the new one, `_2` when it is taken
- *    (diagram/write.ts followDiIds), as on a flow that follows its ends;
+ *    (diagram/utils/di-ids.ts followDiIds), as on a flow that follows its ends;
  *    any other DI id, and plane and diagram ids, stay.
  *  Text annotations: text.
  *  `key=` (empty value) and --unset remove the property.
@@ -85,7 +85,7 @@
  * This module also hosts the small helpers every mutation shares
  * (`changeOf`, `descriptorOf`, `ownValue`, `idOf`).
  */
-import { followDiIds } from '../diagram/write.js';
+import { followDiIds } from '../diagram/utils/di-ids.js';
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { cutAt, MAX_ID, withSuffix } from '../ids/utils/slug.js';
@@ -93,7 +93,7 @@ import { IdRegistry } from '../ids/IdRegistry.js';
 import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
 import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet, type Change } from '../model/ChangeSet.js';
 import { ArtifactEditor } from './ArtifactEditor.js';
@@ -1610,7 +1610,7 @@ function applyEventKeys(doc: Doc, el: El, keys: Map<string, string>, cs: ChangeS
 /**
  * Renames an element id, re-pointing every reference (incl. string refs
  * like calledElement); a DI shape or edge id derived from the old id
- * follows (diagram/write.ts followDiIds: `BPMNShape_<old>`, `<old>_di`).
+ * follows (diagram/utils/di-ids.ts followDiIds: `BPMNShape_<old>`, `<old>_di`).
  */
 export function renameId(doc: Doc, el: El, newId: string): void {
   const old = idOf(el);
