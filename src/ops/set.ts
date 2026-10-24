@@ -92,11 +92,11 @@ import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
 import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
 import { diExpansionState } from '../layout/index.js';
-import { addTo, is, localType, many, walk, type El } from '../model/moddle.js';
+import { addTo, is, localType, many, nameOf, walk, type El } from '../model/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 import { about, ChangeSet, type Change } from '../model/change-set.js';
-import { groupName, setGroupName } from './artifacts.js';
+import { setGroupName } from './artifacts.js';
 import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
@@ -157,7 +157,7 @@ export function changeKind(el: El): string {
 
 /** ChangeSet entry for an element (about it: ChangeSet.rename). */
 export function changeOf(el: El, detail?: string): Change {
-  const name = is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
+  const name = nameOf(el);
   return about({ id: idOf(el), kind: changeKind(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
 }
 
@@ -1668,7 +1668,7 @@ export function renameId(doc: Doc, el: El, newId: string): void {
 /** Structured, settable view of an element's properties (used by `show <id>`). */
 export function readProperties(doc: Doc, el: El): Record<string, unknown> {
   const out: Record<string, unknown> = { id: idOf(el) };
-  const name = is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
+  const name = nameOf(el);
   if (name) out['name'] = name;
   const docs = (ownValue(el, 'documentation') as El[] | undefined) ?? [];
   const text = docs

@@ -66,6 +66,7 @@
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/moddle.js';
+import { kindOf, synchronises } from '../model/kinds.js';
 import { ChangeSet } from '../model/change-set.js';
 import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
@@ -198,13 +199,8 @@ function isMerge(doc: Doc, node: El): boolean {
   return doc.incoming(node).length > 1 && doc.outgoing(node).length === 1;
 }
 
-/** Gateways that wait for their incoming paths (a plain remove cannot bridge them without changing what runs). */
-function synchronises(node: El): boolean {
-  return is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
-}
-
 function joinKind(node: El): string {
-  return is(node, 'bpmn:ParallelGateway') ? 'parallel' : is(node, 'bpmn:InclusiveGateway') ? 'inclusive' : 'complex';
+  return kindOf(node)!.kind.replace('Gateway', '');
 }
 
 /** A plain remove of a synchronising join: E_AMBIGUOUS_BRIDGE (see the module contract). */
@@ -265,7 +261,7 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
     bridged.push(idOf(predecessor));
   }
   cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
-  const sync = is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
+  const sync = synchronises(node);
   if (sync) cs.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
   const count = doc.incoming(successor).length;
   if (count > 1 && (sync || !is(successor, 'bpmn:Gateway'))) {

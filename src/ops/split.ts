@@ -26,7 +26,7 @@
  */
 import type { Doc } from '../model/document.js';
 import { modelError, usageError, type CliError } from '../shared/errors.js';
-import { parseKind, KindError } from '../model/kinds.js';
+import { gatewayKindList, parseKind, KindError } from '../model/kinds.js';
 import { is, type El } from '../model/moddle.js';
 import { ChangeSet } from '../model/change-set.js';
 import { anchorContext, keyRequest, labelOf } from '../ids/style.js';
@@ -53,7 +53,7 @@ function gatewayKind(token: string | undefined): string {
   }
   if (def.family !== 'gateway') {
     throw modelError('E_INVALID_VALUE', `split needs a gateway kind, not ${def.kind}`, {
-      hint: 'Use exclusiveGateway (xor), parallelGateway (and), inclusiveGateway (or), complexGateway (complex) or eventBasedGateway.',
+      hint: `Use ${gatewayKindList()}.`,
     });
   }
   return def.kind;

@@ -69,7 +69,7 @@
  *    materialise empty collections on the semantic elements).
  */
 import type { BpmnModdle } from 'bpmn-moddle';
-import { addTo, is, type El } from '../model/moddle.js';
+import { addTo, groupName, is, type El } from '../model/moddle.js';
 import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll, type Box, type Point } from './geom.js';
 import { idOf, raw, rawList } from './plane.js';
 import { labelSize } from './types.js';
@@ -184,7 +184,7 @@ export function undrawnGroups(defs: El): RememberedGroup[] {
     const value = raw<El>(group, 'categoryValueRef');
     const members = (value && byValue.get(value)) || [];
     if (drawn.has(id) || !members.length) continue;
-    const name = raw<string>(value, 'value')?.trim();
+    const name = groupName(group)?.trim();
     const size = name ? labelSize(name) : undefined;
     out.push({ id, bounds: { x: 0, y: 0, width: 0, height: 0 }, ...(size ? { label: { x: 0, y: 0, width: size.width, height: size.height } } : {}), members });
   }
@@ -217,7 +217,7 @@ function groupElements(defs: El): Map<string, El> {
   return out;
 }
 
-const named = (group: El): boolean => !!raw<string>(raw(group, 'categoryValueRef'), 'value')?.trim();
+const named = (group: El): boolean => !!groupName(group)?.trim();
 
 /**
  * `u` padded by up to `pad` (`top` above), each side at most half-way to a

@@ -56,6 +56,15 @@ export function isAny(el: unknown, types: string[]): boolean {
   return types.some((t) => is(el, t));
 }
 
+/** The name of a group: the value of its category value (a group has no `name`). */
+export function groupName(group: El): string | undefined {
+  return group.get<El | undefined>('categoryValueRef')?.get<string | undefined>('value') || undefined;
+}
+
+export function nameOf(el: El): string | undefined {
+  return is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
+}
+
 /** Local (unprefixed) type name, e.g. "UserTask" for "bpmn:UserTask". */
 export function localType(el: El): string {
   return el.$type.split(':')[1] ?? el.$type;

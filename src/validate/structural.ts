@@ -666,7 +666,7 @@ function lintScope(ctx: Ctx, scope: El, order: FlowOrder): void {
         hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${idOf(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${idOf(node)}\`).`,
       });
     }
-    if (is(node, 'bpmn:ExclusiveGateway') || is(node, 'bpmn:InclusiveGateway')) {
+    if (['exclusiveGateway', 'inclusiveGateway'].includes(kindOf(node)?.kind ?? '')) {
       if (isSplitGateway(doc, node)) {
         const name = nameOf(node);
         if (!name || !name.trim().endsWith('?')) {
