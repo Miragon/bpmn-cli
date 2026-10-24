@@ -84,13 +84,12 @@ import { ChangeSet } from '../model/ChangeSet.js';
 import { assignLane, laneOf } from './containers.js';
 import { Bridge, type BridgedFlow } from './Bridge.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
-import type { PlacementOptions } from './NodePlacement.js';
 import { LaneInheritance } from './LaneInheritance.js';
 import { IdRenamer } from './IdRenamer.js';
 import { idOf } from './utils/elements.js';
 import { FlowOptions } from './FlowOptions.js';
 import type { MoveOp } from './types.js';
-import { NodePlacement } from './NodePlacement.js';
+import { NodePlacement, type PlacementOptions } from './NodePlacement.js';
 import { EventGatewayRule } from './EventGatewayRule.js';
 import { SequenceFlows } from './SequenceFlows.js';
 
