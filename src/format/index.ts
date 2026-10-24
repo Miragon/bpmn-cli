@@ -1338,7 +1338,7 @@ function orderPoolBands(ctx: Ctx, op: OrderOp, snap: Snap, notes: string[]): str
 /* ------------------------------------------------------------------ */
 
 /**
- * The ids of a format op with selectors (query/select.ts): explicit ids first, then
+ * The ids of a format op with selectors (query/ElementSelector.ts): explicit ids first, then
  * what --branch, --path and --kind name (connections for color only). An
  * align without explicit ids or `to` aligns on the first selected element,
  * with only --kind and --axis column on the rightmost one (nothing moves left).

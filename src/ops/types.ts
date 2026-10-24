@@ -200,7 +200,7 @@ export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
 /**
- * Selectors of place / align / color / tidy (src/query/select.ts): they add
+ * Selectors of place / align / color / tidy (src/query/ElementSelector.ts): they add
  * elements to `ids` (connections only for color).
  */
 export interface Selectors {

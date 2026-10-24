@@ -915,7 +915,7 @@ async function runFormat(file: string, op: Op, o: RawOpts): Promise<void> {
   }, opts.json);
 }
 
-/** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/query/select.ts). */
+/** --path <fromId> <toId> [--via <flowId...>], --kind <kind>, --branch <flowId> (src/query/ElementSelector.ts). */
 function withSelectors(cmd: CommandType, what: string): CommandType {
   return cmd
     .option('--path <ids...>', `${what} every node${what === 'colour' ? ' and flow' : ''} on the shortest sequence-flow path <fromId> <toId>`)

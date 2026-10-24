@@ -2,7 +2,7 @@
  * Connections and labels in a kept drawing: src/diagram/reroute.ts (routing
  * one connection with the BPMN side conventions, deciding which kept
  * connections need a new route), src/diagram/labels.ts (label placement)
- * and the text rendering of the layout block (src/report/view-text.ts renderLayout).
+ * and the text rendering of the layout block (src/report/utils/result-lines.ts renderLayout).
  */
 import { describe, expect, it } from 'vitest';
 import type { DEdge, DShape, Plane } from '../src/diagram/plane.js';
