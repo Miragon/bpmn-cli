@@ -37,7 +37,8 @@
  *    the flow).
  *  - participant / lane -> containers.ts; dataObject / dataStore /
  *    textAnnotation -> artifacts.ts (scope from --in or default; `--after`
- *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them).
+ *    etc. are invalid for them: E_INVALID_PLACEMENT; `--to` connects them);
+ *    group -> artifacts.ts createGroup (op.members; no placement options).
  *  - op.set -> setProperties() from ./set.js on the new element.
  *  - batch aliases (ops/aliases.ts): op.as binds the new element (with
  *    --if-absent and an existing one: that one), op.flowAs the flow the flow
@@ -66,7 +67,7 @@ import { anchorContext, kindRequest, type AnchorContext, type ContextWord, type 
 import { FLOW_NODE_FAMILIES, KindError, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/kinds.js';
 import { addTo, is, localType, many, type El } from '../model/moddle.js';
 import { ChangeSet, renamedNote, type Change } from '../model/change-set.js';
-import { createAssociation, createDataAssociation, createDataObject, createDataStore, createTextAnnotation } from './artifacts.js';
+import { createAssociation, createDataAssociation, createDataObject, createDataStore, createGroup, createTextAnnotation } from './artifacts.js';
 import { assignLane, createLane, createParticipant, laneOf } from './containers.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { inheritedLane, laneInheritedWarning, type InheritedLane } from './lanes.js';
@@ -554,6 +555,11 @@ export function addElement(doc: Doc, op: AddOp, idContext?: AnchorContext): Chan
       break;
     }
     case 'artifact': {
+      if (def.kind === 'group') {
+        rejectPlacement(op, [], def.kind);
+        el = createGroup(doc, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(op.members ? { members: op.members } : {}) }, cs);
+        break;
+      }
       rejectPlacement(op, ['in', 'to'], def.kind);
       const scope = doc.requireScope(op.in);
       const text = op.text ?? op.name;

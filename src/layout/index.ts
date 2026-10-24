@@ -40,7 +40,7 @@
  */
 import type { LayoutWarning } from 'bpmn-auto-layout';
 import { giveDrawnElementsIds, type GivenId } from '../diagram/drawn-ids.js';
-import { membersOf, redrawGroups, rememberGroups, type RedrawnGroups } from '../diagram/groups.js';
+import { membersOf, redrawGroups, rememberGroups, undrawnGroups, type RedrawnGroups } from '../diagram/groups.js';
 import { diIdsFit, rememberDiIds, restoreDiIds } from '../diagram/write.js';
 import type { IdRequest } from '../ids/style.js';
 import { layoutClean } from './clean/engine.js';
@@ -460,7 +460,7 @@ export async function layoutModel(model: Model, opts: LayoutOptions = {}): Promi
   const given = givenIds.length ? { givenIds } : {};
   const expanded = resolveExpanded(model, opts);
   const diIds = rememberDiIds(model.definitions);
-  const groups = rememberGroups(model.definitions);
+  const groups = [...rememberGroups(model.definitions), ...undrawnGroups(model.definitions)];
   if ((opts.engine ?? 'clean') === 'clean') {
     const { warnings } = layoutClean(model, expanded, membersOf(groups));
     const redrawn = redrawGroups(model.moddle, model.definitions, groups);

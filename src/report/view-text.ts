@@ -18,6 +18,7 @@
  *    collaboration Collaboration_1: participant Participant_Shop "Shop" = Process_Order;
  *      messageFlow Flow_9 "Order": Activity_Send "Send order" -> Participant_Customer "Customer" [message Order];
  *      annotations owned by the collaboration (`TextAnnotation_2 "text" ~ Activity_Send`)
+ *    groups: Group_Payment "Payment": Activity_Pay, Event_Paid (the members its box holds or that reference its category value)
  *    root: message Message_OrderReceived "OrderReceived", error Error_PaymentFailed "PaymentFailed" (PAY-001)
  *    problems: E_... / W_... lines
  *  renderDetail(detail): key: value lines.
@@ -49,7 +50,7 @@
  *  - boundary events are indented under their host, sub-process children under
  *    the sub-process; unreachable nodes are prefixed with `! unreachable`.
  *  - the collaboration (pools, message flows) comes first, then each process
- *    with its `lanes:` / `data:` / `annotations:` sections, then `root:` and
+ *    with its `lanes:` / `data:` / `annotations:` sections, then `groups:`, `root:` and
  *    `problems:`.
  */
 import type { AroundNode, AroundView, ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext, Implementation } from '../query/context.js';
@@ -214,6 +215,10 @@ export function renderView(view: ModelView): string {
       out.push(`${INDENT}annotations:`);
       for (const a of p.annotations) out.push(`${INDENT}${INDENT}${annotationLine(a)}`);
     }
+  }
+  if (view.groups?.length) {
+    out.push('groups:');
+    for (const g of view.groups) out.push(`${INDENT}${g.id}${g.name ? ` ${q(g.name)}` : ''}: ${g.members.join(', ') || '(empty)'}`);
   }
   if (view.rootElements.length) {
     out.push(`root: ${view.rootElements.map((r) => `${r.kind} ${r.id}${r.name ? ` ${q(r.name)}` : ''}${r.code ? ` (${r.code})` : ''}${r.correlationKey !== undefined ? ` [correlationKey=${flagValue(r.correlationKey)}]` : ''}`).join(', ')}`);

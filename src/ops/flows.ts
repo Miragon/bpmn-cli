@@ -29,7 +29,7 @@ import { followDiIds } from '../diagram/write.js';
 import { modelError, type Warning } from '../shared/errors.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';
 import { hasIdWords, IdRegistry, isSuffix, isValidId, slugify } from '../ids/slugs.js';
-import { kindLabel, triggerOf } from '../model/kinds.js';
+import { branchesByCondition, ignoresConditions, isLinkCatch, isLinkThrow, kindLabel, triggerOf } from '../model/kinds.js';
 import { addTo, insertInto, is, many, removeFrom, type El } from '../model/moddle.js';
 import { about, renamedNote, type ChangeSet } from '../model/change-set.js';
 import type { FlowOptions, Placement } from './types.js';
@@ -104,12 +104,12 @@ function isEventSubProcess(el: El): boolean {
 
 /** True when the node may have outgoing sequence flows. */
 export function canBeFlowSource(node: El): boolean {
-  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:EndEvent') && !isEventSubProcess(node);
+  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:EndEvent') && !isLinkThrow(node) && !isEventSubProcess(node);
 }
 
 /** True when the node may have incoming sequence flows. */
 export function canBeFlowTarget(node: El): boolean {
-  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !isEventSubProcess(node);
+  return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !isLinkCatch(node) && !isEventSubProcess(node);
 }
 
 /** The kind-based part of the endpoint rules (no scope check). */
@@ -125,6 +125,12 @@ export function assertFlowNodeRoles(source: El, target: El): void {
   }
   if (is(target, 'bpmn:StartEvent')) {
     throw modelError('E_INVALID_TARGET', `Start event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
+  }
+  if (isLinkThrow(source)) {
+    throw modelError('E_INVALID_SOURCE', `Link throw event ${idOf(source)} cannot have outgoing sequence flows`, { element: idOf(source) });
+  }
+  if (isLinkCatch(target)) {
+    throw modelError('E_INVALID_TARGET', `Link catch event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
   }
   if (is(target, 'bpmn:BoundaryEvent')) {
     throw modelError('E_INVALID_TARGET', `Boundary event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
@@ -311,6 +317,25 @@ export function assertCondition(expr: string | undefined): void {
   }
 }
 
+function assertConditionTaken(source: El, expr: string | undefined, flowId?: string): void {
+  if (!expr || !ignoresConditions(source)) return;
+  throw modelError('E_INVALID_VALUE', `A flow out of ${idOf(source)} cannot have a condition: a ${kindLabel(source)} ${is(source, 'bpmn:ParallelGateway') ? 'always takes all of its outgoing paths' : 'takes the path of the event that happens first'}`, {
+    ...(flowId ? { element: flowId } : {}),
+    hint: `Branch by condition with an exclusive gateway instead: \`bpmn retype <file> ${idOf(source)} exclusiveGateway\`.`,
+  });
+}
+
+/** Removes the condition of each flow out of `source` when it ignores conditions (parallel / event-based gateway): W_CONDITION_DROPPED. */
+export function dropIgnoredConditions(doc: Doc, source: El, cs: ChangeSet, flows: El[] = doc.outgoing(source)): void {
+  if (!ignoresConditions(source)) return;
+  for (const flow of flows) {
+    if (!flow.get<El | undefined>('conditionExpression')) continue;
+    flow.set('conditionExpression', undefined);
+    cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(flow)} was dropped: a ${kindLabel(source)} takes no conditions`, element: idOf(flow), related: [idOf(source)] });
+  }
+  doc.invalidate();
+}
+
 /**
  * Creates a sequence flow source -> target, maintains incoming/outgoing and
  * declaration order (the flow is declared right after its source unless
@@ -321,6 +346,7 @@ export function assertCondition(expr: string | undefined): void {
 export function createSequenceFlow(doc: Doc, source: El, target: El, attrs: FlowAttrs = {}, declareAfter?: El): El {
   assertSequenceFlowEndpoints(doc, source, target);
   assertCondition(attrs.condition);
+  assertConditionTaken(source, attrs.condition, attrs.id);
   const scope = doc.scopeOf(source)!;
   const reuse = attrs.id ? undefined : attrs.reuse;
   // the ends the put-back flow had: its id may name them (followEnds)
@@ -659,8 +685,8 @@ export function redirectFlow(doc: Doc, flow: El, ends: { source?: El; target?: E
 export function setDefaultFlow(doc: Doc, flow: El, isDefault: boolean): void {
   const source = flow.get<El>('sourceRef');
   if (isDefault) {
-    if (!is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway') && !is(source, 'bpmn:Activity')) {
-      throw modelError('E_INVALID_DEFAULT', `Only exclusive/inclusive gateways and activities can have a default flow (${idOf(source)} is a ${kindLabel(source)})`, {
+    if (!branchesByCondition(source) && !is(source, 'bpmn:Activity')) {
+      throw modelError('E_INVALID_DEFAULT', `Only exclusive/inclusive/complex gateways and activities can have a default flow (${idOf(source)} is a ${kindLabel(source)})`, {
         element: idOf(flow),
       });
     }
@@ -674,6 +700,7 @@ export function setDefaultFlow(doc: Doc, flow: El, isDefault: boolean): void {
 
 export function setFlowCondition(doc: Doc, flow: El, expr: string | undefined, language?: string): void {
   assertCondition(expr);
+  assertConditionTaken(flow.get<El>('sourceRef'), expr, idOf(flow));
   if (expr) {
     flow.set('conditionExpression', conditionExpression(doc, expr, language));
     const source = flow.get<El | undefined>('sourceRef');

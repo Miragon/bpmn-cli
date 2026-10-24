@@ -59,7 +59,7 @@
  */
 import type { Doc } from '../model/document.js';
 import { isCliError, type Warning } from '../shared/errors.js';
-import { isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
+import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
 import { completeMirrorLists } from '../model/mirror.js';
 import { is, walk, type El } from '../model/moddle.js';
 import { assertSequenceFlowEndpoints } from '../ops/flows.js';
@@ -163,14 +163,6 @@ function linkNameOf(el: El): string | undefined {
   const def = list(el, 'eventDefinitions').find((d) => is(d, 'bpmn:LinkEventDefinition'));
   const name = def ? peek<unknown>(def, 'name') : undefined;
   return typeof name === 'string' && name ? name : undefined;
-}
-
-function isLinkThrow(el: El): boolean {
-  return is(el, 'bpmn:IntermediateThrowEvent') && triggerOf(el) === 'link';
-}
-
-function isLinkCatch(el: El): boolean {
-  return is(el, 'bpmn:IntermediateCatchEvent') && triggerOf(el) === 'link';
 }
 
 /** Catching link events of a scope by link name (a throwing link continues there). */
@@ -666,7 +658,7 @@ function lintScope(ctx: Ctx, scope: El, order: FlowOrder): void {
         hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${idOf(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${idOf(node)}\`).`,
       });
     }
-    if (is(node, 'bpmn:ExclusiveGateway') || is(node, 'bpmn:InclusiveGateway')) {
+    if (['exclusiveGateway', 'inclusiveGateway'].includes(kindOf(node)?.kind ?? '')) {
       if (isSplitGateway(doc, node)) {
         const name = nameOf(node);
         if (!name || !name.trim().endsWith('?')) {
@@ -691,6 +683,15 @@ function lintScope(ctx: Ctx, scope: El, order: FlowOrder): void {
       pushFinding(ctx.warnings, 'W_NAMED_PARALLEL', `Parallel gateway ${describe(node)} should not have a name`, idOf(node), {
         hint: `Unset it: \`bpmn set <file> ${idOf(node)} name=\`.`,
       });
+    }
+    if (ignoresConditions(node)) {
+      const conditional = outgoing.filter((f) => peek<El | undefined>(f, 'conditionExpression'));
+      if (conditional.length) {
+        pushFinding(ctx.warnings, 'W_CONDITION_IGNORED', `Flows ${conditional.map(idOf).join(', ')} out of ${describe(node)} have a condition, which the gateway never evaluates`, idOf(node), {
+          related: conditional.map(idOf),
+          hint: `Remove them (\`bpmn set <file> ${idOf(conditional[0])} condition=\`), or branch by condition: \`bpmn retype <file> ${idOf(node)} exclusiveGateway\`.`,
+        });
+      }
     }
     if (is(node, 'bpmn:EventBasedGateway')) {
       for (const f of outgoing) {
@@ -828,7 +829,7 @@ function validateStructure(doc: Doc): ValidationResult {
       const rejected = isRejectedType(el.$type);
       if (rejected) {
         pushFinding(ctx.errors, 'E_UNSUPPORTED_KIND', `${el.$type} ${idOf(el)} is not supported: ${rejected}`, idOf(el), {
-          hint: `Retype it (\`bpmn retype <file> ${idOf(el)} <kind>\`) or remove it.`,
+          hint: `Remove it: \`bpmn remove <file> ${idOf(el)}\`.`,
         });
       }
       if (is(el, 'bpmn:SequenceFlow')) checkSequenceFlow(ctx, el, scope);

@@ -41,6 +41,7 @@ import { projectIdConventions } from './node/bpmnlint.js';
 import { assertNewFile, checkFile, checkLoadedDoc, decodeXmlBytes, layoutDocToFile, layoutFile, mutateDocToFile, mutateFile, readDoc, readXml, type FileMutationOptions } from './node/files.js';
 import { renderPng } from './node/render.js';
 import { listAllExtensions } from './ops/ext.js';
+import { defaultWithConditionViolation, groupViolation, placementViolation } from './ops/rules.js';
 import { parseSpaceAmount, type AddOp, type AlignOp, type ColorOp, type CompactOp, type ConnectOp, type ExtOp, type LabelOp, type MoveOp, type Op, type OrderOp, type PlaceOp, type RemoveOp, type RetypeOp, type RouteOp, type SetOp, type SpaceOp, type TidyOp, type TriggerOptions } from './ops/types.js';
 import { assertLossless, LAYOUT_MODES, type LayoutMode, type MutationResult } from './pipeline/index.js';
 import { PLATFORM_CHOICES, type PlatformChoice } from './platform/profiles/profile.js';
@@ -444,9 +445,8 @@ function kindArg(value: string): string {
   return value;
 }
 
-/* The same rules `apply` enforces on ops JSON (ops/batch.ts), spelled with CLI flags. */
+/* The rules `apply` enforces on ops JSON (ops/rules.ts), spelled with CLI flags. */
 
-const PLACEMENT_FLAGS = ['after', 'before', 'flow', 'in', 'on'] as const;
 const FLOW_FLAGS: Record<string, string> = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' };
 
 function flag(key: string): string {
@@ -455,20 +455,14 @@ function flag(key: string): string {
 
 /** Exactly one placement, or --after together with --before. */
 function checkPlacementFlags(o: RawOpts): void {
-  const used = PLACEMENT_FLAGS.filter((k) => o[k] !== undefined && o[k] !== '');
-  if (used.length <= 1 || (used.length === 2 && used.includes('after') && used.includes('before'))) return;
-  throw usageError(`${used.map(flag).join(' and ')} cannot be combined`, {
-    hint: 'Use exactly one placement: --after, --before, --after + --before (splice into that flow), --flow, --in, or --on (boundary events).',
-  });
+  const violation = placementViolation(Object.keys(o).filter((k) => o[k] !== undefined && o[k] !== ''), flag);
+  if (violation) throw usageError(violation.message, { hint: violation.hint });
 }
 
 /** Flow options describe the flow INTO the node; they need a placement that creates one. */
 function checkFlowFlags(o: RawOpts, needsPlacement: boolean): void {
-  if (o['default'] && o['condition'] !== undefined) {
-    throw usageError('--default and --condition are mutually exclusive: a default flow has no condition', {
-      hint: 'Keep the condition on the other branches and mark this one as default.',
-    });
-  }
+  const conditionedDefault = defaultWithConditionViolation(!!o['default'], o['condition'] !== undefined, flag);
+  if (conditionedDefault) throw usageError(conditionedDefault.message, { hint: conditionedDefault.hint });
   if (!needsPlacement) return;
   const used = Object.keys(FLOW_FLAGS).filter((k) => o[k] !== undefined && o[k] !== false);
   const createsFlow = !!o['after'] || !!o['before'] || !!o['flow'];
@@ -650,7 +644,7 @@ withTriggerOptions(
       .option('--text <text>', 'text annotations: the text')
       .option('--process <id>', 'participants: bind this existing process')
       .option('--black-box', 'participants: no process')
-      .option('--members <ids>', 'lanes: comma-separated member node ids'),
+      .option('--members <ids>', 'lanes / groups: comma-separated member ids (a group is drawn around them)'),
   ),
 ).action(async (file: string, kind: string, name: string | undefined, keyValues: string[], o: RawOpts) => {
   const opts = mutationOptions(o);
@@ -888,10 +882,8 @@ withJsonOptions(ext.command('list <file> <id>').description('list extension elem
 
 /** At most one flag per group, and (with `need`) at least one of all. */
 function checkFlagGroups(o: RawOpts, groups: string[][], need?: string): void {
-  for (const g of groups) {
-    const used = g.filter((k) => o[k] !== undefined);
-    if (used.length > 1) throw usageError(`${used.map(flag).join(' and ')} cannot be combined`, { hint: `Give at most one of ${g.map(flag).join(', ')}.` });
-  }
+  const violation = groupViolation(Object.keys(o).filter((k) => o[k] !== undefined), groups, flag);
+  if (violation) throw usageError(violation.message, { hint: violation.hint });
   if (need && !groups.flat().some((k) => o[k] !== undefined)) throw usageError(need);
 }
 

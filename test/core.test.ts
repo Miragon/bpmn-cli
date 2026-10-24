@@ -104,7 +104,8 @@ describe('kinds', () => {
   });
 
   it('rejects unsupported kinds with a reason and suggests near misses', () => {
-    expect(() => parseKind('complexGateway')).toThrow(/rejected/);
+    expect(() => parseKind('choreographyTask')).toThrow(/rejected/);
+    expect(parseKind('complex').def.kind).toBe('complexGateway');
     expect(() => parseKind('usertsk')).toThrow(/did you mean/);
     expect(suggestKinds('servic')).toContain('serviceTask');
   });

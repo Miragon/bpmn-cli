@@ -15,7 +15,9 @@
  *    participants remain.
  *  - data object reference: also its bpmn:DataObject when no other reference
  *    uses it (same for the root bpmn:DataStore of a data store reference);
- *    text annotation: its associations.
+ *    text annotation: its associations; group: its category value when no
+ *    other group references it (the members' references to it go too),
+ *    then its category when no value is left.
  *  - op.ifExists: unknown ids are skipped with a note; else E_NOT_FOUND.
  *  - op.withBranch: a flow node or boundary event goes together with its
  *    exclusive downstream path (branchOf): every node it alone leads to
@@ -30,7 +32,7 @@
  *    successor (each incoming flow is re-pointed, keeping its id unless it
  *    named its ends, its label and condition; a predecessor already
  *    connected to the successor, or the successor itself, gets no second
- *    flow); a parallel / inclusive join loses its synchronisation
+ *    flow); a parallel / inclusive / complex join loses its synchronisation
  *    (W_IMPLICIT_JOIN says so). Several outgoing flows are refused
  *    (E_AMBIGUOUS_BRIDGE: which predecessor to which successor?).
  *  - a plain remove (bridging on) of such a node (several incoming flows,
@@ -64,6 +66,7 @@
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/moddle.js';
+import { kindOf, synchronises } from '../model/kinds.js';
 import { ChangeSet } from '../model/change-set.js';
 import { detachNode, eventGatewayRule, eventGatewayTargetProblem, flowChange, redirectFlow, removeSequenceFlow, renamedNote, type Bridge } from './flows.js';
 import { changeOf, descriptorOf, idOf, isEl, ownValue } from './set.js';
@@ -196,9 +199,8 @@ function isMerge(doc: Doc, node: El): boolean {
   return doc.incoming(node).length > 1 && doc.outgoing(node).length === 1;
 }
 
-/** Gateways that wait for their incoming paths (a plain remove cannot bridge them without changing what runs). */
-function synchronises(node: El): boolean {
-  return is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
+function joinKind(node: El): string {
+  return kindOf(node)!.kind.replace('Gateway', '');
 }
 
 /** A plain remove of a synchronising join: E_AMBIGUOUS_BRIDGE (see the module contract). */
@@ -206,11 +208,10 @@ function refuseSynchronisingJoin(doc: Doc, node: El): void {
   if (!synchronises(node)) return;
   const incoming = doc.incoming(node);
   const successor = doc.outgoing(node)[0]!.get<El>('targetRef');
-  const kind = is(node, 'bpmn:ParallelGateway') ? 'parallel' : is(node, 'bpmn:InclusiveGateway') ? 'inclusive' : 'complex';
   const preds = [...new Set(incoming.map((f) => idOf(f.get<El>('sourceRef'))))];
   throw modelError(
     'E_AMBIGUOUS_BRIDGE',
-    `${idOf(node)} is a ${kind} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
+    `${idOf(node)} is a ${joinKind(node)} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,
     {
       element: idOf(node),
       candidates: incoming.map(idOf),
@@ -260,17 +261,17 @@ function bridgeAll(doc: Doc, node: El, cs: ChangeSet, removing: ReadonlySet<stri
     bridged.push(idOf(predecessor));
   }
   cs.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
-  const sync = is(node, 'bpmn:ParallelGateway') || is(node, 'bpmn:InclusiveGateway') || is(node, 'bpmn:ComplexGateway');
+  const sync = synchronises(node);
   if (sync) cs.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
   const count = doc.incoming(successor).length;
   if (count > 1 && (sync || !is(successor, 'bpmn:Gateway'))) {
     cs.warn({
       code: 'W_IMPLICIT_JOIN',
       message: sync
-        ? `${idOf(successor)} now has ${count} incoming flows: the ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
+        ? `${idOf(successor)} now has ${count} incoming flows: the ${joinKind(node)} join ${idOf(node)} synchronised them, now each path runs on to ${idOf(successor)} on its own`
         : `${idOf(successor)} now has ${count} incoming flows (implicit join)`,
       element: idOf(successor),
-      hint: sync ? `Keep a ${is(node, 'bpmn:ParallelGateway') ? 'parallel' : 'inclusive'} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
+      hint: sync ? `Keep a ${joinKind(node)} join in front of ${idOf(successor)} if the paths must wait for each other.` : 'Consider joining through a gateway.',
     });
   }
 }
@@ -503,6 +504,14 @@ function afterDetach(doc: Doc, el: El, parent: El | undefined, cs: ChangeSet): v
   if (is(el, 'bpmn:DataStoreReference')) {
     const backing = el.get<El | undefined>('dataStoreRef');
     if (backing && isAttached(doc, backing) && !findReferences(doc.definitions, backing).length) cascadeRemove(doc, backing, cs);
+    return;
+  }
+  if (is(el, 'bpmn:Group')) {
+    const value = el.get<El | undefined>('categoryValueRef');
+    if (!value || !isAttached(doc, value) || findReferences(doc.definitions, value).some((r) => is(r.holder, 'bpmn:Group'))) return;
+    const category = value.$parent as El;
+    cascadeRemove(doc, value, cs);
+    if (is(category, 'bpmn:Category') && !many(category, 'categoryValue').length) cascadeRemove(doc, category, cs);
     return;
   }
   if (is(el, 'bpmn:Process')) {

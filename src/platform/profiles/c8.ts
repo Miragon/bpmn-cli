@@ -71,7 +71,7 @@
  *   W_C8_DEPLOY_LISTENER           execution / task listener without type or event type, an unknown event type, start
  *                                  listeners on start and boundary events, end listeners on gateways, listeners on
  *                                  sequence flows
- *   W_C8_DEPLOY_UNSUPPORTED        a transaction, a cancel event (complex gateways are E_UNSUPPORTED_KIND)
+ *   W_C8_DEPLOY_UNSUPPORTED        a transaction, a cancel event, a complex gateway
  *   W_C8_DEPLOY_BOUNDARY_HOST      boundary event on a compensation handler (validate/structural.ts withProfile drops it next to
  *                                  the structural E_INVALID_HOST)
  *   W_C8_DEPLOY_SCHEMA             an attribute without prefix that the BPMN schema does not define (anywhere in the
@@ -1019,8 +1019,8 @@ function checkFlow(ctx: Ctx, flow: El): void {
   if (!isFeel(body)) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_EXPRESSION', flow, undefined, 'condition', `The condition "${body.trim()}" of sequence flow ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, body.trim() ? `\`bpmn set <file> ${id} ${sh(`condition==${feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${sh('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`);
   }
-  // (a complex gateway is not supported at all: E_UNSUPPORTED_KIND)
-  if (source && !is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway')) {
+  // (a complex gateway is not supported at all: W_C8_DEPLOY_UNSUPPORTED; parallel / event-based gateways: W_CONDITION_IGNORED)
+  if (source && !is(source, 'bpmn:ParallelGateway') && !is(source, 'bpmn:EventBasedGateway') && !is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway')) {
     push(ctx, 'runtime', 'W_C8_CONDITION_IGNORED', flow, undefined, 'conditionIgnored', `Sequence flow ${id} out of ${describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, `Remove it (\`bpmn set <file> ${id} condition=\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${idOf(source)}\`, then move the condition onto its flows.`);
   }
 }
@@ -1401,6 +1401,9 @@ function visit(ctx: Ctx, el: El, owner: El | undefined): void {
   if (is(el, 'bpmn:Transaction')) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_UNSUPPORTED', el, undefined, 'transaction', `${describe(el)} is a transaction; Camunda 8 does not support transactions and refuses the file`, `\`bpmn retype <file> ${idOf(el)} subProcess\` (an embedded sub-process).`);
     return;
+  }
+  if (is(el, 'bpmn:ComplexGateway')) {
+    push(ctx, 'deploy', 'W_C8_DEPLOY_UNSUPPORTED', el, undefined, 'complexGateway', `Complex gateway ${idOf(el)}: Camunda 8 does not support complex gateways and refuses the file`, `\`bpmn retype <file> ${idOf(el)} inclusiveGateway\` (or exclusiveGateway: one path).`);
   }
   if (is(el, 'bpmn:Process') || (is(el, 'bpmn:SubProcess') && !is(el, 'bpmn:AdHocSubProcess'))) checkStartEvents(ctx, el);
   if (is(el, 'bpmn:Process') || is(el, 'bpmn:SubProcess')) checkSubscriptionScopes(ctx, el);

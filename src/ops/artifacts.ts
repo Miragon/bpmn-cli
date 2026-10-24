@@ -13,6 +13,19 @@
  *    `text`; id TextAnnotation_<NameSlug> from `name` (the positional name of
  *    `add`), TextAnnotation_<TextSlug> when only `text` was given; an
  *    unnamed data object / store: DataObjectReference_In<Scope>.
+ *  - createGroup(): bpmn:Group (Group_<NameSlug>, unnamed: Group_Around<First
+ *    member>) in the artifacts of the innermost sub-process holding every
+ *    member, else of the collaboration, else of the members' process (where
+ *    bpmn-js looks for it on the plane it is drawn on), with a root
+ *    bpmn:Category holding one bpmn:CategoryValue (`value` = the name) the
+ *    group references; each member (a flow node, data object or data store
+ *    reference)
+ *    references the value too (FlowElement.categoryValueRef), so membership
+ *    needs no coordinates: the layout draws the box around the members
+ *    (diagram/groups.ts). No members: E_USAGE, a wrong one: E_INVALID_VALUE.
+ *  - setGroupName(): `set <group> name=` writes the category value's
+ *    `value` (a group has no `name`) and sizes the group's label in the
+ *    drawing to the new name (diagram/groups.ts relabelGroup).
  *  - createAssociation(): bpmn:Association (Association_<Source>To<Target>,
  *    the labels of the ends)
  *    in the scope's artifacts between an element and a text annotation
@@ -27,11 +40,12 @@
  *    property cleanup when unused.
  */
 import type { Doc } from '../model/document.js';
-import { modelError } from '../shared/errors.js';
+import { modelError, usageError } from '../shared/errors.js';
 import { kindByName, kindLabel, triggerOf } from '../model/kinds.js';
 import { contextOf, kindRequest, labelOf, speakingStem, typeRequest, type IdRequest } from '../ids/style.js';
-import { addTo, is, many, removeFrom, type El } from '../model/moddle.js';
+import { addTo, collaboration, is, many, removeFrom, type El } from '../model/moddle.js';
 import type { ChangeSet } from '../model/change-set.js';
+import { relabelGroup } from '../diagram/groups.js';
 
 export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
 
@@ -147,6 +161,57 @@ export function createTextAnnotation(doc: Doc, scope: El, opts: { id?: string; n
   cs.create({ id, kind: 'textAnnotation', ...(opts.text ? { name: opts.text } : {}), detail: `in ${idOf(scope)}` });
   doc.invalidate();
   return annotation;
+}
+
+/** A root bpmn:Category with one bpmn:CategoryValue for the group `groupId`; returns the value. */
+function createCategoryValue(doc: Doc, context: string, name: string | undefined): El {
+  const request = { ...(name ? { name } : {}), context };
+  const value = doc.create('bpmn:CategoryValue', { id: doc.allocateId(typeRequest('bpmn:CategoryValue', request)).id, ...(name ? { value: name } : {}) });
+  const category = doc.create('bpmn:Category', { id: doc.allocateId(typeRequest('bpmn:Category', request)).id });
+  addTo(category, 'categoryValue', value);
+  addTo(doc.definitions, 'rootElements', category);
+  return value;
+}
+
+/** `set <group> name=`: the value of its category value (created with its category when it has none; an empty name keeps the value, membership hangs on it). */
+export function setGroupName(doc: Doc, group: El, name: string): void {
+  const value = group.get<El | undefined>('categoryValueRef');
+  if (value) value.set('value', name || undefined);
+  else if (name) group.set('categoryValueRef', createCategoryValue(doc, speakingStem(idOf(group)) ?? '', name));
+  relabelGroup(doc.moddle, doc.definitions, group, name);
+}
+
+/**
+ * Where a new group goes, so that a modeler finds it on the plane it is drawn
+ * on: the innermost sub-process holding every member (a collapsed one has a
+ * plane of its own), else the collaboration, else the members' process.
+ */
+function groupContainer(doc: Doc, members: El[]): El {
+  const within = (el: El, scope: El): boolean => {
+    for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (p === scope) return true;
+    return false;
+  };
+  for (let scope = doc.scopeOf(members[0]!); scope && is(scope, 'bpmn:SubProcess'); scope = doc.scopeOf(scope)) if (members.every((m) => within(m, scope!))) return scope;
+  return collaboration(doc.definitions) ?? doc.processOf(members[0]!)!;
+}
+
+/** Creates a group around `members` with its category and category value (see the module contract). */
+export function createGroup(doc: Doc, opts: { id?: string; name?: string; members?: string[] }, cs: ChangeSet): El {
+  if (!opts.members?.length) throw usageError('A group needs --members <id,...>: the elements it is drawn around');
+  const members = opts.members.map((id) => doc.require(id));
+  const wrong = members.find((m) => !is(m, 'bpmn:FlowNode') && !isDataReference(m));
+  if (wrong) {
+    throw modelError('E_INVALID_VALUE', `${idOf(wrong)} is a ${kindLabel(wrong)}; group members are flow nodes, data objects and data stores`, { element: idOf(wrong) });
+  }
+  const around = `Around ${labelOf(members[0]!)}`;
+  const id = allocateId(doc, kindRequest(kindByName('group')!, opts.name ? { name: opts.name } : { context: around }), opts.id);
+  const value = createCategoryValue(doc, speakingStem(id) ?? around, opts.name);
+  const group = doc.create('bpmn:Group', { id, categoryValueRef: value });
+  addTo(groupContainer(doc, members), 'artifacts', group);
+  for (const member of members) addTo(member, 'categoryValueRef', value);
+  cs.create({ id, kind: 'group', ...(opts.name ? { name: opts.name } : {}), detail: `around ${members.map(idOf).join(', ')}` });
+  doc.invalidate();
+  return group;
 }
 
 function isCompensationPair(source: El, target: El): boolean {

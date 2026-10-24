@@ -164,11 +164,12 @@ describe('structural errors', () => {
   });
 
   it('E_UNSUPPORTED_KIND', async () => {
-    const doc = await processDoc(chain([{ tag: 'complexGateway', id: 'Gw' }]));
+    const doc = await processDoc(chain([{ tag: 'choreographyTask', id: 'Ch' }]));
     const f = findingsOf(doc, 'E_UNSUPPORTED_KIND');
     expect(f).toHaveLength(1);
-    expect(f[0]!.element).toBe('Gw');
-    expect(f[0]!.message).toContain('complex');
+    expect(f[0]!.element).toBe('Ch');
+    expect(f[0]!.message).toContain('choreographies');
+    expect(findingsOf(await processDoc(chain([{ tag: 'complexGateway', id: 'Gw' }])), 'E_UNSUPPORTED_KIND')).toEqual([]);
   });
 
   it('E_INVALID_SOURCE / E_INVALID_TARGET (flow endpoint rules)', async () => {
@@ -192,6 +193,32 @@ describe('structural errors', () => {
       ['E_INVALID_TARGET', 'F3'],
     ]);
     expect(r.errors[0]!.related).toEqual(['End', 'A']);
+  });
+
+  it('E_INVALID_SOURCE / E_INVALID_TARGET: a link throw event ends its path, a link catch event starts one', async () => {
+    const link = '<bpmn:linkEventDefinition name="Shipping" />';
+    const doc = await processDoc(
+      body(
+        [
+          { tag: 'startEvent', id: 'Start' },
+          { tag: 'intermediateThrowEvent', id: 'Throw', inner: link },
+          { tag: 'intermediateCatchEvent', id: 'Catch', inner: link },
+          { tag: 'endEvent', id: 'End' },
+        ],
+        [
+          { id: 'F1', from: 'Start', to: 'Throw' },
+          { id: 'F2', from: 'Throw', to: 'End' },
+          { id: 'F3', from: 'Start', to: 'Catch' },
+          { id: 'F4', from: 'Catch', to: 'End' },
+        ],
+      ),
+    );
+    const r = validateDoc(doc);
+    expect(r.errors.map((e) => [e.code, e.element])).toEqual([
+      ['E_INVALID_SOURCE', 'F2'],
+      ['E_INVALID_TARGET', 'F3'],
+    ]);
+    expect(r.errors[0]!.message).toContain('Link throw event Throw');
   });
 
   it('E_CROSS_SCOPE', async () => {
@@ -752,7 +779,7 @@ describe('hints', () => {
       processDoc(gw('name="Check"', '', 'name="no"')),
       processDoc(chain([]), { extraRoots: '<bpmn:process id="Process_2" />' }),
       processDoc(chain([]), { extraRoots: '<bpmn:collaboration id="C"><bpmn:participant id="P1" /></bpmn:collaboration>' }),
-      processDoc(chain([{ tag: 'complexGateway', id: 'Cg' }], '<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id="L2"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>')),
+      processDoc(chain([{ tag: 'choreographyTask', id: 'Cg' }], '<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id="L2"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>')),
       processDoc(body([{ tag: 'startEvent', id: 'Start', inner: terminateDef }, { tag: 'endEvent', id: 'End', inner: cancelDef }, { tag: 'task', id: 'A' }, { tag: 'boundaryEvent', id: 'B', attrs: 'attachedToRef="A" cancelActivity="false"', inner: errorDef }, { tag: 'boundaryEvent', id: 'C', inner: timerDef }, { tag: 'exclusiveGateway', id: 'Gw', attrs: 'default="F1"' }], [{ id: 'F1', from: 'Start', to: 'End' }, { id: 'F2', from: 'A', to: 'End' }, { id: 'F3', from: 'Gw', to: 'A' }])),
       processDoc(chain([], '<bpmn:subProcess id="Sub" triggeredByEvent="true"><bpmn:task id="T" /></bpmn:subProcess><bpmn:subProcess id="Sub2" triggeredByEvent="true"><bpmn:startEvent id="S2" /></bpmn:subProcess>')),
       processDoc(body([{ tag: 'startEvent', id: 'Start' }, { tag: 'task', id: 'A' }, { tag: 'boundaryEvent', id: 'Comp', attrs: 'attachedToRef="A"', inner: '<bpmn:compensateEventDefinition />' }, { tag: 'task', id: 'H', attrs: 'isForCompensation="true"' }, { tag: 'endEvent', id: 'End' }], [{ id: 'F1', from: 'Start', to: 'A' }, { id: 'F2', from: 'A', to: 'End' }, { id: 'F3', from: 'Comp', to: 'H' }])),

@@ -66,6 +66,8 @@
  *   W_C7_DEPLOY_AD_HOC_SUBPROCESS  ad-hoc sub-process with a sequence flow or a boundary event, or (not Operaton) a
  *                                  multi-instance loop (the engines do not run ad-hoc sub-processes; one that
  *                                  nothing connects is skipped with its content, its loop rules hold)
+ *   W_C7_DEPLOY_COMPLEX_GATEWAY    complex gateway with a sequence flow (the engines ignore complex gateways; one that
+ *                                  nothing connects deploys)
  *   W_C7_DEPLOY_LINK               two link catch events with one name in a process, a link throw event (with an
  *                                  incoming flow) without a catch event of its name in its own (sub-)process;
  *                                  schema (every definition in the file): link definition without name
@@ -1327,6 +1329,14 @@ function checkAdHoc(ctx: Ctx, el: El): void {
   push(ctx, 'deploy', 'W_C7_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, 'adHoc', message, connected ? `${retype}.` : `${retype}, or drop the loop: \`bpmn set <file> ${id} loop=none\`.`, [...flows, ...boundaries].map(idOf).filter((x): x is string => !!x));
 }
 
+function checkComplexGateway(ctx: Ctx, el: El): void {
+  const id = idOf(el)!;
+  const incoming = ctx.incoming.get(el) ?? [];
+  const flows = [...incoming, ...(ctx.outgoing.get(el) ?? [])];
+  if (!flows.length) return;
+  push(ctx, 'deploy', 'W_C7_DEPLOY_COMPLEX_GATEWAY', el, undefined, 'complexGateway', `Complex gateway ${id} is connected; the engines do not run complex gateways and refuse the file (invalid ${incoming.length ? 'destination' : 'source'} '${id}' of sequence flow ${idOf(flows[0])})`, `\`bpmn retype <file> ${id} inclusiveGateway\` (or exclusiveGateway: one path).`, flows.map(idOf).filter((x): x is string => !!x));
+}
+
 /**
  * Message and signal subscriptions that share a name in one engine scope
  * (engine-checked): the start events of a process; the event sub-process
@@ -1586,6 +1596,7 @@ function visit(ctx: Ctx, el: El, owner: El | undefined, executable: boolean): vo
     if (is(el, 'bpmn:Activity')) checkMultiInstance(ctx, el);
     if (is(el, 'bpmn:Event')) checkEvent(ctx, el);
     if (is(el, 'bpmn:EventBasedGateway')) checkEventGateway(ctx, el);
+    if (is(el, 'bpmn:ComplexGateway')) checkComplexGateway(ctx, el);
     if (is(el, 'bpmn:ExclusiveGateway')) checkExclusiveGateway(ctx, el);
     if (is(el, 'bpmn:ScriptTask')) checkScriptTask(ctx, el);
     if (is(el, 'bpmn:ReceiveTask')) checkReceiveTask(ctx, el);

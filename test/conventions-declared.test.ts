@@ -859,7 +859,7 @@ describe('bpmn show --conventions (the view)', () => {
     const row = (kind: string) => view.rows.find((r) => r.kinds.includes(kind));
     expect(row('serviceTask')).toEqual({ pattern: '<kind>_{name:camel}', source: 'lint', kinds: ['task', 'userTask', 'serviceTask', 'scriptTask', 'sendTask', 'receiveTask', 'manualTask', 'businessRuleTask', 'subProcess', 'callActivity', 'startEvent', 'endEvent'] });
     // what the rule does not name follows the file: its type-named PascalCase prefixes; the process bpmn-cli's own
-    expect(row('lane')).toEqual({ pattern: '<Kind>_{name:pascal}', source: 'file', kinds: ['participant', 'lane', 'textAnnotation', 'collaboration', 'message'], note: 'not checked' });
+    expect(row('lane')).toEqual({ pattern: '<Kind>_{name:pascal}', source: 'file', kinds: ['participant', 'lane', 'textAnnotation', 'group', 'collaboration', 'message'], note: 'not checked' });
     expect(row('process')).toEqual({ pattern: 'Process_{name:pascal}', source: 'default', kinds: ['process'], note: 'not checked' });
     expect(row('dataObject')).toMatchObject({ pattern: 'DataObjectReference_{name:pascal}', source: 'file' });
     expect(row('sequenceFlow')).toEqual({ pattern: 'flow_{source}To{target}', source: 'lint', kinds: ['sequenceFlow'] });
@@ -907,7 +907,7 @@ describe('bpmn show --conventions (the view)', () => {
     const view = conventionsView(await Doc.fromXml(PASCAL), declared({ prefixes: { 'bpmn:UserTask': 'user task_', 'bpmn:Gateway': 'a gate_' } }));
     const row = (kind: string) => view.rows.find((r) => r.kinds.includes(kind));
     expect(row('userTask')).toMatchObject({ source: 'file', note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
-    expect(row('exclusiveGateway')).toMatchObject({ source: 'file', kinds: ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway'], note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
+    expect(row('exclusiveGateway')).toMatchObject({ source: 'file', kinds: ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'complexGateway', 'eventBasedGateway'], note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
     expect(row('lane')?.note).toBe('not checked');
     // under required, the triggers whose qualified prefix is too long for new ids: they follow the file's style
     const long = conventionsView(undefined, declared({ case: 'snake_case', eventDefinitionQualifier: 'required', prefixes: { 'bpmn:EndEvent': 'endEventWithAVeryLongPrefixThatIsFiftyCharactersX_' } }));

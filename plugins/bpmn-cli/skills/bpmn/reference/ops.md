@@ -93,7 +93,8 @@ bpmn show invoice.bpmn
 | `on` A | boundary events only: attach to activity A |
 | `to` T | also connect the new node to T (a branch that rejoins) |
 
-Data objects, data stores, annotations, lanes and pools take `in` only.
+Data objects, data stores, annotations, lanes and pools take `in` only. A group takes
+no placement: `members` names what it is drawn around.
 
 ```bash
 printf '%s' '[
@@ -153,7 +154,7 @@ Tasks: `task`, `userTask`, `serviceTask`, `sendTask`, `receiveTask`,
 `scriptTask`, `manualTask`, `businessRuleTask`. Sub-processes: `subProcess`,
 `eventSubProcess:<trigger>` (with its start event), `adHocSubProcess`,
 `transaction`; `callActivity` (`set calledElement=<processId>`). Gateways:
-`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `eventBasedGateway`
+`exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `complexGateway`, `eventBasedGateway`
 (name exclusive gateways as a question, name their branches). Events:
 `startEvent`, `endEvent`, `intermediateCatchEvent`, `intermediateThrowEvent`,
 `boundaryEvent` with `:message`, `:timer`, `:error`, `:signal`, `:escalation`,

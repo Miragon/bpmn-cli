@@ -53,8 +53,12 @@ A write rewrites only the elements the change touched, so a git diff shows only 
 ## Limitations
 
 - One root is laid out: the collaboration, or the single process.
-- Not supported as new elements: `complexGateway`, choreographies, groups. A file that has
-  one stays editable.
+- Not supported as new elements: choreographies. A file that has one stays editable.
+- No Camunda 7 / 8 engine runs a `complexGateway`; the Camunda profiles report it.
+- A group (`add group "<Name>" --members <id,...>`) is tied to its members without
+  coordinates: every member references the group's category value
+  (`categoryValueRef`, BPMN 2.0), and the layout draws the box around them. A group drawn
+  in a modeler has only its box; `show` lists the elements that box holds.
 - Vertical pools and lanes are redrawn in full instead of placed incrementally.
 - Lossy imports are refused (`E_IMPORT_LOSSY`); `--force` drops what bpmn-moddle cannot read.
 - Broken links in hand-edited files are not repaired; `bpmn validate` reports them.

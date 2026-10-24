@@ -61,7 +61,7 @@ throw / end event without job type, a call activity without
 `zeebe:calledElement`, a catching message without correlation key, a JUEL
 `${...}` condition or another non-FEEL value, FEEL slips (`&&`, `||`, `==`),
 timers it cannot parse (`PT2D` instead of `P2D`, a date without offset),
-unsupported elements (transactions, cancel events) and more. Runtime findings
+unsupported elements (transactions, cancel events, complex gateways) and more. Runtime findings
 (`W_C8_*`) deploy but misbehave: a flow without condition out of an exclusive
 gateway with other outgoing flows is never taken, `camunda:*` content is
 ignored, a standard loop runs once. Each hint is the fixing command; use

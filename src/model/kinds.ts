@@ -47,6 +47,10 @@ export interface KindDef {
   triggers?: Trigger[];
   /** extra properties set on creation */
   props?: Record<string, unknown>;
+  /** gateways only: evaluates conditions and may have a default flow */
+  branchesByCondition?: true;
+  /** gateways only: a join waits for its incoming paths */
+  synchronises?: true;
   description: string;
 }
 
@@ -87,9 +91,10 @@ export const KINDS: KindDef[] = [
   { kind: 'transaction', type: 'bpmn:Transaction', family: 'subProcess', aliases: [], prefix: 'Activity', description: 'Transaction sub-process' },
   { kind: 'callActivity', type: 'bpmn:CallActivity', family: 'callActivity', aliases: ['call'], prefix: 'Activity', description: 'Calls another process (set calledElement=<processId>)' },
   // gateways
-  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
-  { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', description: 'AND: all outgoing paths' },
-  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', description: 'OR: one or more outgoing paths' },
+  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', branchesByCondition: true, description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
+  { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', synchronises: true, description: 'AND: all outgoing paths' },
+  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'OR: one or more outgoing paths' },
+  { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
   { kind: 'eventBasedGateway', type: 'bpmn:EventBasedGateway', family: 'gateway', aliases: ['eventBased', 'event-based', 'eventGateway'], prefix: 'Gateway', description: 'Waits for the first of several catching events' },
   // events
   { kind: 'startEvent', type: 'bpmn:StartEvent', family: 'event', aliases: ['start'], prefix: 'Event', triggers: ['none', 'message', 'timer', 'signal', 'conditional', 'error', 'escalation', 'compensate'], description: 'Start event (error/escalation/compensate only inside an eventSubProcess)' },
@@ -104,15 +109,14 @@ export const KINDS: KindDef[] = [
   { kind: 'dataObject', type: 'bpmn:DataObjectReference', family: 'data', aliases: ['data', 'dataObjectReference'], prefix: 'DataObjectReference', description: 'Data object (reference + backing bpmn:DataObject)' },
   { kind: 'dataStore', type: 'bpmn:DataStoreReference', family: 'data', aliases: ['store', 'dataStoreReference'], prefix: 'DataStoreReference', description: 'Data store reference' },
   { kind: 'textAnnotation', type: 'bpmn:TextAnnotation', family: 'artifact', aliases: ['note', 'annotation', 'text'], prefix: 'TextAnnotation', description: 'Text annotation (connect it to an element to draw an association)' },
+  { kind: 'group', type: 'bpmn:Group', family: 'artifact', aliases: [], prefix: 'Group', description: 'Group drawn around its members (--members <id,...>; the members reference its category value)' },
 ];
 
 const REJECTED_TYPES: Record<string, string> = {
-  'bpmn:ComplexGateway': 'the layout engine cannot draw complex gateways; use exclusiveGateway or inclusiveGateway',
   'bpmn:ChoreographyTask': 'choreographies are not supported',
   'bpmn:SubChoreography': 'choreographies are not supported',
   'bpmn:CallChoreography': 'choreographies are not supported',
   'bpmn:ImplicitThrowEvent': 'implicit throw events are not supported',
-  'bpmn:Group': 'groups are not supported in this version',
 };
 
 const byToken = new Map<string, KindDef>();
@@ -242,6 +246,24 @@ export function kindOf(el: El): KindDef | undefined {
   return KINDS.find((k) => k.type === el.$type);
 }
 
+export function branchesByCondition(el: El): boolean {
+  return !!kindOf(el)?.branchesByCondition;
+}
+
+export function ignoresConditions(el: El): boolean {
+  return kindOf(el)?.family === 'gateway' && !branchesByCondition(el);
+}
+
+export function synchronises(el: El): boolean {
+  return !!kindOf(el)?.synchronises;
+}
+
+/** `exclusiveGateway (xor), parallelGateway (and), ...` for hints. */
+export function gatewayKindList(): string {
+  const gateways = KINDS.filter((k) => k.family === 'gateway').map((k) => (k.aliases[0] ? `${k.kind} (${k.aliases[0]})` : k.kind));
+  return `${gateways.slice(0, -1).join(', ')} or ${gateways.at(-1)}`;
+}
+
 /** Trigger of an event element, derived from its (first) event definition. */
 export function triggerOf(el: El): Trigger | undefined {
   if (!is(el, 'bpmn:Event')) return undefined;
@@ -250,6 +272,16 @@ export function triggerOf(el: El): Trigger | undefined {
   if (!first) return 'none';
   const entry = (Object.entries(TRIGGER_TYPES) as Array<[Trigger, string]>).find(([, type]) => is(first, type));
   return entry?.[0];
+}
+
+/** A throwing link event ends its path: the flow continues at the catching link event of the same name. */
+export function isLinkThrow(el: El): boolean {
+  return is(el, 'bpmn:IntermediateThrowEvent') && triggerOf(el) === 'link';
+}
+
+/** A catching link event starts a path: it continues the throwing link event of the same name. */
+export function isLinkCatch(el: El): boolean {
+  return is(el, 'bpmn:IntermediateCatchEvent') && triggerOf(el) === 'link';
 }
 
 /** `userTask`, `startEvent:message`, `boundaryEvent:timer` ... for display. */

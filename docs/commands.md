@@ -90,6 +90,7 @@ bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice --timer P
 - Placement: `--after`, `--before`, `--flow`, `--in`, `--on`, `--lane` ([Placement grammar](reference.md#placement-grammar)).
 - The id comes from the name (`Activity_CheckInvoice`). `--id` with `--if-absent` makes the add idempotent.
 - Lanes, data and annotations take `--in` only; wire them afterwards with `connect`.
+- A group takes no placement: `--members <id,...>` names what it is drawn around.
 - The first `participant` wraps the existing process. `--black-box` creates an empty pool and never
   wraps, so add a normal participant first.
 
