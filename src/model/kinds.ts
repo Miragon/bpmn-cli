@@ -250,6 +250,10 @@ export function branchesByCondition(el: El): boolean {
   return !!kindOf(el)?.branchesByCondition;
 }
 
+export function ignoresConditions(el: El): boolean {
+  return kindOf(el)?.family === 'gateway' && !branchesByCondition(el);
+}
+
 export function synchronises(el: El): boolean {
   return !!kindOf(el)?.synchronises;
 }

@@ -59,7 +59,7 @@
  */
 import type { Doc } from '../model/document.js';
 import { isCliError, type Warning } from '../shared/errors.js';
-import { isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
+import { ignoresConditions, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
 import { completeMirrorLists } from '../model/mirror.js';
 import { is, walk, type El } from '../model/moddle.js';
 import { assertSequenceFlowEndpoints } from '../ops/flows.js';
@@ -691,6 +691,15 @@ function lintScope(ctx: Ctx, scope: El, order: FlowOrder): void {
       pushFinding(ctx.warnings, 'W_NAMED_PARALLEL', `Parallel gateway ${describe(node)} should not have a name`, idOf(node), {
         hint: `Unset it: \`bpmn set <file> ${idOf(node)} name=\`.`,
       });
+    }
+    if (ignoresConditions(node)) {
+      const conditional = outgoing.filter((f) => peek<El | undefined>(f, 'conditionExpression'));
+      if (conditional.length) {
+        pushFinding(ctx.warnings, 'W_CONDITION_IGNORED', `Flows ${conditional.map(idOf).join(', ')} out of ${describe(node)} have a condition, which the gateway never evaluates`, idOf(node), {
+          related: conditional.map(idOf),
+          hint: `Remove them (\`bpmn set <file> ${idOf(conditional[0])} condition=\`), or branch by condition: \`bpmn retype <file> ${idOf(node)} exclusiveGateway\`.`,
+        });
+      }
     }
     if (is(node, 'bpmn:EventBasedGateway')) {
       for (const f of outgoing) {

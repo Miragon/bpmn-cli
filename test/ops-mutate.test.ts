@@ -674,8 +674,10 @@ describe('retype', () => {
     expect(gw.$type).toBe('bpmn:ParallelGateway');
     expect(ids(doc.outgoing(gw))).toEqual(['F_yes', 'F_no']);
     expect(doc.require('F_no').get<El>('sourceRef')).toBe(gw);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED']);
+    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED', 'W_CONDITION_DROPPED']);
     expect(cs.warnings[0]!.message).toMatch(/default/);
+    expect(cs.warnings[1]!.element).toBe('F_yes');
+    expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
     expect(doc.require('F_no')).toBeDefined();
     const again = await expectRoundTrip(doc);
     expect(again.require('Gw').$type).toBe('bpmn:ParallelGateway');

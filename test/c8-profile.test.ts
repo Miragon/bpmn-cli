@@ -237,7 +237,7 @@ const CASES: Case[] = [
   { name: 'flow without condition next to a conditional one: never taken', xml: xml(gateway(['= x &gt; 1', null])), codes: ['W_C8_EXCLUSIVE_GATEWAY'], engine: 'accept' },
   { name: 'inclusive gateway flow without condition: never taken', xml: xml(gateway(['= true', null], undefined, 'inclusiveGateway')), codes: ['W_C8_EXCLUSIVE_GATEWAY'], engine: 'accept' },
   { name: 'exclusive gateway with one unconditional flow', xml: xml(gateway([null])), codes: [], engine: 'accept' },
-  { name: 'condition on a flow out of a parallel gateway: ignored', xml: xml(gateway(['= false', null], undefined, 'parallelGateway')), codes: ['W_C8_CONDITION_IGNORED'], engine: 'accept' },
+  { name: 'condition on a flow out of a parallel gateway: left to the structural W_CONDITION_IGNORED', xml: xml(gateway(['= false', null], undefined, 'parallelGateway')), codes: [], engine: 'accept' },
   { name: 'event-based gateway', xml: xml(eventGateway([TIMER_CATCH, msgCatch('M1')]), { roots: MSG() }), codes: [], engine: 'accept' },
   { name: 'event-based gateway with one branch', xml: xml(eventGateway([TIMER_CATCH]), { roots: MSG() }), codes: ['W_C8_DEPLOY_EVENT_GATEWAY'], engine: 'reject' },
   { name: 'event-based gateway leading to a receive task', xml: xml(eventGateway([TIMER_CATCH, '<bpmn:receiveTask id="{id}" messageRef="M1">{in}</bpmn:receiveTask>']), { roots: MSG() }), codes: ['W_C8_DEPLOY_EVENT_GATEWAY'], engine: 'reject', structural: undefined },
