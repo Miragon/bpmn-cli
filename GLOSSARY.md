@@ -27,6 +27,10 @@ a new concept gets its line here first.
 | **Layout analysis** | The measurement of a drawing's layout problems, one plane analysis per BPMNPlane (`diagram/LayoutAnalysis.ts`, `diagram/PlaneAnalysis.ts`; kinds and weights in `diagram/utils/problems.ts`). |
 | **Problem locator** | Finds where a layout problem shows on its plane, for the numbered badges of `render --problems` (`diagram/ProblemLocator.ts`). |
 | **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`diagram/NodePlacer.ts`). |
+| **Format ops** | One run of a batch's format operations on a document's drawing (`format/FormatOps.ts`), one action class per op (`format/*Action.ts`). |
+| **Room maker** | Keeps the shapes a format op moved on request where they are and lets the others give way, refusing a move out of its frame (`format/RoomMaker.ts`). |
+| **Room hint** | The space-tool run an `E_NO_ROOM` refusal of `place` / `align` names, found by a dry run (`format/RoomHint.ts`). |
+| **Compaction** | Closing the empty rows and columns of a drawing and shrinking its frames to their content (`format/Compaction.ts`). |
 | **Layout mode** | How a write updates the drawing: `full` redraws, `incremental` keeps a hand-made drawing and places only what changed. |
 | **Engine** | A layout engine: the clean engine redraws, the incremental engine keeps a drawing. |
 | **Snapshot** | What every DI element showed before the ops of a write, with the semantic facts the incremental layout's diff needs (`layout/Snapshot.ts`). |

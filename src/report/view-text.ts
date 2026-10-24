@@ -55,7 +55,7 @@
  */
 import type { AroundNode, AroundView, ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext, Implementation } from '../query/context.js';
 import { KEYS, type LayoutMetrics, type LayoutProblem } from '../diagram/utils/problems.js';
-import type { FormatResult } from '../format/index.js';
+import type { FormatResult } from '../format/FormatOps.js';
 import type { LayoutView } from '../query/layout-view.js';
 import type { Warning } from '../shared/CliError.js';
 import type { LayoutStatus } from '../pipeline/index.js';

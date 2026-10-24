@@ -26,7 +26,7 @@
  * more of one hint into one line (`--json` lists every finding).
  */
 import type { LayoutProblem } from '../diagram/utils/problems.js';
-import type { FormatResult } from '../format/index.js';
+import type { FormatResult } from '../format/FormatOps.js';
 import type { Warning } from '../shared/CliError.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './view-text.js';
 import type { CheckResult, ConventionsReport, LayoutStatus, MutationResult } from '../pipeline/index.js';

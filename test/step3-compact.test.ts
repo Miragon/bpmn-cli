@@ -1,6 +1,6 @@
 /**
- * Step 3: closing empty space in a kept drawing (src/format/compact.ts and
- * the `compact` / negative `space` format ops in src/format/index.ts).
+ * Step 3: closing empty space in a kept drawing (src/format/Compaction.ts and
+ * the `compact` / negative `space` format ops in src/format/FormatOps.ts).
  *
  *  - compact closes empty columns and rows and shrinks lanes, pools and
  *    expanded sub-processes to their content, keeping the order; it never

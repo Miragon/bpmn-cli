@@ -123,7 +123,7 @@ import { IncrementalLayout, type IncrementalReport } from '../layout/Incremental
 import { Snapshot } from '../layout/Snapshot.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/utils/problems.js';
-import { runFormatOps, type FormatEntry, type FormatResult } from '../format/index.js';
+import { FormatOps, type FormatEntry, type FormatResult } from '../format/FormatOps.js';
 import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
 import { applyColors, colorsOf, diIds } from '../diagram/write.js';
 import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
@@ -652,7 +652,7 @@ function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
 /** Runs the format ops on the laid-out XML; returns the new XML and their results. */
 async function runFormat(xml: string, file: string | undefined, entries: FormatEntry[], asFile: boolean): Promise<{ xml: string; results: FormatResult[]; after: LayoutMetrics }> {
   const laid = await Doc.fromXml(xml, file);
-  const results = runFormatOps(laid, entries, asFile);
+  const results = new FormatOps(laid).run(entries, asFile);
   return { xml: await laid.toXml(), results, after: LayoutAnalysis.of(laid.definitions) };
 }
 
