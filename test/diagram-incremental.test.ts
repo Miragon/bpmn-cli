@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
 import { is, type El } from '../src/model/utils/moddle.js';
@@ -91,13 +91,13 @@ async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 
@@ -505,7 +505,7 @@ describe('incremental placement', () => {
     ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as Op, ...sub.slice(1)]));
     now = shapes(after);
     expect(now.get('NS')).toMatchObject({ expanded: false, bounds: { width: 100, height: 80 } });
-    const planes = readPlanes(after.definitions);
+    const planes = new DiagramReader(after.definitions).planes();
     expect(planes.map((p) => p.rootId)).toEqual(['P', 'NS']);
     expect([...planes[1]!.shapes.keys()].sort()).toEqual(['NSS', 'NST']);
   });
@@ -524,7 +524,7 @@ describe('incremental placement', () => {
     const now = shapes(after);
     expect(now.get('Sub')).toMatchObject({ expanded: false, bounds: { x: before.get('Sub')!.bounds.x, width: 100, height: 80 } });
     expect(now.get('E')!.bounds.x).toBeLessThan(before.get('E')!.bounds.x);
-    const planes = readPlanes(after.definitions);
+    const planes = new DiagramReader(after.definitions).planes();
     expect(planes[1]!.rootId).toBe('Sub');
     expect([...planes[1]!.shapes.keys()].sort()).toEqual(['SE', 'SS', 'ST']);
     expect(r.layout.notes).toContain('Sub drawn collapsed');
@@ -535,7 +535,7 @@ describe('incremental placement', () => {
     const collapsed: Op[] = [...BASE.slice(0, 5), { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B', collapsed: true }, { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' }, { op: 'add', kind: 'task', id: 'ST', name: 'Inner', after: 'SS' }];
     const xml = await handXml(collapsed);
     const before = shapes(await Doc.fromXml(xml));
-    expect(readPlanes((await Doc.fromXml(xml)).definitions)).toHaveLength(2);
+    expect(new DiagramReader((await Doc.fromXml(xml)).definitions).planes()).toHaveLength(2);
     const { r, after } = await run(xml, [{ op: 'set', id: 'Sub', values: { expanded: 'true' } }]);
     const now = shapes(after);
     const sub = now.get('Sub')!;
@@ -543,7 +543,7 @@ describe('incremental placement', () => {
     expect(sub.bounds.x).toBe(before.get('Sub')!.bounds.x);
     for (const id of ['SS', 'ST']) expect(inside(now.get(id)!, sub)).toBe(true);
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(sub));
-    expect(readPlanes(after.definitions)).toHaveLength(1);
+    expect(new DiagramReader(after.definitions).planes()).toHaveLength(1);
     expect(r.layout.notes).toContain('Sub drawn expanded');
     const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.overlaps).toBe(0);
@@ -671,7 +671,7 @@ function flowFrom(doc: Doc, source: string, target: string): string {
 
 /** The edges that do not reach their ends (reroute.ts detachedEnds), with the ends they miss. */
 function detached(doc: Doc): string[] {
-  return readPlanes(doc.definitions).flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length).map((e) => `${e.id}->${new Drawing(p).detachedEnds(e).join(',')}`));
+  return new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length).map((e) => `${e.id}->${new Drawing(p).detachedEnds(e).join(',')}`));
 }
 
 /** `xml` with the waypoints of the edge of `flow` moved by (dx, dy): the line no longer reaches its ends. */

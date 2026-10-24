@@ -6,7 +6,7 @@ import type { DEdge, Plane, Point } from '../diagram/types.js';
 import { copyBox, polylinesCross, samePoints } from '../diagram/utils/geom.js';
 import { predecessors, raw } from '../diagram/utils/plane.js';
 import { isHardProblem, problemKey, type LayoutMetrics } from '../diagram/utils/problems.js';
-import { writePlanes } from '../diagram/write.js';
+import { PlaneWriter } from '../diagram/PlaneWriter.js';
 import type { Checkpoint, IncrementalLayout } from './IncrementalLayout.js';
 
 /** at most this many repair trials per write (a reroute or a chain placed again, each measured) */
@@ -108,7 +108,7 @@ export class CrossingRepair {
     let retries = 0;
     let guard: TrialGuard | undefined;
     const measure = (): LayoutMetrics => {
-      writePlanes(this.run.doc.moddle, this.run.doc.definitions, this.run.planes);
+      new PlaneWriter(this.run.doc.moddle, this.run.doc.definitions).write(this.run.planes);
       return LayoutAnalysis.of(this.run.doc.definitions);
     };
     // what a trial must never add: a hard problem (counted per problem), or a crossing between two connections drawn

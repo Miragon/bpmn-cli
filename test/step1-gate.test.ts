@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { diffProblems } from '../src/diagram/utils/problems.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type DShape } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
@@ -46,7 +46,7 @@ async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
   return out;
 }
 

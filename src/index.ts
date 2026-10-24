@@ -73,7 +73,7 @@ export { parseOps, OPS_SCHEMA } from './ops/batch.js';
 export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/utils/problems.js';
 export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
 export type { FormatResult, FormatEntry } from './format/FormatOps.js';
-export { SWATCHES, type SwatchName } from './diagram/write.js';
+export { SWATCHES, type SwatchName } from './diagram/utils/colors.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
 

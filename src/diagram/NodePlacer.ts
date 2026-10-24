@@ -108,8 +108,9 @@ import { is, type El } from '../model/utils/moddle.js';
 import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, segmentsCross, type Box, type Point } from './utils/geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf } from './utils/labels.js';
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, predecessors, raw, rawList, sequenceFlows, shapeKind, spacingOf, successors, type Spacing } from './utils/plane.js';
-import { poolOf } from './plane.js';
-import type { DEdge, DShape, Plane, Semantics, ShapeKind } from './types.js';
+
+import type { DEdge, DShape, Plane, ShapeKind } from './types.js';
+import type { Semantics } from './Semantics.js';
 import { attachedSide, defaultSides } from './utils/sides.js';
 import { routeOrthogonal } from './router.js';
 import { Drawing } from './Drawing.js';
@@ -229,7 +230,7 @@ export class NodePlacer {
   /** nodes placed as the continuation of a chain (on their anchor's row, no row choice): a line touching them is routed again */
   continued?: Set<string>;
   private readonly drawings = new Map<Plane, Drawing>();
-  
+
   constructor(
     private readonly planes: Plane[],
     private readonly sem: Semantics,
@@ -243,7 +244,7 @@ export class NodePlacer {
   ) {
     this.spacing = new Map(planes.map((p) => [p, spacingOf(p)]));
   }
-  
+
   checkpoint(): PlacerState {
     return {
       placed: new Set(this.placed),
@@ -259,7 +260,7 @@ export class NodePlacer {
       ...(this.skip ? { skip: new Map(this.skip) } : {}),
     };
   }
-  
+
   restore(st: PlacerState): void {
     const refill = <T>(into: Set<T>, from: Set<T>): void => {
       into.clear();
@@ -366,7 +367,7 @@ export class NodePlacer {
     }
     const lane = kind === 'lane' ? this.sem.laneParent.get(id) : this.sem.laneOf.get(id);
     if (lane) s.laneId = lane;
-    const pool = poolOf(this.sem, id);
+    const pool = this.sem.poolOf(id);
     if (pool) s.poolId = pool;
     const scope = this.sem.scopeOf.get(id);
     const sid = idOf(scope);

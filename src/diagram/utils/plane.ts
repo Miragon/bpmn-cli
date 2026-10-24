@@ -4,7 +4,8 @@
  * materialises an empty collection on the model.
  */
 import { is, type El } from '../../model/utils/moddle.js';
-import type { DEdge, DShape, EdgeKind, Plane, Semantics, ShapeKind } from '../types.js';
+import type { DEdge, DShape, EdgeKind, Plane, ShapeKind } from '../types.js';
+import type { Semantics } from '../Semantics.js';
 import { clamp, cy, median, right, unionAll, type Box } from './geom.js';
 import { titleBox, titleDepth } from './text.js';
 

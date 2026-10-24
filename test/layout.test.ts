@@ -34,7 +34,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LayoutDebug } from '../src/shared/LayoutDebug.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { readPlanes as diagramPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import type { DShape, GNode, ScopeLayout } from '../src/diagram/types.js';
 import { titleBox } from '../src/diagram/utils/text.js';
 import { Doc } from '../src/model/document.js';
@@ -2999,7 +2999,7 @@ ${categories}
 /** Every shape of the drawing by element id (all planes). */
 async function shapesOf(xml: string): Promise<Map<string, DShape>> {
   const doc = await Doc.fromXml(xml);
-  return new Map(diagramPlanes(doc.definitions).flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
+  return new Map(new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
 }
 
 /** The group's box holds the members whole and cuts no other leaf shape. */

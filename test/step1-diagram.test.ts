@@ -24,10 +24,10 @@ import { Doc } from '../src/model/document.js';
 import { diffProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/utils/problems.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
-import { writePlanes } from '../src/diagram/write.js';
+import { PlaneWriter } from '../src/diagram/PlaneWriter.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
@@ -60,13 +60,13 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
   return out;
 }
 
@@ -272,21 +272,21 @@ describe('connections always keep two distinct waypoints', () => {
 
   it('brokenEdge: two waypoints on one point', async () => {
     const doc = await Doc.fromXml(fixture('zero-edge.bpmn'));
-    const plane = readPlanes(doc.definitions)[0]!;
+    const plane = new DiagramReader(doc.definitions).planes()[0]!;
     expect(new Drawing(plane).brokenEdge(plane.edges.get('F2')!, undefined)).toBe(true);
     expect(new Drawing(plane).brokenEdge(plane.edges.get('F1')!, undefined)).toBe(false);
   });
 
   it('rounding never merges the two ends of a connection into one waypoint', async () => {
     const doc = await Doc.fromXml(fixture('zero-edge.bpmn'));
-    const planes = readPlanes(doc.definitions);
+    const planes = new DiagramReader(doc.definitions).planes();
     planes[0]!.edges.get('F3')!.points = [
       { x: 350.2, y: 140 },
       { x: 350.4, y: 140.2 },
     ];
-    writePlanes(doc.moddle, doc.definitions, planes);
+    new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const written = (await Doc.fromXml(await doc.toXml())).definitions;
-    const edge = readPlanes(written)[0]!.edges.get('F3')!;
+    const edge = new DiagramReader(written).planes()[0]!.edges.get('F3')!;
     expect(edge.points).toHaveLength(2);
   });
 });
@@ -411,7 +411,7 @@ describe('metrics: frame defects and real segment tests', () => {
 
   it('brokenEdge: an end point more than 10 px outside its end is broken whatever it was before (detachedEnds)', async () => {
     const doc = await Doc.fromXml(diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI));
-    const plane = readPlanes(doc.definitions)[0]!;
+    const plane = new DiagramReader(doc.definitions).planes()[0]!;
     const broken = [...plane.edges.values()].filter((e) => new Drawing(plane).brokenEdge(e, new Drawing(plane).edgeBefore(e))).map((e) => e.id);
     expect(broken).toEqual(['Far', 'Both', 'DOA']);
     expect([...plane.edges.values()].map((e) => [e.id, new Drawing(plane).detachedEnds(e)])).toEqual([

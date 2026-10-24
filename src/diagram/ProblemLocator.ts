@@ -13,7 +13,7 @@ interface LocPlane {
 
 export class ProblemLocator {
   private readonly planes: LocPlane[] = [];
-  
+
   constructor(private readonly defs: El) {
     for (const diagram of rawList(defs, 'diagrams')) {
       const plane = raw(diagram, 'plane');
@@ -23,7 +23,7 @@ export class ProblemLocator {
       this.planes.push({ root, shapes: new Map(shapes.map((x) => [x.id, x])), edges: new Map(edges.map((x) => [x.id, x])) });
     }
   }
-  
+
   /** The problems with where each shows (`at`; see contract); the problems themselves are not changed. */
   locate(problems: readonly LayoutProblem[]): LayoutProblem[] {
     return problems.map((p) => {

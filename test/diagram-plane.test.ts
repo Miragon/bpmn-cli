@@ -4,10 +4,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes, semantics, homePlane } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Semantics } from '../src/diagram/Semantics.js';
 import { frameOf } from '../src/diagram/utils/plane.js';
 import { type Plane } from '../src/diagram/types.js';
-import { applyColors, colorsOf, diIds, pruneDi, writePlanes } from '../src/diagram/write.js';
+import { applyColors, colorsOf } from '../src/diagram/utils/colors.js';
+import { DiIds } from '../src/diagram/DiIds.js';
+import { pruneDi } from '../src/diagram/utils/prune.js';
+import { PlaneWriter } from '../src/diagram/PlaneWriter.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { BPMN_NS } from './helpers.js';
 
@@ -53,7 +57,7 @@ const POOL = `<?xml version="1.0" encoding="UTF-8"?>
 
 async function load(xml = POOL): Promise<{ doc: Doc; planes: Plane[] }> {
   const doc = await Doc.fromXml(xml);
-  return { doc, planes: readPlanes(doc.definitions) };
+  return { doc, planes: new DiagramReader(doc.definitions).planes() };
 }
 
 function bounds(doc: Doc, id: string): Record<string, number> | undefined {
@@ -93,15 +97,15 @@ describe('readPlanes', () => {
     expect(frameOf(p, p.shapes.get('SS')!)!.id).toBe('Sub');
     expect(frameOf(p, p.shapes.get('L2a')!)!.id).toBe('L2');
     expect(frameOf(p, p.shapes.get('L1')!)!.id).toBe('Pool');
-    const sem = semantics(doc.definitions);
-    expect(homePlane(planes, sem, 'SS')).toBe(p);
-    expect(homePlane(planes, sem, 'F1')).toBe(p);
+    const sem = Semantics.of(doc.definitions);
+    expect(sem.homePlane(planes, 'SS')).toBe(p);
+    expect(sem.homePlane(planes, 'F1')).toBe(p);
   });
 
   it('does not materialise collections on the model', async () => {
     const { doc } = await load();
     const before = await doc.toXml();
-    readPlanes(doc.definitions);
+    new DiagramReader(doc.definitions).planes();
     expect(await doc.toXml()).toBe(before);
   });
 });
@@ -114,7 +118,7 @@ describe('writePlanes', () => {
     s.bounds.x += 10;
     s.label!.x += 10;
     p.edges.get('F1')!.points[0]!.x += 10;
-    writePlanes(doc.moddle, doc.definitions, planes);
+    new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const xml = await doc.toXml();
     expect(bounds(doc, 'S')).toEqual({ x: 190, y: 157, width: 36, height: 36 });
     expect(xml).toContain('bioc:fill="#c8e6c9"');
@@ -132,7 +136,7 @@ describe('writePlanes', () => {
     doc.get('P')!.get<El[]>('flowElements').push(el);
     el.$parent = doc.get('P');
     p.shapes.set('G', { id: 'G', el, bounds: { x: 600.4, y: 150.6, width: 50, height: 50 }, kind: 'gateway', container: false, label: { x: 590, y: 120, width: 70, height: 14 } });
-    writePlanes(doc.moddle, doc.definitions, planes);
+    new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmndi:BPMNShape id="G_di" bpmnElement="G" isMarkerVisible="true">\s*<dc:Bounds x="600" y="151" width="50" height="50" \/>\s*<bpmndi:BPMNLabel>/);
     expect(p.shapes.get('G')!.di).toBeDefined();
@@ -140,7 +144,7 @@ describe('writePlanes', () => {
 
   it('follows the BPMNShape_ style of engine-written files and avoids taken ids', async () => {
     const doc = await Doc.fromXml(POOL.replace(/id="(\w+)_di" bpmnElement="(\w+)"/g, 'id="BPMNShape_$2" bpmnElement="$2"'));
-    const ids = diIds(doc.definitions);
+    const ids = new DiIds(doc.definitions);
     expect(ids.shape('X')).toBe('BPMNShape_X');
     expect(ids.shape('S')).toBe('BPMNShape_S_2');
   });
@@ -153,7 +157,7 @@ describe('writePlanes', () => {
     const child: Plane = { id: 'x', rootId: 'Sub', root: doc.get('Sub')!, shapes: new Map([['SS', ss]]), edges: new Map(), dropped: [] };
     p.dropped.push(p.edges.get('F1')!.di!);
     p.edges.delete('F1');
-    writePlanes(doc.moddle, doc.definitions, [p, child]);
+    new PlaneWriter(doc.moddle, doc.definitions).write([p, child]);
     const diagrams = doc.definitions.get<El[]>('diagrams');
     expect(diagrams).toHaveLength(2);
     const second = diagrams[1]!.get<El>('plane');
@@ -161,7 +165,7 @@ describe('writePlanes', () => {
     expect(second.get<El[]>('planeElement').map((e) => e.get('id'))).toEqual(['SS_di']);
     expect(await doc.toXml()).not.toContain('F1_di');
     child.deleted = true;
-    writePlanes(doc.moddle, doc.definitions, [p, child]);
+    new PlaneWriter(doc.moddle, doc.definitions).write([p, child]);
     expect(doc.definitions.get<El[]>('diagrams')).toHaveLength(1);
   });
 });
@@ -173,7 +177,7 @@ describe('pruneDi and colours', () => {
     const list = proc.get<El[]>('flowElements');
     list.splice(list.indexOf(doc.get('B')!), 1);
     doc.invalidate();
-    const pruned = pruneDi(doc.definitions, semantics(doc.definitions));
+    const pruned = pruneDi(doc.definitions, Semantics.of(doc.definitions));
     expect(pruned).toEqual(['B']);
     expect(await doc.toXml()).not.toContain('B_di');
   });

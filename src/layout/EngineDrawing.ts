@@ -1,7 +1,8 @@
 import type { Doc } from '../model/document.js';
 import { is, parseXml, type El } from '../model/utils/moddle.js';
-import { readPlanes, semantics } from '../diagram/plane.js';
-import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
 import { copyBox, type Box } from '../diagram/utils/geom.js';
 import { contentOf, idOf } from '../diagram/utils/plane.js';
 import { layoutClean } from './clean/engine.js';
@@ -29,8 +30,8 @@ export class EngineDrawing {
     const model = await parseXml(await doc.toXml());
     const expanded = resolveExpanded(model, { expand: opts.expand ?? [], collapse: opts.collapse ?? [] });
     layoutClean(model, expanded);
-    const sem = semantics(model.definitions);
-    return new EngineDrawing(readPlanes(model.definitions, sem), sem);
+    const sem = Semantics.of(model.definitions);
+    return new EngineDrawing(new DiagramReader(model.definitions, sem).planes(), sem);
   }
 
   block(rootId: string, pool: boolean): Block | undefined {

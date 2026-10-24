@@ -41,7 +41,8 @@
 import type { LayoutWarning } from 'bpmn-auto-layout';
 import { giveDrawnElementsIds, type GivenId } from '../diagram/drawn-ids.js';
 import { membersOf, redrawGroups, rememberGroups, undrawnGroups, type RedrawnGroups } from '../diagram/groups.js';
-import { diIdsFit, rememberDiIds, restoreDiIds } from '../diagram/write.js';
+import { diIdsFit } from '../diagram/utils/di-ids.js';
+import { DiIdMemo } from '../diagram/DiIdMemo.js';
 import type { IdRequest } from '../ids/style.js';
 import { layoutClean } from './clean/engine.js';
 import { addTo, layoutRoot, parseXml, serialize, type El, type Model, idOf } from '../model/utils/moddle.js';
@@ -120,12 +121,12 @@ export class FullLayout {
     const givenIds = giveDrawnElementsIds(this.model.definitions, this.opts.allocateId);
     const given = givenIds.length ? { givenIds } : {};
     const expanded = resolveExpanded(this.model, this.opts);
-    const diIds = rememberDiIds(this.model.definitions);
+    const diIds = DiIdMemo.remember(this.model.definitions);
     const groups = [...rememberGroups(this.model.definitions), ...undrawnGroups(this.model.definitions)];
     if ((this.opts.engine ?? 'clean') === 'clean') {
       const { warnings } = layoutClean(this.model, expanded, membersOf(groups));
       const redrawn = redrawGroups(this.model.moddle, this.model.definitions, groups);
-      restoreDiIds(this.model.definitions, diIds);
+      diIds.restore(this.model.definitions);
       const { xml } = await this.model.moddle.toXML(this.model.definitions, { format: true });
       return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
     }
@@ -149,7 +150,7 @@ export class FullLayout {
     const fixed = new Set(missingDi ? new AssociationEdges(laidOut).synthesise() : []);
     const redrawn = redrawGroups(laidOut.moddle, laidOut.definitions, groups);
     const placed = new Set([...redrawn.drawn, ...redrawn.kept]);
-    restoreDiIds(laidOut.definitions, diIds);
+    diIds.restore(laidOut.definitions);
     return {
       xml: await serialize(laidOut),
       warnings: result.warnings.filter((w) => !(w.code === 'DI_NOT_CREATED' && fixed.has(w.elementId)) && !(w.code === 'GROUP_MEMBERS_NOT_FOUND' && placed.has(w.elementId))),

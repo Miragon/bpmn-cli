@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { PlaneCheckpoint } from '../src/diagram/PlaneCheckpoint.js';
 import { BPMN_NS } from './helpers.js';
 
@@ -22,7 +22,7 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
   </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
 
-const planeOf = async () => readPlanes((await Doc.fromXml(XML)).definitions)[0]!;
+const planeOf = async () => new DiagramReader((await Doc.fromXml(XML)).definitions).planes()[0]!;
 
 describe('PlaneCheckpoint', () => {
   it('drops a label that was added after the checkpoint', async () => {

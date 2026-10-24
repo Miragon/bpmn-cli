@@ -2,7 +2,8 @@ import { laneSetOf, ordersPools } from '../ops/order.js';
 import type { OrderOp } from '../ops/types.js';
 import { bottom, copyBox, cx, cy, right } from '../diagram/utils/geom.js';
 import { idOf, rawList } from '../diagram/utils/plane.js';
-import type { DShape, Semantics } from '../diagram/types.js';
+import type { DShape } from '../diagram/types.js';
+import type { Semantics } from '../diagram/Semantics.js';
 import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 

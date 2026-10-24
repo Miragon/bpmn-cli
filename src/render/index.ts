@@ -142,9 +142,10 @@ import type { Box, Point } from '../diagram/utils/geom.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { ProblemLocator } from '../diagram/ProblemLocator.js';
 import { problemKey, type LayoutProblem, type MetricKey } from '../diagram/utils/problems.js';
-import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
 import { raw, rawList } from '../diagram/utils/plane.js';
-import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
 import { pathOf } from '../query/select.js';
 import { textWidth, titleBox, wrapLines } from '../diagram/utils/text.js';
 import { planeColumns } from '../query/layout-view.js';
@@ -270,7 +271,7 @@ const SIZE = 12;
 /** `bpmn render --format svg`: one plane of the document as SVG (see the module contract). */
 export async function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> {
   let doc = await Doc.fromXml(xml);
-  if (readPlanes(doc.definitions).length) return renderDocSvg(doc, opts);
+  if (new DiagramReader(doc.definitions).planes().length) return renderDocSvg(doc, opts);
   // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth); the problems stay the file's
   const fileProblems = opts.problems ? LayoutAnalysis.of(doc.definitions).problems : [];
   const { xml: drawn } = await new FullLayout(doc.model).run();
@@ -289,8 +290,8 @@ export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult {
 /** renderDocSvg; `fileProblems`: the layout problems of a file drawn in memory (listed instead of the drawing's). */
 function drawDoc(doc: Doc, opts: RenderOptions, fileProblems?: LayoutProblem[]): RenderResult {
   const defs = doc.definitions;
-  const sem = semantics(defs);
-  const read = readPlanes(defs, sem);
+  const sem = Semantics.of(defs);
+  const read = new DiagramReader(defs, sem).planes();
   const checked = read.map(saneOf);
   const planes = checked.map((c) => c.plane);
   const want = cropOf(doc, sem, planes, opts);
@@ -416,7 +417,7 @@ function undrawnOn(planes: Plane[], plane: Plane, sem: Semantics): string[] {
       is(el, 'bpmn:DataStoreReference') ||
       is(el, 'bpmn:TextAnnotation');
     if (!drawable || planes.some((p) => p.shapes.has(id) || p.edges.has(id))) continue;
-    if (homePlane(planes, sem, id) === plane) out.push(id);
+    if (sem.homePlane(planes, id) === plane) out.push(id);
   }
   return out;
 }

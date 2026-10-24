@@ -35,7 +35,8 @@ import { Separation, type SeparateOptions, type SeparateResult } from './Separat
 import { SpaceTool, type Axis, type SpaceRequest, type SpaceResult, type StripRequest } from './SpaceTool.js';
 import type { DrawingSnapshot } from './DrawingSnapshot.js';
 import type { TrialGuard } from './TrialGuard.js';
-import type { Box, DEdge, DShape, Plane, Point, Semantics, Side } from './types.js';
+import type { Box, DEdge, DShape, Plane, Point, Side } from './types.js';
+import type { Semantics } from './Semantics.js';
 import { segmentHits } from './utils/geom.js';
 import { hasExternalLabel, labelSideOf, type LabelSide } from './utils/labels.js';
 import { raw } from './utils/plane.js';

@@ -16,7 +16,7 @@ import { SINGLE_TOP } from '../ops/ext.js';
 import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
 import { OP_NAMES } from '../ops/types.js';
 import { OPS_SCHEMA, OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/batch.js';
-import { SWATCHES } from '../diagram/write.js';
+import { SWATCHES } from '../diagram/utils/colors.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
 import { zeebeAllowedOn, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';
 

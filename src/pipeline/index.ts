@@ -126,7 +126,8 @@ import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/utils/problems.js';
 import { FormatOps, type FormatEntry, type FormatResult } from '../format/FormatOps.js';
 import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
-import { applyColors, colorsOf, diIds } from '../diagram/write.js';
+import { applyColors, colorsOf } from '../diagram/utils/colors.js';
+import { DiIds } from '../diagram/DiIds.js';
 import { redrawGroups, undrawnGroups } from '../diagram/groups.js';
 import { kindLabel } from '../model/kinds.js';
 import { serializeWithout, unkeptEntries, withoutEntries } from '../model/mirror.js';
@@ -514,7 +515,7 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
       if (id && is(shape, 'bpmndi:BPMNShape')) shapes.set(id, shape);
     }
   }
-  let newDi: ReturnType<typeof diIds> | undefined;
+  let newDi: DiIds | undefined;
   for (const [id, expanded] of wanted) {
     const sub = doc.get(id);
     if (!sub || !SUB_PROCESS_TYPES.some((t) => is(sub, t))) continue;
@@ -528,7 +529,7 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
       const root = layoutRoot(doc.definitions);
       if (!root) continue;
       // the engine's plane and diagram ids, a long root id cut (diagram/write.ts diIds)
-      newDi ??= diIds(doc.definitions);
+      newDi ??= new DiIds(doc.definitions);
       rootPlane = doc.moddle.create('bpmndi:BPMNPlane', { id: newDi.plane(root.get<string>('id')), bpmnElement: root });
       const diagram = doc.moddle.create('bpmndi:BPMNDiagram', { id: newDi.diagram(root.get<string>('id')), plane: rootPlane });
       rootPlane.$parent = diagram;
@@ -536,7 +537,7 @@ export function persistExpansionHints(doc: Doc, expansion: { expand: string[]; c
     }
     // a placeholder shape (redrawn by the next layout) so the collapse survives the stale diagram; its id in the file's DI style
     const shape = doc.moddle.create('bpmndi:BPMNShape', {
-      id: (newDi ??= diIds(doc.definitions)).shape(id),
+      id: (newDi ??= new DiIds(doc.definitions)).shape(id),
       bpmnElement: sub,
       isExpanded: false,
       bounds: doc.moddle.create('dc:Bounds', { x: 0, y: 0, width: 100, height: 80 }),
@@ -724,7 +725,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
   const expansion = collectExpansion(doc, opts);
   const report: IncrementalReport = await IncrementalLayout.run(doc, before.snapshot, { relocated, created, ...expansion });
-  const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), diIds(doc.definitions).shape);
+  const groups = redrawGroups(doc.moddle, doc.definitions, undrawnGroups(doc.definitions), new DiIds(doc.definitions).shape);
   const xml = await doc.toXml();
   return {
     xml,

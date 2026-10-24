@@ -37,9 +37,10 @@ import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type 
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import type { LayoutMetrics } from '../diagram/utils/problems.js';
 import { spacingOf, raw } from '../diagram/utils/plane.js';
-import { readPlanes, semantics } from '../diagram/plane.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
 import type { DShape, Plane } from '../diagram/types.js';
-import { swatchOf, type SwatchName } from '../diagram/write.js';
+import { swatchOf, type SwatchName } from '../diagram/utils/colors.js';
 
 export interface LayoutGroup {
   /** the frame: plane root, participant, lane or expanded sub-process */
@@ -216,8 +217,8 @@ function diagramOf(plane: Plane, laneParent: Map<string, string>): LayoutDiagram
 
 /** The drawing without coordinates (see module contract). */
 export function layoutView(defs: El): LayoutView {
-  const sem = semantics(defs);
-  const planes = readPlanes(defs, sem);
+  const sem = Semantics.of(defs);
+  const planes = new DiagramReader(defs, sem).planes();
   const colors: LayoutColor[] = [];
   const labels: LayoutLabel[] = [];
   for (const plane of planes) {

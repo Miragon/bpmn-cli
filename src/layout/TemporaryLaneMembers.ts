@@ -7,7 +7,7 @@ interface TempMember {
 
 export class TemporaryLaneMembers {
   private constructor(private readonly members: TempMember[]) {}
-  
+
   get count(): number {
     return this.members.length;
   }

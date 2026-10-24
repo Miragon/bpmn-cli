@@ -193,23 +193,6 @@ export interface Plane {
   deleted?: boolean;
 }
 
-export interface Semantics {
-  /** semantic elements by id (no DI) */
-  byId: Map<string, El>;
-  /** flow node id -> innermost lane id */
-  laneOf: Map<string, string>;
-  /** lane id -> parent lane id */
-  laneParent: Map<string, string>;
-  /** lane id -> process id */
-  laneProcess: Map<string, string>;
-  /** process id -> participant id */
-  poolOfProcess: Map<string, string>;
-  /** flow element / artifact id -> containing process or sub-process */
-  scopeOf: Map<string, El>;
-  /** the collaboration, if any */
-  collaboration?: El;
-}
-
 export type Side = 'left' | 'right' | 'top' | 'bottom';
 
 export type ShapeKind =

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/pipeline/index.js';
@@ -49,7 +49,7 @@ async function handFile(name: string): Promise<string> {
 
 async function boxOf(file: string, id: string): Promise<unknown> {
   const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
-  for (const p of readPlanes(doc.definitions)) if (p.shapes.has(id)) return p.shapes.get(id)!.bounds;
+  for (const p of new DiagramReader(doc.definitions).planes()) if (p.shapes.has(id)) return p.shapes.get(id)!.bounds;
   return undefined;
 }
 

@@ -109,10 +109,11 @@ import { cx } from '../diagram/utils/geom.js';
 import { isHardProblem, problemKey, type LayoutMetrics, type LayoutProblem } from '../diagram/utils/problems.js';
 import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { edgeEnds, edgeKind, idOf, raw, rawList } from '../diagram/utils/plane.js';
-import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
-import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
 import { selection } from '../query/select.js';
-import { writePlanes } from '../diagram/write.js';
+import { PlaneWriter } from '../diagram/PlaneWriter.js';
 import { Drawing } from '../diagram/Drawing.js';
 import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
 import { TrialGuard, type TrialPolicy } from '../diagram/TrialGuard.js';
@@ -158,12 +159,12 @@ export class FormatOps {
   readonly sem: Semantics;
   readonly planes: Plane[];
   private readonly drawings = new Map<Plane, Drawing>();
-  
+
   constructor(readonly doc: Doc) {
-    this.sem = semantics(doc.definitions);
-    this.planes = readPlanes(doc.definitions, this.sem);
+    this.sem = Semantics.of(doc.definitions);
+    this.planes = new DiagramReader(doc.definitions, this.sem).planes();
   }
-  
+
   /**
    * Runs the format ops of a batch on the drawing of `doc` (see module
    * contract). `asFile`: the drawing of `doc` is the file's (a batch of format
@@ -180,7 +181,7 @@ export class FormatOps {
         throw err;
       }
     }
-    writePlanes(this.doc.moddle, this.doc.definitions, this.planes);
+    new PlaneWriter(this.doc.moddle, this.doc.definitions).write(this.planes);
     this.doc.invalidate();
     return results;
   }
@@ -224,7 +225,7 @@ export class FormatOps {
     }
     const ends = edgeEnds(el);
     const drawsBoth = (p: Plane | undefined): p is Plane => !!p && !!ends.sourceId && !!ends.targetId && p.shapes.has(ends.sourceId) && p.shapes.has(ends.targetId);
-    const plane = !draw ? undefined : is(el, 'bpmn:MessageFlow') ? homePlane(this.planes, this.sem, id) : this.planes.find(drawsBoth);
+    const plane = !draw ? undefined : is(el, 'bpmn:MessageFlow') ? this.sem.homePlane(this.planes, id) : this.planes.find(drawsBoth);
     if (drawsBoth(plane)) {
       const edge: DEdge = { id, el, kind: edgeKind(el), ...ends, points: [] };
       plane.edges.set(id, edge);
@@ -274,7 +275,7 @@ export class FormatOps {
 
   /** The current layout problems of the document (the planes written first). */
   measure(): LayoutMetrics {
-    writePlanes(this.doc.moddle, this.doc.definitions, this.planes);
+    new PlaneWriter(this.doc.moddle, this.doc.definitions).write(this.planes);
     return LayoutAnalysis.of(this.doc.definitions);
   }
 

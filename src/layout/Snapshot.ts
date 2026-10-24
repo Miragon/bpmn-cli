@@ -7,10 +7,11 @@
 import { successorOf } from '../model/change-set.js';
 import { is, layoutRoot, type El } from '../model/utils/moddle.js';
 import { DETACHED_GAP } from '../diagram/EdgeRouter.js';
-import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
 import { containsPoint, copyBox, copyPoints, type Box, type Point } from '../diagram/utils/geom.js';
 import { boxOf, edgeEnds, idOf, raw, rawList } from '../diagram/utils/plane.js';
-import { pruneEdges } from '../diagram/write.js';
+import { pruneEdges } from '../diagram/utils/prune.js';
 
 export interface SnapEntry {
   id: string;
@@ -62,7 +63,7 @@ export class Snapshot {
   ) {}
 
   static take(defs: El): Snapshot {
-    const sem = semantics(defs);
+    const sem = Semantics.of(defs);
     const snap = new Snapshot(new Map(sem.byId), new Map(sem.laneOf));
     const rootId = idOf(layoutRoot(defs));
     if (rootId) snap.rootId = rootId;
@@ -77,7 +78,7 @@ export class Snapshot {
       const host = is(el, 'bpmn:BoundaryEvent') ? idOf(raw(el, 'attachedToRef')) : undefined;
       if (host) snap.hostOf.set(id, host);
     }
-    const planes = readPlanes(defs, sem);
+    const planes = new DiagramReader(defs, sem).planes();
     for (const plane of planes) {
       for (const s of plane.shapes.values()) {
         if (!s.di) continue;
@@ -112,7 +113,7 @@ export class Snapshot {
     if (snap.flowNodeShapes) {
       for (const [id, el] of sem.byId) {
         if (!is(el, 'bpmn:FlowNode')) continue;
-        const home = homePlane(planes, sem, id);
+        const home = sem.homePlane(planes, id);
         if (home && !home.shapes.has(id)) snap.undrawn.push(id);
       }
     }

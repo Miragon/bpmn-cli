@@ -14,8 +14,10 @@ a new concept gets its line here first.
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
 | **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors. |
 | **Splice** | Inserting a node into an existing sequence flow. |
-| **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/plane.ts`). |
+| **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/types.ts`; read by `diagram/DiagramReader.ts`, written by `diagram/PlaneWriter.ts`). |
+| **Semantics** | The index of the semantic model a drawing is read against: elements by id, lanes, pools, scopes (`diagram/Semantics.ts`). |
 | **Checkpoint** | A saved state of a plane, to try a change and undo it (`diagram/PlaneCheckpoint.ts`). |
+| **DI ids** | The ids of DI elements in the file's style: new ones (`diagram/DiIds.ts`) and the old ones kept over a full redraw (`diagram/DiIdMemo.ts`). |
 | **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`diagram/Drawing.ts`). |
 | **Frame** | A pool, lane or expanded sub-process: a shape that holds other shapes (`diagram/FrameEditor.ts` draws, removes, collapses and expands them). |
 | **Space tool** | The modeler's tool that moves everything beyond a line to make or close room, growing the frames it crosses (`diagram/SpaceTool.ts`). |

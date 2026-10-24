@@ -85,7 +85,7 @@
  * This module also hosts the small helpers every mutation shares
  * (`changeOf`, `descriptorOf`, `ownValue`, `idOf`).
  */
-import { followDiIds } from '../diagram/write.js';
+import { followDiIds } from '../diagram/utils/di-ids.js';
 import type { Doc } from '../model/document.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';

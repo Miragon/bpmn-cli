@@ -123,12 +123,14 @@ import { bottom, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, 
 import { hasExternalLabel } from '../diagram/utils/labels.js';
 import { NodePlacer, type PlacementHooks, type PlacerState } from '../diagram/NodePlacer.js';
 import { verticalBand, predecessors, successors, spacingOf, boundariesOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, titleOf } from '../diagram/utils/plane.js';
-import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
-import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
+import { Semantics } from '../diagram/Semantics.js';
+import type { DEdge, DShape, Plane } from '../diagram/types.js';
 import type { EdgeBefore } from '../diagram/EdgeRouter.js';
 import { attachedSide } from '../diagram/utils/sides.js';
 import { activitySize, BOTTOM_ROOM, titleBox } from '../diagram/utils/text.js';
-import { pruneDi, writePlanes } from '../diagram/write.js';
+import { pruneDi } from '../diagram/utils/prune.js';
+import { PlaneWriter } from '../diagram/PlaneWriter.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
 import { Drawing } from '../diagram/Drawing.js';
 import type { SpaceResult } from '../diagram/SpaceTool.js';
@@ -195,17 +197,17 @@ export class IncrementalLayout implements PlacementHooks {
   private engineRun?: Promise<EngineDrawing>;
   afterPlace?: (plane: Plane, s: DShape) => void;
   afterNode?: (plane: Plane, id: string) => void;
-  
+
   /** Incremental layout of a document after its ops ran (see module contract). */
   static async run(doc: Doc, snap: Snapshot, opts: IncrementalOptions = {}): Promise<IncrementalReport> {
-    const sem = semantics(doc.definitions);
+    const sem = Semantics.of(doc.definitions);
     const prunedNow = pruneDi(doc.definitions, sem);
     // a further view is not drawn: the edge of a flow whose ends changed would show the old ends there
     const stale = snap.pruneReEnded(doc.definitions, { further: true });
     const duplicates = new DuplicateDiGuard(doc.definitions);
     return new IncrementalLayout(doc, snap, opts, sem, stale).layout(prunedNow, duplicates);
   }
-  
+
   private constructor(
     readonly doc: Doc,
     private readonly snap: Snapshot,
@@ -215,7 +217,7 @@ export class IncrementalLayout implements PlacementHooks {
   ) {
     this.sem = sem;
     // a further diagram showing an element another diagram already shows is a second view of it: left as it is
-    this.planes = readPlanes(doc.definitions, sem).filter((p, i, all) => all.findIndex((q) => q.rootId === p.rootId) === i);
+    this.planes = new DiagramReader(doc.definitions, sem).planes().filter((p, i, all) => all.findIndex((q) => q.rootId === p.rootId) === i);
     for (const [oldFlowId, ends] of snap.flowEnds) {
       const id = snap.currentId(oldFlowId);
       const el = sem.byId.get(id);
@@ -232,7 +234,7 @@ export class IncrementalLayout implements PlacementHooks {
     this.created = opts.created ?? [];
     this.place = new NodePlacer(this.planes, sem, this.oldSource, this.oldTarget, new Set(opts.collapse ?? []), this.notes, this);
   }
-  
+
   private async layout(prunedNow: readonly string[], duplicates: DuplicateDiGuard): Promise<IncrementalReport> {
     const defs = this.doc.definitions;
     const before = this.edgesBefore;
@@ -246,7 +248,7 @@ export class IncrementalLayout implements PlacementHooks {
         if (ends.length && !(e.di && this.snap.changedEnds(e.di).length)) detached.set(e.id, ends);
       }
     }
-  
+
     const wrapped = this.followRoot();
     const strips = this.removedAndRelocated(new Set(this.opts.relocated ?? []));
     const ignore = new Set<string>([...this.reroute, ...this.oldSource.keys(), ...this.oldTarget.keys()]);
@@ -261,10 +263,10 @@ export class IncrementalLayout implements PlacementHooks {
       const ends = detached.get(id);
       if (ends) this.notes.push(`${id} routed again: it did not reach ${ends.join(' and ')}`);
     }
-    writePlanes(this.doc.moddle, defs, this.planes);
+    new PlaneWriter(this.doc.moddle, defs).write(this.planes);
     this.doc.invalidate();
     duplicates.assertNone(defs);
-  
+
     const live = new Set<El>();
     for (const p of this.planes) for (const x of [...p.shapes.values(), ...p.edges.values()]) if (x.di) live.add(x.di);
     const pruned = new Set(prunedNow);
@@ -283,7 +285,7 @@ export class IncrementalLayout implements PlacementHooks {
       notes: this.notes,
     };
   }
-  
+
   /** Steps 6 to 9 (see module contract); the local repair runs them again from a checkpoint. */
   private async draw(): Promise<string[]> {
     await this.placeNodes();
@@ -427,7 +429,7 @@ export class IncrementalLayout implements PlacementHooks {
 
   /** A plane for a collapsed sub-process that has none yet. */
   planeFor(id: string): Plane | undefined {
-    const home = homePlane(this.planes, this.sem, id);
+    const home = this.sem.homePlane(this.planes, id);
     if (home) return home;
     const el = this.sem.byId.get(id);
     if (!el) return undefined;
@@ -502,7 +504,7 @@ export class IncrementalLayout implements PlacementHooks {
         // compared by the ids now: renaming a process or sub-process (`set id=`) relocates nothing
         const scopeNow = idOf(this.sem.scopeOf.get(s.id));
         const scopeBefore = this.cur(this.snap.scopeOf.get(this.oldId(s)));
-        const home = homePlane(this.planes, this.sem, s.id);
+        const home = this.sem.homePlane(this.planes, s.id);
         if (!relocated.has(s.id) && scopeNow === scopeBefore && (!home || home === plane)) continue;
         const boundaries = [...plane.shapes.values()].filter((b) => b.hostId === s.id);
         const content = s.kind === 'subProcess' && s.expanded ? contentOf(plane, s.id) : undefined;
@@ -658,7 +660,7 @@ export class IncrementalLayout implements PlacementHooks {
       const id = idOf(el);
       if (!id || shapes.has(id)) continue;
       if (is(el, 'bpmn:Participant')) {
-        const plane = homePlane(this.planes, this.sem, id);
+        const plane = this.sem.homePlane(this.planes, id);
         if (!plane) continue;
         const s = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
         const proc = raw<El>(el, 'processRef');
@@ -672,7 +674,7 @@ export class IncrementalLayout implements PlacementHooks {
         this.place.placed.add(id);
         shapes.set(id, { plane, shape: s });
       } else if (is(el, 'bpmn:Lane')) {
-        const plane = homePlane(this.planes, this.sem, id);
+        const plane = this.sem.homePlane(this.planes, id);
         if (!plane) continue;
         const s = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
         if (!this.drawing(plane).placeLane(s)) {
@@ -1009,7 +1011,7 @@ export class IncrementalLayout implements PlacementHooks {
       const id = idOf(el);
       if (!id || !this.isConnection(el)) continue;
       const ends = edgeEnds(el);
-      const home = is(el, 'bpmn:MessageFlow') ? homePlane(this.planes, this.sem, id) : this.planes.find((p) => (!ends.sourceId || p.shapes.has(ends.sourceId) || p.edges.has(ends.sourceId)) && (!ends.targetId || p.shapes.has(ends.targetId) || p.edges.has(ends.targetId)));
+      const home = is(el, 'bpmn:MessageFlow') ? this.sem.homePlane(this.planes, id) : this.planes.find((p) => (!ends.sourceId || p.shapes.has(ends.sourceId) || p.edges.has(ends.sourceId)) && (!ends.targetId || p.shapes.has(ends.targetId) || p.edges.has(ends.targetId)));
       const have = edges.get(id);
       if (!home) continue;
       if (have && have.plane !== home) {

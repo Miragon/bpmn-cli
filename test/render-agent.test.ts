@@ -16,7 +16,7 @@ import { Doc } from '../src/model/document.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
 import { diffProblems, type LayoutProblem } from '../src/diagram/utils/problems.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type Plane } from '../src/diagram/types.js';
 import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/render/index.js';
 import { pathOf } from '../src/query/select.js';
@@ -100,7 +100,7 @@ describe('locateProblems', () => {
       const defs = doc.definitions;
       const problems = LayoutAnalysis.of(defs).problems;
       for (const p of problems) expect(p, file).not.toHaveProperty('at');
-      const planes = readPlanes(defs);
+      const planes = new DiagramReader(defs).planes();
       const out = new ProblemLocator(defs).locate(problems);
       expect(out.map(({ at: _, ...p }) => p), file).toEqual(problems);
       for (const p of out) {
@@ -125,7 +125,7 @@ describe('locateProblems', () => {
     const out = new ProblemLocator(doc.definitions).locate(LayoutAnalysis.of(doc.definitions).problems);
     const crossing = out.find((p) => p.kind === 'crossings')!;
     expect(crossing.ids).toEqual(['Flow_6', 'Flow_21']);
-    const plane = readPlanes(doc.definitions)[0]!;
+    const plane = new DiagramReader(doc.definitions).planes()[0]!;
     // the crossing point lies on both flows
     const onFlow = (id: string): boolean =>
       plane.edges.get(id)!.points.some((a, i, pts) => {
@@ -141,11 +141,11 @@ describe('--problems', () => {
     let badges = 0;
     for (const file of [...bpmnFiles(SCENARIOS), GALLERY, LONG]) {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
-      if (!readPlanes(doc.definitions).length) continue;
+      if (!new DiagramReader(doc.definitions).planes().length) continue;
       const metrics = LayoutAnalysis.of(doc.definitions).problems;
       const r = renderDocSvg(doc, { maxSize: 2000, problems: true });
       expect(r.problems.map((p) => `${p.n} ${shown(p)}`), file).toEqual(metrics.map((p, i) => `${i + 1} ${shown(p)}`));
-      const plane = readPlanes(doc.definitions).find((p) => p.rootId === r.plane)!;
+      const plane = new DiagramReader(doc.definitions).planes().find((p) => p.rootId === r.plane)!;
       const drawn = badgesOf(r.svg);
       expect([...drawn.keys()].sort((a, b) => a - b), file).toEqual(r.problems.filter((p) => p.drawn).map((p) => p.n));
       for (const p of r.problems.filter((x) => x.drawn)) {
@@ -184,7 +184,7 @@ describe('crops', () => {
     const tokens: number[] = [];
     for (const file of bpmnFiles(SCENARIOS)) {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
-      const planes = readPlanes(doc.definitions);
+      const planes = new DiagramReader(doc.definitions).planes();
       if (!planes.length) continue;
       const nodes = [...doc.byId().values()].filter((el) => is(el, 'bpmn:FlowNode') && planes.some((p) => p.shapes.has(el.get<string>('id'))));
       for (const [i, node] of nodes.entries()) {

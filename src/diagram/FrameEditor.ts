@@ -30,7 +30,8 @@
 import { SIZES } from './utils/sizes.js';
 import { bottom, copyBox, cy, median, right, union, type Box } from './utils/geom.js';
 import { boundariesOf, contentOf, isLeaf } from './utils/plane.js';
-import type { DEdge, DShape, Plane, Semantics } from './types.js';
+import type { DEdge, DShape, Plane } from './types.js';
+import type { Semantics } from './Semantics.js';
 
 import type { SpaceResult, SpaceTool } from './SpaceTool.js';
 

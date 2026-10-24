@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { readPlanes } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
 import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
 import { routeOrthogonal } from '../src/diagram/router.js';
 import { Drawing } from '../src/diagram/Drawing.js';
@@ -37,13 +37,13 @@ async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; before:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 

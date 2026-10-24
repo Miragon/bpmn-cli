@@ -1,5 +1,5 @@
 import { is, type El } from '../model/utils/moddle.js';
-import { readPlanes } from '../diagram/plane.js';
+import { DiagramReader } from '../diagram/DiagramReader.js';
 import { sameBox, type Box, type Point } from '../diagram/utils/geom.js';
 
 /**
@@ -13,7 +13,7 @@ export class DiagramGeometry {
 
   static of(defs: El): DiagramGeometry {
     const out = new DiagramGeometry();
-    for (const plane of readPlanes(defs)) {
+    for (const plane of new DiagramReader(defs).planes()) {
       for (const s of plane.shapes.values()) out.shapes.set(`${plane.rootId}|${s.id}`, { bounds: s.bounds, ...(s.label ? { label: s.label } : {}), flowNode: is(s.el, 'bpmn:FlowNode') });
       for (const e of plane.edges.values()) out.edges.set(`${plane.rootId}|${e.id}`, { points: e.points, ...(e.label ? { label: e.label } : {}) });
     }
@@ -23,7 +23,7 @@ export class DiagramGeometry {
   /** Bounds of every flow node shape of all diagrams, by element id. */
   static flowNodeBoxes(defs: El): Map<string, Box> {
     const out = new Map<string, Box>();
-    for (const plane of readPlanes(defs)) {
+    for (const plane of new DiagramReader(defs).planes()) {
       for (const s of plane.shapes.values()) if (is(s.el, 'bpmn:FlowNode')) out.set(s.id, s.bounds);
     }
     return out;

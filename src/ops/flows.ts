@@ -25,7 +25,7 @@
  * gets an id from its new ends.
  */
 import type { Doc, FlowEnds, FormerEnd, KeptFlow } from '../model/document.js';
-import { followDiIds } from '../diagram/write.js';
+import { followDiIds } from '../diagram/utils/di-ids.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { connectionRequest, flowRequest, formerLabels, labelOf, speakingStem, type IdRequest } from '../ids/style.js';

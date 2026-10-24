@@ -12,7 +12,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { readPlanes, semantics } from '../src/diagram/plane.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Semantics } from '../src/diagram/Semantics.js';
 import { inside } from '../src/diagram/utils/geom.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { Op } from '../src/ops/types.js';
@@ -54,9 +55,9 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 /** Every shape inside its expanded sub-process. */
 function outsideSub(doc: Doc): string[] {
-  const sem = semantics(doc.definitions);
+  const sem = Semantics.of(doc.definitions);
   const out: string[] = [];
-  for (const plane of readPlanes(doc.definitions, sem)) {
+  for (const plane of new DiagramReader(doc.definitions, sem).planes()) {
     for (const s of plane.shapes.values()) {
       const parent = s.parentId ? plane.shapes.get(s.parentId) : undefined;
       if (parent?.container && !inside(s.bounds, parent.bounds)) out.push(`${s.id} outside ${parent.id}`);
@@ -66,7 +67,7 @@ function outsideSub(doc: Doc): string[] {
 }
 
 const centreX = (doc: Doc, id: string): number => {
-  const s = readPlanes(doc.definitions, semantics(doc.definitions))
+  const s = new DiagramReader(doc.definitions, Semantics.of(doc.definitions)).planes()
     .map((p) => p.shapes.get(id))
     .find((x) => !!x)!;
   return s.bounds.x + s.bounds.width / 2;
