@@ -31,7 +31,7 @@ import type { Warning } from '../shared/CliError.js';
 import type { CheckResult, ConventionsReport, LayoutStatus } from '../pipeline/index.js';
 import type { PlatformSummary } from '../platform/profiles/PlatformProfiles.js';
 import type { Change } from '../model/ChangeSet.js';
-import type { ValidationResult } from '../validate/structural.js';
+import type { ValidationResult } from '../validate/StructuralValidator.js';
 import type { ValidatorReport } from '../validate/validators.js';
 import type { ModelView } from '../query/model-view.js';
 

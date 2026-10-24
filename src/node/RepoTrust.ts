@@ -1,7 +1,7 @@
 import { lstatSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { gitRoot } from './find-up.js';
+import { gitRoot } from './utils/find-up.js';
 import { gitDirOf } from './utils/git.js';
 import { inside, real } from './utils/paths.js';
 

@@ -2,7 +2,7 @@
  * The `incoming` / `outgoing` lists of flow nodes are derived data: BPMN 2.0
  * makes them optional mirrors of each sequence flow's sourceRef / targetRef.
  * The CLI completes them in memory when it reads a document (Doc.fromXml,
- * after recording them as read; validate/structural.ts repairFlowLinks does the same for
+ * after recording them as read; StructuralValidator.repairFlowLinks does the same for
  * a model changed in memory), because the placement grammar, the views, the
  * lint and the layout read them. A file keeps them only the way it kept them
  * before:
@@ -50,7 +50,7 @@ const listOf = (node: El, direction: Direction): El[] => (node.get<El[] | undefi
  * Adds every sequence flow to `sourceRef.outgoing` / `targetRef.incoming`
  * where it is missing (in memory: what is written decides unkeptEntries).
  * Idempotent; returns the number of entries added. Entries that contradict a
- * flow's endpoints are left alone (validate/structural.ts reports them as E_FLOW_LINKS).
+ * flow's endpoints are left alone (StructuralValidator reports them as E_FLOW_LINKS).
  */
 export function completeMirrorLists(definitions: El): number {
   let added = 0;

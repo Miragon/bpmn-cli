@@ -9,9 +9,9 @@
  *    the sub-process (recursively). Lanes list member ids. Collaboration
  *    section with participants and message flows. Root messages/errors/
  *    signals/escalations. `problems` = validateDoc(doc) errors + warnings
- *    (validate/structural.ts).
+ *    (validate/StructuralValidator.ts).
  *  It first adds missing incoming/outgoing mirror entries (optional in BPMN
- *  2.0, see repairFlowLinks in validate/structural.ts) so flows of hand-written files
+ *  2.0, see StructuralValidator.repairFlowLinks) so flows of hand-written files
  *  show up; a file with complete mirrors is left untouched.
  *  The decision link of a business rule task is shown as the node fact
  *  `calledDecision` in every spelling (ops/decision.ts). The Camunda 8
@@ -26,7 +26,8 @@ import { diExpansionState } from '../diagram/utils/expansion.js';
 import { Groups } from '../diagram/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
-import { flowOrder, validateDoc } from '../validate/structural.js';
+import { FlowOrder } from '../validate/FlowOrder.js';
+import { StructuralValidator } from '../validate/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { ModelView, ViewData, ViewGroup, ViewLane, ViewMessageFlow, ViewNode, ViewProcess } from './model-view.js';
@@ -54,7 +55,7 @@ export class ModelViewBuilder {
   /** The complete semantic view of the document (see contract above). */
   build(): ModelView {
     const doc = this.doc;
-    const { errors, warnings } = validateDoc(doc);
+    const { errors, warnings } = new StructuralValidator(doc).validate();
     return compact<ModelView>({
       file: doc.file,
       definitions: compact({
@@ -106,7 +107,7 @@ export class ModelViewBuilder {
   }
 
   private nodes(scope: El): ViewNode[] {
-    const { ordered, unreachable } = flowOrder(this.doc, scope);
+    const { ordered, unreachable } = new FlowOrder(this.doc, scope);
     return ordered.map((node) => this.node(node, unreachable));
   }
 

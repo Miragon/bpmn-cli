@@ -26,7 +26,7 @@ import type { CliError } from '../src/shared/CliError.js';
 import type { Op } from '../src/ops/types.js';
 import { bpmnlintEngine, findBpmnlintConfig, loadBpmnlint, projectBpmnlint, projectBpmnlintSettings } from '../src/node/index.js';
 import { checkFile, checkLoadedDoc, mutateFile } from '../src/node/index.js';
-import { gitRoot } from '../src/node/find-up.js';
+import { gitRoot } from '../src/node/utils/find-up.js';
 import { checkDoc } from '../src/index.js';
 import type { ValidatorFinding, ValidatorIssue } from '../src/validate/validators.js';
 

@@ -23,7 +23,7 @@ import { mutateDoc } from '../src/index.js';
 import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
 import { TimerValue } from '../src/platform/profiles/TimerValue.js';
 import { loadProfiles, runProfile } from '../src/index.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 import { ZEEBE as C8_DESCRIPTOR } from '../src/platform/ZeebeDescriptor.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

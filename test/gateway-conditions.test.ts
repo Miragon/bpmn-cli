@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 import { definitionsXml, docFromXml } from './helpers.js';
 import { ElementRetyper } from '../src/ops/ElementRetyper.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';

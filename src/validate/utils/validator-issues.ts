@@ -1,6 +1,6 @@
 import { modelError } from '../../shared/utils/errors.js';
 import type { Warning } from '../../shared/CliError.js';
-import type { ValidationResult } from '../structural.js';
+import type { ValidationResult } from '../StructuralValidator.js';
 import type { ValidatorIssue, ValidatorReport, ValidatorRun } from '../validators.js';
 
 /** Hidden identity of an issue (ValidatorFinding.key; not serialised). */

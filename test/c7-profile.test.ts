@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { checkFile } from '../src/node/index.js';
 import { mutateDoc, detectPlatform, loadProfiles, runProfile, type ProfileFinding } from '../src/index.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

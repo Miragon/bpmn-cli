@@ -119,7 +119,7 @@ import { OpRunner, type BatchRun } from '../ops/OpRunner.js';
 import { withoutProfileDuplicates } from '../ops/utils/covers.js';
 import type { Op } from '../ops/types.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
-import type { ValidationResult } from '../validate/structural.js';
+import type { ValidationResult } from '../validate/StructuralValidator.js';
 import { FindingBaseline, type ValidationDelta } from '../validate/FindingBaseline.js';
 import { ModelViewBuilder } from '../query/ModelViewBuilder.js';
 import { DiagramUpdate } from './DiagramUpdate.js';

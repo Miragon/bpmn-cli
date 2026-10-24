@@ -1,6 +1,6 @@
 /**
  * Platform validation profiles: engine-specific checks on top of the
- * structural validation and lint of src/validate/structural.ts.
+ * structural validation and lint of src/validate/StructuralValidator.ts.
  *
  *  - run(doc, choice) detects the platform (platform/PlatformDetection.ts; an
  *    explicit choice wins) and runs its rules: Camunda 7 (platform/profiles/C7Profile.ts;

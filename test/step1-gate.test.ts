@@ -31,7 +31,7 @@ import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HARD = new Set(['overlaps', 'through', 'missing', 'outsideLane', 'outsidePool', 'outsideSub', 'frameIntrusion', 'frameOverlap', 'degenerateEdge']);

@@ -7,7 +7,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findUp } from '../src/node/find-up.js';
+import { findUp } from '../src/node/utils/find-up.js';
 
 export default function setup(): void {
   for (const dir of [tmpdir(), join(import.meta.dirname, '..')]) {

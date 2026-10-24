@@ -14,7 +14,7 @@ import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
 import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
 import type { Op } from '../src/ops/types.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 import { elementDetail } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 

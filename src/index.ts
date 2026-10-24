@@ -17,6 +17,7 @@ import type { CheckOptions, CheckResult, LayoutDocOptions, MutationOptions, Muta
 import { EditTransaction } from './pipeline/EditTransaction.js';
 import { Relayout } from './pipeline/Relayout.js';
 import { DocCheck } from './pipeline/DocCheck.js';
+import { StructuralValidator, type ValidateOptions, type ValidationResult } from './validate/StructuralValidator.js';
 import { IdConventionsReader, type IdConventions, type IdNamingHelpers } from './ids/IdConventionsReader.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
@@ -174,7 +175,9 @@ export function decisionLinkOf(el: El, doc?: Doc): DecisionLink | undefined {
 }
 
 export { ChangeSet, type Change } from './model/ChangeSet.js';
-export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
+export type { ValidateOptions, ValidationResult } from './validate/StructuralValidator.js';
+/** Structural validation and lint of a document, with the platform profile on request (see src/validate/StructuralValidator.ts). */
+export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult { return new StructuralValidator(doc).validate(opts); }
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
 export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';

@@ -2,8 +2,7 @@
  * `bpmn show <id>`: everything about one element incl. ElementProperties.read()
  * from ops/ElementProperties.ts, new ExtensionLister().list() from ops/ext.js, flows in/out with
  * labels/conditions, host, attached boundary events, lane, scope. It first
- * adds missing incoming/outgoing mirror entries (repairFlowLinks in
- * validate/structural.ts) so flows of hand-written files show up.
+ * adds missing incoming/outgoing mirror entries (StructuralValidator.repairFlowLinks) so flows of hand-written files show up.
  */
 import type { Doc } from '../model/Doc.js';
 import { triggerOf } from '../model/utils/kinds.js';
@@ -15,7 +14,8 @@ import { ExtensionLister } from '../ops/ExtensionLister.js';
 import { nestedEntries } from '../ops/utils/nested-slots.js';
 import { ElementProperties } from '../ops/ElementProperties.js';
 import { vendorAttributes } from '../ops/utils/elements.js';
-import { flowOrder, repairFlowLinks } from '../validate/structural.js';
+import { FlowOrder } from '../validate/FlowOrder.js';
+import { StructuralValidator } from '../validate/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { ElementDetail, NestedDetail } from './model-view.js';
@@ -35,7 +35,7 @@ export class ElementDetailBuilder {
 
   build(): ElementDetail {
     const { doc, el } = this;
-    repairFlowLinks(doc);
+    new StructuralValidator(doc).repairFlowLinks();
     const isNode = is(el, 'bpmn:FlowNode');
     const incoming = doc.incoming(el).map((f) => {
       const source = peek<El>(f, 'sourceRef');
@@ -53,7 +53,7 @@ export class ElementDetailBuilder {
       nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttributes(n), extensions: new ExtensionLister().list(n) });
     }
     const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(shownId) : [];
-    const children = is(el, 'bpmn:SubProcess') ? flowOrder(doc, el).ordered.map(shownId) : [];
+    const children = is(el, 'bpmn:SubProcess') ? new FlowOrder(doc, el).ordered.map(shownId) : [];
     const listed = new ExtensionLister().list(el);
     const extensions: unknown[] = listed.length ? listed : this.facts.extensionTypes().map((type, index) => ({ index, type }));
     const host = peek<El>(el, 'attachedToRef');

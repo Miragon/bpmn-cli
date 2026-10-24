@@ -77,7 +77,7 @@
  *                                  without an engine) is converted to camunda:decisionRef by
  *                                  `set <id> calledDecision=<decision>`
  *   W_C7_DEPLOY_BOUNDARY_HOST      boundary event attached to a compensation handler (isForCompensation="true");
- *                                  validate/structural.ts withProfile drops it next to the structural E_INVALID_HOST
+ *                                  StructuralValidator.withProfile drops it next to the structural E_INVALID_HOST
  *   W_C7_DEPLOY_SCRIPT             script task without script and without camunda:resource
  *   W_C7_DEPLOY_EXCLUSIVE_GATEWAY  exclusive gateway without outgoing flow, a single conditional flow, a conditional
  *                                  default flow, or flows without condition next to a default (or more than one)

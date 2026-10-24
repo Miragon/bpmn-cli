@@ -21,7 +21,6 @@ import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
 import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
 import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
 import { vendorAttributes } from '../ops/utils/elements.js';
-import { flowOrder, repairFlowLinks, validateDoc } from '../validate/structural.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export interface ViewFlow {

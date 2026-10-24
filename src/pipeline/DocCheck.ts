@@ -5,7 +5,7 @@ import { FullLayout } from '../layout/FullLayout.js';
 import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { PlatformDetection } from '../platform/PlatformDetection.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
-import { validateDoc } from '../validate/structural.js';
+import { StructuralValidator } from '../validate/StructuralValidator.js';
 import { ValidatorSet } from '../validate/ValidatorSet.js';
 import { counts, withValidatorReports } from '../validate/utils/validator-issues.js';
 import { once } from '../validate/utils/once.js';
@@ -27,7 +27,7 @@ export class DocCheck {
     const opts = this.opts;
     return LayoutDebug.during(opts.debug, async () => {
       await PLATFORM_PROFILES.ensure(doc, opts.platform ?? 'auto');
-      let validation = validateDoc(doc, { platform: opts.platform ?? 'auto' });
+      let validation = new StructuralValidator(doc).validate({ platform: opts.platform ?? 'auto' });
       const structuralErrors = validation.errors.length;
       const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
       const file = opts.file ?? doc.file;

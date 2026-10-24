@@ -92,6 +92,8 @@ a new concept gets its line here first.
 | **Platform detection** | Which engine a file targets, from an explicit choice, `modeler:executionPlatform` or the vendor namespaces (`platform/PlatformDetection.ts`). |
 | **Document namespaces** | The xmlns declarations of a document and the URIs its prefixed names resolve to (`platform/DocumentNamespaces.ts`). |
 | **Finding** | One problem a validation reports (structural, profile, bpmnlint, a host's validator). |
+| **Structural validator** | The structural errors and lint warnings of one document, with the platform profile's findings on request (`validate/StructuralValidator.ts`). |
+| **Flow order** | The flow nodes of one scope in flow order from its start events, with the ones no start reaches (`validate/FlowOrder.ts`). |
 | **Validator set** | The validators of one call, named, run on one document (`validate/ValidatorSet.ts`). |
 | **Baseline** | The findings a document had before an edit, so a write reports only what the edit added (`validate/FindingBaseline.ts`). |
 | **Id style** | The way a file spells its ids (prefixes, case, flow form), learned from the file (`ids/IdStyle.ts`). |

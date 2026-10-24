@@ -17,7 +17,7 @@ import { kindLabel, triggerOf } from '../model/utils/kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
-import { flowOrder } from '../validate/structural.js';
+import { FlowOrder } from '../validate/FlowOrder.js';
 import { AROUND_DEFAULT_DEPTH, type AroundNode, type AroundOptions, type AroundScope, type AroundView } from './context.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
@@ -107,7 +107,7 @@ export class AroundWindow {
 
     // tree order: a scope's nodes in flow order, a host's boundary events after it, a sub-process's window after it
     const visitScope = (scope: El): void => {
-      const ordered = flowOrder(doc, scope).ordered;
+      const ordered = new FlowOrder(doc, scope).ordered;
       const placed = new Set<El>();
       const emit = (n: El): void => {
         if (placed.has(n)) return;

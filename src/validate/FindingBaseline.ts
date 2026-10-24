@@ -29,7 +29,8 @@ import type { Op } from '../ops/types.js';
 import { PlatformDetection, type PlatformChoice } from '../platform/PlatformDetection.js';
 import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
-import { lintCoveredBy, validateDoc, withProfile, type ValidationResult } from './structural.js';
+import { StructuralValidator, type ValidationResult } from './StructuralValidator.js';
+import { lintCoveredBy } from './utils/lint-coverage.js';
 import { coveredLint, counts, keyOf, leftOutOf, lintKey, preexisting, validatorRefusal, withValidatorReports } from './utils/validator-issues.js';
 import type { Validator, ValidatorContext, ValidatorIssue, ValidatorReport, ValidatorRun } from './validators.js';
 import { ValidatorSet } from './ValidatorSet.js';
@@ -94,12 +95,12 @@ export class FindingBaseline {
 
   /**
    * Validates the document before the ops run (this also repairs missing
-   * incoming/outgoing entries, see repairFlowLinks), runs its platform
+   * incoming/outgoing entries, see StructuralValidator.repairFlowLinks), runs its platform
    * profile and the validators on it (its text as read; the in-memory model
    * serialised only for a created document).
    */
   static async capture(doc: Doc, opts: BaselineOptions): Promise<FindingBaseline> {
-    const { errors, warnings } = validateDoc(doc);
+    const { errors, warnings } = new StructuralValidator(doc).validate();
     const profile = PLATFORM_PROFILES.baseline(doc, opts.platform);
     const index = new Map(doc.byId());
     const validators = new ValidatorSet(opts.validators);
@@ -116,12 +117,13 @@ export class FindingBaseline {
    * file), so its rules may load now.
    */
   async afterOps(): Promise<ValidationResult> {
-    const raw = (this.raw = validateDoc(this.doc));
+    const validator = new StructuralValidator(this.doc);
+    const raw = (this.raw = validator.validate());
     const structural = this.separatePreexisting(raw);
     await PLATFORM_PROFILES.ensure(this.doc, this.opts.platform);
     const after = (this.profileAfter = PLATFORM_PROFILES.run(this.doc, this.opts.platform));
     const delta = PLATFORM_PROFILES.delta(this.doc, this.profile, after);
-    const validation = (this.validation = withProfile(structural, after, delta.added, delta));
+    const validation = (this.validation = validator.withProfile(structural, after, delta.added, delta));
     if (validation.errors.length && !this.opts.force) {
       throw modelError('E_VALIDATION', `The change would introduce ${validation.errors.length} structural error(s); nothing was written`, {
         errors: validation.errors,

@@ -25,7 +25,7 @@ import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
-import { validateDoc } from '../src/validate/structural.js';
+import { validateDoc } from '../src/index.js';
 import { elementDetail, renderDetail, renderExtensionList } from '../src/index.js';
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';

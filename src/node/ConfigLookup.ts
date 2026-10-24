@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { findUp, gitRoot } from './find-up.js';
+import { findUp, gitRoot } from './utils/find-up.js';
 import { gitDirOf } from './utils/git.js';
 import { real } from './utils/paths.js';
 

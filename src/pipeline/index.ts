@@ -11,7 +11,7 @@ import type { MetricsDelta } from '../diagram/utils/problems.js';
 import type { FormatResult } from '../format/FormatOps.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import type { PlatformChoice } from '../platform/PlatformDetection.js';
-import type { ValidationResult } from '../validate/structural.js';
+import type { ValidationResult } from '../validate/StructuralValidator.js';
 import type { ValidationDelta } from '../validate/FindingBaseline.js';
 import type { Validator } from '../validate/validators.js';
 import type { ModelView } from '../query/model-view.js';

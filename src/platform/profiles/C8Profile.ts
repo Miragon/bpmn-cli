@@ -72,7 +72,7 @@
  *                                  listeners on start and boundary events, end listeners on gateways, listeners on
  *                                  sequence flows
  *   W_C8_DEPLOY_UNSUPPORTED        a transaction, a cancel event, a complex gateway
- *   W_C8_DEPLOY_BOUNDARY_HOST      boundary event on a compensation handler (validate/structural.ts withProfile drops it next to
+ *   W_C8_DEPLOY_BOUNDARY_HOST      boundary event on a compensation handler (StructuralValidator.withProfile drops it next to
  *                                  the structural E_INVALID_HOST)
  *   W_C8_DEPLOY_SCHEMA             an attribute without prefix that the BPMN schema does not define (anywhere in the
  *                                  file), extension elements on bpmn:definitions, an id that is no NCName; from the

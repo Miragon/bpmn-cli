@@ -6,7 +6,7 @@ import { bpmnlintUnavailableFindings } from '../validate/utils/bpmnlint.js';
 import { BpmnlintLibs } from './BpmnlintLibs.js';
 import { ChainResolver, type BpmnlintChain } from './ChainResolver.js';
 import { BPMNLINT_CONFIG_FILE } from './ConfigLookup.js';
-import { gitRoot } from './find-up.js';
+import { gitRoot } from './utils/find-up.js';
 import { LoadCache } from './LoadCache.js';
 import { ModdleExtensions } from './ModdleExtensions.js';
 import { RepoTrust, type Repo } from './RepoTrust.js';

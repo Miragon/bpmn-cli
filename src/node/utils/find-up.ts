@@ -1,7 +1,7 @@
 /**
  * The upward lookup of a file by name (Node only): the nearest directory, from
  * a start directory up to the filesystem root, that holds one of some names
- * as a regular file. The .bpmnlintrc lookup (src/node/bpmnlint.ts) runs it.
+ * as a regular file. The .bpmnlintrc lookup (src/node/ConfigLookup.ts) runs it.
  *
  *   findUp(dir, ['a.yml', 'b.yml'])                        -> { dir, name } of the nearest directory with either
  *   findUp(dir, ['.bpmnlintrc'], { stopAtGitRoot: true })  -> the same, but not above the repository's root
