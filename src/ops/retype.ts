@@ -54,6 +54,7 @@ import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
 import { zeebeUserTaskDefault } from '../platform/defaults.js';
 import { cascadeRemove } from './remove.js';
+import { dropIgnoredConditions } from './flows.js';
 import {
   assertMessageFlowsFit,
   changeOf,
@@ -225,6 +226,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     }
     for (const w of applyTrigger(doc, target, trigger, opts)) cs.warn(w);
   }
+  dropIgnoredConditions(doc, target, cs);
   if (isEvent) assertMessageFlowsFit(doc, target, conflictsBefore);
   if (dropNonInterrupting && trigger !== undefined) warnNonInterruptingDropped(cs, target, trigger);
   recordIdState(doc, target, before, oldLabel);

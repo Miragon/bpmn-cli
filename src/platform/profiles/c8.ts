@@ -1019,8 +1019,8 @@ function checkFlow(ctx: Ctx, flow: El): void {
   if (!isFeel(body)) {
     push(ctx, 'deploy', 'W_C8_DEPLOY_EXPRESSION', flow, undefined, 'condition', `The condition "${body.trim()}" of sequence flow ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, body.trim() ? `\`bpmn set <file> ${id} ${sh(`condition==${feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${sh('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`);
   }
-  // (a complex gateway is not supported at all: W_C8_DEPLOY_UNSUPPORTED)
-  if (source && !is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway')) {
+  // (a complex gateway is not supported at all: W_C8_DEPLOY_UNSUPPORTED; parallel / event-based gateways: W_CONDITION_IGNORED)
+  if (source && !is(source, 'bpmn:ParallelGateway') && !is(source, 'bpmn:EventBasedGateway') && !is(source, 'bpmn:ExclusiveGateway') && !is(source, 'bpmn:InclusiveGateway') && !is(source, 'bpmn:ComplexGateway')) {
     push(ctx, 'runtime', 'W_C8_CONDITION_IGNORED', flow, undefined, 'conditionIgnored', `Sequence flow ${id} out of ${describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, `Remove it (\`bpmn set <file> ${id} condition=\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${idOf(source)}\`, then move the condition onto its flows.`);
   }
 }

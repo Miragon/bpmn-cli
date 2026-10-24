@@ -101,7 +101,7 @@ import { assignLane } from './containers.js';
 import { setDecisionLink } from './decision.js';
 import { applyTrigger, bindRefAs, ensureRootElement, vendorContent } from './events.js';
 import { setCorrelationKey } from './ext.js';
-import { assertCondition, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
+import { assertCondition, dropIgnoredConditions, flowChange, flowsNamedAfter, followRenamedEnd, recordFormerEnd, redirectFlow, renamedNote, setDefaultFlow, setFlowCondition } from './flows.js';
 import type { SetOp, TriggerOptions } from './types.js';
 
 /* ------------------------------------------------------------------ */
@@ -471,6 +471,7 @@ function applyKey(doc: Doc, el: El, key: string, value: string, cs: ChangeSet): 
       if (!value) throw invalidValue(el, key, 'a flow always needs a source and a target');
       const node = doc.require(value, 'bpmn:FlowNode');
       const renamed = redirectFlow(doc, el, key === 'source' ? { source: node } : { target: node });
+      if (key === 'source') dropIgnoredConditions(doc, node, cs, [el]);
       cs.change(flowChange(el, `${flowChange(el).detail} (${key} changed)${renamedNote(renamed)}`));
       return;
     }
