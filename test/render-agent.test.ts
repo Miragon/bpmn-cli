@@ -1,7 +1,7 @@
 /**
  * `bpmn render` for agents (issue #12, stage 2): crops (--around draws
  * exactly the nodes of show --around, --path, --scope, ids), halos,
- * numbered layout problems at their location (metrics.ts locateProblems,
+ * numbered layout problems at their location (ProblemLocator.ts,
  * each badge inside its elements' bounding box, listed in metrics order),
  * tiles cut at the diagram's columns, `--render` on mutating commands and
  * the fuzz walk's render oracle. Synthetic models only.
@@ -13,7 +13,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { aroundView } from '../src/query/context.js';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems, locateProblems, type LayoutProblem } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
+import { diffProblems, type LayoutProblem } from '../src/diagram/utils/problems.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type Plane } from '../src/diagram/types.js';
 import { changeHighlight, HALO_COLORS, MIN_LABEL_SCALE, renderDocSvg, renderSvg } from '../src/render/index.js';
@@ -96,10 +98,10 @@ describe('locateProblems', () => {
     for (const file of files) {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       const defs = doc.definitions;
-      const problems = layoutProblems(defs).problems;
+      const problems = LayoutAnalysis.of(defs).problems;
       for (const p of problems) expect(p, file).not.toHaveProperty('at');
       const planes = readPlanes(defs);
-      const out = locateProblems(defs, problems);
+      const out = new ProblemLocator(defs).locate(problems);
       expect(out.map(({ at: _, ...p }) => p), file).toEqual(problems);
       for (const p of out) {
         const plane = planes.find((x) => x.shapes.has(p.ids[0] ?? '') || x.edges.has(p.ids[0] ?? ''));
@@ -120,7 +122,7 @@ describe('locateProblems', () => {
 
   it('locates each kind on the defect: a crossing at the crossing point, an overlap in the overlap', async () => {
     const doc = await Doc.fromXml(readFileSync(O2C, 'utf8'));
-    const out = locateProblems(doc.definitions, layoutProblems(doc.definitions).problems);
+    const out = new ProblemLocator(doc.definitions).locate(LayoutAnalysis.of(doc.definitions).problems);
     const crossing = out.find((p) => p.kind === 'crossings')!;
     expect(crossing.ids).toEqual(['Flow_6', 'Flow_21']);
     const plane = readPlanes(doc.definitions)[0]!;
@@ -140,7 +142,7 @@ describe('--problems', () => {
     for (const file of [...bpmnFiles(SCENARIOS), GALLERY, LONG]) {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       if (!readPlanes(doc.definitions).length) continue;
-      const metrics = layoutProblems(doc.definitions).problems;
+      const metrics = LayoutAnalysis.of(doc.definitions).problems;
       const r = renderDocSvg(doc, { maxSize: 2000, problems: true });
       expect(r.problems.map((p) => `${p.n} ${shown(p)}`), file).toEqual(metrics.map((p, i) => `${i + 1} ${shown(p)}`));
       const plane = readPlanes(doc.definitions).find((p) => p.rootId === r.plane)!;
@@ -163,7 +165,7 @@ describe('--problems', () => {
   it('a list of problems: exactly those, numbered in its order; a problem on another plane is listed, not drawn', async () => {
     const xml = readFileSync(O2C, 'utf8');
     const doc = await Doc.fromXml(xml);
-    const all = layoutProblems(doc.definitions).problems;
+    const all = LayoutAnalysis.of(doc.definitions).problems;
     const asked = [all[3]!, all[0]!];
     const r = await renderSvg(xml, { problems: asked });
     expect(r.problems.map((p) => [p.n, p.kind, p.ids])).toEqual([
@@ -443,7 +445,7 @@ describe('the commands', () => {
 describe('the fuzz walk renders every result', () => {
   it('reports a render violation when the result does not render, and none when it does', async () => {
     const exec = libExecutor({ Doc, parseOps, mutateDoc, CliError });
-    const metrics = { measure: (await import('../src/diagram/metrics.js')).layoutProblemsOfXml, diff: (await import('../src/diagram/metrics.js')).diffProblems, hard: [] as string[] };
+    const metrics = { measure: (xml: string) => LayoutAnalysis.ofXml(xml), diff: diffProblems, hard: [] as string[] };
     const xml = readFileSync(O2C, 'utf8');
     const base = { xml, model: 'o2c', seed: 5, mode: 'auto', steps: 2, exec, metrics, detEvery: 0 };
     const failing = { draw: async (): Promise<never> => Promise.reject(new CliError('E_RENDER', 'The PNG rasteriser failed: unreachable', 'io')), maxSize: 2000 };

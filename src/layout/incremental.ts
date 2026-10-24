@@ -120,7 +120,8 @@ import { is, layoutRoot, parseXml, type El } from '../model/utils/moddle.js';
 import { successorOf } from '../model/change-set.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, polylinesCross, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/utils/geom.js';
 import { hasExternalLabel } from '../diagram/utils/labels.js';
-import { isHardProblem, layoutProblems, problemKey, type LayoutMetrics } from '../diagram/metrics.js';
+import { isHardProblem, problemKey, type LayoutMetrics } from '../diagram/utils/problems.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, successors, newShape, type PlaceCtx } from '../diagram/place.js';
 import { spacingOf, type Spacing, boundariesOf, boxOf, contentOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, inFrame, isLeaf, isSubProcess, raw, rawList, titleOf } from '../diagram/utils/plane.js';
 import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
@@ -1538,7 +1539,7 @@ async function repairCrossings(ctx: Ctx, rerouted: string[], start: Checkpoint, 
   let guard: TrialGuard | undefined;
   const measure = (): LayoutMetrics => {
     writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
-    return layoutProblems(ctx.doc.definitions);
+    return LayoutAnalysis.of(ctx.doc.definitions);
   };
   // what a trial must never add: a hard problem (counted per problem), or a crossing between two connections drawn
   // before this run (counted together: a reroute must not trade a crossing with a new connection for one among the

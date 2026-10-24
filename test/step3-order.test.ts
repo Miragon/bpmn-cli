@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from "vitest";
 import { parseOps } from '../src/ops/batch.js';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { isCliError } from '../src/shared/utils/errors.js';
@@ -79,7 +79,7 @@ function edges(doc: Doc): Map<string, DEdge> {
 const participants = (doc: Doc): string[] => doc.collaboration()!.get<El[]>('participants').map((p) => p.get<string>('id'));
 const collabId = (doc: Doc): string => doc.collaboration()!.get<string>('id');
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hard = (doc: Doc): string[] => layoutProblems(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
+const hard = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
 const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
 const topToBottom = (doc: Doc, ids: string[]): string[] => [...ids].sort((a, b) => shapes(doc).get(a)!.bounds.y - shapes(doc).get(b)!.bounds.y);
 

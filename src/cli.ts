@@ -27,7 +27,7 @@ import { basename, dirname, extname, join } from 'node:path';
 import { Command, CommanderError, type Command as CommandType, InvalidArgumentError, Option } from 'commander';
 import { BOUNDARY_SIDE_VALUES, COLOR_VALUES, LABEL_SIDE_VALUES, parseOps, SIDE_VALUES } from './ops/batch.js';
 import { LayoutDebug } from './shared/LayoutDebug.js';
-import { layoutProblems } from './diagram/metrics.js';
+import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
 import { changeHighlight, RENDER_MAX_SIZE, renderSvg, scaleText, type RenderHighlight, type RenderOptions, type RenderProblem } from './render/index.js';
 import { renderShown, viewDoc, type ViewOptions } from './api.js';
 import { AROUND_DEFAULT_DEPTH } from './query/context.js';
@@ -1045,7 +1045,7 @@ withJsonOptions(program.command('metrics <file>').description('layout quality of
   async (file: string, o: RawOpts) => {
     await run(async () => {
       const doc = await readDocArg(file);
-      const m = layoutProblems(doc.definitions);
+      const m = LayoutAnalysis.of(doc.definitions);
       if (o['json']) printJson({ file, score: m.score, counts: m.counts, problems: m.problems }, !!o['pretty']);
       else print(renderMetrics(m));
     }, !!o['json']);

@@ -1,4 +1,4 @@
-import { diffProblems, type LayoutMetrics, type LayoutProblem } from './metrics.js';
+import { diffProblems, type LayoutMetrics, type LayoutProblem } from './utils/problems.js';
 
 /** What a trial must not make worse. */
 export interface TrialPolicy {

@@ -33,7 +33,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LayoutDebug } from '../src/shared/LayoutDebug.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes as diagramPlanes } from '../src/diagram/plane.js';
 import { type DShape } from '../src/diagram/types.js';
 import { titleBox } from '../src/diagram/utils/text.js';
@@ -643,7 +643,7 @@ describe('clean layout engine', () => {
     const L = await layout('top-loop-label', doc);
     const g = L.box('Gateway_Another');
     expect(flowBetween(L, 'Gateway_Another', 'Activity_Claim').points[0]).toEqual({ x: cx(g), y: g.y });
-    expect(layoutProblems(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
+    expect(LayoutAnalysis.of(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
   });
 
   it('lanes: a join whose entries rise into its bottom vertex leaves for a target below through its right vertex; a split with one entry keeps its drops', async () => {
@@ -675,7 +675,7 @@ describe('clean layout engine', () => {
     // o2c: the join's entries from Finance and Warehouse, and the fork's entry from Finance (it merges "ok" too): both leave for the lanes below through the right vertex
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'agent__o2c.bpmn'), 'utf8'));
     const o2c = await layout('o2c-join-exits', doc);
-    expect(layoutProblems(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
+    expect(LayoutAnalysis.of(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
     const fork = o2c.box('Gateway_Fork'), join2 = o2c.box('Gateway_Join');
     for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
     expect(flowBetween(o2c, 'Gateway_Join', 'Activity_ShipGoods').points[0]).toEqual({ x: right(join2), y: cy(join2) });
@@ -1605,7 +1605,7 @@ describe('clean layout engine', () => {
     // it crosses no line; the drawing keeps the crossing the lanes force (score 5)
     expect(crossingsOf(L, flow.id)).toEqual([]);
     expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
-    expect(layoutProblems(L.out.model.definitions).score).toBeLessThanOrEqual(5);
+    expect(LayoutAnalysis.of(L.out.model.definitions).score).toBeLessThanOrEqual(5);
     // the label to the upper right of the event, clear of the flows into and out of Pick invoice
     const label = L.shape('BE12').label!, host = L.box('A1');
     expect(label.x).toBeGreaterThan(right(L.box('BE12')));
@@ -1881,7 +1881,7 @@ describe('clean layout engine', () => {
       expect(flowBetween(L, 'BE13', 'H').points[0], `${what}: Rejected's flow leaves downwards`).toEqual({ x: cx(rejected), y: bottom(rejected) });
       expect(L.shape('BE13').label!.x, `${what}: its label right of it, below the host`).toBeGreaterThan(right(rejected));
       if (sub) expect(L.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
-      expect(layoutProblems(L.out.model.definitions).score, what).toBe(0);
+      expect(LayoutAnalysis.of(L.out.model.definitions).score, what).toBe(0);
     }
   });
 
@@ -3123,7 +3123,7 @@ describe('groups over a full redraw', () => {
     // the old DI order
     expect(r.xml.indexOf('bpmnElement="Group_Outer"')).toBeLessThan(r.xml.indexOf('bpmnElement="Group_Inner"'));
     expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
-    expect(layoutProblems((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
+    expect(LayoutAnalysis.of((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
   });
 
   it('two stacked groups come back the same on a second redraw, and an edit to the first result finds it engine-owned', async () => {

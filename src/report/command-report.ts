@@ -25,7 +25,7 @@
  * too). validate's text folds one of its rules with FLOOD_MIN findings or
  * more of one hint into one line (`--json` lists every finding).
  */
-import type { LayoutProblem } from '../diagram/metrics.js';
+import type { LayoutProblem } from '../diagram/utils/problems.js';
 import type { FormatResult } from '../format/index.js';
 import type { Warning } from '../shared/CliError.js';
 import { formatLine, renderChanges, renderLayout, renderProblems, renderView } from './view-text.js';

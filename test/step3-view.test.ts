@@ -1,7 +1,7 @@
 /**
  * Step 3: what `show --layout` tells an agent about x positions (columns,
  * wide gaps, rows that hold unrelated clusters) and the drawing-quality
- * problem kinds in a real write (src/query/layout-view.ts, metrics.ts).
+ * problem kinds in a real write (src/query/layout-view.ts, LayoutAnalysis.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';

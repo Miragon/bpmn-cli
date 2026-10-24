@@ -9,6 +9,10 @@
  * (copied to dist/types by `npm run build`), so a consumer's strict
  * typecheck (skipLibCheck false) resolves them.
  */
+import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { ProblemLocator } from './diagram/ProblemLocator.js';
+import type { LayoutMetrics, LayoutProblem } from './diagram/utils/problems.js';
+import type { El } from './model/utils/moddle.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -64,9 +68,24 @@ export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
 export { parseOps, OPS_SCHEMA } from './ops/batch.js';
 /* the diagram API: read-only views of a drawing and the format operations */
-export { layoutProblems, layoutProblemsOfXml, locateProblems, diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/metrics.js';
+export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/utils/problems.js';
 export { layoutView, type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
 export { runFormatOps, type FormatResult, type FormatEntry } from './format/index.js';
 export { SWATCHES, type SwatchName } from './diagram/write.js';
 /* the drawing as an image: one diagram plane as SVG (`bpmn render --format svg`; PNG: renderPng in @miragon/bpmn-cli/node) */
 export { renderSvg, renderDocSvg, changeHighlight, RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/index.js';
+
+/** The layout problems of every diagram of `defs` (diagram/LayoutAnalysis.ts); `importWarnings` are reported as one `failed` problem. */
+export function layoutProblems(defs: El, opts: { importWarnings?: number } = {}): LayoutMetrics {
+  return LayoutAnalysis.of(defs, opts);
+}
+
+/** Parses `xml` and measures it (import warnings count as `failed`). */
+export function layoutProblemsOfXml(xml: string): Promise<LayoutMetrics> {
+  return LayoutAnalysis.ofXml(xml);
+}
+
+/** The problems with where each shows on its plane (diagram/ProblemLocator.ts). */
+export function locateProblems(defs: El, problems: readonly LayoutProblem[]): LayoutProblem[] {
+  return new ProblemLocator(defs).locate(problems);
+}

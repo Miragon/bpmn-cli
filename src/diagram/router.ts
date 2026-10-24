@@ -22,7 +22,7 @@
  *    run, a short hook before it (a horizontal run of at most the target's
  *    width + 2·stub) with the run before that, and every run back to where
  *    it parts from another such line into the same port (the run on which
- *    they part included; metrics.ts joinTail). Running on a tail costs no
+ *    they part included; utils/harness.ts joinTail). Running on a tail costs no
  *    overlap when the route follows it into the port, leaving it before the
  *    port costs the overlap, crossing it costs as usual: a further entry
  *    joins the bundle and follows it into the same vertex. The waiver can

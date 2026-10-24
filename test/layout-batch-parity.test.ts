@@ -33,7 +33,8 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml } from '../src/api.js';
 import { CliError } from '../src/shared/CliError.js';
-import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const FIXTURE = (() => {
@@ -88,7 +89,7 @@ const boundsOf = (xml: string, id: string): { x: number; y: number; width: numbe
   return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
 };
 const bottomOf = (b: { y: number; height: number }): number => b.y + b.height;
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
 
 async function batch(ops: object[], xml = FIXTURE): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;

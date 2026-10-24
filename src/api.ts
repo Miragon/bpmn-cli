@@ -39,7 +39,8 @@
  */
 import { parseOps } from './ops/batch.js';
 import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
-import { layoutProblems, type LayoutMetrics } from './diagram/metrics.js';
+import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import type { LayoutMetrics } from './diagram/utils/problems.js';
 import { layoutView, type LayoutView } from './query/layout-view.js';
 import { aroundView, elementContext, type AroundView, type ElementContext } from './query/context.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
@@ -275,7 +276,7 @@ export async function conventionsXml(
 
 /** `bpmn metrics --json`: the layout score, the count per kind and every problem with its element ids. */
 export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'score' | 'counts' | 'problems'>> {
-  const m = layoutProblems((await Doc.fromXml(xml)).definitions);
+  const m = LayoutAnalysis.of((await Doc.fromXml(xml)).definitions);
   return { score: m.score, counts: m.counts, problems: m.problems };
 }
 

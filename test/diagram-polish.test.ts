@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
 import { routeOrthogonal } from '../src/diagram/router.js';
@@ -262,7 +262,7 @@ describe('judged edits on hand drawings', () => {
     expect(right(B)).toBeLessThanOrEqual(right(A));
     expect(a.get('C')!.bounds.x - right(A)).toBeGreaterThanOrEqual(40);
     expect(overlap(a.get('B')!.label!, A)).toBe(false);
-    expect(layoutProblems(after.definitions).counts.overlaps).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
     expect(r.layout.notes.some((n) => n.startsWith('A grew'))).toBe(true);
   });
 
@@ -294,7 +294,7 @@ describe('judged edits on hand drawings', () => {
     const end = (id: string): string => key(edges(after).get(id)!.points.at(-1)!);
     expect(end('f4')).toBe(`${j.x + j.width / 2},${bottom(j)}`);
     expect(end('f5')).toBe(end('f4'));
-    const between = layoutProblems(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
+    const between = LayoutAnalysis.of(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
     expect(between).toEqual([]);
   });
 
@@ -308,7 +308,7 @@ describe('judged edits on hand drawings', () => {
     expect(a.get('E2')!.bounds.x - b.get('E2')!.bounds.x).toBe(dx);
     expect(a.get('M')!.label!.x - b.get('M')!.label!.x).toBe(dx);
     for (const id of ['S', 'H', 'B', 'E1', 'Org']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
-    expect(layoutProblems(after.definitions).counts.overlaps).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
   });
 
   it('remove: the row stays when closing it would leave an associated artifact behind', async () => {

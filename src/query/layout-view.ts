@@ -28,13 +28,14 @@
  *   - labels: external labels (events, gateways, data, flows) that are not on
  *     the default side (diagram/utils/labels.ts defaultLabelSide; flows: above), with the
  *     side they are on.
- *   - metrics: layoutProblems(defs) (counts, score, problems with ids).
+ *   - metrics: LayoutAnalysis.of(defs) (counts, score, problems with ids).
  *  Read-only.
  */
 import { is, type El } from '../model/utils/moddle.js';
 import { cx, cy, median, right } from '../diagram/utils/geom.js';
 import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type LabelSide } from '../diagram/utils/labels.js';
-import { layoutProblems, type LayoutMetrics } from '../diagram/metrics.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import type { LayoutMetrics } from '../diagram/utils/problems.js';
 import { spacingOf, raw } from '../diagram/utils/plane.js';
 import { readPlanes, semantics } from '../diagram/plane.js';
 import type { DShape, Plane } from '../diagram/types.js';
@@ -237,5 +238,5 @@ export function layoutView(defs: El): LayoutView {
       if (side && side !== 'above') labels.push({ id: e.id, side, default: 'above' });
     }
   }
-  return { diagrams: planes.map((p) => diagramOf(p, sem.laneParent)), colors, labels, metrics: layoutProblems(defs) };
+  return { diagrams: planes.map((p) => diagramOf(p, sem.laneParent)), colors, labels, metrics: LayoutAnalysis.of(defs) };
 }

@@ -91,7 +91,7 @@
  *    If the incremental layout fails, auto falls back to full.
  * The result reports the mode, why it ran, what the incremental engine
  * placed / moved / rerouted / pruned, and the layout problems before / after
- * (src/diagram/metrics.ts) with the problems added and resolved.
+ * (src/diagram/LayoutAnalysis.ts) with the problems added and resolved.
  *
  * Format ops (place, align, color, label, route, space, tidy, and the lane
  * part of `order`; src/format/index.ts) run after the layout, on its result,
@@ -119,7 +119,8 @@ import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from '../layout/index.js';
 import type { GivenId } from '../diagram/drawn-ids.js';
 import { diagramGeometry, engineOwned, layoutIncremental, pruneReEnded, takeSnapshot, type IncrementalReport, type Snapshot } from '../layout/incremental.js';
-import { layoutProblems, metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/metrics.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { metricsDelta, type LayoutMetrics, type MetricsDelta } from '../diagram/utils/problems.js';
 import { runFormatOps, type FormatEntry, type FormatResult } from '../format/index.js';
 import { followStickies, stickyAnchors, type ResolvedAnchor, type StickyAnchor } from '../diagram/stickies.js';
 import { applyColors, colorsOf, diIds } from '../diagram/write.js';
@@ -585,7 +586,7 @@ async function captureBefore(doc: Doc, mode: LayoutMode | 'skip', formatOnly: bo
   const snapshot = takeSnapshot(doc.definitions);
   const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
   const before: Before = { snapshot, stickies: stickyAnchors(doc.definitions) };
-  if (hasDiagram) before.metrics = layoutProblems(doc.definitions);
+  if (hasDiagram) before.metrics = LayoutAnalysis.of(doc.definitions);
   if (mode === 'auto' && !formatOnly && snapshot.flowNodeShapes > 0) before.xml = baseline ?? (await doc.toXml());
   return before;
 }
@@ -650,7 +651,7 @@ function formatEntries(doc: Doc, ops: Op[]): FormatEntry[] {
 async function runFormat(xml: string, file: string | undefined, entries: FormatEntry[], asFile: boolean): Promise<{ xml: string; results: FormatResult[]; after: LayoutMetrics }> {
   const laid = await Doc.fromXml(xml, file);
   const results = runFormatOps(laid, entries, asFile);
-  return { xml: await laid.toXml(), results, after: layoutProblems(laid.definitions) };
+  return { xml: await laid.toXml(), results, after: LayoutAnalysis.of(laid.definitions) };
 }
 
 /**
@@ -714,7 +715,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   } else if (applyColors(doc.moddle, defs, colors)) {
     xml = await doc.toXml();
   }
-  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: layoutProblems(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
+  return { xml, status: { status: 'ok', mode: 'full', warnings: result.warnings, expanded: result.expanded, ...(result.notes?.length ? { notes: result.notes } : {}) }, after: LayoutAnalysis.of(defs), ...(result.givenIds?.length ? { givenIds: result.givenIds } : {}) };
 }
 
 async function incrementalLayout(doc: Doc, before: Before, relocated: string[], opts: MutationOptions, created: readonly string[]): Promise<{ xml: string; status: LayoutStatus; after: LayoutMetrics }> {
@@ -736,7 +737,7 @@ async function incrementalLayout(doc: Doc, before: Before, relocated: string[], 
       pruned: report.pruned,
       notes: report.notes,
     },
-    after: layoutProblems(doc.definitions),
+    after: LayoutAnalysis.of(doc.definitions),
   };
 }
 
@@ -860,7 +861,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
     if (pruned || reEnded.length) changes.note(staleDiNote(pruned, reEnded));
     persistExpansionHints(doc, collectExpansion(doc, opts));
     xml = await doc.toXml();
-    layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(before.metrics, layoutProblems(doc.definitions)) };
+    layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(before.metrics, LayoutAnalysis.of(doc.definitions)) };
   } else if (formatOnly && requested !== 'full' && before.snapshot.flowNodeShapes > 0) {
     // nothing semantic changed: the drawing is kept as it is and only formatted
     xml = await doc.toXml();

@@ -28,7 +28,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
-import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const fixture = (name: string): string => readFileSync(join(ROOT, 'test', 'fixtures', 'layout-room', name), 'utf8');
@@ -46,7 +47,7 @@ const waypoints = (xml: string, id: string): Array<{ x: number; y: number }> => 
   const edge = new RegExp(`<bpmndi:BPMNEdge [^>]*bpmnElement="${id}"[^>]*>([\\s\\S]*?)</bpmndi:BPMNEdge>`).exec(xml)![1]!;
   return [...edge.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
 };
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
 const cy = (b: { y: number; height: number }): number => b.y + b.height / 2;
 
 async function batch(xml: string, ops: object[]): Promise<string> {
@@ -314,7 +315,7 @@ describe('the guard of the local repair (stage B verification)', () => {
     const drawn = new Set([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!));
     // the crossings between two flows drawn before the edit
     const among = async (x: string): Promise<string[]> =>
-      (await layoutProblemsOfXml(x)).problems.filter((p) => p.kind === 'crossings' && p.ids.every((id) => drawn.has(id))).map((p) => p.ids.join(' x '));
+      (await LayoutAnalysis.ofXml(x)).problems.filter((p) => p.kind === 'crossings' && p.ids.every((id) => drawn.has(id))).map((p) => p.ids.join(' x '));
     expect(await among(r.xml)).toEqual(await among(xml));
     expect(r.result.layout?.rerouted ?? []).not.toContain('Flow_ApprovedNo');
   });

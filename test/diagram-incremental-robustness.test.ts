@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
@@ -304,7 +304,7 @@ describe('several diagrams, partial and unusual DI', () => {
       expect(r.layout.rerouted ?? [], layout).toEqual([]);
       expect(r.layout.notes ?? [], layout).toEqual([]);
       expect(edges(after).get('F3')!.points.at(-1), layout).toEqual({ x: 160, y: 550 });
-      expect(layoutProblems(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
+      expect(LayoutAnalysis.of(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
     }
   });
 

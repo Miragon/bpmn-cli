@@ -64,7 +64,7 @@
  *    those naming an element drawn in full) in metrics order with the same
  *    ids, a list exactly these problems (matched by problemKey) in its order;
  *    each numbered 1.. in that order. A problem whose location
- *    (diagram/metrics.ts locateProblems) is on this plane and in the image gets a
+ *    (diagram/ProblemLocator.ts) is on this plane and in the image gets a
  *    numbered badge there (`drawn`); a badge that would cover an earlier one
  *    moves aside within the bounding box of the problem's elements.
  *  - tiles: when the image would draw its labels below MIN_LABEL_SCALE, it is
@@ -139,7 +139,9 @@ import { layoutModel } from '../layout/index.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import type { MutationReport } from '../report/command-report.js';
 import type { Box, Point } from '../diagram/utils/geom.js';
-import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from '../diagram/metrics.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../diagram/ProblemLocator.js';
+import { problemKey, type LayoutProblem, type MetricKey } from '../diagram/utils/problems.js';
 import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
 import { raw, rawList } from '../diagram/utils/plane.js';
 import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
@@ -270,7 +272,7 @@ export async function renderSvg(xml: string, opts: RenderOptions = {}): Promise<
   let doc = await Doc.fromXml(xml);
   if (readPlanes(doc.definitions).length) return renderDocSvg(doc, opts);
   // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth); the problems stay the file's
-  const fileProblems = opts.problems ? layoutProblems(doc.definitions).problems : [];
+  const fileProblems = opts.problems ? LayoutAnalysis.of(doc.definitions).problems : [];
   const { xml: drawn } = await layoutModel(doc.model);
   doc = await Doc.fromXml(drawn);
   const result = drawDoc(doc, opts, fileProblems);
@@ -862,11 +864,11 @@ function problemBox(plane: Plane, ids: string[]): Box | undefined {
   return unionOf(boxes);
 }
 
-/** The problems listed (see contract), located (diagram/metrics.ts locateProblems). */
+/** The problems listed (see contract), located (diagram/ProblemLocator.ts). */
 function problemList(frame: Frame, asked: true | readonly LayoutProblem[]): LayoutProblem[] {
   const defs = frame.defs;
   if (!defs || !frame.located) return [];
-  const located = frame.fileProblems ?? locateProblems(defs, layoutProblems(defs).problems);
+  const located = frame.fileProblems ?? new ProblemLocator(defs).locate(LayoutAnalysis.of(defs).problems);
   if (asked === true) {
     const shown = frame.drawn;
     return shown ? located.filter((p) => p.ids.some((id) => shown.has(id))) : located;

@@ -30,7 +30,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
-import { layoutProblems, locateProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
 import { renderSvg } from '../src/render/index.js';
 import { titleBox } from '../src/diagram/utils/text.js';
 import { parseXml } from '../src/model/utils/moddle.js';
@@ -870,7 +871,7 @@ describe('labelOnTitle', () => {
     expect(m.problems).toEqual([{ kind: 'labelOnTitle', ids: ['Event_Abgebrochen', 'Activity_Esp'] }]);
     expect(m.score).toBe(2);
     const { definitions } = await parseXml(xml);
-    const [p] = locateProblems(definitions, layoutProblems(definitions).problems);
+    const [p] = new ProblemLocator(definitions).locate(LayoutAnalysis.of(definitions).problems);
     const title = titleBox({ x: 140, y: 220, width: 240, height: 140 }, ESP_NAME)!;
     expect(p!.at!.plane).toBe('Process_1');
     expect(overlap({ x: p!.at!.x - 0.5, y: p!.at!.y - 0.5, width: 1, height: 1 }, title)).toBe(true);

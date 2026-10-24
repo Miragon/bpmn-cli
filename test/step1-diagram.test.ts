@@ -21,7 +21,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
+import { diffProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape, type Plane } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
@@ -74,7 +76,7 @@ const overlap = (a: DShape, b: DShape): boolean => a.bounds.x < right(b) && b.bo
 
 /** Problems of the given kinds in the drawing. */
 function problems(doc: Doc, kinds: MetricKey[]): LayoutProblem[] {
-  return layoutProblems(doc.definitions).problems.filter((p) => kinds.includes(p.kind));
+  return LayoutAnalysis.of(doc.definitions).problems.filter((p) => kinds.includes(p.kind));
 }
 
 const FRAME_DEFECTS: MetricKey[] = ['frameIntrusion', 'frameOverlap', 'outsideSub', 'outsideLane', 'outsidePool', 'overlaps', 'degenerateEdge'];
@@ -312,7 +314,7 @@ function diagramXml(body: string, planeOf: string, di: string[], extraRoots = ''
   return definitionsXml(body, { nsDecl: DI_NS, extraRoots: `${extraRoots}${diagram}` });
 }
 
-const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await layoutProblemsOfXml(xml)).problems.filter((p) => kinds.includes(p.kind));
+const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await LayoutAnalysis.ofXml(xml)).problems.filter((p) => kinds.includes(p.kind));
 
 /** Edges near and far from their ends: A 100..200, B 300..400 (y 100..180); Near ends 10 px left of B (still attached), Far 60 px left of it, Both starts 50 px right of A and ends below-left of B, Undrawn ends at a node without a shape, DOA 64 px left of its data object. */
 const DETACHED_BODY = `
@@ -386,7 +388,7 @@ describe('metrics: frame defects and real segment tests', () => {
       shape('T2', t2),
     ];
     expect(await kindsOf(diagramXml(body, 'Collab', di([200, 500, 100, 80]), roots), ['frameIntrusion', 'frameOverlap'])).toEqual([]);
-    const moved = await layoutProblemsOfXml(diagramXml(body, 'Collab', di([200, 270, 100, 80]), roots));
+    const moved = await LayoutAnalysis.ofXml(diagramXml(body, 'Collab', di([200, 270, 100, 80]), roots));
     expect(moved.problems.filter((p) => p.kind === 'frameIntrusion')).toEqual([
       { kind: 'frameIntrusion', ids: ['T2', 'PoolA'] },
       { kind: 'frameIntrusion', ids: ['T2', 'L2'] },
@@ -399,7 +401,7 @@ describe('metrics: frame defects and real segment tests', () => {
   it('degenerateEdge: one waypoint, or two on one point', async () => {
     const body = `<bpmn:task id="A" /><bpmn:task id="B" /><bpmn:sequenceFlow id="F1" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F3" sourceRef="A" targetRef="B" />`;
     const di = [shape('A', [100, 100, 100, 80]), shape('B', [300, 100, 100, 80]), edge('F1', [[200, 140]]), edge('F2', [[200, 140], [200, 140]]), edge('F3', [[200, 140], [300, 140]])];
-    const m = await layoutProblemsOfXml(diagramXml(body, 'Process_1', di));
+    const m = await LayoutAnalysis.ofXml(diagramXml(body, 'Process_1', di));
     expect(m.problems.filter((p) => p.kind === 'degenerateEdge')).toEqual([
       { kind: 'degenerateEdge', ids: ['F1'] },
       { kind: 'degenerateEdge', ids: ['F2'] },
@@ -423,7 +425,7 @@ describe('metrics: frame defects and real segment tests', () => {
 
   it('detachedEdge: an edge that does not reach its ends, with the ends it misses, located at that end point; a write that reroutes it resolves it', async () => {
     const xml = diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI);
-    const m = await layoutProblemsOfXml(xml);
+    const m = await LayoutAnalysis.ofXml(xml);
     const found = m.problems.filter((p) => p.kind === 'detachedEdge');
     expect(found).toEqual([
       { kind: 'detachedEdge', ids: ['Far', 'B'] },
@@ -431,7 +433,7 @@ describe('metrics: frame defects and real segment tests', () => {
       { kind: 'detachedEdge', ids: ['DOA', 'DO'] },
     ]);
     expect(WEIGHTS.detachedEdge).toBe(WEIGHTS.degenerateEdge);
-    expect(locateProblems((await Doc.fromXml(xml)).definitions, found).map((p) => p.at)).toEqual([
+    expect(new ProblemLocator((await Doc.fromXml(xml)).definitions).locate(found).map((p) => p.at)).toEqual([
       { plane: 'Process_1', x: 240, y: 140 },
       { plane: 'Process_1', x: 250, y: 160 },
       { plane: 'Process_1', x: 250, y: 325 },
@@ -440,7 +442,7 @@ describe('metrics: frame defects and real segment tests', () => {
     // Undrawn: its end N is placed now
     expect(r.layout.rerouted).toEqual(['Far', 'Both', 'Undrawn', 'DOA']);
     expect(r.layout.metrics!.resolved.filter((p) => p.kind === 'detachedEdge')).toEqual(found);
-    expect(layoutProblems(after.definitions).counts.detachedEdge).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.detachedEdge).toBe(0);
   });
 
   it('through: a diagonal line passing beside a shape is not through it; one crossing it is', async () => {

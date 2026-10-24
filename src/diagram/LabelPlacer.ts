@@ -6,7 +6,7 @@
  *  - A label box collides with a shape, another label, a line (the borders
  *    of pools, lanes and expanded sub-processes included) or the title of an
  *    expanded sub-process (utils/plane.ts titleOf; diagram/utils/text.ts titleBox) closer than
- *    2 px (1 px to a line). A label's home is where metrics.ts labelOutsideFrame wants it:
+ *    2 px (1 px to a line). A label's home is where PlaneAnalysis.ts checkLabelFrames wants it:
  *    the expanded sub-process its owner lives in, else its pool (a flow's
  *    when both its ends share it).
  *  - placeShapeLabel(shape, prefer?) puts the label of an event,
@@ -117,7 +117,7 @@ export class LabelPlacer {
   }
 
   /**
-   * The frame a label belongs in (metrics.ts labelOutsideFrame): the expanded
+   * The frame a label belongs in (PlaneAnalysis.ts checkLabelFrames): the expanded
    * sub-process a shape lives in, else its pool; a flow's when both its ends
    * share it; undefined when there is none.
    */

@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { Drawing } from '../src/diagram/Drawing.js';
@@ -125,7 +125,7 @@ describe('layout modes', () => {
     const { r, after } = await run(xml, [{ op: 'set', id: 'A', values: { name: 'Check order' } }]);
     expect(r.layout).toMatchObject({ status: 'ok', mode: 'full', reason: expect.stringMatching(/no diagram/) });
     expect(r.layout.metrics?.before).toBeUndefined();
-    expect(layoutProblems(after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.missing).toBe(0);
   });
 
   it('auto redraws an engine-owned diagram in full (every CLI-built step stays engine-owned)', async () => {
@@ -211,7 +211,7 @@ describe('incremental placement', () => {
       }
     }
     expect(now.get('G')!.bounds.x).toBeGreaterThanOrEqual(right(n) + 20);
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.overlaps).toBe(0);
     expect(m.counts.missing).toBe(0);
     expect(m.score).toBe(0);
@@ -269,7 +269,7 @@ describe('incremental placement', () => {
         const { end, bottom: vertex } = entry(after, source);
         expect(end, source).toBe(vertex);
       }
-      expect(layoutProblems(after.definitions).counts.segmentOverlap).toBe(0);
+      expect(LayoutAnalysis.of(after.definitions).counts.segmentOverlap).toBe(0);
       expect(r.layout.metrics!.after.score).toBe(r.layout.metrics!.before!.score);
       expect(addedKinds(r)).toEqual([]);
     });
@@ -331,7 +331,7 @@ describe('incremental placement', () => {
       ], 13, 7, hookBundle);
       const into = (doc: Doc, source: string): DEdge => [...edges(doc).values()].find((x) => x.sourceId === source && x.targetId === 'GJ')!;
       const before = await Doc.fromXml(xml);
-      expect(layoutProblems(before.definitions).problems.filter((p) => ['through', 'overlaps'].includes(p.kind))).toEqual([]);
+      expect(LayoutAnalysis.of(before.definitions).problems.filter((p) => ['through', 'overlaps'].includes(p.kind))).toEqual([]);
       const hook = into(before, 'T2').points;
       const j = shapes(before).get('GJ')!;
       expect(hook.at(-1)).toEqual({ x: j.bounds.x + j.bounds.width / 2, y: bottom(j) });
@@ -420,7 +420,7 @@ describe('incremental placement', () => {
     const bridge = [...edges(after).values()].find((e) => e.sourceId === 'S')!;
     expect(bridge.targetId).toBe('G');
     expect(bridge.points).toHaveLength(2);
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('moves a node to another lane band keeping its x, everything else stays', async () => {
@@ -451,7 +451,7 @@ describe('incremental placement', () => {
     expect(l3.bounds.y).toBe(bottom(before.get('L2')!));
     expect(bottom(now.get('Pool')!)).toBe(bottom(l3));
     expect(inside(now.get('C')!, l3)).toBe(true);
-    expect(layoutProblems(after.definitions).counts.laneGap).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.laneGap).toBe(0);
     expect(r.layout.placed).toContain('L3');
   });
 
@@ -475,7 +475,7 @@ describe('incremental placement', () => {
     expect(now.get('Cust')!.bounds.width).toBe(now.get('Pool')!.bounds.width);
     const mf = [...edges(after).values()].find((e) => e.kind === 'messageFlow')!;
     expect(orthogonal(mf)).toBe(true);
-    expect(layoutProblems(after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.missing).toBe(0);
   });
 
   it('lays out a new pool with content as one block below the others', async () => {
@@ -487,7 +487,7 @@ describe('incremental placement', () => {
     const now = shapes(after);
     for (const id of ['SupS', 'SupT']) expect(inside(now.get(id)!, now.get('Sup')!)).toBe(true);
     expect(now.get('Sup')!.bounds.y).toBeGreaterThan(bottom(now.get('Pool')!));
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('places a new expanded sub-process with content as one block, a collapsed one on its own diagram', async () => {
@@ -501,7 +501,7 @@ describe('incremental placement', () => {
     expect(now.get('NS')).toMatchObject({ expanded: true });
     for (const id of ['NSS', 'NST']) expect(inside(now.get(id)!, now.get('NS')!)).toBe(true);
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(now.get('NS')!));
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
     ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as Op, ...sub.slice(1)]));
     now = shapes(after);
     expect(now.get('NS')).toMatchObject({ expanded: false, bounds: { width: 100, height: 80 } });
@@ -528,7 +528,7 @@ describe('incremental placement', () => {
     expect(planes[1]!.rootId).toBe('Sub');
     expect([...planes[1]!.shapes.keys()].sort()).toEqual(['SE', 'SS', 'ST']);
     expect(r.layout.notes).toContain('Sub drawn collapsed');
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('expands a collapsed sub-process: its diagram moves in and the drawing makes room', async () => {
@@ -545,7 +545,7 @@ describe('incremental placement', () => {
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(sub));
     expect(readPlanes(after.definitions)).toHaveLength(1);
     expect(r.layout.notes).toContain('Sub drawn expanded');
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.overlaps).toBe(0);
     expect(m.counts.outsideSub).toBe(0);
   });
@@ -556,7 +556,7 @@ describe('incremental placement', () => {
     expect(now.get('Sub')).toMatchObject({ kind: 'task', container: false, bounds: { width: 100, height: 80 } });
     expect(r.layout.pruned).toEqual(expect.arrayContaining(['SS', 'ST', 'SE']));
     expect(r.xml).not.toMatch(/bpmnElement="Sub" isExpanded/);
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('re-inserts a moved node at its new place, reusing its DI', async () => {
@@ -570,7 +570,7 @@ describe('incremental placement', () => {
     expect(now.get('G')!.bounds.x).toBeGreaterThan(right(now.get('C')!));
     expect(r.layout.moved).toContain('C');
     expect(r.layout.placed).not.toContain('C');
-    expect(layoutProblems(after.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
 
   it('places artifacts next to their element: data below-right, annotations above-right', async () => {
@@ -584,7 +584,7 @@ describe('incremental placement', () => {
     expect(now.get('D')!.bounds.x).toBeGreaterThanOrEqual(a.bounds.x);
     expect(bottom(now.get('N')!)).toBeLessThan(a.bounds.y);
     expect(now.get('N')!.bounds.x).toBeGreaterThan(a.bounds.x);
-    const m = layoutProblems(after.definitions);
+    const m = LayoutAnalysis.of(after.definitions);
     expect(m.counts.missing).toBe(0);
     expect(m.counts.overlaps).toBe(0);
   });
@@ -630,7 +630,7 @@ describe('incremental placement', () => {
     const cx = (s: DShape): number => s.bounds.x + s.bounds.width / 2;
     expect(cy(ev), 'on the top border').toBe(drawn.get('A1')!.bounds.y);
     expect(cy(drawn.get('BE13')!), 'Rejected on the bottom border').toBe(bottom(drawn.get('A1')!));
-    expect(layoutProblems(doc.definitions).score).toBe(0);
+    expect(LayoutAnalysis.of(doc.definitions).score).toBe(0);
     const flow = flowFrom(doc, 'BE12', 'F');
     const top = { x: cx(ev), y: ev.bounds.y };
     expect(edges(doc).get(flow)!.points[0]).toEqual(top);
@@ -697,7 +697,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(next.r.layout.mode).toBe('incremental');
     expect(next.r.layout.placed).toContain(bridge);
     expect(edges(next.after).get(bridge)!.points[0]!.x).toBe(right(shapes(next.after).get('S')!));
-    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(next.after.definitions).counts.missing).toBe(0);
     expect(detached(next.after)).toEqual([]);
   });
 
@@ -709,7 +709,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(routed.r.layout.reason).toBe('format operations only: drawing kept');
     expect(routed.r.layout.format?.[0]?.rerouted).toEqual([bridge]);
     expect(edges(routed.after).get(bridge)!.points[0]!.x).toBe(right(shapes(routed.after).get('S')!));
-    expect(layoutProblems(routed.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(routed.after.definitions).counts.missing).toBe(0);
     for (const [id, s] of shapes(after)) expect(shapes(routed.after).get(id)!.bounds, id).toEqual(s.bounds);
     const batch = await run(xml, [{ op: 'remove', ids: ['A'] }, { op: 'route', id: bridge }], { layout: false });
     expect(edges(batch.after).has(bridge)).toBe(true);
@@ -741,7 +741,7 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     const next = await run(r.xml, [{ op: 'set', id: 'C', values: { name: 'Clarify it' } }]);
     expect(next.r.layout.placed).toContain('N');
     expect(next.r.layout.rerouted).toContain(spliced);
-    expect(layoutProblems(next.after.definitions).counts.missing).toBe(0);
+    expect(LayoutAnalysis.of(next.after.definitions).counts.missing).toBe(0);
     expect(detached(next.after)).toEqual([]);
   });
 

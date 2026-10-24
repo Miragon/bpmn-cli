@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DEdge, type DShape } from '../src/diagram/types.js';
 import { isCliError } from '../src/shared/utils/errors.js';
@@ -99,7 +99,7 @@ function edges(doc: Doc): Map<string, DEdge> {
 }
 
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hardOf = (doc: Doc): string[] => layoutProblems(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
+const hardOf = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
 const notesOf = (r: MutationResult): string[] => r.layout.format?.flatMap((f) => f.notes ?? []) ?? [];
 const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
 

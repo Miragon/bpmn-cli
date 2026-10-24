@@ -23,7 +23,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/document.js';
-import { diffProblems, layoutProblems } from '../src/diagram/metrics.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes } from '../src/diagram/plane.js';
 import { type DShape } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
@@ -59,7 +60,7 @@ describe('fitInFrame keeps an inner frame with its content when the drawing has 
     const before = await Doc.fromXml(xml);
     const { r, after } = await run(xml, [{ op: 'set', id: 'R', values: { name: LONG } }], { layout: 'incremental' });
     expect(r.layout.mode).toBe('incremental');
-    const added = diffProblems(layoutProblems(before.definitions).problems, layoutProblems(after.definitions).problems).added;
+    const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
     expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
     const b = shapes(before);
     const s = shapes(after);
@@ -105,7 +106,7 @@ describe('making room for place / align never leaves a new overlap', () => {
     const xml = fixture('place-pinned-row.bpmn');
     const before = await Doc.fromXml(xml);
     const { r, after } = await run(xml, [{ op: 'place', ids: ['M'], rowOf: 'J', after: 'X' }]);
-    const added = diffProblems(layoutProblems(before.definitions).problems, layoutProblems(after.definitions).problems).added;
+    const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
     expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
     const s = shapes(after);
     const centreY = (id: string): number => s.get(id)!.bounds.y + s.get(id)!.bounds.height / 2;

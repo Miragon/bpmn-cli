@@ -107,7 +107,8 @@ import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type Form
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
 import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, type Box, type Point } from '../diagram/utils/geom.js';
 import { edgeLabelAt, hasExternalLabel, labelArea, labelAt } from '../diagram/utils/labels.js';
-import { isHardProblem, layoutProblems, problemKey, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
+import { isHardProblem, problemKey, type LayoutMetrics, type LayoutProblem } from '../diagram/utils/problems.js';
+import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
 import { spacingOf, edgeEnds, edgeKind, frameInterior, frameOf, idOf, isLeaf, raw, rawList } from '../diagram/utils/plane.js';
 import { homePlane, readPlanes, semantics } from '../diagram/plane.js';
 import type { DEdge, DShape, Plane, Semantics, Side } from '../diagram/types.js';
@@ -893,7 +894,7 @@ function columnWidth(plane: Plane): number {
 /** The current layout problems of the document (the planes written first). */
 function measure(ctx: Ctx): LayoutMetrics {
   writePlanes(ctx.doc.moddle, ctx.doc.definitions, ctx.planes);
-  return layoutProblems(ctx.doc.definitions);
+  return LayoutAnalysis.of(ctx.doc.definitions);
 }
 
 /** What the drawing shows before an op. */

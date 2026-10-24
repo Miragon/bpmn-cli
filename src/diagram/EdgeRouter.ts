@@ -58,7 +58,7 @@
  *    outside of (the edge another tool or an older --no-layout write left
  *    at the old place of its end); an end without a shape on the plane or
  *    docked on a connection never is. The metric `detachedEdge`
- *    (metrics.ts) applies the same rule.
+ *    (PlaneAnalysis.ts) applies the same rule.
  */
 import { attachedSide, defaultSides, gatewaySide } from './utils/sides.js';
 import { crossings, routeOrthogonal, type RouteRequest } from './router.js';
@@ -88,7 +88,7 @@ export interface EdgeBefore {
   targetGap: number;
 }
 
-/** How far (px) the first / last waypoint of a connection may lie outside its end's shape before the connection is detached (detachedEnds; metrics.ts DETACHED_GAP alike). */
+/** How far (px) the first / last waypoint of a connection may lie outside its end's shape before the connection is detached (detachedEnds; PlaneAnalysis.ts DETACHED_GAP alike). */
 export const DETACHED_GAP = 10;
 
 export class EdgeRouter {
