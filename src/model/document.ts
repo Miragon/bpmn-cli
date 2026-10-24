@@ -17,10 +17,11 @@ import type { IdConventions } from '../ids/conventions.js';
 import { IdStyle, speakingStem, typeRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, suggestKinds } from './kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './mirror.js';
-import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION, platformOf } from '../platform/descriptor.js';
-import { C8_PLATFORM_VERSION } from '../platform/zeebe.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
+import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from '../platform/CamundaDescriptor.js';
+import { C8_PLATFORM_VERSION } from '../platform/ZeebeDescriptor.js';
+import { PlatformDetection } from '../platform/PlatformDetection.js';
 
 export const KNOWN_NAMESPACES: Record<string, string> = {
   camunda: 'http://camunda.org/schema/1.0/bpmn',
@@ -281,10 +282,10 @@ export class Doc {
    */
   platformChoice?: 'c7' | 'c8' | 'none';
 
-  /** The engine the file targets (an explicit platformChoice, else platform/descriptor.ts platformOf). */
+  /** The engine the file targets (an explicit platformChoice, else platform/PlatformDetection.ts target). */
   platform(): 'camunda7' | 'camunda8' | undefined {
     if (this.platformChoice) return this.platformChoice === 'c7' ? 'camunda7' : this.platformChoice === 'c8' ? 'camunda8' : undefined;
-    return platformOf(this.definitions);
+    return new PlatformDetection(this.definitions).target();
   }
 
   /**

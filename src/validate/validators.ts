@@ -52,7 +52,7 @@ import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import type { El } from '../model/utils/moddle.js';
 import type { Op } from '../ops/types.js';
-import type { Platform } from '../platform/detect.js';
+import type { Platform } from '../platform/PlatformDetection.js';
 import type { ValidationResult } from './structural.js';
 
 export type ValidatorSeverity = 'error' | 'warning';

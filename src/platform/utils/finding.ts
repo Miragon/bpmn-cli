@@ -13,7 +13,7 @@
  * findings it introduced from those the file already had (PlatformProfiles.delta)
  * without the subject showing up in JSON output.
  */
-import type { Warning } from '../shared/CliError.js';
+import type { Warning } from '../../shared/CliError.js';
 
 export type Severity = 'deploy' | 'runtime' | 'practice';
 

@@ -40,9 +40,10 @@ import type { Doc } from '../model/document.js';
 import { modelError } from '../shared/utils/errors.js';
 import { kindLabel } from '../model/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
-import { C7_URIS, CAMUNDA_URI, OPERATON_URI, ZEEBE_URI } from '../platform/descriptor.js';
 import type { ChangeSet } from '../model/change-set.js';
 import { coversProfileSubjects } from './covers.js';
+import { CAMUNDA_URI, OPERATON_URI, C7_URIS } from '../platform/CamundaDescriptor.js';
+import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export interface DecisionLink {
   /** the id of the decision (in the DMN file) */

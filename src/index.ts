@@ -10,7 +10,7 @@
  * typecheck (skipLibCheck false) resolves them.
  */
 import type { Doc } from './model/document.js';
-import type { Platform, PlatformChoice } from './platform/detect.js';
+import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
 
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
@@ -62,10 +62,9 @@ export { decisionLinkOf, type DecisionLink } from './ops/decision.js';
 export { ChangeSet, type Change } from './model/change-set.js';
 export { validateDoc, type ValidateOptions, type ValidationResult } from './validate/structural.js';
 /* the platform profile (Camunda 7 / 8 rules, loaded on demand; validate --platform) */
-export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/detect.js';
+export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
-export type { ProfileFinding, Severity } from './platform/finding.js';
-export { detectPlatform } from './platform/detect.js';
+export type { ProfileFinding, Severity } from './platform/utils/finding.js';
 export { listExtensions, listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 export { buildView, elementDetail, findElements, scopeView, type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
 export { parseOps, OPS_SCHEMA } from './ops/batch.js';
@@ -100,4 +99,9 @@ export function loadProfiles(platforms?: readonly Exclude<Platform, 'none'>[]): 
  */
 export function runProfile(doc: Doc, choice?: PlatformChoice): ProfileReport {
   return PLATFORM_PROFILES.run(doc, choice);
+}
+
+/** Detects the target engine of a document: modeler:executionPlatform, else the vendor namespace its content uses, else a declared one. */
+export function detectPlatform(doc: Doc): PlatformInfo {
+  return PlatformDetection.of(doc).info();
 }

@@ -47,8 +47,8 @@ import { decisionLinkOf } from '../ops/decision.js';
 import { describeTrigger } from '../ops/events.js';
 import { listExtensions, type ExtensionInfo } from '../ops/ext.js';
 import { definitionsOf, nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
-import { ZEEBE_URI } from '../platform/descriptor.js';
 import { flowOrder, repairFlowLinks, validateDoc } from '../validate/structural.js';
+import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export interface ViewFlow {
   id: string;

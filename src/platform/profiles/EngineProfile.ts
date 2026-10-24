@@ -1,6 +1,7 @@
 import type { Doc } from '../../model/document.js';
+import type { DocumentNamespaces } from '../DocumentNamespaces.js';
 import type { El } from '../../model/utils/moddle.js';
-import type { ProfileFinding, Severity } from '../finding.js';
+import type { ProfileFinding, Severity } from '../utils/finding.js';
 import type { RuleKit } from './rule-kit.js';
 import { idOf, isGeneric, list, localName, peek } from './utils/element.js';
 
@@ -15,7 +16,7 @@ export type ElementWalk = 'descend' | 'stop';
 
 export abstract class EngineProfile {
   protected doc!: Doc;
-  protected ns!: Map<string, string>;
+  protected ns!: DocumentNamespaces;
   /** prefix of the engine's namespace in this file, for messages and hints */
   protected p = '';
   protected out: ProfileFinding[] = [];
@@ -27,7 +28,7 @@ export abstract class EngineProfile {
 
   findings(doc: Doc, opts: { operaton?: boolean } = {}): ProfileFinding[] {
     this.doc = doc;
-    this.ns = this.kit.namespaceMap(doc);
+    this.ns = new this.kit.DocumentNamespaces(doc);
     this.out = [];
     this.indexFlows();
     this.checkDocument(opts);
@@ -47,9 +48,6 @@ export abstract class EngineProfile {
     for (const c of this.bpmnChildren(el)) this.visit(c, next, executable);
   }
 
-  protected prefixOf(uri: string): string | undefined {
-    return [...this.ns.entries()].find(([, u]) => u === uri)?.[0];
-  }
 
   private indexFlows(): void {
     this.outgoing = new Map();
@@ -73,7 +71,7 @@ export abstract class EngineProfile {
   /** The generic extension elements of a BPMN element, with their namespace. */
   protected extensionValues(el: El | undefined): ExtValue[] {
     const ext = peek<El>(el, 'extensionElements');
-    return list(ext, 'values').map((v, index) => ({ el: v, uri: isGeneric(v) ? this.kit.uriOfElement(v, this.ns) : undefined, local: localName(v.$type), index }));
+    return list(ext, 'values').map((v, index) => ({ el: v, uri: isGeneric(v) ? this.ns.uriOfElement(v) : undefined, local: localName(v.$type), index }));
   }
 
   /** BPMN containment children (no references, no DI, no vendor content). */

@@ -706,7 +706,7 @@ element by element.
 
 The Camunda 8 profile (`src/platform/profiles/C8Profile.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
-(`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
+(`src/platform/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
 while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
 rule (151 models) with the expected codes and Camunda 8's verdict, the timer

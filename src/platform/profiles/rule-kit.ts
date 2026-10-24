@@ -25,10 +25,10 @@ import { unkeptEntries } from '../../model/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
 import { decisionLinkOf } from '../../ops/decision.js';
 import { decodeXml, elementChildren, readXmlText, XmlTextError } from '../../xml/text-reader.js';
-import { C7_URIS, CAMUNDA_URI, camundaAttr, camundaAttrs, camundaType, containersOf, idReferenceAttrs, isC7Uri, OPERATON_URI, ZEEBE_URI } from '../descriptor.js';
-import { namespaceMap, namespaceUsage, uriOfElement, uriOfName } from '../detect.js';
-import { makeFinding } from '../finding.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeAttrs, zeebeContainersOf, zeebeNestedOnly, zeebeType, zeebeTypeNames } from '../zeebe.js';
+import { CAMUNDA, OPERATON_URI } from '../CamundaDescriptor.js';
+import { DocumentNamespaces } from '../DocumentNamespaces.js';
+import { makeFinding } from '../utils/finding.js';
+import { ZEEBE } from '../ZeebeDescriptor.js';
 
 export const RULE_KIT = {
   // model, kinds, findings
@@ -43,27 +43,10 @@ export const RULE_KIT = {
   unkeptEntries,
   decisionLinkOf,
   // namespaces and vendor descriptors
-  C7_URIS,
-  CAMUNDA_URI,
   OPERATON_URI,
-  ZEEBE_URI,
-  isC7Uri,
-  namespaceMap,
-  namespaceUsage,
-  uriOfElement,
-  uriOfName,
-  camundaAttr,
-  camundaAttrs,
-  camundaType,
-  containersOf,
-  idReferenceAttrs,
-  zeebeAllowedOn,
-  zeebeAttr,
-  zeebeAttrs,
-  zeebeContainersOf,
-  zeebeNestedOnly,
-  zeebeType,
-  zeebeTypeNames,
+  DocumentNamespaces,
+  camunda: CAMUNDA,
+  zeebe: ZEEBE,
   // the text of a file (SchemaText.ts)
   decodeXml,
   elementChildren,

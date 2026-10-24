@@ -136,9 +136,8 @@ import { takeDroppedContent, withoutProfileDuplicates, type DroppedContent } fro
 import { requestedExpansion } from '../ops/set.js';
 import { isFormatOp, type Op } from '../ops/types.js';
 import { ChangeSet } from '../model/change-set.js';
-import { resolvePlatform } from '../platform/detect.js';
-import type { PlatformChoice } from '../platform/detect.js';
-import type { ProfileFinding } from '../platform/finding.js';
+import { PlatformDetection, type PlatformChoice } from '../platform/PlatformDetection.js';
+import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import { plainText, preserveText } from '../xml/preserve.js';
 import { lintCoveredBy, validateDoc, withProfileChanges, type ValidationResult } from '../validate/structural.js';
@@ -809,7 +808,7 @@ async function mutate(doc: Doc, ops: Op[], opts: MutationOptions): Promise<Mutat
   const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
   const file = opts.file ?? doc.file;
   const validators = namedValidators(opts.validators);
-  const vctx: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(file ? { file } : {}), platform: validators.length ? resolvePlatform(doc, opts.platform ?? 'auto').platform : 'none', ops };
+  const vctx: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(file ? { file } : {}), platform: validators.length ? PlatformDetection.of(doc).resolve(opts.platform ?? 'auto').platform : 'none', ops };
   // the validators' baseline: the document before the ops (its text as read; the in-memory model serialised only for a created document)
   const validatorsBefore: ValidatorRun[] = validators.length
     ? await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...vctx, phase: 'before' })
@@ -1010,7 +1009,7 @@ export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<Check
     const validators = namedValidators(opts.validators);
     if (validators.length) {
       // before the layout dry run, which redraws the model in memory: the validators see the document's own diagram
-      const runs = await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...(file ? { file } : {}), phase: 'check', platform: resolvePlatform(doc, opts.platform ?? 'auto').platform, ops: [] });
+      const runs = await runValidators(validators, { xml: once(async () => doc.source?.text ?? (await doc.toXml())), doc: async () => doc }, { ...(file ? { file } : {}), phase: 'check', platform: PlatformDetection.of(doc).resolve(opts.platform ?? 'auto').platform, ops: [] });
       validation = withValidatorReports(validation, checkReports(runs), runs);
     }
     let layout: CheckResult['layout'];

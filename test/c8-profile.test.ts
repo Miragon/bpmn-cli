@@ -23,8 +23,8 @@ import { mutateDoc } from '../src/pipeline/index.js';
 import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
 import { TimerValue } from '../src/platform/profiles/TimerValue.js';
 import { loadProfiles, runProfile } from '../src/index.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeContainersOf, zeebeNestedOnly, zeebeType } from '../src/platform/zeebe.js';
 import { validateDoc } from '../src/validate/structural.js';
+import { ZEEBE as C8_DESCRIPTOR } from '../src/platform/ZeebeDescriptor.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
@@ -376,23 +376,23 @@ describe('Camunda 8 profile: one model per rule', () => {
 
 describe('the zeebe descriptor, read as data', () => {
   it('knows where zeebe elements belong and what they hold', () => {
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:ServiceTask')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:EndEvent')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:taskDefinition', 'bpmn:UserTask')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:ioMapping', 'bpmn:ExclusiveGateway')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:subscription', 'bpmn:Message')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:properties', 'bpmn:Lane')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:publishMessage', 'bpmn:SendTask')).toBe(true);
-    expect(zeebeAllowedOn('zeebe:input', 'bpmn:ServiceTask')).toBe(false);
-    expect(zeebeAllowedOn('zeebe:nope', 'bpmn:ServiceTask')).toBeUndefined();
-    expect(zeebeContainersOf('zeebe:header')).toEqual(['zeebe:taskHeaders']);
-    expect(zeebeContainersOf('zeebe:input')).toEqual(['zeebe:ioMapping']);
-    expect(zeebeNestedOnly('zeebe:executionListener')).toBe(true);
-    expect(zeebeNestedOnly('zeebe:taskHeaders')).toBe(false);
-    expect(zeebeType('calledDecision')!.attributes.map((a) => a.name)).toEqual(['decisionId', 'resultVariable', 'bindingType', 'versionTag']);
-    expect(zeebeType('zeebe:inputOutputParameter')).toBeUndefined();
-    expect(zeebeAttr('zeebe:modelerTemplate')!.owners).toContain('bpmn:FlowElement');
-    expect(zeebeAttr('zeebe:taskDefinition')).toBeUndefined();
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:ServiceTask')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:EndEvent')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:UserTask')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:ioMapping', 'bpmn:ExclusiveGateway')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:subscription', 'bpmn:Message')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:properties', 'bpmn:Lane')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:publishMessage', 'bpmn:SendTask')).toBe(true);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:input', 'bpmn:ServiceTask')).toBe(false);
+    expect(C8_DESCRIPTOR.allowedOn('zeebe:nope', 'bpmn:ServiceTask')).toBeUndefined();
+    expect(C8_DESCRIPTOR.containersOf('zeebe:header')).toEqual(['zeebe:taskHeaders']);
+    expect(C8_DESCRIPTOR.containersOf('zeebe:input')).toEqual(['zeebe:ioMapping']);
+    expect(C8_DESCRIPTOR.nestedOnly('zeebe:executionListener')).toBe(true);
+    expect(C8_DESCRIPTOR.nestedOnly('zeebe:taskHeaders')).toBe(false);
+    expect(C8_DESCRIPTOR.type('calledDecision')!.attributes.map((a) => a.name)).toEqual(['decisionId', 'resultVariable', 'bindingType', 'versionTag']);
+    expect(C8_DESCRIPTOR.type('zeebe:inputOutputParameter')).toBeUndefined();
+    expect(C8_DESCRIPTOR.attr('zeebe:modelerTemplate')!.owners).toContain('bpmn:FlowElement');
+    expect(C8_DESCRIPTOR.attr('zeebe:taskDefinition')).toBeUndefined();
   });
 });
 

@@ -6,7 +6,7 @@
  * runtime rules, from running the process (test/c8-profile.test.ts holds one
  * model per rule with the engine's verdict and re-checks it with
  * BPMN_C8_ENGINE); placement and known attributes come from the zeebe-bpmn-moddle
- * descriptor, read as data (platform/zeebe.ts; never registered with the model,
+ * descriptor, read as data (platform/ZeebeDescriptor.ts; never registered with the model,
  * so zeebe content stays generic).
  *
  * Scope: executable processes (isExecutable="true"; Camunda 8 skips the others,
@@ -146,31 +146,6 @@ const C8_EQUIVALENT: Record<string, string> = {
   versionTag: 'zeebe:versionTag value=<tag>',
 };
 
-/** Zeebe types Camunda 8 reads at most once per element (engine-checked: a second one is refused). */
-const SINGLE: ReadonlySet<string> = new Set([
-  'taskDefinition',
-  'ioMapping',
-  'taskHeaders',
-  'userTask',
-  'formDefinition',
-  'assignmentDefinition',
-  'priorityDefinition',
-  'taskSchedule',
-  'versionTag',
-  'executionListeners',
-  'taskListeners',
-  'properties',
-  'linkedResources',
-  'adHoc',
-  'calledElement',
-  'calledDecision',
-  'script',
-  'publishMessage',
-  'subscription',
-  'loopCharacteristics',
-  'conditionalFilter',
-]);
-
 const BINDING_TYPES = ['deployment', 'latest', 'versionTag'];
 const PATH = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$/;
 const TASK_LISTENER_EVENTS = ['creating', 'assigning', 'updating', 'completing', 'canceling', 'create', 'assignment', 'update', 'complete', 'cancel'];
@@ -184,7 +159,7 @@ export class C8Profile extends EngineProfile {
 
   protected override checkDocument(): void {
     const doc = this.doc;
-    this.p = this.prefixOf(this.kit.ZEEBE_URI) ?? 'zeebe';
+    this.p = this.ns.prefixOf(this.kit.zeebe.uri) ?? 'zeebe';
     this.unlisted = new Map();
     if (doc.source) for (const e of this.kit.unkeptEntries(doc.definitions, doc.source.mirror)) if (e.direction === 'outgoing') this.unlisted.set(e.flow, e.node);
     const processes = doc.processes();
@@ -304,7 +279,7 @@ export class C8Profile extends EngineProfile {
   /** Top-level zeebe extension elements of type `local`. */
   private zeebe(el: El | undefined, local: string): El[] {
     return this.extensionValues(el)
-      .filter((v) => v.uri === this.kit.ZEEBE_URI && v.local === local)
+      .filter((v) => v.uri === this.kit.zeebe.uri && v.local === local)
       .map((v) => v.el);
   }
 
@@ -312,7 +287,7 @@ export class C8Profile extends EngineProfile {
   private kids(el: El, local?: string): El[] {
     const raw = peek<unknown[]>(el, '$children');
     if (!Array.isArray(raw)) return [];
-    return (raw as El[]).filter((c) => c && typeof c.$type === 'string' && isGeneric(c) && this.kit.uriOfElement(c, this.ns) === this.kit.ZEEBE_URI && (local === undefined || localName(c.$type) === local));
+    return (raw as El[]).filter((c) => c && typeof c.$type === 'string' && isGeneric(c) && this.ns.uriOfElement(c) === this.kit.zeebe.uri && (local === undefined || localName(c.$type) === local));
   }
 
   /** `<p>:taskDefinition` in the file's spelling. */
@@ -378,20 +353,20 @@ export class C8Profile extends EngineProfile {
     const addr = this.addressOf(el, owner);
     const where = this.describe(el, owner);
     for (const key of Object.keys(el.$attrs ?? {})) {
-      const uri = this.kit.uriOfName(key, this.ns);
+      const uri = this.ns.uriOfName(key);
       if (!uri) continue;
       const local = localName(key);
       const unset = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${key}=`)}\`` : 'edit the XML';
-      if (this.kit.C7_URIS.has(uri)) {
+      if (this.kit.camunda.uris.has(uri)) {
         this.push('runtime', 'W_C8_FOREIGN_CONTENT', el, owner, `attr:${key}`, `${where} carries the Camunda 7 attribute ${key}, which Camunda 8 ignores`, this.foreignHint(el, owner, local, unset));
         continue;
       }
-      if (uri !== this.kit.ZEEBE_URI) continue;
-      const def = this.kit.zeebeAttr(local);
+      if (uri !== this.kit.zeebe.uri) continue;
+      const def = this.kit.zeebe.attr(local);
       if (!def) {
         // an attribute of a zeebe extension element written on the BPMN element (zeebe:assignee): name the element
-        const home = this.kit.zeebeTypeNames().find((t) => this.kit.zeebeAllowedOn(t, el) === true && this.kit.zeebeType(t)!.attributes.some((a) => a.name === local));
-        const guess = home ? undefined : didYouMean(local, this.kit.zeebeAttrs().map((a) => localName(a.name)));
+        const home = this.kit.zeebe.typeNames().find((t) => this.kit.zeebe.allowedOn(t, el) === true && this.kit.zeebe.type(t)!.attributes.some((a) => a.name === local));
+        const guess = home ? undefined : didYouMean(local, this.kit.zeebe.attrs().map((a) => localName(a.name)));
         const value = String(el.$attrs[key] ?? '');
         this.push(
           'runtime',
@@ -430,19 +405,19 @@ export class C8Profile extends EngineProfile {
     const counts = new Map<string, number>();
     for (const v of values) {
       if (!v.uri) continue;
-      if (this.kit.C7_URIS.has(v.uri)) {
+      if (this.kit.camunda.uris.has(v.uri)) {
         this.push('runtime', 'W_C8_FOREIGN_CONTENT', host, owner, `ext:${v.el.$type}#${v.index}`, `${where} contains the Camunda 7 extension ${v.el.$type}, which Camunda 8 ignores`, this.foreignHint(host, owner, v.local, remove(v)));
         continue;
       }
-      if (v.uri !== this.kit.ZEEBE_URI) continue;
-      const t = this.kit.zeebeType(v.local);
+      if (v.uri !== this.kit.zeebe.uri) continue;
+      const t = this.kit.zeebe.type(v.local);
       if (!t) {
-        const guess = didYouMean(v.local, this.kit.zeebeTypeNames().map(localName));
+        const guess = didYouMean(v.local, this.kit.zeebe.typeNames().map(localName));
         this.push('runtime', 'W_C8_UNKNOWN_ELEMENT', host, owner, `ext:${v.local}`, `${where} has the unknown extension element ${this.z(v.local)}${guess ? ` (did you mean ${this.z(guess)}?)` : ''}; Camunda 8 ignores it`, `Remove it (${remove(v)})${guess && addr ? ` and add the right one: ${this.extAdd(host, owner, `${this.z(guess)} ...`)}` : ''}.`);
         continue;
       }
-      if (this.kit.zeebeNestedOnly(v.local)) {
-        const container = this.kit.zeebeContainersOf(v.local)[0]!;
+      if (this.kit.zeebe.nestedOnly(v.local)) {
+        const container = this.kit.zeebe.containersOf(v.local)[0]!;
         this.push('runtime', 'W_C8_MISPLACED_EXTENSION', host, owner, `ext:${v.local}`, `${this.z(v.local)} sits directly in the extension elements of ${where}, but belongs inside ${this.z(localName(container))}; Camunda 8 ignores it`, `Remove it (${remove(v)}) and add it again, \`bpmn ext add\` files it into its container: ${this.extAdd(host, owner, `${this.z(v.local)} ...`)}.`);
         continue;
       }
@@ -450,7 +425,7 @@ export class C8Profile extends EngineProfile {
         this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, 'listener:flow', `${where} has execution listeners; Camunda 8 supports them on processes, activities, events and gateways, not on sequence flows, and refuses the file`, `Remove them (${remove(v)}) and put them on the flow's source or target.`);
         continue;
       }
-      if (this.kit.zeebeAllowedOn(v.local, host) === false) {
+      if (this.kit.zeebe.allowedOn(v.local, host) === false) {
         const hosts = t.allowedIn.filter((a) => a.startsWith('bpmn:')).map((a) => this.lowerFirst(localName(a)));
         this.push('runtime', 'W_C8_MISPLACED_EXTENSION', host, owner, `ext:${v.local}`, `${this.z(v.local)} on ${where} has no effect: Camunda 8 reads it on ${hosts.length > 5 ? `${hosts.slice(0, 5).join(', ')}, ...` : hosts.join(', ')} only`, `Remove it: ${remove(v)}.`);
         continue;
@@ -459,7 +434,7 @@ export class C8Profile extends EngineProfile {
       this.checkZeebeElement(host, owner, v.el, '');
     }
     for (const [local, n] of counts) {
-      if (n < 2 || !SINGLE.has(local)) continue;
+      if (n < 2 || !this.kit.zeebe.isSingle(local)) continue;
       this.push('deploy', 'W_C8_DEPLOY_DUPLICATE_EXTENSION', host, owner, `dup:${local}`, `${where} has ${n} ${this.z(local)} elements; Camunda 8 reads one and refuses the file`, `Merge them into one: ${this.lowerFirst(this.rebuildHint(host, owner, this.z(local)).replace(/^See it/, 'See them'))}`);
     }
     // input mappings where the engine reads only outputs
@@ -477,7 +452,7 @@ export class C8Profile extends EngineProfile {
   /** Attributes and children of a zeebe element (known names, placement), recursively; then the engine rules on its content. */
   private checkZeebeElement(host: El, owner: El | undefined, v: El, path: string): void {
     const local = localName(v.$type);
-    const t = this.kit.zeebeType(local);
+    const t = this.kit.zeebe.type(local);
     if (!t) return;
     const where = `${this.z(local)}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
     const names = new Set(t.attributes.map((a) => a.name));
@@ -503,7 +478,7 @@ export class C8Profile extends EngineProfile {
       const cl = localName(c.$type);
       const childPath = path ? `${path} > ${this.z(local)}` : this.z(local);
       if (!t.children.includes(`zeebe:${cl}`)) {
-        const known = this.kit.zeebeType(cl);
+        const known = this.kit.zeebe.type(cl);
         this.push('runtime', known ? 'W_C8_MISPLACED_EXTENSION' : 'W_C8_UNKNOWN_ELEMENT', host, owner, `ext:${childPath}/${cl}`, known ? `${this.z(cl)} does not belong inside ${this.z(local)} (${where}); Camunda 8 ignores it` : `${where} contains the unknown element ${this.z(cl)}; Camunda 8 ignores it`, this.rebuildHint(host, owner, this.z(path ? localName(path.split(' > ')[0]!) : local)));
         continue;
       }

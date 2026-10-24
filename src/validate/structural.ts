@@ -64,8 +64,8 @@ import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel,
 import { completeMirrorLists } from '../model/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { assertSequenceFlowEndpoints } from '../ops/flows.js';
-import type { PlatformChoice } from '../platform/detect.js';
-import type { ProfileFinding } from '../platform/finding.js';
+import type { PlatformChoice } from '../platform/PlatformDetection.js';
+import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidatorReport } from './validators.js';
 

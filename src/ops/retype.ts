@@ -41,19 +41,17 @@
  *    W_C7_MISPLACED_EXTENSION, W_C8_MISPLACED_ATTRIBUTE, W_C8_MISPLACED_EXTENSION);
  *    withoutProfileDuplicates() drops the summary then, so
  *    a write reports every item once. Retyped to a userTask in a Camunda 8
- *    file, the task gets zeebe:userTask (platform/defaults.ts).
+ *    file, the task gets zeebe:userTask (platform/Camunda8Defaults.ts).
  */
 import type { Doc } from '../model/document.js';
 import { modelError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, type KindDef, type Trigger } from '../model/kinds.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
-import { allowedOn, attrAppliesTo, isC7Uri, ZEEBE_URI } from '../platform/descriptor.js';
-import { zeebeAllowedOn, zeebeAttr, zeebeNestedOnly } from '../platform/zeebe.js';
 import { ChangeSet } from '../model/change-set.js';
 import { applyTrigger, bindRefAs } from './events.js';
 import { coversProfileSubjects } from './covers.js';
-import { zeebeUserTaskDefault } from '../platform/defaults.js';
+import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
 import { cascadeRemove } from './remove.js';
 import { dropIgnoredConditions } from './flows.js';
 import {
@@ -73,6 +71,8 @@ import {
   type PropDescriptor,
 } from './set.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
+import { CAMUNDA } from '../platform/CamundaDescriptor.js';
+import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export { withoutProfileDuplicates } from './covers.js';
 
@@ -214,7 +214,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
     cs.replaced.push({ from: el, to: target });
     const inapplicable = inapplicableCamundaContent(doc, target, to);
     if (inapplicable) cs.warn(inapplicable);
-    if (zeebeUserTaskDefault(doc, target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+    if (new Camunda8Defaults(doc).userTask(target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
   }
   let dropNonInterrupting = false;
   if (trigger !== undefined && (!sameTrigger || hasTriggerOptions)) {
@@ -244,7 +244,7 @@ export function retypeElement(doc: Doc, op: RetypeOp): ChangeSet {
 /** `camunda:<local>` when `name` is prefixed with a prefix bound to the camunda (or Operaton's) namespace. */
 function camundaName(doc: Doc, name: string): string | undefined {
   const idx = name.indexOf(':');
-  if (idx <= 0 || !isC7Uri(doc.namespaceUri(name.slice(0, idx)))) return undefined;
+  if (idx <= 0 || !CAMUNDA.reads(doc.namespaceUri(name.slice(0, idx)))) return undefined;
   return `camunda:${name.slice(idx + 1)}`;
 }
 
@@ -263,16 +263,16 @@ function zeebeLocal(doc: Doc, name: string): string | undefined {
 function inapplicableCamundaContent(doc: Doc, el: El, to: KindDef): Warning | undefined {
   const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
     const name = camundaName(doc, key);
-    if (name) return attrAppliesTo(name, el) === false;
+    if (name) return CAMUNDA.attrAppliesTo(name, el) === false;
     const z = zeebeLocal(doc, key);
-    const def = z ? zeebeAttr(z) : undefined;
+    const def = z ? ZEEBE.attr(z) : undefined;
     return !!def && !def.owners.some((o) => is(el, o));
   });
   const exts: string[] = [];
   for (const ext of el.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
     const name = camundaName(doc, ext.$type);
     const z = name ? undefined : zeebeLocal(doc, ext.$type);
-    const misplaced = name ? allowedOn(name, el) === false : z ? zeebeAllowedOn(z, el) === false && !zeebeNestedOnly(z) : false;
+    const misplaced = name ? CAMUNDA.allowedOn(name, el) === false : z ? ZEEBE.allowedOn(z, el) === false && !ZEEBE.nestedOnly(z) : false;
     if (misplaced && !exts.includes(ext.$type)) exts.push(ext.$type);
   }
   const names = [...attrs, ...exts];

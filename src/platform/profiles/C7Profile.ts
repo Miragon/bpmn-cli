@@ -4,13 +4,13 @@
  * deployed, plus vendor content they silently ignore. Every rule was taken
  * from a deployment against Camunda 7.24, CIB seven 2.2 and Operaton 2.1.5
  * (all three gave the same answer) or from the camunda-bpmn-moddle descriptor
- * (platform/descriptor.ts, read as data; it is never registered with the
+ * (platform/CamundaDescriptor.ts, read as data; it is never registered with the
  * model, so camunda content stays generic: `el.$attrs['camunda:assignee']`,
  * generic `camunda:inputOutput` elements).
  *
  * Operaton's own namespace (operaton:*) holds the same types. Only Operaton
  * reads it, first, with camunda:* as the fallback; Camunda 7 and CIB seven
- * ignore it. A file that uses it targets Operaton (platform/detect.ts `operaton`) and
+ * ignore it. A file that uses it targets Operaton (platform/PlatformDetection.ts `operaton`) and
  * is read that way: an operaton attribute wins over the camunda one, and one
  * operaton:inputOutput next to one camunda:inputOutput is no duplicate.
  *
@@ -117,7 +117,7 @@
  * would delete its siblings (extHint).
  */
 import type { El } from '../../model/utils/moddle.js';
-import type { CamundaElementType } from '../descriptor.js';
+import type { CamundaElementType } from '../CamundaDescriptor.js';
 import type { RuleKit } from './rule-kit.js';
 import { EngineProfile, type ElementWalk } from './EngineProfile.js';
 import { attr, idOf, isGeneric, list, localName, nameOf, peek, triggerName } from './utils/element.js';
@@ -154,9 +154,6 @@ const EXTRA_HOSTS: Record<string, string[]> = {
 /** Attributes the engines read that the descriptor models as child elements only (camunda:field expression="${...}", engine-checked). */
 const EXTRA_ATTRS: Record<string, string[]> = { field: ['expression'] };
 
-/** Extension element types an element holds at most once: `ext add --replace` rebuilds the one there is (ops/ext.ts SINGLE_TOP). */
-const SINGLE_TOP = new Set(['inputOutput', 'formData', 'connector', 'failedJobRetryTimeCycle', 'properties']);
-
 /** Attributes that pick one item of a repeatable type, in the order a selector prefers them. */
 const SELECTOR_KEYS = ['id', 'name', 'event', 'target', 'source', 'errorRef'];
 
@@ -189,8 +186,8 @@ export class C7Profile extends EngineProfile {
    */
   protected override checkDocument(opts: { operaton?: boolean }): void {
     const doc = this.doc;
-    this.operaton = opts.operaton ?? (this.kit.namespaceUsage(doc, this.ns).get(this.kit.OPERATON_URI) ?? 0) > 0;
-    this.p = (this.operaton ? this.prefixOf(this.kit.OPERATON_URI) : undefined) ?? this.prefixOf(this.kit.CAMUNDA_URI) ?? this.prefixOf(this.kit.OPERATON_URI) ?? 'camunda';
+    this.operaton = opts.operaton ?? (this.ns.usage().get(this.kit.OPERATON_URI) ?? 0) > 0;
+    this.p = (this.operaton ? this.ns.prefixOf(this.kit.OPERATON_URI) : undefined) ?? this.ns.prefixOf(this.kit.camunda.uri) ?? this.ns.prefixOf(this.kit.OPERATON_URI) ?? 'camunda';
     this.errors = new Map(doc.rootElementsOfType('bpmn:Error').map((e) => [idOf(e) ?? '', e] as const));
     const defs = doc.definitions;
     this.checkAttributes(defs, undefined);
@@ -293,7 +290,7 @@ export class C7Profile extends EngineProfile {
   }
 
   private uriOfAttr(key: string): string | undefined {
-    return this.kit.uriOfName(key, this.ns);
+    return this.ns.uriOfName(key);
   }
 
   /**
@@ -307,7 +304,7 @@ export class C7Profile extends EngineProfile {
     for (const [k, v] of Object.entries(el.$attrs ?? {})) {
       if (k.slice(k.indexOf(':') + 1) !== local) continue;
       const uri = this.uriOfAttr(k);
-      if (!this.kit.isC7Uri(uri)) continue;
+      if (!this.kit.camunda.reads(uri)) continue;
       const value = v === undefined || v === null ? undefined : String(v);
       if (uri === this.kit.OPERATON_URI) return value;
       fallback ??= value;
@@ -318,7 +315,7 @@ export class C7Profile extends EngineProfile {
   /** Top-level camunda extension elements of type `local`. */
   private camundaExt(el: El, local: string): El[] {
     return this.extensionValues(el)
-      .filter((v) => v.uri && this.kit.isC7Uri(v.uri) && v.local === local)
+      .filter((v) => v.uri && this.kit.camunda.reads(v.uri) && v.local === local)
       .map((v) => v.el);
   }
 
@@ -327,8 +324,8 @@ export class C7Profile extends EngineProfile {
     if (!Array.isArray(kids)) return [];
     return (kids as El[]).filter((c) => {
       if (!c || typeof c !== 'object' || typeof c.$type !== 'string' || !isGeneric(c)) return false;
-      const uri = this.kit.uriOfElement(c, this.ns);
-      return this.kit.isC7Uri(uri) && (local === undefined || localName(c.$type) === local);
+      const uri = this.ns.uriOfElement(c);
+      return this.kit.camunda.reads(uri) && (local === undefined || localName(c.$type) === local);
     });
   }
 
@@ -430,18 +427,18 @@ export class C7Profile extends EngineProfile {
       const local = key.slice(key.indexOf(':') + 1);
       const value = raw === undefined || raw === null ? '' : String(raw);
       const unset = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${key}=`)}\`` : 'edit the XML';
-      if (uri === this.kit.ZEEBE_URI) {
+      if (uri === this.kit.zeebe.uri) {
         this.push('runtime', 'W_C7_FOREIGN_CONTENT', el, owner, `attr:${key}`, `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, `Remove it: ${unset}, and use the camunda attribute instead (\`bpmn kinds\` lists them).`);
         continue;
       }
-      if (!this.kit.isC7Uri(uri)) continue;
-      const def = this.kit.camundaAttr(local);
+      if (!this.kit.camunda.reads(uri)) continue;
+      const def = this.kit.camunda.attr(local);
       if (!def) {
-        const applicable = this.kit.camundaAttrs().filter((a) => a.owners.some((o) => this.kit.is(el, o))).map((a) => localName(a.name));
-        const guess = didYouMean(local, this.kit.camundaAttrs().map((a) => localName(a.name)), applicable);
+        const applicable = this.kit.camunda.attrs().filter((a) => a.owners.some((o) => this.kit.is(el, o))).map((a) => localName(a.name));
+        const guess = didYouMean(local, this.kit.camunda.attrs().map((a) => localName(a.name)), applicable);
         const prefix = key.slice(0, key.indexOf(':'));
         const fits = !!guess && applicable.includes(guess);
-        const elsewhere = guess && !fits ? ` It applies to ${this.kindsText(this.kit.camundaAttr(guess)!.owners)} only.` : '';
+        const elsewhere = guess && !fits ? ` It applies to ${this.kindsText(this.kit.camunda.attr(guess)!.owners)} only.` : '';
         this.push(
           'runtime',
           'W_C7_UNKNOWN_ATTRIBUTE',
@@ -490,7 +487,7 @@ export class C7Profile extends EngineProfile {
   }
 
   private allowedTop(local: string, host: El): boolean {
-    const t = this.kit.camundaType(local);
+    const t = this.kit.camunda.type(local);
     if (!t) return true;
     const hosts = [...t.allowedIn, ...(EXTRA_HOSTS[local] ?? [])];
     return hosts.some((a) => a === '*' || (a.startsWith('bpmn:') && this.kit.is(host, a)));
@@ -548,7 +545,7 @@ export class C7Profile extends EngineProfile {
     if (!addr) return 'Fix it in the XML.';
     const slot = addr.prefix;
     const type = v.$type;
-    if (SINGLE_TOP.has(local)) {
+    if (this.kit.camunda.isSingle(local)) {
       return `See it with \`bpmn ext list <file> ${addr.id} --json\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${this.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
     }
     const flat = this.extAddArgs(v, type, fix);
@@ -559,7 +556,7 @@ export class C7Profile extends EngineProfile {
   /** Attributes and children of a generic camunda element, recursively. */
   private checkVendorElement(v: El, host: El, owner: El | undefined, topEl: El, path: string): void {
     const local = localName(v.$type);
-    const t = this.kit.camundaType(local);
+    const t = this.kit.camunda.type(local);
     if (!t) return;
     const rebuild = (): string => this.extHint(host, owner, topEl, localName(topEl.$type));
     const where = `${this.p}:${local}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
@@ -568,7 +565,7 @@ export class C7Profile extends EngineProfile {
     for (const [k, raw] of Object.entries(v as unknown as Record<string, unknown>)) {
       if (k.startsWith('$') || k.startsWith('xmlns')) continue;
       if (k.includes(':')) {
-        if (this.uriOfAttr(k) === this.kit.ZEEBE_URI) this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${k}`, `${where} carries the Camunda 8 attribute ${k}, which Camunda 7 ignores`, rebuild());
+        if (this.uriOfAttr(k) === this.kit.zeebe.uri) this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${k}`, `${where} carries the Camunda 8 attribute ${k}, which Camunda 7 ignores`, rebuild());
         continue;
       }
       if (!names.has(k)) {
@@ -585,22 +582,22 @@ export class C7Profile extends EngineProfile {
     const kids = peek<unknown[]>(v, '$children');
     for (const c of Array.isArray(kids) ? (kids as El[]) : []) {
       if (!c || typeof c.$type !== 'string' || !isGeneric(c)) continue;
-      const uri = this.kit.uriOfElement(c, this.ns);
+      const uri = this.ns.uriOfElement(c);
       const cl = localName(c.$type);
-      if (uri === this.kit.ZEEBE_URI) {
+      if (uri === this.kit.zeebe.uri) {
         this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}/${cl}`, `${where} contains the Camunda 8 element ${c.$type}, which Camunda 7 ignores`, rebuild());
         continue;
       }
-      if (!this.kit.isC7Uri(uri)) continue;
+      if (!this.kit.camunda.reads(uri)) continue;
       const childPath = path ? `${path} > ${this.p}:${local}` : `${this.p}:${local}`;
       if (texts.has(cl)) continue;
-      const ct = this.kit.camundaType(cl);
+      const ct = this.kit.camunda.type(cl);
       if (!ct) {
         const guess = didYouMean(cl, [...texts, ...t.properties.filter((p) => p.type.startsWith('camunda:')).map((p) => localName(p.type).replace(/^./, (s) => s.toLowerCase()))]);
         this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${childPath}/${cl}`, `${where} contains the unknown element ${this.p}:${cl}${guess ? ` (did you mean ${this.p}:${guess}?)` : ''}; the engines ignore it`, rebuild());
         continue;
       }
-      if (!this.kit.containersOf(cl).includes(t.name)) {
+      if (!this.kit.camunda.containersOf(cl).includes(t.name)) {
         this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${childPath}/${cl}`, `${this.p}:${cl} does not belong inside ${this.p}:${local} (${where}); the engines ignore it`, rebuild());
         continue;
       }
@@ -635,12 +632,12 @@ export class C7Profile extends EngineProfile {
     const byType = new Map<string, { local: string; type: string; uri: string; els: El[] }>();
     for (const v of values) {
       if (!v.uri) continue;
-      if (v.uri === this.kit.ZEEBE_URI) {
+      if (v.uri === this.kit.zeebe.uri) {
         this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${v.el.$type}`, `${where} contains the Camunda 8 extension ${v.el.$type}, which Camunda 7 ignores`, hostId ? `Remove it: \`bpmn ext remove <file> ${hostId} ${this.slotted(slot, v.el.$type)}\`.` : 'Remove it from the XML.');
         continue;
       }
-      if (!this.kit.isC7Uri(v.uri)) continue;
-      const t = this.kit.camundaType(v.local);
+      if (!this.kit.camunda.reads(v.uri)) continue;
+      const t = this.kit.camunda.type(v.local);
       if (!t) {
         const guess = didYouMean(v.local, this.typeNames());
         this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${v.local}`, `${where} has the unknown extension element ${this.p}:${v.local}${guess ? ` (did you mean ${this.p}:${guess}?)` : ''}; the engines ignore it`, hostId ? `Remove it (\`bpmn ext remove <file> ${hostId} ${this.slotted(slot, String(v.index))}\`) and add the right one with \`bpmn ext add <file> ${hostId} ${this.slotted(slot, `${this.p}:${guess ?? '<type>'}`)} ...\`.` : 'Fix it in the XML.');
@@ -656,7 +653,7 @@ export class C7Profile extends EngineProfile {
         continue;
       }
       if (!this.allowedTop(v.local, host)) {
-        const containers = t.allowedIn.length ? [] : this.kit.containersOf(v.local);
+        const containers = t.allowedIn.length ? [] : this.kit.camunda.containersOf(v.local);
         const message = containers.length
           ? `${this.p}:${v.local} sits directly in the extension elements of ${where}, but belongs inside ${containers.map((c) => c.replace(/^camunda:/, `${this.p}:`)).join(' / ')}; the engines ignore it`
           : `${this.p}:${v.local} on ${where} has no effect: the engines read it on ${this.kindsText([...t.allowedIn, ...(EXTRA_HOSTS[v.local] ?? [])])} only`;
@@ -684,7 +681,7 @@ export class C7Profile extends EngineProfile {
       else continue;
       if (!read && local !== 'failedJobRetryTimeCycle') continue;
       const merge = hostId ? `Merge them into one: \`bpmn ext list <file> ${hostId} --json\`, then \`bpmn ext add <file> ${hostId} ${this.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.` : 'Merge them in the XML.';
-      const subject = `dup:${local}${uri === this.kit.CAMUNDA_URI ? '' : `@${uri}`}`;
+      const subject = `dup:${local}${uri === this.kit.camunda.uri ? '' : `@${uri}`}`;
       if (read) {
         this.push('deploy', 'W_C7_DEPLOY_DUPLICATE_EXTENSION', host, owner, subject, `${where} has ${els.length} ${type} elements; the engines refuse the file (ENGINE-01009 multiple elements with tag name ${local})`, merge);
       } else {
@@ -709,7 +706,7 @@ export class C7Profile extends EngineProfile {
     if (this.typeNameCache) return this.typeNameCache;
     const names = new Set<string>();
     for (const a of ['inputOutput', 'inputParameter', 'outputParameter', 'in', 'out', 'field', 'connector', 'properties', 'property', 'formData', 'formField', 'formProperty', 'taskListener', 'executionListener', 'failedJobRetryTimeCycle', 'errorEventDefinition', 'potentialStarter', 'list', 'map', 'entry', 'value', 'script', 'validation', 'constraint']) {
-      if (this.kit.camundaType(a)) names.add(a);
+      if (this.kit.camunda.type(a)) names.add(a);
     }
     this.typeNameCache = [...names];
     return this.typeNameCache;
@@ -843,7 +840,7 @@ export class C7Profile extends EngineProfile {
     for (const name of names) {
       const v = this.c7(el, name);
       if (v === undefined || this.isNumber(v) || this.isExpression(v)) continue;
-      if (!this.kit.camundaAttr(name)?.owners.some((o) => this.kit.is(el, o))) continue;
+      if (!this.kit.camunda.attr(name)?.owners.some((o) => this.kit.is(el, o))) continue;
       this.push('deploy', 'W_C7_DEPLOY_BAD_VALUE', el, owner, `attr:${name}`, `${this.p}:${name}="${v}" on ${this.describe(el, owner)} is not a number or expression; the engines refuse it`, addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${this.p}:${name}=50`)}\` (an integer or \${...}).` : 'Use an integer.');
     }
   }
@@ -1478,8 +1475,8 @@ export class C7Profile extends EngineProfile {
   /** Id references inside camunda content (camunda:errorEventDefinition errorRef -> bpmn:Error). */
   private checkVendorRefs(host: El, owner: El | undefined): void {
     for (const v of this.extensionValues(host)) {
-      if (!v.uri || !this.kit.isC7Uri(v.uri)) continue;
-      for (const ref of this.kit.idReferenceAttrs()) {
+      if (!v.uri || !this.kit.camunda.reads(v.uri)) continue;
+      for (const ref of this.kit.camunda.idReferenceAttrs()) {
         if (localName(ref.element) !== v.local) continue;
         const target = attr(v.el, ref.attr);
         if (target === undefined) continue;
@@ -1513,13 +1510,13 @@ export class C7Profile extends EngineProfile {
       const di = this.kit.isDiElement(el) || (!!owner && this.kit.isDiElement(owner));
       const addr = di ? undefined : el === owner ? (id ? { id, prefix: '' } : undefined) : owner ? this.addressOf(el, owner) : undefined;
       for (const k of bare) {
-        const vendor = this.kit.camundaAttr(k);
+        const vendor = this.kit.camunda.attr(k);
         const fits = !!vendor && vendor.owners.some((o) => this.kit.is(el, o)) && !!id && el === owner;
         const where = el === owner ? this.describe(el, undefined) : `${el.$type}${id ? ` in ${id}` : ''}`;
         const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
         // a decision link without prefix (bpmn-cli's calledDecision for a model without an engine, or calledElement read as one): `set calledDecision=` writes the engines' spelling
         // (not next to another implementation: class, delegateExpression, expression or type=external stay, the attribute just goes)
-        const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && this.kit.isC7Uri(this.kit.uriOfName(a, this.ns)));
+        const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && this.kit.camunda.reads(this.ns.uriOfName(a)));
         const link = el === owner && !!id && !implemented && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? this.kit.decisionLinkOf(el, this.doc) : undefined;
         const hint = link
           ? `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.p}:decisionRef; the unprefixed ${k} is removed).`

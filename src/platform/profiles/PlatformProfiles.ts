@@ -2,7 +2,7 @@
  * Platform validation profiles: engine-specific checks on top of the
  * structural validation and lint of src/validate/structural.ts.
  *
- *  - run(doc, choice) detects the platform (platform/detect.ts; an
+ *  - run(doc, choice) detects the platform (platform/PlatformDetection.ts; an
  *    explicit choice wins) and runs its rules: Camunda 7 (platform/profiles/C7Profile.ts;
  *    a file that uses the operaton namespace is read the way Operaton reads
  *    it, `operaton: true`), Camunda 8 (platform/profiles/C8Profile.ts); plain BPMN has no
@@ -34,8 +34,8 @@ import type { Doc } from '../../model/document.js';
 import { CliError } from '../../shared/CliError.js';
 import { ioError, usageError } from '../../shared/utils/errors.js';
 import type { El } from '../../model/utils/moddle.js';
-import { resolvePlatform, type Platform, type PlatformChoice, type PlatformInfo } from '../detect.js';
-import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from '../finding.js';
+import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from '../PlatformDetection.js';
+import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from '../utils/finding.js';
 import type { EngineProfile } from './EngineProfile.js';
 import { RULE_KIT } from './rule-kit.js';
 
@@ -130,7 +130,7 @@ export class PlatformProfiles {
   /** Loads the rules run(doc, choice) needs (the pipeline, before every profile run). */
   async ensure(doc: Doc, choice: PlatformChoice = 'auto'): Promise<void> {
     if (this.rules.c7 && this.rules.c8) return;
-    await this.load(resolvePlatform(doc, choice).platform);
+    await this.load(PlatformDetection.of(doc).resolve(choice).platform);
   }
 
   /**
@@ -139,7 +139,7 @@ export class PlatformProfiles {
    * (loadProfile; the async API loads them itself).
    */
   run(doc: Doc, choice: PlatformChoice = 'auto'): ProfileReport {
-    const info = resolvePlatform(doc, choice);
+    const info = PlatformDetection.of(doc).resolve(choice);
     if (info.platform === 'none') return { ...info, findings: [] };
     const rules = this.rules[info.platform];
     if (!rules) {
