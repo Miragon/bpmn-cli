@@ -18,6 +18,7 @@ import { usageError, type CliError } from '../shared/errors.js';
 import { editDistance } from '../ids/slugs.js';
 import { FLOW_NODE_FAMILIES, KindError, gatewayKindList, kindByName, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
 import { ALIAS, checkAliases } from './aliases.js';
+import { defaultWithConditionViolation, groupViolation, placementViolation } from './rules.js';
 import {
   OP_NAMES,
   parseSpaceAmount,
@@ -553,24 +554,22 @@ function checkFields(ctx: Ctx, value: unknown, fields: Record<string, FieldSpec>
   return out;
 }
 
+const quoted = (field: string): string => `"${field}"`;
+
 function presentKeys(obj: Record<string, unknown>, keys: readonly string[]): string[] {
   return keys.filter((k) => obj[k] !== undefined);
 }
 
 /** Placement keys must form one of: after | before | after+before | flow | in | on. */
 function checkPlacement(ctx: Ctx, obj: Record<string, unknown>): void {
-  for (const [a, b] of PLACEMENT_CONFLICTS) {
-    if (obj[a] !== undefined && obj[b] !== undefined) {
-      throw fail(ctx, `"${a}" and "${b}" cannot be combined`, 'Use exactly one placement: after, before, after + before (splice into that flow), flow, in, or on (boundary events).');
-    }
-  }
+  const violation = placementViolation(presentKeys(obj, PLACEMENT_KEYS), quoted);
+  if (violation) throw fail(ctx, violation.message, violation.hint);
 }
 
 /** Flow options describe the flow INTO the node; they need a placement that creates one. */
 function checkFlowOptions(ctx: Ctx, obj: Record<string, unknown>, needsPlacement: boolean): void {
-  if (obj['default'] === true && obj['condition'] !== undefined) {
-    throw fail(ctx, '"default" and "condition" are mutually exclusive: a default flow has no condition', 'Keep the condition on the other branches and mark this one as default.');
-  }
+  const conditionedDefault = defaultWithConditionViolation(obj['default'] === true, obj['condition'] !== undefined, quoted);
+  if (conditionedDefault) throw fail(ctx, conditionedDefault.message, conditionedDefault.hint);
   if (!needsPlacement) return;
   const used = presentKeys(obj, [...FLOW_KEYS, 'flowAs']);
   const createsFlow = obj['after'] !== undefined || obj['before'] !== undefined || obj['flow'] !== undefined;
@@ -662,10 +661,8 @@ function checkExt(ctx: Ctx, obj: Record<string, unknown>): void {
 
 /** At most one key of each group; with `atLeastOne`, one key of all groups together. */
 function checkGroups(ctx: Ctx, obj: Record<string, unknown>, groups: string[][], atLeastOne: string): void {
-  for (const g of groups) {
-    const used = presentKeys(obj, g);
-    if (used.length > 1) throw fail(ctx, `${used.map((k) => `"${k}"`).join(' and ')} cannot be combined`, `Give at most one of ${g.map((k) => `"${k}"`).join(', ')}.`);
-  }
+  const violation = groupViolation(presentKeys(obj, groups.flat()), groups, quoted);
+  if (violation) throw fail(ctx, violation.message, violation.hint);
   if (!presentKeys(obj, groups.flat()).length) throw fail(ctx, atLeastOne);
 }
 

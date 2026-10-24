@@ -70,4 +70,9 @@ describe('architecture', () => {
       .filter((file) => readFileSync(join('src', file), 'utf8').includes("'categoryValueRef'"));
     expect(touching.sort()).toEqual(owners.sort());
   });
+
+  it('the CLI spells the op rules of ops/rules.ts with flags instead of restating them', () => {
+    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
+    for (const restatedRule of ['cannot be combined`', 'mutually exclusive', 'Use exactly one placement', 'Give at most one of']) expect(cli).not.toContain(restatedRule);
+  });
 });
