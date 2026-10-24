@@ -30,8 +30,8 @@ export interface ErrorDoc {
 }
 
 /**
- * Every E_/W_ code the CLI can emit (kept complete by test/batch.test.ts,
- * which greps src/ for codes).
+ * Every E_/W_ code the CLI can emit and no other (kept exact by
+ * test/architecture.test.ts, which greps src/ for codes).
  */
 export const ERROR_CATALOGUE: ErrorDoc[] = [
   // usage / I/O
