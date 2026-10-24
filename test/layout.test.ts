@@ -35,12 +35,11 @@ import { describe, expect, it } from 'vitest';
 import { LayoutDebug } from '../src/shared/LayoutDebug.js';
 import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 import { readPlanes as diagramPlanes } from '../src/diagram/plane.js';
-import { type DShape } from '../src/diagram/types.js';
+import type { DShape, GNode, ScopeLayout } from '../src/diagram/types.js';
 import { titleBox } from '../src/diagram/utils/text.js';
 import { Doc } from '../src/model/document.js';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
+import { FullLayout, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/FullLayout.js';
 import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
-import type { GNode, ScopeLayout } from '../src/diagram/types.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { collapsedIds } from '../src/ops/add.js';
 import { runOps } from '../src/ops/index.js';
@@ -355,7 +354,7 @@ interface Laid {
 const OUT_DIR = process.env['BPMN_LAYOUT_TEST_OUT'];
 
 async function layout(name: string, doc: Doc, opts: LayoutOptions = {}): Promise<Laid> {
-  const { xml, warnings } = await layoutModel(doc.model, opts);
+  const { xml, warnings } = await new FullLayout(doc.model, opts).run();
   if (OUT_DIR) {
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(join(OUT_DIR, `${name}.bpmn`), xml);

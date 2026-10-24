@@ -135,7 +135,7 @@
 import { aroundView } from '../query/context.js';
 import { Doc } from '../model/document.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
-import { layoutModel } from '../layout/index.js';
+import { FullLayout } from '../layout/FullLayout.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import type { MutationReport } from '../report/command-report.js';
 import type { Box, Point } from '../diagram/utils/geom.js';
@@ -273,7 +273,7 @@ export async function renderSvg(xml: string, opts: RenderOptions = {}): Promise<
   if (readPlanes(doc.definitions).length) return renderDocSvg(doc, opts);
   // nothing drawn: draw it in memory (layoutModel replaces the DI; its XML is the truth); the problems stay the file's
   const fileProblems = opts.problems ? LayoutAnalysis.of(doc.definitions).problems : [];
-  const { xml: drawn } = await layoutModel(doc.model);
+  const { xml: drawn } = await new FullLayout(doc.model).run();
   doc = await Doc.fromXml(drawn);
   const result = drawDoc(doc, opts, fileProblems);
   const notes = ['the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)'];

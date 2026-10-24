@@ -10,11 +10,12 @@
  * typecheck (skipLibCheck false) resolves them.
  */
 import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { FullLayout, type LayoutOptions, type LayoutResult } from './layout/FullLayout.js';
 import { FormatOps, type FormatEntry, type FormatResult } from './format/FormatOps.js';
 import type { Doc } from './model/document.js';
 import { ProblemLocator } from './diagram/ProblemLocator.js';
 import type { LayoutMetrics, LayoutProblem } from './diagram/utils/problems.js';
-import type { El } from './model/utils/moddle.js';
+import type { El, Model } from './model/utils/moddle.js';
 /* the in-memory API: strings in, strings / data out (docs/library.md) */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { mutationReport, mutationWarnings, opWarnings, renderMutation, mutationSummary, renderSummary, advisoryValidators, warningLines, conventionsLines, validationReport, renderValidation, type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -28,7 +29,6 @@ export { aroundView, elementContext, implementationOf, AROUND_DEFAULT_DEPTH, typ
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/document.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/kinds.js';
-export { layoutModel } from './layout/index.js';
 export { runOp, runOps } from './ops/index.js';
 export { FORMAT_OP_NAMES, isFormatOp } from './ops/types.js';
 export type {
@@ -99,4 +99,13 @@ export function locateProblems(defs: El, problems: readonly LayoutProblem[]): La
  */
 export function runFormatOps(doc: Doc, entries: readonly FormatEntry[], asFile = false): FormatResult[] {
   return new FormatOps(doc).run(entries, asFile);
+}
+
+/**
+ * Lays out the model (layout/FullLayout.ts). The model's in-memory DI is
+ * replaced by the hint diagram as a side effect; callers should treat the
+ * returned XML as the truth and re-parse it if they need DI.
+ */
+export function layoutModel(model: Model, opts: LayoutOptions = {}): Promise<LayoutResult> {
+  return new FullLayout(model, opts).run();
 }

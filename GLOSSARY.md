@@ -37,6 +37,9 @@ a new concept gets its line here first.
 | **Engine-owned** | A drawing that equals what the engine draws for the same model, so `auto` redraws it in full (`layout/DiagramGeometry.ts`). |
 | **Engine drawing** | What the clean engine draws for the document; the incremental layout copies blocks of it for new expanded sub-processes and pools (`layout/EngineDrawing.ts`). |
 | **Crossing repair** | The incremental layout's last step: crossings between new and kept lines are tried away by routing again or a branch's next row, each trial measured (`layout/CrossingRepair.ts`). |
+| **Full layout** | A redraw of the whole model by an engine that keeps the DI ids, the colours and the groups (`layout/FullLayout.ts`). |
+| **Temporary lane members** | Laneless flow nodes put into a lane for one bpmn-auto-layout run only (`layout/TemporaryLaneMembers.ts`). |
+| **Association edges** | The association DI bpmn-auto-layout leaves out, drawn after its run (`layout/AssociationEdges.ts`). |
 | **Profile** | The rules of one execution platform (Camunda 7, Camunda 8) that `validate` runs on demand. |
 | **Finding** | One problem a validation reports (structural, profile, bpmnlint, a host's validator). |
 | **Baseline** | The findings a document had before an edit, so a write reports only what the edit added. |

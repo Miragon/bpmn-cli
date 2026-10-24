@@ -35,7 +35,7 @@
 import type { Doc } from '../model/document.js';
 import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
 import { listAllExtensions, type ExtensionInfo } from '../ops/ext.js';

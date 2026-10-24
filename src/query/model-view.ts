@@ -39,7 +39,7 @@ import type { Doc } from '../model/document.js';
 import { usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { KindError, kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../model/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
 import { groupName, is, localType, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/containers.js';
 import { groupMembers } from '../diagram/groups.js';

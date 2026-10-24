@@ -50,7 +50,7 @@ import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
 import { renderAround, renderContext, renderDetail, renderLayoutView, renderView } from './report/view-text.js';
 import { assertKindToken } from './model/kinds.js';
-import type { LayoutEngine } from './layout/index.js';
+import type { LayoutEngine } from './layout/FullLayout.js';
 import { listAllExtensions, type ExtensionInfo } from './ops/ext.js';
 import type { Op } from './ops/types.js';
 import { assertLayoutOptions, assertLossless, checkDoc, layoutDoc, mutateDoc, type LayoutMode, type MutationResult } from './pipeline/index.js';

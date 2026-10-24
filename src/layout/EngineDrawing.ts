@@ -5,7 +5,7 @@ import type { DEdge, DShape, Plane, Semantics } from '../diagram/types.js';
 import { copyBox, type Box } from '../diagram/utils/geom.js';
 import { contentOf, idOf } from '../diagram/utils/plane.js';
 import { layoutClean } from './clean/engine.js';
-import { resolveExpanded } from './index.js';
+import { resolveExpanded } from '../diagram/utils/expansion.js';
 import type { IncrementalOptions } from './IncrementalLayout.js';
 
 /** A part of the engine's drawing the incremental layout copies in: a new expanded sub-process or pool with its content. */

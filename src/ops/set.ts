@@ -91,7 +91,7 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { cutAt, IdRegistry, MAX_ID, withSuffix } from '../ids/slugs.js';
 import { kindRequest, type IdRequest, type IdState } from '../ids/style.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../model/kinds.js';
-import { diExpansionState } from '../layout/index.js';
+import { diExpansionState } from '../diagram/utils/expansion.js';
 import { addTo, is, localType, many, nameOf, walk, type El } from '../model/utils/moddle.js';
 import { attrAppliesTo, camundaAttr, camundaAttrsFor, idReferenceAttrs, isC7Uri, typeIs, ZEEBE_URI } from '../platform/descriptor.js';
 import { zeebeAllowedOn, zeebeAttr, zeebeType, zeebeTypeNames } from '../platform/zeebe.js';

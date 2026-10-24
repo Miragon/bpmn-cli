@@ -116,7 +116,8 @@ import { utf8Declaration } from '../xml/encoding.js';
 import { Doc } from '../model/document.js';
 import { CliError, type Warning } from '../shared/CliError.js';
 import { ioError, modelError, usageError } from '../shared/utils/errors.js';
-import { layoutModel, SUB_PROCESS_TYPES, type LayoutWarningInfo, type LayoutEngine } from '../layout/index.js';
+import { FullLayout, type LayoutWarningInfo, type LayoutEngine } from '../layout/FullLayout.js';
+import { SUB_PROCESS_TYPES } from '../diagram/utils/expansion.js';
 import type { GivenId } from '../diagram/drawn-ids.js';
 import { DiagramGeometry } from '../layout/DiagramGeometry.js';
 import { IncrementalLayout, type IncrementalReport } from '../layout/IncrementalLayout.js';
@@ -678,11 +679,11 @@ async function isEngineOwned(xml: string, engine: LayoutEngine | undefined, undr
     }
   }
   const clean = await parseXml(reference);
-  await layoutModel(clean, {});
+  await new FullLayout(clean, {}).run();
   if (mine.drawnBy(clean.definitions)) return true;
   if (engine !== 'auto') return false;
   const auto = await parseXml(reference);
-  const result = await layoutModel(auto, { engine: 'auto' });
+  const result = await new FullLayout(auto, { engine: 'auto' }).run();
   return mine.drawnBy((await parseXml(result.xml)).definitions);
 }
 
@@ -706,7 +707,7 @@ async function fullLayout(doc: Doc, opts: MutationOptions): Promise<{ xml: strin
   const colors = colorsOf(doc.definitions);
   const expansion = collectExpansion(doc, opts);
   // an element without id that the redraw draws gets one in the document's style and registry
-  const result = await layoutModel(doc.model, { ...expansion, engine: opts.engine, allocateId: (req) => doc.allocateId(req).id });
+  const result = await new FullLayout(doc.model, { ...expansion, engine: opts.engine, allocateId: (req) => doc.allocateId(req).id }).run();
   if (result.givenIds?.length) doc.invalidate();
   let xml = result.xml;
   let defs = doc.definitions;
@@ -1019,7 +1020,7 @@ export async function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<Check
       layout = { status: 'skipped', warnings: [], expanded: [] };
     } else {
       try {
-        const r = await layoutModel(doc.model, {});
+        const r = await new FullLayout(doc.model, {}).run();
         layout = { status: 'ok', warnings: r.warnings, expanded: r.expanded };
       } catch (err) {
         const e = toCliError(err) as CliError;

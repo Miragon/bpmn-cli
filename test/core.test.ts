@@ -4,7 +4,8 @@ import { IdRegistry, isValidId, slugify } from '../src/ids/slugs.js';
 import { connectionRequest, IdStyle, kindRequest, typeRequest } from '../src/ids/style.js';
 import { kindByName } from '../src/model/kinds.js';
 import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/model/kinds.js';
-import { diExpansionState, layoutModel, resolveExpanded } from '../src/layout/index.js';
+import { FullLayout } from '../src/layout/FullLayout.js';
+import { diExpansionState, resolveExpanded } from '../src/diagram/utils/expansion.js';
 import { many } from '../src/model/utils/moddle.js';
 import { createSequenceFlow, detachNode, placeNode, redirectFlow, spliceIntoFlow } from '../src/ops/flows.js';
 import { runOps } from '../src/ops/index.js';
@@ -323,12 +324,12 @@ describe('layout', () => {
     <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="Sub" />`),
     );
     expect([...resolveExpanded(doc.model)]).toEqual(['Sub']);
-    const r1 = await layoutModel(doc.model);
+    const r1 = await new FullLayout(doc.model).run();
     expect(r1.expanded).toEqual(['Sub']);
     expect(r1.xml).toMatch(/BPMNShape_Sub" bpmnElement="Sub" isExpanded="true"/);
     const doc2 = await Doc.fromXml(r1.xml);
     expect(doc2.importWarnings).toHaveLength(0);
-    const r2 = await layoutModel(doc2.model, { collapse: ['Sub'] });
+    const r2 = await new FullLayout(doc2.model, { collapse: ['Sub'] }).run();
     expect(r2.expanded).toEqual([]);
     const doc3 = await Doc.fromXml(r2.xml);
     expect(diExpansionState(doc3.definitions).get('Sub')).toBe(false);
@@ -338,13 +339,13 @@ describe('layout', () => {
 
   it('maps layout errors to codes', async () => {
     const doc = await Doc.fromXml(definitionsXml(`<bpmn:complexGateway id="CG" />`));
-    await expect(layoutModel(doc.model, { engine: 'auto' })).rejects.toMatchObject({ code: 'LAYOUT_UNSUPPORTED_ELEMENT', details: { element: 'CG' } });
+    await expect(new FullLayout(doc.model, { engine: 'auto' }).run()).rejects.toMatchObject({ code: 'LAYOUT_UNSUPPORTED_ELEMENT', details: { element: 'CG' } });
   });
 
   it('ignores expand/collapse ids that are not sub-processes', async () => {
     const doc = await Doc.fromXml(definitionsXml(`<bpmn:subProcess id="Sub"><bpmn:task id="Inner" /></bpmn:subProcess><bpmn:task id="T" />`));
     expect([...resolveExpanded(doc.model, { expand: ['Nope', 'T'], collapse: ['AlsoNope'] })]).toEqual(['Sub']);
-    const r = await layoutModel(doc.model, { expand: ['Nope'] });
+    const r = await new FullLayout(doc.model, { expand: ['Nope'] }).run();
     expect(r.expanded).toEqual(['Sub']);
   });
 
@@ -362,7 +363,7 @@ describe('layout', () => {
     ]);
     const members = () => many(doc.get('Lane_L1')!, 'flowNodeRef').map((n) => n.get('id'));
     expect(members()).toEqual(['S', 'A', 'E']);
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.xml).toMatch(/BPMNShape_B"/);
     // the temporary membership used for the layout leaves no trace, in memory or in the written model
     expect(members()).toEqual(['S', 'A', 'E']);
@@ -374,7 +375,7 @@ describe('layout', () => {
 
   it('draws the compensation association and puts the handler below its boundary event', async () => {
     const doc = await compensationDoc();
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.warnings.filter((w) => w.code === 'DI_NOT_CREATED')).toEqual([]);
     const association = [...doc.byId().values()].find((e) => e.$type === 'bpmn:Association')!.get<string>('id');
     expect(r.xml).toContain(`BPMNEdge_${association}`);
@@ -397,7 +398,7 @@ describe('layout', () => {
     const association = cs.created.find((c) => c.kind === 'association')!.id;
     // F1 says nothing about its ends (a number): a flow
     expect(association).toBe('Association_FlowToOnTheFlow');
-    const r = await layoutModel(doc.model);
+    const r = await new FullLayout(doc.model).run();
     expect(r.warnings).toEqual([]);
     expect(r.xml).toContain(`BPMNEdge_${association}`);
   });
@@ -418,7 +419,7 @@ describe('pipeline', () => {
     const again = await Doc.fromXml(r.xml);
     expect(again.importWarnings).toHaveLength(0);
     expect([...resolveExpanded(again.model)]).toEqual([]);
-    const laidOut = await layoutModel(again.model);
+    const laidOut = await new FullLayout(again.model).run();
     expect(laidOut.xml).toMatch(/BPMNPlane_Sub/);
   });
 });
