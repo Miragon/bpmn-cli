@@ -5,7 +5,7 @@
  *  - runProfile(doc, choice) detects the platform (platform/detect.ts; an
  *    explicit choice wins) and runs its rules: Camunda 7 (platform/profiles/C7Profile.ts;
  *    a file that uses the operaton namespace is read the way Operaton reads
- *    it, `operaton: true`), Camunda 8 (platform/profiles/c8.ts); plain BPMN has no
+ *    it, `operaton: true`), Camunda 8 (platform/profiles/C8Profile.ts); plain BPMN has no
  *    engine rules.
  *  - The rules of a platform are loaded on demand (loadProfile: one
  *    `import()` per platform, cached), so a host's bundler puts each rule
@@ -15,7 +15,7 @@
  *    pipeline (mutateDoc, checkDoc and the in-memory API) loads them first
  *    (ensureProfile), a direct caller awaits loadProfile / loadProfiles. A
  *    chunk that fails to load rejects with E_PROFILE_LOAD (category io).
- *    Only this module imports C7Profile.ts / c8.ts (tools/iso/check.mjs fails when
+ *    Only this module imports C7Profile.ts / C8Profile.ts (tools/iso/check.mjs fails when
  *    a rule module is in a browser bundle's initial chunks), and they import
  *    nothing of the core: it hands them RULE_KIT (platform/profiles/rule-kit.ts), so
  *    a host whose entry module awaits a call at top level does not wait for
@@ -76,9 +76,9 @@ const LOADERS: Record<EnginePlatform, () => Promise<Rules>> = {
     return (doc, opts) => profile.findings(doc, opts);
   },
   c8: async () => {
-    const { c8Findings, useKit } = await import('./c8.js');
-    useKit(RULE_KIT);
-    return (doc) => c8Findings(doc);
+    const { C8Profile } = await import('./C8Profile.js');
+    const profile = new C8Profile(RULE_KIT);
+    return (doc) => profile.findings(doc);
   },
 };
 

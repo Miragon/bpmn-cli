@@ -392,9 +392,9 @@ npx vitest run test/isomorphic.test.ts
   not compile. It prints the minified and gzipped sizes, split like a host's
   bundler would split them: the initial chunks of the whole entry and of an
   `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
-  rules, the Camunda 8 rules with `feel` and `schema-text`,
+  rules, the Camunda 8 rules with the FEEL, timer and schema-text checks,
   bpmn-auto-layout). It fails when a rule module
-  (`dist/platform/{c7,c8,feel,schema-text}.js`) is in the initial chunks of
+  (`dist/platform/profiles/`: the profiles, their base, utils and checks) is in the initial chunks of
   either entry, naming it; when a rule module imports a module the entry
   loads, naming both (Rollup / Vite would put that module into the host's
   entry chunk and make the rule chunk import the entry chunk back: a host
@@ -704,7 +704,7 @@ element by element.
 
 ## Engine checks (Camunda 8)
 
-The Camunda 8 profile (`src/platform/profiles/c8.ts`) states for every rule what
+The Camunda 8 profile (`src/platform/profiles/C8Profile.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
 (`src/platform/zeebe.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails

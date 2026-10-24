@@ -1,5 +1,5 @@
 /**
- * The Camunda 8 validation profile (src/platform/profiles/c8.ts): one synthetic model
+ * The Camunda 8 validation profile (src/platform/profiles/C8Profile.ts): one synthetic model
  * per rule with the exact findings it must produce and what Camunda 8.9 does
  * with it, the zeebe descriptor lookup, the FEEL and timer value checks, and
  * the `validate` output for Camunda 8 files.

@@ -1,7 +1,7 @@
 /**
  * Read-only lookup over the Camunda 8 (Zeebe) descriptor (`zeebe-bpmn-moddle`,
  * resources/zeebe.json, inlined as zeebe-descriptor.ts), used for validation
- * (platform/profiles/c8.ts) and for placing zeebe extension elements (ops/ext.ts).
+ * (platform/profiles/C8Profile.ts) and for placing zeebe extension elements (ops/ext.ts).
  *
  * Like the Camunda 7 descriptor (platform/descriptor.ts) it is DATA: it is
  * never registered with a BpmnModdle instance, so zeebe content stays generic
@@ -32,7 +32,7 @@
  *  - zeebe:properties has no allowedIn: it may sit anywhere.
  *  - zeebe:publishMessage is not in the descriptor; Camunda 8.9 accepts it on a
  *    send task and in a message event definition (it does not execute it yet:
- *    platform/profiles/c8.ts W_C8_UNSUPPORTED_IMPLEMENTATION).
+ *    platform/profiles/C8Profile.ts W_C8_UNSUPPORTED_IMPLEMENTATION).
  */
 import { is, type El } from '../model/utils/moddle.js';
 import { typeIs } from './descriptor.js';

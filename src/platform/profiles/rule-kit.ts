@@ -1,9 +1,9 @@
 /**
- * What the engine rules that load on demand (platform/profiles/C7Profile.ts, c8.ts and
- * schema-text.ts, which comes with c8.ts) use of the core: the loader
+ * What the engine rules that load on demand (platform/profiles/C7Profile.ts,
+ * C8Profile.ts and the modules they import) use of the core: the loader
  * (platform/profiles/profile.ts) hands them RULE_KIT right after the import
- * (`useKit`), they import nothing of the core themselves (type imports
- * only).
+ * (`new C7Profile(RULE_KIT)`), they import nothing of the core themselves
+ * (type imports only).
  *
  * Why: a module that the core and a rule module both import is placed by
  * Rollup / Vite (the host's bundler) into the host's entry chunk, and the
@@ -13,11 +13,10 @@
  * finished, and that module waits for the rule chunk. A rule chunk that
  * imports nothing loads whatever the host's entry does.
  *
- * Contract: a rule module declares the helpers it uses as module variables
- * (`let { is, walk, ... } = {} as RuleKit`) and exports `useKit(kit)`,
- * which assigns them (and those of the modules it imports); nothing of the
- * kit is used while the module is evaluated, only when a rule runs. A new
- * helper a rule needs is added here. tools/iso/check.mjs and
+ * Contract: a profile reads the helpers as `this.kit` (EngineProfile takes
+ * the kit in its constructor), nothing of the kit is used while a rule
+ * module is evaluated, only when a rule runs. A new helper a rule needs is
+ * added here. tools/iso/check.mjs and
  * test/isomorphic.test.ts fail when a rule module imports a module the
  * core entry loads, naming both.
  */
@@ -65,7 +64,7 @@ export const RULE_KIT = {
   zeebeNestedOnly,
   zeebeType,
   zeebeTypeNames,
-  // the text of a file (schema-text.ts)
+  // the text of a file (SchemaText.ts)
   decodeXml,
   elementChildren,
   readXmlText,
