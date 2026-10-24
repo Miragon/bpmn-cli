@@ -60,10 +60,11 @@
 import type { Doc } from '../model/Doc.js';
 import { isCliError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
-import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/kinds.js';
+import { ignoresConditions, isLinkCatch, isLinkThrow, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/utils/kinds.js';
 import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
-import { assertSequenceFlowEndpoints } from '../ops/flows.js';
+import { FlowRules } from '../model/FlowRules.js';
+import { ALWAYS_INTERRUPTING as NON_INTERRUPTING_FORBIDDEN } from '../ops/EventTrigger.js';
 import type { PlatformChoice } from '../platform/PlatformDetection.js';
 import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileBaseline, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
@@ -345,7 +346,7 @@ function checkSequenceFlow(ctx: Ctx, flow: El, scope: El): void {
   const target = peek<El>(flow, 'targetRef');
   if (!source || !target) return; // reported by checkReferences
   try {
-    assertSequenceFlowEndpoints(ctx.doc, source, target);
+    new FlowRules(ctx.doc).assertEndpoints(source, target);
   } catch (err) {
     if (!isCliError(err)) throw err;
     pushFinding(ctx.errors, err.code, err.message, shownId(flow), { related: [shownId(source), shownId(target)], hint: err.details.hint });
@@ -404,7 +405,6 @@ function checkFlowLinks(ctx: Ctx, node: El): void {
   }
 }
 
-const NON_INTERRUPTING_FORBIDDEN: Trigger[] = ['error', 'cancel', 'compensate'];
 const EVENT_SUBPROCESS_ONLY_STARTS: Trigger[] = ['error', 'escalation', 'compensate'];
 
 function checkEvent(ctx: Ctx, el: El, scope: El): void {

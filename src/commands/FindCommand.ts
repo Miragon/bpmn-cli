@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import { assertKindToken } from '../model/kinds.js';
+import { assertKindToken } from '../model/utils/kinds.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { ElementFinder } from '../query/ElementFinder.js';
 import { renderFind } from '../report/utils/view-lines.js';

@@ -30,8 +30,26 @@ a new concept gets its line here first.
 | **Kind** | The CLI's name for a BPMN element type, with an optional trigger (`userTask`, `boundaryEvent:timer`). |
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
 | **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader`, written by `DecisionLinkWriter` (`ops/`). |
-| **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors. |
-| **Splice** | Inserting a node into an existing sequence flow. |
+| **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors: a single node, a join, a moved group (`ops/Bridge.ts`). |
+| **Splice** | Inserting a node into an existing sequence flow (`SequenceFlows.splice`). |
+| **Op classes** | `add`, `connect`, `set`, `remove`, `retype`, `move` and `split` run as `ElementAdder`, `ElementConnector`, `PropertySetter`, `ElementRemover`, `ElementRetyper`, `NodeMover` and `FlowSplitter` (`ops/`). |
+| **Flow rules** | What a sequence flow may connect and carry: the roles of its ends, one scope for both, a condition its source takes (`model/FlowRules.ts`). |
+| **Sequence flows** | Creating, removing, redirecting and splicing a document's sequence flows, their default marker and condition (`ops/SequenceFlows.ts`). |
+| **Flow options** | The name, id, condition, language and default marker of the flow an op creates or splices a node into (`ops/FlowOptions.ts`). |
+| **Node placement** | Where a node goes (--after / --before / --flow / --in / --on) and the append, prepend, splice or attachment that puts it there (`ops/NodePlacement.ts`). |
+| **Lane inheritance** | The lane a node placed in a process without --lane gets (`ops/LaneInheritance.ts`). |
+| **Event-gateway rule** | Which targets an event-based gateway may lead to: the Camunda 7 engines' rule or BPMN 2.0's, by the file (`ops/EventGatewayRule.ts`). |
+| **Flow id follower** | A flow whose id names its ends takes the id of its new ends when they change (`ops/FlowIdFollower.ts`). |
+| **Stale flow report** | W_FLOW_ID_STALE for the flows that kept an id naming their old ends (`ops/StaleFlowReport.ts`). |
+| **Event trigger** | An event's trigger as the model has it: as options, as details, as a short text (`ops/EventTrigger.ts`). |
+| **Trigger change** | A change of an element's trigger or kind: merged options, a dropped non-interrupting flag, the message-flow check, the id state (`ops/TriggerChange.ts`). |
+| **Event definitions** | The event definitions of one event, updated in place or replaced when its trigger changes (`ops/EventDefinitions.ts`). |
+| **Root elements** | The root Message, Error, Signal and Escalation elements events, tasks and message flows reference (`ops/RootElements.ts`). |
+| **Property coercer** | The keys `set` takes and the values it writes: documented keys, settable BPMN attributes, typed values, vendor attributes (`ops/PropertyCoercer.ts`). |
+| **Nested slots** | The `definition.` / `loop.` / `condition.` keys of the nested elements without an id of their own (`ops/NestedSlots.ts`). |
+| **Element properties** | The settable view of an element's properties that `show <id>` prints (`ops/ElementProperties.ts`). |
+| **Id allocator** | The ids one edit gives out (new, explicit, with a collision suffix) and what it recorded about them (`model/IdAllocator.ts`). |
+| **Id renamer** | Renaming an id with every reference, and the ids a retype or a trigger change leaves a stale prefix (`ops/IdRenamer.ts`). |
 | **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`diagram/types.ts`; read by `diagram/DiagramReader.ts`, written by `diagram/PlaneWriter.ts`). |
 | **Semantics** | The index of the semantic model a drawing is read against: elements by id, lanes, pools, scopes (`diagram/Semantics.ts`). |
 | **Checkpoint** | A saved state of a plane, to try a change and undo it (`diagram/PlaneCheckpoint.ts`). |

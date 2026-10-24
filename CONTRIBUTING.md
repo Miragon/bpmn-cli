@@ -45,7 +45,7 @@ them on a private corpus without copying it into the repository, are described i
   | folder | holds |
   | --- | --- |
   | `shared/` | errors and the debug sink, used everywhere |
-  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation |
+  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
   | `ids/` | id words and slugs, the file's id style, the declared id conventions |
   | `xml/` | the text-preserving write, the positional XML reader, the encoding |
   | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |

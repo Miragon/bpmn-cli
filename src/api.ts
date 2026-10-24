@@ -58,7 +58,7 @@ import { ContextText } from './report/ContextText.js';
 import { DetailText } from './report/DetailText.js';
 import { LayoutText } from './report/LayoutText.js';
 import { ModelViewText } from './report/ModelViewText.js';
-import { assertKindToken } from './model/kinds.js';
+import { assertKindToken } from './model/utils/kinds.js';
 import type { LayoutEngine } from './layout/FullLayout.js';
 import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
 import type { Op } from './ops/types.js';

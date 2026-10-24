@@ -8,7 +8,7 @@
  */
 import type { BpmnlintSeverity } from '../validate/bpmnlint-validator.js';
 import type { Doc } from '../model/Doc.js';
-import { KINDS } from '../model/kinds.js';
+import { KINDS } from '../model/utils/kinds.js';
 import type { ValidatorFinding } from '../validate/validators.js';
 import { IdStyle, type Body, type FlowForm, type PrefixSource } from './IdStyle.js';
 import type { IdConventions, QualifierMode } from './IdConventionsReader.js';

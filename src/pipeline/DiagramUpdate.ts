@@ -345,7 +345,7 @@ export class DiagramUpdate {
     const colors = colorsOf(doc.definitions);
     const expansion = doc.layoutRequests.expansion(this.opts);
     // an element without id that the redraw draws gets one in the document's style and registry
-    const result = await new FullLayout(doc.model, { ...expansion, engine: this.opts.engine, allocateId: (req) => edit.allocateId(req).id }).run();
+    const result = await new FullLayout(doc.model, { ...expansion, engine: this.opts.engine, allocateId: (req) => edit.allocator.allocate(req).id }).run();
     if (result.givenIds?.length) doc.invalidate();
     let xml = result.xml;
     let defs = doc.definitions;

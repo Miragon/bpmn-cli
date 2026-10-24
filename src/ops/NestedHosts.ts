@@ -10,8 +10,9 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import type { El } from '../model/utils/moddle.js';
-import { kindLabel } from '../model/kinds.js';
-import { idOf, NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './set.js';
+import { kindLabel } from '../model/utils/kinds.js';
+import { idOf } from './utils/elements.js';
+import { NESTED_SLOTS, parseSlotRef, resolveNested, SLOT_TEXT, slotsOf, type NestedSlot } from './utils/nested-slots.js';
 import { VendorElements } from './VendorElements.js';
 import type { ExtOp } from './types.js';
 

@@ -2,7 +2,6 @@ import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { is, many, removeFrom, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { changeOf } from './set.js';
 import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
 import { ExtensionLevel } from './ExtensionLevel.js';
 import { NESTED_HOSTS } from './NestedHosts.js';
@@ -54,7 +53,7 @@ export class ExtensionRemover {
     const c = el.get<El | undefined>('extensionElements');
     if (c && !many(c, 'values').length) el.set('extensionElements', undefined);
     this.doc.invalidate();
-    cs.change(changeOf(this.hosts.ownerOf(el), `ext removed ${texts.map((t) => this.hosts.slotPrefix(el) + t).join(', ')}`));
+    cs.change(ChangeSet.entryOf(this.hosts.ownerOf(el), `ext removed ${texts.map((t) => this.hosts.slotPrefix(el) + t).join(', ')}`));
     return cs;
   }
 

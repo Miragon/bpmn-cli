@@ -29,7 +29,7 @@
 import type { BpmnlintRuleSetting } from '../validate/bpmnlint-validator.js';
 import { closestKey } from '../shared/utils/fuzzy.js';
 import { isUsablePrefix } from './utils/slug.js';
-import { KINDS, TRIGGER_TYPES } from '../model/kinds.js';
+import { KINDS, TRIGGER_TYPES } from '../model/utils/kinds.js';
 import { createModdle } from '../model/utils/moddle.js';
 import type { ValidatorFinding } from '../validate/validators.js';
 

@@ -1,5 +1,6 @@
 import { many, type El } from '../model/utils/moddle.js';
-import { descriptorOf, isEl, nestedEntries } from './set.js';
+import { descriptorOf, isEl } from './utils/elements.js';
+import { nestedEntries } from './utils/nested-slots.js';
 
 export interface ExtensionInfo {
   index: number;

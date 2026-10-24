@@ -19,7 +19,7 @@ import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
 import { EditContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
-import { kindLabel, suggestKinds } from './kinds.js';
+import { kindLabel, suggestKinds } from './utils/kinds.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
@@ -82,7 +82,7 @@ export class Doc {
   readonly layoutRequests = new LayoutRequests();
   /**
    * Whether a flow whose id names its ends is renamed when an op changes
-   * them (ops/flows.ts followEnds). False keeps the id of every flow the
+   * them (ops/FlowIdFollower.ts follow). False keeps the id of every flow the
    * document had before the batch (EditContext.flowsBefore); the batch
    * reports each one whose id no longer names its ends as W_FLOW_ID_STALE
    * (ops/OpRunner.ts). MutationOptions.keepFlowIds decides for one call
@@ -455,9 +455,9 @@ export class Doc {
     this.style = undefined;
   }
 
-  /** A new id in the running edit's style for a kindRequest / typeRequest / connectionRequest / flowRequest; claims it (EditContext.allocateId). */
+  /** A new id in the running edit's style for a kindRequest / typeRequest / connectionRequest / flowRequest; claims it (IdAllocator.allocate). */
   allocateId(req: IdRequest): { id: string; base: string } {
-    return this.edit.allocateId(req);
+    return this.edit.allocator.allocate(req);
   }
 
   /** Next id for a prefix (the family of `bpmn kinds`, or a type name) and name in the document's style; claims it. */
@@ -465,7 +465,7 @@ export class Doc {
     return this.allocateId({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
   }
 
-  /** Validates and claims an explicit id: the caller's, so no longer generated (EditContext.generatedBase), also where an op before freed a generated one. */
+  /** Validates and claims an explicit id: the caller's, so no longer generated (IdAllocator.generatedBase), also where an op before freed a generated one. */
   claimId(id: string): void {
     if (!isValidId(id)) {
       throw modelError('E_INVALID_ID', `"${id}" is not a valid id: must match [A-Za-z_][A-Za-z0-9_.-]*`, { element: id });
@@ -474,7 +474,7 @@ export class Doc {
       throw modelError('E_DUPLICATE_ID', `An element with id "${id}" already exists`, { element: id, hint: 'Choose another --id or omit it.' });
     }
     this.ids.claim(id);
-    this.edit.forgetGenerated(id);
+    this.edit.allocator.forgetGenerated(id);
   }
 
   /** moddle.create wrapper that claims the id. */

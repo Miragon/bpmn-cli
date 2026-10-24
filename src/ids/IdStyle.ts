@@ -182,7 +182,7 @@
  *  serviceTask_shipGoods under PascalCase, userTask_userTask1 for
  *  serviceTask_1), and gives an element the batch created (a split's join
  *  too) its new id, which the flows the batch named after it follow
- *  (ops/set.ts recordIdState). Without declared conventions nothing of
+ *  (ops/IdRenamer.ts recordState). Without declared conventions nothing of
  *  this runs.
  */
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, withSuffix } from './utils/slug.js';
@@ -193,7 +193,7 @@ import { CONNECTIONS, connectionRequest, kindRequest, typeRequest, type IdReques
 import type { IdConventions } from './IdConventionsReader.js';
 import { DeclaredConventions } from './DeclaredConventions.js';
 import { DEFAULT_FLOW, LearnedStyle } from './LearnedStyle.js';
-import { kindByName } from '../model/kinds.js';
+import { kindByName } from '../model/utils/kinds.js';
 import type { El } from '../model/utils/moddle.js';
 
 /** The case of the bodies of new ids. */
@@ -559,7 +559,7 @@ export class IdStyle {
    * flow prefix, which bpmn-cli gave them before another form or prefix had
    * the majority, and each form built from the ends under the prefixes that
    * voted for it), so that a flow a file got before still names its ends
-   * (ops/flows.ts followEnds), whichever way the vote goes. With declared
+   * (ops/FlowIdFollower.ts follow), whichever way the vote goes. With declared
    * conventions also the ids of the file's own style (learnedOnly): a flow
    * named before they applied still names its ends. `id`: only the other
    * styles whose ids it can be (it starts with their head, prefix and a

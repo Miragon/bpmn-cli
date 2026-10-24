@@ -29,7 +29,7 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { kindByName, kindLabel } from '../model/kinds.js';
+import { kindByName, kindLabel } from '../model/utils/kinds.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';

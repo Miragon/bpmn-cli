@@ -66,7 +66,7 @@
 import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { idOf } from './set.js';
+import { idOf } from './utils/elements.js';
 import { ExtensionInserter } from './ExtensionInserter.js';
 import { ExtensionRemover } from './ExtensionRemover.js';
 import { NESTED_HOSTS } from './NestedHosts.js';

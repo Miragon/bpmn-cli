@@ -18,7 +18,7 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
-import { kindLabel, triggerOf } from '../model/kinds.js';
+import { kindLabel, triggerOf } from '../model/utils/kinds.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { typeRequest } from '../ids/utils/requests.js';
 import { addTo, is, many, removeFrom, type El, idOf } from '../model/utils/moddle.js';

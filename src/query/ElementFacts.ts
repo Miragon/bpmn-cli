@@ -1,9 +1,10 @@
 import { TRIGGER_TYPES } from '../model/utils/kinds.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
-import { describeTrigger } from '../ops/events.js';
+import { EventTrigger } from '../ops/EventTrigger.js';
 import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
-import { definitionsOf, nestedEntries, vendorAttributes } from '../ops/set.js';
+import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
+import { vendorAttributes } from '../ops/utils/elements.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import type { Implementation } from './context.js';
 import type { ViewFlow } from './model-view.js';
@@ -16,7 +17,7 @@ export class ElementFacts {
 
   /** Trigger details from the first event definition (fallback while events.ts is a stub). */
   trigger(): string | undefined {
-    const described = describeTrigger(this.el);
+    const described = new EventTrigger(this.el).describe();
     if (described) return described;
     const def = list(this.el, 'eventDefinitions')[0];
     if (!def) return undefined;

@@ -30,7 +30,7 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
-import { kindLabel } from '../model/kinds.js';
+import { kindLabel } from '../model/utils/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './utils/covers.js';

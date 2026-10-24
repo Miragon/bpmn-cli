@@ -12,7 +12,7 @@
  */
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
-import { kindByName } from '../model/kinds.js';
+import { kindByName } from '../model/utils/kinds.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { kindRequest, typeRequest } from '../ids/utils/requests.js';
 import { addTo, insertInto, is, many, type El, idOf } from '../model/utils/moddle.js';

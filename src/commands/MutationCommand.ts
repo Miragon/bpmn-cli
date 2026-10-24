@@ -3,7 +3,7 @@ import type { Doc } from '../model/Doc.js';
 import { ImageWriter, type Shot } from '../node/ImageWriter.js';
 import { DocFile, type FileMutationOptions } from '../node/DocFile.js';
 import { ModelFile } from '../node/ModelFile.js';
-import { defaultWithConditionViolation, placementViolation } from '../ops/rules.js';
+import { defaultWithConditionViolation, placementViolation } from '../ops/utils/op-rules.js';
 import type { Op, TriggerOptions } from '../ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from '../pipeline/index.js';
 import { RENDER_MAX_SIZE, type RenderOptions } from '../render/types.js';
@@ -36,7 +36,7 @@ export interface OutputOptions {
 
 export type MutationFlags = FileMutationOptions & OutputOptions;
 
-/* The rules `apply` enforces on ops JSON (ops/rules.ts), spelled with CLI flags. */
+/* The rules `apply` enforces on ops JSON (ops/utils/op-rules.ts), spelled with CLI flags. */
 
 const FLOW_FLAGS: Record<string, string> = { flowName: '--flow-name', flowId: '--flow-id', condition: '--condition', language: '--language', default: '--default' };
 

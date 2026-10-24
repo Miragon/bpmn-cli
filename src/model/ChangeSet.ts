@@ -2,7 +2,8 @@
  * What a mutation did. Rendered as text or JSON after every write.
  */
 import type { Warning } from '../shared/CliError.js';
-import type { El } from './utils/moddle.js';
+import { kindLabel, kindOf } from './utils/kinds.js';
+import { idOf, is, nameOf, type El } from './utils/moddle.js';
 import { renamedNote } from './utils/renames.js';
 
 export interface Change {
@@ -14,7 +15,7 @@ export interface Change {
   detail?: string;
 }
 
-/** An id an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds). */
+/** An id an op renamed (a flow whose id named its old ends, ops/FlowIdFollower.ts follow). */
 export interface Rename {
   from: string;
   to: string;
@@ -27,8 +28,8 @@ export interface Rename {
    */
   takeover?: true;
   /**
-   * an element the same change created took another id (ops/set.ts
-   * recordIdState: its generated id after a retype), or a flow the change
+   * an element the same change created took another id (ops/IdRenamer.ts
+   * recordState: its generated id after a retype), or a flow the change
    * named after it followed (with `was`): the old id was never in the file,
    * so the details of the change's entries (a flow's ends), its notes and
    * its warnings name the element by the new one too, and a W_ID_SUFFIXED
@@ -39,8 +40,8 @@ export interface Rename {
 
 export class ChangeSet {
   /**
-   * The element a change entry or a rename is about (ops/flows.ts flowChange,
-   * ops/set.ts changeOf, EditContext.recordRename): rename renames only the
+   * The element a change entry or a rename is about (entryOf, flowEntryOf,
+   * EditContext.recordRename): rename renames only the
    * entries of the renamed element, not those of an element that took the id
    * the rename freed. Kept out of the objects, so JSON and the entries' shape
    * stay as they are.
@@ -56,9 +57,41 @@ export class ChangeSet {
     return entry;
   }
 
+  /** The entry of an element (about it: rename): its id (`''` without one), kind label (kinds table first, then lowerCamel type), name and `detail`. */
+  static entryOf(el: El, detail?: string): Change {
+    const name = nameOf(el);
+    return ChangeSet.about({ id: el.get<string | undefined>('id') ?? '', kind: ChangeSet.kindOf(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
+  }
+
+  /** The entry of a sequence flow: its ends, or `detail` (about the flow: rename). */
+  static flowEntryOf(flow: El, detail?: string): { id: string; kind: string; name?: string; detail: string } {
+    const src = flow.get<El | undefined>('sourceRef');
+    const tgt = flow.get<El | undefined>('targetRef');
+    const name = flow.get<string | undefined>('name');
+    return ChangeSet.about(
+      {
+        id: idOf(flow),
+        kind: 'sequenceFlow',
+        ...(name ? { name } : {}),
+        detail: detail ?? `${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}`,
+      },
+      flow,
+    );
+  }
+
+  private static kindOf(el: El): string {
+    if (kindOf(el)) return kindLabel(el);
+    if (is(el, 'bpmn:SequenceFlow')) return 'sequenceFlow';
+    if (is(el, 'bpmn:MessageFlow')) return 'messageFlow';
+    if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
+    if (is(el, 'bpmn:Association')) return 'association';
+    const local = el.$type.split(':')[1] ?? el.$type;
+    return local.charAt(0).toLowerCase() + local.slice(1);
+  }
+
   /**
    * Records that `next` took the place of `old` (a retype that changes the
-   * type builds a new element, ops/retype.ts swapType): an entry about `old`
+   * type builds a new element, ops/ElementRetyper.ts swapType): an entry about `old`
    * is about `next` (rename), so a rename recorded for `next` (its id
    * regenerated) renames the entries an earlier op made for `old`.
    */
@@ -82,14 +115,14 @@ export class ChangeSet {
   warnings: Warning[] = [];
   /** human-readable remarks, e.g. "inserted between A and B" */
   notes: string[] = [];
-  /** ids an op renamed (a flow whose id named its old ends, ops/flows.ts followEnds): earlier entries name the new id */
+  /** ids an op renamed (a flow whose id named its old ends, ops/FlowIdFollower.ts follow): earlier entries name the new id */
   renames: Rename[] = [];
   /** batch aliases an op defined (`as`, `flowAs`, `joinAs`; ops/OpAliases.ts): the element itself */
   bindings: Array<{ alias: string; el: El }> = [];
-  /** elements an op replaced by a new one (a retype to another type, ops/retype.ts swapType): the batch aliases follow */
+  /** elements an op replaced by a new one (a retype to another type, ops/ElementRetyper.ts swapType): the batch aliases follow */
   replaced: Array<{ from: El; to: El }> = [];
   /**
-   * nodes a `move` placed elsewhere, by their id at the time (ops/move.ts; not
+   * nodes a `move` placed elsewhere, by their id at the time (ops/NodeMover.ts; not
    * renamed): the incremental layout places them again. A move that left a
    * node where it was lists nothing, so its drawing stays.
    */

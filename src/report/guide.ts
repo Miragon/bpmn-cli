@@ -6,7 +6,7 @@
  * the ops field specs and schema) so the text can never drift from the code.
  */
 import { EXIT_CODES } from '../shared/CliError.js';
-import type { Trigger } from '../model/kinds.js';
+import type { Trigger } from '../model/utils/kinds.js';
 
 /* ------------------------------------------------------------------ */
 /* error catalogue                                                      */

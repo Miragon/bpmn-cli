@@ -1,4 +1,4 @@
-import { kindOf, triggerOf } from '../model/kinds.js';
+import { kindOf, triggerOf } from '../model/utils/kinds.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { hasIdWords, nameWords } from './utils/slug.js';
 import { CONTEXT_WORDS, kindWord, localName, speakingStem, stemWords, ucfirst, type ContextWord } from './utils/id-words.js';
@@ -80,7 +80,7 @@ export class ElementLabels {
   }
 
   /**
-   * The labels earlier versions gave the element as a flow end (followEnds
+   * The labels earlier versions gave the element as a flow end (FlowIdFollower.follow
    * recognises a flow named by them): an unnamed element whose id tells its
    * context was named by its kind (Gateway, Join, End, Timer).
    */

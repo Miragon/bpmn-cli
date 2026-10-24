@@ -16,12 +16,12 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { renderDetail, renderView, runOps, mutateDoc, buildView, elementDetail, findElements } from '../src/index.js';
-import { readProperties } from '../src/ops/set.js';
 import type { Op } from '../src/ops/types.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 import { CAMUNDA as C7_DESCRIPTOR } from '../src/platform/CamundaDescriptor.js';
 import { PlatformDetection } from '../src/platform/PlatformDetection.js';
 import { VendorDescriptor } from '../src/platform/VendorDescriptor.js';
+import { ElementProperties } from '../src/ops/ElementProperties.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -174,7 +174,7 @@ describe('set: prefixed keys address nested elements', () => {
     expect(xml).toMatch(/<bpmn:conditionalEventDefinition camunda:variableName="y" camunda:variableEvents="create, update"/);
     expect(xml).not.toMatch(/<bpmn:(boundaryEvent|intermediateThrowEvent|intermediateCatchEvent)[^>]*camunda:/);
     // show prints them with the same keys
-    expect(readProperties(doc, doc.require('Event_Declined'))).toMatchObject({ 'definition.camunda:errorCodeVariable': 'errCode' });
+    expect(new ElementProperties(doc).read(doc.require('Event_Declined'))).toMatchObject({ 'definition.camunda:errorCodeVariable': 'errCode' });
   });
 
   it('loop.<attr> writes onto the multi-instance loop (created when missing, with a note)', async () => {
@@ -185,7 +185,7 @@ describe('set: prefixed keys address nested elements', () => {
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics camunda:collection="\$\{items\}" camunda:elementVariable="item" camunda:asyncBefore="true" \/>/);
     expect(xml).not.toMatch(/<bpmn:userTask[^>]*camunda:collection/);
-    expect(readProperties(doc, doc.require('Activity_Review'))).toMatchObject({ loop: 'parallel', 'loop.camunda:collection': '${items}' });
+    expect(new ElementProperties(doc).read(doc.require('Activity_Review'))).toMatchObject({ loop: 'parallel', 'loop.camunda:collection': '${items}' });
   });
 
   it('loop.<attr> on a standard loop is refused; an empty value on a missing nested element is a no-op', async () => {
@@ -213,7 +213,7 @@ describe('set: prefixed keys address nested elements', () => {
     set(doc, 'Flow_yes', { 'condition.camunda:resource': 'deployment://cond.groovy', language: 'groovy' });
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment:\/\/cond.groovy" \/>/);
-    expect(readProperties(doc, doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
+    expect(new ElementProperties(doc).read(doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
   });
 
   it('unknown prefixes and missing definitions are reported', async () => {
@@ -310,7 +310,7 @@ describe('set <flow> condition= keeps / reports camunda:resource and the languag
 
   it('show and the overview list a resource condition', async () => {
     const doc = await Doc.fromXml(RESOURCE_CONDITION);
-    expect(readProperties(doc, doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
+    expect(new ElementProperties(doc).read(doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
     const text = renderView(buildView(doc));
     expect(text).toContain('Yes (Flow_yes if resource deployment://cond.groovy [language=groovy])');
   });
@@ -477,7 +477,7 @@ describe('receiveTask / sendTask take message=<name>', () => {
     const cs = set(doc, 'Activity_Wait', { message: 'PaymentReceived' });
     expect(cs.created).toContainEqual(expect.objectContaining({ id: 'Message_PaymentReceived', kind: 'message' }));
     expect(await doc.toXml()).toContain('<bpmn:receiveTask id="Activity_Wait" name="Wait payment" messageRef="Message_PaymentReceived">');
-    expect(readProperties(doc, doc.require('Activity_Wait'))).toMatchObject({ message: 'PaymentReceived' });
+    expect(new ElementProperties(doc).read(doc.require('Activity_Wait'))).toMatchObject({ message: 'PaymentReceived' });
     // an existing message by name is reused
     set(doc, 'Activity_Wait', { message: 'Notify' });
     expect(doc.require('Activity_Wait').get('messageRef')?.get('id')).toBe('Message_Notify');

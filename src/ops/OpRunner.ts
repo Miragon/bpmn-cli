@@ -7,20 +7,21 @@ import { usageError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { addElement } from './add.js';
 import { AliasTable } from './AliasTable.js';
 import { OpAliases } from './OpAliases.js';
-import { connectElements } from './connect.js';
 import { ExtensionEditor } from './ExtensionEditor.js';
-import { reportStaleFlows } from './flows.js';
-import { moveElements } from './move.js';
 import { Reordering } from './Reordering.js';
-import { removeElements } from './remove.js';
-import { retypeElement } from './retype.js';
-import { reportStaleIdPrefixes, setProperties } from './set.js';
-import { splitFlow } from './split.js';
 import { isFormatOp } from './utils/op-names.js';
 import type { Op } from './types.js';
+import { IdRenamer } from './IdRenamer.js';
+import { StaleFlowReport } from './StaleFlowReport.js';
+import { ElementRemover } from './ElementRemover.js';
+import { ElementRetyper } from './ElementRetyper.js';
+import { ElementAdder } from './ElementAdder.js';
+import { ElementConnector } from './ElementConnector.js';
+import { FlowSplitter } from './FlowSplitter.js';
+import { NodeMover } from './NodeMover.js';
+import { PropertySetter } from './PropertySetter.js';
 
 /** What a batch did: the merged changes, the ops with their aliases resolved (what the layout and the format phase run), alias -> final id. */
 export interface BatchRun {
@@ -49,8 +50,8 @@ export class OpRunner {
     return this.within(() => {
       this.edit.begin();
       const cs = this.step(op);
-      reportStaleFlows(this.doc, cs, this.edit.flowsBefore);
-      reportStaleIdPrefixes(this.doc, cs);
+      new StaleFlowReport(this.doc).report(cs, this.edit.flowsBefore);
+      new IdRenamer(this.doc).reportStalePrefixes(cs);
       return cs;
     });
   }
@@ -67,8 +68,8 @@ export class OpRunner {
    * when the batch began: it was stale before). Likewise W_ID_PREFIX_STALE:
    * one per element a retype or a trigger change kept the id of, from its
    * state before the batch to its state after it; an element the batch
-   * created takes the prefix of its new kind instead (ops/set.ts
-   * recordIdState).
+   * created takes the prefix of its new kind instead (ops/IdRenamer.ts
+   * recordState).
    */
   runBatch(ops: Op[]): BatchRun {
     return this.within(() => {
@@ -123,8 +124,8 @@ export class OpRunner {
       // a warning about the model's state is about the batch's final state (a lane added before the pool that wraps its process)
       all.warnings = all.warnings.filter((w) => this.stillHolds(w));
       // a kept flow id is stale against the flow's final ends, a kept id's prefix against the element's final type and trigger
-      reportStaleFlows(this.doc, all, this.edit.flowsBefore);
-      reportStaleIdPrefixes(this.doc, all);
+      new StaleFlowReport(this.doc).report(all, this.edit.flowsBefore);
+      new IdRenamer(this.doc).reportStalePrefixes(all);
       return { changes: all, ops: resolved, aliases: table.toRecord() };
     });
   }
@@ -143,7 +144,7 @@ export class OpRunner {
   /** Runs one op: W_ID_SUFFIXED for the ids it suffixed, and a flow renamed after its new ends: every entry names its final id (merge applies it to earlier ops too). */
   private step(op: Op): ChangeSet {
     const cs = this.dispatch(op);
-    this.edit.reportSuffixed(cs);
+    this.edit.allocator.reportSuffixed(cs);
     cs.rename(this.edit.takeRenames());
     return cs;
   }
@@ -152,23 +153,23 @@ export class OpRunner {
     const doc = this.doc;
     switch (op.op) {
       case 'add':
-        return addElement(doc, op);
+        return new ElementAdder(doc).add(op);
       case 'connect':
-        return connectElements(doc, op);
+        return new ElementConnector(doc).connect(op);
       case 'set':
-        return setProperties(doc, op);
+        return new PropertySetter(doc).set(op);
       case 'remove':
-        return removeElements(doc, op);
+        return new ElementRemover(doc).remove(op);
       case 'retype':
-        return retypeElement(doc, op);
+        return new ElementRetyper(doc).retype(op);
       case 'move':
-        return moveElements(doc, op);
+        return new NodeMover(doc).move(op);
       case 'order':
         return new Reordering(doc, op).apply();
       case 'ext':
         return new ExtensionEditor(doc).apply(op);
       case 'split':
-        return splitFlow(doc, op);
+        return new FlowSplitter(doc).split(op);
       case 'place':
       case 'align':
       case 'color':

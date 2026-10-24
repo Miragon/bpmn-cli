@@ -1,4 +1,4 @@
-import { KINDS } from '../model/kinds.js';
+import { KINDS } from '../model/utils/kinds.js';
 import { isUsablePrefix } from './utils/slug.js';
 import { PREFIXED, prefixClass } from './utils/id-words.js';
 import { kindTypeNames } from './utils/requests.js';

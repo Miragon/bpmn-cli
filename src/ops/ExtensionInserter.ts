@@ -5,7 +5,6 @@ import { is, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './utils/covers.js';
 import { familyPath, isCamunda, ruleName } from './utils/vendor-family.js';
-import { changeOf } from './set.js';
 import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
 import { ExtensionLevel } from './ExtensionLevel.js';
 import { ExtSnippetReader } from './ExtSnippetReader.js';
@@ -93,7 +92,7 @@ export class ExtensionInserter {
     for (const w of drops) cs.warn(w);
     this.doc.invalidate();
     for (const n of notes) cs.note(n);
-    if (out.some((o) => o.verb !== 'unchanged')) cs.change(changeOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((o) => o.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
+    if (out.some((o) => o.verb !== 'unchanged')) cs.change(ChangeSet.entryOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((o) => o.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
     return cs;
   }
 

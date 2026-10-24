@@ -26,7 +26,7 @@ import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { insertInto, is, many, removeFrom, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { changeOf, idOf } from './set.js';
+import { idOf } from './utils/elements.js';
 import { laneSetOf } from './utils/lanes.js';
 import type { OrderOp } from './types.js';
 
@@ -91,7 +91,7 @@ export class Reordering {
     }
     participants.splice(0, participants.length, ...ordered);
     doc.invalidate();
-    cs.change(changeOf(collab, `pool order: ${ordered.map(idOf).join(', ')}`));
+    cs.change(ChangeSet.entryOf(collab, `pool order: ${ordered.map(idOf).join(', ')}`));
     return cs;
   }
 
@@ -125,7 +125,7 @@ export class Reordering {
     }
     lanes.splice(0, lanes.length, ...ordered);
     doc.invalidate();
-    cs.change(changeOf(owner, `lane order: ${ordered.map(idOf).join(', ')}`));
+    cs.change(ChangeSet.entryOf(owner, `lane order: ${ordered.map(idOf).join(', ')}`));
     return cs;
   }
 
@@ -158,7 +158,7 @@ export class Reordering {
     this.rewriteOutgoing(node, ordered);
     this.redeclare(node, ordered);
     doc.invalidate();
-    cs.change(changeOf(node, `outgoing order: ${ordered.map(idOf).join(', ')}`));
+    cs.change(ChangeSet.entryOf(node, `outgoing order: ${ordered.map(idOf).join(', ')}`));
     return cs;
   }
 

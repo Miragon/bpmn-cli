@@ -1,4 +1,4 @@
-import type { KindDef } from '../../model/kinds.js';
+import type { KindDef } from '../../model/utils/kinds.js';
 import { lcfirst, localName } from './id-words.js';
 
 /**

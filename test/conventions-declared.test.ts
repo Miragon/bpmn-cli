@@ -231,7 +231,7 @@ describe('new ids take the declared prefix and case', () => {
       { op: 'add', kind: 'serviceTask', name: 'Phase 22', in: 'Process_1' },
     ], declared({ prefixes: { 'bpmn:ServiceTask': 'ServiceTask_' }, case: 'PascalCase' }));
     expect(createdIds(pascal)).toEqual(['ServiceTask_Phase2', 'ServiceTask_Phase2No2', 'ServiceTask_Phase22']);
-    // snake_case keeps `_2`; the id a retype in the batch gives (EditContext.regeneratedId) and the W_ID_PREFIX_STALE hint take No too
+    // snake_case keeps `_2`; the id a retype in the batch gives (IdAllocator.regenerated) and the W_ID_PREFIX_STALE hint take No too
     const snake = await run(definitionsXml(''), [{ op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }, { op: 'add', kind: 'serviceTask', name: 'Step 1', in: 'Process_1' }], declared({ case: 'snake_case' }));
     expect(createdIds(snake)).toEqual(['serviceTask_step_1', 'serviceTask_step_1_2']);
     const retyped = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/>'), [{ op: 'add', kind: 'task', name: 'Step 1', in: 'Process_1', as: '$t' }, { op: 'retype', id: '$t', kind: 'serviceTask' }]);

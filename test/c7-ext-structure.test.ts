@@ -21,19 +21,19 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
-import { connectElements } from '../src/ops/connect.js';
 import { listExtensions, type ExtensionInfo } from '../src/index.js';
 import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
 import { SelectorParser } from '../src/ops/SelectorParser.js';
 import { NESTED_HOSTS } from '../src/ops/NestedHosts.js';
 import { EXTENSION_STRUCTURE } from '../src/ops/ExtensionStructure.js';
-import { eventGatewayTargetProblem } from '../src/ops/flows.js';
 import { runOps } from '../src/index.js';
-import { moveElements } from '../src/ops/move.js';
-import { removeElements } from '../src/ops/remove.js';
 import type { ExtOp, Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
+import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
+import { ElementRemover } from '../src/ops/ElementRemover.js';
+import { ElementConnector } from '../src/ops/ElementConnector.js';
+import { NodeMover } from '../src/ops/NodeMover.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -537,7 +537,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const err = caught(() => removeElements(doc, { op: 'remove', ids: ['Event_Paid'] }));
+    const err = caught(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_Paid'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Gateway_Wait to End_A/);
     expect(String(err.details['hint'])).toMatch(/--no-bridge/);
@@ -549,13 +549,13 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    removeElements(nb, { op: 'remove', ids: ['Event_Paid'], bridge: false });
+    new ElementRemover(nb).remove({ op: 'remove', ids: ['Event_Paid'], bridge: false });
     expect(nb.outgoing(nb.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
     const both = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    removeElements(both, { op: 'remove', ids: ['Event_Paid', 'End_A'] });
+    new ElementRemover(both).remove({ op: 'remove', ids: ['Event_Paid', 'End_A'] });
     expect(both.outgoing(both.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
   });
 
@@ -571,7 +571,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_FinishedB" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    const err = caught(() => removeElements(doc, { op: 'remove', ids: ['Event_Received'] }));
+    const err = caught(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_Received'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Event_FinishedB .* already waits for the message "Finished"/);
   });
@@ -583,7 +583,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:receiveTask id="Task_Receive" messageRef="Message_Confirmed" />
     <bpmn:sequenceFlow id="F_A3" sourceRef="Task_Receive" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => removeElements(receive, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
+    expect(caught(() => new ElementRemover(receive).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
 
     const joined = await gatewayDoc(
       `
@@ -593,7 +593,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:endEvent id="End_A" />`,
       `<bpmn:sequenceFlow id="F_X" sourceRef="End_T_Pre" targetRef="Event_Confirmed" /><bpmn:task id="End_T_Pre" />`,
     );
-    expect(caught(() => removeElements(joined, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
+    expect(caught(() => new ElementRemover(joined).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
 
     const signals = await gatewayDoc(
       `
@@ -608,14 +608,14 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_Go2" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    expect(caught(() => removeElements(signals, { op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
+    expect(caught(() => new ElementRemover(signals).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
 
     const ok = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="Event_Confirmed" />${catchMsg('Event_Confirmed', 'Message_Confirmed')}
     <bpmn:sequenceFlow id="F_A3" sourceRef="Event_Confirmed" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const cs = removeElements(ok, { op: 'remove', ids: ['Event_Paid'] });
+    const cs = new ElementRemover(ok).remove({ op: 'remove', ids: ['Event_Paid'] });
     expect(cs.notes).toContain('bridged: Gateway_Wait -> Event_Confirmed');
     const r = await mutateDoc(ok, [], { dryRun: true, layout: false });
     expect(r.validation.errors).toEqual([]);
@@ -626,7 +626,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => moveElements(doc, { op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
+    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
   });
 
   it('eventGatewayTargetProblem follows the engines: message/timer/signal/conditional catch events only', async () => {
@@ -640,7 +640,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:userTask id="C_Task" />`,
     );
     const g = doc.require('Gateway_Wait');
-    const problem = (id: string) => eventGatewayTargetProblem(doc, g, doc.require(id));
+    const problem = (id: string) => new EventGatewayRule(doc).targetProblem(g, doc.require(id));
     expect(problem('C_Cond')).toBeUndefined();
     expect(problem('C_Link')).toMatch(/link catch event/);
     expect(problem('C_None')).toMatch(/plain catch event/);
@@ -678,7 +678,7 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
     const err = caught(() => runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_Revoke', timer: 'PT1H' } as Op]));
     expect(err.code).toBe('E_INVALID_HOST');
     expect(err.message).toMatch(/compensation handler/);
-    expect(caught(() => moveElements(doc, { op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_Other').get<El>('attachedToRef').get('id')).toBe('Activity_Book');
     // a normal activity still takes boundary events
     runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', id: 'Event_New', on: 'Activity_Book', timer: 'PT2H' } as Op]);
@@ -687,16 +687,16 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
 
   it('warns W_DUPLICATE_FLOW when connect adds a second flow between the same nodes', async () => {
     const doc = await compDoc();
-    const first = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
+    const first = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
     expect(first.warnings.map((w) => w.code)).not.toContain('W_DUPLICATE_FLOW');
-    const second = connectElements(doc, { op: 'connect', source: 'Start', target: 'End' });
+    const second = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
     const dup = second.warnings.find((w) => w.code === 'W_DUPLICATE_FLOW');
     // the file numbers its flows F1, F2: new ones keep the prefix and name their ends; the second one takes a suffix
     expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F_StartToEnd\b/);
     expect(second.created.map((c) => c.id)).toEqual(['F_StartToEnd_2']);
     expect(second.warnings.map((w) => w.code)).toContain('W_ID_SUFFIXED');
     expect(dup?.hint).toMatch(/--if-absent/);
-    const skipped = connectElements(doc, { op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
+    const skipped = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);
     expect(skipped.created).toEqual([]);
     expect(many(doc.require('Process_1'), 'flowElements').filter((f) => is(f, 'bpmn:SequenceFlow') && f.get<El>('targetRef').get('id') === 'End')).toHaveLength(3);

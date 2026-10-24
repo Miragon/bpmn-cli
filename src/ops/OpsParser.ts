@@ -12,10 +12,11 @@
 import { usageError } from '../shared/utils/errors.js';
 import { CliError } from '../shared/CliError.js';
 import { closestKey } from '../shared/utils/fuzzy.js';
-import { FLOW_NODE_FAMILIES, KindError, kindByName, gatewayKindList, normalizeTrigger, parseKind, type Family } from '../model/kinds.js';
+import { FLOW_NODE_FAMILIES, kindByName, gatewayKindList, normalizeTrigger, parseKind, type Family } from '../model/utils/kinds.js';
+import { KindError } from '../model/KindError.js';
 import { OpAliases } from './OpAliases.js';
 import { ALIAS, unknownAlias } from './utils/aliases.js';
-import { defaultWithConditionViolation, groupViolation, placementViolation } from './rules.js';
+import { defaultWithConditionViolation, groupViolation, placementViolation } from './utils/op-rules.js';
 import { OP_NAMES } from './utils/op-names.js';
 import { parseSpaceAmount } from './utils/space-amount.js';
 import type { FieldSpec, SplitNode } from './utils/field-specs.js';
@@ -229,7 +230,7 @@ export class OpsParser {
     const kind = obj['kind'];
     if (typeof kind !== 'string') return;
     let family: Family;
-    // `eventSubProcess:<trigger>` creates the event sub-process together with its start event (see ops/add.ts)
+    // `eventSubProcess:<trigger>` creates the event sub-process together with its start event (see ops/ElementAdder.ts)
     const eventSub = /^(eventSubProcess|eventSub|bpmn:eventSubProcess):(.+)$/i.exec(kind);
     if (eventSub) {
       const trigger = normalizeTrigger(eventSub[2]!);
@@ -248,7 +249,7 @@ export class OpsParser {
     if (expectFamily && family !== expectFamily) {
       throw this.fail(ctx, `"kind" must be a ${expectFamily} kind, "${kind}" is a ${family}`, expectFamily === 'gateway' ? `Use ${gatewayKindList()}.` : undefined);
     }
-    // send and receive tasks reference a message too (`add sendTask --message X`, ops/add.ts)
+    // send and receive tasks reference a message too (`add sendTask --message X`, ops/ElementAdder.ts)
     const messageTask = ['sendTask', 'receiveTask'].includes(parseKind(kind).def.kind);
     const triggers = this.presentKeys(obj, TRIGGER_KEYS).filter((k) => !(messageTask && k === 'message'));
     if (triggers.length && family !== 'event') {

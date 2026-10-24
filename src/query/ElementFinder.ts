@@ -13,7 +13,7 @@ import type { Doc } from '../model/Doc.js';
 import { is, peek, walk, type El } from '../model/utils/moddle.js';
 import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
 import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
-import { nestedEntries } from '../ops/set.js';
+import { nestedEntries } from '../ops/utils/nested-slots.js';
 import { ElementFacts } from './ElementFacts.js';
 import type { FindHit } from './model-view.js';
 import { compact, kindFilter, labelOf, nameOf, truncate } from './utils/view.js';

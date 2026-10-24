@@ -1,16 +1,18 @@
 import { LAYOUT_MODES } from '../pipeline/index.js';
 import { Doc } from '../model/Doc.js';
-import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/kinds.js';
+import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/utils/kinds.js';
 import { SWATCHES } from '../diagram/utils/colors.js';
 import { OPS_SCHEMA } from '../ops/OpsSchemaBuilder.js';
 import { OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/utils/op-fields.js';
 import { EXTENSION_STRUCTURE } from '../ops/ExtensionStructure.js';
-import { NESTED_SLOTS, NESTED_TYPES, nestedKeysOf, SET_KEYS, type NestedSlot, type SetKeyDoc } from '../ops/set.js';
+import { NESTED_SLOTS, NESTED_TYPES, type NestedSlot } from '../ops/utils/nested-slots.js';
+import { SET_KEYS, type SetKeyDoc } from '../ops/PropertyCoercer.js';
 import { OP_NAMES } from '../ops/utils/op-names.js';
 import { ZEEBE } from '../platform/ZeebeDescriptor.js';
 import { usageError } from '../shared/utils/errors.js';
 import { ERROR_CATALOGUE, EXIT_CODE_DOCS, ID_CONVENTIONS, NESTED_SELECTORS, NON_INTERRUPTING_DOC, PLACEMENT_DOCS, PLACEMENT_NOTES, TRIGGER_OPTIONS } from './guide.js';
 import { heading, table } from './utils/table.js';
+import { NestedSlots } from '../ops/NestedSlots.js';
 
 const FAMILY_LABELS: Record<Family, string> = {
   task: 'Tasks',
@@ -265,7 +267,7 @@ export class KindsReference {
     const table = {} as Record<NestedSlot, Record<string, string[]>>;
     for (const slot of NESTED_SLOTS) {
       table[slot] = {};
-      for (const type of NESTED_TYPES[slot]) table[slot][type] = nestedKeysOf(doc, slot, doc.moddle.create(type));
+      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(doc).keysOf(slot, doc.moddle.create(type));
     }
     return table;
   }

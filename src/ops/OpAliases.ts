@@ -1,7 +1,7 @@
 /**
  * Batch aliases: an op of an `apply` batch names an element it creates
  * (`"as": "$check"`; add also `"flowAs"`: the flow into the new node, and
- * `"outAs"`: the flow it creates out of it, ops/add.ts; split
+ * `"outAs"`: the flow it creates out of it, ops/ElementAdder.ts; split
  * `"joinAs"`: its join gateway; the nodes of a split branch take `as` /
  * `flowAs` too; add, connect, set and retype `"refAs"`: the bpmn:Message /
  * Error / Signal / Escalation the element references, created or found by
@@ -23,9 +23,9 @@
  *    far); an alias in a field that names a new id (`id`, `flowId`,
  *    `joinId`) is a usage error that points to `as`.
  *  - AliasTable binds an alias to the element itself, so it follows a
- *    rename later in the batch (ops/flows.ts followEnds), and a retype to
+ *    rename later in the batch (ops/FlowIdFollower.ts follow), and a retype to
  *    another type, which replaces the element by a new one
- *    (ChangeSet.replaced, ops/retype.ts swapType: runBatch rebinds the
+ *    (ChangeSet.replaced, ops/ElementRetyper.ts swapType: runBatch rebinds the
  *    alias, also when the new element got a new id); resolve()
  *    returns a copy of the op with every alias replaced by the element's
  *    current id (an alias of a removed element is E_NOT_FOUND). The format
@@ -67,7 +67,7 @@ const REF_KEYS: Record<Op['op'], readonly string[]> = {
 /** `set` keys whose value is an element id. */
 const SET_REF_KEYS: readonly string[] = ['default', 'source', 'target', 'lane'];
 
-/** Keys that define an alias, per op (`refAs`: the root element the op's element references, ops/events.ts bindRefAs). */
+/** Keys that define an alias, per op (`refAs`: the root element the op's element references, ops/RootElements.ts bindRefAs). */
 const DEF_KEYS = Object.fromEntries(Object.entries(OP_FIELDS).map(([name, fields]) => [name, Object.keys(fields).filter((key) => fields[key]!.alias)])) as Partial<Record<Op['op'], readonly string[]>>;
 
 const NODE_DEF_KEYS = Object.keys(NODE_FIELDS).filter((key) => NODE_FIELDS[key as keyof typeof NODE_FIELDS].alias);

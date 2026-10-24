@@ -1,6 +1,6 @@
 /**
- * `bpmn show <id>`: everything about one element incl. readProperties()
- * from ops/set.js, new ExtensionLister().list() from ops/ext.js, flows in/out with
+ * `bpmn show <id>`: everything about one element incl. ElementProperties.read()
+ * from ops/ElementProperties.ts, new ExtensionLister().list() from ops/ext.js, flows in/out with
  * labels/conditions, host, attached boundary events, lane, scope. It first
  * adds missing incoming/outgoing mirror entries (repairFlowLinks in
  * validate/structural.ts) so flows of hand-written files show up.
@@ -12,7 +12,9 @@ import { Groups } from '../diagram/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
 import { ExtensionLister } from '../ops/ExtensionLister.js';
-import { nestedEntries, readProperties, vendorAttributes } from '../ops/set.js';
+import { nestedEntries } from '../ops/utils/nested-slots.js';
+import { ElementProperties } from '../ops/ElementProperties.js';
+import { vendorAttributes } from '../ops/utils/elements.js';
 import { flowOrder, repairFlowLinks } from '../validate/structural.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
@@ -74,7 +76,7 @@ export class ElementDetailBuilder {
       process: is(el, 'bpmn:Participant') ? peek<El>(el, 'processRef')?.get<string>('id') : doc.processOf(el)?.get<string>('id'),
       lane: isNode && !is(el, 'bpmn:BoundaryEvent') ? laneOf(doc, el)?.get<string>('id') : undefined,
       host: host ? shownId(host) : undefined,
-      properties: { ...this.baseProperties(), ...readProperties(doc, el) },
+      properties: { ...this.baseProperties(), ...new ElementProperties(doc).read(el) },
       incoming,
       outgoing: doc.outgoing(el).map((f) => new ElementFacts(f).flow()),
       boundary: boundary.length ? boundary : undefined,
@@ -89,7 +91,7 @@ export class ElementDetailBuilder {
     });
   }
 
-  /** Facts the view derives itself; readProperties() (ops/set.ts) overrides them key by key. */
+  /** Facts the view derives itself; ElementProperties.read() (ops/ElementProperties.ts) overrides them key by key. */
   private baseProperties(): Record<string, unknown> {
     const { doc, el, facts } = this;
     const props: Record<string, unknown> = {};

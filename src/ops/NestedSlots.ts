@@ -1,0 +1,229 @@
+/**
+ * The `<slot>.<key>` keys of `set`: attributes of the nested elements
+ * without an id of their own (`definition.`, `loop.`, `condition.`; see
+ * ops/utils/nested-slots.ts), checked against the BPMN type and the Camunda
+ * and Zeebe descriptors, the nested element created where a key needs it.
+ */
+import { PropertyCoercer } from './PropertyCoercer.js';
+import type { Doc } from '../model/Doc.js';
+import { modelError } from '../shared/utils/errors.js';
+import { IdRenamer } from './IdRenamer.js';
+import { kindLabel, kindOf, TRIGGER_TYPES } from '../model/utils/kinds.js';
+import { is, many, type El } from '../model/utils/moddle.js';
+import { ChangeSet } from '../model/ChangeSet.js';
+import { descriptorOf, idOf, isEl, typeLabel } from './utils/elements.js';
+import { parseSlotRef, resolveNested, slotsOf, SLOT_TEXT, type NestedSlot } from './utils/nested-slots.js';
+import { CAMUNDA } from '../platform/CamundaDescriptor.js';
+import { VendorDescriptor } from '../platform/VendorDescriptor.js';
+import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
+
+/** Keys of a nested element that have their own set key (or are generated). */
+const NESTED_BLOCKED: Record<string, string> = {
+  body: 'use condition= / when= / timer= / cardinality= / completion=',
+};
+
+export class NestedSlots {
+  private readonly coercer: PropertyCoercer;
+
+  constructor(private readonly doc: Doc) {
+    this.coercer = new PropertyCoercer(doc);
+  }
+
+  /**
+   * The `<slot>.<key>` keys a nested element of this type accepts: id, its
+   * settable BPMN attributes and the camunda attributes the Camunda descriptor
+   * places on it (other vendors' attributes are accepted too, unchecked).
+   */
+  keysOf(slot: NestedSlot, target: El): string[] {
+    const keys = ['id', ...this.coercer.genericKeys(target).filter((k) => !NESTED_BLOCKED[k]), ...CAMUNDA.attrsFor(target).map((a) => a.name)];
+    return [...new Set(keys)].map((k) => `${slot}.${k}`);
+  }
+
+  /** Creates the nested element a non-empty `<slot>.<key>` needs, or explains why it cannot. */
+  private create(el: El, slot: NestedSlot, key: string, cs: ChangeSet): El {
+    const id = idOf(el);
+    const local = this.coercer.camundaLocal(key);
+    if (slot === 'loop') {
+      const multi = this.doc.moddle.create('bpmn:MultiInstanceLoopCharacteristics');
+      this.checkKey(el, slot, multi, key);
+      multi.$parent = el;
+      el.set('loopCharacteristics', multi);
+      cs.note(`${id}: created a parallel multi-instance loop for loop.${key}`);
+      return multi;
+    }
+    if (slot === 'condition' && is(el, 'bpmn:SequenceFlow') && local === 'resource') {
+      const expr = this.doc.moddle.create('bpmn:FormalExpression');
+      expr.$parent = el;
+      el.set('conditionExpression', expr);
+      const source = el.get<El | undefined>('sourceRef');
+      if (source?.get<El | undefined>('default') === el) {
+        source.set('default', undefined);
+        cs.change(ChangeSet.entryOf(el, `no longer the default flow of ${idOf(source)}`));
+      }
+      return expr;
+    }
+    if (slot === 'definition') {
+      const name = local ? `camunda:${local}` : undefined;
+      const trigger = name ? (kindOf(el)?.triggers ?? []).find((t) => t !== 'none' && CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[t])) : undefined;
+      throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition to set ${slot}.${key} on (it has no trigger)`, {
+        element: id,
+        hint: `Give it a trigger first: \`bpmn set <file> ${id} trigger=${trigger ?? '<trigger>'}\` (or in the same command, e.g. trigger=${trigger ?? 'message'} ${slot}.${key}=<value>).`,
+      });
+    }
+    throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no condition to set ${slot}.${key} on`, {
+      element: id,
+      hint: is(el, 'bpmn:SequenceFlow')
+        ? `Set the condition first (\`bpmn set <file> ${id} condition=<expression>\`), or make it a script resource condition with condition.camunda:resource=<uri> language=<lang>.`
+        : `Set the condition first: \`bpmn set <file> ${id} when=<expression>\`.`,
+    });
+  }
+
+  /** Refuses a key the nested element cannot carry (E_WRONG_HOST for known camunda attributes, E_UNKNOWN_KEY otherwise). */
+  private checkKey(el: El, slot: NestedSlot, target: El, key: string, prefix: string = slot): void {
+    const id = idOf(el);
+    const full = `${prefix}.${key}`;
+    const zi = key.indexOf(':');
+    if (zi > 0 && this.doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !ZEEBE.attr(key.slice(zi + 1))) {
+      // a zeebe setting of a nested element is an extension element of it (loop.zeebe:loopCharacteristics)
+      const local = key.slice(zi + 1);
+      const owner = ZEEBE.typeNames().find((t) => ZEEBE.allowedOn(t, target) === true && ZEEBE.type(t)!.attributes.some((a) => a.name === local));
+      if (owner) {
+        throw modelError('E_WRONG_HOST', `${key} is not an attribute of the ${typeLabel(target)} of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
+          element: id,
+          hint: `Use \`bpmn ext add <file> ${id} ${prefix}.${key.slice(0, zi)}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
+        });
+      }
+    }
+    if (key.includes(':')) {
+      const local = this.coercer.camundaLocal(key);
+      if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) return;
+      const owners = CAMUNDA.attr(local)?.owners ?? [];
+      const onElement = CAMUNDA.attrAppliesTo(`camunda:${local}`, el);
+      const multi = slot === 'loop' && owners.some((o) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', o));
+      throw modelError('E_WRONG_HOST', `${key} cannot be set on the ${typeLabel(target)} of ${kindLabel(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
+        element: id,
+        hint: multi
+          ? `Set loop=parallel or loop=sequential first (\`bpmn set <file> ${id} loop=parallel ${full}=<value>\`).`
+          : onElement
+            ? `It is an attribute of ${id} itself: \`bpmn set <file> ${id} ${key}=<value>\`.`
+            : `${key} belongs on ${owners.map((o) => o.replace('bpmn:', '')).join(', ')}.`,
+      });
+    }
+    if (key === 'id') return;
+    const p = descriptorOf(target).propertiesByName?.[key];
+    const blocked = NESTED_BLOCKED[key];
+    if (!p || blocked || !this.coercer.isSettable(p)) {
+      const keys = ['id', ...this.coercer.genericKeys(target).filter((k) => !NESTED_BLOCKED[k])].map((k) => `${prefix}.${k}`);
+      throw modelError('E_UNKNOWN_KEY', `Unknown key "${full}" for ${kindLabel(el)} ${id}: a ${typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
+        element: id,
+        candidates: keys,
+        hint: `Keys of the ${SLOT_TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${prefix}.<prefix>:<attr>.`,
+      });
+    }
+  }
+
+  /** A script resource replaces an inline body: the body goes, reported as W_PROPERTY_DROPPED. */
+  private static dropConditionBody(el: El, expr: El, cs: ChangeSet, key = 'camunda:resource'): void {
+    const body = expr.get<string | undefined>('body');
+    if (!body) return;
+    expr.set('body', undefined);
+    cs.warn({
+      code: 'W_PROPERTY_DROPPED',
+      message: `The condition "${body}" of ${idOf(el)} was dropped: a script resource condition has no inline body`,
+      element: idOf(el),
+      hint: `To go back to an inline condition remove the resource and set the body in one command: \`bpmn set <file> ${idOf(el)} condition.${key}= '${is(el, 'bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>'\`.`,
+    });
+  }
+
+  /**
+   * Removing the script resource of a condition that has no inline body would
+   * leave an empty condition: the engines deploy it, and every evaluation fails
+   * ("condition script returns null" / "condition expression returns
+   * non-Boolean"). Refused unless the same command gives the inline condition
+   * (`condition=` on a flow, which may also remove it; `when=` on an event).
+   */
+  private assertConditionKept(el: El, target: El, key: string, full: string): void {
+    if (!this.coercer.isResourceKey(key) || this.coercer.resourceKeyOf(target) !== key) return;
+    if (target.get<string | undefined>('body')?.trim()) return;
+    const id = idOf(el);
+    const flow = is(el, 'bpmn:SequenceFlow');
+    throw PropertyCoercer.invalid(
+      el,
+      full,
+      `removing the script resource ${String(target.$attrs[key])} would leave ${flow ? 'the condition' : 'the condition of the conditional event'} empty (it has no inline body); the engines would fail every evaluation of an empty condition`,
+      flow
+        ? `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'condition=\${...}'\`, or remove the whole condition: \`bpmn set <file> ${id} condition=\`.`
+        : `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'when=\${...}'\` (a conditional event always needs a condition), or point it at another script: \`bpmn set <file> ${id} ${full}=<uri>\`.`,
+    );
+  }
+
+  /**
+   * Applies one `<slot>.<key>=<value>` (see the module contract). `replacing`:
+   * the same command sets the flow's inline condition (condition=), so a
+   * removed script resource leaves nothing empty behind.
+   */
+  apply(el: El, slot: string, key: string, value: string, cs: ChangeSet, replacing = false): void {
+    const full = `${slot}.${key}`;
+    if (key.includes(':')) value = this.coercer.vendorValue(el, key, value, full);
+    const slots = slotsOf(el);
+    const ref = parseSlotRef(slot);
+    if (!ref || !slots.includes(ref.slot) || !key) {
+      throw this.coercer.unknownKey(el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((s) => `${s}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
+    }
+    const s = ref.slot;
+    let target = resolveNested(el, ref, full);
+    if (!target) {
+      if (!value) return; // nothing to remove
+      target = this.create(el, s, key, cs);
+    }
+    if (value) this.checkKey(el, s, target, key, ref.text);
+    if (s === 'condition' && value && this.coercer.isResourceKey(key)) NestedSlots.dropConditionBody(el, target, cs, key);
+    if (s === 'condition' && !value && !replacing) this.assertConditionKept(el, target, key, full);
+    if (key.includes(':')) {
+      this.coercer.setVendorAttribute(target, key, value);
+    } else if (key === 'id') {
+      if (!value) throw PropertyCoercer.invalid(el, full, 'an id cannot be empty');
+      if (idOf(target)) new IdRenamer(this.doc).rename(target, value);
+      else {
+        this.doc.claimId(value);
+        target.set('id', value);
+      }
+    } else if (!PropertyCoercer.removeUndefined(target, key, value)) {
+      this.checkKey(el, s, target, key, ref.text);
+      const p = descriptorOf(target).propertiesByName![key]!;
+      const coerced = value ? this.coercer.coerce(el, p, value, full) : undefined;
+      if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) this.assertCompensationInScope(el, coerced, full);
+      target.set(key, coerced);
+    }
+    cs.change(ChangeSet.entryOf(el, value ? `${full}=${value}` : `${full} removed`));
+  }
+
+  /**
+   * The activity a compensation throw event names (activityRef) must be an
+   * activity of the event's own scope (directly, not inside a sub-process of
+   * it); a throw event in an event sub-process may also name an activity of the
+   * scope around the event sub-process. Camunda 7, CIB seven and Operaton refuse
+   * anything else ("no activity with id ... in scope"); BPMN 2.0 says the same
+   * (the activity is compensated from within its scope).
+   */
+  private assertCompensationInScope(event: El, activity: El, full: string): void {
+    if (!is(activity, 'bpmn:Activity')) return;
+    const scope = this.doc.scopeOf(event);
+    if (!scope) return;
+    const scopes = [scope];
+    if (is(scope, 'bpmn:SubProcess') && scope.get<boolean | undefined>('triggeredByEvent')) {
+      const outer = this.doc.scopeOf(scope);
+      if (outer) scopes.push(outer);
+    }
+    const actual = this.doc.scopeOf(activity);
+    if (actual && scopes.includes(actual)) return;
+    const candidates = scopes.flatMap((sc) => many(sc, 'flowElements').filter((e) => is(e, 'bpmn:Activity') && !(is(e, 'bpmn:SubProcess') && e.get<boolean | undefined>('triggeredByEvent'))).map(idOf));
+    const id = idOf(event);
+    throw modelError('E_CROSS_SCOPE', `${full}=${idOf(activity)}: ${idOf(activity)} is in ${actual ? idOf(actual) : '?'}, not in the scope of ${id} (${scopes.map(idOf).join(' / ')}); a compensation event can only compensate activities of its own scope`, {
+      element: id,
+      related: [idOf(activity)],
+      candidates,
+      hint: `Name an activity of ${scopes.map(idOf).join(' or ')}: ${candidates.join(', ') || 'none'}. To compensate ${idOf(activity)}, throw the compensation inside ${actual ? idOf(actual) : 'its scope'} (e.g. an event sub-process or an intermediate throw event there). The engines refuse the file otherwise.`,
+    });
+  }
+}

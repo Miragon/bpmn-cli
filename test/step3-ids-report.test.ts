@@ -16,7 +16,7 @@ import { cutAt, cutName, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug
 import { IdRegistry } from '../src/ids/IdRegistry.js';
 import { connectionRequest, kindRequest } from '../src/ids/utils/requests.js';
 import { IdStyle } from '../src/ids/IdStyle.js';
-import { kindByName } from '../src/model/kinds.js';
+import { kindByName } from '../src/model/utils/kinds.js';
 import { runOps, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 

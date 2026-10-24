@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { SUB_PROCESS_TYPES } from '../diagram/utils/expansion.js';
-import { kindLabel } from '../model/kinds.js';
+import { kindLabel } from '../model/utils/kinds.js';
 import { EditTransaction } from './EditTransaction.js';
 import type { LayoutDocOptions, MutationResult } from './index.js';
 

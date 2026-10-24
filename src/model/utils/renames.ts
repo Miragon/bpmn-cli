@@ -1,5 +1,5 @@
 /**
- * The detail a change entry gets from what followEnds did to a flow whose
+ * The detail a change entry gets from what FlowIdFollower.follow did to a flow whose
  * ends changed: ` (renamed from <old>: ...)` when it renamed the flow; for
  * `''`, ` (id added: it had none)`: a flow without id got one from its new
  * ends.

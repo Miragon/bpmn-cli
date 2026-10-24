@@ -6,9 +6,10 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { is, walk, type El } from '../model/utils/moddle.js';
-import type { ChangeSet } from '../model/ChangeSet.js';
-import { kindLabel } from '../model/kinds.js';
-import { changeOf, definitionsOf, idOf } from './set.js';
+import { ChangeSet } from '../model/ChangeSet.js';
+import { kindLabel } from '../model/utils/kinds.js';
+import { definitionsOf } from './utils/nested-slots.js';
+import { idOf } from './utils/elements.js';
 import { ExtensionInserter } from './ExtensionInserter.js';
 import { NESTED_HOSTS } from './NestedHosts.js';
 import { VendorElements } from './VendorElements.js';
@@ -79,7 +80,7 @@ export class ZeebeSubscription {
       const sub = existing[0]! as unknown as Record<string, unknown>;
       if (sub['correlationKey'] !== value) {
         sub['correlationKey'] = value;
-        cs.change(changeOf(message, `${existing[0]!.$type} correlationKey=${value}`));
+        cs.change(ChangeSet.entryOf(message, `${existing[0]!.$type} correlationKey=${value}`));
       }
     } else {
       cs.merge(new ExtensionInserter(doc).add(message, { op: 'ext', id: idOf(message), action: 'add', type, attrs: { correlationKey: value } }));

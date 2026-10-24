@@ -11,7 +11,7 @@ import { Cli } from '../src/commands/Cli.js';
 import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
 import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/utils/slug.js';
-import { KINDS } from '../src/model/kinds.js';
+import { KINDS } from '../src/model/utils/kinds.js';
 import { OP_NAMES } from '../src/ops/utils/op-names.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';

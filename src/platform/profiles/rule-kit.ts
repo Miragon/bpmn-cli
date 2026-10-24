@@ -20,7 +20,7 @@
  * test/isomorphic.test.ts fail when a rule module imports a module the
  * core entry loads, naming both.
  */
-import { kindLabel } from '../../model/kinds.js';
+import { kindLabel } from '../../model/utils/kinds.js';
 import { unkeptEntries } from '../../model/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
 import { DecisionLinkReader } from '../../ops/DecisionLinkReader.js';

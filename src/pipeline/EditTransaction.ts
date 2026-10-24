@@ -31,7 +31,7 @@
  *    path (Doc.fromXml + mutateDoc, XML from anywhere) is guarded like files.
  *  - dropped content: a retype whose new kind cannot hold the element's
  *    content (sub-process -> task) is refused with E_WOULD_DROP_CONTENT
- *    listing the ids it would delete (EditContext.droppedContent, recorded by ops/retype.ts).
+ *    listing the ids it would delete (EditContext.droppedContent, recorded by ops/ElementRetyper.ts).
  *  - validation: the document is validated before and after the ops; only
  *    errors the ops introduce block the write (E_VALIDATION). Errors the
  *    document already had (same code and element) do not block unrelated
@@ -42,7 +42,7 @@
  *    warnings; `validation.platform` has them as `added`, the ones the ops
  *    removed as `resolved`, and the totals (`bpmn validate` lists them all).
  *    An op warning that the added findings repeat item by item is dropped
- *    (retype's W_PROPERTY_INAPPLICABLE, ops/retype.ts withoutProfileDuplicates).
+ *    (retype's W_PROPERTY_INAPPLICABLE, ops/utils/covers.ts withoutProfileDuplicates).
  *  - validators (src/validate/validators.ts, MutationOptions.validators): each runs
  *    on the document before the ops and on the candidate XML after the
  *    layout, the format ops and the text-preserving step, i.e. on exactly
@@ -116,7 +116,7 @@ import { modelError } from '../shared/utils/errors.js';
 import { EditContext } from '../model/EditContext.js';
 import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { OpRunner, type BatchRun } from '../ops/OpRunner.js';
-import { withoutProfileDuplicates } from '../ops/retype.js';
+import { withoutProfileDuplicates } from '../ops/utils/covers.js';
 import type { Op } from '../ops/types.js';
 import { PLATFORM_PROFILES } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidationResult } from '../validate/structural.js';
@@ -211,7 +211,7 @@ export class EditTransaction {
     const doc = this.doc;
     const unchanged = doc.source !== undefined && xml === doc.source.text;
     // the generated ids under a declared prefix that the file's style would give otherwise (the ones the change kept)
-    const declared = this.edit.declaredIds.filter((id) => doc.has(id));
+    const declared = this.edit.allocator.declaredIds.filter((id) => doc.has(id));
     const conventions = this.edit.conventions;
     const result: MutationResult = {
       ok: true,

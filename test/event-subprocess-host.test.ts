@@ -7,11 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import type { El } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/index.js';
-import { moveElements } from '../src/ops/move.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/validate/structural.js';
 import { definitionsXml } from './helpers.js';
+import { NodeMover } from '../src/ops/NodeMover.js';
 
 const TIMER = '<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>';
 
@@ -61,7 +61,7 @@ describe('boundary events on an event sub-process (#75)', () => {
 
   it('move --on an event sub-process is refused with E_INVALID_HOST', async () => {
     const doc = await Doc.fromXml(ORDER);
-    expect(caught(() => moveElements(doc, { op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_ShipTimeout').get<El>('attachedToRef').get('id')).toBe('Activity_Ship');
   });
 
