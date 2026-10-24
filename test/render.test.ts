@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/render/index.js';
-import { innerLines, wrapLines } from '../src/diagram/text.js';
+import { innerLines, wrapLines } from '../src/diagram/utils/text.js';
 import { CliError } from '../src/shared/CliError.js';
 import { rasterize, renderPng } from '../src/node/render.js';
 // @ts-expect-error plain ESM tooling without type declarations

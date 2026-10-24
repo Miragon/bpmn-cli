@@ -27,8 +27,8 @@
  *    same border as before, in the same order, with their labels.
  *  Every function returns the ids it moved or resized.
  */
-import { SIZES } from './types.js';
-import { bottom, copyBox, cy, median, right, type Box } from './geom.js';
+import { SIZES } from './utils/sizes.js';
+import { bottom, copyBox, cy, median, right, union, type Box } from './utils/geom.js';
 import { boundariesOf, contentOf, isLeaf, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 
 export { contentOf };
@@ -57,12 +57,6 @@ export function wrapPool(plane: Plane, pool: DShape): void {
   }
   for (const e of plane.edges.values()) for (const p of e.points) box = box ? union(box, { x: p.x, y: p.y, width: 0, height: 0 }) : { x: p.x, y: p.y, width: 0, height: 0 };
   pool.bounds = box ? { x: Math.round(box.x - HEADER - PAD), y: Math.round(box.y - PAD), width: Math.round(box.width + HEADER + 2 * PAD), height: Math.round(box.height + 2 * PAD) } : { x: 100, y: 80, width: 600, height: 250 };
-}
-
-function union(a: Box, b: Box): Box {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, width: Math.max(right(a), right(b)) - x, height: Math.max(bottom(a), bottom(b)) - y };
 }
 
 /** A new pool below the last one. */

@@ -32,7 +32,7 @@
  *  Read-only.
  */
 import { is, type El } from '../model/utils/moddle.js';
-import { cx, cy, median, right } from '../diagram/geom.js';
+import { cx, cy, median, right } from '../diagram/utils/geom.js';
 import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf, type LabelSide } from '../diagram/labels.js';
 import { layoutProblems, type LayoutMetrics } from '../diagram/metrics.js';
 import { spacingOf } from '../diagram/place.js';

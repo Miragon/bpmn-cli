@@ -88,7 +88,7 @@
  *  undefined when the label fits.
  */
 import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './geom.js';
+import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './utils/geom.js';
 import { defaultLabelSide, hasExternalLabel, labelArea, labelAt, labelSizeOf } from './labels.js';
 import { boundariesOf, contentOf, frameOf, inFrame, isLeaf, raw, type DShape, type Plane } from './plane.js';
 

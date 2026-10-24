@@ -46,7 +46,7 @@
  *      sub-process with content and a new pool with content are laid out by
  *      the clean engine as one block and placed like a node of that size;
  *      an activity (task, call activity, collapsed sub-process) whose new or
- *      changed name does not fit its box (diagram/text.ts activitySize: bpmn-js line
+ *      changed name does not fit its box (diagram/utils/text.ts activitySize: bpmn-js line
  *      breaking, room kept for a marker or boundary events on the bottom
  *      border) grows: wider in steps of 20 up to 200 px, then higher around
  *      its centre row, never smaller. Its left border stays, its boundary
@@ -54,7 +54,7 @@
  *      drawing's gap (at most 40 px) to what follows on its row (shapes and
  *      their labels), the space tool makes room by the added width (anchored
  *      at the activity); an external label the grown box covers is placed
- *      again (step 9); a renamed expanded sub-process whose title (diagram/text.ts
+ *      again (step 9); a renamed expanded sub-process whose title (diagram/utils/text.ts
  *      titleBox) now takes more lines than the old one did and comes closer
  *      than 4 px to the shapes and labels drawn in it under the title
  *      (inside the frame, below its top border: not a message flow's label
@@ -115,11 +115,11 @@ import { LayoutDebug } from '../shared/LayoutDebug.js';
 import type { Doc } from '../model/document.js';
 import { resolveExpanded } from './index.js';
 import { layoutClean } from './clean/engine.js';
-import { SIZES } from '../diagram/types.js';
+import { SIZES } from '../diagram/utils/sizes.js';
 import { is, layoutRoot, parseXml, type El } from '../model/utils/moddle.js';
 import { successorOf } from '../model/change-set.js';
 import { collapse, expand, placeLane, placePool, removedLane, removedPool, reseatBoundaries, wrapPool } from '../diagram/containers.js';
-import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/geom.js';
+import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, overlaps, polylinesCross, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/utils/geom.js';
 import { clearTitles, hasExternalLabel, placeEdgeLabel, placeShapeLabel, refitLabel } from '../diagram/labels.js';
 import { layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
 import { changeLane, placeArtifact, placeFlowNodes, predecessors, spacingOf, successors, newShape, type PlaceCtx, type Spacing } from '../diagram/place.js';
@@ -128,7 +128,7 @@ import { brokenEdge, DETACHED_GAP, detachedEnds, edgeBefore, routeEdge, routeRan
 import { separate } from '../diagram/separate.js';
 import { attachedSide } from '../diagram/router.js';
 import { closeStrip, fitInFrame, makeSpace } from '../diagram/space.js';
-import { activitySize, BOTTOM_ROOM, titleBox } from '../diagram/text.js';
+import { activitySize, BOTTOM_ROOM, titleBox } from '../diagram/utils/text.js';
 import { pruneDi, pruneEdges, writePlanes } from '../diagram/write.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
 
@@ -1071,7 +1071,7 @@ function growForTitle(ctx: Ctx, plane: Plane, s: DShape): void {
   const title = titleOf(s);
   if (!title) return;
   const old = oldTitle(ctx, s);
-  // the depth the title gained (diagram/text.ts titleDepth): its new lines, all of it where none was drawn
+  // the depth the title gained (diagram/utils/text.ts titleDepth): its new lines, all of it where none was drawn
   const gained = old ? title.height - old.height : bottom(title) - s.bounds.y;
   if (gained <= 0) return;
   const { shapes, edges } = contentOf(plane, s.id);
@@ -1325,7 +1325,7 @@ function labels(ctx: Ctx, routed: ReadonlySet<string>): void {
   }
 }
 
-/** The title an expanded sub-process had before the ops (diagram/text.ts titleBox of its snapshot bounds and name); undefined without one. */
+/** The title an expanded sub-process had before the ops (diagram/utils/text.ts titleBox of its snapshot bounds and name); undefined without one. */
 function oldTitle(ctx: Ctx, s: DShape): Box | undefined {
   const was = s.di ? ctx.snap.byDi.get(s.di) : undefined;
   return was?.bounds && was.kind === 'subProcess' && was.expanded === true ? titleBox(was.bounds, ctx.snap.names.get(was.id)) : undefined;
@@ -1344,22 +1344,6 @@ const REPAIR_TRIALS = 8;
 const CHAIN_RETRIES = 2;
 
 const isHardProblem = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
-
-/** Whether two polylines cross (a proper crossing of two segments, like the crossings metric). */
-function polylinesCross(a: readonly Point[], b: readonly Point[]): boolean {
-  const o = (p: Point, q: Point, r: Point): number => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
-  for (let i = 0; i + 1 < a.length; i++) {
-    for (let j = 0; j + 1 < b.length; j++) {
-      const [p, q, r, s] = [a[i]!, a[i + 1]!, b[j]!, b[j + 1]!];
-      const o1 = o(p, q, r);
-      const o2 = o(p, q, s);
-      const o3 = o(r, s, p);
-      const o4 = o(r, s, q);
-      if (o1 !== o2 && o3 !== o4 && o1 && o2 && o3 && o4) return true;
-    }
-  }
-  return false;
-}
 
 /** Every crossing between a connection drawn in this run and an existing one: [new, existing, plane]. */
 function newCrossings(ctx: Ctx): Array<[DEdge, DEdge, Plane]> {

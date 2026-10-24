@@ -27,8 +27,8 @@
  */
 import { is, type El } from '../model/utils/moddle.js';
 import type { ShapeKind } from './router.js';
-import { unionAll, type Box, type Point } from './geom.js';
-import { titleBox, titleDepth } from './text.js';
+import { unionAll, type Box, type Point } from './utils/geom.js';
+import { titleBox, titleDepth } from './utils/text.js';
 
 export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';
 
@@ -419,7 +419,7 @@ export function frameInterior(frame: DShape, pad = 15): Box {
   return { x: b.x + head + pad, y: b.y + top, width: Math.max(0, b.width - head - 2 * pad), height: Math.max(0, b.height - top - pad) };
 }
 
-/** Where the title of an expanded sub-process is drawn (text.ts titleBox); undefined for any other shape and without a name. */
+/** Where the title of an expanded sub-process is drawn (diagram/utils/text.ts titleBox); undefined for any other shape and without a name. */
 export function titleOf(s: DShape): Box | undefined {
   return s.kind === 'subProcess' && s.container ? titleBox(s.bounds, raw<string>(s.el, 'name')) : undefined;
 }

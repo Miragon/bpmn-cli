@@ -479,7 +479,7 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
     });
 
     describe('labelOnTitle', () => {
-      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (text.ts titleBox)
+      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (diagram/utils/text.ts titleBox)
       const titled = (name: string, expanded: boolean, label: Rect): string =>
         processXml(`<bpmn:subProcess id="Sub"${name ? ` name="${name}"` : ''} /><bpmn:startEvent id="E" name="Order in" />`, [shape('Sub', [100, 100, 300, 200], { expanded }), shape('E', [40, 40, 36, 36], { label })]);
 

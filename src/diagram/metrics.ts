@@ -68,7 +68,7 @@
  *                        or message flow overlapping the title of a named
  *                        expanded sub-process (event sub-processes,
  *                        transactions and ad-hoc ones too) on its plane:
- *                        where bpmn-js draws its name, text.ts titleBox.
+ *                        where bpmn-js draws its name, diagram/utils/text.ts titleBox.
  *                        Pool and lane names are not checked
  *      messageLabelFar   a named message flow whose label is more than 50 px
  *                        away from its line
@@ -135,8 +135,9 @@
  *    measurement (parallelRun length). Duplicates are matched one to one.
  */
 import { is, parseXml, type El } from '../model/utils/moddle.js';
+import { segmentsCross } from './utils/geom.js';
 import type { Box, Point } from './types.js';
-import { titleBox } from './text.js';
+import { titleBox } from './utils/text.js';
 
 /** structural defects the regression harness does not measure (see contract) */
 export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge', 'detachedEdge'] as const;
@@ -252,17 +253,6 @@ function segs(pts: Point[]): Seg[] {
   const out: Seg[] = [];
   for (let i = 0; i + 1 < pts.length; i++) out.push([pts[i]!, pts[i + 1]!]);
   return out;
-}
-
-const orient = (a: Point, b: Point, c: Point): number => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-
-/** proper crossing: the end points of each segment lie strictly on both sides of the other */
-function cross([a, b]: Seg, [c, d]: Seg): boolean {
-  const o1 = orient(a, b, c);
-  const o2 = orient(a, b, d);
-  const o3 = orient(c, d, a);
-  const o4 = orient(c, d, b);
-  return o1 !== o2 && o3 !== o4 && !!o1 && !!o2 && !!o3 && !!o4;
 }
 
 /** segment bounding box meets the box shrunk by `shrink` */
@@ -555,7 +545,7 @@ function checkEdgePairs({ edges, add }: PlaneCtx): void {
     for (let j = i + 1; j < edges.length; j++) {
       const a = edges[i]!;
       const b = edges[j]!;
-      if (a.segs.some((sa) => b.segs.some((sb) => cross(sa, sb)))) add('crossings', `${a.id}x${b.id}`, [a.id, b.id]);
+      if (a.segs.some((sa) => b.segs.some((sb) => segmentsCross(...sa, ...sb)))) add('crossings', `${a.id}x${b.id}`, [a.id, b.id]);
       const related = [...a.ends].some((x) => b.ends.has(x));
       if (related) continue;
       let len = 0;
@@ -975,7 +965,7 @@ function checkLabelFrames(ctx: PlaneCtx): void {
   }
 }
 
-/** The title of a named expanded sub-process (text.ts titleBox), undefined for any other shape. */
+/** The title of a named expanded sub-process (diagram/utils/text.ts titleBox), undefined for any other shape. */
 const titleOf = (s: Shape): Box | undefined => (s.expanded && is(s.el, 'bpmn:SubProcess') ? titleBox(s.b, raw<string>(s.el, 'name')) : undefined);
 
 /** named external labels on the title of an expanded sub-process */
@@ -1178,7 +1168,7 @@ function locate(p: LayoutProblem, pl: LocPlane): Point | undefined {
   const labelOf = (id: string | undefined): Box | undefined => (id === undefined ? undefined : (pl.shapes.get(id)?.label ?? pl.edges.get(id)?.label));
   switch (p.kind) {
     case 'crossings':
-      for (const x of ea?.segs ?? []) for (const y of eb?.segs ?? []) if (cross(x, y)) return crossPoint(x, y);
+      for (const x of ea?.segs ?? []) for (const y of eb?.segs ?? []) if (segmentsCross(...x, ...y)) return crossPoint(x, y);
       return undefined;
     case 'overlaps':
     case 'frameOverlap':

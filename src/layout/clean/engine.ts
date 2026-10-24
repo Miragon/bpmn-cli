@@ -28,19 +28,21 @@
  *  - groups are not drawn here (no warning either): layoutModel draws them
  *    again around what their boxes held (diagram/groups.ts)
  *  - a label on a shape, another label, a line or the title of an expanded
- *    sub-process (diagram/text.ts titleBox) moves to a free spot around its
+ *    sub-process (diagram/utils/text.ts titleBox) moves to a free spot around its
  *    element, in a sub-process below its title first, else beside the
  *    title; a spot next to the element before one stepped further out
  *    (declutterLabels)
  */
-import { titleBox } from '../../diagram/text.js';
+import { titleBox } from '../../diagram/utils/text.js';
 import { addTo, is, many, type El, type Model, idOf } from '../../model/utils/moddle.js';
 import { layoutRoot } from '../../model/utils/moddle.js';
-import { DATA_ROW_EXTRA, annotationSize, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
+import { DATA_ROW_EXTRA, boundariesOnTop, boundaryExtra, framedSize, freeJoinColumns, gridScope, growToFit, layoutScope, liftChains, nodeLabels, placeAnnotations, placeAttachedArtifacts, shiftNode, type PlaceOptions } from './place.js';
 import { messageLabel, poolOrder, routeMessageFlows, type MessageFlowJob, type MessagePool, type Seg } from './messages.js';
 import { placeCollaborationNotes, type NoteJob } from './notes.js';
-import { borderPoint, elementLabel, routeEdges, routeLinks } from './route.js';
-import { METRICS, SIZES, boxesOverlap, center, type Box, type GEdge, type GNode, type LaneBox, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { elementLabel, routeEdges, routeLinks } from './route.js';
+import { METRICS, SIZES, annotationSize } from '../../diagram/utils/sizes.js';
+import { borderPoint, boxesOverlap, center } from '../../diagram/utils/geom.js';
+import type { Box, GEdge, GNode, LaneBox, Point, ScopeLayout } from '../../diagram/types.js';
 
 export interface EngineWarning {
   code: string;
@@ -869,7 +871,7 @@ function hitsBox([p, q]: Seg, b: Box, shrink = 0): boolean {
 
 /**
  * Moves labels that sit on a shape, on another label, on a line or on the
- * title of an expanded sub-process (text.ts titleBox) to the next free spot
+ * title of an expanded sub-process (diagram/utils/text.ts titleBox) to the next free spot
  * around their element: of the spots next to it (below / above, also
  * shifted, and beside it) in an expanded sub-process one below its title
  * first, else one inside the element's frame (in a sub-process always:

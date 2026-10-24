@@ -75,7 +75,10 @@
  *    the label box (it wraps at 90 px)
  *  - data associations are orthogonal stubs (vertical / horizontal / Z)
  */
-import { LABEL_LINE, METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type Point, type ScopeLayout } from '../../diagram/types.js';
+import { LABEL_LINE, labelSize } from '../../diagram/utils/text.js';
+import { METRICS, SIZES } from '../../diagram/utils/sizes.js';
+import { borderPoint, boxesOverlap, center, segmentHitsBox } from '../../diagram/utils/geom.js';
+import type { Box, GArtifact, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../diagram/types.js';
 
 interface Channel {
   y: number;
@@ -101,13 +104,6 @@ function obstacles(layout: ScopeLayout): Box[] {
   }
   for (const a of routedArtifacts(layout)) boxes.push(a.box);
   return boxes;
-}
-
-/** the segment from a to b runs through the inside of `box` (touching its border does not count) */
-export function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
-  const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
-  const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
-  return x1 < box.x + box.width && x2 > box.x && y1 < box.y + box.height && y2 > box.y;
 }
 
 /** number of boxes a path cuts through (segment ends shrunk so touching the own border does not count) */
@@ -1181,17 +1177,6 @@ function linkPath(a: Box, n: Box, node: GNode | undefined, boxes: Box[], lines: 
     if (!best || score < best.score) best = { pts, score };
   });
   return best!.pts;
-}
-
-/** Point on the border of `box` on the line from its centre towards `to`. */
-export function borderPoint(box: Box, to: Point): Point {
-  const c = center(box);
-  const dx = to.x - c.x, dy = to.y - c.y;
-  if (dx === 0 && dy === 0) return c;
-  const sx = dx !== 0 ? Math.abs((box.width / 2) / dx) : Infinity;
-  const sy = dy !== 0 ? Math.abs((box.height / 2) / dy) : Infinity;
-  const s = Math.min(sx, sy);
-  return { x: c.x + dx * s, y: c.y + dy * s };
 }
 
 export interface LabelOptions {

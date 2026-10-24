@@ -63,11 +63,12 @@
  *    together
  */
 import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import { titleBox, titleDepth } from '../../diagram/text.js';
+import { labelSize, titleBox, titleDepth } from '../../diagram/utils/text.js';
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { RISE_KEEP, XIndex, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments, segmentHitsBox } from './route.js';
-import { METRICS, SIZES, boxesOverlap, center, labelSize, type Box, type GArtifact, type GEdge, type GNode, type LaneBandInfo, type LinkEnd, type Point, type ScopeLayout } from '../../diagram/types.js';
-
+import { RISE_KEEP, XIndex, crossingPairs, elementLabel, entriesFromBelow, faultyFlows, nameOf, riseFrom, riseSlots, riseX, risesInto, routeEdges, routeLinks, routedArtifacts, routedSegments } from './route.js';
+import { METRICS, SIZES, annotationSize } from '../../diagram/utils/sizes.js';
+import { boxesOverlap, center, equalBoxes, segmentHitsBox } from '../../diagram/utils/geom.js';
+import type { Box, GArtifact, GEdge, GNode, LaneBandInfo, LinkEnd, Point, ScopeLayout } from '../../diagram/types.js';
 
 /* ------------------------------------------------------------------ */
 /* graph extraction                                                     */
@@ -1243,7 +1244,7 @@ export function boundariesOnTop(layout: ScopeLayout): void {
         const clear =
           !label ||
           (!shapes.some((s) => s !== b.box && boxesOverlap(s, label, 2)) &&
-            !labels.some((l) => !sameBox(l, label) && boxesOverlap(l, label, 2)) &&
+            !labels.some((l) => !equalBoxes(l, label) && boxesOverlap(l, label, 2)) &&
             !flowLabels.some((l) => boxesOverlap(l, label, 2)) &&
             !segments.some(([, s]) => s.some(([p, q]) => segmentHitsBox(p, q, label))));
         ways.set(b, { length, bends, up, box, label: clear, worth: false });
@@ -1319,10 +1320,6 @@ function messageEnds(scope: El): Set<string> {
     }
   }
   return ids;
-}
-
-function sameBox(a: Box, b: Box): boolean {
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
 /**
@@ -1432,13 +1429,6 @@ function placeEventSubs(layout: ScopeLayout): void {
 /* ------------------------------------------------------------------ */
 /* artifacts                                                            */
 /* ------------------------------------------------------------------ */
-
-export function annotationSize(text: string | undefined): { width: number; height: number } {
-  const len = (text ?? '').length;
-  const width = Math.min(300, Math.max(100, Math.ceil((len * 6.5 + 24) / 20) * 20));
-  const lines = Math.max(1, Math.ceil((len * 6.5) / (width - 14)));
-  return { width, height: Math.max(30, lines * 14 + 12) };
-}
 
 /** Middle of the longest segment of a routed flow (zero-size anchor box). */
 function flowPoint(flow: GEdge): Box {

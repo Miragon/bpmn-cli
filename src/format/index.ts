@@ -105,7 +105,7 @@ import { is, type El } from '../model/utils/moddle.js';
 import { laneSetOf, ordersLanes, ordersPools } from '../ops/order.js';
 import { parseSpaceAmount, type AlignOp, type ColorOp, type CompactOp, type FormatOp, type LabelOp, type OrderOp, type PlaceOp, type RouteOp, type SpaceOp, type TidyOp } from '../ops/types.js';
 import { closeEmpty, compactPlane, drawingGaps, looseEdges, occupied, PAD as COMPACT_PAD, type Attempt } from './compact.js';
-import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/geom.js';
+import { bottom, containsPoint, copyBox, copyPoints, cx, cy, inside, median, overlaps, right, sameBox, samePoints, segmentHits, type Box, type Point } from '../diagram/utils/geom.js';
 import { clearTitles, edgeLabelAt, hasExternalLabel, labelArea, labelAt, labelOnSide, labelSideOf, labelSizeOf, placeEdgeLabel, placeShapeLabel } from '../diagram/labels.js';
 import { diffProblems, layoutProblems, problemKey, WEIGHTS, type LayoutMetrics, type LayoutProblem } from '../diagram/metrics.js';
 import { spacingOf } from '../diagram/place.js';
@@ -115,7 +115,7 @@ import { attachedSide, type Side } from '../diagram/router.js';
 import { separate, tidy } from '../diagram/separate.js';
 import { fitInFrame, makeSpace, roomBelowTitle, shiftShape, unitBox } from '../diagram/space.js';
 import { selection } from '../query/select.js';
-import { titleBox } from '../diagram/text.js';
+import { titleBox } from '../diagram/utils/text.js';
 import { setSwatch, writePlanes } from '../diagram/write.js';
 import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
 

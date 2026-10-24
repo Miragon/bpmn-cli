@@ -70,9 +70,9 @@
  */
 import type { BpmnModdle } from 'bpmn-moddle';
 import { addTo, groupName, is, type El } from '../model/utils/moddle.js';
-import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll, type Box, type Point } from './geom.js';
+import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll, type Box, type Point } from './utils/geom.js';
 import { idOf, raw, rawList } from './plane.js';
-import { labelSize } from './types.js';
+import { labelSize } from './utils/text.js';
 
 /** padding of a redrawn group around its members */
 export const GROUP_PAD = 20;

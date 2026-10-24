@@ -10,7 +10,7 @@
  *    event's 'below' sits below the host border, right of the event.
  *  - A label box collides with a shape, another label, a line (the borders
  *    of pools, lanes and expanded sub-processes included) or the title of an
- *    expanded sub-process (plane.ts titleOf; text.ts titleBox) closer than
+ *    expanded sub-process (plane.ts titleOf; diagram/utils/text.ts titleBox) closer than
  *    2 px (1 px to a line). labelArea(frame) is where the label of a shape
  *    in that frame goes first: the frame 2 px inside its border, below its
  *    title. A label's home is where metrics.ts labelOutsideFrame wants it:
@@ -58,9 +58,9 @@
  *    above / below the longest horizontal segment, left / right of the
  *    longest vertical one (undefined when the flow has none).
  */
-import { labelSize } from './types.js';
+import { labelSize } from './utils/text.js';
 import { is } from '../model/utils/moddle.js';
-import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from './geom.js';
+import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from './utils/geom.js';
 import { frameOf, raw, titleOf, type DEdge, type DShape, type Plane } from './plane.js';
 import { attachedSide } from './router.js';
 

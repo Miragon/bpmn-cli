@@ -1,4 +1,4 @@
-import { copyBox, copyPoints } from './geom.js';
+import { copyBox, copyPoints } from './utils/geom.js';
 import type { Box, Point } from './types.js';
 import type { DEdge, DShape, Plane } from './plane.js';
 

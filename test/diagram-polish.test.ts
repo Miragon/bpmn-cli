@@ -16,7 +16,7 @@ import { layoutProblems } from '../src/diagram/metrics.js';
 import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
 import { routeOrthogonal } from '../src/diagram/router.js';
 import { makeSpace } from '../src/diagram/space.js';
-import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/text.js';
+import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/utils/text.js';
 import type { Box, Point } from '../src/diagram/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';

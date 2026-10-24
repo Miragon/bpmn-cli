@@ -40,16 +40,16 @@
  *  result counts the strips closed and the pixels removed per axis.
  *  Paddings: lanes and pools 30 px (left of the content: after the 30 px
  *  headers), sub-processes 30 px (45 px at the top, room for the name; a
- *  name of three lines and more keeps its lines and 4 px, diagram/text.ts
+ *  name of three lines and more keeps its lines and 4 px, diagram/utils/text.ts
  *  titleDepth).
  *  Interior gaps: the drawing's gap (spacingOf) on x, clamp(row - 80, 30,
  *  60) on y. Strips with less than 10 px to gain are left alone.
  */
-import { bottom, right, type Box } from '../diagram/geom.js';
+import { bottom, right, type Box } from '../diagram/utils/geom.js';
 import { spacingOf } from '../diagram/place.js';
 import { inFrame, isLeaf, raw, type DEdge, type DShape, type Plane } from '../diagram/plane.js';
 import { closeStrip, type Axis, type SpaceResult } from '../diagram/space.js';
-import { titleDepth } from '../diagram/text.js';
+import { titleDepth } from '../diagram/utils/text.js';
 
 /** padding kept between a frame's border and its content */
 export const PAD = 30;

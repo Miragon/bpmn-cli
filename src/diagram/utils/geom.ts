@@ -5,9 +5,17 @@
  * about moddle or DI. Boxes are `{x, y, width, height}` in diagram pixels,
  * y grows downwards.
  */
-import type { Box, Point } from './types.js';
+import type { Box, Point } from '../types.js';
 
 export type { Box, Point };
+
+export function center(b: Box): Point {
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+export function boxesOverlap(a: Box, b: Box, margin = 0): boolean {
+  return a.x < b.x + b.width + margin && a.x + a.width + margin > b.x && a.y < b.y + b.height + margin && a.y + a.height + margin > b.y;
+}
 
 export const right = (b: Box): number => b.x + b.width;
 export const bottom = (b: Box): number => b.y + b.height;
@@ -43,6 +51,11 @@ export function inside(inner: Box, outer: Box, pad = 0): boolean {
 
 export function containsPoint(b: Box, p: Point, tol = 0): boolean {
   return p.x >= b.x - tol && p.x <= right(b) + tol && p.y >= b.y - tol && p.y <= bottom(b) + tol;
+}
+
+/** The boxes are exactly the same (no tolerance). */
+export function equalBoxes(a: Box, b: Box): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
 export function union(a: Box, b: Box): Box {
@@ -88,6 +101,30 @@ export function segmentHits(p: Point, q: Point, b: Box, shrink = 2): boolean {
   const lo = Math.max(ax, ay);
   const hi = Math.min(bx, by);
   return lo < hi && lo < 1 && hi > 0;
+}
+
+/** The segment a-b runs through the open interior of `box` (touching the border does not count). */
+export function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
+  return Math.min(a.x, b.x) < right(box) && Math.max(a.x, b.x) > box.x && Math.min(a.y, b.y) < bottom(box) && Math.max(a.y, b.y) > box.y;
+}
+
+const orient = (a: Point, b: Point, c: Point): number => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+
+/** Proper crossing of the segments a-b and c-d: the end points of each lie strictly on both sides of the other (shared end points, T-junctions and collinear runs do not count). */
+export function segmentsCross(a: Point, b: Point, c: Point, d: Point): boolean {
+  const o1 = orient(a, b, c);
+  const o2 = orient(a, b, d);
+  const o3 = orient(c, d, a);
+  const o4 = orient(c, d, b);
+  return o1 !== o2 && o3 !== o4 && !!o1 && !!o2 && !!o3 && !!o4;
+}
+
+/** Whether two polylines cross (a proper crossing of two of their segments, like the crossings metric). */
+export function polylinesCross(a: readonly Point[], b: readonly Point[]): boolean {
+  for (let i = 0; i + 1 < a.length; i++) {
+    for (let j = 0; j + 1 < b.length; j++) if (segmentsCross(a[i]!, a[i + 1]!, b[j]!, b[j + 1]!)) return true;
+  }
+  return false;
 }
 
 export function pathHits(points: readonly Point[], b: Box, shrink = 2): boolean {

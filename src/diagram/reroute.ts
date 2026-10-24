@@ -61,7 +61,7 @@
  *    (metrics.ts) applies the same rule.
  */
 import { attachedSide, crossings, defaultSides, routeOrthogonal, type RouteRequest, type Side } from './router.js';
-import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './geom.js';
+import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './utils/geom.js';
 import { isLeaf, type DEdge, type DShape, type Plane } from './plane.js';
 
 export interface RouteOptions {

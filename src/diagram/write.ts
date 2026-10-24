@@ -55,7 +55,7 @@
 import type { BpmnModdle } from 'bpmn-moddle';
 import { cutAt, MAX_ID } from '../ids/slugs.js';
 import { addTo, is, removeFrom, type El } from '../model/utils/moddle.js';
-import { roundPoints, sameBox, samePoints, type Box, type Point } from './geom.js';
+import { roundPoints, sameBox, samePoints, type Box, type Point } from './utils/geom.js';
 import { displayRoot, idOf, raw, rawList, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 
 /* ------------------------------------------------------------------ */

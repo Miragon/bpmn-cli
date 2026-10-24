@@ -71,6 +71,7 @@
  * `crossings(points, lines)` counts a route's proper crossings with `lines`
  * (the test of the cost).
  */
+import { bottom, equalBoxes, grow, right, segmentHitsBox, union } from './utils/geom.js';
 import type { Box, Point } from './types.js';
 
 export type Side = 'left' | 'right' | 'top' | 'bottom';
@@ -184,23 +185,6 @@ export function attachedSide(event: Box, host: Box): Side {
 
 // ---------------------------------------------------------------- geometry
 
-function right(b: Box): number {
-  return b.x + b.width;
-}
-
-function bottom(b: Box): number {
-  return b.y + b.height;
-}
-
-function inflate(b: Box, d: number): Box {
-  return { x: b.x - d, y: b.y - d, width: b.width + 2 * d, height: b.height + 2 * d };
-}
-
-function union(a: Box, b: Box): Box {
-  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
-  return { x, y, width: Math.max(right(a), right(b)) - x, height: Math.max(bottom(a), bottom(b)) - y };
-}
-
 function intersect(a: Box, b: Box): Box {
   const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
   return { x, y, width: Math.max(0, Math.min(right(a), right(b)) - x), height: Math.max(0, Math.min(bottom(a), bottom(b)) - y) };
@@ -211,17 +195,8 @@ function touches(a: Box, b: Box): boolean {
   return a.x <= right(b) && right(a) >= b.x && a.y <= bottom(b) && bottom(a) >= b.y;
 }
 
-function sameBox(a: Box, b: Box): boolean {
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
-
 function finiteBox(b: Box): boolean {
   return [b.x, b.y, b.width, b.height].every(Number.isFinite) && b.width >= 0 && b.height >= 0;
-}
-
-/** the segment a-b runs through the open interior of `box` (touching the border does not count) */
-function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
-  return Math.min(a.x, b.x) < right(box) && Math.max(a.x, b.x) > box.x && Math.min(a.y, b.y) < bottom(box) && Math.max(a.y, b.y) > box.y;
 }
 
 function orient(a: Point, b: Point, c: Point): number {
@@ -546,16 +521,16 @@ interface Grid {
  * would need more room is found by the whole-plane retry.
  */
 function region(c: Ctx, wide: boolean, frame: Box | undefined): Box {
-  const grow = 2 * c.m + 10;
+  const spread = 2 * c.m + 10;
   const clip = (b: Box): Box => (frame ? intersect(b, frame) : b);
-  let ext = inflate(union(c.s, c.t), Math.max(REGION_PAD, 2 * c.stub + 20));
-  if (wide) for (const o of c.obstacles) ext = union(ext, inflate(o, grow));
+  let ext = grow(union(c.s, c.t), Math.max(REGION_PAD, 2 * c.stub + 20));
+  if (wide) for (const o of c.obstacles) ext = union(ext, grow(o, spread));
   ext = clip(ext);
   for (let round = 0; round < 2; round++) {
     let next = ext;
-    for (const o of c.obstacles) if (touches(o, ext)) next = union(next, inflate(o, grow));
+    for (const o of c.obstacles) if (touches(o, ext)) next = union(next, grow(o, spread));
     next = clip(next);
-    if (sameBox(next, ext)) break;
+    if (equalBoxes(next, ext)) break;
     ext = next;
   }
   return ext;
@@ -763,12 +738,12 @@ function buildGrid(c: Ctx, ext: Box, frame: Box | undefined): Grid {
   for (const o of inc) {
     addInside(g, o, HIT, 0);
     addOutline(g, o, OVERLAP);
-    if (c.m > 0) addInside(g, inflate(o, c.m), 0, NEAR);
+    if (c.m > 0) addInside(g, grow(o, c.m), 0, NEAR);
   }
   addInside(g, c.s, HIT, 0);
   addInside(g, c.t, HIT, 0);
   if (c.tMiddle) guardVertices(g, c.t);
-  const near = inflate(ext, OVERLAP_TOL + 1);
+  const near = grow(ext, OVERLAP_TOL + 1);
   for (const seg of c.segs) {
     const bb = { x: Math.min(seg.a.x, seg.b.x), y: Math.min(seg.a.y, seg.b.y), width: Math.abs(seg.a.x - seg.b.x), height: Math.abs(seg.a.y - seg.b.y) };
     if (touches(bb, near)) markLine(g, seg);
@@ -1061,7 +1036,7 @@ function centreJog(p: Point[], k: number, c: Ctx): Point[] | undefined {
   const at = along(b);
   const s1 = Math.min(vertical ? b.y : b.x, vertical ? q.y : q.x);
   const s2 = Math.max(vertical ? b.y : b.x, vertical ? q.y : q.x);
-  const blockers = [...c.obstacles.map((o) => inflate(o, c.m)), inflate(c.s, c.stub), inflate(c.t, c.stub)];
+  const blockers = [...c.obstacles.map((o) => grow(o, c.m)), grow(c.s, c.stub), grow(c.t, c.stub)];
   for (const o of blockers) {
     const olo = vertical ? o.x : o.y, ohi = vertical ? right(o) : bottom(o);
     const clo = vertical ? o.y : o.x, chi = vertical ? bottom(o) : right(o);

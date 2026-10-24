@@ -103,10 +103,9 @@
  *  connected to (unconnected: like an unconnected node).
  */
 import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { annotationSize } from '../layout/clean/place.js';
-import { SIZES } from './types.js';
+import { annotationSize, SIZES } from './utils/sizes.js';
 import { is, type El } from '../model/utils/moddle.js';
-import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, type Box, type Point } from './geom.js';
+import { bottom, clamp, cx, cy, median, overlaps, pathHits, right, segmentHits, segmentsCross, type Box, type Point } from './utils/geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt, labelSideOf, labelSizeOf } from './labels.js';
 import { boundariesOf, frameOf, frameInterior, idOf, inFrame, isLeaf, isSubProcess, poolOf, raw, rawList, shapeKind, type DEdge, type DShape, type Plane, type Semantics } from './plane.js';
 import { routingLines } from './reroute.js';
@@ -526,15 +525,6 @@ function freeRows(plane: Plane, frame: DShape | undefined, x: number, width: num
   return out;
 }
 
-function properCross(a: Point, b: Point, c: Point, d: Point): boolean {
-  const o = (p: Point, q: Point, r: Point): number => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
-  const o1 = o(a, b, c);
-  const o2 = o(a, b, d);
-  const o3 = o(c, d, a);
-  const o4 = o(c, d, b);
-  return o1 !== o2 && o3 !== o4 && !!o1 && !!o2 && !!o3 && !!o4;
-}
-
 interface Shift {
   line: number;
   delta: number;
@@ -594,7 +584,7 @@ function connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, 
   for (const o of obstacles) if (o !== hostBox && pathHits(pts, o)) cost += 2000;
   for (const line of flows) {
     for (let i = 0; i + 1 < pts.length; i++) {
-      for (let j = 0; j + 1 < line.length; j++) if (properCross(pts[i]!, pts[i + 1]!, line[j]!, line[j + 1]!)) cost += CROSSING;
+      for (let j = 0; j + 1 < line.length; j++) if (segmentsCross(pts[i]!, pts[i + 1]!, line[j]!, line[j + 1]!)) cost += CROSSING;
     }
   }
   const labels = [...plane.shapes.values(), ...plane.edges.values()].map((x) => x.label).filter((l): l is Box => !!l);
@@ -622,7 +612,7 @@ function chainCost(plane: Plane, box: Box, cand: Cand): number {
     for (let j = 0; j + 1 < line.length; j++) {
       const p = line[j]!;
       const q = line[j + 1]!;
-      if (run && properCross(run[0], run[1], p, q)) {
+      if (run && segmentsCross(run[0], run[1], p, q)) {
         cost += CROSSING;
         if (LayoutDebug.on()) LayoutDebug.log(`[place]   chain at c=${cand.c} crosses ${e.id}`);
       } else if ((rest && segmentHits(p, q, rest, 2)) || (head && segmentHits(p, q, head, 2))) {

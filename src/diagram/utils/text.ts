@@ -35,7 +35,7 @@
  *    renderer, both layout engines and the metrics use them, so they agree
  *    on where a title is.
  */
-import type { Box } from './types.js';
+import type { Box } from '../types.js';
 
 /** advance widths of Arial in 1/1000 em */
 const ARIAL: Record<string, number> = {
@@ -155,3 +155,42 @@ export function activitySize(name: string, size: { width: number; height: number
   }
   return { width, height };
 }
+
+/** labelSize's results by width and name (the layout asks for the same names over and over); cleared when full */
+const sizes = new Map<number, Map<string, { width: number; height: number; lines: number }>>();
+
+/** Estimated label box for a name rendered by bpmn-js (12px Arial, wrapped at `maxWidth`); do not change the result. */
+export function labelSize(name: string, maxWidth = 90): { width: number; height: number; lines: number } {
+  let byName = sizes.get(maxWidth);
+  if (!byName) sizes.set(maxWidth, (byName = new Map()));
+  let size = byName.get(name);
+  if (!size) {
+    if (byName.size >= 4096) byName.clear();
+    byName.set(name, (size = measureLabel(name, maxWidth)));
+  }
+  return size;
+}
+
+function measureLabel(name: string, maxWidth: number): { width: number; height: number; lines: number } {
+  const words = name.split(/\s+/).filter(Boolean);
+  const charW = 7;
+  const pad = 12;
+  const longest = Math.max(0, ...words.map((w) => w.length * charW + pad));
+  const limit = Math.max(maxWidth, longest); // never break inside a word
+  const lines: number[] = [];
+  let cur = 0;
+  for (const w of words) {
+    const ww = w.length * charW;
+    if (cur === 0) cur = ww;
+    else if (cur + charW + ww + pad <= limit) cur += charW + ww;
+    else {
+      lines.push(cur);
+      cur = ww;
+    }
+  }
+  if (cur > 0 || !lines.length) lines.push(cur);
+  const width = Math.max(20, Math.min(limit, Math.max(...lines) + pad));
+  return { width, height: lines.length * LABEL_LINE, lines: lines.length };
+}
+
+export const LABEL_LINE = 14;

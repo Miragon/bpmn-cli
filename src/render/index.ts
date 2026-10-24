@@ -113,14 +113,14 @@
  *    else with a shape is a plain box.
  *  - Labels like bpmn-js 18: external labels (events, gateways, data, flows,
  *    groups) centred on the DI label bounds with their top at its y, in 11
- *    px Arial (diagram/text.ts wrapLines), 13.2 px a line, laid out twice like
+ *    px Arial (diagram/utils/text.ts wrapLines), 13.2 px a line, laid out twice like
  *    bpmn-js: wrapped at max(90, the label bounds' width), then again at the
  *    width of the widest line of that (rounded up), which may break it
  *    differently; without label bounds (90 px) below the shape (a group: at
  *    its top), a flow's at the middle of its middle segment, 15 px above it
  *    (right of a vertical one).
  *    Embedded labels: 12 px, padding 7, centred in tasks and collapsed
- *    sub-processes, at the top of expanded ones (their title, diagram/text.ts
+ *    sub-processes, at the top of expanded ones (their title, diagram/utils/text.ts
  *    titleBox), left-top in annotations; pool and lane names in their 30 px
  *    header band.
  *  - Off-viewport culling: shapes, connections and labels outside the view
@@ -138,11 +138,11 @@ import { ioError, modelError, usageError } from '../shared/utils/errors.js';
 import { layoutModel } from '../layout/index.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import type { MutationReport } from '../report/command-report.js';
-import type { Box, Point } from '../diagram/geom.js';
+import type { Box, Point } from '../diagram/utils/geom.js';
 import { layoutProblems, locateProblems, problemKey, type LayoutProblem, type MetricKey } from '../diagram/metrics.js';
 import { homePlane, raw, rawList, readPlanes, semantics, type DEdge, type DShape, type Plane, type Semantics } from '../diagram/plane.js';
 import { pathOf } from '../query/select.js';
-import { textWidth, titleBox, wrapLines } from '../diagram/text.js';
+import { textWidth, titleBox, wrapLines } from '../diagram/utils/text.js';
 import { planeColumns } from '../query/layout-view.js';
 
 /** What a halo marks: the CLI's `--render` colours created, changed and moved elements apart. */
@@ -1261,7 +1261,7 @@ function edgeBox(e: DEdge): Box {
   return unionOf([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
 }
 
-/** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's name; an expanded sub-process's title, diagram/text.ts titleBox); undefined without one. */
+/** About where a frame's name is drawn (in a pool's or lane's header band, centred along it; a black-box pool's name; an expanded sub-process's title, diagram/utils/text.ts titleBox); undefined without one. */
 function frameNameBox(s: DShape): Box | undefined {
   const name = s.kind === 'group' ? undefined : raw<string>(s.el, 'name');
   if (!name || !name.trim()) return undefined;

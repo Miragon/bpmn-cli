@@ -33,7 +33,7 @@
  *   format op.
  */
 import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { bottom, right, type Box } from './geom.js';
+import { bottom, right, type Box } from './utils/geom.js';
 import { frameOf, isLeaf, type DShape, type Plane } from './plane.js';
 import { fitInFrame, shiftShape, unitBox } from './space.js';
 
