@@ -1,11 +1,12 @@
 import type { Box, Point } from '../drawing/utils/geom.js';
+import { cx, unionAll } from '../drawing/utils/geom.js';
 import { raw } from '../drawing/utils/raw.js';
 import type { DEdge } from '../drawing/types.js';
 import { is, type El } from '../model/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';
 import { HALO_COLORS, type Item } from './types.js';
-import { pointsBox, unionOf } from './utils/boxes.js';
+import { pointsBox } from './utils/boxes.js';
 import { attr, FILL, n } from './utils/svg.js';
 
 interface Dir {
@@ -79,7 +80,7 @@ export class EdgePainter {
     const box = pointsBox(this.edge.points);
     if (!this.carriesMessage()) return box;
     const m = this.halfway();
-    return unionOf([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
+    return unionAll([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
   }
 
   label(): Item | undefined {
@@ -88,7 +89,7 @@ export class EdgePainter {
     const value = raw<string>(e.el, 'name');
     if (!value || !value.trim()) return undefined;
     const text = new LabelPainter(this.style.label);
-    if (e.label) return text.external(e.id, value, e.label.x + e.label.width / 2, Math.round(e.label.y), e.label.width);
+    if (e.label) return text.external(e.id, value, cx(e.label), Math.round(e.label.y), e.label.width);
     const mid = this.flowLabelMid();
     return text.external(e.id, value, mid.x, Math.round(mid.y - 10));
   }

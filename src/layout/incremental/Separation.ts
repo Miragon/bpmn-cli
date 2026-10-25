@@ -1,5 +1,5 @@
 import { LayoutDebug } from '../LayoutDebug.js';
-import { bottom, right, type Box } from '../../drawing/utils/geom.js';
+import { bottom, type Box, cx, cy, right } from '../../drawing/utils/geom.js';
 import { Frames } from '../../drawing/Frames.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../../drawing/types.js';
@@ -109,7 +109,7 @@ export class Separation {
   }
 
   private readingOrder(a: Box, b: Box): number {
-    return a.x + a.width / 2 - (b.x + b.width / 2) || a.y + a.height / 2 - (b.y + b.height / 2);
+    return cx(a) - (cx(b)) || cy(a) - (cy(b));
   }
 
   private candidateMoves(a: Unit, b: Unit, boxes: Map<string, Box>, ctx: { movable: Set<string>; active: Set<string>; used: Map<string, Set<Dir>>; gap: number; lockedX: Set<string>; lockedY: Set<string> }): Move[] {
@@ -124,7 +124,7 @@ export class Separation {
       const ob = boxes.get(o.id)!;
       const used = ctx.used.get(s.id) ?? new Set<Dir>();
       if (s === second) out.push({ unit: s.id, dir: 'right', need: right(ob) + ctx.gap - sb.x });
-      const lower = sb.y + sb.height / 2 >= ob.y + ob.height / 2;
+      const lower = cy(sb) >= cy(ob);
       if (lower && !used.has('up')) out.push({ unit: s.id, dir: 'down', need: bottom(ob) + ctx.gap - sb.y });
       if (!lower && ctx.active.has(s.id) && !used.has('down')) {
         const need = bottom(sb) - (ob.y - ctx.gap);

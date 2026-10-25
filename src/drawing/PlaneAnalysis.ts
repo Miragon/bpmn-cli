@@ -1,6 +1,6 @@
 import { is, type El } from '../model/utils/moddle.js';
 import type { Box, Point } from './types.js';
-import { segmentsCross } from './utils/geom.js';
+import { cx, cy, segmentsCross } from './utils/geom.js';
 import { collinear, cuts, drawnEnds, enclosingProcess, glyph, hits, inside, joinTail, lookup, overlap, ptIn, readDrawnPlane, subTitleOf, type Edge, type MetricIndex, type Seg, type Shape } from './utils/harness.js';
 import { idOf, raw, rawList } from './utils/raw.js';
 import type { MetricKey } from './utils/problems.js';
@@ -283,7 +283,7 @@ export class PlaneAnalysis {
   }
 
   private centreInside(b: Box, f: Box): boolean {
-    const c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    const c = { x: cx(b), y: cy(b) };
     return c.x > f.x && c.x < f.x + f.width && c.y > f.y && c.y < f.y + f.height;
   }
 
@@ -380,7 +380,7 @@ export class PlaneAnalysis {
       const s = lookup(byId, sid);
       const t = lookup(byId, tid);
       if (!s || !t || !sid || !tid) continue;
-      if (t.b.x + t.b.width / 2 >= s.b.x) continue;
+      if (cx(t.b) >= s.b.x) continue;
       if (this.reaches(sem, tid, sid)) continue;
       add('backwardFlow', e.id, [e.id, sid, tid]);
     }

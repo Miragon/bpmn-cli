@@ -1,6 +1,6 @@
 import { is, type El } from '../model/utils/moddle.js';
 import type { Box, Point } from './types.js';
-import { segmentsCross } from './utils/geom.js';
+import { cx, cy, segmentsCross } from './utils/geom.js';
 import { collinear, cuts, drawnEnds, glyph, hits, joinTail, ptIn, readDrawnPlane, segs, subTitleOf, type Edge, type Seg, type Shape } from './utils/harness.js';
 import { idOf, raw, rawList } from './utils/raw.js';
 import type { LayoutProblem } from './utils/problems.js';
@@ -44,7 +44,7 @@ export class ProblemLocator {
   }
 
   private centreOf(b: Box): Point {
-    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    return { x: cx(b), y: cy(b) };
   }
 
   /** the first box's centre when they do not meet */
@@ -171,7 +171,7 @@ export class ProblemLocator {
         return sb ? ea?.pts.find((q) => !ptIn(q, sb.b)) : undefined;
       case 'laneGap':
         if (!sa || !sb) return undefined;
-        return p.detail === 'bottom' ? { x: sa.b.x + sa.b.width / 2, y: (sa.b.y + sa.b.height + sb.b.y + sb.b.height) / 2 } : { x: sa.b.x + sa.b.width / 2, y: (sa.b.y + sb.b.y) / 2 };
+        return p.detail === 'bottom' ? { x: cx(sa.b), y: (sa.b.y + sa.b.height + sb.b.y + sb.b.height) / 2 } : { x: cx(sa.b), y: (sa.b.y + sb.b.y) / 2 };
       case 'backwardFlow':
         return ea ? this.halfway(ea.pts) : undefined;
       case 'labelOutsideFrame':

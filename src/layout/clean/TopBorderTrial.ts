@@ -9,7 +9,7 @@ import { LinkRouter } from './LinkRouter.js';
 import { ScopeGrid } from './ScopeGrid.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { hitCount, segmentsCross, toSegments, type Segment } from './utils/geometry.js';
+import { hitCount, properCross, toSegments, type Segment } from './utils/geometry.js';
 import { nameOf } from './utils/names.js';
 import { obstacles, routedArtifacts } from './utils/scope.js';
 
@@ -155,7 +155,7 @@ export class TopBorderTrial extends ArrangementTrial {
       const met = new Set<number>();
       for (const s of toSegments(pts)) {
         index.each(Math.min(s[0].x, s[1].x), Math.max(s[0].x, s[1].x), ([q, j]) => {
-          if (!met.has(j) && segmentsCross(s, q)) met.add(j);
+          if (!met.has(j) && properCross(s, q)) met.add(j);
         });
       }
       n += met.size;

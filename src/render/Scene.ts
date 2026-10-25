@@ -1,9 +1,10 @@
 import type { Point } from '../drawing/utils/geom.js';
+import { grow } from '../drawing/utils/geom.js';
 import type { DShape, Plane } from '../drawing/types.js';
 import { EdgePainter } from './EdgePainter.js';
 import { ShapePainter } from './ShapePainter.js';
 import { HALO_COLORS, LAYER, type Item } from './types.js';
-import { grow, pointsBox } from './utils/boxes.js';
+import { pointsBox } from './utils/boxes.js';
 import { attr, n } from './utils/svg.js';
 
 /** the view fits only this much of a faded connection */

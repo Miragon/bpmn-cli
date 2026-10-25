@@ -1,6 +1,6 @@
 import { labelSize } from '../../drawing/utils/text.js';
 import { METRICS, SIZES } from '../../drawing/utils/sizes.js';
-import { center } from '../../drawing/utils/geom.js';
+import { center, cx } from '../../drawing/utils/geom.js';
 import type { GEdge, GNode, ScopeLayout } from '../../drawing/types.js';
 import { RowAssigner } from './RowAssigner.js';
 import { nameOf } from './utils/names.js';
@@ -182,7 +182,7 @@ export class ScopeGrid {
     for (const n of nodes) {
       const ev = n.compensatedBy;
       if (ev) {
-        n.box.x = Math.round(ev.box.x + ev.box.width / 2 - n.box.width / 2);
+        n.box.x = Math.round(cx(ev.box) - n.box.width / 2);
         ScopeGrid.placeBoundaryEvents(n);
       }
     }

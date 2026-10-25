@@ -1,6 +1,6 @@
 import { addTo, is, many, walk, type El, type Model } from '../model/utils/moddle.js';
 import { SUB_PROCESS_TYPES } from '../drawing/utils/expansion.js';
-import { center, containsPoint } from '../drawing/utils/geom.js';
+import { center, containsPoint, cx } from '../drawing/utils/geom.js';
 
 interface Rect {
   x: number;
@@ -151,7 +151,7 @@ export class AssociationEdges {
       const r = this.boundsOf(shape);
       if (r) others.push(r);
     }
-    const x = Math.round(eventRect.x + eventRect.width / 2 - handlerRect.width / 2);
+    const x = Math.round(cx(eventRect) - handlerRect.width / 2);
     for (let gap = HANDLER_GAP; gap <= HANDLER_GAP * 4; gap += 20) {
       const candidate: Rect = { x, y: eventRect.y + eventRect.height + gap, width: handlerRect.width, height: handlerRect.height };
       if (others.some((o) => this.overlaps(candidate, o, OVERLAP_MARGIN))) continue;

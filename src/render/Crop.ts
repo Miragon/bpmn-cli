@@ -1,3 +1,4 @@
+import { cx, cy } from '../drawing/utils/geom.js';
 import type { Plane } from '../drawing/types.js';
 import type { Semantics } from '../drawing/Semantics.js';
 import type { Doc } from '../model/Doc.js';
@@ -95,8 +96,8 @@ export class Crop {
       drawn.add(f.id);
       const b = f.bounds;
       for (const s of plane.shapes.values()) {
-        const x = s.bounds.x + s.bounds.width / 2;
-        const y = s.bounds.y + s.bounds.height / 2;
+        const x = cx(s.bounds);
+        const y = cy(s.bounds);
         if (s !== f && x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) drawn.add(s.id);
       }
     } else {

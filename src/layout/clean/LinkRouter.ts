@@ -1,7 +1,7 @@
-import { center, borderPoint } from '../../drawing/utils/geom.js';
+import { borderPoint, bottom, center, cx, right } from '../../drawing/utils/geom.js';
 import type { Box, GNode, Point, ScopeLayout } from '../../drawing/types.js';
 import { ChannelRouter } from './ChannelRouter.js';
-import { bottom, dedupe, hitCount, right, toSegments, type Segment } from './utils/geometry.js';
+import { dedupe, hitCount, toSegments, type Segment } from './utils/geometry.js';
 import { obstacles, routedSegments } from './utils/scope.js';
 
 /** Compensation links, associations and data associations. */
@@ -14,11 +14,11 @@ export class LinkRouter {
     const flows = routedSegments(layout);
     for (const c of layout.compensations) {
       const eb = c.event.box, hb = c.handler.box;
-      const ex = eb.x + eb.width / 2;
+      const ex = cx(eb);
       if (ex >= hb.x && ex <= hb.x + hb.width) c.points = [{ x: ex, y: bottom(eb) }, { x: ex, y: hb.y }];
       else {
         const midY = (bottom(eb) + hb.y) / 2;
-        const hx = hb.x + hb.width / 2;
+        const hx = cx(hb);
         c.points = [{ x: ex, y: bottom(eb) }, { x: ex, y: midY }, { x: hx, y: midY }, { x: hx, y: hb.y }];
       }
       c.points = c.points.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));

@@ -1,5 +1,5 @@
 import { LayoutDebug } from '../LayoutDebug.js';
-import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { bottom, type Box, containsPoint, cx, cy, overlaps, right } from '../../drawing/utils/geom.js';
 import { Frames } from '../../drawing/Frames.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 import { defaultLabelSide, hasExternalLabel, labelAt } from '../../drawing/utils/labels.js';
@@ -132,7 +132,7 @@ export class SpaceTool {
 
   private centreInBand(b: Box, band: [number, number] | undefined, axis: Axis): boolean {
     if (!band) return true;
-    const c = axis === 'x' ? b.y + b.height / 2 : b.x + b.width / 2;
+    const c = axis === 'x' ? cy(b) : cx(b);
     return c >= band[0] && c <= band[1];
   }
 
@@ -197,7 +197,7 @@ export class SpaceTool {
   /** For shapes without a semantic pool (collaboration-level artifacts): by their centre. */
   private geometricPool(s: DShape, before: ReadonlyMap<string, Box>): string | undefined {
     if (s.poolId || s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group' || s.hostId || s.parentId) return s.poolId;
-    const c = { x: s.bounds.x + s.bounds.width / 2, y: s.bounds.y + s.bounds.height / 2 };
+    const c = { x: cx(s.bounds), y: cy(s.bounds) };
     for (const p of this.plane.shapes.values()) {
       if (p.kind !== 'participant') continue;
       const b = before.get(p.id) ?? p.bounds;
@@ -209,7 +209,7 @@ export class SpaceTool {
   /** For shapes no lane lists (data objects, annotations): the innermost lane at their centre. */
   private geometricLane(s: DShape, before: ReadonlyMap<string, Box>): string | undefined {
     if (s.laneId || s.hostId || s.parentId || s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group') return s.laneId;
-    const c = { x: s.bounds.x + s.bounds.width / 2, y: s.bounds.y + s.bounds.height / 2 };
+    const c = { x: cx(s.bounds), y: cy(s.bounds) };
     let best: Box | undefined;
     let id: string | undefined;
     for (const l of this.plane.shapes.values()) {
@@ -252,7 +252,7 @@ export class SpaceTool {
   }
 
   private nearestSegment(pts: ReadonlyArray<{ x: number; y: number }>, b: Box): number {
-    const c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    const c = { x: cx(b), y: cy(b) };
     let best = 0;
     let dist = Infinity;
     for (let i = 0; i + 1 < pts.length; i++) {
@@ -306,7 +306,7 @@ export class SpaceTool {
     if (s.container || s.kind === 'group' || scope.ancestors.has(s.id)) return false;
     const b = p.before.get(s.id)!;
     const f = p.before.get(scope.frame.id)!;
-    const c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    const c = { x: cx(b), y: cy(b) };
     return c.x > f.x && c.x < right(f) && c.y > f.y && c.y < bottom(f);
   }
 
@@ -344,7 +344,7 @@ export class SpaceTool {
       } else if (host && hostDecision === 'resize') {
         // on a resized host they stay on its border, which moves only beyond the line
         const eb = before.get(s.id)!;
-        d = (axis === 'x' ? eb.x + eb.width / 2 : eb.y + eb.height / 2) >= line ? 'move' : 'stay';
+        d = (axis === 'x' ? cx(eb) : cy(eb)) >= line ? 'move' : 'stay';
       } else if (scoped) {
         d = scoped;
       } else if (carrier && depth < 20) {
@@ -353,7 +353,7 @@ export class SpaceTool {
         d = decide(block, depth + 1) === 'move' ? 'move' : 'stay';
       } else if (this.rigid(p, s)) {
         const b = before.get(s.id)!;
-        d = (axis === 'x' ? b.x + b.width / 2 : b.y + b.height / 2) >= line ? 'move' : 'stay';
+        d = (axis === 'x' ? cx(b) : cy(b)) >= line ? 'move' : 'stay';
       } else {
         const ref = before.get(s.id)!;
         if (this.near(ref, axis) >= line) d = this.overlapsBand(ref, band, axis) ? 'move' : 'stay';
@@ -561,7 +561,7 @@ export class SpaceTool {
     let out = 0;
     for (const b of PlaneQuery.boundariesOf(this.plane, frame.id)) {
       const e = b.bounds;
-      const onBorder = axis === 'y' ? Math.abs(e.y + e.height / 2 - bottom(frame.bounds)) <= 6 : Math.abs(e.x + e.width / 2 - right(frame.bounds)) <= 6;
+      const onBorder = axis === 'y' ? Math.abs(cy(e) - bottom(frame.bounds)) <= 6 : Math.abs(cx(e) - right(frame.bounds)) <= 6;
       const facing = axis === 'y' ? e.x < right(box) + 10 && right(e) > box.x - 10 : e.y < bottom(box) + 10 && bottom(e) > box.y - 10;
       if (onBorder && facing) out = Math.max(out, (axis === 'y' ? e.height : e.width) / 2 + 10);
     }

@@ -3,7 +3,7 @@ import type { IncrementalLayout, IncrementalOptions } from './IncrementalLayout.
 import { LayoutDebug } from '../LayoutDebug.js';
 import { SIZES } from '../../drawing/utils/sizes.js';
 import { is, type El } from '../../model/utils/moddle.js';
-import { copyBox, cy, inside, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { type Box, copyBox, cy, inside, overlaps, right } from '../../drawing/utils/geom.js';
 import { idOf } from '../../drawing/utils/raw.js';
 import { Frames } from '../../drawing/Frames.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
@@ -158,7 +158,7 @@ export class DrawingDiff {
     const behind = (id: string): boolean => {
       const o = plane.shapes.get(id);
       if (!o) return false;
-      const c = o.bounds.y + o.bounds.height / 2;
+      const c = cy(o.bounds);
       return o.bounds.x >= end - 3 && (!fb || (c >= fb.y && c <= fb.y + fb.height));
     };
     const tethered = [...plane.edges.values()].some((e) => {

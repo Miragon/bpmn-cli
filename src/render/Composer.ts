@@ -1,11 +1,12 @@
 import type { Box, Point } from '../drawing/utils/geom.js';
+import { containsPoint, grow, unionAll } from '../drawing/utils/geom.js';
 import { LayoutAnalysis } from '../drawing/LayoutAnalysis.js';
 import { ProblemLocator } from '../drawing/ProblemLocator.js';
 import { problemKey, type LayoutProblem } from '../drawing/utils/problems.js';
 import type { Plane } from '../drawing/types.js';
 import { TileGrid } from './TileGrid.js';
 import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type Frame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
-import { contains, grow, meets, pointsBox, unionOf } from './utils/boxes.js';
+import { meets, pointsBox } from './utils/boxes.js';
 import { scaleText } from './utils/scale.js';
 import { FILL, n } from './utils/svg.js';
 
@@ -26,7 +27,7 @@ export class Composer {
     const { items, frame, opts } = this;
     const notes = frame.notes;
     const fit = items.filter((i) => !i.extra);
-    const content = unionOf((fit.length ? fit : items).map((i) => i.fit ?? i.box)) ?? { x: 0, y: 0, width: 0, height: 0 };
+    const content = unionAll((fit.length ? fit : items).map((i) => i.fit ?? i.box)) ?? { x: 0, y: 0, width: 0, height: 0 };
     let view = grow(content, MARGIN);
     let scale = opts.scale ?? 1;
     if (!(scale > 0) || !Number.isFinite(scale)) scale = 1;
@@ -36,7 +37,7 @@ export class Composer {
     const focus = new Set(opts.focus ?? []);
     if (focus.size && fitted(view) < MIN_LABEL_SCALE && frame.located) {
       const near = Composer.nearFocus(frame.located, focus);
-      const region = unionOf(items.filter((i) => i.id !== undefined && (focus.has(i.id) || (near.has(i.id) && !frame.located!.edges.has(i.id)))).map((i) => i.box));
+      const region = unionAll(items.filter((i) => i.id !== undefined && (focus.has(i.id) || (near.has(i.id) && !frame.located!.edges.has(i.id)))).map((i) => i.box));
       if (region) {
         notes.push(`the whole plane would be drawn at ${scaleText(fitted(view))} of its size: the image shows the region around the ${focus.size} element${focus.size > 1 ? 's' : ''} in focus (\`bpmn render <file>\` draws all of it)`);
         view = grow(region, FOCUS_MARGIN);
@@ -112,7 +113,7 @@ export class Composer {
       const e = plane.edges.get(id);
       if (e?.points.length) boxes.push(pointsBox(e.points), ...(e.label ? [e.label] : []));
     }
-    return unionOf(boxes);
+    return unionAll(boxes);
   }
 
   private problemList(asked: true | readonly LayoutProblem[]): LayoutProblem[] {
@@ -138,7 +139,7 @@ export class Composer {
       const out: RenderProblem = { n: i + 1, kind: p.kind, ids: p.ids, ...(p.detail !== undefined ? { detail: p.detail } : {}), drawn: false };
       const at = p.at;
       if (!plane || frame.fileProblems || !at || at.plane !== plane.rootId) return out;
-      const tile = views.findIndex((v) => contains(v.view, at));
+      const tile = views.findIndex((v) => containsPoint(v.view, at));
       if (tile < 0) return out;
       const box = Composer.problemBox(plane, p.ids) ?? { x: at.x, y: at.y, width: 0, height: 0 };
       const spot = Composer.freeSpot(at, placed, r, box);
@@ -164,7 +165,7 @@ export class Composer {
       for (let k = 0; k < 8; k++) {
         const a = (k * Math.PI) / 4;
         const p = { x: at.x + Math.cos(a) * ring * r, y: at.y + Math.sin(a) * ring * r };
-        if (contains(box, p) && free(p)) return { x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 };
+        if (containsPoint(box, p) && free(p)) return { x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 };
       }
     }
     return at;

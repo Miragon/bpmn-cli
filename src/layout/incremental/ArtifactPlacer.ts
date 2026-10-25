@@ -1,5 +1,5 @@
 import { is } from '../../model/utils/moddle.js';
-import { bottom, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { bottom, type Box, cx, overlaps, right } from '../../drawing/utils/geom.js';
 import { idOf, raw, rawList } from '../../drawing/utils/raw.js';
 import { Frames } from '../../drawing/Frames.js';
 
@@ -60,7 +60,7 @@ export class ArtifactPlacer {
     for (const k of steps) {
       if (annotation) {
         candidates.push({ x: right(a) + 20 + k * 30, y: a.y - 30 - size.height - k * 20, ...size });
-        candidates.push({ x: a.x + a.width / 2 + k * 40, y: a.y - 40 - size.height - k * 30, ...size });
+        candidates.push({ x: cx(a) + k * 40, y: a.y - 40 - size.height - k * 30, ...size });
       } else {
         candidates.push({ x: right(a) + 10 + k * (size.width + 20), y: bottom(a) + 30, ...size });
         candidates.push({ x: right(a) + 10, y: bottom(a) + 30 + k * (size.height + 20), ...size });

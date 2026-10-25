@@ -1,5 +1,5 @@
 import { SIZES } from '../../drawing/utils/sizes.js';
-import { bottom, copyBox, cy, median, right, union, type Box } from '../../drawing/utils/geom.js';
+import { bottom, type Box, copyBox, cx, cy, median, right, union } from '../../drawing/utils/geom.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 import type { DEdge, DShape, Plane } from '../../drawing/types.js';
 import type { Semantics } from '../../drawing/Semantics.js';
@@ -170,7 +170,7 @@ export class FrameEditor {
     const nb = host.bounds;
     type Side = 'top' | 'bottom' | 'left' | 'right';
     const sideOf = (b: Box): Side => {
-      const c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      const c = { x: cx(b), y: cy(b) };
       const d: Array<[Side, number]> = [
         ['bottom', Math.abs(c.y - bottom(old))],
         ['right', Math.abs(c.x - right(old))],
@@ -181,7 +181,7 @@ export class FrameEditor {
     };
     const horizontal = (side: Side): boolean => side === 'top' || side === 'bottom';
     const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
-    const along = (b: Box, side: Side): number => (horizontal(side) ? b.x + b.width / 2 : b.y + b.height / 2);
+    const along = (b: Box, side: Side): number => (horizontal(side) ? cx(b) : cy(b));
     const span = (box: Box, side: Side): [number, number] => (horizontal(side) ? [box.x, right(box)] : [box.y, bottom(box)]);
     const bySide = new Map<Side, DShape[]>();
     for (const e of events) {

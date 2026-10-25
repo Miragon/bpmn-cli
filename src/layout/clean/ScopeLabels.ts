@@ -1,7 +1,7 @@
 import { LABEL_LINE, labelSize } from '../../drawing/utils/text.js';
 import { boxesOverlap } from '../../drawing/utils/geom.js';
 import type { Box, GArtifact, GNode, ScopeLayout } from '../../drawing/types.js';
-import { bottom } from './utils/geometry.js';
+import { bottom } from '../../drawing/utils/geom.js';
 import { nameOf } from './utils/names.js';
 import { boundaryLeft, isEvent } from './utils/nodes.js';
 

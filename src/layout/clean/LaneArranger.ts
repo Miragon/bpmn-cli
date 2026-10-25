@@ -1,3 +1,4 @@
+import { cy } from '../../drawing/utils/geom.js';
 import { many, type El, idOf } from '../../model/utils/moddle.js';
 import { METRICS, SIZES } from '../../drawing/utils/sizes.js';
 import type { GEdge, GNode, LaneBox, Point, ScopeLayout } from '../../drawing/types.js';
@@ -272,7 +273,7 @@ export class LaneArranger {
     const labelIn = (y: number): boolean => y >= top && y < bottom;
     let content = bottom - SIZES.lanePadding;
     for (const n of lane.nodes) content = Math.max(content, n.box.y + n.box.height, ...n.boundary.map((b) => b.box.y + b.box.height));
-    for (const a of scope.artifacts) if (inBand(a.box.y + a.box.height / 2)) content = Math.max(content, a.box.y + a.box.height);
+    for (const a of scope.artifacts) if (inBand(cy(a.box))) content = Math.max(content, a.box.y + a.box.height);
     for (const e of scope.edges) {
       for (const p of e.points) if (inBand(p.y)) content = Math.max(content, p.y);
       if (e.label && labelIn(e.label.y)) content = Math.max(content, e.label.y + e.label.height);

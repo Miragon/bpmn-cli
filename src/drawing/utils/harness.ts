@@ -1,3 +1,4 @@
+import { cx } from './geom.js';
 /**
  * Geometry and lenient DI reading of the layout metrics, matching the regression harness:
  * every shape and edge counts and bounds and waypoints are taken without a finite check.
@@ -64,7 +65,7 @@ export function glyph(lb: Box, name: string): Box {
   const est = Math.max(6, name.length * 6);
   const width = Math.min(est, 90);
   const lines = Math.max(1, Math.ceil(est / 90));
-  return { x: lb.x + lb.width / 2 - width / 2, y: lb.y, width, height: lines * 14 };
+  return { x: cx(lb) - width / 2, y: lb.y, width, height: lines * 14 };
 }
 
 export const lookup = <T>(map: Map<string, T>, id: string | undefined): T | undefined => (id === undefined ? undefined : map.get(id));
@@ -190,7 +191,7 @@ export function joinTail(a: Edge, b: Edge, target: Shape | undefined): Set<strin
   const entry = (r: Run | undefined): number => {
     if (!r) return 0;
     const [p, q] = r.seg;
-    if (p.x !== q.x || Math.abs(q.x - (g.x + g.width / 2)) > 2) return 0;
+    if (p.x !== q.x || Math.abs(q.x - (cx(g))) > 2) return 0;
     if (Math.abs(q.y - (g.y + g.height)) <= 2 && p.y > q.y) return 1;
     return Math.abs(q.y - g.y) <= 2 && p.y < q.y ? -1 : 0;
   };

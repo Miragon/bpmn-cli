@@ -1,3 +1,4 @@
+import { cx } from '../drawing/utils/geom.js';
 import type { Box, Point } from '../drawing/utils/geom.js';
 import { textWidth, wrapLines } from '../drawing/utils/text.js';
 import { LAYER, type Item } from './types.js';
@@ -46,7 +47,7 @@ export class LabelPainter {
     const step = SIZE * 1.2;
     const pad = v === 'middle' ? 0 : padding;
     const top = pad + (v === 'middle' ? (box.height - ls.length * step) / 2 : 0);
-    const x = h === 'left' ? box.x + padding : box.x + box.width / 2;
+    const x = h === 'left' ? box.x + padding : cx(box);
     return lines(ls, x, box.y + top + step * 0.75, SIZE, this.color, h === 'left' ? 'start' : 'middle', transform);
   }
 }

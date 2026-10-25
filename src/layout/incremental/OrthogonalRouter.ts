@@ -1,4 +1,4 @@
-import { bottom, equalBoxes, grow, right, segmentHitsBox, union } from '../../drawing/utils/geom.js';
+import { bottom, cy, equalBoxes, grow, right, segmentHitsBox, union } from '../../drawing/utils/geom.js';
 import type { Box, Point, Side } from '../../drawing/types.js';
 import { SOURCE_DEFAULT, TARGET_DEFAULT } from '../../drawing/utils/sides.js';
 import { RouteGrid } from './RouteGrid.js';
@@ -486,8 +486,8 @@ export class OrthogonalRouter {
 
   /** Only when the search finds nothing. */
   private directRoute(): Point[] {
-    const p = this.c.src[0] ?? { ...pointOn(this.c.s, 'right', this.c.s.y + this.c.s.height / 2), side: 'right' as Side, cost: 0 };
-    const q = this.c.tgt[0] ?? { ...pointOn(this.c.t, 'left', this.c.t.y + this.c.t.height / 2), side: 'left' as Side, cost: 0 };
+    const p = this.c.src[0] ?? { ...pointOn(this.c.s, 'right', cy(this.c.s)), side: 'right' as Side, cost: 0 };
+    const q = this.c.tgt[0] ?? { ...pointOn(this.c.t, 'left', cy(this.c.t)), side: 'left' as Side, cost: 0 };
     const a = { x: p.x, y: p.y }, b = { x: q.x, y: q.y };
     if (a.x === b.x || a.y === b.y) return simplify([a, b]);
     const hp = p.side === 'left' || p.side === 'right';

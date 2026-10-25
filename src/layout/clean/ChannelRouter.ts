@@ -1,10 +1,10 @@
 import { labelSize } from '../../drawing/utils/text.js';
 import { METRICS } from '../../drawing/utils/sizes.js';
-import { center, segmentHitsBox } from '../../drawing/utils/geom.js';
+import { bottom, center, right, segmentHitsBox } from '../../drawing/utils/geom.js';
 import type { Box, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../drawing/types.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { bottom, dedupe, hitCount, pathHits, right, segmentsCross, toSegments, type Segment } from './utils/geometry.js';
+import { dedupe, hitCount, pathHits, properCross, toSegments, type Segment } from './utils/geometry.js';
 import { nameOf } from './utils/names.js';
 import { boundaryLeft } from './utils/nodes.js';
 import { obstacles, routedArtifacts } from './utils/scope.js';
@@ -126,7 +126,7 @@ export class ChannelRouter {
   static countCrossings(points: Point[], routed: Segment[] | XIndex<Segment>, stop = Infinity): number {
     let n = 0;
     for (const a of toSegments(points)) {
-      const count = (b: Segment): boolean => segmentsCross(a, b) && ++n >= stop;
+      const count = (b: Segment): boolean => properCross(a, b) && ++n >= stop;
       if (Array.isArray(routed) ? routed.some(count) : routed.each(Math.min(a[0].x, a[1].x), Math.max(a[0].x, a[1].x), count)) break;
     }
     return n;
@@ -177,7 +177,7 @@ export class ChannelRouter {
           Math.max(s[0].x, s[1].x),
           (q, id) => {
             const j = owner[id]!;
-            if (met[j] !== i && segmentsCross(s, q)) {
+            if (met[j] !== i && properCross(s, q)) {
               met[j] = i;
               crossings++;
             }

@@ -1,5 +1,5 @@
 import { SIZES } from '../../drawing/utils/sizes.js';
-import { bottom, cx, cy, overlaps, pathHits, right, type Box, type Point } from '../../drawing/utils/geom.js';
+import { bottom, type Box, cx, cy, overlaps, pathHits, type Point, right } from '../../drawing/utils/geom.js';
 import { idOf, raw } from '../../drawing/utils/raw.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 
@@ -68,7 +68,7 @@ export class BoundaryPlacer {
     const offset = Math.min(SIZES.event.width / 2 + 7, hb.width / 2);
     // the flow leaves a bottom boundary event downwards: keep that lane clear of other labels
     const labels = [...plane.shapes.values()].filter((o) => o.id !== host.id && o.id !== self && o.label).map((o) => o.label!);
-    const exitClear = (b: Box): boolean => b.y < hb.y || !labels.some((l) => overlaps(l, { x: b.x + b.width / 2 - 2, y: bottom(b), width: 4, height: 40 }));
+    const exitClear = (b: Box): boolean => b.y < hb.y || !labels.some((l) => overlaps(l, { x: cx(b) - 2, y: bottom(b), width: 4, height: 40 }));
     // where connections already dock on the host (an event there would force them around)
     const docks: Point[] = [];
     for (const e of plane.edges.values()) {
