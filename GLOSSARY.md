@@ -17,34 +17,34 @@ a new concept gets its line here first.
 | **Check** | `bpmn validate` of a document: validation, the validators and a layout dry run (`pipeline/DocCheck.ts`). |
 | **Reordering** | An `order` op on a document: the outgoing flows of a node, the lanes of a pool or lane, or the pools of a collaboration (`ops/Reordering.ts`). |
 | **Alias** | A `$name` an op gives to what it creates, so later ops of the batch can name it. |
-| **Op aliases** | Where one op defines aliases and where it may name one, and the op with its aliases resolved (`ops/OpAliases.ts`). |
-| **Alias table** | The aliases of a running batch: each bound to its element, so it follows renames and retypes (`ops/AliasTable.ts`). |
-| **Field spec** | Type, description and rules of one key of an op in the ops JSON; one table per op (`ops/utils/op-fields.ts`). |
-| **Ops parser** | Checks the ops JSON of `apply` against the field specs and the batch aliases and returns typed ops (`ops/OpsParser.ts`). |
-| **Ops schema** | The JSON Schema of the ops JSON, built from the field specs (`ops/OpsSchemaBuilder.ts`). |
+| **Op aliases** | Where one op defines aliases and where it may name one, and the op with its aliases resolved (`ops/parsing/OpAliases.ts`). |
+| **Alias table** | The aliases of a running batch: each bound to its element, so it follows renames and retypes (`ops/parsing/AliasTable.ts`). |
+| **Field spec** | Type, description and rules of one key of an op in the ops JSON; one table per op (`ops/parsing/utils/op-fields.ts`). |
+| **Ops parser** | Checks the ops JSON of `apply` against the field specs and the batch aliases and returns typed ops (`ops/parsing/OpsParser.ts`). |
+| **Ops schema** | The JSON Schema of the ops JSON, built from the field specs (`ops/parsing/OpsSchemaBuilder.ts`). |
 | **Change set** | What one op created, changed and removed, and the warnings it raised (`model/ChangeSet.ts`). |
-| **Pool editor** | Creates a participant (pool): wraps the one process, binds one, creates a new or a black-box one (`ops/PoolEditor.ts`). |
-| **Lane editor** | Creates lanes (nested ones inherit the parent's members) and assigns flow nodes to a lane (`ops/LaneEditor.ts`). |
+| **Pool editor** | Creates a participant (pool): wraps the one process, binds one, creates a new or a black-box one (`ops/participants/PoolEditor.ts`). |
+| **Lane editor** | Creates lanes (nested ones inherit the parent's members) and assigns flow nodes to a lane (`ops/participants/LaneEditor.ts`). |
 | **Artifact editor** | Creates data objects, data stores, text annotations and groups, and names a group (`ops/ArtifactEditor.ts`). |
 | **Association editor** | Creates and removes associations and data associations (`ops/AssociationEditor.ts`). |
 | **Kind** | The CLI's name for a BPMN element type, with an optional trigger (`userTask`, `boundaryEvent:timer`). |
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
-| **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader`, written by `DecisionLinkWriter` (`ops/`). |
-| **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors: a single node, a join, a moved group (`ops/Bridge.ts`). |
+| **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader` (`model/`), written by `DecisionLinkWriter` (`ops/`). |
+| **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors: a single node, a join, a moved group (`ops/flows/Bridge.ts`). |
 | **Splice** | Inserting a node into an existing sequence flow (`SequenceFlows.splice`). |
-| **Op classes** | `add`, `connect`, `set`, `remove`, `retype`, `move` and `split` run as `ElementAdder`, `ElementConnector`, `PropertySetter`, `ElementRemover`, `ElementRetyper`, `NodeMover` and `FlowSplitter` (`ops/`). |
+| **Op classes** | `add`, `connect`, `set`, `remove`, `retype`, `move` and `split` run as `ElementAdder`, `ElementConnector`, `PropertySetter`, `ElementRemover`, `ElementRetyper`, `NodeMover` (`ops/`) and `FlowSplitter` (`ops/flows/`). |
 | **Flow rules** | What a sequence flow may connect and carry: the roles of its ends, one scope for both, a condition its source takes (`model/FlowRules.ts`). |
-| **Sequence flows** | Creating, removing, redirecting and splicing a document's sequence flows, their default marker and condition (`ops/SequenceFlows.ts`). |
-| **Flow options** | The name, id, condition, language and default marker of the flow an op creates or splices a node into (`ops/FlowOptions.ts`). |
+| **Sequence flows** | Creating, removing, redirecting and splicing a document's sequence flows, their default marker and condition (`ops/flows/SequenceFlows.ts`). |
+| **Flow options** | The name, id, condition, language and default marker of the flow an op creates or splices a node into (`ops/flows/FlowOptions.ts`). |
 | **Node placement** | Where a node goes (--after / --before / --flow / --in / --on) and the append, prepend, splice or attachment that puts it there (`ops/NodePlacement.ts`). |
-| **Lane inheritance** | The lane a node placed in a process without --lane gets (`ops/LaneInheritance.ts`). |
-| **Event-gateway rule** | Which targets an event-based gateway may lead to: the Camunda 7 engines' rule or BPMN 2.0's, by the file (`ops/EventGatewayRule.ts`). |
-| **Flow id follower** | A flow whose id names its ends takes the id of its new ends when they change (`ops/FlowIdFollower.ts`). |
-| **Stale flow report** | W_FLOW_ID_STALE for the flows that kept an id naming their old ends (`ops/StaleFlowReport.ts`). |
-| **Event trigger** | An event's trigger as the model has it: as options, as details, as a short text (`ops/EventTrigger.ts`). |
-| **Trigger change** | A change of an element's trigger or kind: merged options, a dropped non-interrupting flag, the message-flow check, the id state (`ops/TriggerChange.ts`). |
-| **Event definitions** | The event definitions of one event, updated in place or replaced when its trigger changes (`ops/EventDefinitions.ts`). |
-| **Root elements** | The root Message, Error, Signal and Escalation elements events, tasks and message flows reference (`ops/RootElements.ts`). |
+| **Lane inheritance** | The lane a node placed in a process without --lane gets (`ops/participants/LaneInheritance.ts`). |
+| **Event-gateway rule** | Which targets an event-based gateway may lead to: the Camunda 7 engines' rule or BPMN 2.0's, by the file (`ops/events/EventGatewayRule.ts`). |
+| **Flow id follower** | A flow whose id names its ends takes the id of its new ends when they change (`ops/flows/FlowIdFollower.ts`). |
+| **Stale flow report** | W_FLOW_ID_STALE for the flows that kept an id naming their old ends (`ops/flows/StaleFlowReport.ts`). |
+| **Event trigger** | An event's trigger as the model has it: as options, as details, as a short text (`ops/events/EventTrigger.ts`). |
+| **Trigger change** | A change of an element's trigger or kind: merged options, a dropped non-interrupting flag, the message-flow check, the id state (`ops/events/TriggerChange.ts`). |
+| **Event definitions** | The event definitions of one event, updated in place or replaced when its trigger changes (`ops/events/EventDefinitions.ts`). |
+| **Root elements** | The root Message, Error, Signal and Escalation elements events, tasks and message flows reference (`ops/events/RootElements.ts`). |
 | **Property coercer** | The keys `set` takes and the values it writes: documented keys, settable BPMN attributes, typed values, vendor attributes (`ops/PropertyCoercer.ts`). |
 | **Nested slots** | The `definition.` / `loop.` / `condition.` keys of the nested elements without an id of their own (`ops/NestedSlots.ts`). |
 | **Element properties** | The settable view of an element's properties that `show <id>` prints (`ops/ElementProperties.ts`). |
@@ -109,14 +109,14 @@ a new concept gets its line here first.
 | **Conventions table** | The conventions new ids follow in one file, a row per id pattern and source (`bpmn show --conventions`, `ids/ConventionsTable.ts`). |
 | **Vendor extension** | Engine-specific content (`camunda:`, `zeebe:`) on a BPMN element. |
 | **Vendor descriptor** | The read-only lookup over an engine's moddle descriptor: its attributes, extension element types, placement and the types an element holds once (`VendorDescriptor`, `CAMUNDA`, `ZEEBE`). |
-| **Extension editor** | Runs an `ext` op: resolves its host, then adds (`ExtensionInserter`) or removes (`ExtensionRemover`) vendor extension elements (`ops/ExtensionEditor.ts`). |
-| **Extension structure** | Where vendor extension elements go: containers, single-instance and keyed types, child order (`ops/ExtensionStructure.ts`). |
-| **Extension level** | The top of an element's extensionElements or the children of one vendor element, where `ext` inserts, selects and removes (`ops/ExtensionLevel.ts`). |
-| **Extension selector** | `prefix:type[attr=value]/...`: the path `ext` names vendor elements with (`ops/SelectorParser.ts`). |
+| **Extension editor** | Runs an `ext` op: resolves its host, then adds (`ExtensionInserter`) or removes (`ExtensionRemover`) vendor extension elements (`ops/extensions/ExtensionEditor.ts`). |
+| **Extension structure** | Where vendor extension elements go: containers, single-instance and keyed types, child order (`ops/extensions/ExtensionStructure.ts`). |
+| **Extension level** | The top of an element's extensionElements or the children of one vendor element, where `ext` inserts, selects and removes (`ops/extensions/ExtensionLevel.ts`). |
+| **Extension selector** | `prefix:type[attr=value]/...`: the path `ext` names vendor elements with (`ops/parsing/SelectorParser.ts`). |
 | **Nested host** | An event definition, loop characteristics or condition expression that holds extension elements and is named through its owner (`ops/NestedHosts.ts`). |
 | **Vendor elements** | How `ext` reads, names and creates generic vendor elements: canonical type, prefix, attributes, key and label (`ops/VendorElements.ts`). |
-| **Extension snippet** | The `--xml` of `ext add`, read synchronously into generic elements (`ops/ExtensionSnippetReader.ts`). |
-| **Zeebe subscription** | The correlation key of a message, written on the bpmn:Message an event or receive task waits for (`ops/ZeebeSubscription.ts`). |
+| **Extension snippet** | The `--xml` of `ext add`, read synchronously into generic elements (`ops/extensions/ExtensionSnippetReader.ts`). |
+| **Zeebe subscription** | The correlation key of a message, written on the bpmn:Message an event or receive task waits for (`ops/events/ZeebeSubscription.ts`). |
 | **Camunda 8 defaults** | What the CLI writes for elements it creates in a Camunda 8 file, like Camunda Modeler (`platform/Camunda8Defaults.ts`). |
 | **Command catalogue** | The commands of `bpmn` with their arguments, `--help` text and guide usage, and the options of every write (`report/CommandCatalogue.ts`). |
 | **Shot** | The image or tiles one render wrote, with size, image tokens, plane and numbered problems: `node/ImageWriter.ts` writes it, `report/RenderReport.ts` prints it. |

@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { AssociationEditor, PLACEHOLDER_PROPERTY } from '../src/ops/AssociationEditor.js';
-import { LaneEditor } from '../src/ops/LaneEditor.js';
-import { laneOf } from '../src/ops/utils/lanes.js';
-import { EventTrigger } from '../src/ops/EventTrigger.js';
+import { LaneEditor } from '../src/ops/participants/LaneEditor.js';
+import { laneOf } from '../src/model/utils/lanes.js';
+import { EventTrigger } from '../src/ops/events/EventTrigger.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
-import { BRANCH_FIELDS, NODE_FIELDS } from '../src/ops/utils/op-fields.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from '../src/ops/parsing/utils/op-fields.js';
 import { parseOps } from '../src/index.js';
 import type { CliError } from '../src/shared/CliError.js';
 import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
-import { EventDefinitions } from '../src/ops/EventDefinitions.js';
+import { EventDefinitions } from '../src/ops/events/EventDefinitions.js';
 import { ElementAdder } from '../src/ops/ElementAdder.js';
 import { ElementConnector } from '../src/ops/ElementConnector.js';
-import { FlowSplitter } from '../src/ops/FlowSplitter.js';
+import { FlowSplitter } from '../src/ops/flows/FlowSplitter.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -897,7 +897,7 @@ describe('split', () => {
     const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
     expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
     expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
-    // no TypeError: the batch aliases read only arrays of objects (ops/OpAliases.ts), the split checks the shape
+    // no TypeError: the batch aliases read only arrays of objects (ops/parsing/OpAliases.ts), the split checks the shape
     expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
     expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
     expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);

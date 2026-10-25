@@ -11,11 +11,11 @@ import { kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../model
 import { diExpansionState } from '../drawing/utils/expansion.js';
 import { Groups } from '../drawing/Groups.js';
 import { groupName, is, localType, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/utils/lanes.js';
-import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
-import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
-import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
-import { vendorAttributes } from '../ops/utils/elements.js';
+import { laneOf } from '../model/utils/lanes.js';
+import { DecisionLinkReader } from '../model/DecisionLinkReader.js';
+import { ExtensionLister, type ExtensionInfo } from '../model/ExtensionLister.js';
+import { definitionsOf, nestedEntries } from '../model/utils/nested-slots.js';
+import { vendorAttributes } from '../model/utils/elements.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 
 export interface ViewFlow {

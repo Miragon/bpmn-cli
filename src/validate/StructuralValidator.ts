@@ -5,7 +5,7 @@ import { ignoresConditions, isLinkCatch, isRejectedType, kindLabel, kindOf, trig
 import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { FlowRules } from '../model/FlowRules.js';
-import { ALWAYS_INTERRUPTING as NON_INTERRUPTING_FORBIDDEN } from '../ops/EventTrigger.js';
+import { ALWAYS_INTERRUPTING as NON_INTERRUPTING_FORBIDDEN } from '../ops/events/EventTrigger.js';
 import type { PlatformChoice } from '../platform/PlatformDetection.js';
 import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';

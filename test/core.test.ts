@@ -9,13 +9,13 @@ import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../src/mo
 import { FullLayout } from '../src/layout/FullLayout.js';
 import { diExpansionState, resolveExpanded } from '../src/drawing/utils/expansion.js';
 import { many } from '../src/model/utils/moddle.js';
-import { Bridge } from '../src/ops/Bridge.js';
+import { Bridge } from '../src/ops/flows/Bridge.js';
 import { NodePlacement } from '../src/ops/NodePlacement.js';
 import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
 import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from './helpers.js';
-import { SequenceFlows } from '../src/ops/SequenceFlows.js';
+import { SequenceFlows } from '../src/ops/flows/SequenceFlows.js';
 
 function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {
   try {

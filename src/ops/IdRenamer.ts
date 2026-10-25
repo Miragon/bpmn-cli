@@ -8,8 +8,8 @@ import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, triggerOf } from '../model/utils/kinds.js';
 import { is, walk, type El } from '../model/utils/moddle.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
-import { FlowIdFollower } from './FlowIdFollower.js';
-import { descriptorOf, idOf } from './utils/elements.js';
+import { FlowIdFollower } from './flows/FlowIdFollower.js';
+import { descriptorOf, idOf } from '../model/utils/elements.js';
 
 /**
  * Renames ids (`set id=`) and handles ids a retype or trigger change leaves with a stale

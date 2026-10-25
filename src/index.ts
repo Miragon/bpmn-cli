@@ -54,9 +54,9 @@ import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
 import { ValidationText } from './report/ValidationText.js';
 import { WarningLines } from './report/WarningLines.js';
 import { advisoryOf } from './report/utils/findings.js';
-import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
-import { OpsParser } from './ops/OpsParser.js';
-import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
+import { DecisionLinkReader, type DecisionLink } from './model/DecisionLinkReader.js';
+import { OpsParser } from './ops/parsing/OpsParser.js';
+import { ExtensionLister, type ExtensionInfo } from './model/ExtensionLister.js';
 import { LayoutAnalysis } from './drawing/LayoutAnalysis.js';
 import { FullLayout, type LayoutOptions, type LayoutResult } from './layout/FullLayout.js';
 import { FormatOps, type FormatEntry, type FormatResult } from './format/FormatOps.js';
@@ -96,7 +96,7 @@ export function implementationOf(el: El): Implementation | undefined { return ne
 export { Doc, TARGETS, type DocSource, type NewDocOptions } from './model/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './shared/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './model/utils/kinds.js';
-export { FORMAT_OP_NAMES, isFormatOp } from './ops/utils/op-names.js';
+export { FORMAT_OP_NAMES, isFormatOp } from './ops/parsing/utils/op-names.js';
 export type {
   Op,
   AddOp,
@@ -156,7 +156,7 @@ export function conventionsView(
   return new ConventionsTable(doc, conventions).view(opts);
 }
 
-export type { DecisionLink } from './ops/DecisionLinkReader.js';
+export type { DecisionLink } from './model/DecisionLinkReader.js';
 
 /** The decision link of a business rule task in any spelling. */
 export function decisionLinkOf(el: El, doc?: Doc): DecisionLink | undefined {
@@ -171,13 +171,13 @@ export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationRes
 export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './platform/profiles/PlatformProfiles.js';
 export type { ProfileFinding, Severity } from './platform/utils/finding.js';
-export type { ExtensionInfo } from './ops/ExtensionLister.js';
+export type { ExtensionInfo } from './model/ExtensionLister.js';
 export { type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './query/model-view.js';
 export function buildView(doc: Doc): ModelView { return new ModelViewBuilder(doc).build(); }
 export function elementDetail(doc: Doc, el: El): ElementDetail { return new ElementDetailBuilder(doc, el).build(); }
 export function findElements(doc: Doc, text: string, kind?: string): FindHit[] { return new ElementFinder(doc).find(text, kind); }
 export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ModelViewBuilder(doc).scope(view, scopeId); }
-export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
+export { OPS_SCHEMA } from './ops/parsing/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './drawing/utils/problems.js';
 export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';

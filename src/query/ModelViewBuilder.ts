@@ -3,7 +3,7 @@ import { kindLabel } from '../model/utils/kinds.js';
 import { diExpansionState } from '../drawing/utils/expansion.js';
 import { Groups } from '../drawing/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/utils/lanes.js';
+import { laneOf } from '../model/utils/lanes.js';
 import { FlowOrder } from '../validate/FlowOrder.js';
 import { StructuralValidator } from '../validate/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';

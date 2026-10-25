@@ -2,9 +2,9 @@ import { PropertyCoercer } from './PropertyCoercer.js';
 import type { Doc } from '../model/Doc.js';
 import { diExpansionState } from '../drawing/utils/expansion.js';
 import { is, nameOf, type El } from '../model/utils/moddle.js';
-import { descriptorOf, idOf, isEl, ownValue, typeLabel, vendorAttributes } from './utils/elements.js';
-import { nestedEntries } from './utils/nested-slots.js';
-import { EventTrigger } from './EventTrigger.js';
+import { descriptorOf, idOf, isEl, ownValue, typeLabel, vendorAttributes } from '../model/utils/elements.js';
+import { nestedEntries } from '../model/utils/nested-slots.js';
+import { EventTrigger } from './events/EventTrigger.js';
 
 /** The settable view of an element's properties (`show <id>`), keyed as `set` takes them. */
 export class ElementProperties {

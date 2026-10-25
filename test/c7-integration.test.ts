@@ -21,7 +21,7 @@ import { Doc } from '../src/model/Doc.js';
 import { kindsJson, kindsText } from '../src/index.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import { listAllExtensions } from '../src/index.js';
-import { ExtensionEditor } from '../src/ops/ExtensionEditor.js';
+import { ExtensionEditor } from '../src/ops/extensions/ExtensionEditor.js';
 import { runOps } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';

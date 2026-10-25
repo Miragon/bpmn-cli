@@ -11,7 +11,7 @@ import type { ValidationResult } from '../validate/StructuralValidator.js';
 import { FindingBaseline, type ValidationDelta } from '../validate/FindingBaseline.js';
 import { ModelViewBuilder } from '../query/ModelViewBuilder.js';
 import { DiagramUpdate } from './DiagramUpdate.js';
-import { toCliError } from './utils/cli-error.js';
+import { toCliError } from '../shared/utils/cli-error.js';
 import type { LayoutStatus, MutationOptions, MutationResult } from './index.js';
 
 /**

@@ -21,11 +21,11 @@ import type { EditContext } from '../model/EditContext.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { OpRunner } from '../ops/OpRunner.js';
 import { Reordering } from '../ops/Reordering.js';
-import { isFormatOp } from '../ops/utils/op-names.js';
+import { isFormatOp } from '../ops/parsing/utils/op-names.js';
 import type { Op } from '../ops/types.js';
 import { TextPreservation } from '../xml/TextPreservation.js';
 import { firstLine } from '../shared/utils/text.js';
-import { toCliError } from './utils/cli-error.js';
+import { toCliError } from '../shared/utils/cli-error.js';
 import type { LayoutMode, LayoutStatus, MutationOptions } from './index.js';
 
 interface Before {

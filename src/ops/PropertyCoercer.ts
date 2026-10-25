@@ -2,7 +2,7 @@ import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/utils/kinds.js';
 import { is, type El } from '../model/utils/moddle.js';
-import { descriptorOf, idOf, type PropDescriptor } from './utils/elements.js';
+import { descriptorOf, idOf, type PropDescriptor } from '../model/utils/elements.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 
 export interface SetKeyDoc {

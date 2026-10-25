@@ -5,7 +5,7 @@
  * Contract
  *  - `genStep(a, r, step, { semantic, format })` reads an analyse() result and
  *    returns `{ name, ops }` or undefined (nothing applicable after 20 tries):
- *    `ops` is a batch in the JSON format of `bpmn apply` (src/ops/OpsParser.ts), so the
+ *    `ops` is a batch in the JSON format of `bpmn apply` (src/ops/parsing/OpsParser.ts), so the
  *    same step runs through the CLI, through `apply` or in-process; `name`
  *    is the generator (statistics, minimisation messages). Generators are
  *    picked by weight; every random choice comes from `r`, so the same model,

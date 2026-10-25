@@ -1,7 +1,7 @@
 import type { Command as CommandType } from 'commander';
 import type { Op, PlaceOp } from '../ops/types.js';
 import { usageError } from '../shared/utils/errors.js';
-import { groupViolation } from '../ops/utils/op-rules.js';
+import { groupViolation } from '../ops/parsing/utils/op-rules.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 import { assertPathFlags, flag } from './utils/flags.js';

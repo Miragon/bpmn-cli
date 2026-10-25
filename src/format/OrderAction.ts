@@ -1,5 +1,5 @@
 import { Reordering } from '../ops/Reordering.js';
-import { laneSetOf } from '../ops/utils/lanes.js';
+import { laneSetOf } from '../model/utils/lanes.js';
 import type { OrderOp } from '../ops/types.js';
 import { bottom, copyBox, cx, cy, right } from '../drawing/utils/geom.js';
 import { idOf, rawList } from '../drawing/utils/raw.js';

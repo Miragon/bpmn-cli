@@ -45,11 +45,11 @@ them on a private corpus without copying it into the repository, are described i
   | folder | holds |
   | --- | --- |
   | `shared/` | errors, used everywhere |
-  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
+  | `model/` | the moddle tree, kinds, the read helpers views and ops share (lanes, nested slots, extensions, decision links), `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
   | `ids/` | id words and slugs, the file's id style, the declared id conventions |
   | `xml/` | the text-preserving write, the positional XML reader, the encoding |
   | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
-  | `ops/` | the semantic edits (`add`, `connect`, `set`, ...) and the ops JSON of `apply` |
+  | `ops/` | the semantic edits (`add`, `connect`, `set`, ...); `flows/`, `events/`, `extensions/` and `participants/` hold what several of them share, `parsing/` the ops JSON of `apply` |
   | `drawing/` | the drawing (BPMN DI): reading and writing planes, frames, groups, the geometry and the checkpoint every engine shares |
   | `layout/` | the layout engines: `clean/` redraws (`FullLayout`), `incremental/` keeps a hand-made drawing (placers, routers, the space tool); the debug sink |
   | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |

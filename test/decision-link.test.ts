@@ -1,5 +1,5 @@
 /**
- * The decision link of a business rule task (src/ops/DecisionLinkReader.ts, DecisionLinkWriter.ts): Camunda 7
+ * The decision link of a business rule task (src/model/DecisionLinkReader.ts, DecisionLinkWriter.ts): Camunda 7
  * writes it as camunda:decisionRef, Camunda 8 as a zeebe:calledDecision
  * extension element, and bpmn-cli as an unprefixed calledDecision="<decision>"
  * in a model without an engine. `show`, `show <id>` and `find` read every

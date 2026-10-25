@@ -4,8 +4,8 @@ import { kindLabel } from '../model/utils/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './utils/covers.js';
-import { textValue } from './utils/text-value.js';
-import { DecisionLinkReader } from './DecisionLinkReader.js';
+import { textValue } from '../model/utils/text-value.js';
+import { DecisionLinkReader } from '../model/DecisionLinkReader.js';
 import { CAMUNDA_URI, OPERATON_URI } from '../platform/CamundaDescriptor.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 

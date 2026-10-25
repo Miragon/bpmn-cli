@@ -10,7 +10,7 @@ import { ValidatorSet } from '../validate/ValidatorSet.js';
 import { counts, withValidatorReports } from '../validate/utils/validator-issues.js';
 import { once } from '../validate/utils/once.js';
 import type { ValidatorReport, ValidatorRun } from '../validate/validators.js';
-import { toCliError } from './utils/cli-error.js';
+import { toCliError } from '../shared/utils/cli-error.js';
 import type { CheckOptions, CheckResult } from './index.js';
 
 /**

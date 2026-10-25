@@ -4,18 +4,18 @@ import { type Warning } from '../shared/CliError.js';
 import { kindLabel } from '../model/utils/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { LaneEditor } from './LaneEditor.js';
-import { laneOf } from './utils/lanes.js';
-import { Bridge, type BridgedFlow } from './Bridge.js';
+import { LaneEditor } from './participants/LaneEditor.js';
+import { laneOf } from '../model/utils/lanes.js';
+import { Bridge, type BridgedFlow } from './flows/Bridge.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
-import { LaneInheritance } from './LaneInheritance.js';
+import { LaneInheritance } from './participants/LaneInheritance.js';
 import { IdRenamer } from './IdRenamer.js';
-import { idOf } from './utils/elements.js';
-import { FlowOptions } from './FlowOptions.js';
+import { idOf } from '../model/utils/elements.js';
+import { FlowOptions } from './flows/FlowOptions.js';
 import type { MoveOp } from './types.js';
 import { NodePlacement, type PlacementOptions } from './NodePlacement.js';
-import { EventGatewayRule } from './EventGatewayRule.js';
-import { SequenceFlows } from './SequenceFlows.js';
+import { EventGatewayRule } from './events/EventGatewayRule.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
 
 /**
  * A flow the detach took out (flow ids kept). `label`: what no bridge took; given back when the

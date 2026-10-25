@@ -7,14 +7,14 @@ import { findReferences, is, many, removeFrom, walk, type El } from '../model/ut
 import { ChangeSet } from '../model/ChangeSet.js';
 import { coversProfileSubjects } from './utils/covers.js';
 import { Camunda8Defaults } from '../platform/Camunda8Defaults.js';
-import { EventTrigger } from './EventTrigger.js';
-import { TriggerChange } from './TriggerChange.js';
-import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from './utils/elements.js';
+import { EventTrigger } from './events/EventTrigger.js';
+import { TriggerChange } from './events/TriggerChange.js';
+import { descriptorOf, idOf, isEl, ownValue, vendorAttributes, type PropDescriptor } from '../model/utils/elements.js';
 import type { RetypeOp, TriggerOptions } from './types.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
-import { SequenceFlows } from './SequenceFlows.js';
-import { RootElements } from './RootElements.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
+import { RootElements } from './events/RootElements.js';
 import { ElementRemover } from './ElementRemover.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
