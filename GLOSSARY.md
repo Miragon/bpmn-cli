@@ -16,6 +16,7 @@ a new concept gets its line here first.
 | **Relayout** | `bpmn layout` of a document: a full redraw (expanding / collapsing sub-processes) or a tidy (`pipeline/Relayout.ts`). |
 | **Check** | `bpmn validate` of a document: validation, the validators and a layout dry run (`pipeline/DocCheck.ts`). |
 | **Reordering** | An `order` op on a document: the outgoing flows of a node, the lanes of a pool or lane, or the pools of a collaboration (`ops/Reordering.ts`). |
+| **Id suggestions** | The ids of a document a mistyped id may have meant: the batch rename, another spelling, a typo, a matching name (`model/IdSuggestions.ts`). |
 | **Alias** | A `$name` an op gives to what it creates, so later ops of the batch can name it. |
 | **Op aliases** | Where one op defines aliases and where it may name one, and the op with its aliases resolved (`ops/parsing/OpAliases.ts`). |
 | **Alias table** | The aliases of a running batch: each bound to its element, so it follows renames and retypes (`ops/parsing/AliasTable.ts`). |
