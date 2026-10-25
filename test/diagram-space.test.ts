@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Box, Point } from '../src/drawing/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
-import { Drawing } from '../src/drawing/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 
 const EL = {} as El;
 

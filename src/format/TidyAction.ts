@@ -1,6 +1,6 @@
 import type { TidyOp } from '../ops/types.js';
 import type { Plane } from '../drawing/types.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { unique } from './utils/frames.js';
 

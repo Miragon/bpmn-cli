@@ -6,7 +6,7 @@ import { Frames } from '../drawing/Frames.js';
 import { edgeLabelAt, hasExternalLabel, labelAt } from '../drawing/utils/labels.js';
 import { raw } from '../drawing/utils/raw.js';
 import { labelSize } from '../drawing/utils/text.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 
 export class LabelAction {

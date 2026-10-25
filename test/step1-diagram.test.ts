@@ -26,7 +26,7 @@ import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
 import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
 import { ProblemLocator } from '../src/drawing/ProblemLocator.js';
 import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Drawing } from '../src/drawing/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 import { PlaneWriter } from '../src/drawing/PlaneWriter.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';

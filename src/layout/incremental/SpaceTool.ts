@@ -6,8 +6,7 @@ import { defaultLabelSide, hasExternalLabel, labelAt } from '../../drawing/utils
 import { raw } from '../../drawing/utils/raw.js';
 import { labelSize } from '../../drawing/utils/text.js';
 import type { DShape, Plane } from '../../drawing/types.js';
-
-export type Axis = 'x' | 'y';
+import { bandOf, beyondBand, centreInBand, far, near, overlapsBand, pointInBand, resize, shiftBox, type Axis } from './utils/bands.js';
 
 export interface SpaceRequest {
   axis: Axis;
@@ -73,19 +72,6 @@ export interface StripRequest {
 export class SpaceTool {
   constructor(private readonly plane: Plane) {}
 
-  private near(b: Box, axis: Axis): number {
-    return axis === 'x' ? b.x : b.y;
-  }
-
-  private far(b: Box, axis: Axis): number {
-    return axis === 'x' ? right(b) : bottom(b);
-  }
-
-  private shiftBox(b: Box, axis: Axis, d: number): void {
-    if (axis === 'x') b.x += d;
-    else b.y += d;
-  }
-
   shiftShape(id: string, dx: number, dy: number): string[] {
     const s = this.plane.shapes.get(id);
     if (!s || (!dx && !dy)) return [];
@@ -125,35 +111,6 @@ export class SpaceTool {
     return moved;
   }
 
-  private bandOf(within: Box | undefined, axis: Axis): [number, number] | undefined {
-    if (!within) return undefined;
-    return axis === 'x' ? [within.y, bottom(within)] : [within.x, right(within)];
-  }
-
-  private centreInBand(b: Box, band: [number, number] | undefined, axis: Axis): boolean {
-    if (!band) return true;
-    const c = axis === 'x' ? cy(b) : cx(b);
-    return c >= band[0] && c <= band[1];
-  }
-
-  private overlapsBand(b: Box, band: [number, number] | undefined, axis: Axis): boolean {
-    if (!band) return true;
-    const lo = axis === 'x' ? b.y : b.x;
-    const hi = axis === 'x' ? bottom(b) : right(b);
-    return lo < band[1] && hi > band[0];
-  }
-
-  private pointInBand(p: { x: number; y: number }, band: [number, number] | undefined, axis: Axis): boolean {
-    if (!band) return true;
-    const c = axis === 'x' ? p.y : p.x;
-    return c >= band[0] - 1 && c <= band[1] + 1;
-  }
-
-  private resize(b: Box, axis: Axis, d: number): void {
-    if (axis === 'x') b.width = Math.max(1, b.width + d);
-    else b.height = Math.max(1, b.height + d);
-  }
-
   private alignPoolsAndLanes(before: Map<string, Box>, res: SpaceResult): void {
     const pools = [...this.plane.shapes.values()].filter((s) => s.kind === 'participant');
     const grown = pools.filter((p) => res.resized.has(p.id));
@@ -185,13 +142,6 @@ export class SpaceTool {
         res.resized.add(lane.id);
       }
     }
-  }
-
-  private beyondBand(b: Box, band: [number, number] | undefined, axis: Axis): boolean {
-    if (!band) return false;
-    const lo = axis === 'x' ? b.y : b.x;
-    const hi = axis === 'x' ? bottom(b) : right(b);
-    return lo < band[0] - 1 || hi > band[1] + 1;
   }
 
   /** For shapes without a semantic pool (collaboration-level artifacts): by their centre. */
@@ -230,10 +180,10 @@ export class SpaceTool {
     for (const s of this.plane.shapes.values()) {
       if (s === c || s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group') continue;
       if (!Frames.within(this.plane, s, c)) continue;
-      need = Math.max(need, this.far(s.bounds, axis) + (s.kind === 'boundary' ? 0 : pad));
+      need = Math.max(need, far(s.bounds, axis) + (s.kind === 'boundary' ? 0 : pad));
     }
-    const limit = Math.min(need, this.far(before, axis));
-    if (this.far(c.bounds, axis) >= limit) return;
+    const limit = Math.min(need, far(before, axis));
+    if (far(c.bounds, axis) >= limit) return;
     if (axis === 'x') c.bounds.width = limit - c.bounds.x;
     else c.bounds.height = limit - c.bounds.y;
   }
@@ -287,7 +237,7 @@ export class SpaceTool {
   private rigid(p: Pass, c: DShape): boolean {
     if (!p.held || c.kind !== 'subProcess' || !c.container || p.held.has(c.id) || p.keep.has(c.id)) return false;
     const b = p.before.get(c.id)!;
-    return this.near(b, p.axis) < p.line && this.far(b, p.axis) > p.line && this.overlapsBand(b, p.band, p.axis);
+    return near(b, p.axis) < p.line && far(b, p.axis) > p.line && overlapsBand(b, p.band, p.axis);
   }
 
   private rigidAround(p: Pass, s: DShape): DShape | undefined {
@@ -316,7 +266,7 @@ export class SpaceTool {
     if (!scope || s === scope.frame || this.insideFrame(p, s)) return undefined;
     if (!scope.ancestors.has(s.id) || !scope.grow.has(s.id)) return 'stay';
     const b = p.before.get(s.id)!;
-    return this.near(b, p.axis) < p.line && this.far(b, p.axis) > p.line ? 'resize' : 'stay';
+    return near(b, p.axis) < p.line && far(b, p.axis) > p.line ? 'resize' : 'stay';
   }
 
   /** Top-down: the content of a container beyond the line goes with its container. */
@@ -334,7 +284,7 @@ export class SpaceTool {
        */
       const carrier = [s.kind === 'participant' ? undefined : this.geometricPool(s, before), this.geometricLane(s, before), s.parentId]
         .map((id) => (id ? plane.shapes.get(id) : undefined))
-        .find((c) => !!c && this.near(before.get(c.id)!, axis) >= line);
+        .find((c) => !!c && near(before.get(c.id)!, axis) >= line);
       const hostDecision = host && depth < 20 ? decide(host, depth + 1) : undefined;
       const scoped = host ? undefined : this.scopeDecision(p, s);
       const block = p.held && !host && !carrier ? this.rigidAround(p, s) : undefined;
@@ -356,10 +306,10 @@ export class SpaceTool {
         d = (axis === 'x' ? cx(b) : cy(b)) >= line ? 'move' : 'stay';
       } else {
         const ref = before.get(s.id)!;
-        if (this.near(ref, axis) >= line) d = this.overlapsBand(ref, band, axis) ? 'move' : 'stay';
-        else if ((s.container || s.kind === 'group') && this.far(ref, axis) > line && this.overlapsBand(ref, band, axis)) {
+        if (near(ref, axis) >= line) d = overlapsBand(ref, band, axis) ? 'move' : 'stay';
+        else if ((s.container || s.kind === 'group') && far(ref, axis) > line && overlapsBand(ref, band, axis)) {
           // a pool or lane reaching beyond the band holds content that stays, so it never shrinks
-          d = delta < 0 && this.beyondBand(ref, band, axis) ? 'stay' : 'resize';
+          d = delta < 0 && beyondBand(ref, band, axis) ? 'stay' : 'resize';
         }
       }
       decision.set(s.id, d);
@@ -375,11 +325,11 @@ export class SpaceTool {
     for (const s of plane.shapes.values()) {
       const d = decision.get(s.id);
       if (d === 'move') {
-        this.shiftBox(s.bounds, axis, delta);
-        if (s.label) this.shiftBox(s.label, axis, delta);
+        shiftBox(s.bounds, axis, delta);
+        if (s.label) shiftBox(s.label, axis, delta);
         res.moved.add(s.id);
       } else if (d === 'resize') {
-        this.resize(s.bounds, axis, delta);
+        resize(s.bounds, axis, delta);
         res.resized.add(s.id);
       }
     }
@@ -422,7 +372,7 @@ export class SpaceTool {
         else if (end && res.moved.has(end.id)) shift = true;
         else if (end && res.resized.has(end.id)) shift = beyond;
         else if (end) shift = false;
-        else shift = beyond && this.pointInBand(pt, band, axis);
+        else shift = beyond && pointInBand(pt, band, axis);
         shifted.push(shift);
         if (shift) {
           if (axis === 'x') pt.x += delta;
@@ -433,8 +383,8 @@ export class SpaceTool {
       // the label goes with the segment nearest to it
       const a = seg >= 0 ? shifted[seg] : undefined;
       const b = seg >= 0 ? shifted[seg + 1] : undefined;
-      const follow = a !== undefined && a === b ? a : this.near(e.label, axis) >= line && (seg >= 0 || this.centreInBand(e.label, band, axis));
-      if (follow) this.shiftBox(e.label, axis, delta);
+      const follow = a !== undefined && a === b ? a : near(e.label, axis) >= line && (seg >= 0 || centreInBand(e.label, band, axis));
+      if (follow) shiftBox(e.label, axis, delta);
     }
     return res;
   }
@@ -445,17 +395,17 @@ export class SpaceTool {
     for (const s of p.plane.shapes.values()) {
       const d = decision.get(s.id);
       if (d !== 'move' && d !== 'resize') continue;
-      const reach = this.far(p.before.get(s.id)!, p.axis) + p.delta + (s.kind === 'boundary' || s.kind === 'lane' ? 0 : FRAME_PAD);
+      const reach = far(p.before.get(s.id)!, p.axis) + p.delta + (s.kind === 'boundary' || s.kind === 'lane' ? 0 : FRAME_PAD);
       for (const a of this.frameChain(s)) {
         if (!scope.ancestors.has(a.id) || scope.grow.has(a.id) || out.has(a.id)) continue;
-        if (reach > this.far(p.before.get(a.id)!, p.axis) + 0.5) out.add(a.id);
+        if (reach > far(p.before.get(a.id)!, p.axis) + 0.5) out.add(a.id);
       }
     }
     return [...out];
   }
 
   private growthRegion(p: Pass, b: Box): Box {
-    const from = this.far(b, p.axis);
+    const from = far(b, p.axis);
     const len = p.delta + FRAME_GAP;
     return p.axis === 'x' ? { x: from, y: b.y, width: len, height: b.height } : { x: b.x, y: from, width: b.width, height: len };
   }
@@ -502,7 +452,7 @@ export class SpaceTool {
   private spaceInFrame(base: Omit<Pass, 'band' | 'scope'>, frame: DShape): SpaceResult {
     let scope: FrameScope | undefined = this.scopeFor(frame);
     for (let guard = 0; scope && guard < 40; guard++) {
-      const pass: Pass = { ...base, band: this.bandOf(base.before.get(scope.frame.id)!, base.axis), scope };
+      const pass: Pass = { ...base, band: bandOf(base.before.get(scope.frame.id)!, base.axis), scope };
       const decision = this.decideAll(pass);
       const grow = this.outgrown(pass, decision);
       if (grow.length) {
@@ -532,9 +482,9 @@ export class SpaceTool {
     const base = { plane: this.plane, axis, line, delta, keep, before, held };
     const frame = req.frame ? this.plane.shapes.get(req.frame) : undefined;
     const fb = frame && before.get(frame.id)!;
-    if (frame && fb && frame.container && delta > 0 && this.near(fb, axis) < line && this.far(fb, axis) > line) return this.spaceInFrame(base, frame);
+    if (frame && fb && frame.container && delta > 0 && near(fb, axis) < line && far(fb, axis) > line) return this.spaceInFrame(base, frame);
     const within = req.within ?? (frame ? frame.bounds : undefined);
-    const pass: Pass = { ...base, band: this.bandOf(within, axis) };
+    const pass: Pass = { ...base, band: bandOf(within, axis) };
     return this.applyPass(pass, this.decideAll(pass));
   }
 
@@ -630,21 +580,21 @@ export class SpaceTool {
     const { axis, from, to, gap } = req;
     const width = to - from;
     if (width - gap <= 0) return undefined;
-    const band = this.bandOf(req.within, axis);
+    const band = bandOf(req.within, axis);
     // content starting a few px before `to` (a slightly smaller gap in the drawing) moves too
     const tol = 3;
     const line = to - tol;
     const lo = from + gap + tol;
     const hi = line;
-    const blocks = (b: Box): boolean => this.near(b, axis) < hi && this.far(b, axis) > lo && this.overlapsBand(b, band, axis);
+    const blocks = (b: Box): boolean => near(b, axis) < hi && far(b, axis) > lo && overlapsBand(b, band, axis);
     for (const s of this.plane.shapes.values()) {
       const owner = s.hostId ? this.plane.shapes.get(s.hostId) ?? s : s;
-      const stays = this.near(owner.bounds, axis) < line;
+      const stays = near(owner.bounds, axis) < line;
       if (PlaneQuery.isLeaf(s) && stays && blocks(s.bounds)) return undefined;
       if (s.label && stays && blocks(s.label)) return undefined;
-      if (s.container && this.overlapsBand(s.bounds, band, axis)) {
-        const a = this.near(s.bounds, axis);
-        const b = this.far(s.bounds, axis);
+      if (s.container && overlapsBand(s.bounds, band, axis)) {
+        const a = near(s.bounds, axis);
+        const b = far(s.bounds, axis);
         if ((a > lo && a < hi) || (b > lo && b < hi)) return undefined;
       }
     }
@@ -654,7 +604,7 @@ export class SpaceTool {
       for (let i = 1; i + 1 < e.points.length; i++) {
         const p = e.points[i]!;
         const c = axis === 'x' ? p.x : p.y;
-        if (c > lo && c < hi && this.pointInBand(p, band, axis)) return undefined;
+        if (c > lo && c < hi && pointInBand(p, band, axis)) return undefined;
       }
     }
     // a moved shape landing on another one undoes the close (audit #42)

@@ -1,9 +1,9 @@
 import type { Drawing } from './Drawing.js';
-import type { EdgeBefore } from '../layout/incremental/EdgeRouter.js';
-import type { Box, DEdge, DShape, Point } from './types.js';
-import { copyBox, copyPoints, overlaps, sameBox, samePoints } from './utils/geom.js';
-import { raw } from './utils/raw.js';
-import { titleBox } from './utils/text.js';
+import type { EdgeBefore } from './EdgeRouter.js';
+import type { Box, DEdge, DShape, Point } from '../../drawing/types.js';
+import { copyBox, copyPoints, overlaps, sameBox, samePoints } from '../../drawing/utils/geom.js';
+import { raw } from '../../drawing/utils/raw.js';
+import { titleBox } from '../../drawing/utils/text.js';
 
 /** What the planes of a drawing showed before a format op, to compare against afterwards. */
 export class DrawingSnapshot {

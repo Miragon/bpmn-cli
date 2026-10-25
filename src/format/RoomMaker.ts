@@ -4,8 +4,8 @@ import { Frames } from '../drawing/Frames.js';
 import { PlaneQuery } from '../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../drawing/types.js';
 import { DrawingCheckpoint } from '../drawing/DrawingCheckpoint.js';
-import { Drawing } from '../drawing/Drawing.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { Drawing } from '../layout/incremental/Drawing.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import { frameWord } from './utils/frames.js';
 
 /** A sub-process has no header: its border is the limit. */

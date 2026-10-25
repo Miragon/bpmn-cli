@@ -3,7 +3,7 @@ import type { CompactOp } from '../ops/types.js';
 import { Compaction } from './Compaction.js';
 import type { LayoutProblem } from '../drawing/utils/problems.js';
 import type { Plane } from '../drawing/types.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { problemWords, unique } from './utils/frames.js';
 

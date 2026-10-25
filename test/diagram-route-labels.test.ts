@@ -10,7 +10,7 @@ import { crossings } from '../src/drawing/utils/routing.js';
 import { labelAt } from '../src/drawing/utils/labels.js';
 import { renderLayout } from '../src/report/utils/result-lines.js';
 import { Doc } from '../src/model/Doc.js';
-import { Drawing } from '../src/drawing/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 import type { El } from '../src/model/utils/moddle.js';
 
 /** A real element for `type` with `name` (labels read the name, routing the type). */

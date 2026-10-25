@@ -10,7 +10,7 @@ import { PlaneQuery, type Spacing } from '../../drawing/PlaneQuery.js';
 import { Semantics } from '../../drawing/Semantics.js';
 
 import type { DEdge, DShape, Plane, ShapeKind } from '../../drawing/types.js';
-import { Drawing } from '../../drawing/Drawing.js';
+import { Drawing } from './Drawing.js';
 import { labelSize } from '../../drawing/utils/text.js';
 import { PlacementObstacles } from './PlacementObstacles.js';
 import { RowChooser } from './RowChooser.js';

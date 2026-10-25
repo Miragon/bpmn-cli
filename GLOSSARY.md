@@ -60,7 +60,7 @@ a new concept gets its line here first.
 | **Sticky** | A design-iq sticky note (`bpmiq:sticky`) that follows the flow node nearest to it (`drawing/Stickies.ts`). |
 | **Drawn element ids** | Ids given to the elements a full redraw draws that have none, in the file's id style (`drawing/DrawnElementIds.ts`). |
 | **DI ids** | The ids of DI elements in the file's style: new ones (`drawing/DiIds.ts`) and the old ones kept over a full redraw (`drawing/DiIdMemo.ts`). |
-| **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`drawing/Drawing.ts`). |
+| **Drawing** | One plane of a kept drawing being edited, with what the edit touched: space tool, routing, labels, separation and frames behind one seam (`layout/incremental/Drawing.ts`). |
 | **Frame** | A pool, lane or expanded sub-process: a shape that holds other shapes (`drawing/Frames.ts` finds a shape's frames and their interior; `layout/incremental/FrameEditor.ts` draws, removes, collapses and expands them). |
 | **Space tool** | The modeler's tool that moves everything beyond a line to make or close room, growing the frames it crosses (`layout/incremental/SpaceTool.ts`). |
 | **Separation** | Local overlap removal: the shapes that conflict with new or moved ones give way (`layout/incremental/Separation.ts`). |
@@ -68,7 +68,7 @@ a new concept gets its line here first.
 | **Orthogonal router** | Finds the cheapest orthogonal route of one connection between two boxes: A* over a visibility grid (`layout/incremental/OrthogonalRouter.ts`, `layout/incremental/RouteGrid.ts`, `layout/incremental/SearchHeap.ts`). |
 | **Label placer** | Puts external labels on the first free spot around their shape or flow (`layout/incremental/LabelPlacer.ts`). |
 | **Trial** | A change that is measured and kept only when it makes the result no worse, else undone: of a kept drawing (`drawing/TrialGuard.ts`), or of an arrangement of the clean engine, kept only when the routes then draw better (`layout/clean/ArrangementTrial.ts`). |
-| **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`drawing/DrawingSnapshot.ts`). |
+| **Drawing snapshot** | What the planes showed before a format op: bounds, waypoints, labels, connection states (`layout/incremental/DrawingSnapshot.ts`). |
 | **Layout analysis** | The measurement of a drawing's layout problems, one plane analysis per BPMNPlane (`drawing/LayoutAnalysis.ts`, `drawing/PlaneAnalysis.ts`; kinds and weights in `drawing/utils/problems.ts`). |
 | **Problem locator** | Finds where a layout problem shows on its plane, for the numbered badges of `render --problems` (`drawing/ProblemLocator.ts`). |
 | **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`layout/incremental/NodePlacer.ts`). |

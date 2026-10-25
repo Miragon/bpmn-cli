@@ -22,7 +22,7 @@ import type { EdgeBefore } from './EdgeRouter.js';
 import { titleBox } from '../../drawing/utils/text.js';
 import { DiPruner } from '../../drawing/DiPruner.js';
 import { PlaneWriter } from '../../drawing/PlaneWriter.js';
-import { Drawing } from '../../drawing/Drawing.js';
+import { Drawing } from './Drawing.js';
 
 export interface IncrementalReport {
   mode: 'incremental';

@@ -3,9 +3,10 @@ import { Frames } from '../drawing/Frames.js';
 import { PlaneQuery } from '../drawing/PlaneQuery.js';
 import { raw } from '../drawing/utils/raw.js';
 import type { DEdge, DShape, Plane } from '../drawing/types.js';
-import type { Axis, SpaceResult } from '../layout/incremental/SpaceTool.js';
+import type { SpaceResult } from '../layout/incremental/SpaceTool.js';
+import type { Axis } from '../layout/incremental/utils/bands.js';
 import { titleDepth } from '../drawing/utils/text.js';
-import { Drawing } from '../drawing/Drawing.js';
+import { Drawing } from '../layout/incremental/Drawing.js';
 
 export const PAD = 30;
 /** room for the name at the top of a sub-process */

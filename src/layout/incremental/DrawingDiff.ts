@@ -9,7 +9,7 @@ import { Frames } from '../../drawing/Frames.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../../drawing/types.js';
 import { DrawingCheckpoint } from '../../drawing/DrawingCheckpoint.js';
-import { Drawing } from '../../drawing/Drawing.js';
+import { Drawing } from './Drawing.js';
 import type { SpaceResult } from './SpaceTool.js';
 
 interface Strip {

@@ -1,16 +1,17 @@
-import { DrawingCheckpoint } from './DrawingCheckpoint.js';
-import { EdgeRouter, type EdgeBefore, type RouteOptions } from '../layout/incremental/EdgeRouter.js';
-import { FrameEditor } from '../layout/incremental/FrameEditor.js';
-import { LabelPlacer } from '../layout/incremental/LabelPlacer.js';
-import { Separation, type SeparateOptions, type SeparateResult } from '../layout/incremental/Separation.js';
-import { SpaceTool, type Axis, type SpaceRequest, type SpaceResult, type StripRequest } from '../layout/incremental/SpaceTool.js';
+import { DrawingCheckpoint } from '../../drawing/DrawingCheckpoint.js';
+import { EdgeRouter, type EdgeBefore, type RouteOptions } from './EdgeRouter.js';
+import { FrameEditor } from './FrameEditor.js';
+import { LabelPlacer } from './LabelPlacer.js';
+import { Separation, type SeparateOptions, type SeparateResult } from './Separation.js';
+import type { Axis } from './utils/bands.js';
+import { SpaceTool, type SpaceRequest, type SpaceResult, type StripRequest } from './SpaceTool.js';
 import type { DrawingSnapshot } from './DrawingSnapshot.js';
-import type { TrialGuard } from './TrialGuard.js';
-import type { Box, DEdge, DShape, Plane, Point, Side } from './types.js';
-import type { Semantics } from './Semantics.js';
-import { segmentHits } from './utils/geom.js';
-import { hasExternalLabel, labelSideOf, type LabelSide } from './utils/labels.js';
-import { raw } from './utils/raw.js';
+import type { TrialGuard } from '../../drawing/TrialGuard.js';
+import type { Box, DEdge, DShape, Plane, Point, Side } from '../../drawing/types.js';
+import type { Semantics } from '../../drawing/Semantics.js';
+import { segmentHits } from '../../drawing/utils/geom.js';
+import { hasExternalLabel, labelSideOf, type LabelSide } from '../../drawing/utils/labels.js';
+import { raw } from '../../drawing/utils/raw.js';
 
 /**
  * One plane of a drawing kept while it is edited: the space tool, single-connection routing and

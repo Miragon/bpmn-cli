@@ -11,7 +11,7 @@ import { Doc } from '../src/model/Doc.js';
 import type { DEdge, DShape } from '../src/drawing/types.js';
 import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
 import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Drawing } from '../src/drawing/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';

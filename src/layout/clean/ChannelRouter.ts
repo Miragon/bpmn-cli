@@ -8,17 +8,10 @@ import { dedupe, hitCount, pathHits, properCross, toSegments, type Segment } fro
 import { nameOf } from './utils/names.js';
 import { boundaryLeft } from './utils/nodes.js';
 import { obstacles, routedArtifacts } from './utils/scope.js';
+import { Channels, type Channel } from './Channels.js';
+import { BorderSlots } from './BorderSlots.js';
 
-interface Channel {
-  y: number;
-  from: number;
-  to: number;
-}
-
-/** x positions on a node's bottom / top border taken by flows; `out`: a flow leaving there */
-type Used = Map<GNode, Array<{ x: number; out: boolean }>>;
-
-type ChosenChannel = { list: Channel[]; y: number; x1: number; x2: number };
+type ChosenChannel = { list: Channels; y: number; x1: number; x2: number };
 
 type Route = { pts: Point[]; channel?: ChosenChannel; runsBelow?: boolean; runsAbove?: boolean };
 
@@ -37,12 +30,12 @@ export class ChannelRouter {
   private readonly layout: ScopeLayout;
   private readonly obstacleList: Box[];
   private readonly boxes: XIndex<Box>;
-  private readonly channels: Channel[] = [];
-  private readonly topChannels: Channel[] = [];
+  private readonly channels = new Channels();
+  private readonly topChannels = new Channels();
   private readonly allNodes: GNode[];
   private readonly routed = new XIndex<Segment>();
-  private readonly usedBottom: Used = new Map();
-  private readonly usedTop: Used = new Map();
+  private readonly usedBottom = new BorderSlots();
+  private readonly usedTop = new BorderSlots();
   // default label spots: a loop channel through one would push the label away
   private readonly labelsBelow: Box[] = [];
   private readonly labelsAbove: Box[] = [];
@@ -155,7 +148,7 @@ export class ChannelRouter {
     for (const e of [...forward, ...loops]) this.routeEdge(e);
     this.markTopsUsed();
     // channels and runs below a host's row (plus RUN_CLEAR) extend the content height
-    const maxChannel = Math.max(0, ...this.channels.map((c) => c.y));
+    const maxChannel = this.channels.lowest();
     const maxRun = Math.max(0, ...layout.edges.filter((e) => e.runsBelow).map((e) => e.points[1]!.y + RUN_CLEAR));
     layout.height = Math.max(layout.height, maxChannel + 10, maxRun);
     this.moveBelowTop();
@@ -213,23 +206,12 @@ export class ChannelRouter {
     this.addSegments(this.routed, segs);
     if (route.runsAbove) this.addSegments(this.overTop, segs);
     const chosenChannel = route.channel;
-    if (chosenChannel) chosenChannel.list.push({ y: chosenChannel.y, from: Math.min(chosenChannel.x1, chosenChannel.x2), to: Math.max(chosenChannel.x1, chosenChannel.x2) });
+    if (chosenChannel) chosenChannel.list.take(chosenChannel.y, chosenChannel.x1, chosenChannel.x2);
     e.label = this.flowLabel(e);
     if (e.label) {
       this.flowLabels.push(e.label);
       this.flowLabelIndex.add(e.label, e.label.x, right(e.label));
     }
-  }
-
-  /** For a gateway entry only an exit counts: a join's entries share the vertex. */
-  private used(map: Used, n: GNode, x: number, entry = false): boolean {
-    return (map.get(n) ?? []).some((u) => Math.abs(u.x - x) < 1 && (u.out || !entry || n.kind !== 'gateway'));
-  }
-
-  private use(map: Used, n: GNode, x: number, out: boolean): void {
-    const list = map.get(n) ?? [];
-    list.push({ x, out });
-    map.set(n, list);
   }
 
   private bandOf(n: GNode): LaneBandInfo | undefined {
@@ -239,7 +221,7 @@ export class ChannelRouter {
   private bottomSlot(n: GNode, len: number): number {
     const cands = ChannelRouter.bottomCandidates(n);
     const ok = (x: number): boolean => !pathHits([{ x, y: bottom(n.box) }, { x, y: bottom(n.box) + len }], this.boxes, [n.box]);
-    return cands.find((x) => ok(x) && !this.used(this.usedBottom, n, x)) ?? cands.find(ok) ?? cands[0]!;
+    return cands.find((x) => ok(x) && !this.usedBottom.taken(n, x)) ?? cands.find(ok) ?? cands[0]!;
   }
 
   /** The same for every branch, so their labels line up. */
@@ -290,17 +272,8 @@ export class ChannelRouter {
     return maxY;
   }
 
-  private freeChannel(list: Channel[], fromX: number, toX: number, base: number, step: number): number {
-    const lo = Math.min(fromX, toX), hi = Math.max(fromX, toX);
-    let y = base;
-    while (list.some((c) => c.y === y && c.from <= hi && lo <= c.to)) y += step;
-    return y;
-  }
-
   private channelFor(fromX: number, toX: number, base: number): number {
-    const y = this.freeChannel(this.channels, fromX, toX, base, METRICS.loopGap / 2);
-    this.channels.push({ y, from: Math.min(fromX, toX), to: Math.max(fromX, toX) });
-    return y;
+    return this.channels.claim(fromX, toX, base, METRICS.loopGap / 2);
   }
 
   private exitToBelow(s: GNode, ex: number, y: number): Point[] {
@@ -413,12 +386,12 @@ export class ChannelRouter {
     const ex = s.host ? sc.x : this.exitX(s);
     const tx = ChannelRouter.riseX(t);
     const sideY = sb.y + sb.height * 0.75;
-    type Cand = { pts: Point[]; exit?: [Used, GNode, number]; entry?: [Used, GNode, number]; channel?: { list: Channel[]; y: number }; penalty: number; offDiamond?: boolean };
+    type Cand = { pts: Point[]; exit?: [BorderSlots, GNode, number]; entry?: [BorderSlots, GNode, number]; channel?: { list: Channels; y: number }; penalty: number; offDiamond?: boolean };
     const cands: Cand[] = [];
     // a side exit (no x) leaves beside the side vertex: off a gateway's diamond
     const offDiamond = (ex2: { x?: number }): boolean => s.kind === 'gateway' && ex2.x === undefined;
     const base = this.rangeBottom(x1, x2, sameBand) + METRICS.loopGap;
-    const y = this.freeChannel(channels, x1, x2, base, METRICS.loopGap / 2);
+    const y = channels.free(x1, x2, base, METRICS.loopGap / 2);
     const hookY = bottom(tb) + 15;
     const exits: Array<{ pts: Point[]; x?: number }> = [
       { pts: [{ x: ex, y: bottom(sb) }, { x: ex, y }], x: ex },
@@ -445,7 +418,7 @@ export class ChannelRouter {
       }
     }
     const topBase = this.rangeTop(x1, x2, sameBand) - METRICS.loopGap;
-    const topY = this.freeChannel(topChannels, x1, x2, topBase, -METRICS.loopGap / 2);
+    const topY = topChannels.free(x1, x2, topBase, -METRICS.loopGap / 2);
     const ttx = this.topX(t);
     const topHookY = tb.y - 15;
     const sideYTop = sb.y + sb.height * 0.25;
@@ -480,9 +453,9 @@ export class ChannelRouter {
     let best: { c: Cand; score: number } | undefined;
     cands.forEach((c, i) => {
       let score = c.penalty + i * 0.001;
-      if (c.exit && this.used(c.exit[0], c.exit[1], c.exit[2])) score += 2;
+      if (c.exit && c.exit[0].taken(c.exit[1], c.exit[2])) score += 2;
       // a join's entries share its vertex, but not with a loop leaving a gateway off the diamond
-      if (c.entry && this.used(c.entry[0], c.entry[1], c.entry[2], !c.offDiamond)) score += 2;
+      if (c.entry && c.entry[0].taken(c.entry[1], c.entry[2], !c.offDiamond)) score += 2;
       // a way that cannot beat the best so far is not measured further (each part only adds)
       if (best && score >= best.score) return;
       score += hitCount(c.pts, this.boxes, ignore) * 1000;
@@ -493,8 +466,8 @@ export class ChannelRouter {
       if (!best || score < best.score) best = { c, score };
     });
     const win = best!.c;
-    if (win.exit) this.use(win.exit[0], win.exit[1], win.exit[2], true);
-    if (win.entry) this.use(win.entry[0], win.entry[1], win.entry[2], false);
+    if (win.exit) win.exit[0].take(win.exit[1], win.exit[2], true);
+    if (win.entry) win.entry[0].take(win.entry[1], win.entry[2], false);
     return { pts: win.pts, ...(win.channel ? { channel: { list: win.channel.list, y: win.channel.y, x1, x2 } } : {}) };
   }
 
@@ -510,7 +483,7 @@ export class ChannelRouter {
       if (this.openRow.has(e) && this.lineFree(pts) && ChannelRouter.countCrossings(pts, this.routed) <= ChannelRouter.countCrossings(band, this.routed)) this.leftTaken.add(t);
       else {
         pts = band;
-        this.use(this.usedBottom, s, ex, true);
+        this.usedBottom.take(s, ex, true);
       }
     } else if (pathHits(pts, this.boxes, ignore)) {
       const base = this.spanBottom(s.layer, t.layer) + METRICS.loopGap;
@@ -553,7 +526,7 @@ export class ChannelRouter {
         const y = this.channelFor(ex, tb.x - 20, base);
         pts = [{ x: ex, y: bottom(sb) }, { x: ex, y }, { x: tb.x - 20, y }, { x: tb.x - 20, y: tc.y }, { x: tb.x, y: tc.y }];
       }
-    } else this.use(this.usedBottom, s.host ?? s, ex, true);
+    } else this.usedBottom.take(s.host ?? s, ex, true);
     return { pts, runsBelow };
   }
 
@@ -581,7 +554,7 @@ export class ChannelRouter {
       const ttx = this.topX(t);
       const sideFree = !this.routed.near(tb.x - 1, tb.x + 1).some((seg) => seg.some((p) => Math.abs(p.x - tb.x) < 1 && p.y > tb.y && p.y < bottom(tb)));
       return [
-        ...(this.used(usedTop, t, ttx, true) ? [] : [{ to: ttx, down: (y: number): Point[] => [{ x: ttx, y }, { x: ttx, y: tb.y }], top: ttx, penalty: 0 }]),
+        ...(usedTop.taken(t, ttx, true) ? [] : [{ to: ttx, down: (y: number): Point[] => [{ x: ttx, y }, { x: ttx, y: tb.y }], top: ttx, penalty: 0 }]),
         ...(sideFree ? [{ to: gapX, down: (y: number): Point[] => [{ x: gapX, y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 0.1 }] : []),
       ];
     };
@@ -624,7 +597,7 @@ export class ChannelRouter {
         const y = runTo(x);
         return !this.boxes.near(x - RISE_KEEP, x + RISE_KEEP).some((b) => b !== tb && b.x - RISE_KEEP < x && x < right(b) + RISE_KEEP && b.y < y && bottom(b) > bottom(tb));
       };
-      const free = slots.filter((x) => clear(x) && !this.used(usedBottom, t, x, true));
+      const free = slots.filter((x) => clear(x) && !usedBottom.taken(t, x, true));
       const rises = free.length ? free : slots.filter(clear).slice(0, 1);
       const ways: Array<{ to: number; up: (y: number) => Point[]; penalty: number; x?: number }> = [
         ...(rises.length ? rises : slots.slice(0, 1)).map((sx, k) => ({ to: sx, up: (y: number): Point[] => [{ x: sx, y }, { x: sx, y: bottom(tb) }], penalty: k * 0.1, x: sx })),
@@ -695,15 +668,15 @@ export class ChannelRouter {
     });
     pts = best!.pts;
     if (best!.score < 1000) runsBelow = best!.below;
-    if (best!.x !== undefined) this.use(usedBottom, t, best!.x, false);
+    if (best!.x !== undefined) usedBottom.take(t, best!.x, false);
     // later loops and channels keep off a run over the top, and off the top point it enters
     if (best!.score < 1000 && best!.over) {
       runsAbove = true;
       chosenChannel = { list: topChannels, y: best!.over.y, x1: best!.over.from, x2: best!.over.to };
-      if (best!.top !== undefined) this.use(usedTop, t, best!.top, false);
+      if (best!.top !== undefined) usedTop.take(t, best!.top, false);
     }
     // out of the source's top: a loop into that top keeps off it, as off a drop below
-    if (best!.score < 1000 && pts[0]!.y === sb.y) this.use(usedTop, s, sc.x, true);
+    if (best!.score < 1000 && pts[0]!.y === sb.y) usedTop.take(s, sc.x, true);
     if (best!.score >= 1000) {
       const base = this.spanBottom(s.layer, t.layer) + METRICS.loopGap;
       const y = this.channelFor(tb.x - METRICS.hGap / 2, this.exitX(s), base);

@@ -17,7 +17,7 @@ import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/drawin
 import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
 import { DiagramReader } from '../src/drawing/DiagramReader.js';
 import { OrthogonalRouter } from '../src/layout/incremental/OrthogonalRouter.js';
-import { Drawing } from '../src/drawing/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 import type { Box, Point } from '../src/drawing/types.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';

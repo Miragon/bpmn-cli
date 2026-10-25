@@ -7,7 +7,7 @@ import { PlaneQuery } from '../drawing/PlaneQuery.js';
 import { idOf, raw, rawList } from '../drawing/utils/raw.js';
 import type { DShape, Plane, Side } from '../drawing/types.js';
 import { attachedSide } from '../drawing/utils/sides.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { frameWord, outermost, unique } from './utils/frames.js';
 

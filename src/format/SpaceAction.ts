@@ -6,7 +6,7 @@ import { bottom, copyBox, median, right, type Box } from '../drawing/utils/geom.
 import { Frames } from '../drawing/Frames.js';
 import { PlaneQuery } from '../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../drawing/types.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { problemWords } from './utils/frames.js';
 

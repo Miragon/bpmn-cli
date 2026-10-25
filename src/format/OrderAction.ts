@@ -5,7 +5,7 @@ import { bottom, copyBox, cx, cy, right } from '../drawing/utils/geom.js';
 import { idOf, rawList } from '../drawing/utils/raw.js';
 import type { DShape } from '../drawing/types.js';
 import type { Semantics } from '../drawing/Semantics.js';
-import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 
 /**
