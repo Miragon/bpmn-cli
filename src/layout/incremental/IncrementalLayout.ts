@@ -8,6 +8,7 @@ import { IncrementalRouting } from './IncrementalRouting.js';
 import { FrameGrowth } from './FrameGrowth.js';
 import { LabelRefresh } from './LabelRefresh.js';
 import { RunCheckpoint } from './RunCheckpoint.js';
+import type { DrawingCheckpoint } from '../../drawing/DrawingCheckpoint.js';
 import type { Doc } from '../../model/Doc.js';
 import { is, layoutRoot, type El } from '../../model/utils/moddle.js';
 import { copyBox, sameBox, samePoints, type Box, type Point } from '../../drawing/utils/geom.js';
@@ -47,8 +48,7 @@ export interface IncrementalOptions {
 export interface Checkpoint {
   planes: Plane[];
   members: Map<Plane, { shapes: DShape[]; edges: DEdge[] }>;
-  shapes: Map<DShape, { bounds: Box; label?: Box }>;
-  edges: Map<DEdge, { points: Point[]; label?: Box; sourceId?: string; targetId?: string }>;
+  drawing: DrawingCheckpoint;
   placer: PlacerState;
   sets: Pick<IncrementalLayout, 'reroute' | 'newEdges' | 'fromEngine' | 'active' | 'relocated' | 'grown' | 'routedNow'>;
   notes: string[];

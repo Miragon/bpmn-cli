@@ -70,7 +70,7 @@ them on a private corpus without copying it into the repository, are described i
   `test/architecture.test.ts` keeps the root of `src/` to the three entries.
 
   **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
-  named like the class (`model/ModelError.ts`, `drawing/PlaneCheckpoint.ts`). Stateless helper
+  named like the class (`model/ModelError.ts`, `drawing/DrawingCheckpoint.ts`). Stateless helper
   functions live in a `utils/` folder of their stage (`model/utils/moddle.ts`,
   `shared/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
   error classes. Outside the entries (`api.ts`, `index.ts`, `node/index.ts`, which keep the

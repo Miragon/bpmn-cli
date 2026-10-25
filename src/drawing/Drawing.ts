@@ -1,4 +1,4 @@
-import { PlaneCheckpoint } from './PlaneCheckpoint.js';
+import { DrawingCheckpoint } from './DrawingCheckpoint.js';
 import { EdgeRouter, type EdgeBefore, type RouteOptions } from '../layout/incremental/EdgeRouter.js';
 import { FrameEditor } from '../layout/incremental/FrameEditor.js';
 import { LabelPlacer } from '../layout/incremental/LabelPlacer.js';
@@ -34,8 +34,8 @@ export class Drawing {
     this.frames = new FrameEditor(plane, this.space, touched);
   }
 
-  checkpoint(): PlaneCheckpoint {
-    return new PlaneCheckpoint(this.plane);
+  checkpoint(): DrawingCheckpoint {
+    return new DrawingCheckpoint(this.plane);
   }
 
   shift(id: string, dx: number, dy: number): string[] {

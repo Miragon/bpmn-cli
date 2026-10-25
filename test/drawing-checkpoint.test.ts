@@ -1,11 +1,11 @@
 /**
- * src/drawing/PlaneCheckpoint.ts: the undo of a trial move, shared by the
+ * src/drawing/DrawingCheckpoint.ts: the undo of a trial move, shared by the
  * incremental layout and the format ops.
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
 import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { PlaneCheckpoint } from '../src/drawing/PlaneCheckpoint.js';
+import { DrawingCheckpoint } from '../src/drawing/DrawingCheckpoint.js';
 import { BPMN_NS } from './helpers.js';
 
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -24,11 +24,11 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
 
 const planeOf = async () => new DiagramReader((await Doc.fromXml(XML)).definitions).planes()[0]!;
 
-describe('PlaneCheckpoint', () => {
+describe('DrawingCheckpoint', () => {
   it('drops a label that was added after the checkpoint', async () => {
     const plane = await planeOf();
     const start = plane.shapes.get('S')!;
-    const checkpoint = new PlaneCheckpoint(plane);
+    const checkpoint = new DrawingCheckpoint(plane);
     start.label = { x: 90, y: 140, width: 50, height: 14 };
     checkpoint.restore();
     expect(start.label).toBeUndefined();
@@ -38,7 +38,7 @@ describe('PlaneCheckpoint', () => {
     const plane = await planeOf();
     const task = plane.shapes.get('T')!;
     const flow = plane.edges.get('F')!;
-    const checkpoint = new PlaneCheckpoint(plane);
+    const checkpoint = new DrawingCheckpoint(plane);
     task.bounds.x += 50;
     flow.points[1]!.x += 50;
     checkpoint.restore();
@@ -47,5 +47,21 @@ describe('PlaneCheckpoint', () => {
     expect(task.bounds).toEqual({ x: 200, y: 78, width: 100, height: 80 });
     expect(flow.points[1]).toEqual({ x: 200, y: 118 });
     expect(checkpoint.boundsOf(task)).toEqual({ x: 200, y: 78, width: 100, height: 80 });
+  });
+
+  it('keeps the first state of a shape kept twice and puts back the ends of an edge', async () => {
+    const plane = await planeOf();
+    const task = plane.shapes.get('T')!;
+    const flow = plane.edges.get('F')!;
+    const sourceBefore = flow.sourceId;
+    const checkpoint = new DrawingCheckpoint();
+    checkpoint.keepShape(task);
+    checkpoint.keepEdge(flow);
+    task.bounds.x += 50;
+    checkpoint.keepShape(task);
+    flow.sourceId = 'T';
+    checkpoint.restore();
+    expect(task.bounds.x).toBe(200);
+    expect(flow.sourceId).toBe(sourceBefore);
   });
 });

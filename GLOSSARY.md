@@ -54,7 +54,7 @@ a new concept gets its line here first.
 | **Plane query** | Read-only queries on a plane: its leaf shapes, the content of a sub-process, boundary events, the spacing it is drawn with (`drawing/PlaneQuery.ts`). |
 | **Semantics** | The index of the semantic model a drawing is read against: elements by id, lanes, pools, scopes, sequence flows (`drawing/Semantics.ts`). |
 | **DI pruner** | Deletes DI whose element is gone, and the edges of flows whose ends changed (`drawing/DiPruner.ts`). |
-| **Checkpoint** | A saved state of a plane, to try a change and undo it (`drawing/PlaneCheckpoint.ts`). |
+| **Checkpoint** | A saved state of a plane or of chosen shapes and edges (bounds, labels, waypoints, ends), to try a change and undo it (`drawing/DrawingCheckpoint.ts`). |
 | **Groups** | The `bpmn:Group` boxes of a document: remembered before a full redraw and drawn again around their members (`drawing/Groups.ts`). |
 | **Sticky** | A design-iq sticky note (`bpmiq:sticky`) that follows the flow node nearest to it (`drawing/Stickies.ts`). |
 | **Drawn element ids** | Ids given to the elements a full redraw draws that have none, in the file's id style (`drawing/DrawnElementIds.ts`). |

@@ -8,7 +8,7 @@ import { idOf } from '../../drawing/utils/raw.js';
 import { Frames } from '../../drawing/Frames.js';
 import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../../drawing/types.js';
-import { PlaneCheckpoint } from '../../drawing/PlaneCheckpoint.js';
+import { DrawingCheckpoint } from '../../drawing/DrawingCheckpoint.js';
 import { Drawing } from '../../drawing/Drawing.js';
 import type { SpaceResult } from './SpaceTool.js';
 
@@ -139,7 +139,7 @@ export class DrawingDiff {
     // the strip on this row ends where the next shape starts (its gap may be below the median)
     const end = Math.min(to, ...onRow.filter((s) => s.bounds.x >= right(box) - 1).map((s) => s.bounds.x));
     if (!onRow.some((s) => s.bounds.x >= end - 3)) return undefined;
-    const saved = new PlaneCheckpoint(plane);
+    const saved = new DrawingCheckpoint(plane);
     const r = new Drawing(plane).closeStrip({ axis: 'x', from, to: end, gap, ignore, within: row });
     if (!r) return undefined;
     const leaves = [...plane.shapes.values()].filter(PlaneQuery.isLeaf);

@@ -1,6 +1,5 @@
 import type { Checkpoint, IncrementalLayout } from './IncrementalLayout.js';
-import { copyBox, copyPoints } from '../../drawing/utils/geom.js';
-import type { DEdge, DShape } from '../../drawing/types.js';
+import { DrawingCheckpoint } from '../../drawing/DrawingCheckpoint.js';
 
 /** Everything drawing the new elements (steps 6 to 9) changes in a run, taken and put back. */
 export class RunCheckpoint {
@@ -11,8 +10,7 @@ export class RunCheckpoint {
     const cp: Checkpoint = {
       planes: [...run.planes],
       members: new Map(),
-      shapes: new Map(),
-      edges: new Map(),
+      drawing: new DrawingCheckpoint(),
       placer: run.place.checkpoint(),
       sets: {
         reroute: new Set(run.reroute),
@@ -25,21 +23,14 @@ export class RunCheckpoint {
       },
       notes: [...run.notes],
     };
-    const keepShape = (s: DShape): void => {
-      if (!cp.shapes.has(s)) cp.shapes.set(s, { bounds: copyBox(s.bounds), ...(s.label ? { label: copyBox(s.label) } : {}) });
-    };
-    const keepEdge = (e: DEdge): void => {
-      if (!cp.edges.has(e)) cp.edges.set(e, { points: copyPoints(e.points), ...(e.label ? { label: copyBox(e.label) } : {}), ...(e.sourceId ? { sourceId: e.sourceId } : {}), ...(e.targetId ? { targetId: e.targetId } : {}) });
-    };
     for (const plane of run.planes) {
       cp.members.set(plane, { shapes: [...plane.shapes.values()], edges: [...plane.edges.values()] });
-      plane.shapes.forEach(keepShape);
-      plane.edges.forEach(keepEdge);
+      cp.drawing.keepPlane(plane);
     }
     // shapes waiting to be placed again (DI reused): their boundary events and content move along
     for (const r of run.place.reuse.values()) {
-      [r.shape, ...r.boundaries, ...(r.content?.shapes ?? [])].forEach(keepShape);
-      (r.content?.edges ?? []).forEach(keepEdge);
+      [r.shape, ...r.boundaries, ...(r.content?.shapes ?? [])].forEach((s) => cp.drawing.keepShape(s));
+      (r.content?.edges ?? []).forEach((e) => cp.drawing.keepEdge(e));
     }
     return cp;
   }
@@ -52,20 +43,7 @@ export class RunCheckpoint {
       plane.shapes = new Map(m.shapes.map((s) => [s.id, s]));
       plane.edges = new Map(m.edges.map((e) => [e.id, e]));
     }
-    for (const [s, g] of cp.shapes) {
-      s.bounds = copyBox(g.bounds);
-      if (g.label) s.label = copyBox(g.label);
-      else delete s.label;
-    }
-    for (const [e, g] of cp.edges) {
-      e.points = copyPoints(g.points);
-      if (g.label) e.label = copyBox(g.label);
-      else delete e.label;
-      if (g.sourceId) e.sourceId = g.sourceId;
-      else delete e.sourceId;
-      if (g.targetId) e.targetId = g.targetId;
-      else delete e.targetId;
-    }
+    cp.drawing.restore();
     run.place.restore(cp.placer);
     const s = cp.sets;
     Object.assign(run, { reroute: new Set(s.reroute), newEdges: new Set(s.newEdges), fromEngine: new Set(s.fromEngine), active: new Set(s.active), relocated: new Set(s.relocated), grown: new Set(s.grown), routedNow: new Map(s.routedNow) });

@@ -3,7 +3,7 @@ import { bottom, containsPoint, copyBox, cx, cy, inside, overlaps, right, type B
 import { Frames } from '../drawing/Frames.js';
 import { PlaneQuery } from '../drawing/PlaneQuery.js';
 import type { DShape, Plane } from '../drawing/types.js';
-import { PlaneCheckpoint } from '../drawing/PlaneCheckpoint.js';
+import { DrawingCheckpoint } from '../drawing/DrawingCheckpoint.js';
 import { Drawing } from '../drawing/Drawing.js';
 import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
 import { frameWord } from './utils/frames.js';
@@ -193,7 +193,7 @@ export class RoomMaker {
       const stray = strayed();
       return { ok: !sw.length && !gone.length && !collided.length && !stray.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: stray };
     };
-    const start = new PlaneCheckpoint(this.plane);
+    const start = new DrawingCheckpoint(this.plane);
     let r = attempt(refIds);
     if (!r.ok && refIds.length) {
       start.restore();
