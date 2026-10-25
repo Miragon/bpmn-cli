@@ -1,11 +1,11 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { is, type El } from '../model/utils/moddle.js';
-import { cx, right } from '../diagram/utils/geom.js';
-import { idOf, raw, rawList } from '../diagram/utils/raw.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import type { DShape } from '../diagram/types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { is, type El } from '../../model/utils/moddle.js';
+import { cx, right } from '../../drawing/utils/geom.js';
+import { idOf, raw, rawList } from '../../drawing/utils/raw.js';
+import { DiagramReader } from '../../drawing/DiagramReader.js';
+import type { DShape } from '../../drawing/types.js';
 
 /**
  * A join drawn before the ops that a new flow would enter backwards (no loop return) is placed

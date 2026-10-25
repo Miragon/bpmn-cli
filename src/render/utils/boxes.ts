@@ -1,4 +1,4 @@
-import type { Box, Point } from '../../diagram/utils/geom.js';
+import type { Box, Point } from '../../drawing/utils/geom.js';
 
 export const grow = (b: Box, by: number): Box => ({ x: b.x - by, y: b.y - by, width: b.width + 2 * by, height: b.height + 2 * by });
 

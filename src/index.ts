@@ -18,7 +18,7 @@ import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/C
 import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './validate/bpmnlint-validator.js';
 import type { NamedValidator, ValidatorFinding } from './validate/validators.js';
 import type { El, Model } from './model/utils/moddle.js';
-import type { LayoutMetrics, LayoutProblem } from './diagram/utils/problems.js';
+import type { LayoutMetrics, LayoutProblem } from './drawing/utils/problems.js';
 import type { Warning } from './shared/CliError.js';
 import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from './platform/PlatformDetection.js';
 import { PLATFORM_PROFILES, type ProfileReport } from './platform/profiles/PlatformProfiles.js';
@@ -57,10 +57,10 @@ import { advisoryOf } from './report/utils/findings.js';
 import { DecisionLinkReader, type DecisionLink } from './ops/DecisionLinkReader.js';
 import { OpsParser } from './ops/OpsParser.js';
 import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
-import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { LayoutAnalysis } from './drawing/LayoutAnalysis.js';
 import { FullLayout, type LayoutOptions, type LayoutResult } from './layout/FullLayout.js';
 import { FormatOps, type FormatEntry, type FormatResult } from './format/FormatOps.js';
-import { ProblemLocator } from './diagram/ProblemLocator.js';
+import { ProblemLocator } from './drawing/ProblemLocator.js';
 /* the in-memory API: strings in, strings / data out */
 export { applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './report/command-report.js';
@@ -84,7 +84,7 @@ export function renderContext(c: ElementContext): string { return new ContextTex
 export function renderLayoutView(view: LayoutView): string { return new LayoutText(view).text(); }
 export function renderMetrics(m: LayoutMetrics): string { return new MetricsText(m).text(); }
 export { setLayoutDebug } from './api.js';
-export { type DebugSink } from './shared/LayoutDebug.js';
+export { type DebugSink } from './layout/LayoutDebug.js';
 export { GUIDE_TOPICS } from './report/AgentGuide.js';
 export { ERROR_CATALOGUE } from './report/guide.js';
 /* reading views of large models: show --around and show <id> --context */
@@ -179,11 +179,11 @@ export function findElements(doc: Doc, text: string, kind?: string): FindHit[] {
 export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ModelViewBuilder(doc).scope(view, scopeId); }
 export { OPS_SCHEMA } from './ops/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
-export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './diagram/utils/problems.js';
+export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './drawing/utils/problems.js';
 export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './query/layout-view.js';
 export function layoutView(defs: El): LayoutView { return new LayoutViewBuilder(defs).build(); }
 export type { FormatResult, FormatEntry } from './format/FormatOps.js';
-export { SWATCHES, type SwatchName } from './diagram/utils/colors.js';
+export { SWATCHES, type SwatchName } from './drawing/utils/colors.js';
 /* the drawing as SVG; PNG: renderPng in @miragon/bpmn-cli/node */
 export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './render/types.js';
 export { changeHighlight } from './render/utils/highlight.js';

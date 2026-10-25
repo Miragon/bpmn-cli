@@ -1,8 +1,8 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { METRICS, SIZES, annotationSize } from '../../diagram/utils/sizes.js';
-import { boxesOverlap } from '../../diagram/utils/geom.js';
-import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../diagram/types.js';
-import { EdgeRouter } from './EdgeRouter.js';
+import { METRICS, SIZES, annotationSize } from '../../drawing/utils/sizes.js';
+import { boxesOverlap } from '../../drawing/utils/geom.js';
+import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../drawing/types.js';
+import { ChannelRouter } from './ChannelRouter.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { routedSegments, shiftScope } from './utils/scope.js';
 
@@ -10,7 +10,7 @@ import { routedSegments, shiftScope } from './utils/scope.js';
  * Places a scope's data objects, stores and text annotations and builds their links:
  * data before routing so the router avoids it, annotations above their anchor after routing.
  */
-export class ArtifactPlacer {
+export class ScopeArtifactPlacer {
   constructor(private readonly layout: ScopeLayout) {}
 
   build(scope: El, byId: Map<string, GNode>): void {
@@ -105,7 +105,7 @@ export class ArtifactPlacer {
         continue;
       }
       // a join's entries from below rise into its bottom vertex: its data hang right of their line
-      const cx = EdgeRouter.entriesFromBelow(n).length ? n.box.x + n.box.width / 2 + 6 + a.width / 2 : this.belowX(n);
+      const cx = ChannelRouter.entriesFromBelow(n).length ? n.box.x + n.box.width / 2 + 6 + a.width / 2 : this.belowX(n);
       let box: Box = { x: Math.round(cx - a.width / 2), y: n.box.y + n.box.height + (n.boundary.length ? 24 : 20), width: a.width, height: a.height };
       while (!free(box)) box = { ...box, x: box.x + a.width + 10 };
       a.box = box;

@@ -1,8 +1,8 @@
-import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import type { Box, GArtifact, GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import type { Box, GArtifact, GEdge, GNode, ScopeLayout } from '../../drawing/types.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
 import { ArrangementTrial, type Routes } from './ArrangementTrial.js';
-import { EdgeRouter, RISE_KEEP } from './EdgeRouter.js';
+import { ChannelRouter, RISE_KEEP } from './ChannelRouter.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
 import { routedArtifacts } from './utils/scope.js';
@@ -38,7 +38,7 @@ export class JoinColumnTrial extends ArrangementTrial {
       const blocked = (taken ??= this.takenColumns());
       // joins first: a node entered from below may then move under a join already in place
       const open = layout.nodes.filter((n) => blocked.has(n) && !tried.has(n));
-      const j = open.find((n) => EdgeRouter.entriesFromBelow(n).length) ?? open[0];
+      const j = open.find((n) => ChannelRouter.entriesFromBelow(n).length) ?? open[0];
       if (!j) break;
       tried.add(j);
       const before = routed ?? route();
@@ -105,7 +105,7 @@ export class JoinColumnTrial extends ArrangementTrial {
        * Push the others first when the move breaks a straight rise; else only when the move alone
        * is not kept or loses a rise.
        */
-      const breaks = first.some((n) => EdgeRouter.risesInto(n).some((e) => before.rises.has(e)));
+      const breaks = first.some((n) => ChannelRouter.risesInto(n).some((e) => before.rises.has(e)));
       let after = before;
       let keep = false;
       if (breaks && push()) {
@@ -144,7 +144,7 @@ export class JoinColumnTrial extends ArrangementTrial {
   private takenColumns(over?: ReadonlySet<GEdge>): Map<GNode, Array<GNode | undefined>> {
     const { layout } = this;
     const out = new Map<GNode, Array<GNode | undefined>>();
-    const entries = (n: GNode): GEdge[] => (over ? EdgeRouter.risesInto(n).filter((e) => !over.has(e)) : EdgeRouter.risesInto(n));
+    const entries = (n: GNode): GEdge[] => (over ? ChannelRouter.risesInto(n).filter((e) => !over.has(e)) : ChannelRouter.risesInto(n));
     const rising = layout.nodes.filter((n) => entries(n).length);
     if (!rising.length) return out;
     const index = new XIndex<[Box, GNode | undefined]>();
@@ -159,7 +159,7 @@ export class JoinColumnTrial extends ArrangementTrial {
     for (const [b, n] of labels.ownShapes()) add(b, n);
     for (const [b, a] of labels.placedData()) add(b, ownerOf(a));
     for (const j of rising) {
-      const x = EdgeRouter.riseX(j), top = j.box.y + j.box.height, low = Math.max(...entries(j).map(EdgeRouter.riseFrom));
+      const x = ChannelRouter.riseX(j), top = j.box.y + j.box.height, low = Math.max(...entries(j).map(ChannelRouter.riseFrom));
       const owners = index.near(x - RISE_KEEP, x + RISE_KEEP).filter(([b, owner]) => owner !== j && b.x - RISE_KEEP < x && x < b.x + b.width + RISE_KEEP && b.y < low && top < b.y + b.height).map(([, owner]) => owner);
       if (owners.length) out.set(j, owners);
     }

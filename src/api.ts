@@ -4,14 +4,14 @@
  * Errors are CliError instances, exactly what the CLI prints with --json.
  */
 import { OpsParser } from './ops/OpsParser.js';
-import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
-import type { LayoutMetrics } from './diagram/utils/problems.js';
+import { LayoutDebug, type DebugSink } from './layout/LayoutDebug.js';
+import type { LayoutMetrics } from './drawing/utils/problems.js';
 import type { LayoutView } from './query/layout-view.js';
 import type { AroundView, ElementContext } from './query/context.js';
 import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
 import { AroundWindow } from './query/AroundWindow.js';
 import { ElementContextBuilder } from './query/ElementContextBuilder.js';
-import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { LayoutAnalysis } from './drawing/LayoutAnalysis.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { IdConventions } from './ids/IdConventionsReader.js';

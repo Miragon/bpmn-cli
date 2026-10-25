@@ -1,11 +1,11 @@
-import { ChangeSet } from '../model/ChangeSet.js';
-import { is, layoutRoot, type El } from '../model/utils/moddle.js';
-import { DETACHED_GAP } from '../diagram/EdgeRouter.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { Semantics } from '../diagram/Semantics.js';
-import { containsPoint, copyBox, copyPoints, type Box, type Point } from '../diagram/utils/geom.js';
-import { DiPruner } from '../diagram/DiPruner.js';
-import { boxOf, idOf, raw, rawList } from '../diagram/utils/raw.js';
+import { ChangeSet } from '../../model/ChangeSet.js';
+import { is, layoutRoot, type El } from '../../model/utils/moddle.js';
+import { DETACHED_GAP } from './EdgeRouter.js';
+import { DiagramReader } from '../../drawing/DiagramReader.js';
+import { Semantics } from '../../drawing/Semantics.js';
+import { containsPoint, copyBox, copyPoints, type Box, type Point } from '../../drawing/utils/geom.js';
+import { DiPruner } from '../../drawing/DiPruner.js';
+import { boxOf, idOf, raw, rawList } from '../../drawing/utils/raw.js';
 
 export interface SnapEntry {
   id: string;

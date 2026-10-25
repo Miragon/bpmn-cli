@@ -1,6 +1,6 @@
 import { is, type El } from '../model/utils/moddle.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { sameBox, type Box, type Point } from '../diagram/utils/geom.js';
+import { DiagramReader } from '../drawing/DiagramReader.js';
+import { sameBox, type Box, type Point } from '../drawing/utils/geom.js';
 
 /**
  * Everything a drawing shows, keyed by `plane root|element id`:

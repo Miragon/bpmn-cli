@@ -1,4 +1,4 @@
-import { LayoutDebug } from '../shared/LayoutDebug.js';
+import { LayoutDebug } from '../layout/LayoutDebug.js';
 import { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { EditContext } from '../model/EditContext.js';

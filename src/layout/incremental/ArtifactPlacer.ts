@@ -1,9 +1,9 @@
-import { is } from '../model/utils/moddle.js';
-import { bottom, overlaps, right, type Box } from './utils/geom.js';
-import { idOf, raw, rawList } from './utils/raw.js';
-import { Frames } from './Frames.js';
+import { is } from '../../model/utils/moddle.js';
+import { bottom, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { idOf, raw, rawList } from '../../drawing/utils/raw.js';
+import { Frames } from '../../drawing/Frames.js';
 
-import type { DShape, Plane } from './types.js';
+import type { DShape, Plane } from '../../drawing/types.js';
 import type { NodePlacer } from './NodePlacer.js';
 import type { PlacementObstacles } from './PlacementObstacles.js';
 import type { NeighbourPlacer } from './NeighbourPlacer.js';

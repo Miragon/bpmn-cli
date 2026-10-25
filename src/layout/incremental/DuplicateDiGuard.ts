@@ -1,5 +1,5 @@
-import type { El } from '../model/utils/moddle.js';
-import { idOf, raw, rawList } from '../diagram/utils/raw.js';
+import type { El } from '../../model/utils/moddle.js';
+import { idOf, raw, rawList } from '../../drawing/utils/raw.js';
 
 /**
  * Asserts a run never gives an element a second DI element on one plane;

@@ -1,8 +1,8 @@
-import { bottom, cx, cy, overlaps, right, type Box } from './utils/geom.js';
-import { Frames } from './Frames.js';
-import { PlaneQuery } from './PlaneQuery.js';
+import { bottom, cx, cy, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 
-import type { DShape, Plane } from './types.js';
+import type { DShape, Plane } from '../../drawing/types.js';
 import type { NodePlacer } from './NodePlacer.js';
 
 /** What a new shape in a frame has to keep clear of, and where the space tool may push for it. */

@@ -1,13 +1,13 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
-import { is } from '../model/utils/moddle.js';
-import { bottom, copyBox, cy, inside, overlaps, right, type Box } from '../diagram/utils/geom.js';
-import { raw } from '../diagram/utils/raw.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DShape, Plane } from '../diagram/types.js';
-import { attachedSide } from '../diagram/utils/sides.js';
-import { activitySize, BOTTOM_ROOM } from '../diagram/utils/text.js';
+import { is } from '../../model/utils/moddle.js';
+import { bottom, copyBox, cy, inside, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { raw } from '../../drawing/utils/raw.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../../drawing/types.js';
+import { attachedSide } from '../../drawing/utils/sides.js';
+import { activitySize, BOTTOM_ROOM } from '../../drawing/utils/text.js';
 
 /**
  * Room for what was placed and renamed: activities grow to fit a new name, expanded sub-processes

@@ -1,8 +1,8 @@
 import { is, many, type El } from '../../model/utils/moddle.js';
-import { METRICS } from '../../diagram/utils/sizes.js';
-import type { GNode, ScopeLayout } from '../../diagram/types.js';
-import { ArtifactPlacer } from './ArtifactPlacer.js';
-import { EdgeRouter } from './EdgeRouter.js';
+import { METRICS } from '../../drawing/utils/sizes.js';
+import type { GNode, ScopeLayout } from '../../drawing/types.js';
+import { ScopeArtifactPlacer } from './ScopeArtifactPlacer.js';
+import { ChannelRouter } from './ChannelRouter.js';
 import { JoinColumnTrial } from './JoinColumnTrial.js';
 import { LinkRouter } from './LinkRouter.js';
 import { ScopeFrame } from './ScopeFrame.js';
@@ -33,7 +33,7 @@ export class ScopePlacer {
   layOut(scope: El): ScopeLayout {
     const graph = new ScopeGraph(scope, (node) => this.nest(node));
     const { layout } = graph;
-    const artifacts = new ArtifactPlacer(layout);
+    const artifacts = new ScopeArtifactPlacer(layout);
     artifacts.build(scope, graph.byId);
     const grid = new ScopeGrid(layout, this.opts.groups);
     grid.arrange();
@@ -46,7 +46,7 @@ export class ScopePlacer {
       }).run();
       new TopBorderTrial(layout).run();
     }
-    new EdgeRouter(layout).route();
+    new ChannelRouter(layout).route();
     artifacts.refreshFlowAnchors();
     this.placeEventSubs(layout);
     artifacts.placeAnnotations();

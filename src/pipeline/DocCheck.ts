@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import type { CliError } from '../shared/CliError.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
+import { LayoutDebug } from '../layout/LayoutDebug.js';
 import { FullLayout } from '../layout/FullLayout.js';
 import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { PlatformDetection } from '../platform/PlatformDetection.js';

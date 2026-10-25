@@ -1,9 +1,9 @@
-import { attachedSide, defaultSides, gatewaySide } from './utils/sides.js';
-import { crossings } from './utils/routing.js';
+import { attachedSide, defaultSides, gatewaySide } from '../../drawing/utils/sides.js';
+import { crossings } from '../../drawing/utils/routing.js';
 import { OrthogonalRouter, type RouteRequest } from './OrthogonalRouter.js';
-import type { Side, DEdge, DShape, Plane } from './types.js';
-import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from './utils/geom.js';
-import { PlaneQuery } from './PlaneQuery.js';
+import type { Side, DEdge, DShape, Plane } from '../../drawing/types.js';
+import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from '../../drawing/utils/geom.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 
 export interface RouteOptions {
   lines: Point[][];

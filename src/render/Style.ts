@@ -1,4 +1,4 @@
-import { raw } from '../diagram/utils/raw.js';
+import { raw } from '../drawing/utils/raw.js';
 import type { El } from '../model/utils/moddle.js';
 import { FILL, STROKE } from './utils/svg.js';
 

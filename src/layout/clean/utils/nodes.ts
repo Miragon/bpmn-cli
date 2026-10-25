@@ -1,4 +1,4 @@
-import type { GEdge, GNode } from '../../../diagram/types.js';
+import type { GEdge, GNode } from '../../../drawing/types.js';
 
 export function outgoingOf(n: GNode): GEdge[] {
   return [...n.out, ...n.boundary.flatMap((b) => b.out)];

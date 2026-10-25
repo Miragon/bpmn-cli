@@ -1,11 +1,11 @@
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from './utils/geom.js';
-import { Frames } from './Frames.js';
-import { PlaneQuery } from './PlaneQuery.js';
-import { defaultLabelSide, hasExternalLabel, labelAt } from './utils/labels.js';
-import { raw } from './utils/raw.js';
-import { labelSize } from './utils/text.js';
-import type { DShape, Plane } from './types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { bottom, containsPoint, cx, cy, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import { defaultLabelSide, hasExternalLabel, labelAt } from '../../drawing/utils/labels.js';
+import { raw } from '../../drawing/utils/raw.js';
+import { labelSize } from '../../drawing/utils/text.js';
+import type { DShape, Plane } from '../../drawing/types.js';
 
 export type Axis = 'x' | 'y';
 

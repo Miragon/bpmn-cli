@@ -1,7 +1,7 @@
 import { is } from '../model/utils/moddle.js';
-import { cx, cy, median, right } from '../diagram/utils/geom.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DShape, Plane } from '../diagram/types.js';
+import { cx, cy, median, right } from '../drawing/utils/geom.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../drawing/types.js';
 import type { LayoutGap, PlaneColumn } from './layout-view.js';
 
 /**

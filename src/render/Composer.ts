@@ -1,8 +1,8 @@
-import type { Box, Point } from '../diagram/utils/geom.js';
-import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
-import { ProblemLocator } from '../diagram/ProblemLocator.js';
-import { problemKey, type LayoutProblem } from '../diagram/utils/problems.js';
-import type { Plane } from '../diagram/types.js';
+import type { Box, Point } from '../drawing/utils/geom.js';
+import { LayoutAnalysis } from '../drawing/LayoutAnalysis.js';
+import { ProblemLocator } from '../drawing/ProblemLocator.js';
+import { problemKey, type LayoutProblem } from '../drawing/utils/problems.js';
+import type { Plane } from '../drawing/types.js';
 import { TileGrid } from './TileGrid.js';
 import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type Frame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
 import { contains, grow, meets, pointsBox, unionOf } from './utils/boxes.js';

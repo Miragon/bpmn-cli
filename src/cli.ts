@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { Cli } from './commands/Cli.js';
-import { LayoutDebug } from './shared/LayoutDebug.js';
+import { LayoutDebug } from './layout/LayoutDebug.js';
 
 // dist/cli.js and src/cli.ts both sit one level below package.json
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;

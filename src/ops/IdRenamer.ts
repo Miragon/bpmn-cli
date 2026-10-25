@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { followDiIds } from '../diagram/utils/di-ids.js';
+import { followDiIds } from '../drawing/utils/di-ids.js';
 import { cutAt, MAX_ID } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
 import { kindRequest, type IdRequest } from '../ids/utils/requests.js';

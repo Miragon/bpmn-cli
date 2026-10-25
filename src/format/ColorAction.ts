@@ -1,5 +1,5 @@
 import type { ColorOp } from '../ops/types.js';
-import { setSwatch } from '../diagram/utils/colors.js';
+import { setSwatch } from '../drawing/utils/colors.js';
 import type { FormatOps } from './FormatOps.js';
 import { unique } from './utils/frames.js';
 

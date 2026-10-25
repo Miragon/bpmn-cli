@@ -1,6 +1,6 @@
 import { addTo, is, many, walk, type El, type Model } from '../model/utils/moddle.js';
-import { SUB_PROCESS_TYPES } from '../diagram/utils/expansion.js';
-import { center, containsPoint } from '../diagram/utils/geom.js';
+import { SUB_PROCESS_TYPES } from '../drawing/utils/expansion.js';
+import { center, containsPoint } from '../drawing/utils/geom.js';
 
 interface Rect {
   x: number;

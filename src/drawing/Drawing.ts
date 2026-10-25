@@ -1,9 +1,9 @@
 import { PlaneCheckpoint } from './PlaneCheckpoint.js';
-import { EdgeRouter, type EdgeBefore, type RouteOptions } from './EdgeRouter.js';
-import { FrameEditor } from './FrameEditor.js';
-import { LabelPlacer } from './LabelPlacer.js';
-import { Separation, type SeparateOptions, type SeparateResult } from './Separation.js';
-import { SpaceTool, type Axis, type SpaceRequest, type SpaceResult, type StripRequest } from './SpaceTool.js';
+import { EdgeRouter, type EdgeBefore, type RouteOptions } from '../layout/incremental/EdgeRouter.js';
+import { FrameEditor } from '../layout/incremental/FrameEditor.js';
+import { LabelPlacer } from '../layout/incremental/LabelPlacer.js';
+import { Separation, type SeparateOptions, type SeparateResult } from '../layout/incremental/Separation.js';
+import { SpaceTool, type Axis, type SpaceRequest, type SpaceResult, type StripRequest } from '../layout/incremental/SpaceTool.js';
 import type { DrawingSnapshot } from './DrawingSnapshot.js';
 import type { TrialGuard } from './TrialGuard.js';
 import type { Box, DEdge, DShape, Plane, Point, Side } from './types.js';

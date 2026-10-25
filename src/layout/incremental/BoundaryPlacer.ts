@@ -1,10 +1,10 @@
-import { SIZES } from './utils/sizes.js';
-import { bottom, cx, cy, overlaps, pathHits, right, type Box, type Point } from './utils/geom.js';
-import { idOf, raw } from './utils/raw.js';
-import { PlaneQuery } from './PlaneQuery.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import { bottom, cx, cy, overlaps, pathHits, right, type Box, type Point } from '../../drawing/utils/geom.js';
+import { idOf, raw } from '../../drawing/utils/raw.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 
-import type { DShape, Plane } from './types.js';
-import { attachedSide } from './utils/sides.js';
+import type { DShape, Plane } from '../../drawing/types.js';
+import { attachedSide } from '../../drawing/utils/sides.js';
 import type { NodePlacer, Probe } from './NodePlacer.js';
 import type { PlacementObstacles } from './PlacementObstacles.js';
 import { TOP_ROW, type Cand, type RowChooser } from './RowChooser.js';

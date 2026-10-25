@@ -1,11 +1,11 @@
-import { bottom, right, type Box } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { raw } from '../diagram/utils/raw.js';
-import type { DEdge, DShape, Plane } from '../diagram/types.js';
-import type { Axis, SpaceResult } from '../diagram/SpaceTool.js';
-import { titleDepth } from '../diagram/utils/text.js';
-import { Drawing } from '../diagram/Drawing.js';
+import { bottom, right, type Box } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { raw } from '../drawing/utils/raw.js';
+import type { DEdge, DShape, Plane } from '../drawing/types.js';
+import type { Axis, SpaceResult } from '../layout/incremental/SpaceTool.js';
+import { titleDepth } from '../drawing/utils/text.js';
+import { Drawing } from '../drawing/Drawing.js';
 
 export const PAD = 30;
 /** room for the name at the top of a sub-process */

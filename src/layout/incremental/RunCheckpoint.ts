@@ -1,6 +1,6 @@
 import type { Checkpoint, IncrementalLayout } from './IncrementalLayout.js';
-import { copyBox, copyPoints } from '../diagram/utils/geom.js';
-import type { DEdge, DShape } from '../diagram/types.js';
+import { copyBox, copyPoints } from '../../drawing/utils/geom.js';
+import type { DEdge, DShape } from '../../drawing/types.js';
 
 /** Everything drawing the new elements (steps 6 to 9) changes in a run, taken and put back. */
 export class RunCheckpoint {

@@ -1,10 +1,10 @@
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { bottom, cy, overlaps, pathHits, right, segmentHits, segmentsCross, type Box, type Point } from './utils/geom.js';
-import { Frames } from './Frames.js';
-import { PlaneQuery } from './PlaneQuery.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { bottom, cy, overlaps, pathHits, right, segmentHits, segmentsCross, type Box, type Point } from '../../drawing/utils/geom.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
 
-import type { DShape, Plane, ShapeKind } from './types.js';
-import { attachedSide, defaultSides } from './utils/sides.js';
+import type { DShape, Plane, ShapeKind } from '../../drawing/types.js';
+import { attachedSide, defaultSides } from '../../drawing/utils/sides.js';
 import { OrthogonalRouter } from './OrthogonalRouter.js';
 import type { NodePlacer, Probe } from './NodePlacer.js';
 import type { PlacementObstacles } from './PlacementObstacles.js';

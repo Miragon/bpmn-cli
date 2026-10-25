@@ -1,4 +1,4 @@
-import type { LayoutProblem } from '../../diagram/utils/problems.js';
+import type { LayoutProblem } from '../../drawing/utils/problems.js';
 import type { FormatResult } from '../../format/FormatOps.js';
 import type { Change, ChangeSet } from '../../model/ChangeSet.js';
 import type { LayoutStatus } from '../../pipeline/index.js';

@@ -1,12 +1,12 @@
 import { modelError } from '../shared/utils/errors.js';
 import { is } from '../model/utils/moddle.js';
 import type { LabelOp } from '../ops/types.js';
-import { inside, sameBox } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { edgeLabelAt, hasExternalLabel, labelAt } from '../diagram/utils/labels.js';
-import { raw } from '../diagram/utils/raw.js';
-import { labelSize } from '../diagram/utils/text.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { inside, sameBox } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { edgeLabelAt, hasExternalLabel, labelAt } from '../drawing/utils/labels.js';
+import { raw } from '../drawing/utils/raw.js';
+import { labelSize } from '../drawing/utils/text.js';
+import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 
 export class LabelAction {

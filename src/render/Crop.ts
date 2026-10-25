@@ -1,5 +1,5 @@
-import type { Plane } from '../diagram/types.js';
-import type { Semantics } from '../diagram/Semantics.js';
+import type { Plane } from '../drawing/types.js';
+import type { Semantics } from '../drawing/Semantics.js';
 import type { Doc } from '../model/Doc.js';
 import { is } from '../model/utils/moddle.js';
 import { AroundWindow } from '../query/AroundWindow.js';

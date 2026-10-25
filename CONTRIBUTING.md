@@ -44,14 +44,14 @@ them on a private corpus without copying it into the repository, are described i
 
   | folder | holds |
   | --- | --- |
-  | `shared/` | errors and the debug sink, used everywhere |
+  | `shared/` | errors, used everywhere |
   | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
   | `ids/` | id words and slugs, the file's id style, the declared id conventions |
   | `xml/` | the text-preserving write, the positional XML reader, the encoding |
   | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
   | `ops/` | the semantic edits (`add`, `connect`, `set`, ...) and the ops JSON of `apply` |
-  | `diagram/` | the drawing (BPMN DI) and the geometry building blocks the engines share |
-  | `layout/` | the layout engines: `clean/` redraws, `IncrementalLayout.ts` keeps a hand-made drawing |
+  | `drawing/` | the drawing (BPMN DI): reading and writing planes, frames, groups, the geometry and the checkpoint every engine shares |
+  | `layout/` | the layout engines: `clean/` redraws (`FullLayout`), `incremental/` keeps a hand-made drawing (placers, routers, the space tool); the debug sink |
   | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
   | `render/` | the SVG of a diagram |
   | `validate/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with |
@@ -64,13 +64,13 @@ them on a private corpus without copying it into the repository, are described i
 
   Where new code goes: a change of the model's semantics is an op (`ops/`); reading the model
   without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
-  user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
+  user asks for it; geometry more than one engine needs is `drawing/`; text or JSON for the user
   is `report/`; anything that touches the file system or `process` is `node/`; mapping flags to
   options and printing a command's result is `commands/` (`cli.ts` only starts the `Cli`).
   `test/architecture.test.ts` keeps the root of `src/` to the three entries.
 
   **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
-  named like the class (`model/ModelError.ts`, `diagram/PlaneCheckpoint.ts`). Stateless helper
+  named like the class (`model/ModelError.ts`, `drawing/PlaneCheckpoint.ts`). Stateless helper
   functions live in a `utils/` folder of their stage (`model/utils/moddle.ts`,
   `shared/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
   error classes. Outside the entries (`api.ts`, `index.ts`, `node/index.ts`, which keep the

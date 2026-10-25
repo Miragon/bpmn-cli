@@ -4,7 +4,7 @@
  * within 64 characters. Synthetic fixtures only.
  */
 import { describe, expect, it } from 'vitest';
-import { styledId } from '../src/diagram/utils/di-ids.js';
+import { styledId } from '../src/drawing/utils/di-ids.js';
 import { Doc } from '../src/model/Doc.js';
 import { cutAt } from '../src/ids/utils/slug.js';
 import type { Op } from '../src/ops/types.js';

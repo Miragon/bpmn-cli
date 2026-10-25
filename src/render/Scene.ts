@@ -1,5 +1,5 @@
-import type { Point } from '../diagram/utils/geom.js';
-import type { DShape, Plane } from '../diagram/types.js';
+import type { Point } from '../drawing/utils/geom.js';
+import type { DShape, Plane } from '../drawing/types.js';
 import { EdgePainter } from './EdgePainter.js';
 import { ShapePainter } from './ShapePainter.js';
 import { HALO_COLORS, LAYER, type Item } from './types.js';

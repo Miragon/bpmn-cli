@@ -5,8 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/layout/IncrementalLayout.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/layout/IncrementalLayout.js')>()),
+vi.mock('../src/layout/incremental/IncrementalLayout.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/layout/incremental/IncrementalLayout.js')>()),
   IncrementalLayout: {
     run: async () => {
       throw new Error('boom');

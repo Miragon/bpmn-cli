@@ -1,7 +1,7 @@
-import type { Box } from '../diagram/utils/geom.js';
-import { raw, rawList } from '../diagram/utils/raw.js';
-import type { DShape } from '../diagram/types.js';
-import { titleBox, textWidth } from '../diagram/utils/text.js';
+import type { Box } from '../drawing/utils/geom.js';
+import { raw, rawList } from '../drawing/utils/raw.js';
+import type { DShape } from '../drawing/types.js';
+import { titleBox, textWidth } from '../drawing/utils/text.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';

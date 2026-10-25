@@ -1,16 +1,16 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout, IncrementalOptions } from './IncrementalLayout.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { SIZES } from '../diagram/utils/sizes.js';
-import { is, type El } from '../model/utils/moddle.js';
-import { copyBox, cy, inside, overlaps, right, type Box } from '../diagram/utils/geom.js';
-import { idOf } from '../diagram/utils/raw.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DShape, Plane } from '../diagram/types.js';
-import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
-import { Drawing } from '../diagram/Drawing.js';
-import type { SpaceResult } from '../diagram/SpaceTool.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import { is, type El } from '../../model/utils/moddle.js';
+import { copyBox, cy, inside, overlaps, right, type Box } from '../../drawing/utils/geom.js';
+import { idOf } from '../../drawing/utils/raw.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../../drawing/types.js';
+import { PlaneCheckpoint } from '../../drawing/PlaneCheckpoint.js';
+import { Drawing } from '../../drawing/Drawing.js';
+import type { SpaceResult } from './SpaceTool.js';
 
 interface Strip {
   plane: Plane;

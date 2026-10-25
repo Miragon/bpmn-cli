@@ -1,11 +1,11 @@
-import { labelSize } from './utils/text.js';
-import { is } from '../model/utils/moddle.js';
-import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from './utils/geom.js';
-import { Frames } from './Frames.js';
-import { raw } from './utils/raw.js';
-import type { DEdge, DShape, Plane } from './types.js';
-import { attachedSide } from './utils/sides.js';
-import { hasExternalLabel, labelAt, labelSideOf, ORDER, type LabelSide } from './utils/labels.js';
+import { labelSize } from '../../drawing/utils/text.js';
+import { is } from '../../model/utils/moddle.js';
+import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from '../../drawing/utils/geom.js';
+import { Frames } from '../../drawing/Frames.js';
+import { raw } from '../../drawing/utils/raw.js';
+import type { DEdge, DShape, Plane } from '../../drawing/types.js';
+import { attachedSide } from '../../drawing/utils/sides.js';
+import { hasExternalLabel, labelAt, labelSideOf, ORDER, type LabelSide } from '../../drawing/utils/labels.js';
 
 interface Clutter {
   shapes: Box[];

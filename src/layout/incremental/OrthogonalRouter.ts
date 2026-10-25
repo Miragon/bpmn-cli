@@ -1,9 +1,9 @@
-import { bottom, equalBoxes, grow, right, segmentHitsBox, union } from './utils/geom.js';
-import type { Box, Point, Side } from './types.js';
-import { SOURCE_DEFAULT, TARGET_DEFAULT } from './utils/sides.js';
+import { bottom, equalBoxes, grow, right, segmentHitsBox, union } from '../../drawing/utils/geom.js';
+import type { Box, Point, Side } from '../../drawing/types.js';
+import { SOURCE_DEFAULT, TARGET_DEFAULT } from '../../drawing/utils/sides.js';
 import { RouteGrid } from './RouteGrid.js';
 import { SearchHeap } from './SearchHeap.js';
-import { AVOID, BEND, CROSS, DX, DY, EPS, HIT, MIN_STUB, NEAR, OUTWARD, OVERLAP, OVERLAP_TOL, PORT_OFFSET, PORT_SLOPE, REGION_PAD, SRC_RANK, TGT_RANK, THIN_MARGIN, pointOn, segmentsCross, simplify, span, type Port, type Seg } from './utils/routing.js';
+import { AVOID, BEND, CROSS, DX, DY, EPS, HIT, MIN_STUB, NEAR, OUTWARD, OVERLAP, OVERLAP_TOL, PORT_OFFSET, PORT_SLOPE, REGION_PAD, SRC_RANK, TGT_RANK, THIN_MARGIN, pointOn, segmentsCross, simplify, span, type Port, type Seg } from '../../drawing/utils/routing.js';
 
 export interface RouteRequest {
   source: Box;

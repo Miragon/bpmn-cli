@@ -1,8 +1,8 @@
-import { SIZES } from './utils/sizes.js';
-import { bottom, copyBox, cy, median, right, union, type Box } from './utils/geom.js';
-import { PlaneQuery } from './PlaneQuery.js';
-import type { DEdge, DShape, Plane } from './types.js';
-import type { Semantics } from './Semantics.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import { bottom, copyBox, cy, median, right, union, type Box } from '../../drawing/utils/geom.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import type { DEdge, DShape, Plane } from '../../drawing/types.js';
+import type { Semantics } from '../../drawing/Semantics.js';
 
 import type { SpaceResult, SpaceTool } from './SpaceTool.js';
 

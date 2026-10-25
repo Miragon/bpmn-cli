@@ -1,11 +1,11 @@
 import { Reordering } from '../ops/Reordering.js';
 import { laneSetOf } from '../ops/utils/lanes.js';
 import type { OrderOp } from '../ops/types.js';
-import { bottom, copyBox, cx, cy, right } from '../diagram/utils/geom.js';
-import { idOf, rawList } from '../diagram/utils/raw.js';
-import type { DShape } from '../diagram/types.js';
-import type { Semantics } from '../diagram/Semantics.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { bottom, copyBox, cx, cy, right } from '../drawing/utils/geom.js';
+import { idOf, rawList } from '../drawing/utils/raw.js';
+import type { DShape } from '../drawing/types.js';
+import type { Semantics } from '../drawing/Semantics.js';
+import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 
 /**

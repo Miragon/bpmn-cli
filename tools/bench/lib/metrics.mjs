@@ -1,6 +1,6 @@
 /**
  * The bench's layout measurement: this repository's metrics library
- * (src/diagram/LayoutAnalysis.ts, built into dist/index.js), whatever arm
+ * (src/drawing/LayoutAnalysis.ts, built into dist/index.js), whatever arm
  * wrote the file, so every arm is scored by the same oracle.
  *
  * Contract: `loadMetrics()` -> { keys, weights, hard, newKinds, measure(xml), diff(a, b) } where

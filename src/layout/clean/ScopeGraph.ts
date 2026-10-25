@@ -1,6 +1,6 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { SIZES } from '../../diagram/utils/sizes.js';
-import type { GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import type { GEdge, GNode, ScopeLayout } from '../../drawing/types.js';
 import { outgoingOf } from './utils/nodes.js';
 
 export class ScopeGraph {

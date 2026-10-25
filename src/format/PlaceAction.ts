@@ -1,13 +1,13 @@
 import { modelError } from '../shared/utils/errors.js';
 import { is, type El } from '../model/utils/moddle.js';
 import type { PlaceOp } from '../ops/types.js';
-import { bottom, copyBox, cx, cy, inside, overlaps, right, type Box, type Point } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { idOf, raw, rawList } from '../diagram/utils/raw.js';
-import type { DShape, Plane, Side } from '../diagram/types.js';
-import { attachedSide } from '../diagram/utils/sides.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { bottom, copyBox, cx, cy, inside, overlaps, right, type Box, type Point } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { idOf, raw, rawList } from '../drawing/utils/raw.js';
+import type { DShape, Plane, Side } from '../drawing/types.js';
+import { attachedSide } from '../drawing/utils/sides.js';
+import { DrawingSnapshot } from '../drawing/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { frameWord, outermost, unique } from './utils/frames.js';
 

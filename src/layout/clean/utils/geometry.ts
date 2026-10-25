@@ -1,4 +1,4 @@
-import type { Box, Point } from '../../../diagram/types.js';
+import type { Box, Point } from '../../../drawing/types.js';
 import type { XIndex } from '../XIndex.js';
 
 export type Segment = [Point, Point];

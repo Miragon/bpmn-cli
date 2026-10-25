@@ -1,8 +1,8 @@
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { bottom, right, type Box } from './utils/geom.js';
-import { Frames } from './Frames.js';
-import { PlaneQuery } from './PlaneQuery.js';
-import type { DShape, Plane } from './types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { bottom, right, type Box } from '../../drawing/utils/geom.js';
+import { Frames } from '../../drawing/Frames.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../../drawing/types.js';
 import type { SpaceTool } from './SpaceTool.js';
 
 export interface SeparateOptions {

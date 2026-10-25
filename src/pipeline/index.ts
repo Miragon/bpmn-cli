@@ -1,8 +1,8 @@
 import type { IdConventions } from '../ids/IdConventionsReader.js';
-import type { DebugSink } from '../shared/LayoutDebug.js';
+import type { DebugSink } from '../layout/LayoutDebug.js';
 import type { Warning } from '../shared/CliError.js';
 import type { LayoutWarningInfo, LayoutEngine } from '../layout/FullLayout.js';
-import type { MetricsDelta } from '../diagram/utils/problems.js';
+import type { MetricsDelta } from '../drawing/utils/problems.js';
 import type { FormatResult } from '../format/FormatOps.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
 import type { PlatformChoice } from '../platform/PlatformDetection.js';

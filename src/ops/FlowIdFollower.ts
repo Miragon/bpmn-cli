@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import type { FormerEnd } from '../model/EditContext.js';
-import { followDiIds } from '../diagram/utils/di-ids.js';
+import { followDiIds } from '../drawing/utils/di-ids.js';
 import { connectionRequest, type IdRequest } from '../ids/utils/requests.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { speakingStem } from '../ids/utils/id-words.js';

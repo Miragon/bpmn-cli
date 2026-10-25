@@ -1,11 +1,11 @@
 /**
- * src/diagram/PlaneCheckpoint.ts: the undo of a trial move, shared by the
+ * src/drawing/PlaneCheckpoint.ts: the undo of a trial move, shared by the
  * incremental layout and the format ops.
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import { DiagramReader } from '../src/diagram/DiagramReader.js';
-import { PlaneCheckpoint } from '../src/diagram/PlaneCheckpoint.js';
+import { DiagramReader } from '../src/drawing/DiagramReader.js';
+import { PlaneCheckpoint } from '../src/drawing/PlaneCheckpoint.js';
 import { BPMN_NS } from './helpers.js';
 
 const XML = `<?xml version="1.0" encoding="UTF-8"?>

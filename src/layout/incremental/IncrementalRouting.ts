@@ -1,14 +1,14 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { is, type El } from '../model/utils/moddle.js';
-import { segmentHits } from '../diagram/utils/geom.js';
-import { hasExternalLabel } from '../diagram/utils/labels.js';
-import { idOf, raw, rawList } from '../diagram/utils/raw.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DEdge, Plane } from '../diagram/types.js';
-import type { EdgeBefore } from '../diagram/EdgeRouter.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { is, type El } from '../../model/utils/moddle.js';
+import { segmentHits } from '../../drawing/utils/geom.js';
+import { hasExternalLabel } from '../../drawing/utils/labels.js';
+import { idOf, raw, rawList } from '../../drawing/utils/raw.js';
+import { DiagramReader } from '../../drawing/DiagramReader.js';
+import { PlaneQuery } from '../../drawing/PlaneQuery.js';
+import type { DEdge, Plane } from '../../drawing/types.js';
+import type { EdgeBefore } from './EdgeRouter.js';
 
 /**
  * The connections of an incremental run: routed while a batch places its nodes (what the next

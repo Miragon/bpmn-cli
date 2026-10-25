@@ -1,4 +1,4 @@
-import type { Box, GArtifact, GNode, LinkEnd, ScopeLayout } from '../../../diagram/types.js';
+import type { Box, GArtifact, GNode, LinkEnd, ScopeLayout } from '../../../drawing/types.js';
 import { toSegments, type Segment } from './geometry.js';
 
 /** data objects and notes of boundary events are placed before routing */

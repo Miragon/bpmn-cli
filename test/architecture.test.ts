@@ -64,7 +64,7 @@ describe('architecture', () => {
   });
 
   it('only the modules owning group names and memberships touch a category value reference', () => {
-    const owners = ['model/utils/moddle.ts', 'ops/ArtifactEditor.ts', 'ops/ElementRemover.ts', 'diagram/Groups.ts'];
+    const owners = ['model/utils/moddle.ts', 'ops/ArtifactEditor.ts', 'ops/ElementRemover.ts', 'drawing/Groups.ts'];
     const touching = readdirSync('src', { recursive: true, encoding: 'utf8' })
       .filter((file) => file.endsWith('.ts') && !file.startsWith('platform/profiles/'))
       .filter((file) => readFileSync(join('src', file), 'utf8').includes("'categoryValueRef'"));

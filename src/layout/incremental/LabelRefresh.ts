@@ -1,9 +1,9 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
-import { overlaps, segmentHits } from '../diagram/utils/geom.js';
-import { hasExternalLabel } from '../diagram/utils/labels.js';
-import { raw } from '../diagram/utils/raw.js';
-import type { DEdge, DShape } from '../diagram/types.js';
+import { overlaps, segmentHits } from '../../drawing/utils/geom.js';
+import { hasExternalLabel } from '../../drawing/utils/labels.js';
+import { raw } from '../../drawing/utils/raw.js';
+import type { DEdge, DShape } from '../../drawing/types.js';
 
 /**
  * Labels of new and renamed elements and of rerouted named flows are placed; a kept label a new

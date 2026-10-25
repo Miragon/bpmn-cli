@@ -1,6 +1,6 @@
 import { idOf, is, layoutRoot, type Model } from '../../model/utils/moddle.js';
-import { SIZES } from '../../diagram/utils/sizes.js';
-import type { ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import type { ScopeLayout } from '../../drawing/types.js';
 import { CollaborationArtifacts } from './CollaborationArtifacts.js';
 import { DiWriter } from './DiWriter.js';
 import { LaneArranger } from './LaneArranger.js';

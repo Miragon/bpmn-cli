@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
 import { triggerOf } from '../model/utils/kinds.js';
-import { diExpansionState } from '../diagram/utils/expansion.js';
-import { Groups } from '../diagram/Groups.js';
+import { diExpansionState } from '../drawing/utils/expansion.js';
+import { Groups } from '../drawing/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
 import { laneOf } from '../ops/utils/lanes.js';
 import { ExtensionLister } from '../ops/ExtensionLister.js';

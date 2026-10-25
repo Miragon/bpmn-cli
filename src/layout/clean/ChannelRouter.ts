@@ -1,7 +1,7 @@
-import { labelSize } from '../../diagram/utils/text.js';
-import { METRICS } from '../../diagram/utils/sizes.js';
-import { center, segmentHitsBox } from '../../diagram/utils/geom.js';
-import type { Box, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../diagram/types.js';
+import { labelSize } from '../../drawing/utils/text.js';
+import { METRICS } from '../../drawing/utils/sizes.js';
+import { center, segmentHitsBox } from '../../drawing/utils/geom.js';
+import type { Box, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../drawing/types.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
 import { bottom, dedupe, hitCount, pathHits, right, segmentsCross, toSegments, type Segment } from './utils/geometry.js';
@@ -33,7 +33,7 @@ export const RISE_KEEP = 5;
  * drops to targets below, rises into the bottom of targets above, loops through a channel
  * below or over the top. Candidate ways are scored by shapes cut and lines crossed.
  */
-export class EdgeRouter {
+export class ChannelRouter {
   private readonly layout: ScopeLayout;
   private readonly obstacleList: Box[];
   private readonly boxes: XIndex<Box>;
@@ -99,7 +99,7 @@ export class EdgeRouter {
   }
 
   static entriesFromBelow(n: GNode): GEdge[] {
-    return n.kind === 'gateway' && n.in.filter((e) => !e.back).length >= 2 ? EdgeRouter.risesInto(n) : [];
+    return n.kind === 'gateway' && n.in.filter((e) => !e.back).length >= 2 ? ChannelRouter.risesInto(n) : [];
   }
 
   /** Its band, a boundary event's run, else its source's centre. */
@@ -108,12 +108,12 @@ export class EdgeRouter {
   }
 
   static riseX(n: GNode): number {
-    return EdgeRouter.riseSlots(n)[0]!;
+    return ChannelRouter.riseSlots(n)[0]!;
   }
 
   /** Never on the drop line, so a node with one rises in beside it. */
   static riseSlots(n: GNode): number[] {
-    const cands = EdgeRouter.bottomCandidates(n);
+    const cands = ChannelRouter.bottomCandidates(n);
     return cands.length > 1 && n.out.some((e) => !e.back && center(e.target.box).y > center(n.box).y + 1) ? cands.slice(1) : cands;
   }
 
@@ -237,19 +237,19 @@ export class EdgeRouter {
   }
 
   private bottomSlot(n: GNode, len: number): number {
-    const cands = EdgeRouter.bottomCandidates(n);
+    const cands = ChannelRouter.bottomCandidates(n);
     const ok = (x: number): boolean => !pathHits([{ x, y: bottom(n.box) }, { x, y: bottom(n.box) + len }], this.boxes, [n.box]);
     return cands.find((x) => ok(x) && !this.used(this.usedBottom, n, x)) ?? cands.find(ok) ?? cands[0]!;
   }
 
   /** The same for every branch, so their labels line up. */
   private exitX(n: GNode): number {
-    return EdgeRouter.bottomCandidates(n)[0]!;
+    return ChannelRouter.bottomCandidates(n)[0]!;
   }
 
   /** A join fed from below leaves to targets below through its right vertex. */
   private joinFromBelow(n: GNode): boolean {
-    return EdgeRouter.entriesFromBelow(n).length > 0;
+    return ChannelRouter.entriesFromBelow(n).length > 0;
   }
 
   /** Off-centre on an expanded sub-process: its name sits at the top centre. */
@@ -411,7 +411,7 @@ export class EdgeRouter {
     const sameBand = band && band === this.bandOf(t) ? band : undefined;
     const x1 = tb.x - METRICS.hGap / 2, x2 = right(sb) + METRICS.hGap / 2;
     const ex = s.host ? sc.x : this.exitX(s);
-    const tx = EdgeRouter.riseX(t);
+    const tx = ChannelRouter.riseX(t);
     const sideY = sb.y + sb.height * 0.75;
     type Cand = { pts: Point[]; exit?: [Used, GNode, number]; entry?: [Used, GNode, number]; channel?: { list: Channel[]; y: number }; penalty: number; offDiamond?: boolean };
     const cands: Cand[] = [];
@@ -487,7 +487,7 @@ export class EdgeRouter {
       if (best && score >= best.score) return;
       score += hitCount(c.pts, this.boxes, ignore) * 1000;
       if (best && score >= best.score) return;
-      score += EdgeRouter.countCrossings(c.pts, this.routed, best ? Math.ceil((best.score - score) / 3) : Infinity) * 3;
+      score += ChannelRouter.countCrossings(c.pts, this.routed, best ? Math.ceil((best.score - score) / 3) : Infinity) * 3;
       // running on a boundary event's way over the top costs like a crossing
       if (this.overTop.size && !(best && score >= best.score) && this.onRouted(c.pts, this.overTop)) score += 3;
       if (!best || score < best.score) best = { c, score };
@@ -507,7 +507,7 @@ export class EdgeRouter {
       // in its band, or straight when the row is free and crosses no more lines
       const ex = this.exitX(s);
       const band = [...this.exitToBelow(s, ex, e.bandY), ...this.hookFromBelow(t, e.bandY)];
-      if (this.openRow.has(e) && this.lineFree(pts) && EdgeRouter.countCrossings(pts, this.routed) <= EdgeRouter.countCrossings(band, this.routed)) this.leftTaken.add(t);
+      if (this.openRow.has(e) && this.lineFree(pts) && ChannelRouter.countCrossings(pts, this.routed) <= ChannelRouter.countCrossings(band, this.routed)) this.leftTaken.add(t);
       else {
         pts = band;
         this.use(this.usedBottom, s, ex, true);
@@ -567,7 +567,7 @@ export class EdgeRouter {
     let chosenChannel: ChosenChannel | undefined;
     let runsBelow: boolean | undefined;
     let runsAbove: boolean | undefined;
-    const tx = EdgeRouter.riseX(t);
+    const tx = ChannelRouter.riseX(t);
     const gapX = tb.x - METRICS.hGap / 2;
     /**
      * `x` / `top`: where it ends on the target's bottom / top; `over`: its run over the top;
@@ -609,7 +609,7 @@ export class EdgeRouter {
       const host = s.host;
       const band = this.bandOf(s);
       // free slots keeping RISE_KEEP from every shape: a gateway's vertex can lie on a side slot
-      const slots = EdgeRouter.riseSlots(t).filter((x) => Math.abs(x - sc.x) >= RUN_CLEAR);
+      const slots = ChannelRouter.riseSlots(t).filter((x) => Math.abs(x - sc.x) >= RUN_CLEAR);
       const hookX = right(tb) + METRICS.hGap / 2;
       // off the middle of the gaps (loops and hooks run there), not right before the host
       const hostGaps = [right(host.box) + METRICS.hGap / 4, host.box.x - (METRICS.hGap * 3) / 4];
@@ -687,7 +687,7 @@ export class EdgeRouter {
       if (best && score >= best.score) return;
       // a boundary event's way: a crossing or a label it runs through (its own, say) counts 3
       const per = s.host ? 3 : 1;
-      const crossings = EdgeRouter.countCrossings(w.pts, this.routed, Math.min(best ? Math.ceil((best.score - score) / per) : Infinity, w.over ? below! : Infinity));
+      const crossings = ChannelRouter.countCrossings(w.pts, this.routed, Math.min(best ? Math.ceil((best.score - score) / per) : Infinity, w.over ? below! : Infinity));
       if (w.over && crossings >= below!) return;
       score += per * crossings;
       if (s.host && !(best && score >= best.score)) score += 3 * (hitCount(w.pts, this.spotIndex, w.spare ? [w.spare] : []) + hitCount(w.pts, this.flowLabelIndex, []));

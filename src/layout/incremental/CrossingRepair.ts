@@ -1,12 +1,12 @@
-import type { El } from '../model/utils/moddle.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
-import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
-import { TrialGuard, type TrialPolicy } from '../diagram/TrialGuard.js';
-import type { DEdge, Plane, Point } from '../diagram/types.js';
-import { copyBox, polylinesCross, samePoints } from '../diagram/utils/geom.js';
-import { raw } from '../diagram/utils/raw.js';
-import { isHardProblem, problemKey, type LayoutMetrics } from '../diagram/utils/problems.js';
-import { PlaneWriter } from '../diagram/PlaneWriter.js';
+import type { El } from '../../model/utils/moddle.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { LayoutAnalysis } from '../../drawing/LayoutAnalysis.js';
+import { TrialGuard, type TrialPolicy } from '../../drawing/TrialGuard.js';
+import type { DEdge, Plane, Point } from '../../drawing/types.js';
+import { copyBox, polylinesCross, samePoints } from '../../drawing/utils/geom.js';
+import { raw } from '../../drawing/utils/raw.js';
+import { isHardProblem, problemKey, type LayoutMetrics } from '../../drawing/utils/problems.js';
+import { PlaneWriter } from '../../drawing/PlaneWriter.js';
 import type { Checkpoint, IncrementalLayout } from './IncrementalLayout.js';
 
 /** repair trials per write; each one is measured */

@@ -1,7 +1,7 @@
-import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import { titleBox } from '../../diagram/utils/text.js';
-import { boxesOverlap, center, equalBoxes, segmentHitsBox } from '../../diagram/utils/geom.js';
-import type { Box, GEdge, GNode, LaneBandInfo, LinkEnd, Point, ScopeLayout } from '../../diagram/types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import { titleBox } from '../../drawing/utils/text.js';
+import { boxesOverlap, center, equalBoxes, segmentHitsBox } from '../../drawing/utils/geom.js';
+import type { Box, GEdge, GNode, LaneBandInfo, LinkEnd, Point, ScopeLayout } from '../../drawing/types.js';
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
 import { ArrangementTrial, type Routes } from './ArrangementTrial.js';

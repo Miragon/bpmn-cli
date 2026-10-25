@@ -1,4 +1,4 @@
-import type { Box } from '../../diagram/types.js';
+import type { Box } from '../../drawing/types.js';
 import type { Segment } from './utils/geometry.js';
 
 export interface NoteJob {

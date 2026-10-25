@@ -9,7 +9,7 @@
  *    single commands, and add no backward flow; without the reminder path
  *    they add no layout problem at all (score 0, like two commands; on 0.5.0
  *    the batches gave 9 to 19). The new nodes are placed in op order, a chain
- *    of new nodes stays a splice through a split (diagram/NodePlacer.ts
+ *    of new nodes stays a splice through a split (layout/incremental/NodePlacer.ts
  *    spliceTarget, chainReaches), exception paths wait for the normal flow,
  *    and the flows of a node are routed as soon as the next one is placed
  *    (IncrementalLayout.ts routeNow), like the next single command sees them.
@@ -33,8 +33,8 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml } from '../src/api.js';
 import { CliError } from '../src/shared/CliError.js';
-import { diffProblems } from '../src/diagram/utils/problems.js';
-import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { diffProblems } from '../src/drawing/utils/problems.js';
+import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const FIXTURE = (() => {

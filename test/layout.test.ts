@@ -32,19 +32,19 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LayoutDebug } from '../src/shared/LayoutDebug.js';
-import type { DShape, GNode, ScopeLayout } from '../src/diagram/types.js';
-import { titleBox } from '../src/diagram/utils/text.js';
+import { LayoutDebug } from '../src/layout/LayoutDebug.js';
+import type { DShape, GNode, ScopeLayout } from '../src/drawing/types.js';
+import { titleBox } from '../src/drawing/utils/text.js';
 import { Doc } from '../src/model/Doc.js';
 import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
-import { ArtifactPlacer } from '../src/layout/clean/ArtifactPlacer.js';
+import { ScopeArtifactPlacer } from '../src/layout/clean/ScopeArtifactPlacer.js';
 import { ChainLiftTrial } from '../src/layout/clean/ChainLiftTrial.js';
 import { JoinColumnTrial } from '../src/layout/clean/JoinColumnTrial.js';
 import { ScopeGrid } from '../src/layout/clean/ScopeGrid.js';
 import { ScopePlacer } from '../src/layout/clean/ScopePlacer.js';
 import { shiftNode } from '../src/layout/clean/utils/scope.js';
-import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
+import { DiagramReader } from '../src/drawing/DiagramReader.js';
 import { is, many, type El } from '../src/model/utils/moddle.js';
 import { runOps } from '../src/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
@@ -920,7 +920,7 @@ describe('clean layout engine', () => {
       async () =>
         new JoinColumnTrial(scope, (shifts) => {
           new ScopeGrid(scope).arrange(shifts);
-          new ArtifactPlacer(scope).placeAttached();
+          new ScopeArtifactPlacer(scope).placeAttached();
         }).run(),
     );
     expect(lines.filter((l) => l.startsWith('[joins]')).map((l) => l.split(':')[0])).toEqual(['[joins] Gateway_Complete_join stays']);
@@ -2759,7 +2759,7 @@ describe('clean layout engine', () => {
         return { nodes: new Set(nodes), top, bottom: y };
       });
       scope.height = y;
-      new ArtifactPlacer(scope).placeAttached();
+      new ScopeArtifactPlacer(scope).placeAttached();
       scope.laneBands = bands;
     };
   }
@@ -2860,7 +2860,7 @@ describe('clean layout engine', () => {
     expect(assocs[0]!.points.some((p) => p.y === bottom(n1))).toBe(true);
   });
 
-  // ENGINE DEFECT (ArtifactPlacer build/placeAnnotations): the anchor of an annotation on a sequence flow is
+  // ENGINE DEFECT (ScopeArtifactPlacer build/placeAnnotations): the anchor of an annotation on a sequence flow is
   // captured before the annotation band shifts the content down, so the association ends exactly one band
   // (annotation height + vGap) above the flow, in mid-air, and may cut through the other annotation.
   it('text annotations on a task and on a flow: both above, the flow association ends on the flow', async () => {
@@ -3244,7 +3244,7 @@ describe('groups over a full redraw', () => {
       [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
     );
     const doc = await Doc.fromXml(xml);
-    const { Groups } = await import('../src/diagram/Groups.js');
+    const { Groups } = await import('../src/drawing/Groups.js');
     const out = new Groups(doc.definitions).redraw(doc.moddle, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
     expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
     expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);

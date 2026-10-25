@@ -1,6 +1,6 @@
-import type { Box, Point } from './types.js';
-import { bottom, right } from './utils/geom.js';
-import { CROSS, END_ZONE, EPS, HIT, OUTWARD, OVERLAP_TOL, STUB_TURN, pointOn, simplify, span, type Seg } from './utils/routing.js';
+import type { Box, Point } from '../../drawing/types.js';
+import { bottom, right } from '../../drawing/utils/geom.js';
+import { CROSS, END_ZONE, EPS, HIT, OUTWARD, OVERLAP_TOL, STUB_TURN, pointOn, simplify, span, type Seg } from '../../drawing/utils/routing.js';
 
 export class RouteGrid {
   readonly nx: number;

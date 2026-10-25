@@ -1,5 +1,5 @@
 import type { Drawing } from './Drawing.js';
-import type { EdgeBefore } from './EdgeRouter.js';
+import type { EdgeBefore } from '../layout/incremental/EdgeRouter.js';
 import type { Box, DEdge, DShape, Point } from './types.js';
 import { copyBox, copyPoints, overlaps, sameBox, samePoints } from './utils/geom.js';
 import { raw } from './utils/raw.js';

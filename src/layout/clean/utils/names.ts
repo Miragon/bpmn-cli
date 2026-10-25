@@ -1,4 +1,4 @@
-import type { GNode } from '../../../diagram/types.js';
+import type { GNode } from '../../../drawing/types.js';
 
 /** safe to cache: a layout object lives for one run, which renames nothing */
 const names = new WeakMap<object, string | null>();

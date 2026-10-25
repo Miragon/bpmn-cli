@@ -1,6 +1,6 @@
 /**
  * Which layout problem kinds count as hard defects, derived from the metrics
- * library (src/diagram/utils/problems.ts, METRIC_KEYS / METRIC_WEIGHTS of dist/index.js) so that a
+ * library (src/drawing/utils/problems.ts, METRIC_KEYS / METRIC_WEIGHTS of dist/index.js) so that a
  * kind added there later is picked up by the fuzzer, the benchmark and the
  * property test without touching them.
  *

@@ -1,7 +1,7 @@
 import { LAYOUT_MODES } from '../pipeline/index.js';
 import { Doc } from '../model/Doc.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../model/utils/kinds.js';
-import { SWATCHES } from '../diagram/utils/colors.js';
+import { SWATCHES } from '../drawing/utils/colors.js';
 import { OPS_SCHEMA } from '../ops/OpsSchemaBuilder.js';
 import { OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../ops/utils/op-fields.js';
 import { EXTENSION_STRUCTURE } from '../ops/ExtensionStructure.js';

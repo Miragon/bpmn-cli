@@ -2,7 +2,7 @@
  * What a command reports, as data and as text: the same for the CLI and the in-memory API, so
  * a host that embeds the library hands its agent exactly what the CLI would print.
  */
-import type { LayoutProblem } from '../diagram/utils/problems.js';
+import type { LayoutProblem } from '../drawing/utils/problems.js';
 import type { FormatResult } from '../format/FormatOps.js';
 import type { Warning } from '../shared/CliError.js';
 import type { CheckResult, ConventionsReport, LayoutStatus } from '../pipeline/index.js';

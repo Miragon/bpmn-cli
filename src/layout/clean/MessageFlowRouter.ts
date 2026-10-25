@@ -1,7 +1,7 @@
 import { is, type El } from '../../model/utils/moddle.js';
-import { SIZES } from '../../diagram/utils/sizes.js';
-import { center } from '../../diagram/utils/geom.js';
-import type { Box, Point } from '../../diagram/types.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import { center } from '../../drawing/utils/geom.js';
+import type { Box, Point } from '../../drawing/types.js';
 import { crossings, properCross, toSegments, type Segment } from './utils/geometry.js';
 
 export interface MessagePool {

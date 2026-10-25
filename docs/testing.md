@@ -72,7 +72,7 @@ with `--hard warn`) are reported but only fail with `--strict`.
 
 ## Metric kinds
 
-The layout problems come from one library, `src/diagram/LayoutAnalysis.ts` (built into
+The layout problems come from one library, `src/drawing/LayoutAnalysis.ts` (built into
 `dist/index.js`). `tools/layout-regress.mjs` has its own copy of the
 harness kinds; the library adds kinds the harness does not measure (for
 example `frameIntrusion`, `frameOverlap`, `degenerateEdge`, `detachedEdge`). The bench, the
