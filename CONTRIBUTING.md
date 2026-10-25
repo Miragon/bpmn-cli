@@ -36,32 +36,46 @@ them on a private corpus without copying it into the repository, are described i
 ## How the package is laid out
 
 - `src/`: the three entries (`cli.ts`, `api.ts`, the browser-safe `index.ts`) and one folder per
-  stage of the pipeline. `src/report/guide.ts` is the source of `bpmn guide`, `bpmn kinds` and
-  `--help`.
+  stage of the pipeline. `src/report/CommandCatalogue.ts` lists every command with its arguments,
+  its `--help` text and its guide usage, and the options of every write: the commander wiring in
+  `src/commands/` and `bpmn guide` both read it. `src/report/guide.ts` holds the error catalogue
+  and the other hand-written tables that `bpmn guide` (`AgentGuide.ts`) and `bpmn kinds`
+  (`KindsReference.ts`) print.
 
   | folder | holds |
   | --- | --- |
   | `shared/` | errors and the debug sink, used everywhere |
-  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation |
+  | `model/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
   | `ids/` | id words and slugs, the file's id style, the declared id conventions |
   | `xml/` | the text-preserving write, the positional XML reader, the encoding |
   | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
   | `ops/` | the semantic edits (`add`, `connect`, `set`, ...) and the ops JSON of `apply` |
   | `diagram/` | the drawing (BPMN DI) and the geometry building blocks the engines share |
-  | `layout/` | the layout engines: `clean/` redraws, `incremental.ts` keeps a hand-made drawing |
+  | `layout/` | the layout engines: `clean/` redraws, `IncrementalLayout.ts` keeps a hand-made drawing |
   | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
   | `render/` | the SVG of a diagram |
-  | `validate/` | structural validation, the validator hook, the bpmnlint validator |
+  | `validate/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with |
   | `query/` | the read views: `show`, `find`, `--around`, `--context`, the selectors |
-  | `pipeline/` | the transactions: `mutateDoc`, `layoutDoc`, `checkDoc` |
+  | `pipeline/` | the transactions: `EditTransaction` (`mutateDoc`) with its `DiagramUpdate`, `Relayout` (`layoutDoc`), `DocCheck` (`checkDoc`) |
   | `report/` | what a command prints, as text and JSON, and the guide |
   | `node/` | the Node-only layer (`@miragon/bpmn-cli/node`): files, the `.bpmnlintrc`, PNG |
+  | `commands/` | the CLI: the `Cli` (commander, streams, exit codes, errors) and one class per command |
+  | `types/` | type shims for the bpmn-io packages that ship no usable declarations |
 
   Where new code goes: a change of the model's semantics is an op (`ops/`); reading the model
   without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
   user asks for it; geometry more than one engine needs is `diagram/`; text or JSON for the user
-  is `report/`; anything that touches the file system or `process` is `node/` or `cli.ts`.
+  is `report/`; anything that touches the file system or `process` is `node/`; mapping flags to
+  options and printing a command's result is `commands/` (`cli.ts` only starts the `Cli`).
   `test/architecture.test.ts` keeps the root of `src/` to the three entries.
+
+  **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
+  named like the class (`model/ModelError.ts`, `diagram/PlaneCheckpoint.ts`). Stateless helper
+  functions live in a `utils/` folder of their stage (`model/utils/moddle.ts`,
+  `shared/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
+  error classes. Outside the entries (`api.ts`, `index.ts`, `node/index.ts`, which keep the
+  package's public functions and delegate to the classes) there are no free functions. The
+  domain terms the classes are named after are in [GLOSSARY.md](GLOSSARY.md).
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
   examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.
@@ -112,7 +126,7 @@ names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
   generated from them via [release-please](https://github.com/googleapis/release-please), so a
   `feat` or `fix` title is what users read in the release notes.
 - **Documentation moves with the code.** A change to a command, an option or an output also
-  changes `src/report/guide.ts` and the matching page in `docs/`.
+  changes `src/report/CommandCatalogue.ts` or `src/report/guide.ts` and the matching page in `docs/`.
 
 ## Before opening a PR
 

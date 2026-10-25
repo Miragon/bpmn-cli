@@ -1,7 +1,4 @@
-// Type shims for bpmn-io packages that ship no (usable) TypeScript declarations.
-// bpmn-moddle@10 only exposes element interfaces via "bpmn-moddle/types"; the
-// runtime class comes from "moddle" (which is typed). bpmn-auto-layout ships no
-// declarations at all.
+// bpmn-moddle@10 types only its element interfaces and bpmn-auto-layout ships no declarations
 
 declare module 'bpmn-moddle' {
   import type { ModdleElement } from 'moddle';

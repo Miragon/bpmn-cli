@@ -4,7 +4,7 @@
  * that report frame defects (src/diagram/).
  *
  *  - a frame that grows never grows over a shape that is not its content
- *    (space.ts frame mode): nested sub-processes, branch rows, expansion
+ *    (SpaceTool.ts frame mode): nested sub-processes, branch rows, expansion
  *  - an unconnected node is placed below its own container's content
  *  - place / align never push a reference's frames away (E_NO_ROOM)
  *  - metrics: frameIntrusion, frameOverlap, degenerateEdge, detachedEdge, a
@@ -20,17 +20,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { diffProblems, layoutProblems, layoutProblemsOfXml, locateProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
-import { brokenEdge, detachedEnds, edgeBefore } from '../src/diagram/reroute.js';
-import { makeSpace } from '../src/diagram/space.js';
-import { writePlanes } from '../src/diagram/write.js';
-import { isCliError } from '../src/shared/errors.js';
-import type { El } from '../src/model/moddle.js';
+import { Doc } from '../src/model/Doc.js';
+import { diffProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/diagram/utils/problems.js';
+import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { Drawing } from '../src/diagram/Drawing.js';
+import { PlaneWriter } from '../src/diagram/PlaneWriter.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { mutateFile } from '../src/node/index.js';
+import { mutateDoc } from '../src/index.js';
+import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -58,13 +61,13 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
   return out;
 }
 
@@ -74,7 +77,7 @@ const overlap = (a: DShape, b: DShape): boolean => a.bounds.x < right(b) && b.bo
 
 /** Problems of the given kinds in the drawing. */
 function problems(doc: Doc, kinds: MetricKey[]): LayoutProblem[] {
-  return layoutProblems(doc.definitions).problems.filter((p) => kinds.includes(p.kind));
+  return LayoutAnalysis.of(doc.definitions).problems.filter((p) => kinds.includes(p.kind));
 }
 
 const FRAME_DEFECTS: MetricKey[] = ['frameIntrusion', 'frameOverlap', 'outsideSub', 'outsideLane', 'outsidePool', 'overlaps', 'degenerateEdge'];
@@ -162,7 +165,7 @@ describe('a growing frame makes room around it instead of growing over foreign s
       sh('Up', 'task', [600, 150, 100, 80], { laneId: 'L', poolId: 'Pool' }),
     ];
     const plane: Plane = { id: 'p', rootId: 'r', root: el, shapes: new Map(list.map((s) => [s.id, s])), edges: new Map(), dropped: [] };
-    const r = makeSpace(plane, { axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
+    const r = new Drawing(plane).makeSpace({ axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
     expect(plane.shapes.get('F')!.bounds.width).toBe(420);
     expect(plane.shapes.get('B')!.bounds.x).toBe(500);
     // Up is beyond the line but outside the frame: it stays; the lane and the pool do not grow
@@ -270,21 +273,21 @@ describe('connections always keep two distinct waypoints', () => {
 
   it('brokenEdge: two waypoints on one point', async () => {
     const doc = await Doc.fromXml(fixture('zero-edge.bpmn'));
-    const plane = readPlanes(doc.definitions)[0]!;
-    expect(brokenEdge(plane, plane.edges.get('F2')!, undefined)).toBe(true);
-    expect(brokenEdge(plane, plane.edges.get('F1')!, undefined)).toBe(false);
+    const plane = new DiagramReader(doc.definitions).planes()[0]!;
+    expect(new Drawing(plane).brokenEdge(plane.edges.get('F2')!, undefined)).toBe(true);
+    expect(new Drawing(plane).brokenEdge(plane.edges.get('F1')!, undefined)).toBe(false);
   });
 
   it('rounding never merges the two ends of a connection into one waypoint', async () => {
     const doc = await Doc.fromXml(fixture('zero-edge.bpmn'));
-    const planes = readPlanes(doc.definitions);
+    const planes = new DiagramReader(doc.definitions).planes();
     planes[0]!.edges.get('F3')!.points = [
       { x: 350.2, y: 140 },
       { x: 350.4, y: 140.2 },
     ];
-    writePlanes(doc.moddle, doc.definitions, planes);
+    new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const written = (await Doc.fromXml(await doc.toXml())).definitions;
-    const edge = readPlanes(written)[0]!.edges.get('F3')!;
+    const edge = new DiagramReader(written).planes()[0]!.edges.get('F3')!;
     expect(edge.points).toHaveLength(2);
   });
 });
@@ -312,7 +315,7 @@ function diagramXml(body: string, planeOf: string, di: string[], extraRoots = ''
   return definitionsXml(body, { nsDecl: DI_NS, extraRoots: `${extraRoots}${diagram}` });
 }
 
-const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await layoutProblemsOfXml(xml)).problems.filter((p) => kinds.includes(p.kind));
+const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await LayoutAnalysis.ofXml(xml)).problems.filter((p) => kinds.includes(p.kind));
 
 /** Edges near and far from their ends: A 100..200, B 300..400 (y 100..180); Near ends 10 px left of B (still attached), Far 60 px left of it, Both starts 50 px right of A and ends below-left of B, Undrawn ends at a node without a shape, DOA 64 px left of its data object. */
 const DETACHED_BODY = `
@@ -386,7 +389,7 @@ describe('metrics: frame defects and real segment tests', () => {
       shape('T2', t2),
     ];
     expect(await kindsOf(diagramXml(body, 'Collab', di([200, 500, 100, 80]), roots), ['frameIntrusion', 'frameOverlap'])).toEqual([]);
-    const moved = await layoutProblemsOfXml(diagramXml(body, 'Collab', di([200, 270, 100, 80]), roots));
+    const moved = await LayoutAnalysis.ofXml(diagramXml(body, 'Collab', di([200, 270, 100, 80]), roots));
     expect(moved.problems.filter((p) => p.kind === 'frameIntrusion')).toEqual([
       { kind: 'frameIntrusion', ids: ['T2', 'PoolA'] },
       { kind: 'frameIntrusion', ids: ['T2', 'L2'] },
@@ -399,7 +402,7 @@ describe('metrics: frame defects and real segment tests', () => {
   it('degenerateEdge: one waypoint, or two on one point', async () => {
     const body = `<bpmn:task id="A" /><bpmn:task id="B" /><bpmn:sequenceFlow id="F1" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F3" sourceRef="A" targetRef="B" />`;
     const di = [shape('A', [100, 100, 100, 80]), shape('B', [300, 100, 100, 80]), edge('F1', [[200, 140]]), edge('F2', [[200, 140], [200, 140]]), edge('F3', [[200, 140], [300, 140]])];
-    const m = await layoutProblemsOfXml(diagramXml(body, 'Process_1', di));
+    const m = await LayoutAnalysis.ofXml(diagramXml(body, 'Process_1', di));
     expect(m.problems.filter((p) => p.kind === 'degenerateEdge')).toEqual([
       { kind: 'degenerateEdge', ids: ['F1'] },
       { kind: 'degenerateEdge', ids: ['F2'] },
@@ -409,10 +412,10 @@ describe('metrics: frame defects and real segment tests', () => {
 
   it('brokenEdge: an end point more than 10 px outside its end is broken whatever it was before (detachedEnds)', async () => {
     const doc = await Doc.fromXml(diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI));
-    const plane = readPlanes(doc.definitions)[0]!;
-    const broken = [...plane.edges.values()].filter((e) => brokenEdge(plane, e, edgeBefore(plane, e))).map((e) => e.id);
+    const plane = new DiagramReader(doc.definitions).planes()[0]!;
+    const broken = [...plane.edges.values()].filter((e) => new Drawing(plane).brokenEdge(e, new Drawing(plane).edgeBefore(e))).map((e) => e.id);
     expect(broken).toEqual(['Far', 'Both', 'DOA']);
-    expect([...plane.edges.values()].map((e) => [e.id, detachedEnds(plane, e)])).toEqual([
+    expect([...plane.edges.values()].map((e) => [e.id, new Drawing(plane).detachedEnds(e)])).toEqual([
       ['Near', []],
       ['Far', ['B']],
       ['Both', ['A', 'B']],
@@ -423,7 +426,7 @@ describe('metrics: frame defects and real segment tests', () => {
 
   it('detachedEdge: an edge that does not reach its ends, with the ends it misses, located at that end point; a write that reroutes it resolves it', async () => {
     const xml = diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI);
-    const m = await layoutProblemsOfXml(xml);
+    const m = await LayoutAnalysis.ofXml(xml);
     const found = m.problems.filter((p) => p.kind === 'detachedEdge');
     expect(found).toEqual([
       { kind: 'detachedEdge', ids: ['Far', 'B'] },
@@ -431,7 +434,7 @@ describe('metrics: frame defects and real segment tests', () => {
       { kind: 'detachedEdge', ids: ['DOA', 'DO'] },
     ]);
     expect(WEIGHTS.detachedEdge).toBe(WEIGHTS.degenerateEdge);
-    expect(locateProblems((await Doc.fromXml(xml)).definitions, found).map((p) => p.at)).toEqual([
+    expect(new ProblemLocator((await Doc.fromXml(xml)).definitions).locate(found).map((p) => p.at)).toEqual([
       { plane: 'Process_1', x: 240, y: 140 },
       { plane: 'Process_1', x: 250, y: 160 },
       { plane: 'Process_1', x: 250, y: 325 },
@@ -440,7 +443,7 @@ describe('metrics: frame defects and real segment tests', () => {
     // Undrawn: its end N is placed now
     expect(r.layout.rerouted).toEqual(['Far', 'Both', 'Undrawn', 'DOA']);
     expect(r.layout.metrics!.resolved.filter((p) => p.kind === 'detachedEdge')).toEqual(found);
-    expect(layoutProblems(after.definitions).counts.detachedEdge).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.detachedEdge).toBe(0);
   });
 
   it('through: a diagonal line passing beside a shape is not through it; one crossing it is', async () => {

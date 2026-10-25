@@ -2,7 +2,7 @@
  * Camunda 8 after the step 3 verifier round (each finding with a test that
  * failed before the fix):
  *
- *  - FEEL is parsed (src/platform/profiles/feel.ts): the 762 expressions of
+ *  - FEEL is parsed (src/platform/profiles/FeelParser.ts): the 762 expressions of
  *    fixtures/c8/feel-verdicts.json were deployed to Camunda 8.9.22 as flow
  *    conditions; the check agrees with the engine on every one (`&`, `|`,
  *    `<>`, `>>`, `%`, if without else, AND, `:=` ... are refused; ranges,
@@ -28,12 +28,14 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { guideText, KINDS_SECTION_NAMES, kindsSections } from '../src/report/guide.js';
-import { runOps } from '../src/ops/index.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { feelProblem, validCycle, validDateTime, validDuration } from '../src/platform/profiles/c8.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
+import { Doc } from '../src/model/Doc.js';
+import { runOps } from '../src/index.js';
+import { mutateDoc } from '../src/index.js';
+import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
+import { TimerValue } from '../src/platform/profiles/TimerValue.js';
+import { loadProfiles, runProfile } from '../src/index.js';
+import { guideText, kindsSections } from '../src/index.js';
+import { KINDS_SECTION_NAMES } from '../src/report/KindsReference.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
@@ -122,25 +124,25 @@ const FEEL_VERDICTS = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', 'c8
 
 describe('FEEL syntax: the check agrees with Camunda 8.9.22', () => {
   it(`on all ${FEEL_VERDICTS.length} engine-checked expressions`, () => {
-    const wrong = FEEL_VERDICTS.filter(([e, ok]) => (feelProblem(e) === undefined) !== ok).map(([e, ok]) => `${ok ? 'flagged' : 'missed'}: ${JSON.stringify(e)} ${feelProblem(e) ?? ''}`);
+    const wrong = FEEL_VERDICTS.filter(([e, ok]) => (new FeelExpression(e).problem() === undefined) !== ok).map(([e, ok]) => `${ok ? 'flagged' : 'missed'}: ${JSON.stringify(e)} ${new FeelExpression(e).problem() ?? ''}`);
     expect(wrong).toEqual([]);
     expect(FEEL_VERDICTS.filter(([, ok]) => !ok).length).toBeGreaterThan(250);
   });
 
   it('names what the slip means in FEEL', () => {
-    expect(feelProblem(' x & y')).toBe('& (FEEL: and)');
-    expect(feelProblem(' x | y')).toBe('| (FEEL: or)');
-    expect(feelProblem(' x <> 1')).toBe('<> (FEEL: != for "not equal")');
-    expect(feelProblem(' x >> 1')).toBe('>> (FEEL has no shift operators)');
-    expect(feelProblem(' x % 2 = 0')).toBe('% (FEEL has no modulo operator: modulo(a, b))');
-    expect(feelProblem(' if x then true')).toBe('if ... then without else: FEEL needs if c then a else b');
-    expect(feelProblem(' for x in xs')).toBe('for ... in ... needs return: for x in xs return x');
-    expect(feelProblem(' x AND y')).toBe('AND (FEEL keywords are lower case: and)');
-    expect(feelProblem(' x := 1')).toBe(':= (FEEL has no assignment; = compares)');
-    expect(feelProblem(' a ? b : c')).toBe('?: (FEEL: if ... then ... else ...)');
-    expect(feelProblem(' a && b')).toBe('&& (FEEL: and)');
-    expect(feelProblem(' (a')).toBe('an unclosed (');
-    expect(feelProblem(' a +')).toBe('an incomplete expression: it ends after +');
+    expect(new FeelExpression(' x & y').problem()).toBe('& (FEEL: and)');
+    expect(new FeelExpression(' x | y').problem()).toBe('| (FEEL: or)');
+    expect(new FeelExpression(' x <> 1').problem()).toBe('<> (FEEL: != for "not equal")');
+    expect(new FeelExpression(' x >> 1').problem()).toBe('>> (FEEL has no shift operators)');
+    expect(new FeelExpression(' x % 2 = 0').problem()).toBe('% (FEEL has no modulo operator: modulo(a, b))');
+    expect(new FeelExpression(' if x then true').problem()).toBe('if ... then without else: FEEL needs if c then a else b');
+    expect(new FeelExpression(' for x in xs').problem()).toBe('for ... in ... needs return: for x in xs return x');
+    expect(new FeelExpression(' x AND y').problem()).toBe('AND (FEEL keywords are lower case: and)');
+    expect(new FeelExpression(' x := 1').problem()).toBe(':= (FEEL has no assignment; = compares)');
+    expect(new FeelExpression(' a ? b : c').problem()).toBe('?: (FEEL: if ... then ... else ...)');
+    expect(new FeelExpression(' a && b').problem()).toBe('&& (FEEL: and)');
+    expect(new FeelExpression(' (a').problem()).toBe('an unclosed (');
+    expect(new FeelExpression(' a +').problem()).toBe('an incomplete expression: it ends after +');
   });
 });
 
@@ -220,11 +222,11 @@ describe('deploy rules: the profile flags exactly what Camunda 8.9.22 refuses', 
   });
 
   it('timer values', () => {
-    for (const v of ['PT1.5H', 'PT1.5M', 'P1DT1.5H', 'PT1,5H']) expect(validDuration(v), v).toBe(false);
-    for (const v of ['PT1.5S', 'PT1,5S', 'PT0.5S', 'P1DT1H30M']) expect(validDuration(v), v).toBe(true);
-    for (const v of ['2030-12-31t10:00:00z', '2030-12-31t10:00:00Z', '2030-12-31T10:00:00z']) expect(validDateTime(v), v).toBe(true);
-    expect(validCycle('R/PT1.5H')).toBe(false);
-    expect(validCycle('R/2030-12-31t10:00:00z/PT1H')).toBe(true);
+    for (const v of ['PT1.5H', 'PT1.5M', 'P1DT1.5H', 'PT1,5H']) expect(new TimerValue(v).isDuration(), v).toBe(false);
+    for (const v of ['PT1.5S', 'PT1,5S', 'PT0.5S', 'P1DT1H30M']) expect(new TimerValue(v).isDuration(), v).toBe(true);
+    for (const v of ['2030-12-31t10:00:00z', '2030-12-31t10:00:00Z', '2030-12-31T10:00:00z']) expect(new TimerValue(v).isDateTime(), v).toBe(true);
+    expect(new TimerValue('R/PT1.5H').isCycle()).toBe(false);
+    expect(new TimerValue('R/2030-12-31t10:00:00z/PT1H').isCycle()).toBe(true);
   });
 
   it('the messages and fixes name the problem', async () => {

@@ -1,5 +1,5 @@
 /**
- * Tests of the single-connection orthogonal router (src/diagram/router.ts).
+ * Tests of the single-connection orthogonal router (src/diagram/OrthogonalRouter.ts).
  *
  * Every route is checked against the contract (`expectValid`): ≥ 2 points,
  * orthogonal segments without zero-length or collinear interior points, the
@@ -9,7 +9,9 @@
  * frame when one is given. The scenarios then assert the shape of the route.
  */
 import { describe, expect, it } from 'vitest';
-import { attachedSide, defaultSides, routeOrthogonal, type RouteRequest, type Side } from '../src/diagram/router.js';
+import { attachedSide, defaultSides } from '../src/diagram/utils/sides.js';
+import { OrthogonalRouter, type RouteRequest } from '../src/diagram/OrthogonalRouter.js';
+import { type Side } from '../src/diagram/types.js';
 import type { Box, Point } from '../src/diagram/types.js';
 
 const box = (x: number, y: number, width = 100, height = 80): Box => ({ x, y, width, height });
@@ -88,7 +90,7 @@ function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): voi
 }
 
 function route(req: RouteRequest, opts: Expect = {}): Point[] {
-  const points = routeOrthogonal(req);
+  const points = OrthogonalRouter.route(req);
   expectValid(req, points, opts);
   return points;
 }
@@ -105,7 +107,7 @@ function rng(seed: number): () => number {
   };
 }
 
-describe('routeOrthogonal: basic shapes', () => {
+describe('OrthogonalRouter: basic shapes', () => {
   it('draws a straight horizontal line between facing boxes on one row', () => {
     const pts = route({ source: box(0, 0), target: box(300, 0), obstacles: [], sourceSides: TASK_OUT, targetSides: TASK_IN });
     expect(pts).toEqual([{ x: 100, y: 40 }, { x: 300, y: 40 }]);
@@ -142,7 +144,7 @@ describe('routeOrthogonal: basic shapes', () => {
   });
 });
 
-describe('routeOrthogonal: obstacles', () => {
+describe('OrthogonalRouter: obstacles', () => {
   it('goes around a wall between source and target (U-route) without cutting it', () => {
     const wall = box(200, -60, 40, 400);
     const req = { source: box(0, 100), target: box(400, 100), obstacles: [wall], sourceSides: TASK_OUT, targetSides: TASK_IN };
@@ -218,7 +220,7 @@ describe('routeOrthogonal: obstacles', () => {
   });
 });
 
-describe('routeOrthogonal: lines, frame, fallback', () => {
+describe('OrthogonalRouter: lines, frame, fallback', () => {
   it('prefers a route that crosses no existing line when one of similar length exists', () => {
     const line = [{ x: 200, y: 150 }, { x: 200, y: 400 }];
     const req = { source: box(0, 0), target: box(300, 200), obstacles: [], lines: [line], sourceSides: TASK_OUT, targetSides: TASK_IN };
@@ -364,14 +366,14 @@ describe('routeOrthogonal: lines, frame, fallback', () => {
       { x: Math.round(rand() * 1200), y: Math.round(rand() * 600) },
     ]).map(([a, b]) => [a!, { x: b!.x, y: a!.y }, b!]);
     const req = { source: box(0, 0), target: box(1500, 300), obstacles, lines, sourceSides: TASK_OUT, targetSides: TASK_IN };
-    const first = routeOrthogonal(req);
+    const first = OrthogonalRouter.route(req);
     expectValid(req, first, { mayHit: true });
-    expect(routeOrthogonal(req)).toEqual(first);
-    expect(routeOrthogonal({ ...req, obstacles: [...obstacles].reverse(), lines: [...lines].reverse() })).toEqual(first);
+    expect(OrthogonalRouter.route(req)).toEqual(first);
+    expect(OrthogonalRouter.route({ ...req, obstacles: [...obstacles].reverse(), lines: [...lines].reverse() })).toEqual(first);
   });
 });
 
-describe('routeOrthogonal: performance', () => {
+describe('OrthogonalRouter: performance', () => {
   it('routes in a 200-obstacle plane quickly', () => {
     const rand = rng(3);
     const shapes: Box[] = [];
@@ -386,7 +388,7 @@ describe('routeOrthogonal: performance', () => {
       const source = shapes[a]!, target = shapes[b]!;
       const req = { source, target, obstacles: shapes.filter((s) => s !== source && s !== target), sourceSides: TASK_OUT, targetSides: TASK_IN };
       const t0 = performance.now();
-      const pts = routeOrthogonal(req);
+      const pts = OrthogonalRouter.route(req);
       times.push(performance.now() - t0);
       expectValid(req, pts);
     }

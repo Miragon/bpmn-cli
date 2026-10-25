@@ -5,7 +5,7 @@
  * one source of truth for the E_/W_ codes src/ emits.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { projectFiles } from 'archunit';
 import { describe, expect, it } from 'vitest';
 import { ERROR_CATALOGUE } from '../src/report/guide.js';
@@ -42,7 +42,7 @@ describe('architecture', () => {
   it('only the kind definitions group gateway types by behaviour (the engine rule chunks load on demand and keep their own)', () => {
     const gatewayType = String.raw`'bpmn:(?:Exclusive|Inclusive|Parallel|Complex)Gateway'`;
     const groupedGatewayTypes = new RegExp(`${gatewayType}.*${gatewayType}`);
-    const ownedElsewhere = (file: string) => file === join('src', 'model', 'kinds.ts') || file.startsWith(join('src', 'platform', 'profiles'));
+    const ownedElsewhere = (file: string) => file === join('src', 'model', 'utils', 'kinds.ts') || file.startsWith(join('src', 'platform', 'profiles'));
     const offenders = sourceFiles
       .filter((file) => !ownedElsewhere(file))
       .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, i) => (groupedGatewayTypes.test(line) ? `${file}:${i + 1}` : undefined)))
@@ -64,15 +64,19 @@ describe('architecture', () => {
   });
 
   it('only the modules owning group names and memberships touch a category value reference', () => {
-    const owners = ['model/moddle.ts', 'ops/artifacts.ts', 'ops/remove.ts', 'diagram/groups.ts'];
+    const owners = ['model/utils/moddle.ts', 'ops/ArtifactEditor.ts', 'ops/ElementRemover.ts', 'diagram/Groups.ts'];
     const touching = readdirSync('src', { recursive: true, encoding: 'utf8' })
       .filter((file) => file.endsWith('.ts') && !file.startsWith('platform/profiles/'))
       .filter((file) => readFileSync(join('src', file), 'utf8').includes("'categoryValueRef'"));
     expect(touching.sort()).toEqual(owners.sort());
   });
 
-  it('the CLI spells the op rules of ops/rules.ts with flags instead of restating them', () => {
-    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8');
-    for (const restatedRule of ['cannot be combined`', 'mutually exclusive', 'Use exactly one placement', 'Give at most one of']) expect(cli).not.toContain(restatedRule);
+  it('the CLI spells the op rules of ops/utils/op-rules.ts with flags instead of restating them', () => {
+    const cliFiles = [join('src', 'cli.ts'), ...sourceFiles.filter((file) => file.startsWith(join('src', 'commands') + sep))];
+    expect(cliFiles.length).toBeGreaterThan(1);
+    for (const file of cliFiles) {
+      const cli = readFileSync(file, 'utf8');
+      for (const restatedRule of ['cannot be combined`', 'mutually exclusive', 'Use exactly one placement', 'Give at most one of']) expect(cli, file).not.toContain(restatedRule);
+    }
   });
 });

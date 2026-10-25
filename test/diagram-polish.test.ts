@@ -11,16 +11,18 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape, type Plane } from '../src/diagram/plane.js';
-import { routeOrthogonal } from '../src/diagram/router.js';
-import { makeSpace } from '../src/diagram/space.js';
-import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/text.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
+import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/diagram/utils/text.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { OrthogonalRouter } from '../src/diagram/OrthogonalRouter.js';
+import { Drawing } from '../src/diagram/Drawing.js';
 import type { Box, Point } from '../src/diagram/types.js';
-import type { El } from '../src/model/moddle.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');
@@ -36,13 +38,13 @@ async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; before:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 
@@ -77,7 +79,7 @@ describe('makeSpace: labels go with their connection', () => {
       [sh('Top', 'participant', [100, 0, 800, 60]), sh('Pool', 'participant', [100, 120, 800, 200]), sh('A', 'task', [200, 160, 100, 80], { poolId: 'Pool' }), sh('R', 'task', [400, 160, 100, 80], { poolId: 'Pool' })],
       [ed('M', 'R', 'Top', [[450, 160], [450, 60]], { kind: 'messageFlow', label: { x: 456, y: 85, width: 40, height: 14 } })],
     );
-    makeSpace(p, { axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
+    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
     expect(p.edges.get('M')!.points).toEqual([{ x: 600, y: 160 }, { x: 600, y: 60 }]);
     expect(p.edges.get('M')!.label!.x).toBe(606);
   });
@@ -87,7 +89,7 @@ describe('makeSpace: labels go with their connection', () => {
       [sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [500, 100, 100, 80]), sh('C', 'task', [100, 300, 100, 80]), sh('D', 'task', [200, 300, 30, 80])],
       [ed('F', 'A', 'B', [[200, 140], [500, 140]], { label: { x: 210, y: 120, width: 30, height: 14 } }), ed('K', 'C', 'D', [[200, 340], [200, 340]], { label: { x: 420, y: 320, width: 30, height: 14 } })],
     );
-    makeSpace(p, { axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
+    new Drawing(p).makeSpace({ axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
     expect(p.edges.get('F')!.points).toEqual([{ x: 200, y: 140 }, { x: 600, y: 140 }]);
     expect(p.edges.get('F')!.label!.x).toBe(210);
     // a connection outside the band does not move, nor does its label (even beyond the line)
@@ -121,7 +123,7 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
 
   it('anchored outside them: the one mostly before the line stays, the other moves as a whole', () => {
     const p = rows();
-    const r = makeSpace(p, { axis: 'x', line: 301, delta: 160, anchors: ['A'] });
+    const r = new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['A'] });
     expect(p.shapes.get('Sub1')!.bounds).toEqual({ x: 150, y: 200, width: 250, height: 150 });
     expect(p.shapes.get('S1b')!.bounds.x).toBe(340);
     expect(p.shapes.get('S1b')!.label!.x).toBe(335);
@@ -140,12 +142,12 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
 
   it('anchored inside one: that one grows, as without anchors', () => {
     const p = rows();
-    makeSpace(p, { axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
+    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
     expect(p.shapes.get('Sub1')!.bounds.width).toBe(410);
     expect(p.shapes.get('S1a')!.bounds.x).toBe(170);
     expect(p.shapes.get('S1b')!.bounds.x).toBe(500);
     const q = rows();
-    makeSpace(q, { axis: 'x', line: 301, delta: 160 });
+    new Drawing(q).makeSpace({ axis: 'x', line: 301, delta: 160 });
     expect(q.shapes.get('Sub1')!.bounds.width).toBe(410);
     expect(q.shapes.get('Sub2')!.bounds.width).toBe(560);
   });
@@ -161,8 +163,8 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
   it('keeps a middle-only port on the vertex even when another connection docks there', () => {
     const t: Box = { x: 250, y: 160, width: 100, height: 80 };
     const docked = [[{ x: 150, y: 125 }, { x: 250, y: 125 }]];
-    const free = routeOrthogonal({ source: g, target: t, sourceSides: ['right'], obstacles: [], lines: docked });
-    const middle = routeOrthogonal({ source: g, target: t, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
+    const free = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], obstacles: [], lines: docked });
+    const middle = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
     expect(key(free[0]!)).not.toBe('150,125');
     expect(key(middle[0]!)).toBe('150,125');
   });
@@ -170,7 +172,7 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
   it('leaves by another vertex than a taken one when that costs no more than a crossing', () => {
     const t: Box = { x: 250, y: 300, width: 100, height: 80 };
     const taken = [[{ x: 125, y: 150 }, { x: 125, y: 220 }, { x: 250, y: 220 }]];
-    const pts = routeOrthogonal({ source: g, target: t, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
+    const pts = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
     expect(key(pts[0]!)).toBe('150,125');
   });
 
@@ -179,7 +181,7 @@ describe('router: gateway vertices, taken sides, crossings next to an arrowhead'
     const s: Box = { x: 100, y: 100, width: 100, height: 80 };
     const t: Box = { x: 230, y: 300, width: 100, height: 80 };
     const line = [[{ x: 120, y: 240 }, { x: 290, y: 240 }]];
-    const pts = routeOrthogonal({ source: s, target: t, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
+    const pts = OrthogonalRouter.route({ source: s, target: t, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
     const crossAt = pts.slice(1).flatMap((q, i) => {
       const p = pts[i]!;
       return p.x === q.x && Math.min(p.y, q.y) < 240 && Math.max(p.y, q.y) > 240 ? [p.x] : [];
@@ -261,7 +263,7 @@ describe('judged edits on hand drawings', () => {
     expect(right(B)).toBeLessThanOrEqual(right(A));
     expect(a.get('C')!.bounds.x - right(A)).toBeGreaterThanOrEqual(40);
     expect(overlap(a.get('B')!.label!, A)).toBe(false);
-    expect(layoutProblems(after.definitions).counts.overlaps).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
     expect(r.layout.notes.some((n) => n.startsWith('A grew'))).toBe(true);
   });
 
@@ -293,7 +295,7 @@ describe('judged edits on hand drawings', () => {
     const end = (id: string): string => key(edges(after).get(id)!.points.at(-1)!);
     expect(end('f4')).toBe(`${j.x + j.width / 2},${bottom(j)}`);
     expect(end('f5')).toBe(end('f4'));
-    const between = layoutProblems(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
+    const between = LayoutAnalysis.of(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
     expect(between).toEqual([]);
   });
 
@@ -307,7 +309,7 @@ describe('judged edits on hand drawings', () => {
     expect(a.get('E2')!.bounds.x - b.get('E2')!.bounds.x).toBe(dx);
     expect(a.get('M')!.label!.x - b.get('M')!.label!.x).toBe(dx);
     for (const id of ['S', 'H', 'B', 'E1', 'Org']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
-    expect(layoutProblems(after.definitions).counts.overlaps).toBe(0);
+    expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
   });
 
   it('remove: the row stays when closing it would leave an associated artifact behind', async () => {

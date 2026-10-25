@@ -4,7 +4,7 @@
  * after updating that dependency (test/isomorphic.test.ts fails while it is stale).
  *
  * The descriptor as a constant, so that the core reads it without file access
- * or a JSON import (see src/platform/zeebe.ts). Licence of the data:
+ * or a JSON import (see src/platform/ZeebeDescriptor.ts). Licence of the data:
  *
  * The MIT License (MIT)
  *

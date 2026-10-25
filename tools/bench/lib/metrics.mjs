@@ -1,6 +1,6 @@
 /**
  * The bench's layout measurement: this repository's metrics library
- * (src/diagram/metrics.ts, built to dist/diagram/metrics.js), whatever arm
+ * (src/diagram/LayoutAnalysis.ts, built into dist/index.js), whatever arm
  * wrote the file, so every arm is scored by the same oracle.
  *
  * Contract: `loadMetrics()` -> { keys, weights, hard, newKinds, measure(xml), diff(a, b) } where
@@ -21,15 +21,16 @@ import { hardKinds, newKinds } from '../../fuzz/lib/metric-kinds.mjs';
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 export async function loadMetrics() {
-  const file = join(ROOT, 'dist', 'diagram', 'metrics.js');
+  const file = join(ROOT, 'dist', 'index.js');
   if (!existsSync(file)) throw new Error(`${file} is missing: run \`npm run build\` first`);
-  const lib = await import(pathToFileURL(file).href);
+  const api = await import(pathToFileURL(file).href);
+  const lib = { KEYS: api.METRIC_KEYS, WEIGHTS: api.METRIC_WEIGHTS };
   return {
     keys: [...lib.KEYS],
     weights: { ...lib.WEIGHTS },
     hard: hardKinds(lib),
     newKinds: newKinds(lib),
-    measure: (xml) => lib.layoutProblemsOfXml(xml),
-    diff: (before, after) => lib.diffProblems(before, after),
+    measure: (xml) => api.layoutProblemsOfXml(xml),
+    diff: (before, after) => api.diffProblems(before, after),
   };
 }

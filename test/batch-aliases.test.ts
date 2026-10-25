@@ -9,15 +9,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { renderMutation } from '../src/report/command-report.js';
-import { OPS_SCHEMA, opsExample, parseOps } from '../src/ops/batch.js';
-import { idConventionsFromLint } from '../src/ids/conventions.js';
-import { Doc } from '../src/model/document.js';
-import { CliError } from '../src/shared/errors.js';
-import { ERROR_CATALOGUE, guideShort, guideText } from '../src/report/guide.js';
-import { bpmnlintEngine } from '../src/node/bpmnlint.js';
+import { renderMutation, parseOps } from '../src/index.js';
+import { OPS_SCHEMA } from '../src/ops/OpsSchemaBuilder.js';
+import { opsExample } from '../src/ops/utils/op-fields.js';
+import { idConventionsFromLint } from '../src/index.js';
+import { Doc } from '../src/model/Doc.js';
+import { CliError } from '../src/shared/CliError.js';
+import { ERROR_CATALOGUE } from '../src/report/guide.js';
+import { guideShort, guideText } from '../src/index.js';
+import { bpmnlintEngine } from '../src/node/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 function failure(fn: () => unknown): CliError {
   try {

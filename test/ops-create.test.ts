@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { is, many, type El } from '../src/model/moddle.js';
-import { addElement, collapsedIds } from '../src/ops/add.js';
-import { createDataAssociation, removeDataAssociation, PLACEHOLDER_PROPERTY } from '../src/ops/artifacts.js';
-import { connectElements } from '../src/ops/connect.js';
-import { assignLane, laneOf } from '../src/ops/containers.js';
-import { applyTrigger, describeTrigger, triggerDetails } from '../src/ops/events.js';
-import { splitFlow } from '../src/ops/split.js';
+import { Doc } from '../src/model/Doc.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
+import { AssociationEditor, PLACEHOLDER_PROPERTY } from '../src/ops/AssociationEditor.js';
+import { LaneEditor } from '../src/ops/LaneEditor.js';
+import { laneOf } from '../src/ops/utils/lanes.js';
+import { EventTrigger } from '../src/ops/EventTrigger.js';
 import type { AddOp, ConnectOp, SplitOp } from '../src/ops/types.js';
-import { BRANCH_FIELDS, NODE_FIELDS, parseOps } from '../src/ops/batch.js';
-import type { CliError } from '../src/shared/errors.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { ChangeSet } from '../src/model/change-set.js';
+import { BRANCH_FIELDS, NODE_FIELDS } from '../src/ops/utils/op-fields.js';
+import { parseOps } from '../src/index.js';
+import type { CliError } from '../src/shared/CliError.js';
+import { mutateDoc } from '../src/index.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from './helpers.js';
+import { EventDefinitions } from '../src/ops/EventDefinitions.js';
+import { ElementAdder } from '../src/ops/ElementAdder.js';
+import { ElementConnector } from '../src/ops/ElementConnector.js';
+import { FlowSplitter } from '../src/ops/FlowSplitter.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -27,11 +30,11 @@ async function roundTrip(doc: Doc): Promise<{ xml: string; doc: Doc }> {
 }
 
 function add(doc: Doc, op: Omit<AddOp, 'op'>): ChangeSet {
-  return addElement(doc, { op: 'add', ...op });
+  return new ElementAdder(doc).add({ op: 'add', ...op });
 }
 
 function connect(doc: Doc, op: Omit<ConnectOp, 'op'>): ChangeSet {
-  return connectElements(doc, { op: 'connect', ...op });
+  return new ElementConnector(doc).connect({ op: 'connect', ...op });
 }
 
 function ids(els: El[]): string[] {
@@ -81,7 +84,7 @@ const WITH_JOIN = definitionsXml(`
     <bpmn:sequenceFlow id="F4" sourceRef="B" targetRef="Join" />
     <bpmn:sequenceFlow id="F5" sourceRef="Join" targetRef="End" />`);
 
-// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/ids/style.ts)
+// mostly prefixed ids: its task Task_A makes new tasks Task_* (the file's id style, src/ids/IdStyle.ts)
 const WITH_LANES = definitionsXml(`
     <bpmn:laneSet id="LaneSet_1">
       <bpmn:lane id="Lane_Sales" name="Sales"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef></bpmn:lane>
@@ -290,7 +293,7 @@ describe('add: ids and options', () => {
   it('adds documentation and records collapse requests for sub-processes', async () => {
     const doc = await linearDoc();
     add(doc, { kind: 'subProcess', name: 'Details', after: 'Task_A', collapsed: true, doc: 'Explains it' });
-    expect(collapsedIds(doc)).toEqual(['Activity_Details']);
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['Activity_Details']);
     expect(many(doc.require('Activity_Details'), 'documentation')[0]!.get('text')).toBe('Explains it');
     const cs = add(doc, { kind: 'task', name: 'T', in: 'Process_1', collapsed: true });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
@@ -321,8 +324,8 @@ describe('triggers', () => {
     add(doc, { kind: 'intermediateCatchEvent:message', name: 'Wait', message: 'Order received', after: 'Task_A' });
     add(doc, { kind: 'endEvent:message', name: 'Notify', message: 'Message_OrderReceived', in: 'Process_1' });
     expect(doc.rootElementsOfType('bpmn:Message')).toHaveLength(1);
-    expect(describeTrigger(doc.require('Event_Wait'))).toBe('message Order received');
-    expect(triggerDetails(doc.require('Event_Notify'))).toEqual({ trigger: 'message', message: { id: 'Message_OrderReceived', name: 'Order received' } });
+    expect(new EventTrigger(doc.require('Event_Wait')).describe()).toBe('message Order received');
+    expect(new EventTrigger(doc.require('Event_Notify')).details()).toEqual({ trigger: 'message', message: { id: 'Message_OrderReceived', name: 'Order received' } });
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:message id="Message_OrderReceived" name="Order received" \/>/);
     expect(xml).toMatch(/<bpmn:messageEventDefinition messageRef="Message_OrderReceived" \/>/);
@@ -333,19 +336,19 @@ describe('triggers', () => {
     add(doc, { kind: 'endEvent:error', name: 'Failed', error: 'PaymentFailed', errorCode: 'PAY-001', in: 'Process_1' });
     add(doc, { kind: 'boundaryEvent:error', name: 'Catch', on: 'Task_A', error: 'PaymentFailed' });
     expect(doc.rootElementsOfType('bpmn:Error')).toHaveLength(1);
-    expect(describeTrigger(doc.require('Event_Catch'))).toBe('error PaymentFailed (PAY-001)');
-    expect(triggerDetails(doc.require('Event_Catch'))).toEqual({ trigger: 'error', error: { id: 'Error_PaymentFailed', name: 'PaymentFailed', code: 'PAY-001' } });
+    expect(new EventTrigger(doc.require('Event_Catch')).describe()).toBe('error PaymentFailed (PAY-001)');
+    expect(new EventTrigger(doc.require('Event_Catch')).details()).toEqual({ trigger: 'error', error: { id: 'Error_PaymentFailed', name: 'PaymentFailed', code: 'PAY-001' } });
 
     add(doc, { kind: 'endEvent:signal', name: 'Sig', signal: 'Done', in: 'Process_1' });
     add(doc, { kind: 'startEvent:signal', name: 'Sig start', signal: 'Done', in: 'Process_1' });
     expect(doc.rootElementsOfType('bpmn:Signal').map((s) => s.get('id'))).toEqual(['Signal_Done']);
-    expect(describeTrigger(doc.require('Event_SigStart'))).toBe('signal Done');
+    expect(new EventTrigger(doc.require('Event_SigStart')).describe()).toBe('signal Done');
 
     add(doc, { kind: 'endEvent:escalation', name: 'Esc', escalation: 'Too slow', escalationCode: 'SLOW', in: 'Process_1' });
     add(doc, { kind: 'boundaryEvent:escalation', name: 'Esc catch', on: 'Task_A', escalation: 'Too slow', nonInterrupting: true });
     expect(doc.rootElementsOfType('bpmn:Escalation')).toHaveLength(1);
-    expect(describeTrigger(doc.require('Event_EscCatch'))).toBe('escalation Too slow (SLOW)');
-    expect(triggerDetails(doc.require('Event_EscCatch'))?.nonInterrupting).toBe(true);
+    expect(new EventTrigger(doc.require('Event_EscCatch')).describe()).toBe('escalation Too slow (SLOW)');
+    expect(new EventTrigger(doc.require('Event_EscCatch')).details()?.nonInterrupting).toBe(true);
 
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:error id="Error_PaymentFailed" name="PaymentFailed" errorCode="PAY-001" \/>/);
@@ -360,12 +363,12 @@ describe('triggers', () => {
     add(doc, { kind: 'startEvent:timer', name: 'Date', timer: '2030-01-01T00:00:00Z', in: 'Process_1' });
     add(doc, { kind: 'startEvent:timer', name: 'Cron', timer: '0 0 * * *', timerKind: 'cycle', in: 'Process_1' });
     add(doc, { kind: 'boundaryEvent', name: 'Inferred', on: 'Task_A', timer: 'PT1H' });
-    expect(triggerDetails(doc.require('Event_Cycle'))?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
-    expect(triggerDetails(doc.require('Event_Duration'))?.timer).toEqual({ kind: 'duration', value: 'PT5M' });
-    expect(triggerDetails(doc.require('Event_Date'))?.timer).toEqual({ kind: 'date', value: '2030-01-01T00:00:00Z' });
-    expect(triggerDetails(doc.require('Event_Cron'))?.timer).toEqual({ kind: 'cycle', value: '0 0 * * *' });
-    expect(describeTrigger(doc.require('Event_Inferred'))).toBe('PT1H');
-    expect(describeTrigger(doc.require('Event_Duration'))).toBe('PT5M');
+    expect(new EventTrigger(doc.require('Event_Cycle')).details()?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
+    expect(new EventTrigger(doc.require('Event_Duration')).details()?.timer).toEqual({ kind: 'duration', value: 'PT5M' });
+    expect(new EventTrigger(doc.require('Event_Date')).details()?.timer).toEqual({ kind: 'date', value: '2030-01-01T00:00:00Z' });
+    expect(new EventTrigger(doc.require('Event_Cron')).details()?.timer).toEqual({ kind: 'cycle', value: '0 0 * * *' });
+    expect(new EventTrigger(doc.require('Event_Inferred')).describe()).toBe('PT1H');
+    expect(new EventTrigger(doc.require('Event_Duration')).describe()).toBe('PT5M');
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:timeCycle xsi:type="bpmn:tFormalExpression">R\/PT1H<\/bpmn:timeCycle>/);
     expect(xml).toMatch(/<bpmn:timeDate xsi:type="bpmn:tFormalExpression">2030-01-01T00:00:00Z<\/bpmn:timeDate>/);
@@ -380,15 +383,15 @@ describe('triggers', () => {
     add(doc, { kind: 'endEvent:compensate', name: 'Comp', in: 'Process_1' });
     add(doc, { kind: 'endEvent:cancel', name: 'Cancel', in: 'Process_1' });
     add(doc, { kind: 'boundaryEvent:compensate', name: 'Undo', on: 'Task_A' });
-    expect(describeTrigger(doc.require('Event_Cond'))).toBe('condition ${x > 1}');
-    expect(describeTrigger(doc.require('Event_Jump'))).toBe('link L1');
-    expect(describeTrigger(doc.require('Event_L1'))).toBe('link L1');
-    expect(describeTrigger(doc.require('Event_Stop'))).toBe('terminate');
-    expect(describeTrigger(doc.require('Event_Comp'))).toBe('compensate');
-    expect(describeTrigger(doc.require('Event_Cancel'))).toBe('cancel');
-    expect(describeTrigger(doc.require('Event_Undo'))).toBe('compensate');
-    expect(describeTrigger(doc.require('Start'))).toBe('');
-    expect(triggerDetails(doc.require('Task_A'))).toBeUndefined();
+    expect(new EventTrigger(doc.require('Event_Cond')).describe()).toBe('condition ${x > 1}');
+    expect(new EventTrigger(doc.require('Event_Jump')).describe()).toBe('link L1');
+    expect(new EventTrigger(doc.require('Event_L1')).describe()).toBe('link L1');
+    expect(new EventTrigger(doc.require('Event_Stop')).describe()).toBe('terminate');
+    expect(new EventTrigger(doc.require('Event_Comp')).describe()).toBe('compensate');
+    expect(new EventTrigger(doc.require('Event_Cancel')).describe()).toBe('cancel');
+    expect(new EventTrigger(doc.require('Event_Undo')).describe()).toBe('compensate');
+    expect(new EventTrigger(doc.require('Start')).describe()).toBe('');
+    expect(new EventTrigger(doc.require('Task_A')).details()).toBeUndefined();
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:linkEventDefinition name="L1" \/>/);
     expect(xml).toMatch(/<bpmn:terminateEventDefinition \/>/);
@@ -404,10 +407,10 @@ describe('triggers', () => {
     expect(codeOf(() => add(doc, { kind: 'startEvent:message', message: 'M', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     expect(codeOf(() => add(doc, { kind: 'endEvent', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     // retriggering a non-interrupting boundary event to error makes it interrupting again
-    applyTrigger(doc, doc.require('Event_NI'), 'error', { error: 'E' });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('error', { error: 'E' });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
-    applyTrigger(doc, doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: true });
-    applyTrigger(doc, doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: false });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: true });
+    new EventDefinitions(doc, doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: false });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
     await roundTrip(doc);
   });
@@ -424,7 +427,7 @@ describe('triggers', () => {
     expect(cs.created.map((c) => c.id)).toEqual(['Event_Err', 'Error_Boom']);
     add(doc, { kind: 'startEvent:message', name: 'Msg', message: 'Ping', nonInterrupting: true, in: 'Activity_OnError' });
     expect(doc.require('Event_Msg').get('isInterrupting')).toBe(false);
-    expect(triggerDetails(doc.require('Event_Msg'))?.nonInterrupting).toBe(true);
+    expect(new EventTrigger(doc.require('Event_Msg')).details()?.nonInterrupting).toBe(true);
     expect(codeOf(() => add(doc, { kind: 'startEvent:error', error: 'Boom', nonInterrupting: true, in: 'Activity_OnError' }))).toBe('E_INVALID_TRIGGER');
     add(doc, { kind: 'startEvent:timer', name: 'Tick', timer: 'R/PT1H', in: 'Activity_OnError' });
     add(doc, { kind: 'startEvent:signal', name: 'Sig', signal: 'S', in: 'Activity_OnError' });
@@ -441,11 +444,11 @@ describe('triggers', () => {
     const cs = add(doc, { kind: 'userTask', name: 'T', in: 'Process_1', timer: 'PT1H' });
     expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
     add(doc, { kind: 'startEvent:message', name: 'M', message: 'X', in: 'Process_1' });
-    applyTrigger(doc, doc.require('Event_M'), 'none');
+    new EventDefinitions(doc, doc.require('Event_M')).apply('none');
     expect(many(doc.require('Event_M'), 'eventDefinitions')).toHaveLength(0);
-    expect(describeTrigger(doc.require('Event_M'))).toBe('');
-    expect(codeOf(() => applyTrigger(doc, doc.require('Task_A'), 'timer'))).toBe('E_WRONG_KIND');
-    expect(codeOf(() => applyTrigger(doc, doc.require('Start'), 'terminate'))).toBe('E_INVALID_TRIGGER');
+    expect(new EventTrigger(doc.require('Event_M')).describe()).toBe('');
+    expect(codeOf(() => new EventDefinitions(doc, doc.require('Task_A')).apply('timer'))).toBe('E_WRONG_KIND');
+    expect(codeOf(() => new EventDefinitions(doc, doc.require('Start')).apply('terminate'))).toBe('E_INVALID_TRIGGER');
     await roundTrip(doc);
   });
 });
@@ -541,7 +544,7 @@ describe('lanes', () => {
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('Lane_Outbound');
     expect(ids(doc.allLanes(doc.require('Process_1')))).toEqual(['Lane_Sales', 'Lane_Inbound', 'Lane_Outbound', 'Lane_Backoffice']);
     // parent lanes with children cannot take members directly
-    expect(codeOf(() => assignLane(doc, doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
+    expect(codeOf(() => new LaneEditor(doc).assign(doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
     // nodes added after a member inherit the nested lane
     add(doc, { kind: 'task', name: 'Ship', after: 'Task_A' });
     expect(laneOf(doc, doc.require('Task_Ship'))?.get('id')).toBe('Lane_Outbound');
@@ -549,14 +552,14 @@ describe('lanes', () => {
     expect(xml).toMatch(/<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:childLaneSet id="LaneSet_Sales">\s*<bpmn:lane id="Lane_Inbound" name="Inbound">/);
   });
 
-  it('assignLane moves nodes with their boundary events and rejects sub-process children', async () => {
+  it('LaneEditor.assign moves nodes with their boundary events and rejects sub-process children', async () => {
     const doc = await docFromXml(WITH_LANES);
     add(doc, { kind: 'boundaryEvent:timer', name: 'BE', on: 'Task_A', timer: 'PT1H' });
     const cs = new ChangeSet();
-    assignLane(doc, doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
+    new LaneEditor(doc).assign(doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
     expect(ids(many(doc.require('Lane_Backoffice'), 'flowNodeRef'))).toEqual(['End', 'Task_A', 'Event_BE']);
     expect(ids(many(doc.require('Lane_Sales'), 'flowNodeRef'))).toEqual(['Start']);
-    assignLane(doc, doc.require('Task_A'), undefined, cs);
+    new LaneEditor(doc).assign(doc.require('Task_A'), undefined, cs);
     expect(doc.lanesOf(doc.require('Task_A'))).toHaveLength(0);
     expect(doc.lanesOf(doc.require('Event_BE'))).toHaveLength(0);
     expect(cs.changed.some((c) => c.id === 'Task_A' && c.detail === 'removed from lanes')).toBe(true);
@@ -612,7 +615,7 @@ describe('data objects, stores and annotations', () => {
     expect(xml).toMatch(new RegExp(`<bpmn:dataOutputAssociation id="${outId}">\\s*<bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>`));
 
     // removal cleans the placeholder property
-    removeDataAssociation(doc, doc.require(inId));
+    new AssociationEditor(doc).removeDataAssociation(doc.require(inId));
     expect(many(task, 'properties')).toHaveLength(0);
     expect(many(task, 'dataInputAssociations')).toHaveLength(0);
     expect(doc.has(inId)).toBe(false);
@@ -679,9 +682,9 @@ describe('data objects, stores and annotations', () => {
     const doc = await linearDoc();
     add(doc, { kind: 'dataObject', name: 'D' });
     const cs = new ChangeSet();
-    expect(codeOf(() => createDataAssociation(doc, doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
-    expect(codeOf(() => createDataAssociation(doc, doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
-    expect(codeOf(() => createDataAssociation(doc, doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
+    expect(codeOf(() => new AssociationEditor(doc).createDataAssociation(doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
     await roundTrip(doc);
   });
 });
@@ -788,7 +791,7 @@ describe('split', () => {
         { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify' }] },
       ],
     };
-    const cs = splitFlow(doc, op);
+    const cs = new FlowSplitter(doc).split(op);
     const created = cs.created.filter((c) => c.kind !== 'sequenceFlow').map((c) => c.id);
     expect(created).toEqual(['Gateway_InvoiceOk', 'Activity_Book', 'Activity_Archive', 'Activity_Clarify', 'Gateway_InvoiceOk_join']);
     expect(cs.created.find((c) => c.id === 'Gateway_InvoiceOk')!.detail).toBe('between Task_A and End');
@@ -816,7 +819,7 @@ describe('split', () => {
 
   it('without a join every branch end connects to the old successor (implicit join warnings)', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       kind: 'parallel',
@@ -834,7 +837,7 @@ describe('split', () => {
 
   it('appends after gateways / unconnected nodes and supports empty branches', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Loose',
       id: 'Gateway_Split',
@@ -851,7 +854,7 @@ describe('split', () => {
     expect(doc.require('Gateway_Merge').get('name')).toBe('merge');
 
     // after a gateway: appended as another branch, old branches untouched
-    splitFlow(doc, { op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
+    new FlowSplitter(doc).split({ op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
     expect(ids(doc.outgoing(doc.require('GW')))).toHaveLength(2);
     expect(edge(doc, 'F2')).toBe('GW->Task_A');
     await roundTrip(doc);
@@ -859,12 +862,12 @@ describe('split', () => {
 
   it('validates kind, branches and anchors', async () => {
     const doc = await linearDoc();
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
     add(doc, { kind: 'task', name: 'Alone', in: 'Process_1' });
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => splitFlow(doc, { op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
   });
 
   it('typed ops (mutateDoc, no parseOps): a branch without a nodes array is E_USAGE in parseOps\' words, and the document stays as it was', async () => {
@@ -894,7 +897,7 @@ describe('split', () => {
     const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
     expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
     expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
-    // no TypeError: the batch aliases read only arrays of objects (ops/aliases.ts), the split checks the shape
+    // no TypeError: the batch aliases read only arrays of objects (ops/OpAliases.ts), the split checks the shape
     expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
     expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
     expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);
@@ -915,7 +918,7 @@ describe('split', () => {
 
   it('branch nodes inherit the anchor lane and can carry triggers', async () => {
     const doc = await docFromXml(WITH_LANES);
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       kind: 'eventBased',
@@ -927,7 +930,7 @@ describe('split', () => {
     });
     expect(laneOf(doc, doc.require(cs.created.find((c) => c.kind === 'eventBasedGateway')!.id))?.get('id')).toBe('Lane_Sales');
     expect(laneOf(doc, doc.require('Event_Timeout'))?.get('id')).toBe('Lane_Sales');
-    expect(describeTrigger(doc.require('Event_Reply'))).toBe('message Reply');
+    expect(new EventTrigger(doc.require('Event_Reply')).describe()).toBe('message Reply');
     await roundTrip(doc);
   });
 });
@@ -959,7 +962,7 @@ describe('add: event sub-processes with a trigger', () => {
     expect(cs.created[1]!.detail).toBe('start of event sub-process Activity_HandleErrors');
     expect(cs.warnings).toHaveLength(0);
     expect(ids(doc.flowNodes(doc.require('Activity_HandleErrors')))).toEqual([start]);
-    expect(describeTrigger(doc.require(start))).toBe('error PaymentFailed (PAY-1)');
+    expect(new EventTrigger(doc.require(start)).describe()).toBe('error PaymentFailed (PAY-1)');
 
     const cs2 = add(doc, { kind: 'eventSubProcess:message', name: 'On cancel', message: 'Cancel', nonInterrupting: true, in: 'Process_1' });
     expect(cs2.created.map((c) => c.kind)).toEqual(['eventSubProcess', 'startEvent:message', 'message']);
@@ -969,7 +972,7 @@ describe('add: event sub-processes with a trigger', () => {
     expect(doc.scopeOf(doc.require(start2))?.get('id')).toBe('Activity_OnCancel');
     // --timer infers the trigger as well, aliases work
     const cs3 = add(doc, { kind: 'eventSub', name: 'Tick', timer: 'R/PT1H' });
-    expect(triggerDetails(doc.require(cs3.created[1]!.id))?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
+    expect(new EventTrigger(doc.require(cs3.created[1]!.id)).details()?.timer).toEqual({ kind: 'cycle', value: 'R/PT1H' });
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(new RegExp(`<bpmn:subProcess id="Activity_HandleErrors" name="Handle errors" triggeredByEvent="true">\\s*<bpmn:startEvent id="${start}">\\s*<bpmn:errorEventDefinition errorRef="Error_PaymentFailed" />`));
   });
@@ -1074,7 +1077,7 @@ describe('add: option validation', () => {
     expect(err?.exitCode).toBe(2);
     expect(err?.details?.candidates).toEqual(['cycle', 'duration', 'date']);
     add(doc, { kind: 'startEvent:timer', name: 'Good', timer: 'PT2D', timerKind: 'cycle', in: 'Process_1' });
-    expect(triggerDetails(doc.require('Event_Good'))?.timer).toEqual({ kind: 'cycle', value: 'PT2D' });
+    expect(new EventTrigger(doc.require('Event_Good')).details()?.timer).toEqual({ kind: 'cycle', value: 'PT2D' });
   });
 
   it('names text annotations by the positional name and warns only on real id collisions', async () => {
@@ -1118,7 +1121,7 @@ describe('connect: self-loops', () => {
 describe('split: terminating branches', () => {
   it('a branch ending in an end event stops there; the one that continues runs on without a pass-through join', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, {
+    const cs = new FlowSplitter(doc).split({
       op: 'split',
       after: 'Task_A',
       name: 'Ok?',
@@ -1140,14 +1143,14 @@ describe('split: terminating branches', () => {
 
   it('with every branch terminating no join is created and the lost successor is noted; join:false stops the end branch too', async () => {
     const doc = await linearDoc();
-    const cs = splitFlow(doc, { op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
+    const cs = new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
     expect(doc.has('Gateway_1_join')).toBe(false);
     expect(doc.incoming(doc.require('End'))).toHaveLength(0);
     expect(cs.notes.some((n) => n.includes('no join gateway created'))).toBe(true);
     expect(cs.notes.some((n) => n.includes('End is no longer reached'))).toBe(true);
 
     const doc2 = await linearDoc();
-    const cs2 = splitFlow(doc2, { op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
+    const cs2 = new FlowSplitter(doc2).split({ op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
     expect(doc2.incoming(doc2.require('End')).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_Go']);
     expect(doc2.outgoing(doc2.require('Event_Stop'))).toHaveLength(0);
     expect(cs2.warnings).toHaveLength(0);
