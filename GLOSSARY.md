@@ -31,6 +31,7 @@ a new concept gets its line here first.
 | **Trigger** | The event definition of an event (message, timer, error, signal, ...). |
 | **Decision link** | Which DMN decision a business rule task calls, in the spelling of its engine (`camunda:decisionRef`, `zeebe:calledDecision`, the unprefixed `calledDecision`): read by `DecisionLinkReader` (`model/`), written by `DecisionLinkWriter` (`ops/`). |
 | **Bridge** | Reconnecting the predecessors of a removed or moved node to its successors: a single node, a join, a moved group (`ops/flows/Bridge.ts`). |
+| **Moved flows** | The flows a `move` takes out at the old place and puts back at the new one, and what becomes of their names, conditions and default markers (`ops/flows/MovedFlows.ts`). |
 | **Splice** | Inserting a node into an existing sequence flow (`SequenceFlows.splice`). |
 | **Op classes** | `add`, `connect`, `set`, `remove`, `retype`, `move` and `split` run as `ElementAdder`, `ElementConnector`, `PropertySetter`, `ElementRemover`, `ElementRetyper`, `NodeMover` (`ops/`) and `FlowSplitter` (`ops/flows/`). |
 | **Flow rules** | What a sequence flow may connect and carry: the roles of its ends, one scope for both, a condition its source takes (`model/FlowRules.ts`). |
