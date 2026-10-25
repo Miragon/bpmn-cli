@@ -64,14 +64,14 @@ describe('architecture', () => {
   });
 
   it('only the modules owning group names and memberships touch a category value reference', () => {
-    const owners = ['model/utils/moddle.ts', 'ops/ArtifactEditor.ts', 'ops/ElementRemover.ts', 'diagram/Groups.ts'];
+    const owners = ['model/utils/moddle.ts', 'ops/ArtifactEditor.ts', 'ops/ElementRemover.ts', 'drawing/Groups.ts'];
     const touching = readdirSync('src', { recursive: true, encoding: 'utf8' })
       .filter((file) => file.endsWith('.ts') && !file.startsWith('platform/profiles/'))
       .filter((file) => readFileSync(join('src', file), 'utf8').includes("'categoryValueRef'"));
     expect(touching.sort()).toEqual(owners.sort());
   });
 
-  it('the CLI spells the op rules of ops/utils/op-rules.ts with flags instead of restating them', () => {
+  it('the CLI spells the op rules of ops/parsing/utils/op-rules.ts with flags instead of restating them', () => {
     const cliFiles = [join('src', 'cli.ts'), ...sourceFiles.filter((file) => file.startsWith(join('src', 'commands') + sep))];
     expect(cliFiles.length).toBeGreaterThan(1);
     for (const file of cliFiles) {

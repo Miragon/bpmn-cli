@@ -6,11 +6,11 @@ import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
 import { AssociationEditor } from './AssociationEditor.js';
-import { FlowOptions } from './FlowOptions.js';
+import { FlowOptions } from './flows/FlowOptions.js';
 import type { ConnectOp } from './types.js';
-import { EventGatewayRule } from './EventGatewayRule.js';
-import { SequenceFlows } from './SequenceFlows.js';
-import { RootElements } from './RootElements.js';
+import { EventGatewayRule } from './events/EventGatewayRule.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
+import { RootElements } from './events/RootElements.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
 

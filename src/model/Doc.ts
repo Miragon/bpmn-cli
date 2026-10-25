@@ -1,8 +1,7 @@
 import type { ImportWarning } from 'bpmn-moddle';
 import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from '../shared/utils/errors.js';
-import { editDistance, typoTolerance } from '../shared/utils/fuzzy.js';
-import { hasIdWords, isValidId, transliterate } from '../ids/utils/slug.js';
+import { hasIdWords, isValidId } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
 import type { IdConventions } from '../ids/IdConventionsReader.js';
 import { IdStyle } from '../ids/IdStyle.js';
@@ -10,7 +9,8 @@ import { typeRequest, type IdRequest } from '../ids/utils/requests.js';
 import { speakingStem } from '../ids/utils/id-words.js';
 import { EditContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
-import { kindLabel, suggestKinds } from './utils/kinds.js';
+import { kindLabel } from './utils/kinds.js';
+import { IdSuggestions } from './IdSuggestions.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
@@ -104,26 +104,6 @@ export class Doc {
         : 'Definitions_1';
     ids.claim(definitionsId);
     return { processId, definitionsId };
-  }
-
-  /** Pruefung, Prufung and Prüfung fold to the same key. */
-  private static foldUmlauts(text: string): string {
-    return transliterate(text)
-      .toLowerCase()
-      .replace(/ae/g, 'a')
-      .replace(/oe/g, 'o')
-      .replace(/ue/g, 'u')
-      .replace(/ss/g, 's')
-      .replace(/[^a-z0-9]/g, '');
-  }
-
-  private static prefixOf(id: string): string | undefined {
-    return /^([A-Za-z][A-Za-z0-9]*)_./.exec(id)?.[1]!.toLowerCase();
-  }
-
-  private static stemOf(id: string): string {
-    const i = id.indexOf('_');
-    return i === -1 ? id : id.slice(i + 1);
   }
 
   private static insideExtension(el: El): boolean {
@@ -309,53 +289,9 @@ export class Doc {
     return out;
   }
 
-  /**
-   * "Did you mean" ids, best first: the batch's rename, another case / umlaut spelling / prefix,
-   * containment, a typo, a matching name. Ids with the query's prefix come first (a mistyped
-   * `Flow_...` suggests flows), then ids the running batch created.
-   */
+  /** "Did you mean" ids, best first (`IdSuggestions`). */
   suggest(query: string, max = 5): string[] {
-    const q = query.toLowerCase();
-    const fq = Doc.foldUmlauts(query);
-    const fstem = Doc.foldUmlauts(Doc.stemOf(query));
-    const batch = this.edit.batch;
-    const recent = new Set(batch?.created ?? []);
-    const renamed = batch?.renamed.get(query);
-    const prefix = Doc.prefixOf(query);
-    const hits: Array<{ id: string; score: number; dist: number }> = [];
-    for (const [id, el] of this.byId()) {
-      const name = String(el.get<string | undefined>('name') ?? '').toLowerCase();
-      const lid = id.toLowerCase();
-      const fid = Doc.foldUmlauts(id);
-      const fidStem = Doc.foldUmlauts(Doc.stemOf(id));
-      let score = Infinity;
-      let dist = 0;
-      if (id === renamed) score = -1;
-      else if (lid === q) score = 0;
-      else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
-      else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
-      // Flow_GatewayPurchaseApprovedToOrderGoods -> Flow_PurchaseApprovedToOrderGoods
-      else if (prefix && Doc.prefixOf(id) === prefix && fstem.length >= 3 && fidStem.length >= 6 && (fidStem.includes(fstem) || fstem.includes(fidStem))) score = 2;
-      else {
-        const whole = editDistance(fq, fid);
-        const bare = editDistance(fstem, fidStem);
-        if (fq && whole <= typoTolerance(fq.length)) [score, dist] = [3, whole];
-        else if (fstem && bare <= typoTolerance(fstem.length)) [score, dist] = [3, bare];
-        else if (name && (name === q || name.includes(q) || (!!fq && Doc.foldUmlauts(name).includes(fq)))) score = 4;
-        else if (q.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''))) score = 5;
-      }
-      if (score < Infinity) hits.push({ id, score, dist });
-    }
-    if (!hits.length) {
-      // last resort: kind-alike suggestions are not ids; return nothing
-      void suggestKinds;
-    }
-    const fresh = (id: string): number => (recent.has(id) ? 0 : 1);
-    const own = (h: { id: string; score: number }): number => (h.score < 0 || (prefix && Doc.prefixOf(h.id) === prefix) ? 0 : 1);
-    return hits
-      .sort((a, b) => own(a) - own(b) || a.score - b.score || fresh(a.id) - fresh(b.id) || a.dist - b.dist || a.id.localeCompare(b.id))
-      .slice(0, max)
-      .map((h) => h.id);
+    return new IdSuggestions(this).for(query, max);
   }
 
   /** New ids follow these where they declare a prefix, the file's own style elsewhere. */

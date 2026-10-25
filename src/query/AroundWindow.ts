@@ -1,9 +1,9 @@
 import type { Doc } from '../model/Doc.js';
 import { usageError } from '../shared/utils/errors.js';
 import { kindLabel, triggerOf } from '../model/utils/kinds.js';
-import { diExpansionState } from '../diagram/utils/expansion.js';
+import { diExpansionState } from '../drawing/utils/expansion.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { laneOf } from '../ops/utils/lanes.js';
+import { laneOf } from '../model/utils/lanes.js';
 import { FlowOrder } from '../validate/FlowOrder.js';
 import { AROUND_DEFAULT_DEPTH, type AroundNode, type AroundOptions, type AroundScope, type AroundView } from './context.js';
 import { ElementFacts } from './ElementFacts.js';

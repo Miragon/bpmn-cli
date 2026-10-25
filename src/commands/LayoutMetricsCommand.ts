@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
+import { LayoutAnalysis } from '../drawing/LayoutAnalysis.js';
 import { metricsJson } from '../report/utils/metrics-json.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { MetricsText } from '../report/MetricsText.js';

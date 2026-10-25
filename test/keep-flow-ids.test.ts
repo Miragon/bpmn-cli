@@ -19,7 +19,7 @@ import type { Op } from '../src/ops/types.js';
 import { mutateDoc, renderMutation } from '../src/index.js';
 import type { ChangeSet } from '../src/model/ChangeSet.js';
 import { definitionsXml, flowBetween } from './helpers.js';
-import { FlowIdFollower } from '../src/ops/FlowIdFollower.js';
+import { FlowIdFollower } from '../src/ops/flows/FlowIdFollower.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
 async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {

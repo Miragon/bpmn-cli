@@ -1,8 +1,8 @@
-import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import type { GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import type { GEdge, GNode, ScopeLayout } from '../../drawing/types.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
 import { ArrangementTrial, type Routes } from './ArrangementTrial.js';
-import { EdgeRouter } from './EdgeRouter.js';
+import { ChannelRouter } from './ChannelRouter.js';
 
 /**
  * In a laned process, lifts a node and the chain after it onto the row of its predecessor in
@@ -90,7 +90,7 @@ export class ChainLiftTrial extends ArrangementTrial {
           return false;
         }
         if (moved.has(s)) return false;
-        const x = EdgeRouter.riseX(t);
+        const x = ChannelRouter.riseX(t);
         return lift.chain.some((m) => m.box.x < x && x < m.box.x + m.box.width) && above([lane(t), t.row], to) && !above([lane(s), s.row], to);
       });
       if (bent) {

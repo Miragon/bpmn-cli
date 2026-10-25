@@ -2,8 +2,8 @@ import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { insertInto, is, many, removeFrom, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { idOf } from './utils/elements.js';
-import { laneSetOf } from './utils/lanes.js';
+import { idOf } from '../model/utils/elements.js';
+import { laneSetOf } from '../model/utils/lanes.js';
 import type { OrderOp } from './types.js';
 
 /**

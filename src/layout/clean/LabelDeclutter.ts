@@ -1,6 +1,6 @@
-import { titleBox } from '../../diagram/utils/text.js';
-import { boxesOverlap } from '../../diagram/utils/geom.js';
-import type { Box, Point } from '../../diagram/types.js';
+import { titleBox } from '../../drawing/utils/text.js';
+import { boxesOverlap } from '../../drawing/utils/geom.js';
+import type { Box, Point } from '../../drawing/types.js';
 import { is, many, type El } from '../../model/utils/moddle.js';
 import { toSegments, type Segment } from './utils/geometry.js';
 

@@ -1,15 +1,8 @@
-import type { Box, Point } from '../../../diagram/types.js';
+import type { Box, Point } from '../../../drawing/types.js';
+import { segmentsCross } from '../../../drawing/utils/geom.js';
 import type { XIndex } from '../XIndex.js';
 
 export type Segment = [Point, Point];
-
-export function bottom(b: Box): number {
-  return b.y + b.height;
-}
-
-export function right(b: Box): number {
-  return b.x + b.width;
-}
 
 export function toSegments(points: Point[]): Segment[] {
   const out: Segment[] = [];
@@ -50,22 +43,9 @@ export function pathHits(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Bo
   return false;
 }
 
-function orient(a: Point, b: Point, c: Point): number {
-  return Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-}
-
-/** shared endpoints and collinear overlaps do not count */
-export function segmentsCross(s1: Segment, s2: Segment): boolean {
-  const [a, b] = s1, [c, d] = s2;
-  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
-  return o1 !== o2 && o3 !== o4 && o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0;
-}
-
 /** shared endpoints and collinear overlaps do not count */
 export function properCross([a, b]: Segment, [c, d]: Segment): boolean {
-  const o = (p: Point, q: Point, r: Point): number => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
-  const o1 = o(a, b, c), o2 = o(a, b, d), o3 = o(c, d, a), o4 = o(c, d, b);
-  return o1 !== o2 && o3 !== o4 && o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0;
+  return segmentsCross(a, b, c, d);
 }
 
 export function crossings(points: Point[], lines: Segment[]): number {

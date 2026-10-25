@@ -1,4 +1,4 @@
-import type { Box, GArtifact, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../diagram/types.js';
+import type { Box, GArtifact, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../drawing/types.js';
 
 type SavedShape = { n: GNode; layer: number; row: number; band: number; width: number; box: Box; topUsed: boolean | undefined; onTop: boolean | undefined; labelLeft: boolean | undefined };
 type SavedEdge = { e: GEdge; bandRow: number | undefined; bandY: number | undefined; points: Point[]; label: Box | undefined; runsBelow: boolean | undefined; runsAbove: boolean | undefined };

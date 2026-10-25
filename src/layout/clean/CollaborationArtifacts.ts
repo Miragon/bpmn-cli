@@ -1,7 +1,7 @@
 import { is, many, type El, idOf } from '../../model/utils/moddle.js';
-import { SIZES, annotationSize } from '../../diagram/utils/sizes.js';
-import { center, borderPoint } from '../../diagram/utils/geom.js';
-import type { Box, Point } from '../../diagram/types.js';
+import { SIZES, annotationSize } from '../../drawing/utils/sizes.js';
+import { center, borderPoint } from '../../drawing/utils/geom.js';
+import type { Box, Point } from '../../drawing/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import type { DiWriter } from './DiWriter.js';
 import { NotePlacer, type NoteJob } from './NotePlacer.js';

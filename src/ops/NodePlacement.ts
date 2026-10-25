@@ -5,10 +5,10 @@ import { kindLabel } from '../model/utils/kinds.js';
 import { is, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { renamedNote } from '../model/utils/renames.js';
-import { FlowOptions } from './FlowOptions.js';
-import { SequenceFlows } from './SequenceFlows.js';
+import { FlowOptions } from './flows/FlowOptions.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
 import { insertAfterInScope, insertBeforeInScope, lastFlowOf } from './utils/declaration-order.js';
-import { labelOf } from './utils/elements.js';
+import { labelOf } from '../model/utils/elements.js';
 import type { FlowOptions as FlowOptionValues, Placement } from './types.js';
 
 export type PlacementOptions = Placement & FlowOptionValues & { to?: string };

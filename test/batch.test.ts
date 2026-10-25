@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPS_SCHEMA } from '../src/ops/OpsSchemaBuilder.js';
-import { OP_FIELDS, opsExample } from '../src/ops/utils/op-fields.js';
+import { OPS_SCHEMA } from '../src/ops/parsing/OpsSchemaBuilder.js';
+import { OP_FIELDS, opsExample } from '../src/ops/parsing/utils/op-fields.js';
 import { parseOps } from '../src/index.js';
 import { Doc } from '../src/model/Doc.js';
 import { isCliError } from '../src/shared/utils/errors.js';
@@ -12,7 +12,7 @@ import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
 import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../src/ids/utils/slug.js';
 import { KINDS } from '../src/model/utils/kinds.js';
-import { OP_NAMES } from '../src/ops/utils/op-names.js';
+import { OP_NAMES } from '../src/ops/parsing/utils/op-names.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc } from '../src/index.js';
 

@@ -1,7 +1,7 @@
 import { CliError } from '../shared/CliError.js';
 import type { AlignOp } from '../ops/types.js';
-import { cx, cy, type Box } from '../diagram/utils/geom.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { cx, cy, type Box } from '../drawing/utils/geom.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { frameWord, outermost, unique } from './utils/frames.js';
 

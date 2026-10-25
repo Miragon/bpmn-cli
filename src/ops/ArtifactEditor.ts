@@ -6,7 +6,7 @@ import { kindRequest, typeRequest, type IdRequest } from '../ids/utils/requests.
 import { speakingStem } from '../ids/utils/id-words.js';
 import { addTo, collaboration, is, type El, idOf } from '../model/utils/moddle.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { Groups } from '../diagram/Groups.js';
+import { Groups } from '../drawing/Groups.js';
 import { allocateId } from './utils/allocate-id.js';
 import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
 

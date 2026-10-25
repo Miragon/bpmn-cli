@@ -1,10 +1,11 @@
-import type { Box } from '../diagram/utils/geom.js';
-import type { LayoutProblem } from '../diagram/utils/problems.js';
-import type { DShape } from '../diagram/types.js';
+import type { Box } from '../drawing/utils/geom.js';
+import { containsPoint } from '../drawing/utils/geom.js';
+import type { LayoutProblem } from '../drawing/utils/problems.js';
+import type { DShape } from '../drawing/types.js';
 import { is } from '../model/utils/moddle.js';
 import { DiagramColumns } from '../query/DiagramColumns.js';
 import { MARGIN, MAX_TILES, type Frame, type Item } from './types.js';
-import { contains, meets } from './utils/boxes.js';
+import { meets } from './utils/boxes.js';
 
 export interface TileView {
   view: Box;
@@ -35,7 +36,7 @@ export class TileGrid {
     const plane = frame.located;
     if (!plane) return undefined;
     const marks: Box[] = items.filter((i) => !i.extra && i.content && meets(i.content, view)).map((i) => i.content!);
-    for (const p of this.problems) if (p.at && p.at.plane === plane.rootId && !frame.fileProblems && contains(view, p.at)) marks.push({ x: p.at.x, y: p.at.y, width: 0, height: 0 });
+    for (const p of this.problems) if (p.at && p.at.plane === plane.rootId && !frame.fileProblems && containsPoint(view, p.at)) marks.push({ x: p.at.x, y: p.at.y, width: 0, height: 0 });
     if (!marks.length) return undefined;
     const drawnShape = (s: DShape): boolean => (!frame.drawn || frame.drawn.has(s.id)) && !s.container && s.kind !== 'group' && meets(s.bounds, view);
     const leaves = [...plane.shapes.values()].filter(drawnShape);

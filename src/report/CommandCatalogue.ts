@@ -1,4 +1,4 @@
-import { SWATCHES } from '../diagram/utils/colors.js';
+import { SWATCHES } from '../drawing/utils/colors.js';
 import { LAYOUT_MODES } from '../pipeline/index.js';
 
 export interface CommandSignature {

@@ -1,5 +1,5 @@
 /**
- * Tests of src/diagram/LayoutAnalysis.ts (layout problems with ids).
+ * Tests of src/drawing/LayoutAnalysis.ts (layout problems with ids).
  *
  * Every fixture is a hand-built definitions document with BPMNDI: a clean
  * baseline plus one defect per metric kind, checked for the problem ids,
@@ -12,9 +12,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/diagram/utils/problems.js';
-import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { ProblemLocator } from '../src/diagram/ProblemLocator.js';
+import { EXTRA_KEYS, HARNESS_KEYS, KEYS, QUALITY_KEYS, WEIGHTS, diffProblems, metricsDelta, problemKey, scoreOf, type LayoutProblem, type MetricKey } from '../src/drawing/utils/problems.js';
+import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/drawing/ProblemLocator.js';
 import { parseXml } from '../src/model/utils/moddle.js';
 import { definitionsXml } from './helpers.js';
 
@@ -481,7 +481,7 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
     });
 
     describe('labelOnTitle', () => {
-      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (diagram/utils/text.ts titleBox)
+      // the title "Handle order" of a 300 px wide sub-process: centred at x 250, y 107..121.4 (drawing/utils/text.ts titleBox)
       const titled = (name: string, expanded: boolean, label: Rect): string =>
         processXml(`<bpmn:subProcess id="Sub"${name ? ` name="${name}"` : ''} /><bpmn:startEvent id="E" name="Order in" />`, [shape('Sub', [100, 100, 300, 200], { expanded }), shape('E', [40, 40, 36, 36], { label })]);
 

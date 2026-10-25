@@ -1,9 +1,10 @@
+import { cy } from '../../drawing/utils/geom.js';
 import { many, type El, idOf } from '../../model/utils/moddle.js';
-import { METRICS, SIZES } from '../../diagram/utils/sizes.js';
-import type { GEdge, GNode, LaneBox, Point, ScopeLayout } from '../../diagram/types.js';
-import { ArtifactPlacer } from './ArtifactPlacer.js';
+import { METRICS, SIZES } from '../../drawing/utils/sizes.js';
+import type { GEdge, GNode, LaneBox, Point, ScopeLayout } from '../../drawing/types.js';
+import { ScopeArtifactPlacer } from './ScopeArtifactPlacer.js';
 import { ChainLiftTrial } from './ChainLiftTrial.js';
-import { EdgeRouter } from './EdgeRouter.js';
+import { ChannelRouter } from './ChannelRouter.js';
 import { JoinColumnTrial } from './JoinColumnTrial.js';
 import { LinkRouter } from './LinkRouter.js';
 import { DATA_ROW_EXTRA, ScopeGrid } from './ScopeGrid.js';
@@ -86,7 +87,7 @@ export class LaneArranger {
         y += lane.height;
       }
       scope.height = y;
-      new ArtifactPlacer(scope).placeAttached();
+      new ScopeArtifactPlacer(scope).placeAttached();
       scope.laneBands = leaves.map((l) => ({ nodes: new Set(l.nodes), top: l.y, bottom: l.y + l.height }));
     };
     arrange();
@@ -119,12 +120,12 @@ export class LaneArranger {
     const yOf = (): number => ref?.box.y ?? 0;
     // a loop drawn over the top (its label above y 0) moves the content down: the bands follow
     const beforeRouting = yOf();
-    new EdgeRouter(scope).route();
+    new ChannelRouter(scope).route();
     this.growFirstLane(yOf() - beforeRouting, true);
     this.fitLaneLoops();
     // annotations may open a strip above the content too
     const beforeNotes = yOf();
-    new ArtifactPlacer(scope).placeAnnotations();
+    new ScopeArtifactPlacer(scope).placeAnnotations();
     this.growFirstLane(yOf() - beforeNotes, false);
     new LinkRouter(scope).route();
     growToFit(scope);
@@ -164,7 +165,7 @@ export class LaneArranger {
 
   /**
    * The content moved down by `shift`: the first lane grows up over the strip, the others move
-   * down. `bandsMoved`: EdgeRouter already shifted the scope's lane bands.
+   * down. `bandsMoved`: ChannelRouter already shifted the scope's lane bands.
    */
   private growFirstLane(shift: number, bandsMoved: boolean): void {
     const { scope, leaves } = this;
@@ -272,7 +273,7 @@ export class LaneArranger {
     const labelIn = (y: number): boolean => y >= top && y < bottom;
     let content = bottom - SIZES.lanePadding;
     for (const n of lane.nodes) content = Math.max(content, n.box.y + n.box.height, ...n.boundary.map((b) => b.box.y + b.box.height));
-    for (const a of scope.artifacts) if (inBand(a.box.y + a.box.height / 2)) content = Math.max(content, a.box.y + a.box.height);
+    for (const a of scope.artifacts) if (inBand(cy(a.box))) content = Math.max(content, a.box.y + a.box.height);
     for (const e of scope.edges) {
       for (const p of e.points) if (inBand(p.y)) content = Math.max(content, p.y);
       if (e.label && labelIn(e.label.y)) content = Math.max(content, e.label.y + e.label.height);

@@ -2,11 +2,11 @@ import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { Bridge } from './Bridge.js';
-import { idOf } from './utils/elements.js';
+import { Bridge } from './flows/Bridge.js';
+import { idOf } from '../model/utils/elements.js';
 import { contains, detachFromParent, nearestWithId, referencesToAny } from './utils/containment.js';
 import type { RemoveOp } from './types.js';
-import { SequenceFlows } from './SequenceFlows.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
 
 /**
  * Runs the `remove` op: deletes elements with everything that references them.

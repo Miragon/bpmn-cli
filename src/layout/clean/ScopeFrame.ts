@@ -1,6 +1,6 @@
-import { titleDepth } from '../../diagram/utils/text.js';
-import { SIZES } from '../../diagram/utils/sizes.js';
-import type { GNode, ScopeLayout } from '../../diagram/types.js';
+import { titleDepth } from '../../drawing/utils/text.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import type { GNode, ScopeLayout } from '../../drawing/types.js';
 import { ScopeLabels } from './ScopeLabels.js';
 
 /** labels may reach this far into a sub-process's padding */

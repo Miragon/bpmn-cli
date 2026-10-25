@@ -1,8 +1,8 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { BPMN_NS, is, many, type El } from '../model/utils/moddle.js';
-import { descriptorOf, isEl } from './utils/elements.js';
-import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
+import { descriptorOf, isEl } from '../model/utils/elements.js';
+import { EXTENSION_STRUCTURE } from './extensions/ExtensionStructure.js';
 import type { NestedHosts } from './NestedHosts.js';
 import { CAMUNDA_URI, OPERATON_URI } from '../platform/CamundaDescriptor.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';

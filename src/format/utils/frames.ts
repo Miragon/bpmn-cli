@@ -1,5 +1,5 @@
-import type { DShape, Plane } from '../../diagram/types.js';
-import { problemKey, type LayoutProblem } from '../../diagram/utils/problems.js';
+import type { DShape, Plane } from '../../drawing/types.js';
+import { problemKey, type LayoutProblem } from '../../drawing/utils/problems.js';
 
 export function unique(ids: readonly string[]): string[] {
   return ids.filter((id, i) => ids.indexOf(id) === i);

@@ -1,6 +1,6 @@
-import type { GEdge, ScopeLayout } from '../../diagram/types.js';
+import type { GEdge, ScopeLayout } from '../../drawing/types.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
-import { EdgeRouter } from './EdgeRouter.js';
+import { ChannelRouter } from './ChannelRouter.js';
 import { ScopeLabels } from './ScopeLabels.js';
 
 /**
@@ -18,7 +18,7 @@ export abstract class ArrangementTrial {
   protected routesOf(lines = false, look?: () => void): Routes {
     const { layout } = this;
     const checkpoint = new ArrangementCheckpoint(layout);
-    const router = new EdgeRouter(layout);
+    const router = new ChannelRouter(layout);
     router.route();
     const straight = new Set<GEdge>();
     let bends = 0;
@@ -73,10 +73,10 @@ export abstract class ArrangementTrial {
   private straightRises(): Set<GEdge> {
     const out = new Set<GEdge>();
     for (const j of this.layout.nodes) {
-      const xs = EdgeRouter.riseSlots(j).map(Math.round), y = j.box.y + j.box.height;
-      for (const e of EdgeRouter.risesInto(j)) {
+      const xs = ChannelRouter.riseSlots(j).map(Math.round), y = j.box.y + j.box.height;
+      for (const e of ChannelRouter.risesInto(j)) {
         const [p, q] = e.points.slice(-2);
-        if (p && q && (e.source.host ? xs.includes(q.x) : q.x === xs[0]) && q.y === y && p.x === q.x && (e.source.host ? p.y >= EdgeRouter.riseFrom(e) - 1 : Math.abs(p.y - EdgeRouter.riseFrom(e)) <= 1)) out.add(e);
+        if (p && q && (e.source.host ? xs.includes(q.x) : q.x === xs[0]) && q.y === y && p.x === q.x && (e.source.host ? p.y >= ChannelRouter.riseFrom(e) - 1 : Math.abs(p.y - ChannelRouter.riseFrom(e)) <= 1)) out.add(e);
       }
     }
     return out;

@@ -16,9 +16,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/diagram/types.js';
-import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
-import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import type { DEdge, DShape } from '../src/drawing/types.js';
+import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
+import { DiagramReader } from '../src/drawing/DiagramReader.js';
 import { isCliError } from '../src/shared/utils/errors.js';
 import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';

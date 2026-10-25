@@ -1,11 +1,12 @@
-import { bottom, right, type Box } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { raw } from '../diagram/utils/raw.js';
-import type { DEdge, DShape, Plane } from '../diagram/types.js';
-import type { Axis, SpaceResult } from '../diagram/SpaceTool.js';
-import { titleDepth } from '../diagram/utils/text.js';
-import { Drawing } from '../diagram/Drawing.js';
+import { bottom, type Box, cx, cy, right } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { raw } from '../drawing/utils/raw.js';
+import type { DEdge, DShape, Plane } from '../drawing/types.js';
+import type { SpaceResult } from '../layout/incremental/SpaceTool.js';
+import type { Axis } from '../layout/incremental/utils/bands.js';
+import { titleDepth } from '../drawing/utils/text.js';
+import { Drawing } from '../layout/incremental/Drawing.js';
 
 export const PAD = 30;
 /** room for the name at the top of a sub-process */
@@ -158,8 +159,8 @@ export class Compaction {
     }
     const l = e.label;
     if (!l) return;
-    const c = axis === 'x' ? l.x + l.width / 2 : l.y + l.height / 2;
-    if (c <= st.from || c >= line || !inBand(axis === 'x' ? l.y + l.height / 2 : l.x + l.width / 2)) return;
+    const c = axis === 'x' ? cx(l) : cy(l);
+    if (c <= st.from || c >= line || !inBand(axis === 'x' ? cy(l) : cx(l))) return;
     const d = Math.round(map(c) - c);
     if (axis === 'x') l.x += d;
     else l.y += d;

@@ -1,7 +1,7 @@
 import { kindLabel } from '../../model/utils/kinds.js';
 import { unkeptEntries } from '../../model/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
-import { DecisionLinkReader } from '../../ops/DecisionLinkReader.js';
+import { DecisionLinkReader } from '../../model/DecisionLinkReader.js';
 import { decodeXml, elementChildren, readXmlText } from '../../xml/utils/text-reader.js';
 import { XmlTextError } from '../../xml/XmlTextError.js';
 import { CAMUNDA, OPERATON_URI } from '../CamundaDescriptor.js';

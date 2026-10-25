@@ -1,12 +1,12 @@
 import type { LayoutWarning } from 'bpmn-auto-layout';
-import { DrawnElementIds, type GivenId } from '../diagram/DrawnElementIds.js';
-import { Groups, type RedrawnGroups } from '../diagram/Groups.js';
-import { diIdsFit } from '../diagram/utils/di-ids.js';
-import { DiIdMemo } from '../diagram/DiIdMemo.js';
+import { DrawnElementIds, type GivenId } from '../drawing/DrawnElementIds.js';
+import { Groups, type RedrawnGroups } from '../drawing/Groups.js';
+import { diIdsFit } from '../drawing/utils/di-ids.js';
+import { DiIdMemo } from '../drawing/DiIdMemo.js';
 import type { IdRequest } from '../ids/utils/requests.js';
 import { CleanEngine } from './clean/CleanEngine.js';
 import { addTo, layoutRoot, parseXml, serialize, type El, type Model, idOf } from '../model/utils/moddle.js';
-import { resolveExpanded, subProcesses } from '../diagram/utils/expansion.js';
+import { resolveExpanded, subProcesses } from '../drawing/utils/expansion.js';
 import { AssociationEdges } from './AssociationEdges.js';
 import { TemporaryLaneMembers } from './TemporaryLaneMembers.js';
 import { ModelError } from '../model/ModelError.js';

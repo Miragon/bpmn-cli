@@ -1,5 +1,5 @@
 import { walk, type El } from '../../model/utils/moddle.js';
-import { descriptorOf, isEl, ownValue } from './elements.js';
+import { descriptorOf, isEl, ownValue } from '../../model/utils/elements.js';
 
 export function contains(parent: El, child: El): boolean {
   const d = descriptorOf(parent);

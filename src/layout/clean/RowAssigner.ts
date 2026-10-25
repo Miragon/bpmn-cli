@@ -1,5 +1,5 @@
-import { LayoutDebug } from '../../shared/LayoutDebug.js';
-import type { GEdge, GNode, ScopeLayout } from '../../diagram/types.js';
+import { LayoutDebug } from '../LayoutDebug.js';
+import type { GEdge, GNode, ScopeLayout } from '../../drawing/types.js';
 import { outgoingOf } from './utils/nodes.js';
 
 interface Branch {

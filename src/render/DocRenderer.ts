@@ -1,12 +1,12 @@
 import { Doc } from '../model/Doc.js';
 import { ioError, modelError } from '../shared/utils/errors.js';
 import { FullLayout } from '../layout/FullLayout.js';
-import type { Box } from '../diagram/utils/geom.js';
-import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
-import type { LayoutProblem } from '../diagram/utils/problems.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { Semantics } from '../diagram/Semantics.js';
-import type { DEdge, DShape, Plane } from '../diagram/types.js';
+import type { Box } from '../drawing/utils/geom.js';
+import { LayoutAnalysis } from '../drawing/LayoutAnalysis.js';
+import type { LayoutProblem } from '../drawing/utils/problems.js';
+import { DiagramReader } from '../drawing/DiagramReader.js';
+import { Semantics } from '../drawing/Semantics.js';
+import type { DEdge, DShape, Plane } from '../drawing/types.js';
 import { is } from '../model/utils/moddle.js';
 import { Composer } from './Composer.js';
 import { Crop } from './Crop.js';

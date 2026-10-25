@@ -1,4 +1,4 @@
-import { LayoutDebug } from '../shared/LayoutDebug.js';
+import { LayoutDebug } from '../layout/LayoutDebug.js';
 import { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { EditContext } from '../model/EditContext.js';
@@ -11,7 +11,7 @@ import type { ValidationResult } from '../validate/StructuralValidator.js';
 import { FindingBaseline, type ValidationDelta } from '../validate/FindingBaseline.js';
 import { ModelViewBuilder } from '../query/ModelViewBuilder.js';
 import { DiagramUpdate } from './DiagramUpdate.js';
-import { toCliError } from './utils/cli-error.js';
+import { toCliError } from '../shared/utils/cli-error.js';
 import type { LayoutStatus, MutationOptions, MutationResult } from './index.js';
 
 /**

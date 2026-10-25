@@ -1,7 +1,7 @@
 import { addTo, is, type El, type Model, idOf } from '../../model/utils/moddle.js';
-import { SIZES } from '../../diagram/utils/sizes.js';
-import { center, borderPoint } from '../../diagram/utils/geom.js';
-import type { Box, GNode, LaneBox, Point, ScopeLayout } from '../../diagram/types.js';
+import { SIZES } from '../../drawing/utils/sizes.js';
+import { center, borderPoint } from '../../drawing/utils/geom.js';
+import type { Box, GNode, LaneBox, Point, ScopeLayout } from '../../drawing/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import { LabelDeclutter } from './LabelDeclutter.js';
 import type { PoolLayout } from './PoolStacker.js';

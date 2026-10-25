@@ -1,11 +1,11 @@
 import { modelError } from '../shared/utils/errors.js';
-import { bottom, containsPoint, copyBox, cx, cy, inside, overlaps, right, type Box, type Point } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DShape, Plane } from '../diagram/types.js';
-import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
-import { Drawing } from '../diagram/Drawing.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { bottom, containsPoint, copyBox, cx, cy, inside, overlaps, right, type Box, type Point } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../drawing/types.js';
+import { DrawingCheckpoint } from '../drawing/DrawingCheckpoint.js';
+import { Drawing } from '../layout/incremental/Drawing.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import { frameWord } from './utils/frames.js';
 
 /** A sub-process has no header: its border is the limit. */
@@ -193,7 +193,7 @@ export class RoomMaker {
       const stray = strayed();
       return { ok: !sw.length && !gone.length && !collided.length && !stray.length && !left && holds(), notes: out, swallowed: sw, displaced: gone, collided, strayed: stray };
     };
-    const start = new PlaneCheckpoint(this.plane);
+    const start = new DrawingCheckpoint(this.plane);
     let r = attempt(refIds);
     if (!r.ok && refIds.length) {
       start.restore();

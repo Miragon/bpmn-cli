@@ -1,6 +1,6 @@
-import type { LabelSide } from '../diagram/utils/labels.js';
-import type { LayoutMetrics } from '../diagram/utils/problems.js';
-import type { SwatchName } from '../diagram/utils/colors.js';
+import type { LabelSide } from '../drawing/utils/labels.js';
+import type { LayoutMetrics } from '../drawing/utils/problems.js';
+import type { SwatchName } from '../drawing/utils/colors.js';
 
 /**
  * A frame of the drawing (`show --layout`): its flow nodes as rows clustered by centre y, rows

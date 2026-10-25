@@ -37,7 +37,7 @@ import { withoutProfileDuplicates } from '../src/ops/utils/covers.js';
 import type { Op } from '../src/ops/types.js';
 import { mutateDoc, buildView, elementDetail, renderDetail, renderExtensionList, renderView } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
-import { EventGatewayRule } from '../src/ops/EventGatewayRule.js';
+import { EventGatewayRule } from '../src/ops/events/EventGatewayRule.js';
 import { ElementRemover } from '../src/ops/ElementRemover.js';
 import { ElementProperties } from '../src/ops/ElementProperties.js';
 

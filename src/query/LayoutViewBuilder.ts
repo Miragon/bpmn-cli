@@ -1,13 +1,13 @@
 import { is, type El } from '../model/utils/moddle.js';
-import { cx, cy, right } from '../diagram/utils/geom.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf } from '../diagram/utils/labels.js';
-import { LayoutAnalysis } from '../diagram/LayoutAnalysis.js';
-import { raw } from '../diagram/utils/raw.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { Semantics } from '../diagram/Semantics.js';
-import type { DShape, Plane } from '../diagram/types.js';
-import { swatchOf } from '../diagram/utils/colors.js';
+import { cx, cy, right } from '../drawing/utils/geom.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { defaultLabelSide, edgeLabelSideOf, hasExternalLabel, labelSideOf } from '../drawing/utils/labels.js';
+import { LayoutAnalysis } from '../drawing/LayoutAnalysis.js';
+import { raw } from '../drawing/utils/raw.js';
+import { DiagramReader } from '../drawing/DiagramReader.js';
+import { Semantics } from '../drawing/Semantics.js';
+import type { DShape, Plane } from '../drawing/types.js';
+import { swatchOf } from '../drawing/utils/colors.js';
 import { DiagramColumns } from './DiagramColumns.js';
 import type { LayoutColor, LayoutDiagram, LayoutGroup, LayoutLabel, LayoutView } from './layout-view.js';
 

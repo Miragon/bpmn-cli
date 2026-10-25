@@ -1,4 +1,4 @@
-import type { LaneBox } from '../../../diagram/types.js';
+import type { LaneBox } from '../../../drawing/types.js';
 
 export function laneDepth(lanes: LaneBox[]): number {
   return lanes.length ? 1 + Math.max(...lanes.map((l) => laneDepth(l.children))) : 0;

@@ -1,10 +1,10 @@
 import { TRIGGER_TYPES } from '../model/utils/kinds.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
-import { DecisionLinkReader } from '../ops/DecisionLinkReader.js';
-import { EventTrigger } from '../ops/EventTrigger.js';
-import { ExtensionLister, type ExtensionInfo } from '../ops/ExtensionLister.js';
-import { definitionsOf, nestedEntries } from '../ops/utils/nested-slots.js';
-import { vendorAttributes } from '../ops/utils/elements.js';
+import { DecisionLinkReader } from '../model/DecisionLinkReader.js';
+import { EventTrigger } from '../ops/events/EventTrigger.js';
+import { ExtensionLister, type ExtensionInfo } from '../model/ExtensionLister.js';
+import { definitionsOf, nestedEntries } from '../model/utils/nested-slots.js';
+import { vendorAttributes } from '../model/utils/elements.js';
 import { ZEEBE_URI } from '../platform/ZeebeDescriptor.js';
 import type { Implementation } from './context.js';
 import type { ViewFlow } from './model-view.js';

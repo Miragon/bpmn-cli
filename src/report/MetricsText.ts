@@ -1,4 +1,4 @@
-import { KEYS, type LayoutMetrics } from '../diagram/utils/problems.js';
+import { KEYS, type LayoutMetrics } from '../drawing/utils/problems.js';
 import { problemText } from './utils/result-lines.js';
 import { INDENT } from './utils/view-lines.js';
 

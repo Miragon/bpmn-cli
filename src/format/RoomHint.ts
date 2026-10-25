@@ -1,10 +1,10 @@
 import { CliError } from '../shared/CliError.js';
 import type { AlignOp, PlaceOp, SpaceOp } from '../ops/types.js';
-import { cy, right } from '../diagram/utils/geom.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { idOf, raw, rawList } from '../diagram/utils/raw.js';
-import type { DShape } from '../diagram/types.js';
-import { PlaneCheckpoint } from '../diagram/PlaneCheckpoint.js';
+import { cy, right } from '../drawing/utils/geom.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { idOf, raw, rawList } from '../drawing/utils/raw.js';
+import type { DShape } from '../drawing/types.js';
+import { DrawingCheckpoint } from '../drawing/DrawingCheckpoint.js';
 import type { FormatOps } from './FormatOps.js';
 import { PlaceAction } from './PlaceAction.js';
 import { AlignAction } from './AlignAction.js';
@@ -59,7 +59,7 @@ export class RoomHint {
    * the file lacks their changes, so only the batch op is named.
    */
   run(attempt: () => string[]): string[] {
-    const states = this.ops.planes.map((p) => new PlaneCheckpoint(p));
+    const states = this.ops.planes.map((p) => new DrawingCheckpoint(p));
     try {
       return attempt();
     } catch (err) {

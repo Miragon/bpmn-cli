@@ -1,12 +1,12 @@
-import type { Box } from '../diagram/utils/geom.js';
-import { raw, rawList } from '../diagram/utils/raw.js';
-import type { DShape } from '../diagram/types.js';
-import { titleBox, textWidth } from '../diagram/utils/text.js';
+import type { Box } from '../drawing/utils/geom.js';
+import { grow } from '../drawing/utils/geom.js';
+import { raw, rawList } from '../drawing/utils/raw.js';
+import type { DShape } from '../drawing/types.js';
+import { titleBox, textWidth } from '../drawing/utils/text.js';
 import { groupName, is, type El } from '../model/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';
 import { HALO_COLORS, type Item } from './types.js';
-import { grow } from './utils/boxes.js';
 import { at, n } from './utils/svg.js';
 
 const TIMER_TICKS = 'M0 -7.6L0 -9.8M3.8 -6.6L4.9 -8.5M6.6 -3.8L8.5 -4.9M7.6 0L9.8 0M6.6 3.8L8.5 4.9M3.8 6.6L4.9 8.5M0 7.6L0 9.8M-3.8 6.6L-4.9 8.5M-6.6 3.8L-8.5 4.9M-7.6 0L-9.8 0M-6.6 -3.8L-8.5 -4.9M-3.8 -6.6L-4.9 -8.5';

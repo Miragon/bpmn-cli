@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import type { Command as CommandType } from 'commander';
-import { OpsParser } from '../ops/OpsParser.js';
+import { OpsParser } from '../ops/parsing/OpsParser.js';
 import type { Op } from '../ops/types.js';
 import { ioError, usageError } from '../shared/utils/errors.js';
-import { parseOpsJson } from '../shared/utils/ops-json.js';
+import { parseOpsJson } from '../ops/parsing/utils/ops-json.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 

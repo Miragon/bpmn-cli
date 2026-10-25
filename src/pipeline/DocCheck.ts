@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import type { CliError } from '../shared/CliError.js';
-import { LayoutDebug } from '../shared/LayoutDebug.js';
+import { LayoutDebug } from '../layout/LayoutDebug.js';
 import { FullLayout } from '../layout/FullLayout.js';
 import { reportedImportWarnings } from '../ops/utils/decision-link-warnings.js';
 import { PlatformDetection } from '../platform/PlatformDetection.js';
@@ -10,7 +10,7 @@ import { ValidatorSet } from '../validate/ValidatorSet.js';
 import { counts, withValidatorReports } from '../validate/utils/validator-issues.js';
 import { once } from '../validate/utils/once.js';
 import type { ValidatorReport, ValidatorRun } from '../validate/validators.js';
-import { toCliError } from './utils/cli-error.js';
+import { toCliError } from '../shared/utils/cli-error.js';
 import type { CheckOptions, CheckResult } from './index.js';
 
 /**

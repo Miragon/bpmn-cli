@@ -3,7 +3,7 @@ import type { Doc } from '../model/Doc.js';
 import { ImageWriter, type Shot } from '../node/ImageWriter.js';
 import { DocFile, type FileMutationOptions } from '../node/DocFile.js';
 import { ModelFile } from '../node/ModelFile.js';
-import { defaultWithConditionViolation, placementViolation } from '../ops/utils/op-rules.js';
+import { defaultWithConditionViolation, placementViolation } from '../ops/parsing/utils/op-rules.js';
 import type { Op, TriggerOptions } from '../ops/types.js';
 import { LAYOUT_MODES, type LayoutMode, type MutationResult } from '../pipeline/index.js';
 import { RENDER_MAX_SIZE, type RenderOptions } from '../render/types.js';

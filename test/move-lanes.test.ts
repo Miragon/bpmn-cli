@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { Doc } from '../src/model/Doc.js';
-import { laneOf } from '../src/ops/utils/lanes.js';
+import { laneOf } from '../src/model/utils/lanes.js';
 
 interface Box {
   x: number;

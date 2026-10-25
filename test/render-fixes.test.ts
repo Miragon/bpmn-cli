@@ -17,9 +17,9 @@ import { Doc } from '../src/model/Doc.js';
 import { MIN_LABEL_SCALE, renderSvg } from '../src/index.js';
 import { MAX_TILES } from '../src/render/types.js';
 import { scaleText } from '../src/render/utils/scale.js';
-import { textWidth } from '../src/diagram/utils/text.js';
+import { textWidth } from '../src/drawing/utils/text.js';
 import { PngRenderer } from '../src/node/PngRenderer.js';
-import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const GALLERY = join(ROOT, 'test', 'fixtures', 'render', 'gallery.bpmn');

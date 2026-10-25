@@ -1,14 +1,14 @@
 import type { Doc } from '../model/Doc.js';
 import { is, parseXml, type El } from '../model/utils/moddle.js';
-import { DiagramReader } from '../diagram/DiagramReader.js';
-import { Semantics } from '../diagram/Semantics.js';
-import type { DEdge, DShape, Plane } from '../diagram/types.js';
-import { copyBox, type Box } from '../diagram/utils/geom.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import { idOf } from '../diagram/utils/raw.js';
+import { DiagramReader } from '../drawing/DiagramReader.js';
+import { Semantics } from '../drawing/Semantics.js';
+import type { DEdge, DShape, Plane } from '../drawing/types.js';
+import { copyBox, type Box } from '../drawing/utils/geom.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import { idOf } from '../drawing/utils/raw.js';
 import { CleanEngine } from './clean/CleanEngine.js';
-import { resolveExpanded } from '../diagram/utils/expansion.js';
-import type { IncrementalOptions } from './IncrementalLayout.js';
+import { resolveExpanded } from '../drawing/utils/expansion.js';
+import type { IncrementalOptions } from './incremental/IncrementalLayout.js';
 
 /** A new expanded sub-process or pool with its content, copied from the engine drawing. */
 export interface Block {

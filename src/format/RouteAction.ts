@@ -1,8 +1,8 @@
 import { modelError } from '../shared/utils/errors.js';
 import type { RouteOp } from '../ops/types.js';
-import { copyPoints, samePoints } from '../diagram/utils/geom.js';
-import type { Plane, Side } from '../diagram/types.js';
-import { attachedSide } from '../diagram/utils/sides.js';
+import { copyPoints, samePoints } from '../drawing/utils/geom.js';
+import type { Plane, Side } from '../drawing/types.js';
+import { attachedSide } from '../drawing/utils/sides.js';
 import type { FormatOps } from './FormatOps.js';
 
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };

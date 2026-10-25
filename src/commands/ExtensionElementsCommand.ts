@@ -1,5 +1,5 @@
 import type { Command as CommandType } from 'commander';
-import { ExtensionLister } from '../ops/ExtensionLister.js';
+import { ExtensionLister } from '../model/ExtensionLister.js';
 import type { ExtOp } from '../ops/types.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';

@@ -1,6 +1,6 @@
 import type { Doc } from '../model/Doc.js';
 import type { ChangeSet } from '../model/ChangeSet.js';
-import { followDiIds } from '../diagram/utils/di-ids.js';
+import { followDiIds } from '../drawing/utils/di-ids.js';
 import { cutAt, MAX_ID } from '../ids/utils/slug.js';
 import { IdRegistry } from '../ids/IdRegistry.js';
 import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
@@ -8,8 +8,8 @@ import type { IdState } from '../ids/IdStyle.js';
 import { kindLabel, kindOf, triggerOf } from '../model/utils/kinds.js';
 import { is, walk, type El } from '../model/utils/moddle.js';
 import { CAMUNDA } from '../platform/CamundaDescriptor.js';
-import { FlowIdFollower } from './FlowIdFollower.js';
-import { descriptorOf, idOf } from './utils/elements.js';
+import { FlowIdFollower } from './flows/FlowIdFollower.js';
+import { descriptorOf, idOf } from '../model/utils/elements.js';
 
 /**
  * Renames ids (`set id=`) and handles ids a retype or trigger change leaves with a stale

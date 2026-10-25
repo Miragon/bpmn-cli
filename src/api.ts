@@ -3,22 +3,22 @@
  * CLI command it names, without files or environment, so it runs in Node and in the browser.
  * Errors are CliError instances, exactly what the CLI prints with --json.
  */
-import { OpsParser } from './ops/OpsParser.js';
-import { LayoutDebug, type DebugSink } from './shared/LayoutDebug.js';
-import type { LayoutMetrics } from './diagram/utils/problems.js';
+import { OpsParser } from './ops/parsing/OpsParser.js';
+import { LayoutDebug, type DebugSink } from './layout/LayoutDebug.js';
+import type { LayoutMetrics } from './drawing/utils/problems.js';
 import type { LayoutView } from './query/layout-view.js';
 import type { AroundView, ElementContext } from './query/context.js';
 import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
 import { AroundWindow } from './query/AroundWindow.js';
 import { ElementContextBuilder } from './query/ElementContextBuilder.js';
-import { LayoutAnalysis } from './diagram/LayoutAnalysis.js';
+import { LayoutAnalysis } from './drawing/LayoutAnalysis.js';
 import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
 import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
 import type { IdConventions } from './ids/IdConventionsReader.js';
 import { Doc, type NewDocOptions } from './model/Doc.js';
 import { CliError } from './shared/CliError.js';
 import { usageError } from './shared/utils/errors.js';
-import { parseOpsJson } from './shared/utils/ops-json.js';
+import { parseOpsJson } from './ops/parsing/utils/ops-json.js';
 import { AroundText } from './report/AroundText.js';
 import { ContextText } from './report/ContextText.js';
 import { DetailText } from './report/DetailText.js';
@@ -26,7 +26,7 @@ import { LayoutText } from './report/LayoutText.js';
 import { ModelViewText } from './report/ModelViewText.js';
 import { assertKindToken } from './model/utils/kinds.js';
 import type { LayoutEngine } from './layout/FullLayout.js';
-import { ExtensionLister, type ExtensionInfo } from './ops/ExtensionLister.js';
+import { ExtensionLister, type ExtensionInfo } from './model/ExtensionLister.js';
 import type { Op } from './ops/types.js';
 import type { LayoutMode, MutationResult } from './pipeline/index.js';
 import { EditTransaction } from './pipeline/EditTransaction.js';

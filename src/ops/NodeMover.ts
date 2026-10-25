@@ -1,58 +1,21 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError, usageError } from '../shared/utils/errors.js';
-import { type Warning } from '../shared/CliError.js';
 import { kindLabel } from '../model/utils/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
-import { LaneEditor } from './LaneEditor.js';
-import { laneOf } from './utils/lanes.js';
-import { Bridge, type BridgedFlow } from './Bridge.js';
+import { LaneEditor } from './participants/LaneEditor.js';
+import { laneOf } from '../model/utils/lanes.js';
+import { Bridge } from './flows/Bridge.js';
+import { MovedFlows } from './flows/MovedFlows.js';
 import { insertAfterInScope } from './utils/declaration-order.js';
-import { LaneInheritance } from './LaneInheritance.js';
+import { LaneInheritance } from './participants/LaneInheritance.js';
 import { IdRenamer } from './IdRenamer.js';
-import { idOf } from './utils/elements.js';
-import { FlowOptions } from './FlowOptions.js';
+import { idOf } from '../model/utils/elements.js';
+import { FlowOptions } from './flows/FlowOptions.js';
 import type { MoveOp } from './types.js';
 import { NodePlacement, type PlacementOptions } from './NodePlacement.js';
-import { EventGatewayRule } from './EventGatewayRule.js';
-import { SequenceFlows } from './SequenceFlows.js';
-
-/**
- * A flow the detach took out (flow ids kept). `label`: what no bridge took; given back when the
- * flow returns to `target`, else dropped with a warning.
- */
-interface SpareFlow {
-  flow: El;
-  target: El;
-  label?: FlowLabel;
-}
-
-interface FlowLabel {
-  name: string | undefined;
-  condition: El | undefined;
-  isDefault: boolean;
-}
-
-/** A dropped label and its warnings: a later node of the chain may put the flow back after all. */
-interface DroppedLabel {
-  node: El;
-  flow: El;
-  target: El;
-  label: FlowLabel;
-  warnings: Warning[];
-}
-
-interface BridgeMade {
-  node: El;
-  target: El;
-  bridge: BridgedFlow;
-}
-
-interface LabelBefore {
-  name: string | undefined;
-  condition: El | undefined;
-  associations: El[];
-}
+import { EventGatewayRule } from './events/EventGatewayRule.js';
+import { SequenceFlows } from './flows/SequenceFlows.js';
 
 /**
  * `move`: relocates nodes via --after/--before/--flow (chained in order), --in, --on or --lane.
@@ -83,16 +46,12 @@ export class NodeMover {
         cs.note(`${nodes.map(idOf).join(', ')} ${nodes.length > 1 ? 'are' : 'is'} already ${NodeMover.describePlacement(placement)}${nodes.length > 1 ? ', in this order' : ''}`);
         this.optionsOnInFlow(this.doc.incoming(nodes[0]!)[0], placement, cs);
       } else {
-        const spare = new Map<El, SpareFlow>();
-        const dropped: DroppedLabel[] = [];
-        const bridges: BridgeMade[] = [];
-        const before = this.doc.edit.followFlowEnds ? undefined : this.labelsBefore(nodes);
+        const moved = new MovedFlows(this.doc, cs, nodes);
         nodes.forEach((node, i) => {
           const prev = nodes[i - 1];
-          dropped.push(...this.moveNode(node, prev ? { after: idOf(prev) } : placement, cs, hasLane, spare, { prev, next: nodes[i + 1], bridges }));
+          this.moveNode(node, prev ? { after: idOf(prev) } : placement, cs, hasLane, moved, { prev, next: nodes[i + 1] });
         });
-        this.giveBackLate(dropped, cs);
-        if (before) this.reportBridgesKept(bridges, before, cs);
+        moved.finish();
       }
     }
     if (hasLane) {
@@ -301,6 +260,10 @@ export class NodeMover {
     if (!anchor || !is(scope, 'bpmn:Process') || this.doc.lanesOf(node).length) return;
     const lane = this.deepestLane(anchor);
     if (!lane) return;
+    this.joinLane(lane, node, boundaries);
+  }
+
+  private joinLane(lane: El, node: El, boundaries: El[]): void {
     addTo(lane, 'flowNodeRef', node);
     for (const b of boundaries) if (!this.doc.lanesOf(b).length) addTo(lane, 'flowNodeRef', b);
   }
@@ -310,12 +273,7 @@ export class NodeMover {
     for (const id of ids) if (id && !this.doc.has(id)) this.doc.ids.claim(id);
   }
 
-  private static labelOf(flow: El, source: El): FlowLabel {
-    return { name: flow.get<string | undefined>('name'), condition: flow.get<El | undefined>('conditionExpression'), isDefault: source.get<El | undefined>('default') === flow };
-  }
-
-  /** --after / --before / --flow: detach, then place like a new node. */
-  private moveNode(node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, spare: Map<El, SpareFlow>, chain: { prev?: El; next?: El; bridges?: BridgeMade[] } = {}): DroppedLabel[] {
+  private moveNode(node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, moved: MovedFlows, chain: { prev?: El; next?: El } = {}): void {
     const { prev, next } = chain;
     NodeMover.assertNotBoundary(node);
     const anchors = this.anchorsOf(p);
@@ -328,15 +286,15 @@ export class NodeMover {
     const flowIds = [...incoming, ...outgoing].map(idOf);
     const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && this.doc.edit.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
     const oldTarget = oldOut?.get<El>('targetRef');
-    const outLabel = oldOut && NodeMover.labelOf(oldOut, node);
+    const outLabel = oldOut && MovedFlows.labelOf(oldOut, node);
     // a -> b of `move a b`: when b is not bridged, the append after a puts the flow back as it was
     const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && this.doc.edit.keepsFlowId(f));
-    const prevLabel = fromPrev && NodeMover.labelOf(fromPrev, prev!);
+    const prevLabel = fromPrev && MovedFlows.labelOf(fromPrev, prev!);
     const bridge = new Bridge(this.doc, cs, 'move').single(node, true);
-    if (bridge) chain.bridges?.push({ node, target: bridge.flow.get<El>('targetRef'), bridge });
+    if (bridge) moved.bridged(node, bridge);
     this.reserveIds(flowIds);
-    if (oldOut && oldTarget && !this.doc.has(idOf(oldOut))) spare.set(node, { flow: oldOut, target: oldTarget, ...(bridge ? {} : { label: outLabel }) });
-    if (fromPrev && !this.doc.has(idOf(fromPrev)) && !spare.has(prev!)) spare.set(prev!, { flow: fromPrev, target: node, label: prevLabel });
+    if (oldOut && oldTarget && !this.doc.has(idOf(oldOut))) moved.takeOut(node, oldOut, oldTarget, bridge ? undefined : outLabel);
+    if (fromPrev && !this.doc.has(idOf(fromPrev)) && !moved.hasSpare(prev!)) moved.takeOut(prev!, fromPrev, node, prevLabel);
     const laneBefore = laneOf(this.doc, node);
     this.leaveScope([node, ...boundaries], oldScope, targetScope, cs);
     this.doc.invalidate();
@@ -345,8 +303,8 @@ export class NodeMover {
     const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.doc, p) : LaneInheritance.NONE;
     // the gateway's out-flow waits for the append of the next node (a new branch)
     const holdOwn = !!next && is(node, 'bpmn:Gateway');
-    new NodePlacement(this.doc, p).place(node, cs, (source) => (source === node && holdOwn ? undefined : spare.get(source)?.flow));
-    const dropped = this.reportPutBack(spare, cs);
+    new NodePlacement(this.doc, p).place(node, cs, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
+    moved.putBack();
     for (const f of new Set([...this.doc.incoming(node), ...this.doc.outgoing(node)])) new EventGatewayRule(this.doc).warnFlow(f, cs);
     if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
     this.fixFlows(boundaries, targetScope, cs);
@@ -354,158 +312,15 @@ export class NodeMover {
       const note = explicitLane ? undefined : inherited.crossNote(idOf(node), own);
       if (note) cs.note(note);
     } else if (inherited.lane) {
-      addTo(inherited.lane, 'flowNodeRef', node);
-      for (const b of boundaries) if (!this.doc.lanesOf(b).length) addTo(inherited.lane, 'flowNodeRef', b);
+      this.joinLane(inherited.lane, node, boundaries);
       const warning = inherited.warning(idOf(node));
       if (warning) cs.warn(warning);
     }
     cs.change(ChangeSet.entryOf(node, `moved ${NodeMover.describePlacement(p)}`));
     cs.relocated.push(idOf(node));
     this.doc.invalidate();
-    return dropped;
   }
 
-  /** A put-back flow is reported as one changed entry, not as removed plus created. */
-  private reportPutBack(spare: Map<El, SpareFlow>, cs: ChangeSet): DroppedLabel[] {
-    const dropped: DroppedLabel[] = [];
-    for (const [node, { flow, target, label }] of spare) {
-      if (this.doc.get(idOf(flow)) !== flow) continue;
-      spare.delete(node);
-      const id = idOf(flow);
-      const back = flow.get<El>('targetRef') === target;
-      const lost = label && back ? NodeMover.giveBack(node, flow, label, cs) : '';
-      cs.removed = cs.removed.filter((c) => c.id !== id);
-      cs.created = cs.created.filter((c) => c.id !== id);
-      cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${back ? lost : ` (was -> ${idOf(target)})`}`));
-      if (!label || back) continue;
-      const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
-      const warnings: Warning[] = [];
-      if (label.name) warnings.push({ code: 'W_LABEL_DROPPED', message: `Flow label "${label.name}" of ${id} was dropped ${why}`, element: id });
-      if (label.condition) warnings.push({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id });
-      for (const w of warnings) cs.warn(w);
-      dropped.push({ node, flow, target, label, warnings });
-    }
-    return dropped;
-  }
-
-  /** A default flow has no condition, so a flow the placement made the default keeps none. */
-  private static giveBack(node: El, flow: El, label: FlowLabel, cs: ChangeSet): string {
-    const id = idOf(flow);
-    if (label.name && !flow.get<string | undefined>('name')) flow.set('name', label.name);
-    if (label.condition && !flow.get<El | undefined>('conditionExpression')) {
-      if (node.get<El | undefined>('default') === flow) {
-        cs.warn({
-          code: 'W_CONDITION_DROPPED',
-          message: `Condition of ${id} was dropped while moving ${idOf(node)}: ${id} is now the default flow of ${idOf(node)}`,
-          element: id,
-          hint: `A default flow has no condition; use \`bpmn set <file> ${id} condition=...\` if the condition should replace the default marker.`,
-        });
-      } else {
-        flow.set('conditionExpression', label.condition);
-        label.condition.$parent = flow;
-      }
-    }
-    if (!label.isDefault || node.get<El | undefined>('default') === flow) return '';
-    if (!node.get<El | undefined>('default') && !flow.get<El | undefined>('conditionExpression')) {
-      node.set('default', flow);
-      return '';
-    }
-    return ` (no longer the default flow of ${idOf(node)})`;
-  }
-
-  /** A flow a later node of the chain took back between its old ends gets its label back. */
-  private giveBackLate(dropped: DroppedLabel[], cs: ChangeSet): void {
-    for (const { node, flow, target, label, warnings } of dropped) {
-      if (this.doc.get(idOf(flow)) !== flow || flow.get<El>('sourceRef') !== node || flow.get<El>('targetRef') !== target) continue;
-      cs.warnings = cs.warnings.filter((w) => !warnings.includes(w));
-      const lost = NodeMover.giveBack(node, flow, label, cs);
-      const change = ChangeSet.flowEntryOf(flow);
-      cs.changed = cs.changed.filter((c) => c.id !== change.id);
-      cs.change(ChangeSet.flowEntryOf(flow, `${change.detail}${lost}`));
-    }
-  }
-
-  private labelsBefore(nodes: El[]): Map<El, LabelBefore> {
-    const out = new Map<El, LabelBefore>();
-    for (const n of nodes) {
-      for (const f of this.doc.outgoing(n)) if (this.doc.edit.keepsFlowId(f)) out.set(f, { name: f.get<string | undefined>('name'), condition: f.get<El | undefined>('conditionExpression'), associations: [] });
-    }
-    if (!out.size) return out;
-    for (const a of this.doc.byId().values()) {
-      if (!is(a, 'bpmn:Association')) continue;
-      for (const end of ['sourceRef', 'targetRef']) out.get(a.get<El>(end))?.associations.push(a);
-    }
-    return out;
-  }
-
-  /**
-   * Tells on a put-back flow's change entry which bridge kept its label:
-   * `(was -> C; its name stays with the bridge Flow_AToB)`.
-   */
-  private reportBridgesKept(made: BridgeMade[], before: Map<El, LabelBefore>, cs: ChangeSet): void {
-    const alive = (el: El): boolean => this.doc.get(idOf(el)) === el;
-    made.forEach(({ node, target, bridge }, i) => {
-      const flow = bridge.from;
-      const had = before.get(flow);
-      if (!had || !alive(flow)) return;
-      const holder = (took: (b: BridgedFlow) => boolean): El | undefined => {
-        let at = bridge.flow;
-        for (const later of made.slice(i + 1)) {
-          if (later.bridge.from !== at) continue;
-          if (!took(later.bridge)) return undefined;
-          at = later.bridge.flow;
-        }
-        return at;
-      };
-      const kept = new Map<El, string[]>();
-      const keep = (at: El, what: string): void => {
-        kept.set(at, [...(kept.get(at) ?? []), what]);
-      };
-      const lost: Array<{ what: 'name' | 'condition'; at: El }> = [];
-      const { name, condition, associations } = bridge.took;
-      if (name !== undefined && name === had.name && flow.get<string | undefined>('name') !== name) {
-        const at = holder((b) => b.took.name === name);
-        if (at && !alive(at)) lost.push({ what: 'name', at });
-        else if (at?.get<string | undefined>('name') === name) keep(at, 'name');
-      }
-      if (condition && condition === had.condition && flow.get<El | undefined>('conditionExpression') !== condition) {
-        const at = holder((b) => b.took.condition === condition);
-        if (at && !alive(at)) lost.push({ what: 'condition', at });
-        else if (at?.get<El | undefined>('conditionExpression') === condition) keep(at, 'condition');
-      }
-      for (const a of associations) {
-        if (!had.associations.includes(a) || !alive(a)) continue;
-        const at = holder((b) => b.took.associations.includes(a));
-        if (at && alive(at) && (a.get<El>('sourceRef') === at || a.get<El>('targetRef') === at)) keep(at, 'annotation');
-      }
-      const id = idOf(flow);
-      const back = flow.get<El>('sourceRef') === node && flow.get<El>('targetRef') === target;
-      const returned = lost.filter(({ what }) => back && !flow.get(what === 'name' ? 'name' : 'conditionExpression'));
-      if (returned.length) {
-        NodeMover.giveBack(node, flow, { name: returned.some((l) => l.what === 'name') ? name : undefined, condition: returned.some((l) => l.what === 'condition') ? condition : undefined, isDefault: false }, cs);
-        cs.changed = cs.changed.filter((c) => c.id !== id);
-        cs.change(ChangeSet.flowEntryOf(flow));
-      }
-      for (const { what, at } of lost.filter((l) => !returned.includes(l))) {
-        const why = `while moving ${idOf(node)}: the bridge ${idOf(at)} took it, and a later node of the move removed ${idOf(at)}`;
-        if (what === 'name') cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${name}" of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
-        else cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
-      }
-      if (!kept.size) return;
-      const clause = [...kept].map(([at, what]) => {
-        const notes = what.filter((w) => w === 'annotation').length;
-        const items = [...what.filter((w) => w !== 'annotation'), ...(notes ? [notes > 1 ? 'annotations' : 'annotation'] : [])];
-        const list = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]!;
-        return `its ${list} ${items.length > 1 || notes > 1 ? 'stay' : 'stays'} with the bridge ${idOf(at)}`;
-      }).join('; ');
-      const last = cs.changed.map((c) => c.id).lastIndexOf(id);
-      const entry = last === -1 ? ChangeSet.flowEntryOf(flow) : cs.changed[last]!;
-      const detail = entry.detail ?? '';
-      const said = /\(was -> [^()]*\)$/.test(detail) ? `${detail.slice(0, -1)}; ${clause})` : `${detail}${detail ? ' ' : ''}(${clause})`;
-      if (last === -1) cs.change(ChangeSet.about({ ...entry, detail: said }, flow));
-      else cs.changed[last] = ChangeSet.about({ ...entry, detail: said }, flow);
-    });
-  }
 
   private moveInto(nodes: El[], p: PlacementOptions, cs: ChangeSet): void {
     const scope = new NodePlacement(this.doc, p).scope();

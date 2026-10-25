@@ -2,11 +2,11 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import type { SpaceOp } from '../ops/types.js';
 import { parseSpaceAmount } from '../ops/utils/space-amount.js';
 import { Compaction, PAD as COMPACT_PAD } from './Compaction.js';
-import { bottom, copyBox, median, right, type Box } from '../diagram/utils/geom.js';
-import { Frames } from '../diagram/Frames.js';
-import { PlaneQuery } from '../diagram/PlaneQuery.js';
-import type { DShape, Plane } from '../diagram/types.js';
-import { DrawingSnapshot } from '../diagram/DrawingSnapshot.js';
+import { bottom, copyBox, median, right, type Box } from '../drawing/utils/geom.js';
+import { Frames } from '../drawing/Frames.js';
+import { PlaneQuery } from '../drawing/PlaneQuery.js';
+import type { DShape, Plane } from '../drawing/types.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
 import type { FormatOps } from './FormatOps.js';
 import { problemWords } from './utils/frames.js';
 

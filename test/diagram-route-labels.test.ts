@@ -1,16 +1,16 @@
 /**
- * Connections and labels in a kept drawing: src/diagram/EdgeRouter.ts (routing
+ * Connections and labels in a kept drawing: src/layout/incremental/EdgeRouter.ts (routing
  * one connection with the BPMN side conventions, deciding which kept
- * connections need a new route), src/diagram/LabelPlacer.ts (label placement)
+ * connections need a new route), src/layout/incremental/LabelPlacer.ts (label placement)
  * and the text rendering of the layout block (src/report/utils/result-lines.ts renderLayout).
  */
 import { describe, expect, it } from 'vitest';
-import type { DEdge, DShape, Plane } from '../src/diagram/types.js';
-import { crossings } from '../src/diagram/utils/routing.js';
-import { labelAt } from '../src/diagram/utils/labels.js';
+import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
+import { crossings } from '../src/drawing/utils/routing.js';
+import { labelAt } from '../src/drawing/utils/labels.js';
 import { renderLayout } from '../src/report/utils/result-lines.js';
 import { Doc } from '../src/model/Doc.js';
-import { Drawing } from '../src/diagram/Drawing.js';
+import { Drawing } from '../src/layout/incremental/Drawing.js';
 import type { El } from '../src/model/utils/moddle.js';
 
 /** A real element for `type` with `name` (labels read the name, routing the type). */

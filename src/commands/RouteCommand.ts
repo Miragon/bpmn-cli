@@ -1,5 +1,5 @@
 import { Option, type Command as CommandType } from 'commander';
-import { SIDE_VALUES } from '../ops/utils/op-fields.js';
+import { SIDE_VALUES } from '../ops/parsing/utils/op-fields.js';
 import type { RouteOp } from '../ops/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';
