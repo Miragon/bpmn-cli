@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Doc } from '../src/model/document.js';
-import { addTo, removeFrom } from '../src/model/moddle.js';
-import { flowOrder, repairFlowLinks, validateDoc } from '../src/validate/structural.js';
+import type { Doc } from '../src/model/Doc.js';
+import { addTo, removeFrom } from '../src/model/utils/moddle.js';
+import { validateDoc } from '../src/index.js';
+import { FlowOrder } from '../src/validate/FlowOrder.js';
+import { StructuralValidator } from '../src/validate/StructuralValidator.js';
 import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */
@@ -283,7 +285,7 @@ describe('structural errors', () => {
         <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="A" />
         <bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="End" />`),
     );
-    // Doc.fromXml completes the lists in memory (a write keeps the file's own, see model/mirror.ts)
+    // Doc.fromXml completes the lists in memory (a write keeps the file's own, see model/utils/mirror.ts)
     expect(doc.source?.mirror.listed.has(doc.require('Start'))).toBe(false);
     expect(codes(doc)).toEqual({ errors: [], warnings: [] });
     const id = (el: { get: <T>(k: string) => T }) => el.get<string>('id');
@@ -291,8 +293,8 @@ describe('structural errors', () => {
     expect(doc.incoming(doc.require('A')).map(id)).toEqual(['F1']);
     expect(doc.outgoing(doc.require('A')).map(id)).toEqual(['F2']);
     expect(doc.incoming(doc.require('End')).map(id)).toEqual(['F2']);
-    expect(repairFlowLinks(doc)).toBe(0); // idempotent
-    const order = flowOrder(doc, doc.processes()[0]!);
+    expect(new StructuralValidator(doc).repairFlowLinks()).toBe(0); // idempotent
+    const order = new FlowOrder(doc, doc.processes()[0]!);
     expect(order.ordered.map(id)).toEqual(['Start', 'A', 'End']);
     expect(order.unreachable.size).toBe(0);
     expect(await doc.toXml()).toMatch(/<bpmn:startEvent id="Start">\s*<bpmn:outgoing>F1<\/bpmn:outgoing>/);
@@ -513,7 +515,7 @@ describe('lint warnings', () => {
     expect(codes(exempt).warnings).not.toContain('W_UNREACHABLE');
   });
 
-  it('flowOrder lists reachable nodes first and follows boundary flows', async () => {
+  it('FlowOrder lists reachable nodes first and follows boundary flows', async () => {
     const doc = await processDoc(
       body(
         [
@@ -531,7 +533,7 @@ describe('lint warnings', () => {
         ],
       ),
     );
-    const order = flowOrder(doc, doc.processes()[0]!);
+    const order = new FlowOrder(doc, doc.processes()[0]!);
     expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['Start', 'A', 'End', 'Late', 'Old']);
     expect([...order.unreachable].map((n) => n.get<string>('id'))).toEqual(['Old']);
   });
@@ -583,7 +585,7 @@ describe('lint warnings', () => {
         ],
       ),
     );
-    const order = flowOrder(doc, doc.processes()[0]!);
+    const order = new FlowOrder(doc, doc.processes()[0]!);
     expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['Start', 'A', 'Throw', 'Catch', 'B', 'End', 'Lonely', 'End2']);
     expect([...order.unreachable].map((n) => n.get<string>('id'))).toEqual(['Lonely', 'End2']);
     const f = findingsOf(doc, 'W_UNREACHABLE');
@@ -599,7 +601,7 @@ describe('lint warnings', () => {
     const inner = '<bpmn:task id="T1" /><bpmn:task id="T2" />';
     const adHoc = await processDoc(chain([{ tag: 'adHocSubProcess', id: 'AdHoc', inner }]));
     expect(codes(adHoc)).toEqual({ errors: [], warnings: [] });
-    const order = flowOrder(adHoc, adHoc.require('AdHoc'));
+    const order = new FlowOrder(adHoc, adHoc.require('AdHoc'));
     expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['T1', 'T2']);
     expect(order.unreachable.size).toBe(0);
     // an ordinary sub-process with the same content is asked for start/end events and flows

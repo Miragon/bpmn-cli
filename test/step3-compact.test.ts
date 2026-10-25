@@ -1,6 +1,6 @@
 /**
- * Step 3: closing empty space in a kept drawing (src/format/compact.ts and
- * the `compact` / negative `space` format ops in src/format/index.ts).
+ * Step 3: closing empty space in a kept drawing (src/format/Compaction.ts and
+ * the `compact` / negative `space` format ops in src/format/FormatOps.ts).
  *
  *  - compact closes empty columns and rows and shrinks lanes, pools and
  *    expanded sub-processes to their content, keeping the order; it never
@@ -15,13 +15,15 @@
  * keeps them (see test/diagram-format.test.ts), or written by hand.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes, type DEdge, type DShape } from '../src/diagram/plane.js';
-import { isCliError } from '../src/shared/errors.js';
-import type { El } from '../src/model/moddle.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DEdge, DShape } from '../src/diagram/types.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 import { definitionsXml } from './helpers.js';
 
 const BASE: Op[] = [
@@ -87,18 +89,18 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of readPlanes(doc.definitions)) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
   return out;
 }
 
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hardOf = (doc: Doc): string[] => layoutProblems(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
+const hardOf = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
 const notesOf = (r: MutationResult): string[] => r.layout.format?.flatMap((f) => f.notes ?? []) ?? [];
 const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
 

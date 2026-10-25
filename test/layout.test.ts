@@ -32,19 +32,23 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { withLayoutDebug } from '../src/shared/debug.js';
-import { layoutProblems } from '../src/diagram/metrics.js';
-import { readPlanes as diagramPlanes, type DShape } from '../src/diagram/plane.js';
-import { titleBox } from '../src/diagram/text.js';
-import { Doc } from '../src/model/document.js';
-import { layoutModel, type LayoutOptions, type LayoutWarningInfo } from '../src/layout/index.js';
-import { freeJoinColumns, gridScope, layoutScope, liftChains, placeAttachedArtifacts, shiftNode } from '../src/layout/clean/place.js';
-import type { GNode, ScopeLayout } from '../src/diagram/types.js';
-import { is, many, type El } from '../src/model/moddle.js';
-import { collapsedIds } from '../src/ops/add.js';
-import { runOps } from '../src/ops/index.js';
+import { LayoutDebug } from '../src/shared/LayoutDebug.js';
+import type { DShape, GNode, ScopeLayout } from '../src/diagram/types.js';
+import { titleBox } from '../src/diagram/utils/text.js';
+import { Doc } from '../src/model/Doc.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
+import { ArtifactPlacer } from '../src/layout/clean/ArtifactPlacer.js';
+import { ChainLiftTrial } from '../src/layout/clean/ChainLiftTrial.js';
+import { JoinColumnTrial } from '../src/layout/clean/JoinColumnTrial.js';
+import { ScopeGrid } from '../src/layout/clean/ScopeGrid.js';
+import { ScopePlacer } from '../src/layout/clean/ScopePlacer.js';
+import { shiftNode } from '../src/layout/clean/utils/scope.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { is, many, type El } from '../src/model/utils/moddle.js';
+import { runOps } from '../src/index.js';
 import type { AddOp, Op } from '../src/ops/types.js';
-import { layoutDoc, mutateDoc } from '../src/pipeline/index.js';
+import { layoutDoc, mutateDoc } from '../src/index.js';
 
 /* ------------------------------------------------------------------ */
 /* DI reading                                                           */
@@ -354,7 +358,7 @@ interface Laid {
 const OUT_DIR = process.env['BPMN_LAYOUT_TEST_OUT'];
 
 async function layout(name: string, doc: Doc, opts: LayoutOptions = {}): Promise<Laid> {
-  const { xml, warnings } = await layoutModel(doc.model, opts);
+  const { xml, warnings } = await new FullLayout(doc.model, opts).run();
   if (OUT_DIR) {
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(join(OUT_DIR, `${name}.bpmn`), xml);
@@ -642,7 +646,7 @@ describe('clean layout engine', () => {
     const L = await layout('top-loop-label', doc);
     const g = L.box('Gateway_Another');
     expect(flowBetween(L, 'Gateway_Another', 'Activity_Claim').points[0]).toEqual({ x: cx(g), y: g.y });
-    expect(layoutProblems(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
+    expect(LayoutAnalysis.of(L.out.definitions).problems.filter((p) => p.kind === 'labelOnLine' && p.ids[0] === 'Gateway_Another')).toEqual([]);
   });
 
   it('lanes: a join whose entries rise into its bottom vertex leaves for a target below through its right vertex; a split with one entry keeps its drops', async () => {
@@ -674,7 +678,7 @@ describe('clean layout engine', () => {
     // o2c: the join's entries from Finance and Warehouse, and the fork's entry from Finance (it merges "ok" too): both leave for the lanes below through the right vertex
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'agent__o2c.bpmn'), 'utf8'));
     const o2c = await layout('o2c-join-exits', doc);
-    expect(layoutProblems(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
+    expect(LayoutAnalysis.of(o2c.out.definitions).problems.filter((p) => p.kind === 'inOut')).toEqual([]);
     const fork = o2c.box('Gateway_Fork'), join2 = o2c.box('Gateway_Join');
     for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
     expect(flowBetween(o2c, 'Gateway_Join', 'Activity_ShipGoods').points[0]).toEqual({ x: right(join2), y: cy(join2) });
@@ -899,9 +903,9 @@ describe('clean layout engine', () => {
   });
 
   it('a join\'s move that is not kept is undone exactly, also on a scope the passes after placement already ran on (as in a process with lanes)', async () => {
-    // controlflow__s22 laid out and routed; its join's column is still taken, so freeJoinColumns tries the move once more
+    // controlflow__s22 laid out and routed; its join's column is still taken, so JoinColumnTrial tries the move once more
     const doc = await Doc.fromXml(readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', 'controlflow__s22.bpmn'), 'utf8'));
-    const scope = layoutScope(doc.require('Process_S22'), { expanded: new Set(), collapsedScopes: new Map() });
+    const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('Process_S22'));
     const state = (): string =>
       JSON.stringify({
         nodes: scope.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => [n.id, n.layer, n.row, n.band, n.width, n.box, n.topUsed]),
@@ -911,13 +915,13 @@ describe('clean layout engine', () => {
       });
     const drawn = state();
     const lines: string[] = [];
-    await withLayoutDebug(
+    await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
-        freeJoinColumns(scope, (shifts) => {
-          gridScope(scope, undefined, shifts);
-          placeAttachedArtifacts(scope);
-        }),
+        new JoinColumnTrial(scope, (shifts) => {
+          new ScopeGrid(scope).arrange(shifts);
+          new ArtifactPlacer(scope).placeAttached();
+        }).run(),
     );
     expect(lines.filter((l) => l.startsWith('[joins]')).map((l) => l.split(':')[0])).toEqual(['[joins] Gateway_Complete_join stays']);
     expect(state()).toBe(drawn);
@@ -1175,7 +1179,7 @@ describe('clean layout engine', () => {
   it('lanes: a handler stays where moving it right would add a crossing (Inform\'s way up would cross Failed\'s into Fix), and Fix moves instead', async () => {
     // generated: two boundary paths into the lane above, Inform (Late on Pick) and Fix (Failed on Invoice), both in the column of Pack
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1296,7 +1300,7 @@ describe('clean layout engine', () => {
     // generated (r048): moving J4 right of the boundary path's end was rejected as it gained no straight rise; Check
     // customer's way into J4 then crossed Book case's flow and hooked into the join
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1416,8 +1420,8 @@ describe('clean layout engine', () => {
       { op: 'add', kind: 'lane', id: 'L1', name: 'Service', in: 'P', members: ['S', 'H', 'EH', 'H2', 'EH2'] },
       { op: 'add', kind: 'lane', id: 'L2', name: 'Logistics', in: 'P', members: ['A', 'SP', 'B', 'E'] },
     ]);
-    expect(collapsedIds(doc)).toEqual(['SP']);
-    const L = await layout('lanes-collapsed-boundary-labels', doc, { collapse: collapsedIds(doc) });
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['SP']);
+    const L = await layout('lanes-collapsed-boundary-labels', doc, { collapse: doc.layoutRequests.expansion().collapse });
     expect(L.report.through).toEqual([]);
     expect(L.report.labelClashes).toEqual([]);
     expectLabelsClear(L);
@@ -1478,7 +1482,7 @@ describe('clean layout engine', () => {
   });
 
   /**
-   * The way of a boundary event over the top into its target (route.ts): down out of the event's bottom, a short run
+   * The way of a boundary event over the top into its target (EdgeRouter): down out of the event's bottom, a short run
    * into a column gap beside the host, up past the host's row, along a run at least 15 px from every shape and label
    * in its x range (but its own label), down into the target's top. Returns the run's y.
    */
@@ -1510,7 +1514,7 @@ describe('clean layout engine', () => {
   }
 
   /**
-   * A boundary event on its host's top border whose way goes over the top (place.ts boundariesOnTop, route.ts):
+   * A boundary event on its host's top border whose way goes over the top (TopBorderTrial, EdgeRouter):
    * straight up out of the event's top, along a run at least 15 px from every shape and label in its x range (its own
    * label above the host included), down into the target's top (`side`: into its left side from the column gap
    * before it). The event's label lies above the host, below the run. Returns the run's y.
@@ -1590,7 +1594,7 @@ describe('clean layout engine', () => {
     // the run below lane 0's content crossed the split's drop, Notify data's into Book data, Pack order's way up and Book
     // data's into the join (score 25); from the bottom border the way over the top crossed Start -> Pick invoice (score 10)
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-over-top', paymentFailedDoc()),
     );
@@ -1604,7 +1608,7 @@ describe('clean layout engine', () => {
     // it crosses no line; the drawing keeps the crossing the lanes force (score 5)
     expect(crossingsOf(L, flow.id)).toEqual([]);
     expect(L.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
-    expect(layoutProblems(L.out.model.definitions).score).toBeLessThanOrEqual(5);
+    expect(LayoutAnalysis.of(L.out.model.definitions).score).toBeLessThanOrEqual(5);
     // the label to the upper right of the event, clear of the flows into and out of Pick invoice
     const label = L.shape('BE12').label!, host = L.box('A1');
     expect(label.x).toBeGreaterThan(right(L.box('BE12')));
@@ -1739,16 +1743,16 @@ describe('clean layout engine', () => {
   });
 
   it('lanes: a node that a boundary event\'s way enters over the top is not moved for a rise into its bottom it does not have (r013 with data objects in Pack data\'s column)', async () => {
-    // freeJoinColumns moved Pack data right past the data object under it, for the straight rise of a way it then
+    // JoinColumnTrial moved Pack data right past the data object under it, for the straight rise of a way it then
     // drew over the top
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-over-top-no-move', paymentFailedDoc(true)),
     );
     expect(lines.filter((l) => l.startsWith('[joins] F '))).toEqual(['[joins] F stays: entered over the top']);
     expect(L.report.through).toEqual([]);
-    // then the event goes to the top border (boundariesOnTop runs after the joins' moves)
+    // then the event goes to the top border (TopBorderTrial runs after the joins' moves)
     expectUpOverTop(L, 'BE12', 'F', 'A1', 'r013 with data');
   });
 
@@ -1862,7 +1866,7 @@ describe('clean layout engine', () => {
     for (const sub of [false, true]) {
       const what = sub ? 'an expanded sub-process as host' : 'a task as host';
       const lines: string[] = [];
-      const L = await withLayoutDebug(
+      const L = await LayoutDebug.during(
         (line) => lines.push(line),
         async () => layout(`boundary-top-border-one-of-two${sub ? '-sub' : ''}`, twoEventsDoc(sub)),
       );
@@ -1880,7 +1884,7 @@ describe('clean layout engine', () => {
       expect(flowBetween(L, 'BE13', 'H').points[0], `${what}: Rejected's flow leaves downwards`).toEqual({ x: cx(rejected), y: bottom(rejected) });
       expect(L.shape('BE13').label!.x, `${what}: its label right of it, below the host`).toBeGreaterThan(right(rejected));
       if (sub) expect(L.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
-      expect(layoutProblems(L.out.model.definitions).score, what).toBe(0);
+      expect(LayoutAnalysis.of(L.out.model.definitions).score, what).toBe(0);
     }
   });
 
@@ -1913,7 +1917,7 @@ describe('clean layout engine', () => {
     // its column on the row above, so a way up out of the top border cuts it; the way below crosses Wait for goods' way
     // into the join and stays
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -1997,7 +2001,7 @@ describe('clean layout engine', () => {
     const doc = paymentFailedDoc();
     runOps(doc, [{ op: 'add', kind: 'textAnnotation', id: 'N', text: 'Reminder after two days', to: 'BE12' }]);
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-boundary-note-bottom', doc),
     );
@@ -2028,7 +2032,7 @@ describe('clean layout engine', () => {
     expect(loop.points[3]!.y).toBe(bottom(a));
   });
 
-  // ENGINE DEFECT (route.ts flowLabel for back edges): the self-loop label is put left of the loop's right end,
+  // ENGINE DEFECT (EdgeRouter flowLabel for back edges): the self-loop label is put left of the loop's right end,
   // inside the loop, where the loop's left vertical line runs through the text.
   it('self loop label sits outside the loop, clear of its lines', async () => {
     const L = await layout('self-loop-label', selfLoopDoc());
@@ -2089,7 +2093,7 @@ describe('clean layout engine', () => {
     }
   });
 
-  // ENGINE DEFECT (route.ts elementLabel 'boundary'): every boundary label goes right of its event, so with two
+  // ENGINE DEFECT (ScopeLabels.of 'boundary'): every boundary label goes right of its event, so with two
   // named boundary events on one host the label of the left one runs into the right event and its label.
   it('two named boundary events on one host: their labels collide with nothing', async () => {
     const L = await layout('boundary-two-names', boundaryDoc('failed'));
@@ -2100,7 +2104,7 @@ describe('clean layout engine', () => {
     expect(boxesOverlap(xl, L.shape('T').label!)).toBe(false);
   });
 
-  // ENGINE DEFECT (route.ts elementLabel 'boundary' + label size estimate): a boundary name estimated at two
+  // ENGINE DEFECT (ScopeLabels.of 'boundary' + label size estimate): a boundary name estimated at two
   // lines is anchored at the event's bottom, so the label box rises into the host activity.
   it('a long boundary event name stays below its host', async () => {
     const doc = proc([
@@ -2191,8 +2195,8 @@ describe('clean layout engine', () => {
       task('T2', 'Two', 'T1'),
       end('E2', 'T2'),
     ]);
-    expect(collapsedIds(doc)).toEqual(['Sub']);
-    const L = await layout('collapsed-sub', doc, { collapse: collapsedIds(doc) });
+    expect(doc.layoutRequests.expansion().collapse).toEqual(['Sub']);
+    const L = await layout('collapsed-sub', doc, { collapse: doc.layoutRequests.expansion().collapse });
     expectClean(L);
     expectLabelsClear(L);
     expect(L.planes).toHaveLength(2);
@@ -2349,7 +2353,7 @@ describe('clean layout engine', () => {
     expectLaneConventions(L, lanes);
   });
 
-  // ENGINE DEFECT (route.ts: entryX and exitX are both the node centre): at a peak (D: in from the lane below,
+  // ENGINE DEFECT (EdgeRouter: entryX and exitX are both the node centre): at a peak (D: in from the lane below,
   // out to the lane below) the incoming and the outgoing flow share the vertical line under D, which reads as
   // one line with an arrow in the middle.
   it('lanes zig-zag with a peak: the flows into and out of the peak do not share a line', async () => {
@@ -2627,7 +2631,7 @@ describe('clean layout engine', () => {
     for (const full of [false, true]) {
       const what = full ? 'r013' : 'r013 without its boundary paths';
       const lines: string[] = [];
-      const L = await withLayoutDebug(
+      const L = await LayoutDebug.during(
         (line) => lines.push(line),
         async () => layout(`lanes-split-branch-up${full ? '-r013' : ''}`, splitLanesDoc(true, full)),
       );
@@ -2669,7 +2673,7 @@ describe('clean layout engine', () => {
     // agent__o2c without its other lanes: ok runs from Credit ok? straight along the row to the parallel split; not ok's
     // Request prepayment would take a cell of that row (moved up, it bent the happy path into a band under the row)
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () =>
         layout(
@@ -2725,7 +2729,7 @@ describe('clean layout engine', () => {
   it('lanes: a branch stays below where its flow, moved up, would leave the split through the vertex the happy path\'s way down takes (p035)', async () => {
     // moved up, Pick order's flow would run on b0's first piece out of the right vertex, its label on b0's
     const lines: string[] = [];
-    const L = await withLayoutDebug(
+    const L = await LayoutDebug.during(
       (line) => lines.push(line),
       async () => layout('lanes-split-branch-stays-shared-vertex', sharedVertexDoc()),
     );
@@ -2737,7 +2741,7 @@ describe('clean layout engine', () => {
     expect(L.report.inOutOverlaps).toEqual([]);
   });
 
-  /** The rows of a scope laid out again by lane, as engine.ts applyLanes does (each lane's rows stacked from its top), the lanes in the order of `lanes`. */
+  /** The rows of a scope laid out again by lane, as LaneArranger does (each lane's rows stacked from its top), the lanes in the order of `lanes`. */
   function arrangeByLane(scope: ScopeLayout, lanes: string[][]): () => void {
     const of = lanes.map((ids) => scope.nodes.filter((n) => ids.includes(n.id)));
     return () => {
@@ -2755,16 +2759,16 @@ describe('clean layout engine', () => {
         return { nodes: new Set(nodes), top, bottom: y };
       });
       scope.height = y;
-      placeAttachedArtifacts(scope);
+      new ArtifactPlacer(scope).placeAttached();
       scope.laneBands = bands;
     };
   }
 
   it('a branch\'s move up that is not kept is undone exactly; one that is kept leaves the branch on the split\'s row', async () => {
     const laneIds = (doc: Doc): string[][] => many(many(doc.require('P'), 'laneSets')[0]!, 'lanes').map((l) => (l.get<El[] | undefined>('flowNodeRef') ?? []).map(idOf));
-    /** the scope arranged by lane, then liftChains on it: the debug lines, and whether it changed anything the arrangement sets */
+    /** the scope arranged by lane, then ChainLiftTrial on it: the debug lines, and whether it changed anything the arrangement sets */
     const run = async (doc: Doc): Promise<{ scope: ScopeLayout; changed: boolean; lines: string[] }> => {
-      const scope = layoutScope(doc.require('P'), { expanded: new Set(), collapsedScopes: new Map() });
+      const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(doc.require('P'));
       const state = (): string =>
         JSON.stringify({
           nodes: scope.nodes.flatMap((n) => [n, ...n.boundary]).map((n) => [n.id, n.layer, n.row, n.band, n.width, n.box, n.topUsed]),
@@ -2777,9 +2781,9 @@ describe('clean layout engine', () => {
       arrange();
       const arranged = state();
       const lines: string[] = [];
-      await withLayoutDebug(
+      await LayoutDebug.during(
         (line) => lines.push(line),
-        async () => liftChains(scope, arrange),
+        async () => new ChainLiftTrial(scope, arrange).run(),
       );
       return { scope, changed: state() !== arranged, lines };
     };
@@ -2856,7 +2860,7 @@ describe('clean layout engine', () => {
     expect(assocs[0]!.points.some((p) => p.y === bottom(n1))).toBe(true);
   });
 
-  // ENGINE DEFECT (place.ts buildArtifacts/placeArtifacts): the anchor of an annotation on a sequence flow is
+  // ENGINE DEFECT (ArtifactPlacer build/placeAnnotations): the anchor of an annotation on a sequence flow is
   // captured before the annotation band shifts the content down, so the association ends exactly one band
   // (annotation height + vGap) above the flow, in mid-air, and may cut through the other annotation.
   it('text annotations on a task and on a flow: both above, the flow association ends on the flow', async () => {
@@ -2999,7 +3003,7 @@ ${categories}
 /** Every shape of the drawing by element id (all planes). */
 async function shapesOf(xml: string): Promise<Map<string, DShape>> {
   const doc = await Doc.fromXml(xml);
-  return new Map(diagramPlanes(doc.definitions).flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
+  return new Map(new DiagramReader(doc.definitions).planes().flatMap((p) => [...p.shapes.values()].map((s) => [s.id, s] as [string, DShape])));
 }
 
 /** The group's box holds the members whole and cuts no other leaf shape. */
@@ -3122,7 +3126,7 @@ describe('groups over a full redraw', () => {
     // the old DI order
     expect(r.xml.indexOf('bpmnElement="Group_Outer"')).toBeLessThan(r.xml.indexOf('bpmnElement="Group_Inner"'));
     expect((await layoutDoc(await Doc.fromXml(r.xml))).unchanged).toBe(true);
-    expect(layoutProblems((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
+    expect(LayoutAnalysis.of((await Doc.fromXml(r.xml)).definitions).problems.filter((p) => p.ids.some((id) => id.startsWith('Group_')))).toEqual([]);
   });
 
   it('two stacked groups come back the same on a second redraw, and an edit to the first result finds it engine-owned', async () => {
@@ -3240,8 +3244,8 @@ describe('groups over a full redraw', () => {
       [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
     );
     const doc = await Doc.fromXml(xml);
-    const { redrawGroups } = await import('../src/diagram/groups.js');
-    const out = redrawGroups(doc.moddle, doc.definitions, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
+    const { Groups } = await import('../src/diagram/Groups.js');
+    const out = new Groups(doc.definitions).redraw(doc.moddle, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
     expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
     expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);
   });

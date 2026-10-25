@@ -1,6 +1,6 @@
 /**
- * Operations = "CLI flags spelled as JSON". One CLI command builds one op;
- * `bpmn apply` runs a list of them in one transaction.
+ * Ops are CLI flags spelled as JSON: one CLI command builds one op, `bpmn apply` runs a list of
+ * them in one transaction.
  */
 
 export interface TriggerOptions {
@@ -24,9 +24,9 @@ export interface TriggerOptions {
 }
 
 export interface Placement {
-  /** anchor: append after a gateway / unconnected node, or splice into the anchor's single outgoing flow */
+  /** anchor: append after it, or splice into its single outgoing flow */
   after?: string;
-  /** anchor: prepend before a join / unconnected node, or splice into the anchor's single incoming flow */
+  /** anchor: prepend before it, or splice into its single incoming flow */
   before?: string;
   /** splice into this sequence flow */
   flow?: string;
@@ -52,13 +52,13 @@ export interface AddOp extends Placement, FlowOptions, TriggerOptions {
   kind: string;
   name?: string;
   id?: string;
-  /** batch alias of the new element (`$name`; later ops of the batch use it as an id, ops/aliases.ts) */
+  /** batch alias (`$name`) of the new element; later ops of the batch use it as an id */
   as?: string;
-  /** batch alias of the flow into the new node (the flow the flow options describe) */
+  /** batch alias of the flow into the new node */
   flowAs?: string;
-  /** batch alias of the one sequence flow the add creates out of the new node (a splice: to the old successor; a prepend: to the anchor; `to`: to its target) */
+  /** batch alias of the sequence flow the add creates out of the new node */
   outAs?: string;
-  /** batch alias of the bpmn:Message / Error / Signal / Escalation the new element references (created or found by name) */
+  /** batch alias of the Message / Error / Signal / Escalation the new element references */
   refAs?: string;
   /** also connect the new node to this target (branch that re-joins) */
   to?: string;
@@ -103,7 +103,7 @@ export interface SetOp {
   id: string;
   values: Record<string, string>;
   unset?: string[];
-  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  /** batch alias of the Message / Error / Signal / Escalation referenced after the change */
   refAs?: string;
 }
 
@@ -114,7 +114,7 @@ export interface RemoveOp {
   bridge?: boolean;
   /** a join (N incoming, 1 outgoing): connect every predecessor to the successor */
   bridgeAll?: boolean;
-  /** also remove the node's exclusive downstream path (up to the next merge with another path, or the ends) */
+  /** also remove the node's exclusive downstream path, up to the next merge or the ends */
   withBranch?: boolean;
   ifExists?: boolean;
 }
@@ -123,7 +123,7 @@ export interface RetypeOp extends TriggerOptions {
   op: 'retype';
   id: string;
   kind: string;
-  /** batch alias of the bpmn:Message / Error / Signal / Escalation the element references after the change */
+  /** batch alias of the Message / Error / Signal / Escalation referenced after the change */
   refAs?: string;
 }
 
@@ -135,7 +135,7 @@ export interface MoveOp extends Placement, FlowOptions {
 
 export interface OrderOp {
   op: 'order';
-  /** the node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered */
+  /** node whose outgoing flows are ordered, or the container whose lanes / pools are ordered */
   id: string;
   /** outgoing flow ids (lane or participant ids are accepted too and order the lanes / pools) */
   flows?: string[];
@@ -160,21 +160,20 @@ export interface ExtOp {
   /** remove: index within extensionElements (alternative to type) */
   index?: number;
   /**
-   * a nested element of `id` instead of the element itself: its event definition,
-   * loop characteristics or condition expression (also given as a `<slot>.` prefix of type;
-   * one of several event definitions: `definition[<n>]` / `definition[<trigger>]`)
+   * edit the event definition, loop characteristics or condition expression of `id` instead;
+   * one of several event definitions: `definition[<n>]` / `definition[<trigger>]`
    */
   slot?: 'definition' | 'loop' | 'condition' | `definition[${string}]`;
 }
 
 export interface SplitBranch extends FlowOptions {
-  /** nodes of the branch, in order (each like an AddOp without placement; no outAs: the split creates the flow out of a node with the next one) */
+  /** nodes of the branch, in order, each like an AddOp without placement */
   nodes: Array<Omit<AddOp, 'op' | keyof Placement | 'to' | 'outAs' | 'ifAbsent'>>;
 }
 
 export interface SplitOp {
   op: 'split';
-  /** anchor whose single outgoing flow (or which, when unconnected/gateway) gets the split */
+  /** anchor whose single outgoing flow gets the split */
   after: string;
   /** gateway kind (default exclusiveGateway) */
   kind?: string;
@@ -191,18 +190,13 @@ export interface SplitOp {
   branches: SplitBranch[];
 }
 
-/* ------------------------------------------------------------------ */
-/* format operations: diagram only, see src/format/index.ts               */
-/* ------------------------------------------------------------------ */
+// format operations: diagram only
 
 export type SideName = 'left' | 'right' | 'top' | 'bottom';
 export type LabelSideName = 'above' | 'below' | 'left' | 'right';
 export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
-/**
- * Selectors of place / align / color / tidy (src/query/select.ts): they add
- * elements to `ids` (connections only for color).
- */
+/** Selectors of place / align / color / tidy add elements to `ids` (connections only for color). */
 export interface Selectors {
   /** [fromId, toId]: every node and flow on the shortest sequence-flow path between them */
   path?: string[];
@@ -230,7 +224,7 @@ export interface PlaceOp extends Selectors {
   after?: string;
   /** column: the column left of this element */
   before?: string;
-  /** a boundary event (the only id): the border of its host it moves to; its exception path follows */
+  /** a boundary event: the host border it moves to; its exception path follows */
   side?: 'top' | 'bottom';
 }
 
@@ -270,33 +264,15 @@ export interface SpaceOp {
   /** insert vertical space below this element */
   below?: string;
   /**
-   * how much: one column / row of the drawing (default), a number of them
-   * ('2col', '3 rows'), or pixels (a number, '80px'); negative ('-column',
-   * '-2col', a negative number) closes that much empty space instead
+   * how much: one column / row (default), a number of them ('2col', '3 rows') or pixels ('80px');
+   * a negative amount closes that much empty space instead
    */
   by?: SpaceAmount;
 }
 
-/** A `space` amount (parseSpaceAmount): column / row steps of the drawing or pixels; negative closes. */
+/** A `space` amount: column / row steps of the drawing or pixels; negative closes. */
 export type SpaceAmount = 'column' | 'row' | '-column' | '-row' | number | `${number}${SpaceUnit}` | `${number} ${SpaceUnit}`;
 type SpaceUnit = 'col' | 'cols' | 'column' | 'columns' | 'row' | 'rows' | 'px';
-
-/**
- * A `space` amount read: `column` / `row` (one), `<n>col`, `<n>column(s)`,
- * `<n>row(s)` (n steps of the drawing's grid; a space before the unit is
- * fine), `<n>px` or a bare integer (pixels); a leading `-` closes. Undefined
- * for anything else (0 included).
- */
-export function parseSpaceAmount(value: unknown): { count: number; unit: 'column' | 'row' | 'px' } | undefined {
-  if (typeof value === 'number') return Number.isInteger(value) && value !== 0 ? { count: value, unit: 'px' } : undefined;
-  if (typeof value !== 'string') return undefined;
-  const m = /^\s*(-?)\s*(\d*)\s*(px|cols?|columns?|rows?)?\s*$/i.exec(value);
-  if (!m || (!m[2] && (!m[3] || /^px$/i.test(m[3])))) return undefined;
-  const count = (m[1] ? -1 : 1) * (m[2] ? Number(m[2]) : 1);
-  if (count === 0) return undefined;
-  const unit = !m[3] || /^px$/i.test(m[3]) ? 'px' : /^col/i.test(m[3]) ? 'column' : 'row';
-  return { count, unit };
-}
 
 export interface TidyOp extends Selectors {
   op: 'tidy';
@@ -306,19 +282,10 @@ export interface TidyOp extends Selectors {
 
 export interface CompactOp {
   op: 'compact';
-  /** only these frames (pools, lanes, expanded sub-processes) and what is inside them (default: the whole drawing) */
+  /** only these frames and their content (default: the whole drawing) */
   ids?: string[];
 }
 
 export type FormatOp = PlaceOp | AlignOp | ColorOp | LabelOp | RouteOp | SpaceOp | TidyOp | CompactOp;
 
 export type Op = AddOp | ConnectOp | SetOp | RemoveOp | RetypeOp | MoveOp | OrderOp | ExtOp | SplitOp | FormatOp;
-
-/** The diagram-only ops (they run after the semantic ops and the layout, in batch order). */
-export const FORMAT_OP_NAMES: Array<FormatOp['op']> = ['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact'];
-
-export const OP_NAMES: Array<Op['op']> = ['add', 'connect', 'set', 'remove', 'retype', 'move', 'order', 'ext', 'split', ...FORMAT_OP_NAMES];
-
-export function isFormatOp(op: Op): op is FormatOp {
-  return (FORMAT_OP_NAMES as string[]).includes(op.op);
-}

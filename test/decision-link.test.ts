@@ -1,5 +1,5 @@
 /**
- * The decision link of a business rule task (src/ops/decision.ts): Camunda 7
+ * The decision link of a business rule task (src/ops/DecisionLinkReader.ts, DecisionLinkWriter.ts): Camunda 7
  * writes it as camunda:decisionRef, Camunda 8 as a zeebe:calledDecision
  * extension element, and bpmn-cli as an unprefixed calledDecision="<decision>"
  * in a model without an engine. `show`, `show <id>` and `find` read every
@@ -12,14 +12,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { COMMANDS, ERROR_CATALOGUE, guideText, kindsJson } from '../src/report/guide.js';
-import { runOps } from '../src/ops/index.js';
-import { settableKeys } from '../src/ops/set.js';
-import { checkFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
-import { loadProfiles, runProfile } from '../src/platform/profiles/profile.js';
-import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
+import { Doc } from '../src/model/Doc.js';
+import { runOps } from '../src/index.js';
+import { COMMANDS } from '../src/report/CommandCatalogue.js';
+import { ERROR_CATALOGUE } from '../src/report/guide.js';
+import { guideText, kindsJson } from '../src/index.js';
+import { checkFile } from '../src/node/index.js';
+import { mutateDoc, type MutationOptions, loadProfiles, runProfile, buildView, elementDetail, findElements } from '../src/index.js';
+import { PropertyCoercer } from '../src/ops/PropertyCoercer.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();
@@ -168,8 +168,8 @@ describe('set <id> calledDecision=<decision>', () => {
 
   it('is a documented set key of business rule tasks (kinds --json)', async () => {
     const doc = await Doc.fromXml(model('<bpmn:businessRuleTask id="R" />'));
-    expect(settableKeys(doc, doc.require('R'))).toContain('calledDecision');
-    expect(settableKeys(doc, doc.require('S'))).not.toContain('calledDecision');
+    expect(new PropertyCoercer(doc).settableKeys(doc.require('R'))).toContain('calledDecision');
+    expect(new PropertyCoercer(doc).settableKeys(doc.require('S'))).not.toContain('calledDecision');
     const keys = (kindsJson()['setKeys'] as Array<{ key: string; appliesTo: string }>).filter((k) => k.key === 'calledDecision');
     expect(keys.map((k) => k.appliesTo)).toEqual(['businessRuleTask']);
   });

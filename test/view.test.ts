@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ChangeSet } from '../src/model/change-set.js';
-import { renderChanges, renderDetail, renderProblems, renderView } from '../src/report/view-text.js';
-import { buildView, elementDetail, findElements, labelOf, type ViewNode } from '../src/query/model-view.js';
+import { ChangeSet } from '../src/model/ChangeSet.js';
+import { renderChanges } from '../src/report/utils/result-lines.js';
+import { renderDetail, renderProblems, renderView, buildView, elementDetail, findElements } from '../src/index.js';
+import { labelOf } from '../src/query/utils/view.js';
+import type { ViewNode } from '../src/query/model-view.js';
 import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
 /* ------------------------------------------------------------------ */

@@ -12,15 +12,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateXml } from '../src/api.js';
-import { Doc } from '../src/model/document.js';
+import { Doc } from '../src/model/Doc.js';
 import { ERROR_CATALOGUE } from '../src/report/guide.js';
-import type { CliError, Warning } from '../src/shared/errors.js';
-import { is, type El } from '../src/model/moddle.js';
+import type { CliError, Warning } from '../src/shared/CliError.js';
+import { is, type El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { checkFile, mutateFile } from '../src/node/files.js';
-import { mutateDoc, type MutationOptions } from '../src/pipeline/index.js';
-import { mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport, validatorTag } from '../src/report/command-report.js';
-import { compareRuns, runValidators, validatorRefusal, type NamedValidator, type ValidatorContext, type ValidatorFinding, type ValidatorRun } from '../src/validate/validators.js';
+import { checkFile, mutateFile } from '../src/node/index.js';
+import { mutateDoc, mutationReport, mutationSummary, renderMutation, renderSummary, renderValidation, validationReport } from '../src/index.js';
+import type { MutationOptions } from '../src/pipeline/index.js';
+import { validatorTag } from '../src/report/utils/findings.js';
+import { FindingBaseline } from '../src/validate/FindingBaseline.js';
+import { ValidatorSet } from '../src/validate/ValidatorSet.js';
+import { validatorRefusal } from '../src/validate/utils/validator-issues.js';
+import type { NamedValidator, ValidatorContext, ValidatorFinding, ValidatorRun } from '../src/validate/validators.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
@@ -208,7 +212,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('checks what would be written: without the layout a new node has no shape', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
-    // the new flow's id in the file's style (src/ids/style.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
+    // the new flow's id in the file's style (src/ids/IdStyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
     expect(codes(r.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
@@ -220,7 +224,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('ruleId findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
     const r = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
-    // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/style.ts)
+    // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/IdStyle.ts)
     expect(r.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));
@@ -258,10 +262,10 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
 
   it('message matching follows renames in one pass: two ids swapped in one batch stay apart', () => {
     const run = (messages: string[]): ValidatorRun[] => [{ name: 'host', issues: messages.map((message) => ({ code: 'naming/task', message, validator: 'host', severity: 'error' as const })) }];
-    const swapped = compareRuns(run(['task A has no name', 'task B has a typo']), run(['task B has no name', 'task A has a typo']), new Map([['A', 'B'], ['B', 'A']]));
+    const swapped = FindingBaseline.compareRuns(run(['task A has no name', 'task B has a typo']), run(['task B has no name', 'task A has a typo']), new Map([['A', 'B'], ['B', 'A']]));
     expect(swapped[0]).toMatchObject({ errors: [], resolved: [], preexisting: [expect.objectContaining({ message: 'task B has no name' }), expect.objectContaining({ message: 'task A has a typo' })] });
     // A.B is another id than A: renaming A leaves it alone
-    const dotted = compareRuns(run(['task A.B has no name']), run(['task A.B has no name']), new Map([['A', 'X']]));
+    const dotted = FindingBaseline.compareRuns(run(['task A.B has no name']), run(['task A.B has no name']), new Map([['A', 'X']]));
     expect(dotted[0]!.errors).toEqual([]);
   });
 
@@ -285,7 +289,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const issue = (code: string) => ({ code, message: code, validator: 'host', severity: 'warning' as const });
     const before: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO')] }];
     const after: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO'), issue('W_THREE')] }];
-    const reports = compareRuns(before, after);
+    const reports = FindingBaseline.compareRuns(before, after);
     expect(reports.map((r) => r.warnings.map((w) => w.code))).toEqual([[], ['W_THREE']]);
     expect(reports.map((r) => r.resolved.length)).toEqual([0, 0]);
   });
@@ -404,8 +408,8 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
       { severity: 'error', code: 'E_HOST', message: 'about B', element: 'B', ...(ctx.phase === 'before' ? { leftOut: reason } : {}) },
       { severity: 'error', code: 'E_HOST', message: 'about C', element: 'C' },
     ];
-    const runs = (phase: 'before' | 'after') => runValidators([{ name: 'host', blocks: false, validate: host }], { xml: async () => '', doc: async () => doc }, { phase, platform: 'none', ops: [] });
-    const [report] = compareRuns(await runs('before'), await runs('after'));
+    const runs = (phase: 'before' | 'after') => new ValidatorSet([{ name: 'host', blocks: false, validate: host }]).run({ xml: async () => '', doc: async () => doc }, { phase, platform: 'none', ops: [] });
+    const [report] = FindingBaseline.compareRuns(await runs('before'), await runs('after'));
     // A is still in the result: not resolved; B is news; added (B) + kept (C) + left out (A) = counts
     expect(report).toEqual({ name: 'host', blocks: false, errors: [], warnings: [expect.objectContaining({ element: 'B' })], preexisting: [], resolved: [], counts: { errors: 3, warnings: 0 }, leftOut: [{ reason, count: 1 }] });
     expect(renderMutation(mutationReport(await mutateDoc(doc, [], { validators: [{ name: 'host', blocks: false, validate: host }] })))).toContain('\nvalidator host: 3 error(s), 0 warning(s) in the result (1 added, 0 resolved, 1 already in the file, 1 left out (the host checks it elsewhere; a check lists it))\n');

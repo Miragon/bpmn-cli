@@ -1,5 +1,5 @@
 /**
- * Step 3: selectors of the format ops (src/query/select.ts): `path`
+ * Step 3: selectors of the format ops (src/query/ElementSelector.ts): `path`
  * (with `via`), `kind` and `branch` name the elements of place / align /
  * color / tidy, so a happy path is coloured, every end event aligned or a
  * branch moved in one call. Elements are addressed by id only.
@@ -9,14 +9,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseOps } from '../src/ops/batch.js';
-import { Doc } from '../src/model/document.js';
-import { layoutView } from '../src/query/layout-view.js';
-import { readPlanes, type DShape } from '../src/diagram/plane.js';
-import { isCliError } from '../src/shared/errors.js';
-import type { El } from '../src/model/moddle.js';
+import { parseOps, layoutView } from '../src/index.js';
+import { Doc } from '../src/model/Doc.js';
+import type { DShape } from '../src/diagram/types.js';
+import { DiagramReader } from '../src/diagram/DiagramReader.js';
+import { isCliError } from '../src/shared/utils/errors.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc, type MutationResult } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
+import { type MutationResult } from '../src/pipeline/index.js';
 
 const BASE: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
@@ -74,7 +75,7 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of readPlanes(doc.definitions)) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
   return out;
 }
 

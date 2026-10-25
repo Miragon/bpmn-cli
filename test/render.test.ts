@@ -1,7 +1,7 @@
 /**
  * `bpmn render` (issue #12): the SVG renderer of the core
- * (src/render/index.ts), the PNG rasteriser of the node layer
- * (src/node/render.ts: resvg-wasm with the bundled Arimo font) and the
+ * (src/render/DocRenderer.ts), the PNG rasteriser of the node layer
+ * (src/node/PngRenderer.ts: resvg-wasm with the bundled Arimo font) and the
  * command. Every scenario and fixture renders to SVG and PNG with the same
  * bytes twice; labels are laid out like bpmn-js; a rasteriser failure is
  * E_RENDER, never a process abort. The agent features (crops, halos,
@@ -13,10 +13,11 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, w
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/render/index.js';
-import { innerLines, wrapLines } from '../src/diagram/text.js';
-import { CliError } from '../src/shared/errors.js';
-import { rasterize, renderPng } from '../src/node/render.js';
+import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../src/index.js';
+import { innerLines, wrapLines } from '../src/diagram/utils/text.js';
+import { CliError } from '../src/shared/CliError.js';
+import { renderPng } from '../src/node/index.js';
+import { PngRenderer } from '../src/node/PngRenderer.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { bundleCore } from '../tools/iso/bundle.mjs';
 
@@ -110,7 +111,7 @@ describe('every scenario and fixture renders', () => {
 describe('the PNG rasteriser', () => {
   it('draws text with the bundled font only (no system font)', async () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="30" font-family="Arial, Arimo, sans-serif"><rect width="200" height="30" fill="#fff"/><text x="10" y="20" font-size="12" fill="#000">Check invoice ÄÖÜ ß €</text></svg>';
-    const { pixels, width, height } = await rasterize(svg, { pixels: true });
+    const { pixels, width, height } = await new PngRenderer().rasterize(svg, { pixels: true });
     expect({ width, height }).toEqual({ width: 200, height: 30 });
     let dark = 0;
     for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
@@ -121,7 +122,7 @@ describe('the PNG rasteriser', () => {
     const named = await renderSvg(LABELS);
     const unnamed = await renderSvg(LABELS.replace(/ name="[^"]*"/g, ''));
     const count = async (svg: string): Promise<number> => {
-      const { pixels } = await rasterize(svg, { pixels: true });
+      const { pixels } = await new PngRenderer().rasterize(svg, { pixels: true });
       let dark = 0;
       for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
       return dark;
@@ -134,7 +135,7 @@ describe('the PNG rasteriser', () => {
     const trap =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="1616 15 1080 345" width="1080" height="345"><defs><marker id="arrow" viewBox="0 0 20 20" refX="11" refY="10" markerWidth="10" markerHeight="10" orient="auto"><path d="M1 5 L11 10 L1 15 Z" fill="#22242a"/></marker></defs><rect x="1616" y="15" width="1080" height="345" fill="white"/><path d="M4836 120 L4896 120" fill="none" stroke="#22242a" stroke-width="2" marker-end="url(#arrow)"/></svg>';
     for (const svg of [trap, '<svg', 'not xml at all']) {
-      const err = await rasterize(svg).then(
+      const err = await new PngRenderer().rasterize(svg).then(
         () => undefined,
         (e: unknown) => e,
       );
@@ -142,7 +143,7 @@ describe('the PNG rasteriser', () => {
       expect((err as CliError).code).toBe('E_RENDER');
       expect((err as CliError).exitCode).toBe(4);
     }
-    const after = await rasterize('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
+    const after = await new PngRenderer().rasterize('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
     expect(pngSize(after.png)).toEqual({ width: 10, height: 10 });
   });
 });
@@ -244,7 +245,7 @@ describe('renderSvg', () => {
     expect(lean.chunks.flatMap((c: { inputs: string[] }) => c.inputs).filter((f: string) => /render/.test(f))).toEqual([]);
     // (not vacuous: an entry that imports renderSvg has it)
     const render = await bundleCore({ stdin: { contents: "export { renderSvg } from './src/index.ts';", sourcefile: 'render-only.ts' }, minify: false });
-    expect(render.chunks.flatMap((c: { inputs: string[] }) => c.inputs)).toContain('src/render/index.ts');
+    expect(render.chunks.flatMap((c: { inputs: string[] }) => c.inputs)).toContain('src/render/DocRenderer.ts');
   }, 60000);
 });
 

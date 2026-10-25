@@ -17,7 +17,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CliError, Doc, mutateDoc, parseOps } from '../src/index.js';
-import * as metricsLib from '../src/diagram/metrics.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
+import * as problems from '../src/diagram/utils/problems.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { libExecutor } from '../tools/fuzz/lib/exec.mjs';
 // @ts-expect-error plain ESM tooling without type declarations
@@ -35,7 +36,7 @@ const FIXTURES = join(ROOT, 'test', 'fixtures', 'incremental');
 const SCENARIOS = join(ROOT, 'tools', 'scenarios');
 
 const exec: Executor = libExecutor({ Doc, parseOps, mutateDoc, CliError });
-const metrics = { measure: metricsLib.layoutProblemsOfXml, diff: metricsLib.diffProblems, hard: hardKinds(metricsLib, {}) as string[] };
+const metrics = { measure: (xml: string) => LayoutAnalysis.ofXml(xml), diff: problems.diffProblems, hard: hardKinds(problems, {}) as string[] };
 
 type Mode = 'auto' | 'incremental';
 const fx = (name: string, mode: Mode, seed: number) => ({ file: join(FIXTURES, name), mode, seed });

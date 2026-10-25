@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, showXml } from '../src/api.js';
-import { CliError } from '../src/shared/errors.js';
-import { mutationSummary, renderSummary } from '../src/report/command-report.js';
+import { CliError } from '../src/shared/CliError.js';
+import { mutationSummary, renderSummary } from '../src/index.js';
 
 /** The bounds of an element's shape. */
 function bounds(xml: string, id: string): { x: number; y: number; width: number; height: number } {

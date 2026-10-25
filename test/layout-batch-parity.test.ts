@@ -9,13 +9,13 @@
  *    single commands, and add no backward flow; without the reminder path
  *    they add no layout problem at all (score 0, like two commands; on 0.5.0
  *    the batches gave 9 to 19). The new nodes are placed in op order, a chain
- *    of new nodes stays a splice through a split (diagram/place.ts
+ *    of new nodes stays a splice through a split (diagram/NodePlacer.ts
  *    spliceTarget, chainReaches), exception paths wait for the normal flow,
  *    and the flows of a node are routed as soon as the next one is placed
- *    (incremental.ts routeNow), like the next single command sees them.
+ *    (IncrementalLayout.ts routeNow), like the next single command sees them.
  *  - a `connect` into a merge an earlier command spliced, that would enter it
  *    backwards, places the merge again right of its rightmost predecessor
- *    (incremental.ts pullJoins); a loop return does not.
+ *    (IncrementalLayout.ts pullJoins); a loop return does not.
  *  - `place <boundaryEventId> --side top|bottom` (op key "side") moves the
  *    event to that border of its host, routes its flow again and brings its
  *    exception path along: the reminder path above the approval, score 0.
@@ -32,8 +32,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml } from '../src/api.js';
-import { CliError } from '../src/shared/errors.js';
-import { diffProblems, layoutProblemsOfXml } from '../src/diagram/metrics.js';
+import { CliError } from '../src/shared/CliError.js';
+import { diffProblems } from '../src/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/diagram/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const FIXTURE = (() => {
@@ -88,7 +89,7 @@ const boundsOf = (xml: string, id: string): { x: number; y: number; width: numbe
   return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
 };
 const bottomOf = (b: { y: number; height: number }): number => b.y + b.height;
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await layoutProblemsOfXml(before)).problems, (await layoutProblemsOfXml(after)).problems).added.map((p) => p.kind);
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
 
 async function batch(ops: object[], xml = FIXTURE): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;

@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml, validateXml, type CliError, type ValidatorContext, type ValidatorFinding } from '../src/index.js';
-import { checkFile, mutateFile } from '../src/node/files.js';
+import { checkFile, mutateFile } from '../src/node/index.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const STYLED = readFileSync(join(ROOT, 'test', 'fixtures', 'roundtrip', 'styled.bpmn'), 'utf8');

@@ -11,18 +11,17 @@
  *     content, retype warns about camunda content the new kind cannot use
  *  4. show / find display vendor attribute values, process / flow / nested ones
  *  5. receiveTask / sendTask take message=<name> (set, add --message)
- *  + the shared descriptor lookup (src/platform/descriptor.ts)
+ *  + the shared descriptor lookup (src/platform/CamundaDescriptor.ts)
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { renderDetail, renderView } from '../src/report/view-text.js';
-import { runOps } from '../src/ops/index.js';
-import { readProperties } from '../src/ops/set.js';
+import { Doc } from '../src/model/Doc.js';
+import { renderDetail, renderView, runOps, mutateDoc, buildView, elementDetail, findElements } from '../src/index.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
-import { allowedOn, allowedParents, attrAppliesTo, camundaAttr, camundaAttrsFor, containersOf, idReferenceAttrs, isCamundaType, platformOf, typeIs } from '../src/platform/descriptor.js';
-import { buildView, elementDetail, findElements } from '../src/query/model-view.js';
 import { definitionsXml, flowBetween } from './helpers.js';
+import { CAMUNDA as C7_DESCRIPTOR } from '../src/platform/CamundaDescriptor.js';
+import { PlatformDetection } from '../src/platform/PlatformDetection.js';
+import { VendorDescriptor } from '../src/platform/VendorDescriptor.js';
+import { ElementProperties } from '../src/ops/ElementProperties.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -72,14 +71,14 @@ describe('C7 target: history time to live and platform version', () => {
     expect(xml).toMatch(/<bpmn:process id="Process_Order"[^>]*camunda:historyTimeToLive="180"/);
     expect(xml).toContain('modeler:executionPlatform="Camunda Platform"');
     expect(xml).toContain('modeler:executionPlatformVersion="7.24.0"');
-    expect(platformOf(doc.definitions)).toBe('camunda7');
+    expect(new PlatformDetection(doc.definitions).target()).toBe('camunda7');
   });
 
   it('other targets get no TTL', async () => {
     expect(await Doc.create({ target: 'camunda8' }).toXml()).not.toContain('historyTimeToLive');
     expect(await Doc.create({}).toXml()).not.toContain('historyTimeToLive');
-    expect(platformOf(Doc.create({ target: 'camunda8' }).definitions)).toBe('camunda8');
-    expect(platformOf(Doc.create({}).definitions)).toBeUndefined();
+    expect(new PlatformDetection(Doc.create({ target: 'camunda8' }).definitions).target()).toBe('camunda8');
+    expect(new PlatformDetection(Doc.create({}).definitions).target()).toBeUndefined();
   });
 
   it('a process created later in a C7 file (participant) gets the TTL too, in other files not', async () => {
@@ -103,7 +102,7 @@ describe('C7 target: history time to live and platform version', () => {
   it('a loaded C7 file (modeler:executionPlatform) is recognised; an explicit TTL is never overwritten', async () => {
     const xml = definitionsXml('<bpmn:startEvent id="S" />', { nsDecl: `${CAMUNDA} xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform"` });
     const doc = await Doc.fromXml(xml);
-    expect(platformOf(doc.definitions)).toBe('camunda7');
+    expect(new PlatformDetection(doc.definitions).target()).toBe('camunda7');
     const cs = runOps(doc, [{ op: 'add', kind: 'participant', name: 'Other' }, { op: 'add', kind: 'participant', name: 'Third' }]);
     const p = doc.require(cs.created.find((c) => c.kind === 'process')!.id);
     expect(p.$attrs['camunda:historyTimeToLive']).toBe('180');
@@ -155,7 +154,7 @@ describe('renaming an id re-points vendor id references', () => {
   });
 
   it('the descriptor names the id-valued vendor attributes', () => {
-    expect(idReferenceAttrs()).toContainEqual({ element: 'camunda:errorEventDefinition', attr: 'errorRef', target: 'bpmn:Error' });
+    expect(C7_DESCRIPTOR.idReferenceAttrs()).toContainEqual({ element: 'camunda:errorEventDefinition', attr: 'errorRef', target: 'bpmn:Error' });
   });
 });
 
@@ -175,7 +174,7 @@ describe('set: prefixed keys address nested elements', () => {
     expect(xml).toMatch(/<bpmn:conditionalEventDefinition camunda:variableName="y" camunda:variableEvents="create, update"/);
     expect(xml).not.toMatch(/<bpmn:(boundaryEvent|intermediateThrowEvent|intermediateCatchEvent)[^>]*camunda:/);
     // show prints them with the same keys
-    expect(readProperties(doc, doc.require('Event_Declined'))).toMatchObject({ 'definition.camunda:errorCodeVariable': 'errCode' });
+    expect(new ElementProperties(doc).read(doc.require('Event_Declined'))).toMatchObject({ 'definition.camunda:errorCodeVariable': 'errCode' });
   });
 
   it('loop.<attr> writes onto the multi-instance loop (created when missing, with a note)', async () => {
@@ -186,7 +185,7 @@ describe('set: prefixed keys address nested elements', () => {
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics camunda:collection="\$\{items\}" camunda:elementVariable="item" camunda:asyncBefore="true" \/>/);
     expect(xml).not.toMatch(/<bpmn:userTask[^>]*camunda:collection/);
-    expect(readProperties(doc, doc.require('Activity_Review'))).toMatchObject({ loop: 'parallel', 'loop.camunda:collection': '${items}' });
+    expect(new ElementProperties(doc).read(doc.require('Activity_Review'))).toMatchObject({ loop: 'parallel', 'loop.camunda:collection': '${items}' });
   });
 
   it('loop.<attr> on a standard loop is refused; an empty value on a missing nested element is a no-op', async () => {
@@ -214,7 +213,7 @@ describe('set: prefixed keys address nested elements', () => {
     set(doc, 'Flow_yes', { 'condition.camunda:resource': 'deployment://cond.groovy', language: 'groovy' });
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment:\/\/cond.groovy" \/>/);
-    expect(readProperties(doc, doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
+    expect(new ElementProperties(doc).read(doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
   });
 
   it('unknown prefixes and missing definitions are reported', async () => {
@@ -311,7 +310,7 @@ describe('set <flow> condition= keeps / reports camunda:resource and the languag
 
   it('show and the overview list a resource condition', async () => {
     const doc = await Doc.fromXml(RESOURCE_CONDITION);
-    expect(readProperties(doc, doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
+    expect(new ElementProperties(doc).read(doc.require('Flow_yes'))).toMatchObject({ language: 'groovy', 'condition.camunda:resource': 'deployment://cond.groovy' });
     const text = renderView(buildView(doc));
     expect(text).toContain('Yes (Flow_yes if resource deployment://cond.groovy [language=groovy])');
   });
@@ -478,7 +477,7 @@ describe('receiveTask / sendTask take message=<name>', () => {
     const cs = set(doc, 'Activity_Wait', { message: 'PaymentReceived' });
     expect(cs.created).toContainEqual(expect.objectContaining({ id: 'Message_PaymentReceived', kind: 'message' }));
     expect(await doc.toXml()).toContain('<bpmn:receiveTask id="Activity_Wait" name="Wait payment" messageRef="Message_PaymentReceived">');
-    expect(readProperties(doc, doc.require('Activity_Wait'))).toMatchObject({ message: 'PaymentReceived' });
+    expect(new ElementProperties(doc).read(doc.require('Activity_Wait'))).toMatchObject({ message: 'PaymentReceived' });
     // an existing message by name is reused
     set(doc, 'Activity_Wait', { message: 'Notify' });
     expect(doc.require('Activity_Wait').get('messageRef')?.get('id')).toBe('Message_Notify');
@@ -504,35 +503,35 @@ describe('receiveTask / sendTask take message=<name>', () => {
 /* the shared descriptor lookup                                          */
 /* ------------------------------------------------------------------ */
 
-describe('platform/descriptor', () => {
+describe('platform/CamundaDescriptor', () => {
   it('resolves attribute owners through camunda mixins', () => {
-    expect(camundaAttr('camunda:assignee')).toEqual({ name: 'camunda:assignee', type: 'String', owners: ['bpmn:UserTask'] });
-    expect(camundaAttr('asyncBefore')?.owners).toEqual(['bpmn:Activity', 'bpmn:Gateway', 'bpmn:Event', 'bpmn:MultiInstanceLoopCharacteristics']);
-    expect(camundaAttr('camunda:topic')?.owners).toContain('bpmn:MessageEventDefinition');
-    expect(camundaAttr('camunda:resource')?.owners).toEqual(['bpmn:ScriptTask', 'bpmn:FormalExpression']);
-    expect(camundaAttr('zeebe:topic')).toBeUndefined();
-    expect(camundaAttr('camunda:asignee')).toBeUndefined();
-    expect(attrAppliesTo('camunda:assignee', 'bpmn:ServiceTask')).toBe(false);
-    expect(attrAppliesTo('camunda:asyncBefore', 'bpmn:UserTask')).toBe(true);
-    expect(attrAppliesTo('camunda:nope', 'bpmn:UserTask')).toBeUndefined();
-    expect(camundaAttrsFor('bpmn:Process').map((a) => a.name)).toContain('camunda:historyTimeToLive');
-    expect(typeIs('bpmn:UserTask', 'bpmn:Activity')).toBe(true);
-    expect(typeIs('bpmn:UserTask', 'bpmn:Gateway')).toBe(false);
+    expect(C7_DESCRIPTOR.attr('camunda:assignee')).toEqual({ name: 'camunda:assignee', type: 'String', owners: ['bpmn:UserTask'] });
+    expect(C7_DESCRIPTOR.attr('asyncBefore')?.owners).toEqual(['bpmn:Activity', 'bpmn:Gateway', 'bpmn:Event', 'bpmn:MultiInstanceLoopCharacteristics']);
+    expect(C7_DESCRIPTOR.attr('camunda:topic')?.owners).toContain('bpmn:MessageEventDefinition');
+    expect(C7_DESCRIPTOR.attr('camunda:resource')?.owners).toEqual(['bpmn:ScriptTask', 'bpmn:FormalExpression']);
+    expect(C7_DESCRIPTOR.attr('zeebe:topic')).toBeUndefined();
+    expect(C7_DESCRIPTOR.attr('camunda:asignee')).toBeUndefined();
+    expect(C7_DESCRIPTOR.attrAppliesTo('camunda:assignee', 'bpmn:ServiceTask')).toBe(false);
+    expect(C7_DESCRIPTOR.attrAppliesTo('camunda:asyncBefore', 'bpmn:UserTask')).toBe(true);
+    expect(C7_DESCRIPTOR.attrAppliesTo('camunda:nope', 'bpmn:UserTask')).toBeUndefined();
+    expect(C7_DESCRIPTOR.attrsFor('bpmn:Process').map((a) => a.name)).toContain('camunda:historyTimeToLive');
+    expect(VendorDescriptor.typeIs('bpmn:UserTask', 'bpmn:Activity')).toBe(true);
+    expect(VendorDescriptor.typeIs('bpmn:UserTask', 'bpmn:Gateway')).toBe(false);
   });
 
   it('describes extension element types', () => {
-    expect(isCamundaType('camunda:inputOutput')).toBe(true);
-    expect(isCamundaType('camunda:InputOutput')).toBe(true);
-    expect(isCamundaType('camunda:inputOutpt')).toBe(false);
-    expect(isCamundaType('camunda:AsyncCapable')).toBe(false);
-    expect(allowedParents('camunda:taskListener')).toEqual(['bpmn:UserTask']);
-    expect(allowedParents('camunda:connector')).toEqual(['bpmn:ServiceTask', 'bpmn:BusinessRuleTask', 'bpmn:SendTask', 'bpmn:MessageEventDefinition']);
-    expect(allowedParents('camunda:properties')).toEqual(['*']);
-    expect(allowedOn('camunda:taskListener', 'bpmn:ServiceTask')).toBe(false);
-    expect(allowedOn('camunda:inputOutput', 'bpmn:ServiceTask')).toBe(true);
-    expect(containersOf('camunda:inputParameter')).toEqual(['camunda:inputOutput']);
-    expect(containersOf('camunda:formField')).toEqual(['camunda:formData']);
-    expect(containersOf('camunda:property')).toEqual(['camunda:properties']);
+    expect(!!C7_DESCRIPTOR.type('camunda:inputOutput')).toBe(true);
+    expect(!!C7_DESCRIPTOR.type('camunda:InputOutput')).toBe(true);
+    expect(!!C7_DESCRIPTOR.type('camunda:inputOutpt')).toBe(false);
+    expect(!!C7_DESCRIPTOR.type('camunda:AsyncCapable')).toBe(false);
+    expect(C7_DESCRIPTOR.allowedParents('camunda:taskListener')).toEqual(['bpmn:UserTask']);
+    expect(C7_DESCRIPTOR.allowedParents('camunda:connector')).toEqual(['bpmn:ServiceTask', 'bpmn:BusinessRuleTask', 'bpmn:SendTask', 'bpmn:MessageEventDefinition']);
+    expect(C7_DESCRIPTOR.allowedParents('camunda:properties')).toEqual(['*']);
+    expect(C7_DESCRIPTOR.allowedOn('camunda:taskListener', 'bpmn:ServiceTask')).toBe(false);
+    expect(C7_DESCRIPTOR.allowedOn('camunda:inputOutput', 'bpmn:ServiceTask')).toBe(true);
+    expect(C7_DESCRIPTOR.containersOf('camunda:inputParameter')).toEqual(['camunda:inputOutput']);
+    expect(C7_DESCRIPTOR.containersOf('camunda:formField')).toEqual(['camunda:formData']);
+    expect(C7_DESCRIPTOR.containersOf('camunda:property')).toEqual(['camunda:properties']);
   });
 });
 

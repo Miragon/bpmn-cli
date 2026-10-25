@@ -1,15 +1,14 @@
 /**
  * Step 3: what `show --layout` tells an agent about x positions (columns,
  * wide gaps, rows that hold unrelated clusters) and the drawing-quality
- * problem kinds in a real write (src/query/layout-view.ts, metrics.ts).
+ * problem kinds in a real write (src/query/layout-view.ts, LayoutAnalysis.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/document.js';
-import { layoutView } from '../src/query/layout-view.js';
-import { renderLayoutView } from '../src/report/view-text.js';
-import type { El } from '../src/model/moddle.js';
+import { Doc } from '../src/model/Doc.js';
+import { layoutView, renderLayoutView } from '../src/index.js';
+import type { El } from '../src/model/utils/moddle.js';
 import type { Op } from '../src/ops/types.js';
-import { mutateDoc } from '../src/pipeline/index.js';
+import { mutateDoc } from '../src/index.js';
 
 const BASE: Op[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
