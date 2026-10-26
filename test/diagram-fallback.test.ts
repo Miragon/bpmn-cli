@@ -5,8 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/layout/incremental/IncrementalLayout.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/layout/incremental/IncrementalLayout.js')>()),
+vi.mock('../src/domain/diagram/layout/incremental/IncrementalLayout.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/domain/diagram/layout/incremental/IncrementalLayout.js')>()),
   IncrementalLayout: {
     run: async () => {
       throw new Error('boom');
@@ -14,9 +14,9 @@ vi.mock('../src/layout/incremental/IncrementalLayout.js', async (importOriginal)
   },
 }));
 
-const { Doc } = await import('../src/model/Doc.js');
+const { Doc } = await import('../src/domain/document/Doc.js');
 const { mutateDoc } = await import('../src/index.js');
-const { CliError } = await import('../src/shared/CliError.js');
+const { CliError } = await import('../src/domain/document/CliError.js');
 
 /** A drawn file the clean engine would not reproduce (every shape moved by 30 px). */
 async function handXml(): Promise<string> {

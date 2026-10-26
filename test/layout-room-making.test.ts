@@ -9,7 +9,7 @@
  *    horizontal segments of the lines running under the anchor down (bypass
  *    and loop-back lines); a branch also tries the rows above its anchor, a
  *    boundary path its host's top border with the path above it. The row
- *    choice counts the chain that follows on the row (layout/incremental/NodePlacer.ts
+ *    choice counts the chain that follows on the row (domain/diagram/layout/incremental/NodePlacer.ts
  *    chainCost). Single commands and the batch give the same shapes.
  *  - a branch row keeps clear of the boundary events on its frame's bottom
  *    border (audit #63).
@@ -28,8 +28,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
-import { diffProblems } from '../src/drawing/utils/problems.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
+import { diffProblems } from '../src/domain/diagram/utils/problems.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const fixture = (name: string): string => readFileSync(join(ROOT, 'test', 'fixtures', 'layout-room', name), 'utf8');

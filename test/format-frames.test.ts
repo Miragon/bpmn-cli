@@ -11,17 +11,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { inside } from '../src/drawing/utils/geom.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Semantics } from '../src/drawing/Semantics.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { inside } from '../src/domain/diagram/utils/geom.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Semantics } from '../src/domain/diagram/di/Semantics.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
+import { type MutationResult } from '../src/domain/batch/types.js';
 
 /** S -> Sub (S1 -> T1 -> E1) -> G -> B -> E, G -> C -> E2: the sub-process's end event E1 lies left of the outer end events. */
-const MODEL: Op[] = [
+const MODEL: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Prepare', after: 'S' },
   { op: 'add', kind: 'startEvent', id: 'S1', name: 'Begin', in: 'Sub' },
@@ -39,12 +39,12 @@ async function model(): Promise<string> {
   return (await mutateDoc(Doc.create({ processId: 'P' }), MODEL, { dryRun: true })).xml;
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; doc: Doc }> {
+async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationResult; doc: Doc }> {
   const outcome = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental' });
   return { result: outcome, doc: await Doc.fromXml(outcome.xml) };
 }
 
-async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; element?: string; related?: string[]; hint?: string }> {
+async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string; message: string; element?: string; related?: string[]; hint?: string }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental' });
   } catch (err) {

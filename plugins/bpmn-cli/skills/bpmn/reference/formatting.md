@@ -176,8 +176,9 @@ lines up the end events of every lane); dry-run it first and keep it only when
 
 ## 6. Format ops in a batch
 
-Format ops run after the semantic ops and the layout, in batch order, all or
-nothing; they see the final ids (aliases work):
+Format ops run in batch order, all or nothing, each after the layout of the ops
+before it; they see the ids as those ops left them (aliases work), and a later
+model op keeps what they drew:
 
 ```bash
 printf '%s' '[

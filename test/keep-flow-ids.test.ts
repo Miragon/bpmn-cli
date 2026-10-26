@@ -11,19 +11,19 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml, newXml } from '../src/api.js';
-import { Doc } from '../src/model/Doc.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Warning } from '../src/shared/CliError.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { Warning } from '../src/domain/document/CliError.js';
 import { runOp, runOps } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc, renderMutation } from '../src/index.js';
-import type { ChangeSet } from '../src/model/ChangeSet.js';
+import type { ChangeSet } from '../src/domain/document/ChangeSet.js';
 import { definitionsXml, flowBetween } from './helpers.js';
-import { FlowIdFollower } from '../src/ops/flows/FlowIdFollower.js';
+import { FlowIdFollower } from '../src/domain/editing/flows/FlowIdFollower.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
 async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {
-  const ops: Op[] = [
+  const ops: EditCommand[] = [
     { op: 'add', kind: 'startEvent', name: 'Start' },
     { op: 'add', kind: 'task', name: 'Check', after: 'Event_Start' },
     { op: 'add', kind: 'exclusiveGateway', name: 'Ok?', after: 'Activity_Check' },
@@ -130,7 +130,7 @@ const stale = (ws: readonly Warning[]): Warning[] => ws.filter((warning) => warn
 const staleLines = (ws: readonly Warning[]): string[] => stale(ws).map((warning) => `${warning.element} ${warning.related!.join('->')} => ${/ id=(\S+)`/.exec(warning.hint!)![1]}`);
 
 /** Runs ops on CHAIN (or `xml`) with ids kept, without the pipeline. */
-async function kept(ops: Op[], xml = CHAIN): Promise<{ doc: Doc; warnings: Warning[]; renames: number; cs: ChangeSet }> {
+async function kept(ops: EditCommand[], xml = CHAIN): Promise<{ doc: Doc; warnings: Warning[]; renames: number; cs: ChangeSet }> {
   const doc = await Doc.fromXml(xml);
   doc.followFlowEnds = false;
   const cs = runOps(doc, ops);
@@ -167,7 +167,7 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
   });
 
   it('every op that changes the ends of a flow: add --after / --before / --flow / --after --before, split, remove, set source= / target=', async () => {
-    const cases: Array<[Op, string]> = [
+    const cases: Array<[EditCommand, string]> = [
       [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }, 'Flow_CheckToOk Activity_Check->Activity_Review => Flow_CheckToReview'],
       [{ op: 'add', kind: 'task', name: 'Prepare', before: 'Activity_Check' }, 'Flow_StartToCheck Event_Start->Activity_Prepare => Flow_StartToPrepare'],
       [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }, 'Flow_OkToBook Gateway_Ok->Activity_Review => Flow_OkToReview'],
@@ -290,7 +290,7 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
     // the join's default flow comes back to Done, but the prepend made Join -> Archive the default, as asked (as by default)
     const archive = JOINED.replace('<bpmn:exclusiveGateway id="Gateway_Join">', '<bpmn:exclusiveGateway id="Gateway_Join" default="Flow_JoinToDone">')
       .replace('<bpmn:endEvent id="Event_Done"', '<bpmn:task id="Activity_Archive" name="Archive" />\n    <bpmn:endEvent id="Event_Done"');
-    const ops: Op[] = [{ op: 'move', ids: ['Gateway_Join', 'Event_Done'], before: 'Activity_Archive', default: true }];
+    const ops: EditCommand[] = [{ op: 'move', ids: ['Gateway_Join', 'Event_Done'], before: 'Activity_Archive', default: true }];
     const wins = await kept(ops, archive);
     expect(flowBetween(wins.doc, 'Gateway_Join', 'Event_Done')).toBe('Flow_JoinToDone');
     expect(wins.doc.get('Gateway_Join')!.get<El>('default')).toBe(wins.doc.get('Flow_JoinToArchive'));
@@ -383,7 +383,7 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
   });
 
   it('a flow the op or an earlier op of the batch created follows its ends, with runOp on its own too', async () => {
-    const move: Op = { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Event_Start' };
+    const move: EditCommand = { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Event_Start' };
     const alone = await Doc.fromXml(TWO_OUT);
     alone.followFlowEnds = false;
     const single = runOp(alone, move);
@@ -428,7 +428,7 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
     const first = await applyToXml(LINE, [{ op: 'add', kind: 'task', name: 'X', after: 'Activity_A' }], { keepFlowIds: true, layout: false });
     expect(staleLines(first.result.warnings.added)).toEqual(['Flow_AToB Activity_A->Activity_X => Flow_AToX']);
     // moving X away and back: the bridge runs Flow_AToB A -> B (the ends its id names), the splice A -> X again
-    const away: Op[] = [{ op: 'move', ids: ['Activity_X'], after: 'Activity_C' }, { op: 'move', ids: ['Activity_X'], after: 'Activity_A' }];
+    const away: EditCommand[] = [{ op: 'move', ids: ['Activity_X'], after: 'Activity_C' }, { op: 'move', ids: ['Activity_X'], after: 'Activity_A' }];
     const again = await applyToXml(first.xml, away, { keepFlowIds: true, layout: false });
     expect(stale(again.result.warnings.added)).toEqual([]);
     const doc = await Doc.fromXml(first.xml);
@@ -445,7 +445,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
   const HASHED = CHAIN.replace(/Activity_Check/g, 'Activity_0abc123').replace('<bpmn:endEvent id="Event_Done" name="Done">', '<bpmn:endEvent id="Event_Done">');
 
   /** `old -> new` of the renames by default, and `flow source->target => suggested id` of each W_FLOW_ID_STALE with ids kept. */
-  async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
+  async function bothModes(xml: string, ops: EditCommand[]): Promise<{ renamed: string[]; stale: string[] }> {
     const follow = await Doc.fromXml(xml);
     const renamed = runOps(follow, ops).renames.map((result) => `${result.from} -> ${result.to}`);
     const keep = await kept(ops, xml);
@@ -483,7 +483,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
     // two commands: the first renames Check, the second splices after it; Check is still named Check
     const first = await applyToXml(await drawnDefault(), [{ op: 'set', id: 'Activity_Check', values: { id: 'Activity_Verify' } }]);
     expect(first.xml).toContain('<bpmn:sequenceFlow id="Flow_CheckToOk" sourceRef="Activity_Verify" targetRef="Gateway_Ok" />');
-    const splice: Op[] = [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' }];
+    const splice: EditCommand[] = [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' }];
     const renamed = await applyToXml(first.xml, splice);
     expect(renamed.result.renamed).toEqual({ Flow_CheckToOk: 'Flow_VerifyToLog' });
     expect(renamed.xml).toContain('<bpmndi:BPMNEdge id="Flow_VerifyToLog_di" bpmnElement="Flow_VerifyToLog">');
@@ -495,7 +495,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
   });
 
   it('a retype between the `set` and the end change (a new element of the new type) keeps what the end was called', async () => {
-    for (const retype of [{ op: 'retype', id: 'Activity_0abc123', kind: 'userTask' }, { op: 'retype', id: 'Activity_0abc123', kind: 'serviceTask' }] as Op[]) {
+    for (const retype of [{ op: 'retype', id: 'Activity_0abc123', kind: 'userTask' }, { op: 'retype', id: 'Activity_0abc123', kind: 'serviceTask' }] as EditCommand[]) {
       expect(await bothModes(HASHED, [
         { op: 'set', id: 'Activity_0abc123', values: { name: 'Verify' } },
         retype,
@@ -625,7 +625,7 @@ const changedFlows = (cs: Pick<ChangeSet, 'changed'>): string[] => cs.changed.fi
 
 describe('move: a chain anchored on its own nodes, nodes already in place, what the bridge took', () => {
   it('a chain whose --after anchor or --flow source is one of its later nodes, or inside one, is refused before anything changes, in both modes', async () => {
-    const cases: Array<[string, Op, string, string]> = [
+    const cases: Array<[string, EditCommand, string, string]> = [
       [JOINED, { op: 'move', ids: ['Activity_A', 'Gateway_Join', 'Event_Done'], after: 'Gateway_Join' }, 'Gateway_Join cannot anchor the move of Activity_A, Gateway_Join, Event_Done: it is one of the moved nodes', '`bpmn move <file> Activity_A --after Gateway_Join`'],
       [LINE, { op: 'move', ids: ['Activity_A', 'Activity_B'], flow: 'Flow_BToC' }, 'Flow_BToC cannot anchor the move of Activity_A, Activity_B: its source Activity_B is one of the moved nodes', '`bpmn move <file> Activity_A --flow Flow_BToC`'],
       [LINE, { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_C' }, 'Activity_C cannot anchor the move of Activity_B, Activity_C: it is one of the moved nodes', '`bpmn move <file> Activity_B --after Activity_C`'],
@@ -663,7 +663,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
   });
 
   it('a move that leaves its nodes where they are changes nothing, in both modes: no write, no warning, the label and condition stay', async () => {
-    const cases: Array<[Op, string]> = [
+    const cases: Array<[EditCommand, string]> = [
       [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A' }, 'Activity_B is already after Activity_A'],
       [{ op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_A' }, 'Activity_B, Activity_C are already after Activity_A, in this order'],
       [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C' }, 'Activity_B is already before Activity_C'],
@@ -690,7 +690,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
     }
     // a hand-made drawing keeps every shape: the incremental layout places no node a move left where it was (--in its own scope too)
     const hand = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'step1', 'far-label.bpmn'), 'utf8');
-    for (const op of [{ op: 'move', ids: ['ST', 'SE'], after: 'SS' }, { op: 'move', ids: ['ST'], in: 'SUB' }] satisfies Op[]) {
+    for (const op of [{ op: 'move', ids: ['ST', 'SE'], after: 'SS' }, { op: 'move', ids: ['ST'], in: 'SUB' }] satisfies EditCommand[]) {
       const result = await applyToXml(hand, [op]);
       expect([result.unchanged, result.result.layout?.mode, result.result.layout?.moved], JSON.stringify(op)).toEqual([true, 'incremental', []]);
     }
@@ -723,7 +723,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
   });
 
   it('with ids kept, the change of a bridged node\'s put-back out-flow names what the bridge took: its name, condition and annotations', async () => {
-    const move: Op[] = [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }];
+    const move: EditCommand[] = [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }];
     const both = await applyToXml(NAMED_LINE, move, { keepFlowIds: true, layout: false });
     expect(changedFlows(both.result)).toEqual([
       'Flow_AToB: Activity_A -> Activity_C (bridged Activity_B)',
@@ -807,7 +807,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
 
   /** Follows every W_FLOW_ID_STALE hint of `res` (`bpmn set <file> <flow> id=<suggested>`) and reads the result again. */
   async function follow(xml: string, warnings: readonly Warning[]): Promise<{ followed: string[]; naming: string[]; before: unknown; after: unknown }> {
-    const ops: Op[] = stale(warnings).map((warning) => ({ op: 'set', id: warning.element!, values: { id: / id=(\S+)`/.exec(warning.hint!)![1]! } }));
+    const ops: EditCommand[] = stale(warnings).map((warning) => ({ op: 'set', id: warning.element!, values: { id: / id=(\S+)`/.exec(warning.hint!)![1]! } }));
     const done = await applyToXml(xml, ops, { keepFlowIds: true, layout: false });
     const doc = await Doc.fromXml(done.xml);
     const naming = ops.flatMap((op) => {
@@ -821,7 +821,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
   // the five 'follow hints' violations of the keep-mode fuzz campaigns (seeds 1003, 9456, 9473, 7392, 7922): each followed
   // id named its ends no more on the next read, because the file's flow prefix flipped (f -> Flow_: bpmn-cli's glued flows
   // did not vote; G or F, tied: the first declared won)
-  const CASES: Array<[string, string, Op]> = [
+  const CASES: Array<[string, string, EditCommand]> = [
     ['polish-remove-9456.bpmn', 'fHandleTicketToFz6Archive', { op: 'add', kind: 'subProcess', name: 'Fz6 archive', before: 'Activity_Fz3Pay' }],
     ['expand-sibling-9473.bpmn', 'G_Fz6ArchiveToFz3Check G_Fz3CheckToThen', { op: 'move', ids: ['Activity_Fz3Check', 'T', 'P'], before: 'E' }],
     ['polish-lanes-7392.bpmn', 'fFz5CheckToReviewLarge', { op: 'move', ids: ['Gateway_Fz5Check', 'T2'], after: 'G1' }],
@@ -837,7 +837,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
   });
 
   it('seed 1003: six commands on polish-remove.bpmn, the split hint followed, still names its ends', async () => {
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'move', ids: ['H'], after: 'M' },
       { op: 'add', kind: 'task', name: 'Fz2 check', after: 'S' },
       { op: 'move', ids: ['H'], before: 'E2' },
@@ -872,7 +872,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
 describe('`set id=` takes a DI id derived from the old id along', () => {
   /** DI id by element id. */
   const diOf = (xml: string): Map<string, string> => new Map([...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)].map((match) => [match[2]!, match[1]!]));
-  const RENAMES: Op[] = [
+  const RENAMES: EditCommand[] = [
     { op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_CheckToAudit' } },
     { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } },
   ];
@@ -912,7 +912,7 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
   });
 
   it('in a batch, a DI id of an element removed before is free for the rename, as in two commands', async () => {
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'remove', ids: ['Activity_Book'] },
       { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Book' } },
     ];
@@ -940,7 +940,7 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
   });
 
   it('following W_FLOW_ID_STALE with its `bpmn set` gives the file the default rename gives', async () => {
-    const splice: Op[] = [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }];
+    const splice: EditCommand[] = [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }];
     for (const style of ['suffix', 'bpmn'] as const) {
       const renamed = await applyToXml(await drawnDefault(style), splice);
       const keptIds = await applyToXml(await drawnDefault(style), splice, { keepFlowIds: true });

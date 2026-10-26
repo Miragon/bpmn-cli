@@ -1,5 +1,5 @@
 /**
- * Step 3: selectors of the format ops (src/query/ElementSelector.ts): `path`
+ * Step 3: selectors of the format ops (src/domain/views/ElementSelector.ts): `path`
  * (with `via`), `kind` and `branch` name the elements of place / align /
  * color / tidy, so a happy path is coloured, every end event aligned or a
  * branch moved in one call. Elements are addressed by id only.
@@ -10,16 +10,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseOps, layoutView } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import type { DShape } from '../src/drawing/types.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DShape } from '../src/domain/diagram/di/types.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
+import { type MutationResult } from '../src/domain/batch/types.js';
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -29,7 +29,7 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-const SPLIT: Op[] = [
+const SPLIT: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   {
     op: 'split',
@@ -46,7 +46,7 @@ const SPLIT: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'End', name: 'End', after: 'J' },
 ];
 
-async function handXml(ops: Op[]): Promise<string> {
+async function handXml(ops: EditCommand[]): Promise<string> {
   const mutation = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   const doc = await Doc.fromXml(mutation.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
@@ -58,12 +58,12 @@ async function handXml(ops: Op[]): Promise<string> {
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationResult; after: Doc }> {
   const mutation = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   return { result: mutation, after: await Doc.fromXml(mutation.xml) };
 }
 
-async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; hint?: string }> {
+async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string; message: string; hint?: string }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {

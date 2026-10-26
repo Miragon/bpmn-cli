@@ -4,13 +4,13 @@
  * Synthetic fixtures only.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
-import { renderLayout } from '../src/report/utils/result-lines.js';
+import type { MutationOptions, MutationResult } from '../src/domain/batch/types.js';
+import { renderLayout } from '../src/adapters/in/report/utils/result-lines.js';
 
-const OPS: Op[] = [
+const OPS: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -41,7 +41,7 @@ function stickyAt(xml: string, id: string): { x: number; y: number } {
  * with stickies placed relative to shapes: `[stickyId, nodeId, dx, dy]` puts the
  * sticky's top left corner at the node's top left corner plus (dx, dy).
  */
-async function withStickies(stickies: Array<[string, string, number, number]>, opts: { prefix?: string; uri?: string; ops?: Op[] } = {}): Promise<string> {
+async function withStickies(stickies: Array<[string, string, number, number]>, opts: { prefix?: string; uri?: string; ops?: EditCommand[] } = {}): Promise<string> {
   const engine = (await mutateDoc(Doc.create({ processId: 'P' }), opts.ops ?? OPS, { dryRun: true })).xml;
   const hand = engine.replace(/<dc:Bounds x="([-\d.]+)" y="([-\d.]+)"/g, (_m, left: string, top: string) => `<dc:Bounds x="${Number(left) + 13}" y="${Number(top) + 7}"`).replace(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g, (_m, left: string, top: string) => `<di:waypoint x="${Number(left) + 13}" y="${Number(top) + 7}"`);
   const prefix = opts.prefix ?? 'bpmiq';
@@ -54,7 +54,7 @@ async function withStickies(stickies: Array<[string, string, number, number]>, o
     .replace(/(<bpmn:process id="P"[^>]*>)/, `$1<bpmn:extensionElements>${items.join('')}</bpmn:extensionElements>`);
 }
 
-async function write(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
+async function write(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
   return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
 }
 
@@ -87,7 +87,7 @@ describe('design-iq stickies follow their flow node', () => {
 
   it('format ops: a sticky follows a node that place / align moves', async () => {
     const xml = await withStickies([['Sticky_C', 'C', 70, 70]]);
-    const outcome = await write(xml, [{ op: 'place', ids: ['C', 'E2'], above: 'B' } as Op]);
+    const outcome = await write(xml, [{ op: 'place', ids: ['C', 'E2'], above: 'B' } as EditCommand]);
     const shiftDelta = shift(xml, outcome.xml, 'C');
     expect(shiftDelta).not.toEqual({ x: 0, y: 0 });
     const was = stickyAt(xml, 'Sticky_C');
@@ -140,7 +140,7 @@ describe('design-iq stickies follow their flow node', () => {
   });
 
   it('belongs to the task it lies on inside an expanded sub-process, not to the sub-process', async () => {
-    const ops: Op[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C' }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
+    const ops: EditCommand[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C' }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
     const xml = await withStickies([['Sticky_In', 'In', 20, 10]], { ops });
     const outcome = await write(xml, [{ op: 'add', kind: 'task', id: 'In2', name: 'Before inner', before: 'In' }]);
     const shiftDelta = shift(xml, outcome.xml, 'In');

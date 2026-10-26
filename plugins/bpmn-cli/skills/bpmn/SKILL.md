@@ -264,7 +264,7 @@ shrink frames), `order` (lanes, pools, branch order). Selectors
 `--path <fromId> <toId>`, `--branch <flowId>`, `--kind <kind>` name many
 elements at once. Read the drawing with `show --layout` first, `--dry-run` the
 format op, check `bpmn metrics <file>` and look (step 4) after. In a batch they are ops too and
-run after the semantic ops and the layout.
+run in batch order, each after the layout of the ops before it.
 
 ```bash
 bpmn show order-to-cash.bpmn --layout

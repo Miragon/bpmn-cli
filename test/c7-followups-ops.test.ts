@@ -28,18 +28,18 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parseOps } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import { extensionLines } from '../src/report/utils/view-lines.js';
-import { is, many, type El } from '../src/model/utils/moddle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { extensionLines } from '../src/adapters/in/report/utils/view-lines.js';
+import { is, many, type El } from '../src/domain/document/utils/moddle.js';
 import { listAllExtensions } from '../src/index.js';
 import { runOps } from '../src/index.js';
-import { withoutProfileDuplicates } from '../src/ops/utils/covers.js';
-import type { Op } from '../src/ops/types.js';
+import { withoutProfileDuplicates } from '../src/domain/editing/utils/covers.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc, buildView, elementDetail, renderDetail, renderExtensionList, renderView } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
-import { EventGatewayRule } from '../src/ops/events/EventGatewayRule.js';
-import { ElementRemover } from '../src/ops/ElementRemover.js';
-import { ElementProperties } from '../src/ops/ElementProperties.js';
+import { EventGatewayRule } from '../src/domain/editing/events/EventGatewayRule.js';
+import { ElementRemovalService } from '../src/domain/editing/ElementRemovalService.js';
+import { ElementProperties } from '../src/domain/editing/ElementProperties.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -79,7 +79,7 @@ async function load(body: string, opts: { nsDecl?: string; extraRoots?: string }
   return withMirrors(await Doc.fromXml(definitionsXml(body, opts)));
 }
 
-const run = (doc: Doc, ops: Op[]) => runOps(doc, ops);
+const run = (doc: Doc, ops: EditCommand[]) => runOps(doc, ops);
 const codes = (ws: Array<{ code: string }>) => ws.map((warning) => warning.code);
 
 /* ------------------------------------------------------------------ */
@@ -461,7 +461,7 @@ const GW_ROOTS = '  <bpmn:message id="Message_M" name="M" /><bpmn:message id="Me
 describe('7. bridges next to an event-based gateway: the engines’ rule in C7 files, BPMN 2.0 in plain files', () => {
   it('a plain file may bridge the gateway to a receive task (BPMN 2.0 allows it)', async () => {
     const doc = await load(GATEWAY, { extraRoots: GW_ROOTS });
-    const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_M'] });
+    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Event_M'] });
     expect(cs.notes).toContain('bridged: Gateway_G -> Activity_R');
     const outcome = await mutateDoc(doc, [], { dryRun: true, layout: false });
     expect(codes(outcome.validation.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
@@ -469,14 +469,14 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
 
   it('a C7 file refuses the same bridge (the engines reject receive tasks there)', async () => {
     const doc = await load(GATEWAY, { nsDecl: CAMUNDA, extraRoots: GW_ROOTS });
-    const err = caught(() => new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_M'] }));
+    const err = caught(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Event_M'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/to Activity_R, which the engines reject: receiveTask Activity_R is not an intermediate catch event/);
   });
 
   it('plain files still refuse what BPMN 2.0 forbids (a task, receive tasks mixed with message events), naming BPMN 2.0', async () => {
     const task = await load(GATEWAY.replace('<bpmn:receiveTask id="Activity_R" messageRef="Message_R" />', '<bpmn:userTask id="Activity_R" />'), { extraRoots: GW_ROOTS });
-    const err = caught(() => new ElementRemover(task).remove({ op: 'remove', ids: ['Event_M'] }));
+    const err = caught(() => new ElementRemovalService(task).remove({ op: 'remove', ids: ['Event_M'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/which BPMN 2\.0 does not allow: userTask Activity_R is neither an intermediate catch event nor a receive task/);
     // a second message branch makes the receive task a mixed configuration
@@ -486,7 +486,7 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
     <bpmn:intermediateCatchEvent id="Event_X"><bpmn:messageEventDefinition messageRef="Message_X" /></bpmn:intermediateCatchEvent>`,
       { extraRoots: GW_ROOTS },
     );
-    expect(caught(() => new ElementRemover(mixed).remove({ op: 'remove', ids: ['Event_M'] })).message).toMatch(/Event_X on another branch of Gateway_G is a message catch event; BPMN 2\.0 does not mix receive tasks and message catch events/);
+    expect(caught(() => new ElementRemovalService(mixed).remove({ op: 'remove', ids: ['Event_M'] })).message).toMatch(/Event_X on another branch of Gateway_G is a message catch event; BPMN 2\.0 does not mix receive tasks and message catch events/);
     const gateway = mixed.require('Gateway_G');
     expect(new EventGatewayRule(mixed).targetProblem(gateway, mixed.require('Event_T'))).toMatch(/already has the incoming flow F_T/);
   });
@@ -501,10 +501,10 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
     expect(cs.warnings).toEqual([
       expect.objectContaining({ code: 'W_EVENT_GATEWAY_TARGET', element: 'Gateway_G', message: expect.stringMatching(/now leads to Activity_R2 .*Event_M on another branch of Gateway_G is a message catch event/) }),
     ]);
-    const added = run(doc, [{ op: 'add', kind: 'receiveTask', name: 'R3', after: 'Gateway_G', message: 'R3' } as Op]);
+    const added = run(doc, [{ op: 'add', kind: 'receiveTask', name: 'R3', after: 'Gateway_G', message: 'R3' } as EditCommand]);
     expect(codes(added.warnings)).toContain('W_EVENT_GATEWAY_TARGET');
     // a timer catch event is fine (checked once its trigger is set)
-    const timer = run(doc, [{ op: 'add', kind: 'intermediateCatchEvent:timer', name: 'Later', after: 'Gateway_G', timer: 'PT2H' } as Op]);
+    const timer = run(doc, [{ op: 'add', kind: 'intermediateCatchEvent:timer', name: 'Later', after: 'Gateway_G', timer: 'PT2H' } as EditCommand]);
     expect(codes(timer.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
     // move to a place behind the gateway: the same warning
     const loose = await load(`${GATEWAY}<bpmn:receiveTask id="Activity_R4" messageRef="Message_X" />`, { extraRoots: GW_ROOTS });
@@ -574,7 +574,7 @@ describe('9. retype in a C7 file: the profile findings replace W_PROPERTY_INAPPL
     <bpmn:endEvent id="End" />`,
     { nsDecl: CAMUNDA },
   );
-  const retype: Op[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
+  const retype: EditCommand[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
 
   it('drops the summary when the added W_C7_MISPLACED_* findings name every item (mutateDoc reports each item once)', async () => {
     const outcome = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false });

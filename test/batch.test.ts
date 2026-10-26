@@ -1,19 +1,20 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPS_SCHEMA } from '../src/ops/parsing/OpsSchemaBuilder.js';
-import { OP_FIELDS, opsExample } from '../src/ops/parsing/utils/op-fields.js';
+import { OPS_SCHEMA } from '../src/domain/commands/OpsSchemaBuilder.js';
+import { OP_FIELDS, opsExample } from '../src/domain/commands/utils/op-fields.js';
 import { parseOps } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import { isCliError } from '../src/shared/utils/errors.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
 import { renderView, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../src/index.js';
-import { Cli } from '../src/commands/Cli.js';
-import { COMMANDS, COMMON_OPTIONS } from '../src/report/CommandCatalogue.js';
-import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/report/guide.js';
-import { MAX_ID, MAX_SLUG } from '../src/ids/utils/slug.js';
-import { KINDS } from '../src/model/utils/kinds.js';
-import { OP_NAMES } from '../src/ops/parsing/utils/op-names.js';
-import type { Op } from '../src/ops/types.js';
+import { Cli } from '../src/adapters/in/cli/Cli.js';
+import { FILE_USE_CASES } from './helpers.js';
+import { COMMANDS, COMMON_OPTIONS } from '../src/adapters/in/report/CommandCatalogue.js';
+import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../src/adapters/in/report/guide.js';
+import { MAX_ID, MAX_SLUG } from '../src/domain/document/utils/slug.js';
+import { KINDS } from '../src/domain/document/utils/kinds.js';
+import { OP_NAMES } from '../src/domain/commands/utils/op-names.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 
 /** Runs parseOps and returns the thrown CliError. */
@@ -205,7 +206,7 @@ describe('parseOps: shapes', () => {
   });
 
   it('accepts every op shape with all of its keys', () => {
-    const full: Op[] = [
+    const full: EditCommand[] = [
       {
         op: 'add',
         kind: 'boundaryEvent:timer',
@@ -463,7 +464,7 @@ describe('guide', () => {
   });
 
   it('the guide lists every command commander registers, and no other', () => {
-    const registered = new Cli('test').program.commands.map((registeredCommand) => registeredCommand.name());
+    const registered = new Cli('test', FILE_USE_CASES).program.commands.map((registeredCommand) => registeredCommand.name());
     expect([...COMMANDS.map((commandSpec) => commandSpec.name)].sort()).toEqual([...registered].sort());
   });
 
@@ -569,7 +570,7 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     }
     // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
     expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);
-    // a result whose flow ids the variable kept says so (src/commands/MutationCommand.ts keptByEnvNote): the reader may not see the variable
+    // a result whose flow ids the variable kept says so (src/adapters/in/cli/MutationCommand.ts keptByEnvNote): the reader may not see the variable
     for (const [name, text] of Object.entries({ guide: guideText(), DOCS, skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') })) {
       expect(text, name).toContain('`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (');
     }

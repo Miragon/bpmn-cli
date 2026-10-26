@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { showXml, viewXml } from '../src/api.js';
 import { aroundView, elementContext, implementationOf, buildView, elementDetail } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const CLAIMS = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');

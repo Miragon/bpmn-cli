@@ -1,6 +1,6 @@
 /**
- * Step 3: closing empty space in a kept drawing (src/format/Compaction.ts and
- * the `compact` / negative `space` format ops in src/format/FormatOps.ts).
+ * Step 3: closing empty space in a kept drawing (src/domain/diagram/format/CompactionService.ts and
+ * the `compact` / negative `space` format ops in src/domain/batch/DiagramCommandService.ts).
  *
  *  - compact closes empty columns and rows and shrinks lanes, pools and
  *    expanded sub-processes to their content, keeping the order; it never
@@ -15,18 +15,18 @@
  * keeps them (see test/diagram-format.test.ts), or written by hand.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
+import { type MutationResult } from '../src/domain/batch/types.js';
 import { definitionsXml } from './helpers.js';
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -36,14 +36,14 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-const POOLED: Op[] = [
+const POOLED: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' },
   { op: 'add', kind: 'lane', id: 'L1', name: 'Clerk', in: 'Pool', members: ['S', 'A', 'G', 'B', 'E', 'C', 'E2'] },
   { op: 'add', kind: 'lane', id: 'L2', name: 'Boss', in: 'Pool' },
 ];
 
-const WITH_SUB: Op[] = [
+const WITH_SUB: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B' },
   { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' },
@@ -51,7 +51,7 @@ const WITH_SUB: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'SE', name: 'Inner done', after: 'ST' },
 ];
 
-async function handXml(ops: Op[], dx = 13, dy = 7): Promise<string> {
+async function handXml(ops: EditCommand[], dx = 13, dy = 7): Promise<string> {
   const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   const doc = await Doc.fromXml(result.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
@@ -70,14 +70,14 @@ async function handXml(ops: Op[], dx = 13, dy = 7): Promise<string> {
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc; xml: string }> {
+async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationResult; after: Doc; xml: string }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
   return { result, after, xml: result.xml };
 }
 
-async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; hint?: string }> {
+async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string; message: string; hint?: string }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {

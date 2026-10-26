@@ -35,11 +35,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { kindsJson, kindsText } from '../src/index.js';
 import { listAllExtensions } from '../src/index.js';
 import { runOps } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/index.js';
@@ -309,7 +309,7 @@ describe("Operaton's namespace in the ops", () => {
   });
 
   it('retype names the operaton content the new kind cannot use (once, through the profile, in a write)', async () => {
-    const retype: Op[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
+    const retype: EditCommand[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
     const cs = runOps(await fresh(), retype);
     const warning = cs.warnings.find((candidate) => candidate.code === 'W_PROPERTY_INAPPLICABLE');
     expect(warning?.message).toMatch(/operaton:assignee/);
@@ -433,7 +433,7 @@ describe('an explicit mutation platform decides the engine rules of the ops', ()
 <bpmn:sequenceFlow id="F5" sourceRef="G" targetRef="T" /><bpmn:intermediateCatchEvent id="T">${TIMER}</bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F6" sourceRef="T" targetRef="End2" /><bpmn:endEvent id="End2" />`,
       { ns, attrs, roots: `${ROOTS}<bpmn:message id="M2" name="Ship" />` },
     );
-  const remove: Op[] = [{ op: 'remove', ids: ['Catch'] }];
+  const remove: EditCommand[] = [{ op: 'remove', ids: ['Catch'] }];
   const code = async (model: string, platform?: 'c7' | 'none'): Promise<string> => {
     try {
       await mutateDoc(await Doc.fromXml(model), remove, { dryRun: true, layout: false, ...(platform ? { platform } : {}) });

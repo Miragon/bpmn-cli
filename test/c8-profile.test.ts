@@ -1,5 +1,5 @@
 /**
- * The Camunda 8 validation profile (src/platform/profiles/C8Profile.ts): one synthetic model
+ * The Camunda 8 validation profile (src/domain/validation/profiles/C8Profile.ts): one synthetic model
  * per rule with the exact findings it must produce and what Camunda 8.9 does
  * with it, the zeebe descriptor lookup, the FEEL and timer value checks, and
  * the `validate` output for Camunda 8 files.
@@ -18,13 +18,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { mutateDoc } from '../src/index.js';
-import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
-import { TimerValue } from '../src/platform/profiles/TimerValue.js';
+import { FeelExpression } from '../src/domain/validation/profiles/FeelExpression.js';
+import { TimerValue } from '../src/domain/validation/profiles/TimerValue.js';
 import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/index.js';
-import { ZEEBE as C8_DESCRIPTOR } from '../src/platform/ZeebeDescriptor.js';
+import { ZEEBE as C8_DESCRIPTOR } from '../src/domain/document/vendor/ZeebeDescriptor.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

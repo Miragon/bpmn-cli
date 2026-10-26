@@ -9,10 +9,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 
 const ROOT = join(import.meta.dirname, '..');
@@ -23,7 +23,7 @@ function bpmn(...args: string[]): { code: number; out: string; err: string } {
   return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
-const OPS: Op[] = [
+const OPS: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'task', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'endEvent', id: 'E', name: 'Done', after: 'A' },

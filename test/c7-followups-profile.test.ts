@@ -21,9 +21,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { detectPlatform, loadProfiles, runProfile } from '../src/index.js';
-import { PlatformDetection } from '../src/platform/PlatformDetection.js';
+import { PlatformDetection } from '../src/domain/document/vendor/PlatformDetection.js';
 import { validateDoc } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

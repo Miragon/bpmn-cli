@@ -6,12 +6,12 @@
  *  - everything outside the changed elements keeps its text: prolog,
  *    comments, the root tag with its namespace order, vendor attributes in
  *    their place, CDATA, entities, quotes, indentation, the missing final
- *    line break (xml/TextPreservation.ts);
+ *    line break (domain/document/xml/TextPreservation.ts);
  *  - changed and new elements follow the file's style (attribute order,
  *    indentation unit, `/>`, a CDATA section stays one);
  *  - comments next to removed elements are reported, never dropped silently;
  *  - incoming / outgoing lists are written the way the file keeps them
- *    (model/utils/mirror.ts), never added for flows that did not change;
+ *    (domain/document/utils/mirror.ts), never added for flows that did not change;
  *  - the safety net: a text that would not read back as the changed model
  *    falls back to bpmn-moddle's serialisation.
  *
@@ -22,14 +22,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { is, type El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/index.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { is, type El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
+import { mutateFile } from '../src/node.js';
 import { mutateDoc, preserveText } from '../src/index.js';
-import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
-import { readXmlText } from '../src/xml/utils/text-reader.js';
-import { XmlTextError } from '../src/xml/XmlTextError.js';
+import type { MutationOptions, MutationResult } from '../src/domain/batch/types.js';
+import { readXmlText } from '../src/domain/document/utils/text-reader.js';
+import { XmlTextError } from '../src/domain/document/xml/XmlTextError.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -38,11 +38,11 @@ const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'r
 const STYLED = fixture('styled.bpmn');
 const LISTLESS = fixture('listless.bpmn');
 
-async function dry(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
+async function dry(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
   return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, opts);
 }
 
-const rename = (id: string, name: string): Op => ({ op: 'set', id, values: { name } });
+const rename = (id: string, name: string): EditCommand => ({ op: 'set', id, values: { name } });
 
 let dir: string;
 beforeAll(() => {

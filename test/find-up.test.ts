@@ -1,5 +1,5 @@
 /**
- * The upward file lookup of the node layer (src/node/utils/find-up.ts): the nearest
+ * The upward file lookup of the node layer (src/adapters/out/files/utils/find-up.ts): the nearest
  * directory with one of some names as a regular file, the first name of the
  * list winning within a directory, optionally not above the git root; and
  * that root itself (gitRoot).
@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { findUp, gitRoot } from '../src/node/utils/find-up.js';
+import { findUp, gitRoot } from '../src/adapters/out/files/utils/find-up.js';
 
 let dir: string;
 beforeAll(() => {

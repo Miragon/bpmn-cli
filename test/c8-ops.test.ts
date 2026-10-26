@@ -14,8 +14,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { opsExample } from '../src/ops/parsing/utils/op-fields.js';
-import { Doc } from '../src/model/Doc.js';
+import { opsExample } from '../src/domain/commands/utils/op-fields.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { renderView, runOps, mutateDoc, loadProfiles, runProfile, buildView, elementDetail } from '../src/index.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)

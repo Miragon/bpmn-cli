@@ -14,8 +14,8 @@ import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as core from '../src/index.js';
-import { CAMUNDA_DESCRIPTOR, CAMUNDA_DESCRIPTOR_VERSION } from '../src/platform/camunda-descriptor.js';
-import { ZEEBE_DESCRIPTOR, ZEEBE_DESCRIPTOR_VERSION } from '../src/platform/zeebe-descriptor.js';
+import { CAMUNDA_DESCRIPTOR, CAMUNDA_DESCRIPTOR_VERSION } from '../src/domain/document/vendor/camunda-descriptor.js';
+import { ZEEBE_DESCRIPTOR, ZEEBE_DESCRIPTOR_VERSION } from '../src/domain/document/vendor/zeebe-descriptor.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { bundleCore, NODE_GLOBALS } from '../tools/iso/bundle.mjs';
 
@@ -262,7 +262,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   beforeAll(async () => {
     bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
-    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes('src/platform/profiles/C7Profile.ts') ? 'c7' : chunk.inputs.includes('src/platform/profiles/C8Profile.ts') ? 'c8' : undefined);
+    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes('src/domain/validation/profiles/C7Profile.ts') ? 'c7' : chunk.inputs.includes('src/domain/validation/profiles/C8Profile.ts') ? 'c8' : undefined);
     files = bundle.chunks.map((chunk) => {
       const text = chunk.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, quote: string, name: string) => `${quote}./${name}.mjs${quote}`);
       return { name: basename(chunk.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(chunk) };
@@ -303,7 +303,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
     expect(bundle.chunks.filter((chunk) => chunk.entry).map((chunk) => chunk.entryPoint)).toEqual(['src/index.ts']);
     expect(bundle.entry.entryPoint).toBe('src/index.ts');
-    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining(['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']));
+    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining(['src/domain/validation/profiles/C7Profile.ts', 'src/domain/validation/profiles/C8Profile.ts']));
   });
 
   it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
@@ -321,15 +321,15 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       return seen;
     };
     const core = reach('src/index.ts');
-    expect(core.has('src/model/utils/moddle.ts') && core.has('src/platform/profiles/PlatformProfiles.ts')).toBe(true);
-    for (const rules of ['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']) {
+    expect(core.has('src/domain/document/utils/moddle.ts') && core.has('src/domain/validation/profiles/PlatformProfiles.ts')).toBe(true);
+    for (const rules of ['src/domain/validation/profiles/C7Profile.ts', 'src/domain/validation/profiles/C8Profile.ts']) {
       const own = [...reach(rules)];
       expect(own.filter((module) => core.has(module)), rules).toEqual([]);
       expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency)), rules).toEqual([]);
       const chunk = bundle.chunks.find((chunk) => chunk.inputs.includes(rules))!;
       expect(chunk.imports.filter((importPath) => initial.has(importPath)), rules).toEqual([]);
     }
-    expect(bundle.chunks.find((chunk) => chunk.inputs.includes('src/platform/profiles/C8Profile.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/FeelParser.ts', 'src/platform/profiles/FeelExpression.ts', 'src/platform/profiles/TimerValue.ts', 'src/platform/profiles/SchemaText.ts', 'src/platform/profiles/BpmnSchema.ts']));
+    expect(bundle.chunks.find((chunk) => chunk.inputs.includes('src/domain/validation/profiles/C8Profile.ts'))!.inputs).toEqual(expect.arrayContaining(['src/domain/validation/profiles/FeelParser.ts', 'src/domain/validation/profiles/FeelExpression.ts', 'src/domain/validation/profiles/TimerValue.ts', 'src/domain/validation/profiles/SchemaText.ts', 'src/domain/validation/profiles/BpmnSchema.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {

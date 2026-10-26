@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { CliError } from '../src/shared/CliError.js';
-import { Doc } from '../src/model/Doc.js';
+import { CliError } from '../src/domain/document/CliError.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
 
 async function invoice(): Promise<string> {

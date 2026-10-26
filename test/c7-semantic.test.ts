@@ -11,17 +11,17 @@
  *     content, retype warns about camunda content the new kind cannot use
  *  4. show / find display vendor attribute values, process / flow / nested ones
  *  5. receiveTask / sendTask take message=<name> (set, add --message)
- *  + the shared descriptor lookup (src/platform/CamundaDescriptor.ts)
+ *  + the shared descriptor lookup (src/domain/document/vendor/CamundaDescriptor.ts)
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { renderDetail, renderView, runOps, mutateDoc, buildView, elementDetail, findElements } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { definitionsXml, flowBetween } from './helpers.js';
-import { CAMUNDA as C7_DESCRIPTOR } from '../src/platform/CamundaDescriptor.js';
-import { PlatformDetection } from '../src/platform/PlatformDetection.js';
-import { VendorDescriptor } from '../src/platform/VendorDescriptor.js';
-import { ElementProperties } from '../src/ops/ElementProperties.js';
+import { CAMUNDA as C7_DESCRIPTOR } from '../src/domain/document/vendor/CamundaDescriptor.js';
+import { PlatformDetection } from '../src/domain/document/vendor/PlatformDetection.js';
+import { VendorDescriptor } from '../src/domain/document/vendor/VendorDescriptor.js';
+import { ElementProperties } from '../src/domain/editing/ElementProperties.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 
@@ -51,7 +51,7 @@ async function c7Doc(): Promise<Doc> {
     { op: 'add', kind: 'intermediateCatchEvent:conditional', name: 'Ready', id: 'Event_Ready', after: 'Event_Notify', when: '${y > 5}' },
     { op: 'add', kind: 'userTask', name: 'Review item', id: 'Activity_Review', after: 'Event_Ready' },
     { op: 'add', kind: 'endEvent', name: 'Done', id: 'Event_Done', after: 'Activity_Review' },
-  ] as Op[]);
+  ] as EditCommand[]);
   // through XML, like a file on disk
   return Doc.fromXml(await doc.toXml());
 }

@@ -6,16 +6,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 
 /** Hashes, numbers and tool defaults: what a generated id never ends in. */
 const NOT_SPEAKING = /(_[01][0-9a-z]{6}|_\d+|^[A-Za-z]+\d+)$/;
 
-async function created(xml: string, ops: Op[]): Promise<{ doc: Doc; ids: string[]; warnings: string[]; changed: string[] }> {
+async function created(xml: string, ops: EditCommand[]): Promise<{ doc: Doc; ids: string[]; warnings: string[]; changed: string[] }> {
   const doc = await Doc.fromXml(xml);
   const cs = runOps(doc, ops);
   return { doc, ids: cs.created.map((change) => change.id), warnings: cs.warnings.map((warning) => `${warning.code} ${warning.element ?? ''}`.trim()), changed: cs.changed.map((change) => `${change.id}: ${change.detail ?? ''}`) };
@@ -58,7 +58,7 @@ describe('speaking ids in a Camunda Modeler file', () => {
   });
 
   it('two unnamed elements in the same place: the second gets _2 and W_ID_SUFFIXED, deterministically', async () => {
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'endEvent', in: 'Process_1' },
       { op: 'add', kind: 'endEvent', in: 'Process_1' },
       { op: 'connect', source: 'Activity_0k3x9qa', target: 'Event_End' },
@@ -73,7 +73,7 @@ describe('speaking ids in a Camunda Modeler file', () => {
 
 /** A file of the default style with `<id>_di` DI: start -> A -> B -> end. */
 async function drawnDefault(): Promise<string> {
-  const ops: Op[] = [
+  const ops: EditCommand[] = [
     { op: 'add', kind: 'startEvent', name: 'Start' },
     { op: 'add', kind: 'task', name: 'Check', after: 'Event_Start' },
     { op: 'add', kind: 'exclusiveGateway', name: 'Ok?', after: 'Activity_Check' },
@@ -133,10 +133,10 @@ describe('the change report names a flow that took the id a renamed flow freed b
     <bpmn:startEvent id="Event_Check" name="Check"><bpmn:outgoing>Flow_CheckToDone</bpmn:outgoing></bpmn:startEvent>
     <bpmn:endEvent id="Event_Done" name="Done"><bpmn:incoming>Flow_CheckToDone</bpmn:incoming></bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_CheckToDone" sourceRef="Event_Check" targetRef="Event_Done" />`);
-  const splice: Op = { op: 'add', kind: 'task', id: 'Activity_Check', after: 'Event_Check' };
+  const splice: EditCommand = { op: 'add', kind: 'task', id: 'Activity_Check', after: 'Event_Check' };
 
   it('text, JSON and summary agree with the file, alone and in a batch', async () => {
-    for (const ops of [[splice], [{ op: 'set', id: 'Flow_CheckToDone', values: { name: 'go' } }, splice]] as Op[][]) {
+    for (const ops of [[splice], [{ op: 'set', id: 'Flow_CheckToDone', values: { name: 'go' } }, splice]] as EditCommand[][]) {
       const outcome = await applyToXml(FREED, ops, { layout: false });
       const doc = await Doc.fromXml(outcome.xml);
       expect([flowBetween(doc, 'Event_Check', 'Activity_Check'), flowBetween(doc, 'Activity_Check', 'Event_Done')]).toEqual(['Flow_CheckToCheck', 'Flow_CheckToDone']);

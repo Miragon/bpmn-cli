@@ -5,11 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
-import { CliError } from '../src/shared/CliError.js';
-import { Doc } from '../src/model/Doc.js';
+import { CliError } from '../src/domain/document/CliError.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
-import { ElementRemover } from '../src/ops/ElementRemover.js';
+import { ElementRemovalService } from '../src/domain/editing/ElementRemovalService.js';
 
 /** Nodes `[tag, id, extra attrs]` and flows `[id, source, target]` (incoming / outgoing written). */
 function model(nodes: Array<[string, string, string?]>, flows: Array<[string, string, string]>, extra = ''): string {
@@ -149,7 +149,7 @@ describe('remove --with-branch', () => {
 
   it('branchOf reports the stops in document order', async () => {
     const doc = await Doc.fromXml(SPLIT);
-    const branch = new ElementRemover(doc).branchOf(doc.require('D1'));
+    const branch = new ElementRemovalService(doc).branchOf(doc.require('D1'));
     expect(branch.nodes.map((node) => node.get('id'))).toEqual(['D1']);
     expect(branch.stops.map((node) => node.get('id'))).toEqual(['J']);
   });

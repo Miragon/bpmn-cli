@@ -1,5 +1,5 @@
 /**
- * Invariant tests of the "clean" layout engine (src/layout/*.ts).
+ * Invariant tests of the "clean" layout engine (src/domain/diagram/layout/).
  *
  * Every scenario builds a model in memory with the same ops `bpmn apply`
  * runs, lays it out, re-imports the XML and checks the diagram interchange
@@ -32,22 +32,22 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LayoutDebug } from '../src/layout/LayoutDebug.js';
-import type { DShape, GNode, ScopeLayout } from '../src/drawing/types.js';
-import { titleBox } from '../src/drawing/utils/text.js';
-import { Doc } from '../src/model/Doc.js';
-import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
-import { ScopeArtifactPlacer } from '../src/layout/clean/ScopeArtifactPlacer.js';
-import { ChainLiftTrial } from '../src/layout/clean/ChainLiftTrial.js';
-import { JoinColumnTrial } from '../src/layout/clean/JoinColumnTrial.js';
-import { ScopeGrid } from '../src/layout/clean/ScopeGrid.js';
-import { ScopePlacer } from '../src/layout/clean/ScopePlacer.js';
-import { shiftNode } from '../src/layout/clean/utils/scope.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { is, many, type El } from '../src/model/utils/moddle.js';
+import { LayoutDebug } from '../src/domain/diagram/layout/LayoutDebug.js';
+import type { DShape, GNode, ScopeLayout } from '../src/domain/diagram/di/types.js';
+import { titleBox } from '../src/domain/diagram/utils/text.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/domain/diagram/layout/FullLayout.js';
+import { ScopeArtifactPlacer } from '../src/domain/diagram/layout/clean/ScopeArtifactPlacer.js';
+import { ChainLiftTrial } from '../src/domain/diagram/layout/clean/ChainLiftTrial.js';
+import { JoinColumnTrial } from '../src/domain/diagram/layout/clean/JoinColumnTrial.js';
+import { ScopeGrid } from '../src/domain/diagram/layout/clean/ScopeGrid.js';
+import { ScopePlacer } from '../src/domain/diagram/layout/clean/ScopePlacer.js';
+import { shiftNode } from '../src/domain/diagram/utils/scope.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { is, many, type El } from '../src/domain/document/utils/moddle.js';
 import { runOps } from '../src/index.js';
-import type { AddOp, Op } from '../src/ops/types.js';
+import type { AddElement, EditCommand } from '../src/domain/commands/types.js';
 import { layoutDoc, mutateDoc } from '../src/index.js';
 
 /* ------------------------------------------------------------------ */
@@ -456,15 +456,15 @@ function expectRoutedAround(laid: Laid, edge: Edge, spanned: string[], targetId:
   expect(last.x).toBeLessThan(right(targetBox));
 }
 
-function proc(ops: Op[], processId = 'P'): Doc {
+function proc(ops: EditCommand[], processId = 'P'): Doc {
   const doc = Doc.create({ processId });
   runOps(doc, ops);
   return doc;
 }
 
-const start = (id: string, name?: string, extra: Partial<AddOp> = {}): AddOp => ({ op: 'add', kind: 'startEvent', id, ...(name ? { name } : {}), ...extra });
-const end = (id: string, after: string, name?: string, extra: Partial<AddOp> = {}): AddOp => ({ op: 'add', kind: 'endEvent', id, after, ...(name ? { name } : {}), ...extra });
-const task = (id: string, name: string, after: string, extra: Partial<AddOp> = {}): AddOp => ({ op: 'add', kind: 'task', id, name, after, ...extra });
+const start = (id: string, name?: string, extra: Partial<AddElement> = {}): AddElement => ({ op: 'add', kind: 'startEvent', id, ...(name ? { name } : {}), ...extra });
+const end = (id: string, after: string, name?: string, extra: Partial<AddElement> = {}): AddElement => ({ op: 'add', kind: 'endEvent', id, after, ...(name ? { name } : {}), ...extra });
+const task = (id: string, name: string, after: string, extra: Partial<AddElement> = {}): AddElement => ({ op: 'add', kind: 'task', id, name, after, ...extra });
 
 /* ------------------------------------------------------------------ */
 /* scenarios                                                            */
@@ -715,7 +715,7 @@ describe('clean layout engine', () => {
       { op: 'split', after: 'S', kind: 'inclusiveGateway', id: 'G', name: 'Extras booked?', joinId: 'J', branches },
       task('T', 'Hand over parcel', 'J'),
       end('E', 'T', 'Done'),
-      ...(lanes ? [{ op: 'add', kind: 'participant', id: 'Org', name: 'Shop' } as Op, ...Object.entries(lanes).map(([id, members]) => ({ op: 'add', kind: 'lane', id, name: id, in: 'P', members: [...members] }) as Op)] : []),
+      ...(lanes ? [{ op: 'add', kind: 'participant', id: 'Org', name: 'Shop' } as EditCommand, ...Object.entries(lanes).map(([id, members]) => ({ op: 'add', kind: 'lane', id, name: id, in: 'P', members: [...members] }) as EditCommand)] : []),
     ]);
   }
 
@@ -772,7 +772,7 @@ describe('clean layout engine', () => {
             { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
             { op: 'add', kind: 'lane', id: 'L1', name: 'Office', in: 'P', members: ['S', 'R', 'G', 'Au', 'H', 'C', 'SR', 'ER', 'J', 'F', 'E'] },
             { op: 'add', kind: 'lane', id: 'L2', name: 'Support', in: 'P', members: ['FB'] },
-          ] as Op[])
+          ] as EditCommand[])
         : []),
     ]);
   }
@@ -1093,14 +1093,14 @@ describe('clean layout engine', () => {
   it('the run below the host\'s row on the bottom row is part of the scope: a pool or an expanded sub-process without lanes holds it 15 px from its border, an event sub-process below keeps off it (boundary labels of two and three lines)', async () => {
     // the scope without lanes was sized without the run: it lay on the frame's bottom border or below it, and through the
     // event sub-process placed under the content
-    const claim = (name: string): Op[] => [
+    const claim = (name: string): EditCommand[] => [
       { op: 'split', after: 'S', id: 'G', name: 'Which way?', joinId: 'J', branches: [{ flowName: 'fast', nodes: [{ kind: 'task', id: 'A', name: 'Check order' }] }, { flowName: 'slow', nodes: [{ kind: 'userTask', id: 'B', name: 'Review claim' }] }] },
       task('C', 'Notify customer', 'J'),
       end('E', 'C', 'Done'),
       { op: 'add', kind: 'boundaryEvent:timer', id: 'BT', name, on: 'B', timer: 'P2D', nonInterrupting: true },
       { op: 'connect', source: 'BT', target: 'C' },
     ];
-    const cancel: Op[] = [
+    const cancel: EditCommand[] = [
       { op: 'add', kind: 'eventSubProcess', id: 'ESP', name: 'Cancel', in: 'P' },
       { op: 'add', kind: 'startEvent:message', id: 'ES', name: 'Cancelled', in: 'ESP', message: 'Cancel' },
       task('ET1', 'Undo booking', 'ES'),
@@ -1237,7 +1237,7 @@ describe('clean layout engine', () => {
     // generated (k-signal-down): 2 days on Invoice invoice goes on with Label customer after the join. Routed before the
     // others, its run just below the host's row looked free and was crossed by the split's drop, the join's rise and the
     // drop of Payment failed
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       start('S', 'Start'),
       task('A1', 'Invoice invoice', 'S'),
       { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'userTask', id: 'T4', name: 'Print case' }, { kind: 'sendTask', id: 'T5', name: 'Print data' }] }, { nodes: [{ kind: 'task', id: 'T6', name: 'Inform customer' }] }] },
@@ -1272,7 +1272,7 @@ describe('clean layout engine', () => {
   it('boundary events on one host take their runs below its row right to left: the rightmost event\'s run is the highest, so no sibling\'s drop crosses it (both file orders)', async () => {
     // generated (d-9): Late (right) goes on with the join, Escalated (left) with Ship goods after it; stacked in file
     // order, Late's drop crossed Escalated's run when Escalated's flow came first
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       start('S', 'Start'),
       { op: 'split', after: 'S', kind: 'parallelGateway', id: 'G', joinId: 'J', branches: [{ nodes: [{ kind: 'userTask', id: 'T7', name: 'Label goods' }] }, { nodes: [{ kind: 'task', id: 'T8', name: 'Escalate case' }, { kind: 'sendTask', id: 'T9', name: 'Inform invoice' }] }] },
       task('F', 'Ship goods', 'J'),
@@ -1581,7 +1581,7 @@ describe('clean layout engine', () => {
       { op: 'add', kind: 'startEvent:signal', id: 'ESS', name: 'Cancel', in: 'ES', signal: 'Stop' },
       task('EST', 'Cancel order', 'ESS'),
       end('ESE', 'EST', 'Cancelled'),
-      ...(check ? [1, 2, 3, 4].flatMap((docNumber): Op[] => [{ op: 'add', kind: 'dataObjectReference', id: `D${docNumber}`, name: `Doc ${docNumber}`, in: 'P' }, { op: 'connect', source: 'X', target: `D${docNumber}` }]) : []),
+      ...(check ? [1, 2, 3, 4].flatMap((docNumber): EditCommand[] => [{ op: 'add', kind: 'dataObjectReference', id: `D${docNumber}`, name: `Doc ${docNumber}`, in: 'P' }, { op: 'connect', source: 'X', target: `D${docNumber}` }]) : []),
       { op: 'add', kind: 'participant', id: 'Org', name: 'Company' },
       { op: 'add', kind: 'lane', id: 'L0', name: 'Lane 0', in: 'P', members: ['S', 'A1', 'T5', 'T6', 'G2', 'J3', 'F', 'E', 'H9', 'H10', ...(check ? ['X'] : [])] },
       { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['T7'] },
@@ -1668,7 +1668,7 @@ describe('clean layout engine', () => {
   });
 
   /** generated (on-34): Failed on Inform data goes on with the second join; the compensation handler under its sibling blocks the way below everything */
-  const failedToJoinOps = (where = 'P'): Op[] => [
+  const failedToJoinOps = (where = 'P'): EditCommand[] => [
     start('S', 'Start', { in: where }),
     task('A1', 'Inform data', 'S'),
     { op: 'split', after: 'A1', kind: 'exclusiveGateway', id: 'G2', joinId: 'J3', name: 'Invoice claim?', branches: [{ flowName: 'b0', nodes: [{ kind: 'sendTask', id: 'T4', name: 'Inform customer' }] }, { flowName: 'b1', nodes: [{ kind: 'sendTask', id: 'T5', name: 'Archive claim' }, { kind: 'task', id: 'T6', name: 'Notify claim' }] }] },
@@ -1849,8 +1849,8 @@ describe('clean layout engine', () => {
     return proc([
       start('S', 'Start'),
       ...(sub
-        ? [{ op: 'add', kind: 'subProcess', id: 'A1', name: 'Handle claim', after: 'S' } as AddOp, start('SS', undefined, { in: 'A1' }), task('ST', 'Check claim', 'SS'), end('SE', 'ST')]
-        : [{ op: 'add', kind: 'userTask', id: 'A1', name: 'Pick invoice', after: 'S' } as AddOp]),
+        ? [{ op: 'add', kind: 'subProcess', id: 'A1', name: 'Handle claim', after: 'S' } as AddElement, start('SS', undefined, { in: 'A1' }), task('ST', 'Check claim', 'SS'), end('SE', 'ST')]
+        : [{ op: 'add', kind: 'userTask', id: 'A1', name: 'Pick invoice', after: 'S' } as AddElement]),
       { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'task', id: 'T4', name: 'Pack order' }, { kind: 'sendTask', id: 'T5', name: 'Inform order' }] }, { nodes: [{ kind: 'serviceTask', id: 'T6', name: 'Notify data' }, { kind: 'task', id: 'T7', name: 'Book data' }] }] },
       task('F', 'Pack data', 'J3'),
       end('E', 'F', 'End'),
@@ -2375,11 +2375,11 @@ describe('clean layout engine', () => {
         { op: 'add', kind: 'exclusiveGateway', id: 'C', name: 'Done?', after: 'T' },
         ...(merge
           ? [
-              { op: 'add', kind: 'exclusiveGateway', id: 'M', after: 'C', flowName: 'yes' } as AddOp,
+              { op: 'add', kind: 'exclusiveGateway', id: 'M', after: 'C', flowName: 'yes' } as AddElement,
               task('U', 'Update', 'M'),
-              { op: 'add', kind: 'exclusiveGateway', id: 'K', name: 'Again?', after: 'U' } as AddOp,
+              { op: 'add', kind: 'exclusiveGateway', id: 'K', name: 'Again?', after: 'U' } as AddElement,
               end('E', 'K', 'End', { flowName: 'no' }),
-              { op: 'connect', source: 'K', target: 'M', name: 'yes' } as Op,
+              { op: 'connect', source: 'K', target: 'M', name: 'yes' } as EditCommand,
             ]
           : [end('E', 'C', 'End', { flowName: 'yes' })]),
         { op: 'connect', source: 'C', target: 'J', name: 'no' },
@@ -2613,7 +2613,7 @@ describe('clean layout engine', () => {
             { op: 'add', kind: 'startEvent:signal', id: 'ESS', name: 'Cancel', in: 'ES', signal: 'Stop' },
             task('EST', 'Cancel order', 'ESS'),
             end('ESE', 'EST', 'Cancelled'),
-          ] as Op[])
+          ] as EditCommand[])
         : []),
       ...(lanes
         ? ([
@@ -2622,7 +2622,7 @@ describe('clean layout engine', () => {
             { op: 'add', kind: 'lane', id: 'L1', name: 'Lane 1', in: 'P', members: ['T7'] },
             { op: 'add', kind: 'lane', id: 'L2', name: 'Lane 2', in: 'P', members: ['T4', ...(full ? ['ES'] : [])] },
             { op: 'add', kind: 'lane', id: 'L3', name: 'Lane 3', in: 'P', members: [] },
-          ] as Op[])
+          ] as EditCommand[])
         : []),
     ]);
   }
@@ -3244,7 +3244,7 @@ describe('groups over a full redraw', () => {
       [diShape('M1', [100, 100, 100, 80]), diShape('M2', [100, 320, 100, 80]), diShape('Host', [180, 200, 200, 80]), diShape('Event_Late', [182, 262, 36, 36])],
     );
     const doc = await Doc.fromXml(xml);
-    const { Groups } = await import('../src/drawing/Groups.js');
+    const { Groups } = await import('../src/domain/diagram/di/Groups.js');
     const out = new Groups(doc.definitions).redraw(doc.moddle, [{ id: 'Group_M', bounds: { x: 80, y: 80, width: 140, height: 340 }, members: ['M1', 'M2'] }]);
     expect(out).toEqual({ drawn: ['Group_M'], kept: [], moved: [] });
     expectGroupAround(await shapesOf(await doc.toXml()), 'Group_M', ['M1', 'M2', 'Host', 'Event_Late']);

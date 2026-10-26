@@ -1,6 +1,6 @@
 /**
  * Step 3: pool order (`order <collaborationId> <participantId...>`,
- * src/ops/Reordering.ts and src/format/FormatOps.ts orderPoolBands): the participants
+ * src/domain/editing/ElementOrderService.ts and src/domain/batch/DiagramCommandService.ts orderPoolBands): the participants
  * of a collaboration are reordered top to bottom, black-box partner pools
  * included; a kept drawing gets its pool bands restacked with their content
  * and the message flows routed again.
@@ -11,17 +11,17 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from "vitest";
 import { parseOps } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
+import { type MutationResult } from '../src/domain/batch/types.js';
 
-const OPS: Op[] = [
+const OPS: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'serviceTask', id: 'B', name: 'Book', after: 'A' },
@@ -48,14 +48,14 @@ async function handXml(): Promise<string> {
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
   return { result, after };
 }
 
-async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; candidates?: string[] }> {
+async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string; message: string; candidates?: string[] }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {

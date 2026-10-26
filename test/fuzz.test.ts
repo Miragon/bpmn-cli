@@ -17,8 +17,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CliError, Doc, mutateDoc, parseOps } from '../src/index.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import * as problems from '../src/drawing/utils/problems.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import * as problems from '../src/domain/diagram/utils/problems.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { libExecutor } from '../tools/fuzz/lib/exec.mjs';
 // @ts-expect-error plain ESM tooling without type declarations

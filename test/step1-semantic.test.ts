@@ -8,12 +8,12 @@
  *  - pre-existing validation errors do not block unrelated writes
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { addTo } from '../src/model/utils/moddle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { addTo } from '../src/domain/document/utils/moddle.js';
 import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
-import type { Op } from '../src/ops/types.js';
+import { type MutationOptions, type MutationResult } from '../src/domain/batch/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { validateDoc } from '../src/index.js';
 import { elementDetail } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
@@ -40,7 +40,7 @@ async function rejected(promise: Promise<unknown>): Promise<{ code?: string; mes
   throw new Error('expected a rejection');
 }
 
-async function mutate(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<MutationResult> {
+async function mutate(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
   return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: false, ...opts });
 }
 
@@ -98,7 +98,7 @@ describe('vendor extension ids are not BPMN ids', () => {
     for (const op of [
       { op: 'remove', ids: ['email'] },
       { op: 'set', id: 'email', values: { id: 'total' } },
-    ] as Op[]) {
+    ] as EditCommand[]) {
       const failure = await rejected(mutate(FORM_FIELDS, [op], { force: true }));
       expect(failure.code).toBe('E_NOT_FOUND');
     }
@@ -347,7 +347,7 @@ describe('pre-existing validation errors', () => {
   });
 
   it('errors the ops introduce still block (and --force still overrides)', async () => {
-    const ops: Op[] = [{ op: 'add', kind: 'subProcess', id: 'Esp2', in: 'Process_1', set: { triggeredByEvent: 'true' } }];
+    const ops: EditCommand[] = [{ op: 'add', kind: 'subProcess', id: 'Esp2', in: 'Process_1', set: { triggeredByEvent: 'true' } }];
     const err = await rejected(mutate(PREEXISTING, ops));
     expect(err.code).toBe('E_VALIDATION');
     expect((err.details.errors as Array<{ code: string; element?: string }>).map((error) => `${error.code} ${error.element}`)).toEqual(['E_EVENT_SUBPROCESS_NO_START Esp2']);

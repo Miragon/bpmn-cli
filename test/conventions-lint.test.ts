@@ -4,15 +4,15 @@
  * bpmnlint and @miragon/bpmnlint-plugin-rules (the ones the node layer
  * loads), in a new file and in files of other styles; and
  * idConventionsFromLint reads the rule's options as the rule does
- * (src/ids/IdConventionsReader.ts).
+ * (src/domain/document/ids/IdConventionsReader.ts).
  */
 import { BpmnModdle } from 'bpmn-moddle';
 import { describe, expect, it } from 'vitest';
-import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
+import type { BpmnlintRuleSetting } from '../src/domain/validation/bpmnlint-validator.js';
 import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import { bpmnlintEngine } from '../src/node/index.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { bpmnlintEngine } from '../src/node.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 
 const engine = bpmnlintEngine();
@@ -31,7 +31,7 @@ const conventionsOf = (setting: BpmnlintRuleSetting): IdConventions | undefined 
 const LONG = 'Prüfe ob die eingegangene Lieferantenrechnung vollständig und sachlich richtig ist und gebucht werden kann';
 
 /** One batch that asks for every kind and trigger: named, unnamed, a number first, long, repeated names, a split with branch nodes, pools, lanes, data, a message flow. */
-function everyKind(processId: string): Op[] {
+function everyKind(processId: string): EditCommand[] {
   const ops: unknown[] = [
     { op: 'add', kind: 'startEvent', name: 'Invoice received', as: '$s' },
     { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: '$s', as: '$t1' },
@@ -105,7 +105,7 @@ function everyKind(processId: string): Op[] {
     { op: 'connect', source: '$n1', target: '$n2' },
     { op: 'connect', source: '$n1', target: '$n2' },
   ];
-  return ops as Op[];
+  return ops as EditCommand[];
 }
 
 const SETTINGS: Array<[string, BpmnlintRuleSetting]> = [
@@ -147,7 +147,7 @@ describe('the ids of a new file pass element-id-naming (the real rule)', () => {
         { op: 'add', kind: 'serviceTask', name, in: processId },
         { op: 'connect', source: '$a', target: '$b' },
         { op: 'connect', source: '$a', target: '$b' },
-      ] as unknown as Op[];
+      ] as unknown as EditCommand[];
       const result = await mutateDoc(doc, ops, { layout: false, conventions });
       expect(result.changes.created.map((created) => created.id)).toEqual(ids);
       expect(await lint(result.xml, setting)).toEqual([]);
@@ -226,7 +226,7 @@ const FILES: Record<string, [string, string, string]> = {
 /** Names a hash or a slug cannot make an id of, or make one that begins with a number. */
 const NAMES = ['Rechnung prüfen', "Customer's order", 'v2.0 release', '2024', 'Ölwechsel', '检查发票', 'A', 'Go / No-Go?', 'Check  invoice!!', 'ÄÖÜ Straße'];
 
-function intoFile(first: string, last: string): Op[] {
+function intoFile(first: string, last: string): EditCommand[] {
   const ops: unknown[] = [
     { op: 'add', kind: 'serviceTask', name: 'Approve', after: first, as: '$a' },
     { op: 'add', kind: 'userTask', name: 'Check invoice', after: '$a', as: '$b' },
@@ -249,7 +249,7 @@ function intoFile(first: string, last: string): Op[] {
     { op: 'add', kind: 'startEvent', name: 'Monthly', in: 'P', as: '$ms' },
     { op: 'set', id: '$ms', values: { trigger: 'timer', timer: 'R/P1M' } },
   ];
-  return ops as Op[];
+  return ops as EditCommand[];
 }
 
 const MATRIX: Array<[string, BpmnlintRuleSetting]> = [
@@ -280,9 +280,9 @@ describe('in files of other styles, every id a change generates passes element-i
 
   it('the join after an explicit split id in another case, and the ids a retype or a trigger change gives what the batch created, pass it too', async () => {
     const branches = [{ nodes: [{ kind: 'task', name: 'Yes' }] }, { nodes: [{ kind: 'task', name: 'No' }] }];
-    const split = (id?: string): Op => ({ op: 'split', after: 'start', kind: 'xor', ...(id ? { id } : {}), name: 'Approved?', branches }) as Op;
+    const split = (id?: string): EditCommand => ({ op: 'split', after: 'start', kind: 'xor', ...(id ? { id } : {}), name: 'Approved?', branches }) as EditCommand;
     // [config, ops, retype the split's gateways to `and` in the same batch]
-    const cases: Array<[Record<string, unknown>, Op[], boolean?]> = [];
+    const cases: Array<[Record<string, unknown>, EditCommand[], boolean?]> = [];
     for (const id of ['gateway_Approved', 'gateway_approved_check', 'gateway_ok-1', 'Gateway_Check']) cases.push([{}, [split(id)]]);
     for (const id of ['gateway_approved', 'gateway_ok-1']) cases.push([{ case: 'PascalCase' }, [split(id)]]);
     for (const id of ['gateway_Approved', 'gateway_okCheck']) cases.push([{ case: 'snake_case' }, [split(id)]]);
@@ -295,7 +295,7 @@ describe('in files of other styles, every id a change generates passes element-i
       { op: 'set', id: '$e', values: { trigger: 'message', message: 'Reply' } },
       { op: 'add', kind: 'scriptTask', name: 'Run', in: 'P', as: '$r' },
       { op: 'retype', id: '$r', kind: 'serviceTask' },
-    ] as Op[];
+    ] as EditCommand[];
     for (const config of [
       { case: 'PascalCase', prefixes: { 'bpmn:ServiceTask': 'ST', 'bpmn:UserTask': 'UT', 'bpmn:SequenceFlow': 'SF', 'bpmn:Gateway': 'Gw' } },
       { case: 'snake_case', eventDefinitionQualifier: 'required', prefixes: { 'bpmn:ScriptTask': false } },
@@ -311,7 +311,7 @@ describe('in files of other styles, every id a change generates passes element-i
       if (gateways) {
         const ids = result.changes.created.filter((created) => created.kind === 'exclusiveGateway').map((created) => created.id);
         expect(ids).toHaveLength(2);
-        result = await mutateDoc(await fresh(), [...ops, ...ids.map((id) => ({ op: 'retype', id, kind: 'and' }) as Op)], { layout: false, conventions, force: true });
+        result = await mutateDoc(await fresh(), [...ops, ...ids.map((id) => ({ op: 'retype', id, kind: 'and' }) as EditCommand)], { layout: false, conventions, force: true });
       }
       const made = new Set([...result.changes.created.map((created) => created.id), ...result.changes.renames.map((rename) => rename.to)]);
       const explicit = ops.map((operation) => (operation as { id?: string }).id);
@@ -394,7 +394,7 @@ describe('idConventionsFromLint', () => {
     expect(Object.keys(conventions!.prefixes).filter((key) => key.startsWith('bpmndi:'))).toEqual([]);
     // the rule checks DI ids indeed: the DI bpmn-cli writes for a new element is reported
     const doc = Doc.create({ conventions });
-    const result = await mutateDoc(doc, [{ op: 'add', kind: 'startEvent', name: 'Order received', in: 'Process_1' }] as Op[], { conventions });
+    const result = await mutateDoc(doc, [{ op: 'add', kind: 'startEvent', name: 'Order received', in: 'Process_1' }] as EditCommand[], { conventions });
     expect((await lint(result.xml, setting)).map((finding) => finding.id)).toEqual(['BPMNShape_startEvent_orderReceived']);
     expect(idConventionsFromLint({ severity: 'warn', config: { prefixes: { 'bpmndi:BPMNShape': false } } }, naming).notes).toEqual([]);
     // only the DI types bpmn-cli writes ids for: not BPMNLabel (written without an id, which the rule skips), nor a key
@@ -460,7 +460,7 @@ describe('idConventionsFromLint', () => {
     const result = await mutateDoc(await Doc.fromXml(xml), [
       { op: 'add', kind: 'endEvent:escalation', name: 'Late', in: 'P', escalation: 'Late' },
       { op: 'retype', id: 'errorEndEventOfTheOrderHandlingProcessInTheBackOffice_fail', kind: 'endEvent:escalation', escalation: 'Late' },
-    ] as Op[], { layout: false, conventions, force: true });
+    ] as EditCommand[], { layout: false, conventions, force: true });
     const late = result.changes.created.find((created) => created.name === 'Late' && created.kind.startsWith('endEvent'))!.id;
     expect(late.startsWith(plain)).toBe(false);
     expect(result.conventions?.ids ?? []).not.toContain(late);

@@ -1,6 +1,6 @@
 /**
  * Edits follow the file: generated ids take the id style of the file they
- * are written into (src/ids/IdStyle.ts) and say what they name (never a hash or
+ * are written into (src/domain/document/ids/IdStyle.ts) and say what they name (never a hash or
  * a running number: names, kind + context, the ends of a flow), names are
  * transliterated the German way. All fixtures are synthetic.
  */
@@ -9,10 +9,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml } from '../src/api.js';
-import { Doc } from '../src/model/Doc.js';
-import { IdStyle } from '../src/ids/IdStyle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { IdStyle } from '../src/domain/document/ids/IdStyle.js';
 import { runOps } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 import { guideText, kindsJson } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
@@ -32,7 +32,7 @@ function chain(nodes: Array<[string, string, string?]>, flowIds: string[]): stri
   return definitionsXml(body.join('\n'));
 }
 
-async function created(xml: string, ops: Op[]): Promise<{ doc: Doc; ids: string[]; warnings: string[] }> {
+async function created(xml: string, ops: EditCommand[]): Promise<{ doc: Doc; ids: string[]; warnings: string[] }> {
   const doc = await Doc.fromXml(xml);
   const cs = runOps(doc, ops);
   return { doc, ids: cs.created.map((created) => created.id), warnings: cs.warnings.map((warning) => warning.code) };
@@ -104,7 +104,7 @@ describe('id style inference (edits follow the file)', () => {
   });
 
   it('a Camunda Modeler file gets speaking ids with the modeler prefixes; flows name their ends', async () => {
-    const ops: Op[] = [{ op: 'add', kind: 'userTask', name: 'Pack order', after: 'Activity_0k3x9qa' }];
+    const ops: EditCommand[] = [{ op: 'add', kind: 'userTask', name: 'Pack order', after: 'Activity_0k3x9qa' }];
     const spliceEdit = await created(MODELER, ops);
     // hashes show no case: pascal bodies, the file's prefixes and flow prefix
     expect(IdStyle.infer((await Doc.fromXml(MODELER)).definitions).info()).toEqual({ body: 'pascal', sequenceFlow: { form: 'named', prefix: 'Flow' }, messageFlow: { form: 'named', prefix: 'Flow' } });
@@ -249,12 +249,12 @@ describe('id style inference (edits follow the file)', () => {
   });
 
   it('a split joins at a gateway named in the file style (camel: <id>Join; else <id>_join)', async () => {
-    const split: Op = { op: 'split', after: 'userTask_approveOrder', kind: 'parallel', name: 'Fan out', branches: [{ nodes: [{ kind: 'task', name: 'Left' }] }, { nodes: [{ kind: 'task', name: 'Right' }] }] };
+    const split: EditCommand = { op: 'split', after: 'userTask_approveOrder', kind: 'parallel', name: 'Fan out', branches: [{ nodes: [{ kind: 'task', name: 'Left' }] }, { nodes: [{ kind: 'task', name: 'Right' }] }] };
     expect((await created(CAMEL, [split])).ids).toContain('gateway_fanOutJoin');
-    const modeler = await created(MODELER, [{ ...split, after: 'Activity_0k3x9qa' } as Op]);
+    const modeler = await created(MODELER, [{ ...split, after: 'Activity_0k3x9qa' } as EditCommand]);
     expect(modeler.ids.filter((id) => id.startsWith('Gateway_'))).toEqual(['Gateway_FanOut', 'Gateway_FanOut_join']);
     // an unnamed split gateway: After <anchor>
-    const unnamed = await created(MODELER, [{ ...split, name: undefined, after: 'Activity_0k3x9qa' } as Op]);
+    const unnamed = await created(MODELER, [{ ...split, name: undefined, after: 'Activity_0k3x9qa' } as EditCommand]);
     expect(unnamed.ids.filter((id) => id.startsWith('Gateway_'))).toEqual(['Gateway_AfterCheckOrder', 'Gateway_AfterCheckOrder_join']);
     // the gateways' flows name them by their ids' speaking parts: the split AfterCheckOrder, its join CheckOrderJoin
     expect(unnamed.ids).toEqual(expect.arrayContaining(['Flow_AfterCheckOrderToLeft', 'Flow_LeftToCheckOrderJoin', 'Flow_CheckOrderJoinToOrderOk']));
@@ -290,7 +290,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     const { doc } = await created(BARE, [
       { op: 'add', kind: 'task', name: 'Vertragsunterlagenarchivierung an', after: 'shipOrder', as: '$a' },
       { op: 'add', kind: 'task', name: 'Kundenstammdatenaktualisierung café', after: '$a', as: '$b' },
-      ...[1, 2, 3, 4].map((): Op => ({ op: 'connect', source: '$a', target: '$b' })),
+      ...[1, 2, 3, 4].map((): EditCommand => ({ op: 'connect', source: '$a', target: '$b' })),
     ]);
     const suffixed = 'flowVertragsunterlagenarchivieToKundenstammdatenaktualisierung_5';
     expect(doc.ids.has(suffixed)).toBe(true);
@@ -677,7 +677,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
     <bpmn:sequenceFlow id="Flow_OkToBook_2" sourceRef="Gateway_Ok" targetRef="Activity_Book" />`);
 
   /** `old -> new` of the renames of the default, and `flow -> suggested id` of the W_FLOW_ID_STALE with ids kept. */
-  async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
+  async function bothModes(xml: string, ops: EditCommand[]): Promise<{ renamed: string[]; stale: string[] }> {
     const follow = await Doc.fromXml(xml);
     const renamed = runOps(follow, ops).renames.map((rename) => `${rename.from} -> ${rename.to}`);
     const keep = await Doc.fromXml(xml);
@@ -689,7 +689,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
   }
 
   it('the suggestion is the id the default rename gives, in the file\'s form (named, stemTo, idPair, scopedTo, a suffixed id)', async () => {
-    const cases: Array<[string, Op, string]> = [
+    const cases: Array<[string, EditCommand, string]> = [
       [CAMEL, { op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_checkStock' }, 'flow_checkStockToApproveOrder -> flow_checkStockToPackGoods'],
       [SNAKE, { op: 'add', kind: 'serviceTask', name: 'Pack goods', after: 'Task_check_risk' }, 'Flow_Task_check_risk_Gateway_risk_ok -> Flow_Task_check_risk_Task_pack_goods'],
       [SCOPED, { op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', after: 'serviceTask_KotO_ReserveInventory' }, 'Flow_KotO_ReserveToConfirm -> Flow_KotO_ReserveToReview'],
@@ -703,7 +703,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
   });
 
   it('an end `set id=` renamed earlier in the batch still names its flows in every flow form (the id it had: stemTo, idPair, scopedTo)', async () => {
-    const cases: Array<[string, Op[], string]> = [
+    const cases: Array<[string, EditCommand[], string]> = [
       [CAMEL, [{ op: 'set', id: 'serviceTask_checkStock', values: { id: 'serviceTask_verifyStock' } }, { op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_verifyStock' }], 'flow_checkStockToApproveOrder -> flow_verifyStockToPackGoods'],
       [SNAKE, [{ op: 'set', id: 'Task_check_risk', values: { id: 'Task_assess_risk' } }, { op: 'add', kind: 'serviceTask', name: 'Pack goods', after: 'Task_assess_risk' }], 'Flow_Task_check_risk_Gateway_risk_ok -> Flow_Task_assess_risk_Task_pack_goods'],
       [SCOPED, [{ op: 'set', id: 'userTask_KotO_ConfirmShipment', values: { id: 'userTask_KotO_ApproveShipment' } }, { op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', before: 'userTask_KotO_ApproveShipment' }], 'Flow_KotO_ReserveToConfirm -> Flow_KotO_ReserveToReview'],
@@ -725,7 +725,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
     <bpmn:sequenceFlow id="flow_approveToStep1" sourceRef="userTask_approve" targetRef="serviceTask_step1" />
     <bpmn:sequenceFlow id="flow_approveToStep1No2" sourceRef="userTask_approve" targetRef="serviceTask_step1" />
     <bpmn:sequenceFlow id="flow_step1ToDone" sourceRef="serviceTask_step1" targetRef="endEvent_done" />`);
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'set', id: 'userTask_approve', values: { id: 'userTask_review', name: 'Review' } },
       { op: 'add', kind: 'task', name: 'Check', flow: 'flow_approveToStep1No2' },
     ];
@@ -751,7 +751,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
     <bpmn:sequenceFlow id="Flow_AToJoin" sourceRef="Activity_A" targetRef="Gateway_Join" />
     <bpmn:sequenceFlow id="Flow_BToJoin" sourceRef="Activity_B" targetRef="Gateway_Join" />`);
     const expected = ['Flow_OkToA -> Flow_OkToJoin', 'Flow_OkToB -> Flow_OkToJoin_2'];
-    for (const ops of [[{ op: 'remove', ids: ['Activity_A', 'Activity_B'] }], [{ op: 'remove', ids: ['Activity_A'] }, { op: 'remove', ids: ['Activity_B'] }]] as Op[][]) {
+    for (const ops of [[{ op: 'remove', ids: ['Activity_A', 'Activity_B'] }], [{ op: 'remove', ids: ['Activity_A'] }, { op: 'remove', ids: ['Activity_B'] }]] as EditCommand[][]) {
       expect(await bothModes(joined, ops), JSON.stringify(ops)).toEqual({ renamed: expected, stale: expected });
     }
     const doc = await Doc.fromXml(joined);
@@ -766,7 +766,7 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
       [['startEvent', 'Start', 'Start'], ['task', 'Check', 'Check'], ['task', 'Book', 'Book'], ['endEvent', 'Done', 'Done']],
       ['F_StartToCheck', 'F_CheckToBook', 'F_BookToDone'],
     );
-    for (const ops of [[{ op: 'remove', ids: ['Start', 'Book'] }], [{ op: 'remove', ids: ['F_StartToCheck'] }, { op: 'remove', ids: ['Book'] }]] as Op[][]) {
+    for (const ops of [[{ op: 'remove', ids: ['Start', 'Book'] }], [{ op: 'remove', ids: ['F_StartToCheck'] }, { op: 'remove', ids: ['Book'] }]] as EditCommand[][]) {
       expect(await bothModes(xml, ops), JSON.stringify(ops)).toEqual({ renamed: ['F_CheckToBook -> F_CheckToDone'], stale: ['F_CheckToBook -> F_CheckToDone'] });
     }
   });

@@ -11,23 +11,23 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
-import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/drawing/utils/text.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { OrthogonalRouter } from '../src/layout/incremental/OrthogonalRouter.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
-import type { Box, Point } from '../src/drawing/types.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape, Plane } from '../src/domain/diagram/di/types.js';
+import { activitySize, BOTTOM_ROOM, fitsInside, innerLines } from '../src/domain/diagram/utils/text.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { OrthogonalRouter } from '../src/domain/diagram/layout/incremental/OrthogonalRouter.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
+import type { Box, Point } from '../src/domain/diagram/di/types.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationResult } from '../src/pipeline/index.js';
+import { type MutationResult } from '../src/domain/batch/types.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');
 
-async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; before: Doc; after: Doc }> {
+async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationResult; before: Doc; after: Doc }> {
   const before = await Doc.fromXml(xml, 'x.bpmn');
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   const after = await Doc.fromXml(result.xml);

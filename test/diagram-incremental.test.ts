@@ -12,21 +12,21 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
-import { is, type El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
+import { is, type El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { type MutationOptions, type MutationResult } from '../src/domain/batch/types.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
 /* ------------------------------------------------------------------ */
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -36,14 +36,14 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-const POOLED: Op[] = [
+const POOLED: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' },
   { op: 'add', kind: 'lane', id: 'L1', name: 'Clerk', in: 'Pool', members: ['S', 'A', 'G', 'B', 'E', 'C', 'E2'] },
   { op: 'add', kind: 'lane', id: 'L2', name: 'Boss', in: 'Pool' },
 ];
 
-const WITH_SUB: Op[] = [
+const WITH_SUB: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B' },
   { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' },
@@ -52,14 +52,14 @@ const WITH_SUB: Op[] = [
 ];
 
 /** The clean engine's drawing of `ops`. */
-async function engineXml(ops: Op[]): Promise<string> {
+async function engineXml(ops: EditCommand[]): Promise<string> {
   const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   expect(result.layout.mode).toBe('full');
   return result.xml;
 }
 
 /** The clean engine's drawing of `ops`, changed by hand (`redraw`) and every DI coordinate moved by (dx, dy): no longer engine-owned. */
-async function handXml(ops: Op[], dx = 13, dy = 7, redraw?: (doc: Doc) => void): Promise<string> {
+async function handXml(ops: EditCommand[], dx = 13, dy = 7, redraw?: (doc: Doc) => void): Promise<string> {
   const doc = await Doc.fromXml(await engineXml(ops));
   redraw?.(doc);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
@@ -83,7 +83,7 @@ async function handXml(ops: Op[], dx = 13, dy = 7, redraw?: (doc: Doc) => void):
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
@@ -143,7 +143,7 @@ describe('layout modes', () => {
 
   it('auto keeps a hand-made diagram (incremental); full and incremental can be forced', async () => {
     const xml = await handXml(BASE);
-    const op: Op = { op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' };
+    const op: EditCommand = { op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' };
     expect((await run(xml, [op])).result.layout).toMatchObject({ mode: 'incremental', reason: expect.stringMatching(/hand-made/) });
     expect((await run(xml, [op], { layout: 'full' })).result.layout.mode).toBe('full');
     expect((await run(xml, [op], { layout: true })).result.layout.mode).toBe('incremental');
@@ -164,7 +164,7 @@ describe('layout modes', () => {
 
   it('carries colours over a full redraw and keeps them in an incremental one', async () => {
     const colour = (xml: string): string => xml.replace(/(<bpmndi:BPMNShape id="\w+" bpmnElement="A")/, '$1 bioc:fill="#ffcdd2" bioc:stroke="#831311" color:background-color="#ffcdd2" color:border-color="#831311"').replace('<bpmn:definitions ', '<bpmn:definitions xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" ');
-    const op: Op = { op: 'add', kind: 'task', id: 'N', after: 'A' };
+    const op: EditCommand = { op: 'add', kind: 'task', id: 'N', after: 'A' };
     for (const [xml, layout] of [
       [colour(await handXml(BASE)), 'full'],
       [colour(await engineXml(BASE)), 'auto'],
@@ -178,7 +178,7 @@ describe('layout modes', () => {
 
   it('is deterministic', async () => {
     const xml = await handXml(POOLED);
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'task', id: 'N', after: 'A' },
       { op: 'add', kind: 'boundaryEvent:timer', id: 'T', on: 'B', timer: 'PT1H' },
       { op: 'add', kind: 'endEvent', id: 'TE', after: 'T' },
@@ -237,12 +237,12 @@ describe('incremental placement', () => {
   });
 
   describe('a new branch into a join enters from below, sharing the bottom vertex with the other entries', () => {
-    const SPLIT3: Op[] = [
+    const SPLIT3: EditCommand[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'task', id: 'A', name: 'Check', after: 'S' },
       { op: 'add', kind: 'endEvent', id: 'E', name: 'Done', after: 'A' },
     ];
-    const split = (lanes: boolean): Op => ({
+    const split = (lanes: boolean): EditCommand => ({
       op: 'split',
       after: 'A',
       kind: 'parallelGateway',
@@ -492,7 +492,7 @@ describe('incremental placement', () => {
   });
 
   it('places a new expanded sub-process with content as one block, a collapsed one on its own diagram', async () => {
-    const sub: Op[] = [
+    const sub: EditCommand[] = [
       { op: 'add', kind: 'subProcess', id: 'NS', name: 'New sub', after: 'B' },
       { op: 'add', kind: 'startEvent', id: 'NSS', in: 'NS' },
       { op: 'add', kind: 'task', id: 'NST', name: 'Do', after: 'NSS' },
@@ -503,7 +503,7 @@ describe('incremental placement', () => {
     for (const id of ['NSS', 'NST']) expect(inside(now.get(id)!, now.get('NS')!)).toBe(true);
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(now.get('NS')!));
     expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
-    ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as Op, ...sub.slice(1)]));
+    ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as EditCommand, ...sub.slice(1)]));
     now = shapes(after);
     expect(now.get('NS')).toMatchObject({ expanded: false, bounds: { width: 100, height: 80 } });
     const planes = new DiagramReader(after.definitions).planes();
@@ -533,7 +533,7 @@ describe('incremental placement', () => {
   });
 
   it('expands a collapsed sub-process: its diagram moves in and the drawing makes room', async () => {
-    const collapsed: Op[] = [...BASE.slice(0, 5), { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B', collapsed: true }, { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' }, { op: 'add', kind: 'task', id: 'ST', name: 'Inner', after: 'SS' }];
+    const collapsed: EditCommand[] = [...BASE.slice(0, 5), { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B', collapsed: true }, { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' }, { op: 'add', kind: 'task', id: 'ST', name: 'Inner', after: 'SS' }];
     const xml = await handXml(collapsed);
     const before = shapes(await Doc.fromXml(xml));
     expect(new DiagramReader((await Doc.fromXml(xml)).definitions).planes()).toHaveLength(2);
@@ -610,9 +610,9 @@ describe('incremental placement', () => {
   });
 
   it('an engine drawing with a boundary event on its host\'s top border (its way over the top) stays editable: a task after its target, a task into its flow and a reroute keep the event there and its flow leaving it by its top', async () => {
-    // the clean engine puts Payment failed on Pick invoice's top border (layout/clean/TopBorderTrial.ts); Rejected,
+    // the clean engine puts Payment failed on Pick invoice's top border (domain/diagram/layout/clean/TopBorderTrial.ts); Rejected,
     // whose handler lies below, stays on the bottom border
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'userTask', id: 'A1', name: 'Pick invoice', after: 'S' },
       { op: 'split', after: 'A1', kind: 'parallelGateway', id: 'G2', joinId: 'J3', branches: [{ nodes: [{ kind: 'task', id: 'T4', name: 'Pack order' }, { kind: 'sendTask', id: 'T5', name: 'Inform order' }] }, { nodes: [{ kind: 'serviceTask', id: 'T6', name: 'Notify data' }, { kind: 'task', id: 'T7', name: 'Book data' }] }] },

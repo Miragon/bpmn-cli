@@ -38,12 +38,12 @@ let cliFile: string;
 beforeAll(async () => {
   tmp = mkdtempSync(join(tmpdir(), 'bpmn-plugin-'));
   // relative to its own file the bundle reads ../package.json (src/cli.ts), the font from
-  // ../../assets (src/node/PngRenderer.ts) and @resvg/resvg-wasm from node_modules above it
-  mkdirSync(join(tmp, 'pkg', 'cli'), { recursive: true });
-  copyFileSync(join(ROOT, 'package.json'), join(tmp, 'pkg', 'package.json'));
+  // ../../../../assets (src/adapters/out/files/PngRenderer.ts) and @resvg/resvg-wasm from node_modules above it
+  mkdirSync(join(tmp, 'pkg', 'dist', 'out', 'cli'), { recursive: true });
+  copyFileSync(join(ROOT, 'package.json'), join(tmp, 'pkg', 'dist', 'out', 'package.json'));
   symlinkSync(join(ROOT, 'assets'), join(tmp, 'assets'));
   symlinkSync(join(ROOT, 'node_modules'), join(tmp, 'node_modules'));
-  cliFile = join(tmp, 'pkg', 'cli', 'cli.mjs');
+  cliFile = join(tmp, 'pkg', 'dist', 'out', 'cli', 'cli.mjs');
   await build({
     entryPoints: [join(ROOT, 'src', 'cli.ts')],
     bundle: true,

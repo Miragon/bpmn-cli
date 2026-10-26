@@ -1,5 +1,5 @@
 /**
- * The decision link of a business rule task (src/model/DecisionLinkReader.ts, DecisionLinkWriter.ts): Camunda 7
+ * The decision link of a business rule task (src/domain/document/DecisionLinkReader.ts, DecisionLinkWriter.ts): Camunda 7
  * writes it as camunda:decisionRef, Camunda 8 as a zeebe:calledDecision
  * extension element, and bpmn-cli as an unprefixed calledDecision="<decision>"
  * in a model without an engine. `show`, `show <id>` and `find` read every
@@ -12,14 +12,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
-import { COMMANDS } from '../src/report/CommandCatalogue.js';
-import { ERROR_CATALOGUE } from '../src/report/guide.js';
+import { COMMANDS } from '../src/adapters/in/report/CommandCatalogue.js';
+import { ERROR_CATALOGUE } from '../src/adapters/in/report/guide.js';
 import { guideText, kindsJson } from '../src/index.js';
-import { checkFile } from '../src/node/index.js';
+import { checkFile } from '../src/node.js';
 import { mutateDoc, type MutationOptions, loadProfiles, runProfile, buildView, elementDetail, findElements } from '../src/index.js';
-import { PropertyCoercer } from '../src/ops/PropertyCoercer.js';
+import { PropertyCoercer } from '../src/domain/editing/PropertyCoercer.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

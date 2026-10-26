@@ -4,14 +4,14 @@
  * within 64 characters. Synthetic fixtures only.
  */
 import { describe, expect, it } from 'vitest';
-import { styledId } from '../src/drawing/utils/di-ids.js';
-import { Doc } from '../src/model/Doc.js';
-import { cutAt } from '../src/ids/utils/slug.js';
-import type { Op } from '../src/ops/types.js';
+import { styledId } from '../src/domain/diagram/utils/di-ids.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { cutAt } from '../src/domain/document/utils/slug.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions } from '../src/pipeline/index.js';
+import { type MutationOptions } from '../src/domain/batch/types.js';
 
-const OPS: Op[] = [
+const OPS: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -44,7 +44,7 @@ function diOf(xml: string): { shapes: Map<string, string>; planes: string[]; dia
   };
 }
 
-async function write(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<string> {
+async function write(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<string> {
   return (await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts })).xml;
 }
 
@@ -88,7 +88,7 @@ describe('a full redraw keeps the DI ids', () => {
   });
 
   it('a new pool keeps a modeler plane id; a plane named after the old root follows the new root', async () => {
-    const pool: Op = { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' };
+    const pool: EditCommand = { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' };
     const modeler = diOf(await write(await drawn(suffix), [pool], { layout: 'full' }));
     expect(modeler.planes).toEqual(['BPMNPlane_1']);
     expect(modeler.diagrams).toEqual(['BPMNDiagram_1']);
@@ -100,7 +100,7 @@ describe('a full redraw keeps the DI ids', () => {
   });
 
   it('keeps the plane and diagram ids of a collapsed sub-process', async () => {
-    const ops: Op[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C', collapsed: true }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
+    const ops: EditCommand[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C', collapsed: true }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
     const engine = (await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true })).xml;
     const custom = engine.replace('id="BPMNPlane_Sub"', 'id="Sub_plane"').replace('id="BPMNDiagram_Sub"', 'id="Sub_diagram"').replace(/<dc:Bounds x="(\d+)"/, (_m, left: string) => `<dc:Bounds x="${Number(left) + 3}"`);
     const after = diOf(await write(custom, [], { layout: 'full' }));
@@ -109,7 +109,7 @@ describe('a full redraw keeps the DI ids', () => {
   });
 
   it('a new plane never takes the ids of another old diagram', async () => {
-    const ops: Op[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C' }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
+    const ops: EditCommand[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C' }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
     const engine = (await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true })).xml;
     // a second view of the process, as some tools write it
     const second = /<bpmndi:BPMNDiagram id="BPMNDiagram_P">[\s\S]*?<\/bpmndi:BPMNDiagram>/.exec(engine)![0].replace('BPMNDiagram_P', 'BPMNDiagram_2').replace('BPMNPlane_P', 'BPMNPlane_2').replace(/ id="BPMN(Shape|Edge)_/g, ' id="View2_');
@@ -134,7 +134,7 @@ const APPROVE = 'Activity_ApproveTheIncomingSupplierInvoiceForPaymentInTheLedger
 const SUB = 'Activity_HandleTheIncomingSupplierInvoicesOfTheAccountsPayable';
 
 /** Element ids of 52 to 64 characters, flows named after long names (64), a collapsed sub-process; two ids alike in their first 51 characters. */
-const LONG_OPS: Op[] = [
+const LONG_OPS: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'Event_SupplierInvoiceReceivedByTheAccountsPayableDepartment', name: 'Supplier invoice received by the accounts payable department' },
   { op: 'add', kind: 'userTask', id: 'Activity_CheckTheIncomingSupplierInvoiceAgainstTheOrderAndTheDel', name: 'Check the incoming supplier invoice against the order', after: 'Event_SupplierInvoiceReceivedByTheAccountsPayableDepartment' },
   { op: 'add', kind: 'task', id: `${APPROVE}A`, name: 'Approve the incoming supplier invoice for payment', after: 'Activity_CheckTheIncomingSupplierInvoiceAgainstTheOrderAndTheDel' },
@@ -173,7 +173,7 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
     const short = 'Activity_ApproveTheIncomingSupplierInvoiceFor';
     const fits = 'Activity_ApproveTheIncomingSupplierInvoiceForPaymen';
     expect([short.length, fits.length, 'Flow_ApproveTheIncomingSupplierInvoiceForToApproveXY'.length]).toEqual([45, 51, 52]);
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'task', id: APPROVE, name: 'Approve', after: 'S' },
       { op: 'add', kind: 'task', id: short, name: 'Approve again', after: APPROVE },
@@ -195,11 +195,11 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
   });
 
   it('a plane and diagram id cut from a long process id follow a new collaboration root, also as 0.6 cut them (both engines)', async () => {
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'task', id: 'A', name: 'Check', after: 'S' },
     ];
-    const pool: Op = { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' };
+    const pool: EditCommand = { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' };
     for (const engine of ['clean', 'auto'] as const) {
       for (const pid of [LONG_PROCESS, 'Process_HandleTheIncomingSupplierInvoicesOfTheAccountsPayable']) {
         const fresh = (await mutateDoc(Doc.create({ processId: pid }), ops, { dryRun: true, engine })).xml;
@@ -228,7 +228,7 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
   });
 
   it('a DI edge id 0.6 cut to bare numbers (BPMNEdge_Flow_Pruefung10To2030) follows its flow renamed after new ends', async () => {
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'add', kind: 'task', name: 'Prüfung 10 Lieferantenbestellungsuebersicht', as: '$a' },
       { op: 'add', kind: 'task', name: '20 Lieferantenbestellungsuebersicht 30', after: '$a' },
     ];

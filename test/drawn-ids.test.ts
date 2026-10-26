@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml } from '../src/api.js';
-import { Doc } from '../src/model/Doc.js';
-import { parseXml } from '../src/model/utils/moddle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { parseXml } from '../src/domain/document/utils/moddle.js';
 import { mutateDoc, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';

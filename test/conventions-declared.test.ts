@@ -1,19 +1,19 @@
 /**
- * Declared id conventions in the core (issue #34; src/ids/IdStyle.ts DECLARED
+ * Declared id conventions in the core (issue #34; src/domain/document/ids/IdStyle.ts DECLARED
  * CONVENTIONS): they fill the gaps a change opens and never rename what is
  * there; the rest of the file keeps its own style, stable over many writes;
  * W_ID_PREFIX_STALE after a retype or a trigger change; the `conventions`
  * of a result; the view of `bpmn show --conventions`. The conventions come
- * from the real plugin's naming helpers (src/ids/IdConventionsReader.ts).
+ * from the real plugin's naming helpers (src/domain/document/ids/IdConventionsReader.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../src/api.js';
-import type { BpmnlintRuleSetting } from '../src/validate/bpmnlint-validator.js';
+import type { BpmnlintRuleSetting } from '../src/domain/validation/bpmnlint-validator.js';
 import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions, mutateDoc, mutationReport, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import { bpmnlintEngine } from '../src/node/index.js';
-import type { Op } from '../src/ops/types.js';
-import type { MutationResult } from '../src/pipeline/index.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { bpmnlintEngine } from '../src/node.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
+import type { MutationResult } from '../src/domain/batch/types.js';
 import { definitionsXml } from './helpers.js';
 
 const naming = bpmnlintEngine().plugin.naming;
@@ -26,7 +26,7 @@ const createdIds = (mutation: MutationResult): string[] => mutation.changes.crea
 
 /** `ops` on `xml` with the declared conventions (null: none). */
 async function run(xml: string, ops: unknown[], conventions: IdConventions | null = BARE, opts: { keepFlowIds?: boolean } = {}): Promise<MutationResult> {
-  return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops as Op[], { layout: false, ...(conventions ? { conventions } : {}), ...opts });
+  return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops as EditCommand[], { layout: false, ...(conventions ? { conventions } : {}), ...opts });
 }
 
 /** A PascalCase file: start -> two tasks -> end, two lanes, a data object. */
@@ -329,7 +329,7 @@ describe('new ids take the declared prefix and case', () => {
     let doc = Doc.create({ processName: 'Order', conventions: BARE });
     const processes: string[] = [];
     for (const name of ['Main', 'Customer', 'Supplier', 'Back office', 'Tax office']) {
-      const result = await mutateDoc(doc, [{ op: 'add', kind: 'participant', name }] as Op[], { layout: false, conventions: BARE });
+      const result = await mutateDoc(doc, [{ op: 'add', kind: 'participant', name }] as EditCommand[], { layout: false, conventions: BARE });
       processes.push(...result.changes.created.filter((created) => created.kind === 'process').map((created) => created.id));
       doc = await Doc.fromXml(result.xml);
     }
@@ -502,7 +502,7 @@ describe('the conventions of a result', () => {
       [{ op: 'add', kind: 'xor', name: 'Approved?', after: 'serviceTask_bookOrder' }],
       [{ op: 'split', after: 'gateway_approved', kind: 'and', branches: [{ nodes: [{ kind: 'userTask', name: 'Pack' }] }, { nodes: [{ kind: 'userTask', name: 'Bill' }] }] }],
     ]) {
-      const result = await mutateDoc(doc, ops as Op[], { layout: false, conventions: BARE });
+      const result = await mutateDoc(doc, ops as EditCommand[], { layout: false, conventions: BARE });
       lines.push(result.conventions);
       expect(renderSummary(mutationSummary(mutationReport(result)))).not.toContain('conventions:');
       doc = await Doc.fromXml(result.xml);
@@ -701,7 +701,7 @@ describe('W_ID_PREFIX_STALE', () => {
 
   it('an op of the batch that changed the element before its retype (a new element of the new type): every entry names the final id', async () => {
     const start = definitionsXml('<bpmn:startEvent id="startEvent_start" name="Start"/>');
-    const changes: Op[] = [
+    const changes: EditCommand[] = [
       { op: 'set', id: '$t', values: { doc: 'Reviews the invoice' } },
       { op: 'set', id: '$t', values: { name: 'Check bill' } },
       { op: 'move', ids: ['$t'], in: 'Process_1' },
