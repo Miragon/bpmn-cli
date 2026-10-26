@@ -1,4 +1,4 @@
-import { kindLabel } from '../../model/utils/kinds.js';
+import { EVENT_GATEWAY_TRIGGERS, ignoresConditions, isEventSubProcess, kindLabel } from '../../model/utils/kinds.js';
 import { unkeptEntries } from '../../model/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../model/utils/moddle.js';
 import { DecisionLinkReader } from '../../model/DecisionLinkReader.js';
@@ -22,6 +22,9 @@ export const RULE_KIT = {
   isDiElement,
   walk,
   kindLabel,
+  isEventSubProcess,
+  ignoresConditions,
+  EVENT_GATEWAY_TRIGGERS,
   makeFinding,
   unkeptEntries,
   DecisionLinkReader,

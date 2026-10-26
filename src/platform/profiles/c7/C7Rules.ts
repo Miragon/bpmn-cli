@@ -111,7 +111,7 @@ export abstract class C7Rules extends EngineRules {
     if (this.kit.is(el, 'bpmn:EndEvent')) return ['Message', 'Signal'];
     if (this.kit.is(el, 'bpmn:StartEvent')) {
       const parent = el.$parent as El | undefined;
-      if (parent && this.isEventSubProcess(parent)) return ['Message', 'Signal', 'Timer', 'Conditional'];
+      if (parent && this.kit.isEventSubProcess(parent)) return ['Message', 'Signal', 'Timer', 'Conditional'];
       if (parent && this.kit.is(parent, 'bpmn:Process')) return ['Timer', 'Message', 'Signal', 'Conditional'];
     }
     return undefined;

@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
-import { isLinkCatch, isLinkThrow } from '../model/utils/kinds.js';
+import { isEventSubProcess, isLinkCatch, isLinkThrow } from '../model/utils/kinds.js';
 import { is, type El, peek } from '../model/utils/moddle.js';
-import { isEventSubProcess, linkNameOf } from './utils/flow-nodes.js';
+import { linkNameOf } from './utils/flow-nodes.js';
 
 /**
  * Flow order of one scope for the view and the lint: depth-first from its start events,

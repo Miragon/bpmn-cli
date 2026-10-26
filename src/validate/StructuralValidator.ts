@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
 import { isCliError } from '../shared/utils/errors.js';
 import { type Warning } from '../shared/CliError.js';
-import { ignoresConditions, isLinkCatch, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/utils/kinds.js';
+import { ignoresConditions, isEventSubProcess, isLinkCatch, isRejectedType, kindLabel, kindOf, triggerOf, type Trigger } from '../model/utils/kinds.js';
 import { completeMirrorLists } from '../model/utils/mirror.js';
 import { is, walk, type El, peek, list, shownId } from '../model/utils/moddle.js';
 import { FlowRules } from '../model/FlowRules.js';
@@ -11,7 +11,7 @@ import type { ProfileFinding } from '../platform/utils/finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileReport } from '../platform/profiles/PlatformProfiles.js';
 import type { ValidatorReport } from './validators.js';
 import { FlowOrder } from './FlowOrder.js';
-import { isEventSubProcess, linkNameOf } from './utils/flow-nodes.js';
+import { linkNameOf } from './utils/flow-nodes.js';
 import { lintCoveredBy } from './utils/lint-coverage.js';
 
 export interface ValidationResult {

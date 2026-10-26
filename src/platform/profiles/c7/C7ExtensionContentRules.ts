@@ -107,8 +107,8 @@ export class C7ExtensionContentRules extends C7Rules {
     const hostId = idOf(host) ?? idOf(owner);
     const where = this.describe(host, owner);
     const remove = hostId ? `Move the mappings to the next activity and remove them here: \`bpmn ext remove <file> ${hostId} ${this.p}:inputOutput\`.` : 'Remove it from the XML.';
-    if (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent') || this.kit.is(host, 'bpmn:Gateway') || this.isEventSubProcess(host)) {
-      const kind = this.isEventSubProcess(host) ? 'an event sub-process' : `a ${this.describe(host, undefined).split(' ')[0]}`;
+    if (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent') || this.kit.is(host, 'bpmn:Gateway') || this.kit.isEventSubProcess(host)) {
+      const kind = this.kit.isEventSubProcess(host) ? 'an event sub-process' : `a ${this.describe(host, undefined).split(' ')[0]}`;
       this.push('deploy', 'W_C7_DEPLOY_INPUT_OUTPUT', host, owner, 'io:host', `${this.p}:inputOutput on ${where}: the engines do not support input/output mappings on ${kind} and refuse the file`, remove);
       return;
     }

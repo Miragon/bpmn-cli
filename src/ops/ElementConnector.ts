@@ -1,7 +1,7 @@
 import type { Doc } from '../model/Doc.js';
 import { modelError } from '../shared/utils/errors.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
-import { kindLabel, triggerOf } from '../model/utils/kinds.js';
+import { isEventSubProcess, kindLabel, triggerOf } from '../model/utils/kinds.js';
 import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { ChangeSet } from '../model/ChangeSet.js';
 import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
@@ -54,7 +54,7 @@ export class ElementConnector {
       throw modelError('E_INVALID_ENDPOINT', `${ElementConnector.describe(el)} cannot be the ${role} of a message flow: ${why}`, { element: idOf(el), hint });
     };
     if (!is(el, 'bpmn:InteractionNode')) fail('not an interaction node', 'Message flows connect participants, tasks, events and sub-processes; not gateways or data.');
-    if (is(el, 'bpmn:SubProcess') && el.get<boolean | undefined>('triggeredByEvent')) fail('event sub-processes cannot send or receive messages', 'Target a message start event inside it instead.');
+    if (isEventSubProcess(el)) fail('event sub-processes cannot send or receive messages', 'Target a message start event inside it instead.');
     if (is(el, 'bpmn:Event')) {
       const trigger = triggerOf(el);
       if (trigger !== 'none' && trigger !== 'message') fail(`a ${trigger} event cannot ${role === 'source' ? 'send' : 'receive'} messages`, 'Use a message or untyped event.');

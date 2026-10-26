@@ -254,6 +254,13 @@ export function isLinkCatch(el: El): boolean {
   return is(el, 'bpmn:IntermediateCatchEvent') && triggerOf(el) === 'link';
 }
 
+export function isEventSubProcess(el: El | undefined): boolean {
+  return !!el && is(el, 'bpmn:SubProcess') && el.get<boolean | undefined>('triggeredByEvent') === true;
+}
+
+/** The intermediate catch event triggers an event-based gateway may wait for. */
+export const EVENT_GATEWAY_TRIGGERS: readonly Trigger[] = ['message', 'timer', 'signal', 'conditional'];
+
 export function kindLabel(el: El): string {
   const def = kindOf(el);
   if (!def) return el.$type;

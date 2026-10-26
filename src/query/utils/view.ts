@@ -37,10 +37,6 @@ export function labelOf(el: El): string {
   return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
-export function isEventSubProcess(el: El): boolean {
-  return is(el, 'bpmn:SubProcess') && peek<boolean>(el, 'triggeredByEvent') === true;
-}
-
 export function refLabel(ref: El | undefined): string {
   if (!ref) return '?';
   return nameOf(ref) ?? shownId(ref);

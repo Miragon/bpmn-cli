@@ -4,7 +4,7 @@ import { modelError, usageError } from '../shared/utils/errors.js';
 import { ElementLabels, type AnchorContext } from '../ids/ElementLabels.js';
 import { kindRequest, type IdRequest } from '../ids/utils/requests.js';
 import type { ContextWord } from '../ids/utils/id-words.js';
-import { FLOW_NODE_FAMILIES, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/utils/kinds.js';
+import { FLOW_NODE_FAMILIES, isEventSubProcess, kindByName, kindLabel, normalizeTrigger, parseKind, type KindDef, type ParsedKind, type Trigger } from '../model/utils/kinds.js';
 import { KindError } from '../model/KindError.js';
 import { addTo, is, many, type El, idOf } from '../model/utils/moddle.js';
 import { typeLabel } from '../model/utils/elements.js';
@@ -232,10 +232,6 @@ export class ElementAdder {
     }
   }
 
-  private static isEventSubProcess(el: El | undefined): boolean {
-    return !!el && is(el, 'bpmn:SubProcess') && !!el.get<boolean | undefined>('triggeredByEvent');
-  }
-
   private placementDetail(op: AddOp): string {
     switch (NodePlacement.modeOf(op)) {
       case 'between':
@@ -319,7 +315,7 @@ export class ElementAdder {
             hint: `Use boundaryEvent:<trigger>, e.g. boundaryEvent:timer --timer P2D or boundaryEvent:error --error PaymentFailed.`,
           });
         }
-        if (is(el, 'bpmn:StartEvent') && ElementAdder.isEventSubProcess(scope)) {
+        if (is(el, 'bpmn:StartEvent') && isEventSubProcess(scope)) {
           throw modelError('E_TRIGGER_REQUIRED', `Start event ${id} inside event sub-process ${idOf(scope!)} needs a trigger`, {
             element: id,
             candidates: (def.triggers ?? []).filter((t) => t !== 'none'),

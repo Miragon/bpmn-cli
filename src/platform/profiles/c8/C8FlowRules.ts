@@ -1,6 +1,7 @@
+import type { Trigger } from '../../../model/utils/kinds.js';
 import type { El } from '../../../model/utils/moddle.js';
 import type { RuleRun } from '../RuleRun.js';
-import { EVENT_GATEWAY_TRIGGERS, idOf, list, nameOf, peek } from '../utils/element.js';
+import { idOf, list, nameOf, peek, triggerName } from '../utils/element.js';
 import { sh } from '../utils/hint.js';
 import { feelOf, isFeel } from './utils/value.js';
 import { C8Rules } from './C8Rules.js';
@@ -56,7 +57,7 @@ export class C8FlowRules extends C8Rules {
       this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', flow, undefined, 'condition', `The condition "${body.trim()}" of sequence flow ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, body.trim() ? `\`bpmn set <file> ${id} ${sh(`condition==${feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${sh('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`);
     }
     // complex gateways are W_C8_DEPLOY_UNSUPPORTED, parallel / event-based ones W_CONDITION_IGNORED
-    if (source && !this.kit.is(source, 'bpmn:ParallelGateway') && !this.kit.is(source, 'bpmn:EventBasedGateway') && !this.kit.is(source, 'bpmn:ExclusiveGateway') && !this.kit.is(source, 'bpmn:InclusiveGateway') && !this.kit.is(source, 'bpmn:ComplexGateway')) {
+    if (source && !this.kit.is(source, 'bpmn:Gateway')) {
       this.push('runtime', 'W_C8_CONDITION_IGNORED', flow, undefined, 'conditionIgnored', `Sequence flow ${id} out of ${this.describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, `Remove it (\`bpmn set <file> ${id} condition=\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${idOf(source)}\`, then move the condition onto its flows.`);
     }
   }
@@ -85,7 +86,7 @@ export class C8FlowRules extends C8Rules {
       const t = peek<El>(f, 'targetRef');
       if (!t) continue;
       const defs = list(t, 'eventDefinitions');
-      const ok = this.kit.is(t, 'bpmn:IntermediateCatchEvent') && defs.length === 1 && EVENT_GATEWAY_TRIGGERS.some((k) => this.kit.is(defs[0], `bpmn:${k}EventDefinition`));
+      const ok = this.kit.is(t, 'bpmn:IntermediateCatchEvent') && defs.length === 1 && this.kit.EVENT_GATEWAY_TRIGGERS.includes(triggerName(defs[0]!) as Trigger);
       if (!ok) {
         this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${idOf(t)}`, `Event-based gateway ${id} leads to ${this.describe(t)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, this.kit.is(t, 'bpmn:ReceiveTask') ? `Use a message catch event: \`bpmn retype <file> ${idOf(t)} intermediateCatchEvent:message --message ${sh(nameOf(this.messageOf(t)) ?? '<MessageName>')}\`.` : `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${idOf(f)} --message <MessageName>\` (or retype ${idOf(t)}).`, [idOf(t)!, idOf(f)!]);
       }

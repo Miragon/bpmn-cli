@@ -40,5 +40,3 @@ export function triggerName(def: El): string {
 
 export const TIMER_ELEMENTS = ['timeDate', 'timeCycle', 'timeDuration'];
 
-/** The intermediate catch event triggers both engines accept after an event-based gateway. */
-export const EVENT_GATEWAY_TRIGGERS = ['Message', 'Timer', 'Signal', 'Conditional'];

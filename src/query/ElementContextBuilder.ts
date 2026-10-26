@@ -1,10 +1,11 @@
 import type { Doc } from '../model/Doc.js';
+import { isEventSubProcess } from '../model/utils/kinds.js';
 import { is, list, peek, shownId, walk, type El } from '../model/utils/moddle.js';
 import type { ContextCatch, ContextEventSubProcess, ContextLink, ContextMessage, ContextRef, ElementContext } from './context.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { DetailMessageFlow } from './model-view.js';
-import { compact, isEventSubProcess, labelOf, nonEmpty, ownNameOf } from './utils/view.js';
+import { compact, labelOf, nonEmpty, ownNameOf } from './utils/view.js';
 
 const USER_PROPS: Array<[string, string]> = [
   ['bpmn:Message', 'messageRef'],

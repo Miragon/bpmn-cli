@@ -105,13 +105,13 @@ export class C7EventRules extends C7Rules {
     const scope = this.doc.scopeOf(el);
     if (!scope) return;
     const allowed: Array<El | undefined> = [scope];
-    if (this.isEventSubProcess(scope)) allowed.push(this.doc.scopeOf(scope));
+    if (this.kit.isEventSubProcess(scope)) allowed.push(this.doc.scopeOf(scope));
     if (this.kit.is(ref, 'bpmn:FlowNode') && allowed.includes(this.doc.scopeOf(ref))) return;
     const id = idOf(el)!;
     const sid = idOf(scope) ?? '<scopeId>';
     const candidates = this.doc
       .flowNodes(scope)
-      .filter((n) => this.kit.is(n, 'bpmn:Activity') && !this.isEventSubProcess(n))
+      .filter((n) => this.kit.is(n, 'bpmn:Activity') && !this.kit.isEventSubProcess(n))
       .map(idOf)
       .filter((x): x is string => !!x)
       .slice(0, 5);
@@ -153,7 +153,7 @@ export class C7EventRules extends C7Rules {
       if (this.kit.is(node, 'bpmn:StartEvent')) {
         const parent = this.doc.scopeOf(node);
         if (parent && this.kit.is(parent, 'bpmn:Process')) scope = `start:${idOf(parent)}`;
-        else if (parent && this.isEventSubProcess(parent)) scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
+        else if (parent && this.kit.isEventSubProcess(parent)) scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
       } else if (this.kit.is(node, 'bpmn:BoundaryEvent')) {
         const host = peek<El>(node, 'attachedToRef');
         if (host) scope = `${this.isMultiInstance(host) ? 'body' : 'scope'}:${idOf(host)}`;
@@ -234,9 +234,9 @@ export class C7EventRules extends C7Rules {
     const starts = nodes.filter((n) => this.kit.is(n, 'bpmn:StartEvent'));
     const isProcess = this.kit.is(scope, 'bpmn:Process');
     const transaction = this.kit.is(scope, 'bpmn:Transaction');
-    const kind = isProcess ? 'Process' : this.isEventSubProcess(scope) ? 'Event sub-process' : transaction ? 'Transaction' : 'Sub-process';
+    const kind = isProcess ? 'Process' : this.kit.isEventSubProcess(scope) ? 'Event sub-process' : transaction ? 'Transaction' : 'Sub-process';
     if (!starts.length) {
-      if (this.isEventSubProcess(scope)) return;
+      if (this.kit.isEventSubProcess(scope)) return;
       const what = nodes.length ? 'has no start event' : 'is empty, without a start event';
       const add = nodes.length
         ? `Add one: \`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}, then connect it)`
@@ -312,7 +312,7 @@ export class C7EventRules extends C7Rules {
       parts.push(`Start its branch from ${fid}: ${moves}, then ${remove}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     }
     if (this.kit.is(scope, 'bpmn:Process')) parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${sid} trigger=message message=<Name>\``);
-    const again = this.isEventSubProcess(scope) ? this.ownEventSubProcess(scope, extra) : '';
+    const again = this.kit.isEventSubProcess(scope) ? this.ownEventSubProcess(scope, extra) : '';
     return `${parts.join(', or ')}${again ? `; ${again}` : ''}.`;
   }
 
