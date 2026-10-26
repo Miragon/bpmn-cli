@@ -1,48 +1,47 @@
 import type { Doc } from './Doc.js';
 import { modelError } from '../shared/utils/errors.js';
-import { ignoresConditions, isLinkCatch, isLinkThrow, kindLabel } from './utils/kinds.js';
+import { ignoresConditions, isEventSubProcess, isLinkCatch, isLinkThrow, kindLabel } from './utils/kinds.js';
 import { idOf, is, type El } from './utils/moddle.js';
+
+type Role = 'source' | 'target';
+
+interface EndpointRule {
+  role: Role;
+  refuses: (node: El) => boolean;
+  message: (node: El) => string;
+}
 
 /** Which ends a sequence flow may connect, within one scope, and which condition it may carry. */
 export class FlowRules {
+  /** In the order `assertRoles` reports them when both ends are refused. */
+  private static readonly ENDPOINT_RULES: EndpointRule[] = [
+    { role: 'source', refuses: (n) => !is(n, 'bpmn:FlowNode'), message: (n) => `${FlowRules.label(n)} cannot be the source of a sequence flow` },
+    { role: 'target', refuses: (n) => !is(n, 'bpmn:FlowNode'), message: (n) => `${FlowRules.label(n)} cannot be the target of a sequence flow` },
+    { role: 'source', refuses: (n) => is(n, 'bpmn:EndEvent'), message: (n) => `End event ${idOf(n)} cannot have outgoing sequence flows` },
+    { role: 'target', refuses: (n) => is(n, 'bpmn:StartEvent'), message: (n) => `Start event ${idOf(n)} cannot have incoming sequence flows` },
+    { role: 'source', refuses: isLinkThrow, message: (n) => `Link throw event ${idOf(n)} cannot have outgoing sequence flows` },
+    { role: 'target', refuses: isLinkCatch, message: (n) => `Link catch event ${idOf(n)} cannot have incoming sequence flows` },
+    { role: 'target', refuses: (n) => is(n, 'bpmn:BoundaryEvent'), message: (n) => `Boundary event ${idOf(n)} cannot have incoming sequence flows` },
+    { role: 'source', refuses: isEventSubProcess, message: (n) => `Event sub-process ${idOf(n)} cannot have sequence flows` },
+    { role: 'target', refuses: isEventSubProcess, message: (n) => `Event sub-process ${idOf(n)} cannot have sequence flows` },
+  ];
+
   constructor(private readonly doc: Doc) {}
 
   canStart(node: El): boolean {
-    return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:EndEvent') && !isLinkThrow(node) && !FlowRules.isEventSubProcess(node);
+    return !FlowRules.refusal('source', node);
   }
 
   canEnd(node: El): boolean {
-    return is(node, 'bpmn:FlowNode') && !is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !isLinkCatch(node) && !FlowRules.isEventSubProcess(node);
+    return !FlowRules.refusal('target', node);
   }
 
   /** No scope check. */
   assertRoles(source: El, target: El): void {
-    if (!is(source, 'bpmn:FlowNode')) {
-      throw modelError('E_INVALID_SOURCE', `${FlowRules.label(source)} cannot be the source of a sequence flow`, { element: idOf(source) });
-    }
-    if (!is(target, 'bpmn:FlowNode')) {
-      throw modelError('E_INVALID_TARGET', `${FlowRules.label(target)} cannot be the target of a sequence flow`, { element: idOf(target) });
-    }
-    if (is(source, 'bpmn:EndEvent')) {
-      throw modelError('E_INVALID_SOURCE', `End event ${idOf(source)} cannot have outgoing sequence flows`, { element: idOf(source) });
-    }
-    if (is(target, 'bpmn:StartEvent')) {
-      throw modelError('E_INVALID_TARGET', `Start event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
-    }
-    if (isLinkThrow(source)) {
-      throw modelError('E_INVALID_SOURCE', `Link throw event ${idOf(source)} cannot have outgoing sequence flows`, { element: idOf(source) });
-    }
-    if (isLinkCatch(target)) {
-      throw modelError('E_INVALID_TARGET', `Link catch event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
-    }
-    if (is(target, 'bpmn:BoundaryEvent')) {
-      throw modelError('E_INVALID_TARGET', `Boundary event ${idOf(target)} cannot have incoming sequence flows`, { element: idOf(target) });
-    }
-    if (is(source, 'bpmn:SubProcess') && source.get<boolean | undefined>('triggeredByEvent')) {
-      throw modelError('E_INVALID_SOURCE', `Event sub-process ${idOf(source)} cannot have sequence flows`, { element: idOf(source) });
-    }
-    if (is(target, 'bpmn:SubProcess') && target.get<boolean | undefined>('triggeredByEvent')) {
-      throw modelError('E_INVALID_TARGET', `Event sub-process ${idOf(target)} cannot have sequence flows`, { element: idOf(target) });
+    for (const rule of FlowRules.ENDPOINT_RULES) {
+      const node = rule.role === 'source' ? source : target;
+      if (!rule.refuses(node)) continue;
+      throw modelError(rule.role === 'source' ? 'E_INVALID_SOURCE' : 'E_INVALID_TARGET', rule.message(node), { element: idOf(node) });
     }
   }
 
@@ -80,8 +79,8 @@ export class FlowRules {
     });
   }
 
-  private static isEventSubProcess(el: El): boolean {
-    return is(el, 'bpmn:SubProcess') && !!el.get<boolean | undefined>('triggeredByEvent');
+  private static refusal(role: Role, node: El): EndpointRule | undefined {
+    return FlowRules.ENDPOINT_RULES.find((rule) => rule.role === role && rule.refuses(node));
   }
 
   private static label(el: El): string {
