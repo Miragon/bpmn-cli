@@ -48,6 +48,8 @@ export interface KindDef {
   branchesByCondition?: true;
   /** gateways only: a join waits for its incoming paths */
   synchronises?: true;
+  /** gateways only: a split is named as the question its branches answer */
+  namedAsQuestion?: true;
   description: string;
 }
 
@@ -88,9 +90,9 @@ export const KINDS: KindDef[] = [
   { kind: 'transaction', type: 'bpmn:Transaction', family: 'subProcess', aliases: [], prefix: 'Activity', description: 'Transaction sub-process' },
   { kind: 'callActivity', type: 'bpmn:CallActivity', family: 'callActivity', aliases: ['call'], prefix: 'Activity', description: 'Calls another process (set calledElement=<processId>)' },
   // gateways
-  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', branchesByCondition: true, description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
+  { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', branchesByCondition: true, namedAsQuestion: true, description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
   { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', synchronises: true, description: 'AND: all outgoing paths' },
-  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'OR: one or more outgoing paths' },
+  { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, namedAsQuestion: true, description: 'OR: one or more outgoing paths' },
   { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
   { kind: 'eventBasedGateway', type: 'bpmn:EventBasedGateway', family: 'gateway', aliases: ['eventBased', 'event-based', 'eventGateway'], prefix: 'Gateway', description: 'Waits for the first of several catching events' },
   // events
@@ -227,6 +229,10 @@ export function ignoresConditions(el: El): boolean {
 
 export function synchronises(el: El): boolean {
   return !!kindOf(el)?.synchronises;
+}
+
+export function namedAsQuestion(el: El): boolean {
+  return !!kindOf(el)?.namedAsQuestion;
 }
 
 /** `exclusiveGateway (xor), parallelGateway (and), ...` for hints. */

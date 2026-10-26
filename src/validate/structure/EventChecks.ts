@@ -30,28 +30,33 @@ export class EventChecks {
       });
       return;
     }
-    if (is(el, 'bpmn:StartEvent')) {
-      const inEventSub = isEventSubProcess(scope);
-      if (EventChecks.EVENT_SUBPROCESS_ONLY_STARTS.includes(trigger) && !inEventSub) {
-        this.findings.error('E_INVALID_TRIGGER', `startEvent:${trigger} ${shownId(el)} is only allowed inside an event sub-process`, shownId(el), {
-          hint: 'Move it into an eventSubProcess (`bpmn add <file> eventSubProcess "<Name>" --in <scope>`, then `bpmn move <file> <id> --in <eventSubProcessId>`) or use trigger none/message/timer/signal/conditional.',
-        });
-      } else if (!inEventSub && is(scope, 'bpmn:SubProcess') && trigger !== 'none') {
-        this.findings.error('E_INVALID_TRIGGER', `startEvent:${trigger} ${shownId(el)} inside embedded sub-process ${shownId(scope)} must have no trigger`, shownId(el), {
-          hint: `Use \`bpmn set <file> ${shownId(el)} trigger=none\`; triggered starts belong to the process or to an event sub-process.`,
-        });
-      }
-      if (!inEventSub && peek<boolean>(el, 'isInterrupting') === false) {
-        this.findings.error('E_INVALID_TRIGGER', `Non-interrupting start event ${shownId(el)} is only allowed inside an event sub-process`, shownId(el), {
-          hint: `Use \`bpmn set <file> ${shownId(el)} nonInterrupting=false\`.`,
-        });
-      }
-    }
-    if (is(el, 'bpmn:EndEvent') && trigger === 'cancel' && !is(scope, 'bpmn:Transaction')) {
-      this.findings.error('E_INVALID_TRIGGER', `endEvent:cancel ${shownId(el)} is only allowed inside a transaction sub-process`, shownId(el), {
-        hint: 'Use a transaction (`bpmn add <file> transaction "<Name>" ...`) or another end trigger (none, error, terminate, ...).',
+    if (is(el, 'bpmn:StartEvent')) this.checkStartTrigger(el, scope, trigger);
+    if (is(el, 'bpmn:EndEvent') && trigger === 'cancel') this.checkCancelEnd(el, scope);
+  }
+
+  private checkStartTrigger(el: El, scope: El, trigger: Trigger): void {
+    const inEventSub = isEventSubProcess(scope);
+    if (EventChecks.EVENT_SUBPROCESS_ONLY_STARTS.includes(trigger) && !inEventSub) {
+      this.findings.error('E_INVALID_TRIGGER', `startEvent:${trigger} ${shownId(el)} is only allowed inside an event sub-process`, shownId(el), {
+        hint: 'Move it into an eventSubProcess (`bpmn add <file> eventSubProcess "<Name>" --in <scope>`, then `bpmn move <file> <id> --in <eventSubProcessId>`) or use trigger none/message/timer/signal/conditional.',
+      });
+    } else if (!inEventSub && is(scope, 'bpmn:SubProcess') && trigger !== 'none') {
+      this.findings.error('E_INVALID_TRIGGER', `startEvent:${trigger} ${shownId(el)} inside embedded sub-process ${shownId(scope)} must have no trigger`, shownId(el), {
+        hint: `Use \`bpmn set <file> ${shownId(el)} trigger=none\`; triggered starts belong to the process or to an event sub-process.`,
       });
     }
+    if (!inEventSub && peek<boolean>(el, 'isInterrupting') === false) {
+      this.findings.error('E_INVALID_TRIGGER', `Non-interrupting start event ${shownId(el)} is only allowed inside an event sub-process`, shownId(el), {
+        hint: `Use \`bpmn set <file> ${shownId(el)} nonInterrupting=false\`.`,
+      });
+    }
+  }
+
+  private checkCancelEnd(el: El, scope: El): void {
+    if (is(scope, 'bpmn:Transaction')) return;
+    this.findings.error('E_INVALID_TRIGGER', `endEvent:cancel ${shownId(el)} is only allowed inside a transaction sub-process`, shownId(el), {
+      hint: 'Use a transaction (`bpmn add <file> transaction "<Name>" ...`) or another end trigger (none, error, terminate, ...).',
+    });
   }
 
   checkBoundaryEvent(el: El, scope: El): void {

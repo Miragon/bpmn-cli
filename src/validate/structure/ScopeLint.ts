@@ -18,23 +18,29 @@ export class ScopeLint {
   }
 
   lintScope(scope: El, order: FlowOrder): void {
-    const { doc } = this;
-    const nodes = doc.flowNodes(scope);
-    const isProcess = is(scope, 'bpmn:Process');
+    const nodes = this.doc.flowNodes(scope);
     // an ad-hoc sub-process needs neither start/end events nor flows: its nodes run on their own
     const adHoc = is(scope, 'bpmn:AdHocSubProcess');
-    if ((isProcess || nodes.length) && !adHoc) {
-      if (!isEventSubProcess(scope) && !nodes.some((n) => is(n, 'bpmn:StartEvent'))) {
-        this.findings.warning('W_NO_START', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no start event`, shownId(scope), {
-          hint: `Add one: \`bpmn add <file> startEvent "<Name>" --in ${shownId(scope)}\` (or --before <firstNodeId>).`,
-        });
-      }
-      if (!nodes.some((n) => is(n, 'bpmn:EndEvent'))) {
-        this.findings.warning('W_NO_END', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no end event`, shownId(scope), {
-          hint: `Add one after the last node: \`bpmn add <file> endEvent "<Name>" --after <nodeId>\`.`,
-        });
-      }
+    if ((is(scope, 'bpmn:Process') || nodes.length) && !adHoc) this.lintStartAndEnd(scope, nodes);
+    this.lintUnreachable(order);
+    for (const node of nodes) this.lintNode(node, adHoc);
+  }
+
+  private lintStartAndEnd(scope: El, nodes: El[]): void {
+    const isProcess = is(scope, 'bpmn:Process');
+    if (!isEventSubProcess(scope) && !nodes.some((n) => is(n, 'bpmn:StartEvent'))) {
+      this.findings.warning('W_NO_START', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no start event`, shownId(scope), {
+        hint: `Add one: \`bpmn add <file> startEvent "<Name>" --in ${shownId(scope)}\` (or --before <firstNodeId>).`,
+      });
     }
+    if (!nodes.some((n) => is(n, 'bpmn:EndEvent'))) {
+      this.findings.warning('W_NO_END', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no end event`, shownId(scope), {
+        hint: `Add one after the last node: \`bpmn add <file> endEvent "<Name>" --after <nodeId>\`.`,
+      });
+    }
+  }
+
+  private lintUnreachable(order: FlowOrder): void {
     for (const node of order.unreachable) {
       const link = isLinkCatch(node) ? linkNameOf(node) : undefined;
       this.findings.warning('W_UNREACHABLE', `${this.findings.describe(node)} is not reachable from any start event${link ? ` (no throwing link event "${link}" pairs with it)` : ''}`, shownId(node), {
@@ -43,34 +49,39 @@ export class ScopeLint {
           : `Connect it (\`bpmn connect <file> <fromId> ${shownId(node)}\` or \`bpmn move <file> ${shownId(node)} --after <nodeId>\`) or remove it.`,
       });
     }
-    for (const node of nodes) {
-      const outgoing = doc.outgoing(node);
-      const incoming = doc.incoming(node);
-      if (!outgoing.length && !adHoc && !this.isDeadEndExempt(node)) {
-        this.findings.warning('W_DEAD_END', `${this.findings.describe(node)} has no outgoing flow`, shownId(node), {
-          hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${shownId(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${shownId(node)}\`).`,
-        });
-      }
-      this.gatewayLint.lint(node, outgoing);
-      if (!is(node, 'bpmn:Gateway')) {
-        if (outgoing.length >= 2) {
-          this.findings.warning('W_IMPLICIT_SPLIT', `${this.findings.describe(node)} has ${outgoing.length} outgoing flows (implicit split)`, shownId(node), {
-            related: outgoing.map(shownId),
-            hint: `Split through a gateway instead: \`bpmn add <file> parallelGateway --flow ${shownId(outgoing[0])}\` (or exclusiveGateway "<Question?>" for alternatives), then \`bpmn set <file> ${shownId(outgoing[1])} source=<gatewayId>\` for each other outgoing flow (new branches: a {"op":"split"} op in \`bpmn apply <file> ops.json\`).`,
-          });
-        }
-        if (incoming.length >= 2) {
-          this.findings.warning('W_IMPLICIT_JOIN', `${this.findings.describe(node)} has ${incoming.length} incoming flows (implicit join)`, shownId(node), {
-            related: incoming.map(shownId),
-            hint: `Join through a gateway instead: \`bpmn add <file> exclusiveGateway --flow ${shownId(incoming[0])}\` (parallelGateway to synchronise), then \`bpmn set <file> ${shownId(incoming[1])} target=<gatewayId>\` for each other incoming flow.`,
-          });
-        }
-      }
-      if (is(node, 'bpmn:SubProcess') && !doc.flowNodes(node).length) {
-        this.findings.warning('W_EMPTY_SUBPROCESS', `${this.findings.describe(node)} contains no nodes`, shownId(node), {
-          hint: `Add content: \`bpmn add <file> startEvent "<Name>" --in ${shownId(node)}\` ... or remove it.`,
-        });
-      }
+  }
+
+  private lintNode(node: El, adHoc: boolean): void {
+    const { doc } = this;
+    const outgoing = doc.outgoing(node);
+    const incoming = doc.incoming(node);
+    if (!outgoing.length && !adHoc && !this.isDeadEndExempt(node)) {
+      this.findings.warning('W_DEAD_END', `${this.findings.describe(node)} has no outgoing flow`, shownId(node), {
+        hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${shownId(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${shownId(node)}\`).`,
+      });
+    }
+    this.gatewayLint.lint(node, outgoing);
+    this.lintImplicitSplitAndJoin(node, outgoing, incoming);
+    if (is(node, 'bpmn:SubProcess') && !doc.flowNodes(node).length) {
+      this.findings.warning('W_EMPTY_SUBPROCESS', `${this.findings.describe(node)} contains no nodes`, shownId(node), {
+        hint: `Add content: \`bpmn add <file> startEvent "<Name>" --in ${shownId(node)}\` ... or remove it.`,
+      });
+    }
+  }
+
+  private lintImplicitSplitAndJoin(node: El, outgoing: El[], incoming: El[]): void {
+    if (is(node, 'bpmn:Gateway')) return;
+    if (outgoing.length >= 2) {
+      this.findings.warning('W_IMPLICIT_SPLIT', `${this.findings.describe(node)} has ${outgoing.length} outgoing flows (implicit split)`, shownId(node), {
+        related: outgoing.map(shownId),
+        hint: `Split through a gateway instead: \`bpmn add <file> parallelGateway --flow ${shownId(outgoing[0])}\` (or exclusiveGateway "<Question?>" for alternatives), then \`bpmn set <file> ${shownId(outgoing[1])} source=<gatewayId>\` for each other outgoing flow (new branches: a {"op":"split"} op in \`bpmn apply <file> ops.json\`).`,
+      });
+    }
+    if (incoming.length >= 2) {
+      this.findings.warning('W_IMPLICIT_JOIN', `${this.findings.describe(node)} has ${incoming.length} incoming flows (implicit join)`, shownId(node), {
+        related: incoming.map(shownId),
+        hint: `Join through a gateway instead: \`bpmn add <file> exclusiveGateway --flow ${shownId(incoming[0])}\` (parallelGateway to synchronise), then \`bpmn set <file> ${shownId(incoming[1])} target=<gatewayId>\` for each other incoming flow.`,
+      });
     }
   }
 

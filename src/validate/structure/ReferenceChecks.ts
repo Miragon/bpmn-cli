@@ -2,6 +2,12 @@ import type { Doc } from '../../model/Doc.js';
 import { is, walk, type El, peek, shownId } from '../../model/utils/moddle.js';
 import type { StructureFindings } from './StructureFindings.js';
 
+interface ReferenceProperty {
+  name: string;
+  isReference?: boolean;
+  isMany?: boolean;
+}
+
 /** Unique ids, resolvable references and the root processes a collaboration binds. */
 export class ReferenceChecks {
   constructor(
@@ -38,33 +44,38 @@ export class ReferenceChecks {
   }
 
   checkReferences(): void {
+    for (const holder of walk(this.doc.definitions)) this.checkReferencesOf(holder);
+    for (const el of walk(this.doc.definitions)) this.checkConnectionEnds(el);
+  }
+
+  private checkReferencesOf(holder: El): void {
+    const descriptor = holder.$descriptor as { isGeneric?: boolean; properties?: ReferenceProperty[] };
+    if (descriptor.isGeneric || this.isDi(holder)) return;
     const index = this.doc.byId();
-    for (const holder of walk(this.doc.definitions)) {
-      const descriptor = holder.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean; isMany?: boolean }> };
-      if (descriptor.isGeneric || this.isDi(holder)) continue;
-      for (const p of descriptor.properties ?? []) {
-        if (!p.isReference) continue;
-        const v = peek<unknown>(holder, p.name);
-        const targets = p.isMany ? (Array.isArray(v) ? (v as El[]) : []) : v ? [v as El] : [];
-        for (const target of targets) {
-          const tid = peek<string>(target, 'id');
-          if (!tid || index.get(tid) === target) continue;
-          this.findings.error('E_DANGLING_REF', `${this.findings.describe(holder)} references ${p.name}="${tid}", which is not in the model`, shownId(holder), {
-            related: [tid],
-            hint: `Remove ${shownId(holder)} with \`bpmn remove <file> ${shownId(holder)}\` or re-create the missing element "${tid}".`,
-          });
-        }
+    for (const p of (descriptor.properties ?? []).filter((p) => p.isReference)) {
+      for (const target of this.referencedBy(holder, p)) {
+        const tid = peek<string>(target, 'id');
+        if (!tid || index.get(tid) === target) continue;
+        this.findings.error('E_DANGLING_REF', `${this.findings.describe(holder)} references ${p.name}="${tid}", which is not in the model`, shownId(holder), {
+          related: [tid],
+          hint: `Remove ${shownId(holder)} with \`bpmn remove <file> ${shownId(holder)}\` or re-create the missing element "${tid}".`,
+        });
       }
     }
-    for (const el of walk(this.doc.definitions)) {
-      if (!is(el, 'bpmn:SequenceFlow') && !is(el, 'bpmn:MessageFlow') && !is(el, 'bpmn:Association')) continue;
-      for (const end of ['sourceRef', 'targetRef']) {
-        if (!peek<El>(el, end)) {
-          this.findings.error('E_DANGLING_REF', `${this.findings.describe(el)} has no ${end === 'sourceRef' ? 'source' : 'target'} (unresolved reference)`, shownId(el), {
-            hint: `Remove it with \`bpmn remove <file> ${shownId(el)}\` and re-connect with \`bpmn connect <file> <sourceId> <targetId>\`.`,
-          });
-        }
-      }
+  }
+
+  private referencedBy(holder: El, p: ReferenceProperty): El[] {
+    const v = peek<unknown>(holder, p.name);
+    if (p.isMany) return Array.isArray(v) ? (v as El[]) : [];
+    return v ? [v as El] : [];
+  }
+
+  private checkConnectionEnds(el: El): void {
+    if (!is(el, 'bpmn:SequenceFlow') && !is(el, 'bpmn:MessageFlow') && !is(el, 'bpmn:Association')) return;
+    for (const end of ['sourceRef', 'targetRef'].filter((end) => !peek<El>(el, end))) {
+      this.findings.error('E_DANGLING_REF', `${this.findings.describe(el)} has no ${end === 'sourceRef' ? 'source' : 'target'} (unresolved reference)`, shownId(el), {
+        hint: `Remove it with \`bpmn remove <file> ${shownId(el)}\` and re-connect with \`bpmn connect <file> <sourceId> <targetId>\`.`,
+      });
     }
   }
 
